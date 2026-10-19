@@ -413,6 +413,15 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                   ) : o.contractorName ? (
                     <p className="mt-1 text-[12px] text-muted">No date yet.</p>
                   ) : null}
+                  {/* Their report, photos, a quote: on the job and on the home's
+                      Documents tab under Portfolio (James, 19 Oct 2026). */}
+                  {o.contractorId && (
+                    <label className={`${quietCls} mt-2.5 inline-flex cursor-pointer items-center gap-1.5`} title="Goes on this job and on the home's Documents tab">
+                      <DoodleIcon name="upload" size={12} />
+                      {busy ? "Uploading…" : "Add their document"}
+                      <input type="file" className="hidden" disabled={busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
+                    </label>
+                  )}
                 </Person>
               </div>
 
@@ -459,7 +468,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                 }
               >
                 {o.files.length === 0 ? (
-                  <p className="text-[12.5px] text-muted">Nothing on the job yet. Photos, quotes and certificates go here.</p>
+                  <p className="text-[12.5px] text-muted">Nothing on the job yet. Photos, quotes and certificates go here, and on the home's Documents tab too.</p>
                 ) : (
                   <ul className="divide-y divide-line/50">
                     {o.files.map((fl) => (

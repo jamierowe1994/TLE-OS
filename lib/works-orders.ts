@@ -2,6 +2,9 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
+import { addFileDoc } from "@/lib/file-documents";
+import { OTHER as OTHER_DOC } from "@/lib/doc-types";
+import { TEST_STREET } from "@/lib/test-guard";
 
 /**
  * Works orders: every job done on a managed home, from the phone call to
@@ -195,7 +198,7 @@ export interface WorksOrder {
   paidHow: PaidHow | null;
   cancelledReason: string;
   /** Files on the job: photos of the fault, the invoice, the certificate. R2 keys. */
-  files: { key: string; name: string; type: string; at: string; by: string }[];
+  files: { key: string; name: string; type: string; at: string; by: string; kind?: "invoice" }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -571,7 +574,7 @@ export type Move =
   | { action: "reopen"; note?: string }
   | { action: "note"; note: string }
   | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantPhone" | "tenantEmail" | "landlord" | "landlordEmail" | "landlordMobile" | "access" | "authorityPence" | "reportedBy">> }
-  | { action: "file"; file: { key: string; name: string; type: string } };
+  | { action: "file"; file: { key: string; name: string; type: string; kind?: "invoice" } };
 
 export const pounds = (pence: number | null | undefined) =>
   pence == null ? "—" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: pence % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
@@ -777,6 +780,7 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
     }
     case "file": {
       const files = [...o.files, { ...move.file, at: new Date().toISOString(), by }];
+      /* An invoice keeps its kind, so the accounts email can attach it. */
       set("files", JSON.stringify(files));
       text = `File added: ${move.file.name}.`;
       break;
@@ -788,6 +792,28 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
     await q(`UPDATE os_works_orders SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${vals.length}`, vals);
   }
   await logEvent(id, by, eventKind, text);
+  /* Every file on a job also goes on the home's Documents (James, 19 Oct
+     2026): the contractor's report, photos and invoice belong to the
+     property, not only to the job. Whoever added it - the agent on the
+     sheet, the contractor from their link - it lands the same way. A
+     walkthrough job's files stay on the walkthrough. Best effort: the file
+     is already on the job if this fails. */
+  if (move.action === "file" && !o.rehearsal) {
+    const address = [o.propertyName, o.locality].filter(Boolean).join(", ");
+    const invoice = move.file.kind === "invoice";
+    await addFileDoc({
+      home: { address, propertyId: o.propertyId },
+      from: { kind: "job", id: o.id },
+      type: invoice ? "contractor_invoice" : OTHER_DOC,
+      name: invoice ? `Invoice${o.contractorName ? ` - ${o.contractorName}` : ""} (job #${o.ref})` : `Job #${o.ref} - ${move.file.name}`,
+      fileName: move.file.name,
+      r2Key: move.file.key,
+      mime: move.file.type || "application/octet-stream",
+      sizeBytes: 0,
+      by: { id: "", name: by },
+      isTest: TEST_STREET.test(address),
+    }).catch(() => null);
+  }
   const next = await getOrder(id);
   return next!.order;
 }

@@ -38,6 +38,8 @@ export const DOC_TYPES: DocType[] = [
      a certificate, which wants an issue and an expiry date it doesn't have.
      It is a document, labelled so it is easy to spot. */
   { key: "inventory", label: "Inventory", side: "home" },
+  /* A contractor's invoice off a works order (James, 19 Oct 2026). */
+  { key: "contractor_invoice", label: "Contractor Invoice", side: "home" },
 ];
 
 export const OTHER = "other";

@@ -17,7 +17,7 @@ import { DOC_ACCEPT, DOC_TYPES, OTHER, SIDE_LABEL, docTypeLabel, isInventory, ty
  * with that type already picked.
  */
 
-export type FromKind = "deal" | "listing" | "application" | "appraisal" | "viewing" | "property";
+export type FromKind = "deal" | "listing" | "application" | "appraisal" | "viewing" | "property" | "job";
 
 export type Doc = {
   id: string;

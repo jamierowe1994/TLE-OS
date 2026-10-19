@@ -40,7 +40,7 @@ export function accountsInvoiceEmail(o: WorksOrder): AgentEmail {
       heading: `Invoice in on job #${o.ref}`,
       /* "Nothing here has been paid" is the whole point of the email: it is
          a thing to key in, not a receipt. */
-      intro: `${o.contractorName || "The contractor"}'s invoice is on the job and it is ready to key into PayProp. Nothing here has been paid.`,
+      intro: `${o.contractorName || "The contractor"}'s invoice is on the job and it is ready to key into PayProp.${(o.files ?? []).some((f) => f.kind === "invoice") ? " The invoice is attached." : ""} Nothing here has been paid.`,
       rows: [
         { title: where(o), detail: o.title, tone: "neutral", icon: "mark-home.png" },
         {

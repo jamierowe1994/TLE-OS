@@ -12,6 +12,8 @@ import { pounds, tenantsOf, URGENCIES, type Move, type WorksOrder } from "@/lib/
 import type { OsUser } from "@/lib/users";
 import { getLandlordPref, landlordHold } from "@/lib/landlord-prefs";
 import { propertyAgentFor } from "@/lib/works-property-agent";
+import { invoiceSettings } from "@/lib/invoices";
+import { withR2, R2_BUCKET, r2Configured } from "@/lib/r2";
 
 /**
  * The emails a job sends as it moves: to the contractor, the tenant and the
@@ -182,16 +184,42 @@ async function send(o: WorksOrder, id: string, to: string, vars: Record<string, 
   }
 }
 
+/** The newest invoice file on the job, read out of storage for an email. Never throws. */
+async function invoiceAttachments(o: WorksOrder): Promise<{ filename: string; content: string }[]> {
+  const file = [...(o.files ?? [])].reverse().find((f) => f.kind === "invoice");
+  if (!file || !r2Configured) return [];
+  try {
+    const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+    const bytes = await withR2(async (client) => {
+      const res = await client.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: file.key }));
+      return res.Body ? await res.Body.transformToByteArray() : null;
+    });
+    /* Resend's limit is 40MB for the whole email; stay well under it. */
+    if (!bytes || bytes.length > 20 * 1024 * 1024) return [];
+    return [{ filename: file.name || `invoice-job-${o.ref}.pdf`, content: Buffer.from(bytes).toString("base64") }];
+  } catch {
+    return [];
+  }
+}
+
 /** The accounts inbox: a contractor's invoice is on a job (Michael, 7 Sep 2026).
  *  The words live in lib/email/works-internal.ts so the catalogue can show
  *  them without a job having to move. */
 export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promise<SendOutcome> {
-  const address = accountsEmail.trim();
-  if (!address.includes("@")) return { to: "accounts", sent: false, reason: "no accounts inbox set under Maintenance, Invoices, Who invoices are from" };
+  /* No accounts inbox was ever set, so every "invoice in" went nowhere.
+     James, 19 Oct 2026: the invoice goes over "for Michael to then issue"
+     through PayProp - so with no accounts inbox it goes to his compliance
+     inbox. An accounts inbox, once set, still wins. */
+  const address = accountsEmail.trim() || (await invoiceSettings()).complianceEmail.trim();
+  if (!address.includes("@")) return { to: "accounts", sent: false, reason: "no accounts or compliance inbox set under Maintenance, Invoices, Who invoices are from" };
   const mail = accountsInvoiceEmail(o);
   if (o.rehearsal) return keep(o.id, "accounts", address, mail.subject, mail.html);
   try {
-    await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text });
+    /* The invoice itself goes with it, so it can be keyed into PayProp
+       straight from the email. If it cannot be read, the email still goes
+       with the figures and the link to the job. */
+    const attachments = await invoiceAttachments(o);
+    await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text, ...(attachments.length ? { attachments } : {}) });
     return { to: "accounts", sent: true, address, via: "internal sender" };
   } catch (e) {
     return { to: "accounts", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };

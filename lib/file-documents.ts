@@ -24,7 +24,7 @@ import { docTypeLabel } from "@/lib/doc-types";
  * agent tells the customer (James: "that's down to the agent to communicate").
  */
 
-export type FromKind = "deal" | "listing" | "application" | "appraisal" | "viewing" | "property";
+export type FromKind = "deal" | "listing" | "application" | "appraisal" | "viewing" | "property" | "job";
 
 export const FROM_LABEL: Record<FromKind, string> = {
   deal: "Pre-tenancy",
@@ -34,6 +34,9 @@ export const FROM_LABEL: Record<FromKind, string> = {
   viewing: "Viewing",
   /* The home's own page, once the let has gone through (Kirstie, 19 Oct 2026). */
   property: "Property page",
+  /* A file on a works order - the contractor's report, photos, their
+     invoice - lands on the home too (James, 19 Oct 2026). */
+  job: "Maintenance job",
 };
 
 export const isFromKind = (k: string): k is FromKind => k in FROM_LABEL;

@@ -108,7 +108,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       const key = `documents/works-${o.ref}/${Date.now()}-${safeName(file.name) || "file"}`;
       const body = Buffer.from(await file.arrayBuffer());
       await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
-      let next = await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: file.type } }, by);
+      let next = await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: file.type, ...(kind === "invoice" ? { kind: "invoice" as const } : {}) } }, by);
       const amount = Number(String(form.get("amount") ?? "").replace(/[£,\s]/g, ""));
       if (kind === "invoice" && Number.isFinite(amount) && amount > 0) {
         if (!next.completedAt) next = await moveOrder(o.id, { action: "done", note: String(form.get("note") ?? "").trim() || "Marked done by the contractor with their invoice." }, by);

@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     const key = `documents/works-${order.ref}/${Date.now()}-${safeName(file.name) || "invoice"}`;
     const body = Buffer.from(await file.arrayBuffer());
     await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
-    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: file.type } }, by);
+    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "invoice" } }, by);
     await moveOrder(order.id, { action: "done", note: "Done before it was logged; see the contractor's invoice.", completedAt: doneOn ? new Date(doneOn).toISOString() : null }, by);
     await moveOrder(order.id, { action: "payee", payee }, by);
     const next = await moveOrder(order.id, { action: "invoice", invoicePence: Math.round(amount * 100), invoiceRef: str("ref") }, by);
