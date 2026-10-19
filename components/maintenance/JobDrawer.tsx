@@ -398,7 +398,16 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                 </Person>
 
                 <Person tone="brown" icon="setting" role="Contractor" action={canAssign ? <Quiet onClick={() => start("assign")}>{o.contractorId ? "Change" : "Set"}</Quiet> : null}>
-                  <p className={`text-[13.5px] ${o.contractorName ? "font-semibold" : "text-muted"}`}>{o.contractorName || "Not picked yet"}</p>
+                  {/* The name opens their record under Portfolio > Contractors: their
+                      details, bookings, every job and what they are owed (James, 19 Oct 2026). */}
+                  {o.contractorId ? (
+                    <a href={`/contractors?open=${encodeURIComponent(o.contractorId)}`} className="group block" title="Open their record under Contractors">
+                      <p className="text-[13.5px] font-semibold underline decoration-line underline-offset-2 group-hover:decoration-ink">{o.contractorName || "The contractor"}</p>
+                      <p className="mt-0.5 text-[11px] text-muted group-hover:text-ink">Their record, jobs and what they&apos;re owed →</p>
+                    </a>
+                  ) : (
+                    <p className={`text-[13.5px] ${o.contractorName ? "font-semibold" : "text-muted"}`}>{o.contractorName || "Not picked yet"}</p>
+                  )}
                   {o.scheduledAt ? (
                     <p className="mt-1 flex items-center gap-1.5 text-[12px]"><DoodleIcon name="calendar" size={12} className="text-muted" />Booked {stamp(o.scheduledAt)}</p>
                   ) : o.contractorName ? (

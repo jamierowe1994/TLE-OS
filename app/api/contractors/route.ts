@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
   if (id) {
     const c = await getContractor(id);
     /* The office sees every agent's book (James, 19 Oct 2026); an agent only their own and the company's. */
-    if (!c || (c.ownerId && c.ownerId !== me.id && !can(me.role, "see:everything"))) return NextResponse.json({ ok: false, error: "Not in your book." }, { status: 404 });
+    if (!c) return NextResponse.json({ ok: false, error: "No such contractor." }, { status: 404 });
+    if (c.ownerId && c.ownerId !== me.id && !can(me.role, "see:everything")) return NextResponse.json({ ok: false, error: "This contractor is in another agent's book, so only they and the office can open their record." }, { status: 404 });
     const [stats, orders] = await Promise.all([contractorStats(id), listOrders({ limit: 500 })]);
     return NextResponse.json({ ok: true, contractor: c, stats, jobs: orders.filter((o) => o.contractorId === id) });
   }

@@ -112,6 +112,24 @@ export default function ContractorsPage() {
   const canEdit = (c: Contractor) => (c.ownerId ? c.ownerId === data?.me : Boolean(data?.canCorporate));
   const openProfile = (id: string | null) => { const c = all.find((x) => x.id === id); if (c) setProfile(c); };
 
+  /* ?open=<contractor id>: the contractor's name on a job sheet lands here
+     with their record open (James, 19 Oct 2026). Once the book has loaded,
+     so the drawer knows whose book they are in. One that is not in this
+     person's book still opens, and the record says so. */
+  const [deepLinked, setDeepLinked] = useState(false);
+  useEffect(() => {
+    if (!data || deepLinked) return;
+    setDeepLinked(true);
+    let id: string | null = null;
+    try { id = new URLSearchParams(window.location.search).get("open"); } catch { /* fine */ }
+    if (!id) return;
+    setProfile(data.contractors.find((c) => c.id === id) ?? ({ id, ownerId: null, ownerName: null } as Row));
+  }, [data, deepLinked]);
+  const closeProfile = () => {
+    setProfile(null);
+    try { if (new URLSearchParams(window.location.search).has("open")) window.history.replaceState(null, "", "/contractors"); } catch { /* fine */ }
+  };
+
   const loading = !data && !err;
   const dot = <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink align-middle" />;
 
@@ -261,8 +279,8 @@ export default function ContractorsPage() {
         <ContractorProfile
           id={profile.id}
           ownerName={profile.ownerId && profile.ownerId !== data?.me ? profile.ownerName : null}
-          onClose={() => setProfile(null)}
-          onEdit={(c) => { setProfile(null); setTab("book"); setEditing(c); }}
+          onClose={closeProfile}
+          onEdit={(c) => { closeProfile(); setTab("book"); setEditing(c); }}
           onChanged={load}
           canEdit={canEdit}
         />
