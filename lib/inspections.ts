@@ -9,6 +9,7 @@ import { asChecks, type Checks } from "@/lib/inspection-checks";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import type { RexpmTask } from "@/lib/rexpm-tasks";
 import { londonDayOffset, londonTime } from "@/lib/london-time";
+import { addrOf, parseAddress, sameDoor } from "@/lib/address-parse";
 
 /**
  * Inspections: every visit we make to a home we manage, and the permission
@@ -895,11 +896,29 @@ export function dueFromTasks(
   const taken = new Set(existing.filter((i) => i.rexpmTaskId && i.status !== "cancelled").map((i) => i.rexpmTaskId!));
   const byProperty = new Map<string, ManagedProperty>();
   for (const p of currentLets(book)) if (p.propertyId) byProperty.set(p.propertyId, p);
+  /* The book's row is the task's home only when it is the same door
+     (Rhiannon Dodge, 16 Oct 2026). REX PM's task for Room 3, 66 Fore Street
+     still carried Room 2's REX record from before the 6 Oct relink, so the
+     board showed a visit owed at "Room 2" for Room 2's tenant. A REX PM home
+     the book holds under its own id is matched on that first. */
+  const homeOf = (t: RexpmTask): ManagedProperty | null => {
+    const own = t.osPropertyId ? byProperty.get(t.osPropertyId) : undefined;
+    if (own) return own;
+    const p = t.rexPropertyId ? byProperty.get(t.rexPropertyId) : undefined;
+    if (!p) return null;
+    return otherDoor(t, p) ? null : p;
+  };
+  const otherDoor = (t: RexpmTask, p: ManagedProperty) => Boolean(t.address) && !sameDoor(parseAddress(t.address), parseAddress(addrOf(p)), true);
+  /* The REX record a task carries, unless the book shows it is another door's. */
+  const rexOf = (t: RexpmTask): string | null => {
+    const p = t.rexPropertyId ? byProperty.get(t.rexPropertyId) : undefined;
+    return p && otherDoor(t, p) ? null : t.rexPropertyId;
+  };
 
   const out: DueVisit[] = [];
   for (const t of tasks) {
     if (taken.has(t.id)) continue;
-    const p = t.rexPropertyId ? byProperty.get(t.rexPropertyId) ?? null : null;
+    const p = homeOf(t);
     /* The end of the due day on the London clock: a task due today is not
        late until tomorrow, which is how REX PM's Overdue tab reads. */
     const [y, m, d] = (t.dueOn ?? new Date(now).toISOString().slice(0, 10)).split("-").map(Number);
@@ -907,7 +926,7 @@ export function dueFromTasks(
     const type = t.taskType.toLowerCase();
     const kind: Kind = /entry|ingoing|check.?in/.test(type) ? "check_in"
       : /exit|outgoing|check.?out/.test(type) ? "check_out"
-      : t.rexPropertyId && hmoIds.has(t.rexPropertyId) ? "hmo" : "interim";
+      : rexOf(t) && hmoIds.has(rexOf(t)!) ? "hmo" : "interim";
     const tenant = p?.tenants?.[0] ?? null;
     const name = (t.title.includes(":") ? t.title.slice(t.title.indexOf(":") + 1) : t.address).trim().replace(/[\s,]+$/, "");
     const postcode = t.address.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\s*$/i)?.[0] ?? "";
@@ -915,7 +934,7 @@ export function dueFromTasks(
       key: `rexpm:${t.id}`,
       kind,
       listingId: p?.listingId ?? null,
-      propertyId: t.rexPropertyId,
+      propertyId: p?.propertyId ?? rexOf(t),
       osPropertyId: t.osPropertyId,
       propertyName: p?.name ?? name,
       locality: p?.locality ?? postcode,

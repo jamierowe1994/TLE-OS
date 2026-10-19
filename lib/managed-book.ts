@@ -5,7 +5,7 @@ import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { matchHome, rentBook } from "@/lib/rent-status";
 import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
-import { attach, payPropContacts } from "@/lib/business/payprop-tenant-contacts";
+import { attach, payPropPeople, personKey } from "@/lib/business/payprop-tenant-contacts";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { addrOf, parseAddress, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
@@ -462,7 +462,23 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   };
   const outOfScope = (d: Parsed, o: OsProperty) =>
     Boolean(rexUserId) && !inTheirHouse(d, o) && !(o.rexPropertyId && owned?.has(o.rexPropertyId));
-  for (const o of extra) {
+  /* A room that joins makes its house theirs too (Rhiannon Dodge, 16 Oct
+     2026). Room 4 at 66a Fore Street joined her book because she owns its REX
+     record, but the houses were listed before it joined, so Room 2 at 66a -
+     REX has no record for it, REX PM names her - was turned away. A room
+     turned away is looked at again once another room of its house is in. */
+  const join = (row: ManagedProperty, o: OsProperty) => {
+    properties.push(row);
+    /* A room only: one flat must not bring in a block of other agents' flats. */
+    const d = doorOf(row);
+    const k = d.unitWord === "room" ? houseKey(d) : null;
+    if (k) {
+      if (!theirHouses.has(k)) theirHouses.set(k, new Set());
+      theirHouses.get(k)!.add(pcOf(o.postcode));
+    }
+  };
+  /* true: placed or covered; false: not theirs, yet. */
+  const place = (o: OsProperty): boolean => {
     const door = parseAddress(o.address);
     if (o.rexPropertyId) {
       const onIt = properties.filter((p) => p.propertyId === o.rexPropertyId);
@@ -470,24 +486,32 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       const trusted = linkCount.get(o.rexPropertyId) === 1 && onIt.length > 0 && !onIt.some((p) => anotherRoom(door, doorOf(p)));
       if (same.length || trusted) {
         if (!pmFor.has(o.rexPropertyId)) pmFor.set(o.rexPropertyId, o);
-        continue;
+        return true;
       }
-      if (outOfScope(door, o)) continue;
+      if (outOfScope(door, o)) return false;
       /* Linked to a REX property REX does not mark as let (84 of them, 6 Sep):
          the home is managed in REX PM all the same, so it joins the book under
          its REX property - unless another home already stands there. */
       if (!onIt.length) {
-        properties.push(pmRow(o, o.rexPropertyId, `pm-link-${o.rexPropertyId}`, true));
+        join(pmRow(o, o.rexPropertyId, `pm-link-${o.rexPropertyId}`, true), o);
         pmFor.set(o.rexPropertyId, o);
-        continue;
+        return true;
       }
-      properties.push(pmRow(o, o.id, o.id, false));
+      join(pmRow(o, o.id, o.id, false), o);
       pmFor.set(o.id, o);
-      continue;
+      return true;
     }
-    if (outOfScope(door, o) || properties.some((p) => p.propertyId === o.id)) continue;
-    properties.push(pmRow(o, o.id, o.id, false));
+    if (properties.some((p) => p.propertyId === o.id)) return true;
+    if (outOfScope(door, o)) return false;
+    join(pmRow(o, o.id, o.id, false), o);
     pmFor.set(o.id, o);
+    return true;
+  };
+  let waiting = extra.filter((o) => !place(o));
+  /* A round that places nothing is the last. */
+  for (let before = -1; rexUserId && waiting.length && waiting.length !== before; ) {
+    before = waiting.length;
+    waiting = waiting.filter((o) => !place(o));
   }
 
   /* LAST LET'S TENANT, CARRIED OVER (Kirstie, 16 Oct 2026). 6 Linford Close
@@ -531,13 +555,28 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   /* Their email and mobile from REX PM's Tenancies report, imported into
      os_tenant_contacts on 9 Oct 2026 (lib/tenant-contacts). */
   const held = await tenantContacts().catch(() => new Map<string, Map<string, { email: string | null; phone: string | null }>>());
+  /* Not caught past here: no PayProp read means nothing is set aside. */
+  const people = await payPropPeople().catch(() => null);
   for (const p of currentLets(properties)) {
     if (p.tenants.length || !p.propertyId) continue;
     const o = pmFor.get(p.propertyId);
     if (!o?.tenantNames) continue;
     if ("pmStatus" in o && (o as PmHome).pmStatus === "vacant") continue;
     const known = held.get(o.id);
-    p.tenants = o.tenantNames.split(/\s*[,;]\s*/).filter(Boolean).map((name, i) => {
+    /* A name PayProp holds only as a past tenant is not living there
+       (Rhiannon, 16 Oct 2026: Michael Blackmore at Room 2, 66 Fore Street,
+       whose tenancy never went ahead - lib/business/payprop-tenant-contacts
+       pastOnlyPeople). Where that leaves nobody, PayProp's own current
+       tenancy on the home names who is, if it holds one. */
+    const named = o.tenantNames.split(/\s*[,;]\s*/).filter(Boolean);
+    let names = named.filter((n) => !people?.pastOnly.has(personKey(n)));
+    if (!names.length && named.length) {
+      names = (people?.current.get(rentKey(p.address || p.name, p.postcode)) ?? [])
+        .flatMap((r) => r.display.split(/\s*(?:,|&|\band\b)\s*/i))
+        .map((n) => n.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+    }
+    p.tenants = names.map((name, i) => {
       const c = known?.get(nameKey(name));
       return { contactId: `rexpm:${o.id}:${i}`, name, email: c?.email ?? null, phone: c?.phone ?? null };
     });
@@ -545,7 +584,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   /* Email and mobile from PayProp where the book has neither (9 Oct 2026):
      REX PM gives names only. Joined by the home's address, and given only to
      the tenant PayProp names as the lead (lib/business/payprop-tenant-contacts). */
-  const ppContacts = await payPropContacts().catch(() => null);
+  const ppContacts = people?.current ?? null;
   if (ppContacts?.size) {
     for (const p of currentLets(properties)) {
       if (!p.tenants.some((t) => !t.email && !t.phone)) continue;

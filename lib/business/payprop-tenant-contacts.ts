@@ -112,13 +112,68 @@ async function refresh(account: PayPropAccountId): Promise<void> {
   }
 }
 
-/** Every agency's current tenancies with a contact, by rentKey. Never waits on PayProp. */
-export async function payPropContacts(): Promise<ContactsByKey> {
+async function heldRows(): Promise<Array<Record<string, unknown>>> {
   const rows: Array<Record<string, unknown>> = [];
   for (const account of payPropAccounts()) {
     const held = await readCache<Array<Record<string, unknown>>>(`payprop:tenants:v1:${account}`).catch(() => null);
     if (!held || Date.now() - held.at > FRESH_MS) void refresh(account);
     if (held && Date.now() - held.at < TOO_OLD_MS && Array.isArray(held.data)) rows.push(...held.data);
   }
-  return contactsByKey(rows);
+  return rows;
+}
+
+/** Every agency's current tenancies with a contact, by rentKey. Never waits on PayProp. */
+export async function payPropContacts(): Promise<ContactsByKey> {
+  return contactsByKey(await heldRows());
+}
+
+/** A person by their first and last word: "Michael  Blackmore", "Elizabeth Jane Aspden-Mansfield". */
+export function personKey(name: string): string {
+  const w = words(name);
+  return w.length >= 2 ? `${w[0]} ${w[w.length - 1]}` : "";
+}
+
+/**
+ * PEOPLE PAYPROP HOLDS ONLY AS PAST TENANTS (Rhiannon Dodge, 16 Oct 2026).
+ *
+ * Room 2, 66 Fore Street showed Michael Blackmore as its tenant, with a
+ * property visit owed for him, and his tenancy never went ahead. REX PM still
+ * names him on the room; PayProp has him as an Inactive tenant on no home at
+ * all, and nobody on the room. Of the 607 tenants the book takes from REX PM,
+ * 15 are like him (30 Violet Crescent named Stephanie Russell, who left in
+ * 2022; PayProp has Niomi Richer and Aaron Clark there now).
+ *
+ * A name is here when PayProp holds somebody by that first and last name and
+ * NONE of their records is an Active tenancy on a home today. Every name on
+ * a joint record counts: "Marcia Sanders & Michael Gallagher" is Active at 77
+ * Rushmoor Drive, so Michael Gallagher is current. Somebody PayProp has never
+ * heard of is not here - no record is not a moved-out record. Nothing is held
+ * (PayProp not read), nothing is here.
+ */
+export function pastOnlyPeople(rows: Array<Record<string, unknown>>, today = londonToday()): Set<string> {
+  const now = new Set<string>();
+  const past = new Set<string>();
+  for (const t of rows) {
+    const props = (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>;
+    const current = (!str(t.status) || str(t.status) === "Active") && props.some((pr) => {
+      const end = str((pr.tenant as Record<string, unknown> | undefined)?.end_date).slice(0, 10);
+      return !end || end >= today;
+    });
+    const names = new Set<string>();
+    for (const part of (str(t.display_name) || str(t.business_name)).split(/\s*(?:,|&|\band\b)\s*/i)) {
+      const k = personKey(part);
+      if (k) names.add(k);
+    }
+    const lead = leadOf(t);
+    if (lead) { const k = personKey(`${lead.first} ${lead.last}`); if (k) names.add(k); }
+    for (const k of names) (current ? now : past).add(k);
+  }
+  for (const k of now) past.delete(k);
+  return past;
+}
+
+/** Current tenancies by rentKey, and the people PayProp holds only as past tenants. */
+export async function payPropPeople(): Promise<{ current: ContactsByKey; pastOnly: Set<string> }> {
+  const rows = await heldRows();
+  return { current: contactsByKey(rows), pastOnly: pastOnlyPeople(rows) };
 }
