@@ -76,10 +76,29 @@ export async function GET(req: NextRequest) {
     .filter((a) => a.email !== email && surname.length > 2 && (a.email.includes(surname) || a.name.toLowerCase().includes(surname)))
     .map((a) => ({ name: a.name, email: a.email, active: a.active }));
 
+  /* ?raw=1: the whole AccountUsers row for that person.
+     Both of them came back found and active on the right account, which rules
+     out everything the fields above can rule out and leaves "the password the
+     website takes is not one the API will take" - two-factor, or a sign-in
+     button rather than a password. Whatever REX records about that is on the
+     row, and guessing field names from the outside is slower than reading it. */
+  let raw: unknown = undefined;
+  if (req.nextUrl.searchParams.get("raw") === "1" && found) {
+    const one = await rexCall("AccountUsers", "search", {
+      criteria: [{ name: "id", value: Number(found.id) }],
+      limit: 1,
+    }).catch(() => null);
+    const rows = Array.isArray(one?.result)
+      ? one!.result
+      : ((one?.result as { rows?: unknown[] } | undefined)?.rows ?? []);
+    raw = Array.isArray(rows) ? rows[0] ?? null : null;
+  }
+
   return NextResponse.json(
     {
       ok: true,
       email,
+      ...(raw === undefined ? {} : { raw }),
       accountId: rexAccountId(),
       accounts,
       usersOnAccount: everyone.length,
