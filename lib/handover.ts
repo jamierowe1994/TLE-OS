@@ -552,10 +552,13 @@ export async function runHandover(
         await rec.add({ id: `relationship:${uuid}`, label: `Landlord ${uuid} ↔ property`, state: live ? "skipped" : "would", detail: live ? "Skipped: a step before it did not produce an id." : "Would relate the landlord to the property.", request: payload });
         continue;
       }
-      const res = await propolyPatch(`/api/v1/landlords/${uuid}/relationships`, payload);
       /* "Landlord already associated with this property" is the answer we
-         want, whatever status it comes with. */
-      const already = res.status === 409 || /already associated/i.test(refusal(res));
+         want, whatever status it comes with - so it is not filed as a bug
+         either (16 Oct 2026, 285 Leith Walk). */
+      const isAlready = (status: number, body: unknown) =>
+        status === 409 || /already associated/i.test(refusal({ status, body }));
+      const res = await propolyPatch(`/api/v1/landlords/${uuid}/relationships`, payload, { expected: isAlready });
+      const already = isAlready(res.status, res.body);
       const ok = (res.status >= 200 && res.status < 300) || already;
       await rec.add({ id: `relationship:${uuid}`, label: `Landlord ${uuid} ↔ property`, state: ok ? "ok" : "failed", detail: already ? "Already related." : ok ? "Related." : `Propoly said no: ${refusal(res)}`, request: payload, response: res.body });
       if (!ok) status = "failed";

@@ -421,7 +421,17 @@ export class PropolyWriteBlocked extends Error {
   }
 }
 
-async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unknown): Promise<PropolyResult> {
+/**
+ * A write whose refusal can be the answer. Relating a landlord to a property
+ * Propoly already has them on comes back 409 "Landlord already associated
+ * with this property" - the link we wanted is there (Flat 5, 285 Leith Walk,
+ * 16 Oct 2026: the handover read it as done and the deal went on, but the 409
+ * still raised an automatic bug). A caller passes `expected` to say which
+ * answers are not faults; everything else still reports.
+ */
+export type PropolyWriteOpts = { expected?: (status: number, body: unknown) => boolean };
+
+async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unknown, opts?: PropolyWriteOpts): Promise<PropolyResult> {
   const { switchOn } = await import("@/lib/switches");
   if (!(await switchOn("handover_live"))) throw new PropolyWriteBlocked(method, path);
   const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
@@ -446,7 +456,7 @@ async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unk
   } catch {
     body = null;
   }
-  reportPropoly(method, path, res.status);
+  if (!opts?.expected?.(res.status, body)) reportPropoly(method, path, res.status);
   return { status: res.status, body };
 }
 
@@ -483,7 +493,7 @@ export async function propolyUpload(path: string, form: FormData): Promise<Propo
   reportPropoly("POST", path, res.status);
   return { status: res.status, body };
 }
-export const propolyPatch = (path: string, payload: unknown) => propolyWrite("PATCH", path, payload);
+export const propolyPatch = (path: string, payload: unknown, opts?: PropolyWriteOpts) => propolyWrite("PATCH", path, payload, opts);
 
 export function propolyClientName(): string | null {
   return state.cached?.clientName ?? null;
