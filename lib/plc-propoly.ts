@@ -1,7 +1,7 @@
 import "server-only";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
-import { propolyUpload, PropolyWriteBlocked } from "@/lib/business/propoly";
+import { propolyErrorText, propolyUpload, PropolyWriteBlocked } from "@/lib/business/propoly";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { getCase, recordPropolyPush } from "@/lib/plc-store";
@@ -92,9 +92,46 @@ export function propolyTypeFor(checkId: CheckId, name: string): string | null {
   }
 }
 
-function expiryFor(c: PlcCase, checkId: CheckId): string | null {
-  const f = c.findings.find((x) => x.checkId === checkId && x.foundDate);
-  return f?.foundDate ?? null;
+/**
+ * The expiry for a certificate: the scan's foundDate, else the date the
+ * reader printed off the file itself when it landed (doc.read.expiryDate).
+ * 19 Oct 2026, 4 Williams Court: the scan left foundDate empty on both the
+ * EPC and the EIC although each file's read held a printed expiry (2033), so
+ * both were skipped. A date the reader worked out rather than read
+ * (expiryDerived) is still never sent.
+ */
+function expiryFor(c: PlcCase, doc: PlcDocument): string | null {
+  const f = c.findings.find((x) => x.checkId === doc.checkId && x.foundDate);
+  if (f?.foundDate) return f.foundDate;
+  const read = doc.read;
+  if (read?.expiryDate && !read.expiryDerived && /^\d{4}-\d{2}-\d{2}$/.test(read.expiryDate)) return read.expiryDate;
+  return null;
+}
+
+/**
+ * A file name Propoly will take. Its only refusal so far (19 Oct 2026, 422
+ * "Failed to upload document", nothing more) was the one upload in the pack
+ * with a long name, "6 New Cut Building Regulations-GROUND FLOOR PLAN 1-4 AND
+ * 7 (1).pdf" at 66 characters; every name up to 37 went. The file itself
+ * looked ordinary (0.7 MB, one-page PDF 1.7, not encrypted) and a 1.15 MB
+ * image went fine, so the name is the likeliest cause, not a proven one.
+ * REX refused a long dash the same day (lib/terms-to-rex rexPlain). So:
+ * plain ASCII, dashes as "-",
+ * nothing but letters, digits, spaces and . _ - ( ), and at most 60
+ * characters with the extension kept.
+ */
+export function propolyFileName(name: string, fallback = "document.pdf"): string {
+  const plain = name
+    .replace(/[‐-―−]/g, "-")
+    .normalize("NFKD")
+    .replace(/[^A-Za-z0-9 ._()-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!plain || plain.startsWith(".")) return fallback;
+  const dot = plain.lastIndexOf(".");
+  const ext = dot > 0 && plain.length - dot <= 6 ? plain.slice(dot) : "";
+  const stem = (ext ? plain.slice(0, dot) : plain).slice(0, 60 - ext.length).trim();
+  return `${stem || "document"}${ext}`;
 }
 
 async function bytesOf(doc: PlcDocument): Promise<{ bytes: Uint8Array; type: string }> {
@@ -159,7 +196,7 @@ export async function pushCaseToPropoly(caseId: string, by: string): Promise<Pro
       results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: "Propoly takes one file per slot and this slot already had one from this pack." });
       continue;
     }
-    const expiry = COMPLIANCE_TYPES.has(type) ? expiryFor(c, doc.checkId) : null;
+    const expiry = COMPLIANCE_TYPES.has(type) ? expiryFor(c, doc) : null;
     if (COMPLIANCE_TYPES.has(type) && !expiry) {
       results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: "Propoly needs an expiry date for this and the reader did not find one on the document." });
       continue;
@@ -173,15 +210,17 @@ export async function pushCaseToPropoly(caseId: string, by: string): Promise<Pro
       form.set("deal_uuid", dealId);
       form.set("type", type);
       /* The agent's own name for an Anything else file (16 Oct 2026), else the file name. */
-      form.set("name", doc.label || doc.name);
+      const fileName = propolyFileName(doc.name, mime === "application/pdf" ? "document.pdf" : "document");
+      form.set("name", doc.label ? propolyFileName(doc.label, "Document") : fileName);
       if (expiry) form.set("expiration", expiry);
       /* Copied into a plain ArrayBuffer: the S3 client hands back a view over
          a buffer the Blob constructor will not accept as-is. */
       const copy = new Uint8Array(bytes.byteLength);
       copy.set(bytes);
-      form.set("attached", new Blob([copy.buffer], { type: mime }), doc.name);
+      form.set("attached", new Blob([copy.buffer], { type: mime }), fileName);
       const res = await propolyUpload("/api/v1/documents", form);
-      const msg = (res.body as { message?: string } | null)?.message ?? "";
+      /* Everything Propoly said, field errors included, not just .message. */
+      const msg = propolyErrorText(res.body);
       if (res.status === 201 || res.status === 200) {
         taken.add(type);
         results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "uploaded", note: "Uploaded." });
