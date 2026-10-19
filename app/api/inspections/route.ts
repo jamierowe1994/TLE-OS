@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
   const { actor, subject } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
-  const b = (await req.json().catch(() => null)) as (Partial<NewInspection> & { doneOn?: string }) | null;
+  const b = (await req.json().catch(() => null)) as (Partial<NewInspection> & { doneOn?: string; doneBy?: string }) | null;
   if (!b || !b.propertyName?.trim()) return NextResponse.json({ ok: false, error: "An inspection needs a property." }, { status: 400 });
   const kind = (KIND_IDS as readonly string[]).includes(b.kind ?? "") ? (b.kind as Kind) : "interim";
   /* Already done (Rhiannon Dodge, 12 Oct 2026): a due row the agent has
@@ -162,14 +162,16 @@ export async function POST(req: NextRequest) {
   }
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
-    const { doneOn: _doneOn, ...fields } = b;
+    const { doneOn: _doneOn, doneBy: _doneBy, ...fields } = b;
     let inspection = await createInspection({ ...fields, kind, propertyName: b.propertyName, rexpmTaskId: typeof b.rexpmTaskId === "string" ? b.rexpmTaskId : null }, by);
     if (doneAt) {
       /* Visited on that day, then closed: the write-up lives where the visit
          was made, so nothing is left here asking for one. No emails - neither
          move sends any. The cadence counts from this day from now on, and a
          copied-across task it came from leaves the due list. */
-      await moveInspection(inspection.id, { action: "visited", at: doneAt }, by);
+      /* Who made it, where that was somebody else (Kayleigh Wright, 19 Oct
+         2026: visits done in Inventory Base, recorded here afterwards). */
+      await moveInspection(inspection.id, { action: "visited", at: doneAt, inspector: String(b.doneBy ?? "").trim().slice(0, 80) || undefined }, by);
       await logEvent(inspection.id, by, "note", "Recorded as already done: the visit was made and written up before it was booked here.");
       inspection = await moveInspection(inspection.id, { action: "close" }, by);
     }

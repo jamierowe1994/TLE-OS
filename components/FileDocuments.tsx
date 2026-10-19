@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { DOC_ACCEPT, DOC_TYPES, OTHER, SIDE_LABEL, docTypeLabel, type DocSide } from "@/lib/doc-types";
+import { DOC_ACCEPT, DOC_TYPES, OTHER, SIDE_LABEL, docTypeLabel, isInventory, type DocSide } from "@/lib/doc-types";
 
 /**
  * DOCUMENTS ON ANY FILE (James, 5 Oct 2026).
@@ -17,7 +17,7 @@ import { DOC_ACCEPT, DOC_TYPES, OTHER, SIDE_LABEL, docTypeLabel, type DocSide } 
  * with that type already picked.
  */
 
-export type FromKind = "deal" | "listing" | "application" | "appraisal" | "viewing";
+export type FromKind = "deal" | "listing" | "application" | "appraisal" | "viewing" | "property";
 
 export type Doc = {
   id: string;
@@ -237,12 +237,18 @@ export default function FileDocuments({
           {docs!.length ? (
             <ul className="divide-y divide-line/50 rounded-[18px] border border-line/60 bg-white">
               {docs!.map((d) => (
-                <li key={d.id} className="flex items-center gap-3 px-4 py-3">
-                  <DoodleIcon name="doc" size={16} className="shrink-0 text-accent-dark" />
+                <li key={d.id} className={`flex items-center gap-3 px-4 py-3 ${isInventory(d) ? "bg-accent-soft/25" : ""}`}>
+                  <DoodleIcon name={isInventory(d) ? "checklist" : "doc"} size={16} className="shrink-0 text-accent-dark" />
                   <span className="min-w-0 flex-1">
-                    <a href={d.url} target="_blank" rel="noopener noreferrer" className="block truncate text-[13px] font-semibold hover:underline">
-                      {d.name}
-                    </a>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <a href={d.url} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate text-[13px] font-semibold hover:underline">
+                        {d.name}
+                      </a>
+                      {/* Easy to spot among the rest (Kirstie, 19 Oct 2026). */}
+                      {isInventory(d) && d.name.trim().toLowerCase() !== "inventory" ? (
+                        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] font-semibold text-accent-dark">Inventory</span>
+                      ) : null}
+                    </span>
                     <span className="block truncate text-[11px] text-muted">
                       {d.type === OTHER ? "Other · " : ""}
                       {d.fileName} · {d.byName}, {when(d.at)}
@@ -381,7 +387,7 @@ export function UploadForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={120}
-            placeholder="e.g. Inventory, Pet agreement"
+            placeholder="e.g. Pet agreement, Tenancy agreement"
             className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-ink"
           />
         </label>

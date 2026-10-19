@@ -651,6 +651,9 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
               )}
             </section>
 
+            {/* ── The report and anything else filed on the visit. ── */}
+            <VisitFiles inspection={i} busy={busy} onMove={move} />
+
             {/* ── What was found. ── */}
             <Findings inspection={i} findings={held.findings} busy={busy} onMove={move} onRecord={setRecording} />
 
@@ -684,6 +687,66 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
       />
     )}
     </SaveScopeProvider>
+  );
+}
+
+/**
+ * The files on a visit (19 Oct 2026). A visit made in Inventory Base comes
+ * with its report, recorded from the home's page; this is where it is seen,
+ * and where one is added afterwards. Filed under the visit's own ref.
+ */
+function VisitFiles({ inspection: i, busy, onMove }: { inspection: Inspection; busy: boolean; onMove: Move }) {
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const files = i.files ?? [];
+
+  async function add(list: File[]) {
+    if (list.length === 0) return;
+    setUploading(true);
+    setErr(null);
+    try {
+      for (const file of list) {
+        const body = new FormData();
+        body.set("scope", "document");
+        body.set("ref", `inspection-${i.id}`);
+        body.set("file", file);
+        const j = await fetch("/api/r2/upload", { method: "POST", body }).then((r) => r.json());
+        if (!j.ok) throw new Error(j.error ?? `${file.name} would not upload.`);
+        if (!(await onMove({ action: "file", file: { key: j.key, name: file.name, type: j.type || file.type } }, "File"))) break;
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "That would not upload.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Report and files</p>
+        <label className={`text-[11.5px] font-semibold ${busy || uploading ? "text-muted" : "cursor-pointer text-accent-dark underline"}`}>
+          {uploading ? "Uploading…" : "Add a file"}
+          <input type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" disabled={busy || uploading} onChange={(e) => { void add(Array.from(e.target.files ?? [])); e.target.value = ""; }} className="hidden" />
+        </label>
+      </div>
+      {files.length > 0 ? (
+        <ul className="mt-3 space-y-1.5">
+          {files.map((f) => (
+            <li key={f.key}>
+              <a href={`/api/r2/file?key=${encodeURIComponent(f.key)}`} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-2 text-[12.5px] hover:underline">
+                <DoodleIcon name="doc" size={13} className="shrink-0 text-accent-dark" />
+                <span className="truncate font-semibold">{f.name}</span>
+                <span className="shrink-0 text-[11px] text-muted">{f.by ? `${f.by}, ` : ""}{stamp(f.at)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-[12px] text-muted">None yet. A report made somewhere else, such as Inventory Base, can go here.</p>
+      )}
+      {err && <p className="mt-2 text-[11.5px] text-accent-dark">{err}</p>}
+    </section>
   );
 }
 

@@ -39,6 +39,8 @@ import type { DueVisit, Inspection } from "@/lib/inspections";
 import type { DueReview, Review } from "@/lib/tenancy-reviews";
 import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
 import PastTenancies from "@/components/portfolio/PastTenancies";
+import FileDocuments from "@/components/FileDocuments";
+import RecordPastVisit from "@/components/inspections/RecordPastVisit";
 
 /**
  * One home, the whole of it, on one page.
@@ -55,12 +57,15 @@ import PastTenancies from "@/components/portfolio/PastTenancies";
  * fails says it failed and the rest of the page stands. Nothing is a sample.
  */
 
-type Tab = "maintenance" | "compliance" | "inspections" | "tenancy";
+type Tab = "maintenance" | "compliance" | "inspections" | "tenancy" | "documents";
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "maintenance", label: "Maintenance", icon: "setting" },
   { id: "compliance", label: "Compliance", icon: "shield" },
   { id: "inspections", label: "Inspections", icon: "checklist" },
   { id: "tenancy", label: "Tenancy", icon: "key" },
+  /* Kirstie Mulholland, 19 Oct 2026: somewhere for everything that isn't a
+     certificate, and a way to add it once the let has gone through. */
+  { id: "documents", label: "Documents", icon: "folder" },
 ];
 
 /** The pop-up open over the page: an action, picked up from a draft or fresh. */
@@ -70,7 +75,8 @@ type Action =
   | { kind: "notices"; start: NoticeKind }
   | { kind: "tenant-notice"; draft?: PropertyDraft }
   | { kind: "swap" }
-  | { kind: "swap-open" };
+  | { kind: "swap-open" }
+  | { kind: "past-visit" };
 const DRAFT_TITLE: Record<string, string> = { repair: "Report a repair", planned: "Plan a certificate", "tenant-notice": "Tenant gave notice" };
 
 /** One line on the latest activity list. */
@@ -174,6 +180,15 @@ export default function PropertyPage() {
       if (Array.isArray(o)) setOrder(o.map(String));
     } catch { /* fine */ }
   }, []);
+  /* On a phone the tabs scroll sideways; the one picked slides into view
+     (Documents, the fifth, sat off the edge when Add a document opened it). */
+  const tabsRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const nav = tabsRef.current;
+    const on = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !on || nav.scrollWidth <= nav.clientWidth) return;
+    nav.scrollTo({ left: Math.max(0, on.offsetLeft - nav.offsetLeft - 16), behavior: "smooth" });
+  }, [tab, book.state]);
   const pickTab = useCallback((t: Tab) => {
     setTab(t);
     try {
@@ -730,6 +745,8 @@ export default function PropertyPage() {
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className={tile}>{tileIcon("setting")}{tileText("Report a repair", "Tenant and landlord told at each step")}</button>
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}{tileText("Plan a certificate", "A gas safety, EICR or service, by a date")}</button>
                 <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}{tileText("Book a property visit", "Every 6 months: the home and the tenant")}</button>
+                {/* Kayleigh Wright, 19 Oct 2026: visits done in Inventory Base, put on the home afterwards. */}
+                <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => act({ kind: "past-visit" })} className={tile}>{tileIcon("clock")}{tileText("Record a past visit", "Already done elsewhere. No emails")}</button>
                 <button type="button" onClick={() => act({ kind: "notices", start: "s8" })} disabled={roomsOnly} className={tile}>{tileIcon("file-contract")}{tileText("Serve notice", "Section 8, checked by compliance")}</button>
                 <button type="button" onClick={() => act({ kind: "notices", start: "s13" })} disabled={roomsOnly} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
                 <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}{tileText("Tenant gave notice", "Starts the move-out")}</button>
@@ -747,6 +764,7 @@ export default function PropertyPage() {
                 {/* Sean McMahon, 16 Oct 2026: tenants report repairs in their portal, as Fixflow had them do. */}
                 <button type="button" disabled={p.test || !loginListings.length} onClick={() => setShowLogins(true)} className={tile}>{tileIcon("mail")}{tileText("Send out logins", "Tenant account, to report repairs")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
+                <button type="button" disabled={p.test} onClick={() => { pickTab("documents"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("folder")}{tileText("Add a document", "An inventory, an agreement, anything else")}</button>
                 {canAct && noticeIn ? (
                   <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className={tile}>{tileIcon("key")}{tileText("Book the check-out", leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in")}</button>
                 ) : null}
@@ -824,7 +842,7 @@ export default function PropertyPage() {
                     ))}
                   </ul>
                 ) : tenants.length ? (
-                  <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} role="tenant" />)}</ul>
+                  <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} role="tenant" about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />)}</ul>
                 ) : (
                   <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on record. It is empty, or the let has not been recorded.</p>
                 )}
@@ -896,7 +914,7 @@ export default function PropertyPage() {
 
           {/* ── 3. the sections ────────────────────────────────────────── */}
           <section id="sections" className={`${box} min-w-0 scroll-mt-5 p-5 xl:col-start-1 xl:row-start-3`}>
-            <nav className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" aria-label="Sections">
+            <nav ref={tabsRef} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible" aria-label="Sections">
               {TABS.map((t) => (
                 <button
                   key={t.id}
@@ -1004,6 +1022,24 @@ export default function PropertyPage() {
               </div>
             )}
 
+            {tab === "documents" && (
+              <section className="mt-4">
+                {/* The home's documents (lib/file-documents): what Kirstie added
+                    on the deal and the agent on the listing or application for
+                    this address are all here, and anything added here is on
+                    theirs. Kept on the OS; nobody is sent anything. */}
+                <FileDocuments
+                  key={p.listingId}
+                  address={noticeHome.address}
+                  propertyId={/^\d+$/.test(String(p.propertyId ?? "")) ? p.propertyId : null}
+                  from={{ kind: "property", id: String(p.listingId) }}
+                  showMissing={false}
+                  dropZone
+                  intro="Inventories, agreements and anything else that isn't a certificate. Kept on this home, so the office and the agent both see them, including what was added at pre-tenancy. Uploading sends nothing to the landlord or tenant."
+                />
+              </section>
+            )}
+
           </section>
 
           {/* Rent where the map was (James, 8 Oct 2026): up to date or how
@@ -1059,6 +1095,31 @@ export default function PropertyPage() {
             team={visits.data.team}
             me={visits.data.me}
             onBooked={() => { setAction(null); loadVisits(); pickTab("inspections"); }}
+          />
+        </Modal>
+      )}
+      {action?.kind === "past-visit" && visits.state === "ready" && propertyId && (
+        <Modal onClose={closeAction} title="Record a past visit" wide>
+          <RecordPastVisit
+            home={{
+              propertyName: house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name,
+              locality: p.locality,
+              propertyId,
+              listingId: String(p.listingId),
+              address: noticeHome.address,
+              rexPropertyId: /^\d+$/.test(propertyId) ? propertyId : null,
+              landlord: landlord?.name ?? "",
+              landlordEmail: landlord?.email ?? "",
+              tenant: tenants.map((t) => t.name).join(", "),
+              tenantEmail: tenants[0]?.email ?? "",
+              tenantPhone: tenants[0]?.phone ?? "",
+              tenancyStart: tenancy.state === "ready" ? tenancy.data.tenancy?.startDate ?? null : null,
+            }}
+            open={visits.data.inspections}
+            due={visits.data.due}
+            me={visits.data.me?.name ?? ""}
+            onCancel={closeAction}
+            onDone={() => { setAction(null); loadVisits(); pickTab("inspections"); }}
           />
         </Modal>
       )}
@@ -1202,11 +1263,12 @@ function RecordLandlord({ propertyId, current, onSaved }: { propertyId: string; 
   );
 }
 
-function PartyCard({ p, plain = false, role, home }: { p: Party; plain?: boolean; role?: string; home?: { propertyAddress?: string | null } }) {
+function PartyCard({ p, plain = false, role, home, about }: { p: Party; plain?: boolean; role?: string; home?: { propertyAddress?: string | null }; about?: string }) {
   const body = (
     <ContactBlock
       role={role}
       home={home}
+      about={about}
       person={{ name: p.name, email: p.email, phone: p.phone }}
       personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
     />
@@ -1290,6 +1352,17 @@ function VisitsList({ data }: { data: Visits }) {
         </span>
         <Pill tone={i.status === "closed" || i.status === "reported" ? "good" : i.status === "no_access" ? "accent" : "neutral"}>{VISIT_STATUS[i.status] ?? i.status}</Pill>
       </Link>
+      {/* The report that came with it (a visit recorded from Inventory Base, 19 Oct 2026). */}
+      {i.files?.length > 0 && (
+        <div className="-mt-1 flex flex-wrap gap-1.5 px-4 pb-3">
+          {i.files.map((f) => (
+            <a key={f.key} href={`/api/r2/file?key=${encodeURIComponent(f.key)}`} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11.5px] hover:border-ink/40">
+              <DoodleIcon name="doc" size={11} className="shrink-0 text-accent-dark" />
+              <span className="truncate">{f.name}</span>
+            </a>
+          ))}
+        </div>
+      )}
     </li>
   );
   return (

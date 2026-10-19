@@ -28,6 +28,10 @@ export const DOC_TYPES: DocType[] = [
   { key: "epc", label: "Energy Performance Certificate", side: "home" },
   { key: "gas_safety", label: "Gas Safety Certificate", side: "home" },
   { key: "eicr", label: "Electrical Installation Condition Report", side: "home" },
+  /* Kirstie Mulholland, 19 Oct 2026: an inventory could only go on a home as
+     a certificate, which wants an issue and an expiry date it doesn't have.
+     It is a document, labelled so it is easy to spot. */
+  { key: "inventory", label: "Inventory", side: "home" },
 ];
 
 export const OTHER = "other";
@@ -38,6 +42,10 @@ export function docTypeLabel(key: string): string {
   if (key === OTHER) return "Other";
   return DOC_TYPES.find((t) => t.key === key)?.label ?? key;
 }
+
+/** An inventory, by its type or by the name somebody gave an Other before Inventory was a type. */
+export const isInventory = (d: { type: string; name?: string | null }): boolean =>
+  d.type === "inventory" || (d.type === OTHER && /inventor/i.test(String(d.name ?? "")));
 
 export const isDocType = (key: string): boolean => key === OTHER || DOC_TYPES.some((t) => t.key === key);
 
