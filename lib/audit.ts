@@ -93,7 +93,10 @@ export type AuditKind =
   /* Saved through Steve's card (lib/assistant-actions, 15 Oct 2026): a
      tenant's right to rent expiry on a let, and a home's address in the OS. */
   | "rtr_expiry_recorded"
-  | "property_address_changed";
+  | "property_address_changed"
+  /* A list downloaded as a spreadsheet (19 Oct 2026, lib/exports): which
+     screen, how many rows and the filters. No emails or phones go in one. */
+  | "data_exported";
 
 export interface AuditRow {
   id: string;

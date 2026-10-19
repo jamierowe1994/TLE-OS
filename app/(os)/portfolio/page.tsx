@@ -22,6 +22,7 @@ import PastTenancies from "@/components/portfolio/PastTenancies";
 import Segmented from "@/components/Segmented";
 import ListSearch from "@/components/ListSearch";
 import SendLogins from "@/components/portfolio/SendLogins";
+import ExcelButton from "@/components/ExcelButton";
 import { searchMatches } from "@/lib/search-match";
 
 /**
@@ -513,6 +514,23 @@ export default function Portfolio() {
               <DoodleIcon name="mail" size={12} className="text-accent-dark" />
               Send out logins
             </button>
+            {/* Kirstie, 16 Oct 2026: the homes on show as a spreadsheet, filters and all (lib/exports). */}
+            {view === "properties" && <ExcelButton
+              href="/api/export/portfolio"
+              disabled={!book || filteredHomes.length === 0}
+              body={() => ({
+                listings: filteredHomes.map((h) => String(h.listingId)),
+                filters: [
+                  q.trim() && `Search "${q.trim()}"`,
+                  service && `Service ${service}`,
+                  agent && `Agent ${agents.find((a) => a.id === agent)?.label ?? agent}`,
+                  town && `Town ${town}`,
+                  lookOnly && "Needs a look",
+                  notOnRexOnly && "Not on REX",
+                  reletOnly && "Relet",
+                ].filter(Boolean).join(", "),
+              })}
+            />}
             <span className="ml-auto">
               <ListSearch value={q} onChange={setQ} placeholder="Address, landlord, tenant or agent…" />
             </span>

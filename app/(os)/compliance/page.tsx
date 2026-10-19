@@ -7,6 +7,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
+import ExcelButton from "@/components/ExcelButton";
 import StatTile, { toneFor } from "@/components/StatTile";
 import {
   BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, renewalHeld, shownStatus, statusOf,
@@ -341,6 +342,19 @@ export default function Compliance() {
               </button>
             )}
           </h2>
+          <span className="flex flex-wrap items-center gap-2">
+          {/* Kirstie, 16 Oct 2026: every certificate on the homes shown, with its contractor (lib/exports). */}
+          <ExcelButton
+            href="/api/export/certificates"
+            disabled={!source.live || book.length === 0}
+            body={() => ({
+              properties: book.map(({ p }) => p.id),
+              filters: [
+                filter !== "all" && (TILES.find((t) => t.key === filter)?.label ?? filter),
+                query.trim() && `Search "${query.trim()}"`,
+              ].filter(Boolean).join(", "),
+            })}
+          />
           <label className="flex items-center gap-2 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
             <DoodleIcon name="search" size={13} className="shrink-0 text-muted" />
             <input
@@ -350,6 +364,7 @@ export default function Compliance() {
               className="w-44 bg-transparent text-[12px] outline-none placeholder:text-muted/70"
             />
           </label>
+          </span>
         </div>
 
         <div className="overflow-x-auto">
