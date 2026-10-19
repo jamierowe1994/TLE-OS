@@ -114,6 +114,8 @@ export function StepRex({
      (16 Oct 2026): Rovena Buci, Tony Poon and Ed Westwood each sat on this
      screen after REX refused their password, with nothing to press. */
   const [refused, setRefused] = useState(false);
+  /* Signed out of the OS itself, so REX was never asked. */
+  const [signedOut, setSignedOut] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -126,9 +128,19 @@ export function StepRex({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const j = (await r.json()) as { ok?: boolean; error?: string; refused?: boolean };
-      if (j.ok) onDone();
-      else {
+      const j = (await r.json()) as { ok?: boolean; error?: string; refused?: boolean; signedOut?: boolean };
+      if (j.ok) {
+        onDone();
+      } else if (j.signedOut || /signed out|session has ended|sign in to the os/i.test(j.error ?? "")) {
+        /* NOT A REX REFUSAL (19 Oct 2026). Every 401 was read as "REX said no",
+           and a signed-out 401 never reaches REX at all - the OS session had
+           lapsed while the screen sat open, so the password was never tried.
+           Five attempts in three minutes went this way on 19 Oct, each one
+           taking under 13ms, and the person was told their REX password was
+           wrong. Say what actually happened, and send them to sign in. */
+        setSignedOut(true);
+        setError(null);
+      } else {
         setError(j.error ?? "REX would not accept that. Check the address and try again.");
         if (r.status === 401) setRefused(true);
       }
@@ -159,6 +171,17 @@ export function StepRex({
         <RexDino size={230} />
         <p className="hand text-[11.5px] text-muted">This is the one James drew.</p>
       </div>
+
+      {signedOut && (
+        <Problem>
+          You have been signed out of TLE OS, so it could not try REX at all. Your
+          REX password is not the problem.{" "}
+          <a href="/sign-in" className="font-semibold underline">
+            Sign in again
+          </a>
+          , then connect REX.
+        </Problem>
+      )}
 
       {error && <Problem>{error}</Problem>}
 
