@@ -38,6 +38,34 @@ import { hasDb, q } from "@/lib/db";
 export type TenantChangeKind = "swap" | "add" | "rereference";
 export const CHANGE_LABEL: Record<TenantChangeKind, string> = { swap: "Tenant swap", add: "Tenant added", rereference: "Re-reference" };
 
+/**
+ * Is this let's push held to a rehearsal? (19 Oct 2026.) An Add someone, a
+ * Re-reference, and a plain swap with staying tenants ticked to be
+ * referenced again are all new since the swap went live on 12 Oct, so all
+ * three wait on tenant_changes_live. A plain swap (nobody staying
+ * referenced) is the proven one and runs on Handover as before. One rule,
+ * read by the push (/api/handoff) and by the let's Next Step, so the
+ * button's words and what it does never disagree. Unreadable switch = held.
+ */
+export function isNewTenantChange(swap: { kind?: string | null; rereference?: string[] | null } | null | undefined): boolean {
+  if (!swap) return false;
+  return swap.kind === "add" || swap.kind === "rereference" || (swap.rereference?.length ?? 0) > 0;
+}
+export async function heldForTenantChanges(app: { swap?: { kind?: string | null; rereference?: string[] | null } | null } | null | undefined): Promise<boolean> {
+  if (!isNewTenantChange(app?.swap)) return false;
+  const { switchOn } = await import("@/lib/switches");
+  return !(await switchOn("tenant_changes_live").catch(() => false));
+}
+
+/** Who a change of tenants sends for referencing, and who stays as they are. */
+export function referencedOn(swap: { joining: string[]; staying: string[]; rereference?: string[] | null }): { referenced: string[]; notReferenced: string[] } {
+  const again = new Set(swap.rereference ?? []);
+  return {
+    referenced: [...swap.joining, ...swap.staying.filter((n) => again.has(n))],
+    notReferenced: swap.staying.filter((n) => !again.has(n)),
+  };
+}
+
 export interface SwapPerson {
   name: string;
   email: string | null;

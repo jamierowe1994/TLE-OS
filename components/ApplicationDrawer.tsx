@@ -1040,7 +1040,7 @@ export default function ApplicationDrawer({
           ...(scottishLet ? [] : [{ icon: "shield", label: "Right to rent", text: `${answered} of ${people.length}` }]),
         ]
       : []),
-    { icon: "wallet", label: "Holding fee", text: intro ? "None - intro only" : isSwap ? `None on a ${swapWord}` : scottishLet ? "None in Scotland" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
+    { icon: "wallet", label: "Holding fee", text: intro ? "None - intro only" : isSwap ? (app?.swapKind === "add" ? "None when adding a tenant" : `None on a ${swapWord}`) : scottishLet ? "None in Scotland" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
   ];
 
   /* The activity log, for the panel at the top: what the record holds, then

@@ -279,7 +279,7 @@ export async function runHandover(
       label: "The listing",
       state: uniqueOwners.length || packet.swap ? "ok" : "failed",
       detail: packet.swap
-        ? "A tenant swap: the home and its landlord are already in Propoly, so only the new deal and its tenants go over."
+        ? "A change of tenants: the home and its landlord are already in Propoly, so only the new deal and its tenants go over."
         : uniqueOwners.length
           ? `${uniqueOwners.length} owner${uniqueOwners.length === 1 ? "" : "s"} on the listing: ${uniqueOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
           : "No owner is attached to the listing, so there is no landlord to create.",
@@ -523,7 +523,7 @@ export async function runHandover(
         }
       }
     } else if (propertyUuid) {
-      await rec.add(packet.listingId ? { id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "ok", detail: "Already on the listing." } : { id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "skipped", detail: "No REX listing for this home." });
+      await rec.add(packet.listingId ? { id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "ok", detail: "Already on the listing." } : { id: "rex-uuid", label: "Propoly link on the listing", state: "skipped", detail: "This home has no listing to link." });
     }
 
     /* 6. Each landlord related to the property.
@@ -587,8 +587,8 @@ export async function runHandover(
     /* A tenant swap stops at the deal: REX's tenancy is changed by hand, and
        nothing is written to the landlord or tenants (lib/tenant-swaps). */
     if (packet.swap) {
-      await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "skipped", detail: "A tenant swap: the tenancy in REX is changed by hand." });
-      await rec.add({ id: "tell-customers", label: "Tell the landlord and tenants", state: "skipped", detail: "A tenant swap: nothing is written for them. Tell them as you usually would." });
+      await rec.add({ id: "rex-tenants", label: "Tenants on the listing", state: "skipped", detail: "A change of tenants: the tenancy record is changed by hand." });
+      await rec.add({ id: "tell-customers", label: "Tell the landlord and tenants", state: "skipped", detail: "A change of tenants: nothing is written for them. Tell them as you usually would." });
     } else {
       /* 7. The tenants on the REX listing - once. A push that stopped part-way
          is pushed again (12b Cliff Road, 9 Oct 2026: property in, landlord
@@ -789,8 +789,22 @@ async function pushDeal(
     const payload = dealPayload(terms, realProperty, managedBy);
     if (!o.live) {
       await rec.add({ id: "deal", label, state: "would", detail: `Would start the deal: ${termWords(terms)}.`, request: payload });
+      /* Who would be referenced, said on each line, so a rehearsal of an Add
+         someone or a Re-reference shows exactly what live would send
+         (tenant_changes_live, 19 Oct 2026). */
       for (const t of o.packet.tenants) {
-        await rec.add({ id: `deal-tenant:${t.contactId ?? t.name}`, label: `Tenant on the deal: ${t.name}`, state: "would", detail: "Would add them to the deal." });
+        const referenced = t.reference !== false;
+        await rec.add({
+          id: `deal-tenant:${t.contactId ?? t.name}`,
+          label: `Tenant on the deal: ${t.name}`,
+          state: "would",
+          detail: !t.email
+            ? referenced
+              ? "No email address, and Propoly needs one to reference them: this tenant would not go over."
+              : "No email address, so they would not go over: add them to the deal in Propoly by hand."
+            : `Would add them to the deal, ${referenced ? "sent for referencing" : "with no references"}${t.rentSharePcm ? `, paying ${pounds(t.rentSharePcm)} a month of the rent` : ""}.`,
+          request: { tenant: { reference_required: referenced, ...(t.rentSharePcm ? { rent_share_pcm_pence: Math.round(t.rentSharePcm * 100) } : {}) } },
+        });
       }
       return "would";
     }
@@ -818,6 +832,14 @@ async function pushDeal(
   for (const t of o.packet.tenants) {
     const sid = `deal-tenant:${t.contactId ?? t.name}`;
     const tlabel = `Tenant on the deal: ${t.name}`;
+    /* Someone staying on a change of tenants, not being referenced, with no
+       email on the home: they don't stop the deal for the people who are
+       (lib/deal-handoff says the same), so the run isn't marked failed and
+       pushed again and again over them. Added in Propoly by hand. */
+    if (!t.email && t.reference === false) {
+      await rec.add({ id: sid, label: tlabel, state: "skipped", detail: "No email address, and Propoly needs one. Not referenced, so the deal went ahead without them: add them to it in Propoly by hand." });
+      continue;
+    }
     if (!t.email) {
       await rec.add({ id: sid, label: tlabel, state: "failed", detail: "No email address, and Propoly needs one. Add it in REX and push again, or add them in Propoly." });
       result = "failed";
@@ -858,7 +880,7 @@ async function pushDeal(
     if (p(tm.price_pcm_pence) != null && terms.rentPcm != null && p(tm.price_pcm_pence) !== terms.rentPcm) differs.push(`rent is ${pounds(p(tm.price_pcm_pence))}, not ${pounds(terms.rentPcm)}`);
     if (str(tm.move_in_date) && terms.moveIn && str(tm.move_in_date)?.slice(0, 10) !== terms.moveIn) differs.push(`move-in is ${dayOf(str(tm.move_in_date))}`);
     if (!found && terms.holdingFeePounds && !p(tm.holding_fee_pence)) differs.push("no holding fee is set");
-    if (o.packet.swap && p(tm.holding_fee_pence)) differs.push(`Propoly put a holding fee of ${pounds(p(tm.holding_fee_pence))} on it - a tenant swap has none, so set it to not required in Propoly and the deal moves to referencing`);
+    if (o.packet.swap && p(tm.holding_fee_pence)) differs.push(`Propoly put a holding fee of ${pounds(p(tm.holding_fee_pence))} on it - a change of tenants has none, so set it to not required in Propoly and the deal moves to referencing`);
     const tenants = ((after.tenants ?? []) as Row[]).length;
     /* Propoly puts its Flatfair clause on every deal made from here. Right
        when the landlord opted into zero deposit; otherwise it comes off. */

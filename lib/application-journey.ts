@@ -17,6 +17,7 @@ import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
 import { PORTAL_STAGES, propolyDealUrl, stagesFor } from "@/lib/business/propoly-stages";
 import { isScottish } from "@/lib/property-flags";
 import { switchOn } from "@/lib/switches";
+import { heldForTenantChanges, referencedOn } from "@/lib/tenant-swaps";
 import { q } from "@/lib/db";
 import { closedReasons, getApplications } from "@/lib/applications";
 import { feeOf, otherOpenOffers } from "@/lib/offer-hold";
@@ -410,7 +411,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   }
 
   /* The three sources the rest reads from, in parallel. */
-  const [handoff, run, plcCase, allDeals, mode, dealOn] = await Promise.all([
+  const [handoff, run, plcCase, allDeals, switchMode, dealOn, changeHeld] = await Promise.all([
     buildHandoff(app).catch(() => null),
     /* The push that went, over any rehearsal run after it: a rehearsal
        after a live push made the let read "not in Propoly yet" and offered
@@ -427,7 +428,15 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     deals().catch(() => null),
     handoverMode().catch(() => "shadow" as const),
     switchOn("handover_deal").catch(() => false),
+    heldForTenantChanges(app).catch(() => true),
   ]);
+  /* An add or a re-reference pushes for real only once tenant_changes_live
+     is on; until then its button rehearses, and says so (lib/tenant-swaps). */
+  const mode = changeHeld ? ("shadow" as const) : switchMode;
+  /* Who a change of tenants sends for referencing (19 Oct 2026: on a
+     re-reference nobody joins, so "the newcomer" was a blank). */
+  const refs = app.swap ? referencedOn(app.swap) : null;
+  const refNames = refs?.referenced.join(", ") || "the new tenants";
 
   /* A tenant swap's home already has a deal - the tenancy being changed - so
      only the new one counts: the deal its own push started, or one keyed in
@@ -477,7 +486,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     if (startedUuid && app.swap) {
       /* A swap has no holding fee (James, 13 Oct 2026): the deal goes to
          referencing for the newcomer once Propoly's deals are next read. */
-      actions.push({ id: "swap-refs", label: "Referencing the new tenant", detail: `The swap is in Propoly. ${app.swap.joining.join(", ")} ${app.swap.joining.length === 1 ? "is" : "are"} referenced; everybody staying is not.`, href: propolyDealUrl(startedUuid), who: "tenant" });
+      const n = refs?.referenced.length ?? 0;
+      const rest = refs?.notReferenced.length ? ` ${refs.notReferenced.join(", ")} ${refs.notReferenced.length === 1 ? "is" : "are"} on the deal with no references.` : "";
+      actions.push({ id: "swap-refs", label: app.swap.joining.length ? "Referencing the new tenant" : "Referencing the tenants", detail: `The new deal is in Propoly. ${refNames} ${n === 1 ? "is" : "are"} referenced.${rest}`, href: propolyDealUrl(startedUuid), who: "tenant" });
     } else if (startedUuid && scotland) {
       actions.push({ id: "scot-fee", label: "Take the holding fee off in Propoly", detail: "Scotland takes no holding fee, but Propoly puts its own on every deal started from the OS. Set it to not required, check the deposit, then start referencing.", href: propolyDealUrl(startedUuid), who: "kirstie" });
     } else if (startedUuid) {
@@ -503,7 +514,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     actions.push(
       mode === "live"
         ? { id: "handover", label: "Push to Propoly", detail: dealOn ? "Accepted. Push it to Propoly: the landlord, the home and the deal with its tenants go over, using what Propoly already has where it has it, so nothing is duplicated." : "Accepted. Push it to Propoly: the landlord and the home go over, using the records Propoly already has where it has them, so nothing is duplicated.", href: null, who: "you", push: true }
-        : { id: "handover", label: "Push to Propoly", detail: "Accepted. The push is still in practice mode, so pressing it checks every step and writes nothing.", href: null, who: "you", push: true }
+        : changeHeld && refs
+          ? { id: "handover", label: "Push to Propoly", detail: `This change of tenants is in practice mode for now, so pressing it checks every step and writes nothing. Start the new deal in Propoly by hand meanwhile: everyone on it, only ${refNames} referenced, holding fee not required.`, href: null, who: "you", push: true }
+          : { id: "handover", label: "Push to Propoly", detail: "Accepted. The push is still in practice mode, so pressing it checks every step and writes nothing.", href: null, who: "you", push: true }
     );
   }
   stops.push(handoverStop);
@@ -528,7 +541,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     actions.push({
       id: "swap-fee",
       label: "Take the holding fee off in Propoly",
-      detail: `A tenant swap has no holding fee, but Propoly puts its own on every deal started from the OS (${due ? `£${Math.round(due).toLocaleString("en-GB")} here` : "a week's rent"}) - it can't be switched off from outside Propoly. Set the holding fee to not required, check the deposit, then start referencing for ${app.swap.joining.join(", ")}.`,
+      detail: `${app.swap.kind === "add" ? "Adding a tenant takes" : app.swap.kind === "rereference" ? "A re-reference takes" : "A tenant swap takes"} no holding fee, but Propoly puts its own on every deal started from the OS (${due ? `£${Math.round(due).toLocaleString("en-GB")} here` : "a week's rent"}) - it can't be switched off from outside Propoly. Set the holding fee to not required, check the deposit, then start referencing for ${refNames}.`,
       href: dealUrlOf(deal),
       who: "kirstie",
     });

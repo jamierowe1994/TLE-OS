@@ -5,6 +5,7 @@ import { handoffFor } from "@/lib/deal-handoff";
 import { ensureHandoverTodos, handoverMode, handoversFor, runHandover } from "@/lib/handover";
 import { dealDraftFor, DEAL_TEMPLATES, ENGLISH_SCHEMES, PAYMENT_SCHEDULES, SERVICE_LEVELS, TENANCY_TYPES, type DealTerms } from "@/lib/handover-deal";
 import { switchOn } from "@/lib/switches";
+import { heldForTenantChanges } from "@/lib/tenant-swaps";
 import { rexConfigured } from "@/lib/rex";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
@@ -159,7 +160,8 @@ export async function GET(req: NextRequest) {
     const refused = notTheirs(me, app?.agent);
     if (refused) return NextResponse.json({ error: refused }, { status: 403 });
     const [switchMode, runs, dealOn, held] = await Promise.all([handoverMode(), handoversFor(id, 5), switchOn("handover_deal"), heldForTenantChanges(app)]);
-    /* An add or a re-reference rehearses until tenant_changes_live is on. */
+    /* An add, a re-reference, or a swap re-referencing someone staying
+       rehearses until tenant_changes_live is on (lib/tenant-swaps). */
     const mode = held ? ("shadow" as const) : switchMode;
     /* The deal the push would start, for the agent to check first. Only
        when the push would really start one. */
@@ -254,15 +256,4 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: publicError(e) }, { status: 409 });
   }
-}
-
-/**
- * Add someone and Re-reference (lib/tenant-swaps, 19 Oct 2026) are saved in
- * the OS and rehearsed, never pushed for real, until James switches on
- * tenant_changes_live. A plain tenant swap is not held: it runs on Handover.
- */
-async function heldForTenantChanges(app: { swap?: { kind?: string } | null } | null): Promise<boolean> {
-  const kind = app?.swap?.kind;
-  if (kind !== "add" && kind !== "rereference") return false;
-  return !(await switchOn("tenant_changes_live"));
 }
