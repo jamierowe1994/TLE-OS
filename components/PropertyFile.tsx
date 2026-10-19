@@ -7,6 +7,7 @@ import { Pill } from "@/components/Wire";
 import { openDocument } from "@/lib/doc-sheet";
 import PropertyAnswers from "@/components/PropertyAnswers";
 import { useSaveReporter } from "@/components/SaveChip";
+import { CHOICES, eicExpiry, type EicReason } from "@/lib/home-facts-shared";
 
 /**
  * The property file: one panel, the same wherever a home is opened.
@@ -53,6 +54,22 @@ const TYPE_LABEL: Record<string, string> = {
   emergency_lighting_fire_exit: "Fire safety",
 };
 const READER_TO_TYPE: Record<string, string> = { hmo_licence: "mandatory_hmo_license" };
+
+/**
+ * An EIC in place of an EICR (Dan, 17 Oct 2026): on a new build or after a
+ * full rewire the Electrical Installation Certificate answers the electrical
+ * check. It is filed as the home's EICR - one duty, one row, REX's own type -
+ * named as an EIC, with the reason, and the home remembers it (lib/home-facts).
+ */
+const EIC = "eic";
+const TYPE_CHOICES: [string, string][] = Object.entries(TYPE_LABEL).flatMap(([k, v]): [string, string][] => (k === "eicr" ? [[k, v], [EIC, "EIC (new build or full rewire)"]] : [[k, v]]));
+/** The reader calls an EIC an EICR (it is told one counts as the other); its notes say which it was. */
+const looksLikeEic = (r: Read | null) => Boolean(r && r.type === "eicr" && /installation certificate|new (electrical )?installation|\bEIC\b/i.test(r.notes) && !/condition report/i.test(r.notes));
+/** An EIC's expiry is five years from its issue at most, whatever it recommends. */
+const cappedEic = (issue: string, expiry: string) => {
+  const cap = eicExpiry(issue);
+  return cap && (!expiry || expiry > cap) ? cap : expiry;
+};
 
 /**
  * HOW IT GOT HERE, and why it is a question rather than a guess.
@@ -135,7 +152,7 @@ export default function PropertyFile({
   const [error, setError] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(null); // a candidate the person chose
   const [open, setOpen] = useState<Record<string, boolean>>({}); // rows showing every file, not just the latest
-  const [pending, setPending] = useState<{ file: File; forType: string | null; read: Read | null; type: string; expiry: string; issue: string; how: string; busy: boolean; note: string | null } | null>(null);
+  const [pending, setPending] = useState<{ file: File; forType: string | null; read: Read | null; type: string; expiry: string; issue: string; how: string; busy: boolean; note: string | null; eicReason?: EicReason | "" } | null>(null);
   /* Who the certificate reached, on the same screen as the filing. Not a
      toast: "the tenant has no email address on the record" is a finding
      somebody has to act on, and it must not slide away after four seconds. */
@@ -211,22 +228,31 @@ export default function PropertyFile({
     if (forType.current) body.set("expect", forType.current);
     const j = await fetch("/api/compliance/certificates/read", { method: "POST", body }).then((r) => r.json()).catch(() => ({ ok: false }));
     const read: Read | null = j.ok ? j.read : null;
-    const type = forType.current ?? (read ? READER_TO_TYPE[read.type] ?? read.type : "");
-    setPending((p) => (p ? { ...p, read, type: TYPE_LABEL[type] ? type : p.type, expiry: read?.expiry ?? "", issue: read?.issue ?? "", busy: false, note: j.ok ? null : j.error ?? "The reader could not open it; fill the facts in by hand." } : p));
+    const read0 = forType.current ?? (read ? READER_TO_TYPE[read.type] ?? read.type : "");
+    const type = read0 === "eicr" && looksLikeEic(read) ? EIC : read0;
+    const issue = read?.issue ?? "";
+    const expiry = type === EIC && issue ? cappedEic(issue, read?.expiry ?? "") : read?.expiry ?? "";
+    setPending((p) => (p ? { ...p, read, type: TYPE_LABEL[type] || type === EIC ? type : p.type, expiry, issue, eicReason: "", busy: false, note: j.ok ? null : j.error ?? "The reader could not open it; fill the facts in by hand." } : p));
   }
 
   async function file() {
     if (!pending || !pending.type || !pending.expiry) return;
+    const eic = pending.type === EIC;
+    if (eic && (!pending.issue || !pending.eicReason)) {
+      setPending((p) => (p ? { ...p, note: "An EIC needs the date it was issued, and whether the home is a new build or was fully rewired." } : p));
+      return;
+    }
     setPending((p) => (p ? { ...p, busy: true, note: null } : p));
     const body = new FormData();
     body.set("file", pending.file);
     if (effectiveId) body.set("propertyId", effectiveId);
     else if (address) body.set("address", address);
-    body.set("type", pending.type);
-    body.set("expiry", pending.expiry);
+    body.set("type", eic ? "eicr" : pending.type);
+    body.set("expiry", eic ? cappedEic(pending.issue, pending.expiry) : pending.expiry);
     if (pending.issue) body.set("issue", pending.issue);
     if (address) body.set("propertyName", address);
-    body.set("source", `${pending.how}, on ${screen}`);
+    const why = eic ? CHOICES.eicReason.find((c) => c.value === pending.eicReason)?.label.toLowerCase() : null;
+    body.set("source", `${eic ? `EIC (${why}), ` : ""}${pending.how}, on ${screen}`);
     /* Reported to the screen's Auto save chip as well as the line under the
        form, which stays: it is where the agent is looking. A failure keeps
        the form and what was typed into it. */
@@ -245,6 +271,11 @@ export default function PropertyFile({
       return;
     }
     settle({ ok: true });
+    /* The home remembers its electrics are an EIC, so its row and the
+       compliance tiles say so from now on (lib/home-facts). */
+    if (eic && effectiveId && /^(\d+|pm-[0-9a-f-]+)$/i.test(effectiveId)) {
+      await fetch("/api/home-facts", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ home: effectiveId, electrical: "eic", eicReason: pending.eicReason }) }).catch(() => null);
+    }
     setPending(null);
     setWent(j.duplicate ? "That certificate is already on this home; nothing was sent again." : (j.share?.line ?? null));
     load();
@@ -345,7 +376,7 @@ export default function PropertyFile({
             <>
               {pending.read && (
                 <p className="mt-1 text-[12px] leading-relaxed text-muted">
-                  Reads as {TYPE_LABEL[READER_TO_TYPE[pending.read.type] ?? pending.read.type] ?? pending.read.type}
+                  Reads as {looksLikeEic(pending.read) ? "an EIC" : TYPE_LABEL[READER_TO_TYPE[pending.read.type] ?? pending.read.type] ?? pending.read.type}
                   {pending.read.expiry ? `, expires ${day(pending.read.expiry)}${pending.read.expiryDerived ? " (worked out from the issue date)" : ""}` : ", no expiry printed"}
                   {pending.read.address ? `. Address on it: ${pending.read.address}` : ""}
                   {pending.read.notes ? ` ${pending.read.notes}` : ""}
@@ -354,9 +385,9 @@ export default function PropertyFile({
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <label className="text-[11px] text-muted">
                   Type
-                  <select value={pending.type} onChange={(e) => setPending((p) => (p ? { ...p, type: e.target.value } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink">
+                  <select value={pending.type} onChange={(e) => setPending((p) => (p ? { ...p, type: e.target.value, expiry: e.target.value === EIC && p.issue ? cappedEic(p.issue, p.expiry) : p.expiry } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink">
                     <option value="">Choose…</option>
-                    {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {TYPE_CHOICES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </label>
                 <label className="text-[11px] text-muted">
@@ -365,8 +396,20 @@ export default function PropertyFile({
                 </label>
                 <label className="text-[11px] text-muted">
                   Issued
-                  <input type="date" value={pending.issue} onChange={(e) => setPending((p) => (p ? { ...p, issue: e.target.value } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink" />
+                  <input type="date" value={pending.issue} onChange={(e) => setPending((p) => (p ? { ...p, issue: e.target.value, expiry: p.type === EIC && e.target.value ? cappedEic(e.target.value, p.expiry) : p.expiry } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink" />
                 </label>
+                {pending.type === EIC && (
+                  <label className="text-[11px] text-muted sm:col-span-3">
+                    Why an EIC
+                    <select value={pending.eicReason ?? ""} onChange={(e) => setPending((p) => (p ? { ...p, eicReason: e.target.value as EicReason } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink">
+                      <option value="">Choose…</option>
+                      {CHOICES.eicReason.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                    <span className="mt-1 block leading-snug">
+                      An EIC counts in place of an EICR for 5 years from the day it was issued{pending.issue && eicExpiry(pending.issue) ? `, so it runs to ${day(eicExpiry(pending.issue))}` : ""}. After that an EICR is due.
+                    </span>
+                  </label>
+                )}
                 <label className="text-[11px] text-muted sm:col-span-3">
                   How it got here
                   <select value={pending.how} onChange={(e) => setPending((p) => (p ? { ...p, how: e.target.value } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink">

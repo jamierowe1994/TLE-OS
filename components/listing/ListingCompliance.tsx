@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyFile, { type LooseDoc } from "@/components/PropertyFile";
 import FileDocuments, { type Doc } from "@/components/FileDocuments";
 import SendTermsPopout from "@/components/SendTermsPopout";
+import HomeFacts from "@/components/HomeFacts";
 import { useSaveReporter } from "@/components/SaveChip";
 import type { LetType } from "@/lib/let-type";
 import type { TermsState } from "@/lib/use-listing-terms";
@@ -36,6 +37,12 @@ export type ListingHome = {
   scotland: boolean;
   noGas: boolean;
   terms: { rex: boolean | null; held: { how: string; name: string; at: string | null } | null };
+  /** The book's id for the home its facts are kept on (lib/home-facts), when there is one. */
+  homeKey?: string | null;
+  /** What the advert says heats the home. */
+  heating?: string | null;
+  /** The electrics are answered by an EIC (new build or full rewire). */
+  eic?: boolean;
 };
 
 /** The home's type of let and what is on file for it, read once per listing. */
@@ -44,6 +51,14 @@ export function useListingHome(listingId: string | number) {
   const [problem, setProblem] = useState<string | null>(null);
   const reporter = useSaveReporter();
   const id = String(listingId);
+  /* Read again, in place, when the home's facts change what it has to hold
+     (19 Oct 2026). The panel stays up while it does. */
+  const reload = useCallback(() => {
+    fetch(`/api/listings/home?id=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean } & ListingHome) => j?.ok && setHome(j))
+      .catch(() => null);
+  }, [id]);
 
   useEffect(() => {
     let live = true;
@@ -104,7 +119,7 @@ export function useListingHome(listingId: string | number) {
     [home, id, reporter]
   );
 
-  return { home, problem, setLetType, setIntroOnly };
+  return { home, problem, setLetType, setIntroOnly, reload };
 }
 
 /** A document uploaded as one of these is the certificate of that row. */
@@ -126,6 +141,7 @@ export default function ListingCompliance({
   landlordRegistration,
   letOnly,
   introOnly,
+  onHomeChanged,
 }: {
   listingId: string;
   propertyId: string | null;
@@ -141,6 +157,8 @@ export default function ListingCompliance({
   letOnly?: boolean;
   /** Intro only (lib/intro-only): nothing here is ours to chase. */
   introOnly?: boolean;
+  /** The home's facts changed what it has to hold (useListingHome's reload). */
+  onHomeChanged?: () => void;
 }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [papers, setPapers] = useState<{ files: Paper[]; held: string[] } | null>(null);
@@ -233,6 +251,21 @@ export default function ListingCompliance({
           </span>
         </p>
       )}
+      {/* ── 1. The facts that decide them (19 Oct 2026): no gas supply, the
+          hot water, an EIC in place of an EICR. The type of let is asked in
+          the listing's own line of facts, so not again here. ── */}
+      {(home?.homeKey ?? propertyId) && (
+        <HomeFacts
+          homeKey={home?.homeKey ?? propertyId}
+          show={["gasSupply", "hotWater", "electrical"]}
+          heating={home?.heating ?? null}
+          onChanged={() => {
+            onHomeChanged?.();
+            setFileKey((k) => k + 1);
+          }}
+        />
+      )}
+
       {/* ── 2. The certificates that type needs ── */}
       <div className="[&>section]:rounded-[22px] [&>section]:border-line/50">
         <PropertyFile

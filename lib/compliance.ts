@@ -32,7 +32,7 @@ export const CERT_META: Record<
 > = {
   eicr: {
     label: "EICR — electrical safety", short: "EICR",
-    rule: "Every 5 years. Legally required on every let.",
+    rule: "Every 5 years. Legally required on every let. On a new build or after a full rewire, the EIC counts for its first 5 years.",
     trade: "electrician", icon: "pack/checklist",
   },
   gas: {
@@ -234,6 +234,12 @@ export type CompProperty = {
   /** The clean sweep parks this home: nobody has moved in, or it is archived
    *  or vacant with no letting agreement (lib/not-let). Not ours to chase. */
   notLet?: boolean;
+  /** The electrical duty is answered by an EIC, not an EICR: a new build or a
+   *  full rewire (Dan, 17 Oct 2026). Same duty, same five years; the
+   *  certificate is just called something else (lib/home-facts). */
+  eic?: { reason: "new_build" | "rewire" | null };
+  /** Who in the OS answered the home's facts (type, gas, electrics), and when. */
+  factsBy?: Partial<Record<"homeType" | "gasSupply" | "hotWater" | "electrical" | "eicReason", { by: string; at: string }>>;
 };
 
 /**

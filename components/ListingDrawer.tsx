@@ -316,7 +316,7 @@ function ListingDrawerBody({
   const terms = useListingTerms(listing?.id ?? null);
   /* The type of let, and terms counted from wherever they already are
      (James, 12 Oct 2026): the property record's, an upload, a signature. */
-  const { home, problem: homeProblem, setLetType, setIntroOnly } = useListingHome(listing?.id ?? "");
+  const { home, problem: homeProblem, setLetType, setIntroOnly, reload: reloadHome } = useListingHome(listing?.id ?? "");
   const termsOnFile = (terms.status === "ready" && terms.signed) || Boolean(home?.terms.held) || home?.terms.rex === true;
   const termsKnown = terms.status === "ready" || home != null;
   /* The listing's property types, asked for when the Type list first opens. */
@@ -976,8 +976,9 @@ function ListingDrawerBody({
   /* Offered, never required to advertise - and the move-in will not go
      without them. */
   const beforeMoveIn: { id: string; label: string; done: boolean; fix: () => void }[] = [
-    { id: "gas", label: "Gas safety", done: certOk("gas_safety"), fix: () => goTab("compliance") },
-    { id: "eicr", label: "Electrical certificate (EICR)", done: certOk("eicr"), fix: () => goTab("compliance") },
+    /* No gas supply (19 Oct 2026, lib/home-facts): nothing to hold. */
+    { id: "gas", label: home?.noGas ? "No gas supply" : "Gas safety", done: certOk("gas_safety") || Boolean(home?.noGas), fix: () => goTab("compliance") },
+    { id: "eicr", label: home?.eic ? "Electrical certificate (EIC)" : "Electrical certificate (EICR)", done: certOk("eicr"), fix: () => goTab("compliance") },
   ];
   const readyToGoLive = certs != null && requirements.every((r) => r.done) && !(pub?.blockers.length);
   const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
@@ -1269,7 +1270,7 @@ function ListingDrawerBody({
     enquiries: enquiries === null ? "Reading…" : `${enquirers} ${enquirers === 1 ? "person" : "people"}`,
     applications: savedOffers === null ? "Reading…" : openOffers ? `${openOffers} to decide` : `${savedOffers.length} so far`,
     marketing: marketingToGo == null ? "Facts, write-up, photos" : marketingToGo === 0 ? "Complete" : `${marketingToGo} to fill in`,
-    compliance: introOnly ? (termsKnown && !termsOnFile ? "Terms to add" : "The landlord's, intro only") : certs === null ? "Reading…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : /let\s*only|tenant\s*find/i.test(live?.service ?? "") ? "Copies from the landlord" : "Certificates to add",
+    compliance: introOnly ? (termsKnown && !termsOnFile ? "Terms to add" : "The landlord's, intro only") : certs === null ? "Reading…" : certOk("epc") && (certOk("gas_safety") || home?.noGas) && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : /let\s*only|tenant\s*find/i.test(live?.service ?? "") ? "Copies from the landlord" : "Certificates to add",
     portals: pub && !pub.onPortals ? "Off for now" : "Live adverts, how they do",
   };
   const needsOf: Record<TabKey, boolean> = {
@@ -1279,7 +1280,7 @@ function ListingDrawerBody({
     enquiries: (enquiries?.length ?? 0) > 0,
     applications: openOffers > 0,
     marketing: photos.length === 0 || !shownBody,
-    compliance: (!introOnly && certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))) || (termsKnown && !termsOnFile),
+    compliance: (!introOnly && certs != null && !(certOk("epc") && (certOk("gas_safety") || home?.noGas) && certOk("eicr"))) || (termsKnown && !termsOnFile),
     portals: false,
   };
   const countOf: Partial<Record<TabKey, number>> = {
@@ -2201,6 +2202,7 @@ function ListingDrawerBody({
                   landlordRegistration={live?.record.landlordRegistration ?? null}
                   letOnly={/let\s*only|tenant\s*find/i.test(live?.service ?? "")}
                   introOnly={introOnly}
+                  onHomeChanged={reloadHome}
                 />
                 <div className="rounded-[22px] border border-line/50 bg-white p-5">
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>

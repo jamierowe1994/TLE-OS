@@ -2912,6 +2912,24 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_read_at TIMESTAMPTZ;
 -- Michael had ticked every HMO certificate on two such homes Not needed.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS not_hmo BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- What a person in the OS has said about a home (19 Oct 2026, Rhiannon's flat
+-- and Dan's tickets): is it an HMO, is there a gas supply, how is the water
+-- heated, and is its electrical certificate an EICR or an EIC (new build or
+-- full rewire). Keyed on the book's home id - the REX property id, or the
+-- OS's pm- id - so a home with no os_properties row can still be answered.
+-- Beats REX and REX PM's guesses in the compliance book (lib/home-facts).
+-- Never written back to REX. NULL = nobody here has said.
+CREATE TABLE IF NOT EXISTS os_home_facts (
+  home_key        TEXT PRIMARY KEY,
+  home_type       TEXT,          -- 'single' | 'hmo'
+  gas_supply      TEXT,          -- 'gas' | 'none'
+  hot_water       TEXT,          -- 'boiler' | 'tank'
+  electrical_cert TEXT,          -- 'eicr' | 'eic'
+  eic_reason      TEXT,          -- 'new_build' | 'rewire'
+  set_by          JSONB NOT NULL DEFAULT '{}'::jsonb,  -- per fact: { by, at }
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Every column of Susan's clean-sweep sheet, per home (24 Sep 2026): a word, a
 -- date, a number or a file, and where it came from. One row per home per field
 -- (lib/property-facts FIELDS). Filled from REX PM and Propoly first; whatever no

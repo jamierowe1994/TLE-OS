@@ -7,6 +7,8 @@ import { fetchListingBook } from "@/lib/rex-listings";
 import type { Cert, CertKey, CompProperty } from "@/lib/compliance";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { osCertsFor } from "@/lib/os-certs";
+import { allHomeFacts, applyHomeFacts } from "@/lib/home-facts";
+import type { HomeFacts } from "@/lib/home-facts-shared";
 import { applySweep, holdToNextTenancy } from "@/lib/sweep-certs";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 import { allAgents } from "@/lib/rex-agents";
@@ -471,7 +473,12 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       /* undefined is "we do not know", null is "nobody lives here". Only a
          home REX answered about can honestly say vacant. */
       tenant: tenantNames.length ? tenantNames.join(", ") : who || sitting ? null : undefined,
-      hmo: mine.some((e) => HMO_TYPES.includes(e.type_id ?? "")),
+      /* A licence entry ticked "not required" is REX saying the home needs
+         no licence, not that it is an HMO (19 Oct 2026, Rhiannon's Flat 3,
+         15 Marine Parade: REX PM had written every type on it as not
+         required, licences included, and the OS read that as an HMO - 42
+         homes the same). Only a licence somebody actually holds counts. */
+      hmo: mine.some((e) => HMO_TYPES.includes(e.type_id ?? "") && !e.details?.[e.type_id!]?.not_required),
       hasGas: hasGasRecord && !gasNotRequired,
       /* A gas entry of any kind IS an answer, including one marked not
          required - somebody looked. REX PM's category can answer it below. */
@@ -578,6 +585,13 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
      best the house or any of its rooms holds, per type, so a room REX never
      had a certificate written on still reads in date. Flats are not rooms
      and are left alone. */
+  /* What a person in the OS has said about the home (lib/home-facts, 19 Oct
+     2026) beats REX and REX PM. "Not an HMO" holds through the house's
+     sharing below, as the office's own answer does. */
+  const homeFacts = await allHomeFacts().catch(() => new Map<string, HomeFacts>());
+  for (const [id, f] of homeFacts) if (f.homeType === "single") notHmo.add(id);
+  applyHomeFacts(properties, homeFacts);
+
   const houses = new Map<string, CompProperty[]>();
   for (const p of properties) {
     const addr = `${p.name}, ${p.locality}`;
@@ -604,6 +618,8 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       m.hmo = anyHmo && !notHmo.has(m.id);
     }
   }
+  /* Again after the house shared its gas and HMO out: a room's own answer is its own. */
+  applyHomeFacts(properties, homeFacts);
   /* Scotland's EPC and legionella, held to the next tenancy (Michael, 7 Oct
      2026): on the finished book, each home on its own tenancy. */
   await holdToNextTenancy(properties).catch(() => null);

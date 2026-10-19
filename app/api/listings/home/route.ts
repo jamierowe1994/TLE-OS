@@ -10,6 +10,8 @@ import { testTermsParties } from "@/lib/test-terms";
 import { introOnlyMark, setIntroOnly } from "@/lib/intro-only";
 import { forgetListing } from "@/lib/listing-details";
 import { record } from "@/lib/audit";
+import { homeFactsFor } from "@/lib/home-facts";
+import { NO_FACTS } from "@/lib/home-facts-shared";
 
 /**
  * WHAT THIS HOME IS, AND WHAT IS ALREADY ON FILE FOR IT (James, 12 Oct 2026).
@@ -54,8 +56,12 @@ async function answer(id: number) {
       ? q<OsHome>(`SELECT id, hmo, not_hmo, no_gas FROM os_properties WHERE ($1::text IS NOT NULL AND rex_property_id = $1) OR id = $2`, [d.propertyId, d.record.osPropertyId ?? ""]).catch(() => [] as OsHome[])
       : Promise.resolve([] as OsHome[]),
   ]);
-  const hmo = homes.some((h) => h.hmo && !h.not_hmo);
-  const noGas = homes.length > 0 && homes.every((h) => h.no_gas);
+  /* What a person in the OS has said about the home (lib/home-facts, 19 Oct
+     2026) beats the property record's own columns. */
+  const factsKey = d.propertyId ?? d.record.osPropertyId ?? null;
+  const facts = factsKey ? await homeFactsFor(factsKey).catch(() => NO_FACTS) : NO_FACTS;
+  const hmo = facts.homeType ? facts.homeType === "hmo" : homes.some((h) => h.hmo && !h.not_hmo);
+  const noGas = facts.gasSupply ? facts.gasSupply === "none" : homes.length > 0 && homes.every((h) => h.no_gas);
   const name = d.address || d.street;
   const scotland = d.record.scotland || isScottishHome({ name, locality: `${d.town} ${d.postcode}` });
   const guess = deriveLetType({ name, hmo, propertyType: d.propertyType, heading: d.heading });
@@ -90,6 +96,10 @@ async function answer(id: number) {
     scotland,
     noGas,
     terms,
+    /* For the home's facts card: the home it is keyed on, and what the advert says heats it. */
+    homeKey: factsKey,
+    heating: d.facts.heating ?? null,
+    eic: facts.electrical === "eic",
   };
 }
 
@@ -115,6 +125,8 @@ async function testAnswer(id: number) {
     required: requiredFor("residential", { scotland: false, noGas: false }),
     scotland: false,
     noGas: false,
+    homeKey: null,
+    heating: null,
     terms: { rex: null, held: signed ? { how: "Signed online (test)", name: "Terms of business (test)", at: signed.completedAt } : null },
     test: true,
   };

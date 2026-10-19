@@ -76,6 +76,9 @@ export type AuditKind =
   /* A home moved to another agent in the OS, or put back (15 Oct 2026,
      lib/agent-moves). REX is not changed. */
   | "home_agent_moved"
+  /* A home's type, gas supply, hot water or electrical certificate answered
+     in the OS (19 Oct 2026, lib/home-facts). REX is not changed. */
+  | "home_facts_set"
   /* A landlord's own home address saved on their OS record (15 Oct 2026,
      lib/landlord-home). Personal data, and the terms of business carry it. */
   | "landlord_home_address_saved"

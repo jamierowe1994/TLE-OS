@@ -14,6 +14,7 @@ import { isOsPropertyId } from "@/lib/os-properties";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { scopeFor } from "@/lib/scope";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
+import { homeFactsFor } from "@/lib/home-facts";
 
 /**
  * GET /api/property-file?property=<REX property id>
@@ -207,6 +208,18 @@ export async function GET(req: NextRequest) {
       if (!row) continue;
       if (ch) row.checking = ch;
       if (v && row.expiry && row.expiry.slice(0, 10) === String(v.expiry).slice(0, 10)) row.verified = { by: v.by_name, at: new Date(v.at).toISOString() };
+    }
+  }
+  /* What a person in the OS has said about the home (lib/home-facts, 19 Oct
+     2026): no gas supply answers the gas row, and an EIC is the electrical
+     certificate's name on a new build or a full rewire. */
+  if (propertyId) {
+    const facts = await homeFactsFor(propertyId).catch(() => null);
+    if (facts?.gasSupply === "none") {
+      for (const r of rows) if (r.type === "gas_safety" && (r.state === "missing" || r.state === "expired")) r.state = "not-required";
+    }
+    if (facts?.electrical === "eic") {
+      for (const r of rows) if (r.type === "eicr") r.label = "Electrical (EIC)";
     }
   }
   rows.sort((a, b) => (ORDER.indexOf(a.type) + 1 || 99) - (ORDER.indexOf(b.type) + 1 || 99));

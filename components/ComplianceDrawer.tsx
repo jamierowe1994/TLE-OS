@@ -9,6 +9,7 @@ import { Pill } from "@/components/Wire";
 import { CERT_META, heldToNextTenancy, isLetOnly, renewalHeld, renewalHoldEnds, requiredCerts, shownStatus, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
 import { COMPLIANCE_READERS as R, houseByListing, housesIn, pickerOption, roomLabel, tabLabel, type House } from "@/lib/houses";
 import RoomPicker from "@/components/RoomPicker";
+import HomeFacts from "@/components/HomeFacts";
 import { useDocumentOpen } from "@/lib/doc-sheet";
 
 /**
@@ -314,6 +315,11 @@ export default function ComplianceDrawer({
             <p className="mt-3 text-[11px] text-muted">Access for a certificate visit is arranged with the tenant. Book it on a certificate below and the job opens with the home, the duty, the date and these people already filled in.</p>
           </section>
 
+          {/* The facts that decide the list below (19 Oct 2026): an agent can
+              say a flat is not an HMO, that there is no gas, or that the
+              electrics are covered by an EIC. A room answers for itself. */}
+          <HomeFacts key={p.id} homeKey={p.id} onChanged={onChanged} className="mb-4" />
+
           {/* Where every duty stands, at a glance. On the house tab, the
               worst across the rooms; a room reads the house's certificates. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -330,7 +336,7 @@ export default function ComplianceDrawer({
                 <div key={k} className={`rounded-xl border px-3.5 py-3 ${s === "expired" ? "border-accent-dark bg-accent-soft/30" : bad ? "border-accent-dark/40" : "border-line/70"}`}>
                   <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
                     <DoodleIcon name={CERT_META[k].icon} size={12} className="text-accent-dark" />
-                    {CERT_META[k].short}
+                    {k === "eicr" && p.eic ? "EIC" : CERT_META[k].short}
                   </p>
                   <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[12.5px]">
                     <Pill tone={bad ? "accent" : held || nextT ? "neutral" : "good"}>
