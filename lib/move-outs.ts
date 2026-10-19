@@ -171,6 +171,51 @@ export interface OpenMoveOut {
   managedBy?: string;
   /** Where it came from: the old system's list, or a review recorded here. */
   from: "rex-pm" | "review";
+  /** What PayProp says about these tenants on this home (lib/move-outs payPropSays). */
+  payprop?: PayPropSays | null;
+}
+
+/**
+ * PAYPROP SAYS THEY'VE GONE (Rhiannon Dodge, 19 Oct 2026: "the system says I
+ * have 12 move outs incomplete"). REX PM's list came across on 2 Oct with
+ * move-outs nobody had closed there - 11 of her 12 tenants were already gone,
+ * Hanna Johnson since March. PayProp keeps every tenant's record with its
+ * status and, often, the day the tenancy ended, so the board can say so and
+ * close the lot in one go. Nothing is closed on PayProp's word alone: a person
+ * presses the button.
+ */
+export interface PayPropSays {
+  /** Every one of these tenants is a past tenant on this home in PayProp. */
+  gone: boolean;
+  /** The last tenancy end date PayProp holds for them here, YYYY-MM-DD. */
+  leftOn: string | null;
+}
+
+const nameWords = (v: string) => v.toLowerCase().replace(/[^a-z\s'-]/g, " ").split(/\s+/).filter(Boolean);
+const peopleIn = (v: string) => v.split(/&|,|\band\b/i).map(nameWords).filter((w) => w.length > 0);
+const postcodeIn = (v: string) => (v.toUpperCase().match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/)?.[0] ?? "").replace(/\s+/g, "");
+
+/** What PayProp's tenant records say about one move-out's tenants: same surname and first initial, same postcode. */
+export function payPropSays(m: Pick<OpenMoveOut, "tenant" | "locality">, rows: Array<Record<string, unknown>>, today: string): PayPropSays | null {
+  const names = peopleIn(m.tenant);
+  const pc = postcodeIn(m.locality);
+  if (!names.length || !pc) return null;
+  const hits: Array<{ active: boolean; end: string }> = [];
+  for (const t of rows) {
+    const shown = String(t.display_name ?? "").trim() || `${String(t.first_name ?? "")} ${String(t.last_name ?? "")}`;
+    const theirs = peopleIn(shown);
+    if (!names.some((n) => theirs.some((w) => n[n.length - 1] === w[w.length - 1] && n[0][0] === w[0][0]))) continue;
+    for (const pr of (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>) {
+      const addr = (pr.address ?? {}) as Record<string, unknown>;
+      if (postcodeIn(String(addr.postal_code ?? "")) !== pc) continue;
+      const end = String(((pr.tenant ?? {}) as Record<string, unknown>).end_date ?? "").slice(0, 10);
+      hits.push({ active: String(t.status ?? "") === "Active" && !(end && end < today), end });
+    }
+  }
+  if (!hits.length) return null;
+  const gone = hits.every((h) => !h.active);
+  const ends = hits.map((h) => h.end).filter((e) => e && e < today).sort();
+  return { gone, leftOn: gone ? ends[ends.length - 1] ?? null : null };
 }
 
 /** The last instant of a London calendar day: a move-out today is not late until tomorrow. */
@@ -282,5 +327,7 @@ export function summarise(open: OpenMoveOut[], done: MoveOut[], now: Date = new 
     followUp: open.filter((m) => m.followUpOn && m.followUpOn <= today).length,
     inProgress: open.filter((m) => /progress/i.test(m.progress)).length,
     doneThisMonth: done.filter((r) => r.doneAt && inMonth(r.doneAt)).length,
+    /** Already gone by PayProp's records, still open here. */
+    gone: open.filter((m) => m.payprop?.gone).length,
   };
 }

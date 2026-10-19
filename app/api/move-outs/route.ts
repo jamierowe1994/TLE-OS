@@ -9,7 +9,9 @@ import { lastImport, openTasks } from "@/lib/rexpm-tasks";
 import { listReviews } from "@/lib/tenancy-reviews";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { forgetNotices } from "@/lib/portfolio-notice";
-import { listMoveOuts, openMoveOuts, recordMoveOut, summarise, OUTCOME_IDS, type MoveOut, type NewMoveOut, type Outcome } from "@/lib/move-outs";
+import { listMoveOuts, openMoveOuts, payPropSays, recordMoveOut, summarise, OUTCOME_IDS, type MoveOut, type NewMoveOut, type Outcome } from "@/lib/move-outs";
+import { payPropTenantRows } from "@/lib/business/payprop-tenant-contacts";
+import { londonToday } from "@/lib/london-clock";
 
 /**
  * The move-outs board (2 Oct 2026). See lib/move-outs.
@@ -60,11 +62,15 @@ export async function GET(req: NextRequest) {
   const isMine = (rexPropertyId: string | null, who: string | undefined) =>
     !mine || (rexPropertyId && mine.has(rexPropertyId)) || (me && (who ?? "").trim().toLowerCase() === me);
 
+  /* What PayProp says about each one's tenants. PayProp unread is no answer,
+     never "still there". */
+  const ppRows = await payPropTenantRows().catch(() => [] as Array<Record<string, unknown>>);
+  const today = londonToday();
   const open = openMoveOuts(
     tasks.filter((t) => isMine(t.rexPropertyId, t.managedBy)),
     reviews.filter((r) => isMine(r.rexPropertyId, r.doneBy)),
     done, book
-  );
+  ).map((m) => ({ ...m, payprop: ppRows.length ? payPropSays(m, ppRows, today) : null }));
   const myDone = done.filter((r) => isMine(r.rexPropertyId, r.doneBy));
   return NextResponse.json({ ok: true, live: true, open, done: myDone, summary: summarise(open, myDone), readAt: read?.at ?? null });
 }

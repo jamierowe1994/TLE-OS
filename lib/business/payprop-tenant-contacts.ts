@@ -122,6 +122,11 @@ async function heldRows(): Promise<Array<Record<string, unknown>>> {
   return rows;
 }
 
+/** PayProp's tenant records as held, every agency. Never waits on PayProp. */
+export async function payPropTenantRows(): Promise<Array<Record<string, unknown>>> {
+  return heldRows();
+}
+
 /** Every agency's current tenancies with a contact, by rentKey. Never waits on PayProp. */
 export async function payPropContacts(): Promise<ContactsByKey> {
   return contactsByKey(await heldRows());
