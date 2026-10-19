@@ -24,6 +24,8 @@ import ServiceTag from "@/components/portfolio/ServiceTag";
 import HomeAgent from "@/components/portfolio/HomeAgent";
 import ContactBlock from "@/components/ContactBlock";
 import HomePeople from "@/components/portfolio/HomePeople";
+import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
+import { HomeRightToRent } from "@/components/RightToRentField";
 import SendLogins from "@/components/portfolio/SendLogins";
 import Guarantors from "@/components/Guarantors";
 import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice, type NoticeKind } from "@/lib/section-notices-spec";
@@ -446,6 +448,21 @@ export default function PropertyPage() {
       ? { ...b, data: { ...b.data, properties: b.data.properties.map((x) => (x.propertyId === propertyId && (!x.landlord || x.landlord.contactId.startsWith("record:")) ? { ...x, landlord: l } : x)) } }
       : b));
 
+  /* Change landlord (Dan Richards, 17 Oct 2026, lib/landlord-change): the
+     new one shows on every let of the home at once; an undo reads the book
+     again so the landlord before comes back as it was. */
+  const landlordChanged = (c: { id: string; name: string; email: string | null; phone: string | null }) =>
+    setBook((b) => (b.state === "ready"
+      ? { ...b, data: { ...b.data, properties: b.data.properties.map((x) => (x.propertyId === propertyId ? { ...x, landlord: { contactId: `changed:${c.id}`, name: c.name, email: c.email, phone: c.phone } } : x)) } }
+      : b));
+  const landlordUndone = () => {
+    fetch("/api/portfolio", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j?.ok) setBook({ state: "ready", data: j }); })
+      .catch(() => undefined);
+  };
+  const homeLine = [title, p.locality, p.postcode].filter(Boolean).join(", ");
+
   const raiseHome = propertyId
     ? { id: propertyId, name: house ? house.name : p.name, locality: p.locality, landlord: landlord?.name, tenant: tenants[0]?.name ?? null }
     : null;
@@ -848,6 +865,10 @@ export default function PropertyPage() {
                 )}
                 {/* Their guarantors, from the lead and the let (lib/guarantors). */}
                 {tenants.length > 0 && !roomsOnly && !p.test && <Guarantors source={{ listing: String(p.listingId) }} className="mt-3" />}
+                {/* Overseas tenants' right to rent expiry (Kirstie, ticket 066bb29e). */}
+                {tenants.length > 0 && !roomsOnly && !p.test && (
+                  <HomeRightToRent key={String(p.listingId)} listingId={String(p.listingId)} tenants={tenants.map((t) => ({ name: t.name, email: t.email }))} className="mt-3" />
+                )}
                 {tenants.length > 0 && (
                   <div className="mt-3 rounded-xl bg-box px-4 py-3 text-[12.5px]">
                     {tenancy.state === "loading" ? <Loading label="Reading the tenancy dates" />
@@ -860,15 +881,37 @@ export default function PropertyPage() {
 
               <section className={`${card} p-3.5 sm:p-5`}>
                 <p className={`${eyebrow} mb-3`}>Landlord</p>
-                {landlord ? (
+                {landlord && landlord.contactId.startsWith("changed:") && propertyId ? (
+                  /* Changed in the OS to a company, an estate or a new owner
+                     (Dan Richards, 17 Oct 2026): kind, who it was, Undo, papers. */
                   <div className="text-[13px]">
-                    <PartyCard p={landlord} plain role="landlord" home={{ propertyAddress: [title, p.locality, p.postcode].filter(Boolean).join(", ") }} />
+                    <ListingChangedLandlord
+                      key={landlord.contactId}
+                      listingId={String(p.listingId)}
+                      propertyId={propertyId}
+                      address={homeLine}
+                      onChanged={landlordUndone}
+                    />
+                    {landlord.email && landlord.email.includes("@") && (
+                      <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
+                    )}
+                  </div>
+                ) : landlord ? (
+                  <div className="text-[13px]">
+                    <PartyCard p={landlord} plain role="landlord" home={{ propertyAddress: homeLine }} />
                     {landlord.email && landlord.email.includes("@") && (
                       <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
                     )}
                     {/* Kept on the OS record only (lib/record-landlords): changed here, not on the card. */}
                     {landlord.contactId.startsWith("record:") && propertyId && !p.test && (
                       <RecordLandlord propertyId={propertyId} current={landlord} onSaved={setLandlordHere} />
+                    )}
+                    {propertyId && !p.test && (
+                      <ChangeLandlordButton
+                        where={{ listingId: String(p.listingId), propertyId, address: homeLine }}
+                        current={{ name: landlord.name, email: landlord.email, phone: landlord.phone }}
+                        onChanged={landlordChanged}
+                      />
                     )}
                   </div>
                 ) : propertyId && !p.test ? (
@@ -1224,7 +1267,7 @@ function RecordLandlord({ propertyId, current, onSaved }: { propertyId: string; 
 
   if (!open) {
     return current ? (
-      <button type="button" onClick={() => setOpen(true)} className="mt-2 text-[11.5px] text-muted underline">Change the landlord</button>
+      <button type="button" onClick={() => setOpen(true)} className="mt-2 block text-[11.5px] text-muted underline">Edit their details</button>
     ) : (
       <div className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
         <p>No landlord on record for this home.</p>

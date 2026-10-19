@@ -529,7 +529,11 @@ type PassportState = {
     currentAddress: string | null;
   } | null;
 };
-type EnquiryState = { message: string; fields: Array<[string, string]>; receivedAt: string | null; source: string | null };
+type EnquiryState = {
+  message: string; fields: Array<[string, string]>; receivedAt: string | null; source: string | null;
+  /* The email as the portal sent it (Richard Callow, 16 Oct 2026, ticket 73375892). */
+  email?: { subject: string | null; from: string | null; text: string; html?: string | null } | null;
+};
 /* Enquiries already read, by lead id, for the life of the page. Kept whatever
    happens to the request that fetched them: the drawer can re-run its read
    mid-flight (the list refreshes under it), and a reply thrown away as
@@ -928,6 +932,7 @@ function LeadDrawerBody({
   /* The side panel: Messages, Notes or Activity, or shut (10 Oct 2026). */
   const [panelTab, setPanelTab] = useState<PanelTab | null>(null);
   const [enquiryOpen, setEnquiryOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   /* How tall the notes box is: whatever they last dragged it to, on this
      machine, for every lead. */
   const notesBox = useRef<HTMLDivElement | null>(null);
@@ -3035,7 +3040,7 @@ function LeadDrawerBody({
                           {receivedIso && <span>{whenFull(receivedIso)} · {whenAgo(receivedIso)}</span>}
                         </p>
                         {enquiry === undefined && !enqMessage ? (
-                          <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
+                          <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry…</p>
                         ) : enqMessage ? (
                           <>
                             <p className="mt-2 line-clamp-5 whitespace-pre-line text-[14px] leading-relaxed">{enqMessage}</p>
@@ -3058,9 +3063,17 @@ function LeadDrawerBody({
                         ) : (
                           <p className="mt-2 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
                         )}
-                        <p className="mt-2 text-[11px] text-muted">
-                          Via {enquiry?.source || lead.source}
-                          {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
+                        <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+                          <span>
+                            Via {enquiry?.source || lead.source}
+                            {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
+                          </span>
+                          {(enquiry?.email?.text || enquiry?.email?.html) && (
+                            <button type="button" onClick={() => setEmailOpen(true)} className="inline-flex items-center gap-1 font-semibold text-accent-dark hover:underline">
+                              <DoodleIcon name="mail" size={11} />
+                              See the full email
+                            </button>
+                          )}
                         </p>
                       </div>
                                             <div className="mt-5 flex flex-wrap gap-2.5">
@@ -3863,6 +3876,41 @@ function LeadDrawerBody({
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
               <p className="whitespace-pre-line text-[14.5px] leading-relaxed">{enqMessage}</p>
               <TranslateText text={enqMessage} onLanguage={setTheirLanguage} className="mt-3" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* The enquiry email exactly as the portal sent it (Richard Callow,
+          16 Oct 2026): what the old system showed on every portal lead. */}
+      {emailOpen && enquiry?.email && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <button type="button" aria-label="Close" onClick={() => setEmailOpen(false)} className="absolute inset-0 cursor-default bg-ink/45" />
+          <div className="frame-grow relative flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="flex items-start justify-between gap-3 border-b border-line/70 px-6 py-4">
+              <div className="min-w-0">
+                <h2 className="text-[19px]">The enquiry email</h2>
+                <p className="text-[12px] text-muted">{receivedIso ? `${whenFull(receivedIso)} · ` : ""}via {enquiry.source || lead.source}</p>
+              </div>
+              <button type="button" onClick={() => setEmailOpen(false)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted hover:text-ink">✕</button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <dl className="mb-4 grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12.5px]">
+                {enquiry.email.from && (<><dt className="text-muted">From</dt><dd className="break-words">{enquiry.email.from}</dd></>)}
+                {enquiry.email.subject && (<><dt className="text-muted">Subject</dt><dd className="break-words font-semibold">{enquiry.email.subject}</dd></>)}
+                {receivedIso && (<><dt className="text-muted">Received</dt><dd>{whenFull(receivedIso)}</dd></>)}
+              </dl>
+              {enquiry.email.html ? (
+                /* As the portal sent it, in a frame that runs nothing (no scripts, no forms). */
+                <iframe
+                  title="The enquiry email"
+                  srcDoc={enquiry.email.html}
+                  sandbox="allow-popups allow-popups-to-escape-sandbox"
+                  className="block h-[60vh] w-full rounded-2xl border border-line/70 bg-white"
+                />
+              ) : (
+                <pre className="whitespace-pre-wrap break-words rounded-2xl border border-line/70 bg-white px-4 py-3.5 font-sans text-[13px] leading-relaxed">{enquiry.email.text}</pre>
+              )}
             </div>
           </div>
         </div>

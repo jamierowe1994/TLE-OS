@@ -24,6 +24,12 @@ export const DOC_TYPES: DocType[] = [
   { key: "landlord_id", label: "Landlord ID", side: "landlord" },
   { key: "landlord_proof_of_ownership", label: "Landlord Proof of Ownership", side: "landlord" },
   { key: "landlord_aml", label: "Landlord AML Check", side: "landlord" },
+  /* A company or an estate as the landlord (Dan Richards, 17 Oct 2026,
+     lib/landlord-kinds): the papers the PLC check needs in place of one
+     person's proof of ownership. */
+  { key: "company_registration", label: "Companies House Registration", side: "landlord" },
+  { key: "incorporation_certificate", label: "Certificate of Incorporation", side: "landlord" },
+  { key: "grant_of_probate", label: "Grant of Probate", side: "landlord" },
   { key: "licensing", label: "Licensing Requirements", side: "home" },
   { key: "epc", label: "Energy Performance Certificate", side: "home" },
   { key: "gas_safety", label: "Gas Safety Certificate", side: "home" },

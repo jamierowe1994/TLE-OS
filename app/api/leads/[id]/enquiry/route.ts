@@ -13,7 +13,11 @@ export const dynamic = "force-dynamic";
  * else. A lead the OS made itself has no REX email behind it and answers
  * with nothing.
  */
-type Stored = { enquiryV?: number; enquiryFull?: string; enquiryFields?: Array<[string, string]>; enquirySource?: string | null; receivedAt?: string };
+type Stored = {
+  enquiryV?: number; enquiryFull?: string; enquiryFields?: Array<[string, string]>; enquirySource?: string | null; receivedAt?: string;
+  /* The whole email as the portal sent it (ticket 73375892, 16 Oct 2026). */
+  enquiryEmail?: { subject: string | null; from: string | null; text: string; html?: string | null } | null;
+};
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -30,18 +34,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (stored?.enquiryFull !== undefined && stored.enquiryV === ENQUIRY_VERSION) {
       return NextResponse.json({
         ok: true,
-        enquiry: { message: stored.enquiryFull, fields: stored.enquiryFields ?? [], receivedAt: stored.receivedAt ?? null, source: stored.enquirySource ?? null },
+        enquiry: { message: stored.enquiryFull, fields: stored.enquiryFields ?? [], receivedAt: stored.receivedAt ?? null, source: stored.enquirySource ?? null, email: stored.enquiryEmail ?? null },
       });
     }
   }
 
   const e = await readEnquiry(id.slice(4)).catch(() => null);
-  if (!e) return NextResponse.json({ ok: false, error: "REX did not answer for this enquiry." }, { status: 502 });
+  if (!e) return NextResponse.json({ ok: false, error: "The enquiry couldn't be read just now. Try again in a minute." }, { status: 502 });
 
   if (hasDb()) {
     await q(
-      `UPDATE os_leads SET payload = payload || jsonb_build_object('enquiryFull', $2::text, 'enquiryFields', $3::jsonb, 'enquirySource', $4::text, 'enquiryV', $5::int) WHERE id = $1`,
-      [id, e.message, JSON.stringify(e.fields), e.source, ENQUIRY_VERSION]
+      `UPDATE os_leads SET payload = payload || jsonb_build_object('enquiryFull', $2::text, 'enquiryFields', $3::jsonb, 'enquirySource', $4::text, 'enquiryV', $5::int, 'enquiryEmail', $6::jsonb) WHERE id = $1`,
+      [id, e.message, JSON.stringify(e.fields), e.source, ENQUIRY_VERSION, JSON.stringify(e.email ?? null)]
     ).catch(() => {});
   }
   return NextResponse.json({ ok: true, enquiry: { ...e, receivedAt: e.receivedAt ?? stored?.receivedAt ?? null } });

@@ -42,8 +42,13 @@ export type Landlord = {
   email: string | null;
   phone: string | null;
   /** "record" = REX CRM holds no owner, so this is the OS property record's
-   *  landlord (REX PM's name for them): a name to show, nobody to write to. */
-  from?: "rex" | "record";
+   *  landlord (REX PM's name for them): a name to show, nobody to write to.
+   *  "os" = an agent changed the landlord in the OS (lib/landlord-change):
+   *  the OS writes to them, REX still holds the old owner. */
+  from?: "rex" | "record" | "os";
+  /** For "os": a company, an estate or a private owner, and the change behind it. */
+  kind?: "company" | "executor" | "private";
+  changeId?: string;
 };
 
 type Row = Record<string, unknown>;
@@ -59,10 +64,10 @@ const str = (v: unknown): string | null => {
 const CACHE_MS = 12 * 60 * 60 * 1000;
 const cacheKey = (listingId: string) => `landlord:v2:${listingId}`;
 
-async function cached(listingId: string): Promise<{ landlord: Landlord | null } | null> {
+async function cached(listingId: string): Promise<{ landlord: Landlord | null; propertyId?: string | null } | null> {
   if (!hasDb()) return null;
   try {
-    const rows = await q<{ payload: { landlord: Landlord | null }; computed_at: Date }>(
+    const rows = await q<{ payload: { landlord: Landlord | null; propertyId?: string | null }; computed_at: Date }>(
       "SELECT payload, computed_at FROM os_cache WHERE key = $1",
       [cacheKey(listingId)]
     );
@@ -74,13 +79,13 @@ async function cached(listingId: string): Promise<{ landlord: Landlord | null } 
   }
 }
 
-async function keep(listingId: string, landlord: Landlord | null): Promise<void> {
+async function keep(listingId: string, landlord: Landlord | null, propertyId: string | null): Promise<void> {
   if (!hasDb()) return;
   try {
     await q(
       `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
        ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
-      [cacheKey(listingId), JSON.stringify({ landlord })]
+      [cacheKey(listingId), JSON.stringify({ landlord, propertyId })]
     );
   } catch {
     /* slow, not broken */
@@ -109,7 +114,7 @@ export async function landlordForListing(listingId: string): Promise<LandlordAns
   }
 
   const hit = await cached(listingId);
-  if (hit) return { ok: true, landlord: hit.landlord };
+  if (hit) return { ok: true, landlord: (await changedOver(listingId, hit.propertyId ?? null)) ?? hit.landlord };
 
   /* The same Listings/read the drawer's details make on open, shared through
      the per-listing read cache rather than asked for a second time. */
@@ -158,18 +163,29 @@ export async function landlordForListing(listingId: string): Promise<LandlordAns
     : null;
 
   let usable = landlord && landlord.name ? landlord : null;
+  const prop = (((res.result ?? {}) as Row).property ?? null) as Row | null;
+  const propertyId = str(prop?.id) ?? str(((res.result ?? {}) as Row).property_id);
   /* REX CRM has nobody (6 Oct 2026, 6 Ruskin Place: a property our sync
      created with no contact on it). The OS's property record often has the
      landlord from REX PM - show that rather than "no landlord held". */
   if (!usable) {
-    const prop = (((res.result ?? {}) as Row).property ?? null) as Row | null;
-    const propertyId = str(prop?.id) ?? str(((res.result ?? {}) as Row).property_id);
     if (propertyId) {
       const { recordForProperty } = await import("@/lib/listing-record");
       const rec = await recordForProperty(propertyId, {}).catch(() => null);
       if (rec?.landlordName) usable = { contactId: null, name: rec.landlordName, email: null, phone: null, from: "record" };
     }
   }
-  await keep(listingId, usable);
-  return { ok: true, landlord: usable };
+  await keep(listingId, usable, propertyId);
+  return { ok: true, landlord: (await changedOver(listingId, propertyId)) ?? usable };
+}
+
+/**
+ * The landlord an agent changed in the OS (lib/landlord-change), over REX's
+ * owner: a company, an estate or a new owner REX doesn't know about yet. Not
+ * cached, so a change shows the moment it is confirmed and an undo the same.
+ */
+async function changedOver(listingId: string, propertyId: string | null): Promise<Landlord | null> {
+  const { changedLandlordFor, asLandlord } = await import("@/lib/landlord-change");
+  const c = await changedLandlordFor({ listingId, propertyId }).catch(() => null);
+  return c ? asLandlord(c) : null;
 }

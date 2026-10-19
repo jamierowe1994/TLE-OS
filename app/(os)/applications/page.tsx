@@ -344,6 +344,13 @@ export default function Applications() {
               Customer updates
               {updatesOpen ? <span className="figures rounded-full bg-accent px-1.5 text-[10.5px] text-white">{updatesOpen}</span> : null}
             </Link>
+            {/* Overseas tenants' expiry dates to chase (Kirstie, ticket 066bb29e, 16 Oct 2026). */}
+            <Link
+              href="/applications/right-to-rent"
+              className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+            >
+              Right to rent
+            </Link>
           </span>
         }
       />

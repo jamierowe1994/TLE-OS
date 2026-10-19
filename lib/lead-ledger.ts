@@ -60,7 +60,8 @@ export async function recordLeads(leads: Lead[]): Promise<number> {
          'enquiryFull', os_leads.payload->'enquiryFull',
          'enquiryFields', os_leads.payload->'enquiryFields',
          'enquirySource', os_leads.payload->'enquirySource',
-         'enquiryV', os_leads.payload->'enquiryV')),
+         'enquiryV', os_leads.payload->'enquiryV',
+         'enquiryEmail', os_leads.payload->'enquiryEmail')),
        last_seen = NOW()`,
     cols.flat()
   );

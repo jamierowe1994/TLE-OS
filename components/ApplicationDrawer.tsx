@@ -15,6 +15,7 @@ import { Pill } from "@/components/Wire";
 import { type SpineStop } from "@/components/StageSpine";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import ContactBlock from "@/components/ContactBlock";
+import RightToRentField, { type RtrShown } from "@/components/RightToRentField";
 import Guarantors from "@/components/Guarantors";
 import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
@@ -739,20 +740,32 @@ export default function ApplicationDrawer({
 
   /* Each tenant's right to rent expiry, recorded on the let (lib/application-rtr,
      15 Oct 2026). Kept apart from the yes/no answer it sits beside. */
-  const [rtr, setRtr] = useState<{ tenant: string; tenantEmail: string; rightUntil: string | null; noTimeLimit: boolean; followUpOn: string | null }[]>([]);
+  const [rtr, setRtr] = useState<RtrShown[]>([]);
+  /* Pre-tenancy checks each date (Kirstie, ticket 066bb29e, 16 Oct 2026). */
+  const [rtrCanVerify, setRtrCanVerify] = useState(false);
   useEffect(() => {
     if (!letId) return;
     let live = true;
     fetch(`/api/applications/${encodeURIComponent(letId)}/right-to-rent`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => { if (live && j?.ok && Array.isArray(j.records)) setRtr(j.records); })
+      .then((j) => { if (live && j?.ok && Array.isArray(j.records)) { setRtr(j.records); setRtrCanVerify(Boolean(j.canVerify)); } })
       .catch(() => { /* the yes/no still shows; the date just isn't added */ });
     return () => { live = false; };
   }, [letId]);
   const rtrOf = (p: { name: string; email?: string | null }) =>
     rtr.find((r) => (p.email && r.tenantEmail && r.tenantEmail.toLowerCase() === p.email.toLowerCase()) || r.tenant.trim().toLowerCase() === p.name.trim().toLowerCase()) ?? null;
-  const rtrLine = (r: NonNullable<ReturnType<typeof rtrOf>>) =>
-    r.noTimeLimit ? "No time limit" : r.rightUntil ? `Until ${niceDate(r.rightUntil)}` : null;
+  const rtrKeep = (r: RtrShown) => setRtr((all) => [...all.filter((x) => x.tenant.trim().toLowerCase() !== r.tenant.trim().toLowerCase()), r]);
+  async function saveRtr(tenant: string, until: string | null, noTimeLimit: boolean): Promise<string | null> {
+    if (!letId) return "This let has no reference to save against.";
+    const j = await fetch(`/api/applications/${encodeURIComponent(letId)}/right-to-rent`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tenant, until, noTimeLimit }),
+    }).then((r) => r.json()).catch(() => null);
+    if (!j?.ok) return j?.error ?? "That couldn't be saved just now. Try again in a minute.";
+    rtrKeep(j.record as RtrShown);
+    return null;
+  }
 
   const [draft, setDraft] = useState("");
   const [comments, setComments] = useState<AppActivity[] | null>(null);
@@ -1560,9 +1573,6 @@ export default function ApplicationDrawer({
                               ? []
                               : [
                                   ["Right to rent", <Answer key="rtr" v={tenantShown.rightToRent || (rtrOf(tenantShown) ? true : tenantShown.rightToRent)} yes="Recorded" no="Not recorded" />],
-                                  ...(rtrOf(tenantShown)
-                                    ? [["Right to rent expiry", <span key="rtre" data-steve="application.rtr-expiry" title={rtrOf(tenantShown)!.followUpOn ? `Follow-up check by ${niceDate(rtrOf(tenantShown)!.followUpOn!)}` : undefined}>{rtrLine(rtrOf(tenantShown)!)}</span>] as [string, React.ReactNode]]
-                                    : []),
                                 ]),
                             ["Landlord reference", <Answer key="ref" v={tenantShown.landlordRef} />],
                             ["Guarantor", <Answer key="g" v={tenantShown.guarantor} yes="Available" no="None" />],
@@ -1576,6 +1586,23 @@ export default function ApplicationDrawer({
                           ))}
                         </dl>
                         {!tenantShown.isPrimary && <p className="mt-3 text-[11px] text-muted">Only the lead applicant is asked the four questions - the form stops after them.</p>}
+                      </section>
+                    )}
+                    {/* A field for the expiry, not only Steve (Kirstie, ticket
+                        066bb29e): chased from /right-to-rent, checked by pre-tenancy. */}
+                    {!scottishLet && letId && (
+                      <section className="rounded-xl border border-line/50 bg-white p-4" data-steve="application.rtr-expiry">
+                        <div className="mb-2 flex items-baseline justify-between gap-2">
+                          <p className={eyebrow}>Right to rent expiry</p>
+                          <Link href="/applications/right-to-rent" className="text-[11px] text-muted underline hover:text-ink">Renewals list</Link>
+                        </div>
+                        <RightToRentField
+                          key={`${tenantShown.name}-${rtrOf(tenantShown)?.id ?? "none"}`}
+                          record={rtrOf(tenantShown)}
+                          save={(until, noTimeLimit) => saveRtr(tenantShown.name, until, noTimeLimit)}
+                          canVerify={rtrCanVerify}
+                          onVerified={rtrKeep}
+                        />
                       </section>
                     )}
                     {tenantFile ? (

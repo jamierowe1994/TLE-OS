@@ -276,7 +276,8 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       at: c.at,
       title: c.tenant,
       body: `Right to Rent follow-up check ${days < 0 ? `was due ${-days} day${days === -1 ? "" : "s"} ago` : days <= 0 ? "is due today" : `is due in ${days} day${days === 1 ? "" : "s"}`}${c.property ? ` (${c.property})` : ""}.`,
-      href: `/applications/${encodeURIComponent(c.applicationId)}`,
+      /* A sitting tenant's is kept on the home (ticket 066bb29e). */
+      href: c.applicationId.startsWith("home:") ? `/portfolio/${encodeURIComponent(c.applicationId.slice(5))}` : `/applications/${encodeURIComponent(c.applicationId)}`,
       tone: "warn",
     });
   }

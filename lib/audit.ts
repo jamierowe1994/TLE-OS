@@ -72,6 +72,10 @@ export type AuditKind =
   | "property_person_added"
   | "property_person_changed"
   | "property_person_removed"
+  /* The landlord of a home changed in the OS to a company, an estate or a new
+     owner (17 Oct 2026, lib/landlord-change), or that change undone. OS only. */
+  | "landlord_changed"
+  | "landlord_change_undone"
   | "tenant_logins_sent"
   /* A home moved to another agent in the OS, or put back (15 Oct 2026,
      lib/agent-moves). REX is not changed. */
@@ -96,6 +100,8 @@ export type AuditKind =
   /* Saved through Steve's card (lib/assistant-actions, 15 Oct 2026): a
      tenant's right to rent expiry on a let, and a home's address in the OS. */
   | "rtr_expiry_recorded"
+  /* Kirstie's check of a recorded right to rent expiry (ticket 066bb29e). */
+  | "rtr_expiry_verified"
   | "property_address_changed";
 
 export interface AuditRow {

@@ -59,6 +59,7 @@ import FieldSelect from "@/components/FieldSelect";
 import { LET_TYPES, type LetType } from "@/lib/let-type";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
 import ContactBlock from "@/components/ContactBlock";
+import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
 import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
 import ListingEnquiries from "@/components/listing/ListingEnquiries";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
@@ -347,6 +348,8 @@ function ListingDrawerBody({
    * it is (88% of rentals).
    */
   const [landlord, setLandlord] = useState<LandlordState>({ status: "idle" });
+  /* A landlord changed in the OS asks again (Dan Richards, 17 Oct 2026). */
+  const [landlordRev, setLandlordRev] = useState(0);
   /* The photo set popped out full size; null when closed. */
   const [lightbox, setLightbox] = useState<number | null>(null);
   /* How we get into the property - vacant, tenant or landlord - kept on
@@ -632,7 +635,7 @@ function ListingDrawerBody({
     return () => {
       gone = true;
     };
-  }, [listing]);
+  }, [listing, landlordRev]);
 
   const [booked, setBooked] = useState<{ when: string; who: string }[]>([]);
   /* WHERE IT'S UP TO, KEPT (17 Sep 2026). The step used to live in this
@@ -1565,6 +1568,15 @@ function ListingDrawerBody({
                   <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
                   Looking them up…
                 </p>
+              ) : landlord.status === "known" && landlord.landlord.from === "os" ? (
+                /* Changed in the OS to a company, an estate or a new owner (Dan
+                   Richards, 17 Oct 2026): what kind, who it was, Undo, the papers. */
+                <ListingChangedLandlord
+                  listingId={String(listing.id)}
+                  propertyId={listing.propertyId ?? null}
+                  address={[listing.name, listing.locality].filter(Boolean).join(", ")}
+                  onChanged={() => setLandlordRev((n) => n + 1)}
+                />
               ) : landlord.status === "known" ? (
                 <div className="text-[13px]">
                   {/* The same block as every person in the OS: change the name, number
@@ -1580,9 +1592,26 @@ function ListingDrawerBody({
                   {landlord.landlord.from === "record" && (
                     <p className="mt-2 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>
                   )}
+                  {!testListing && (
+                    <ChangeLandlordButton
+                      where={{ listingId: String(listing.id), propertyId: listing.propertyId ?? null, address: [listing.name, listing.locality].filter(Boolean).join(", ") }}
+                      current={{ name: landlord.landlord.name, email: landlord.landlord.email, phone: landlord.landlord.phone }}
+                      onChanged={() => setLandlordRev((n) => n + 1)}
+                    />
+                  )}
                 </div>
               ) : landlord.status === "none" ? (
-                <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord is held against this property. Ask the office to add them to the listing and they will come through.</p>
+                <div className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
+                  <p>No landlord is held against this property.</p>
+                  {!testListing && (
+                    <ChangeLandlordButton
+                      where={{ listingId: String(listing.id), propertyId: listing.propertyId ?? null, address: [listing.name, listing.locality].filter(Boolean).join(", ") }}
+                      current={null}
+                      className="mt-1.5 font-semibold text-ink underline"
+                      onChanged={() => setLandlordRev((n) => n + 1)}
+                    />
+                  )}
+                </div>
               ) : (
                 <p className="text-[12px] leading-relaxed text-accent-dark">{landlord.says}</p>
               )}

@@ -57,6 +57,9 @@ export async function POST(req: NextRequest) {
   const file = form.get("file");
   const type = String(form.get("type") ?? "");
   const ownName = String(form.get("name") ?? "").trim();
+  /* Whose it is, on a landlord's papers (lib/landlord-kinds): "Director 2 -
+     Jane Smith". Added to the type's name so two directors' IDs tell apart. */
+  const who = String(form.get("who") ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
   const address = String(form.get("address") ?? "").trim();
   const propertyId = String(form.get("property") ?? "").trim() || null;
   const fromKind = String(form.get("from") ?? "");
@@ -104,7 +107,7 @@ export async function POST(req: NextRequest) {
     home: { address, propertyId },
     from: { kind: fromKind, id: fromId },
     type,
-    name: type === OTHER ? ownName : docTypeLabel(type),
+    name: type === OTHER ? ownName : who ? `${docTypeLabel(type)} - ${who}` : docTypeLabel(type),
     fileName: file.name,
     r2Key: key,
     mime: file.type,

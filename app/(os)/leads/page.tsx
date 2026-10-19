@@ -708,9 +708,9 @@ export default function Leads() {
            about actually is. See `scanNote` below. */
         blurb={
           source.loading
-            ? "Fetching today's enquiries from REX…"
+            ? "Fetching today's enquiries…"
             : source.live
-              ? `Live from REX${
+              ? `Live from the portals, your ads and the website${
                   source.total ? ` - ${source.total.toLocaleString("en-GB")} enquiries on record` : ""
                 }.`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")

@@ -12,6 +12,9 @@ import DoodleIcon from "@/components/DoodleIcon";
  * lookup being unavailable must never stop someone adding a lead.
  */
 
+/** A home already on our books (/api/homes/ours). */
+export type OurHome = { propertyId: string; listingId: string; address: string; landlord: string | null; agent: string | null };
+
 export type ResolvedAddress = {
   address: string;
   postcode: string | null;
@@ -23,12 +26,17 @@ export default function AddressField({
   value,
   onChange,
   onResolved,
+  onOurHome,
 }: {
   value: string;
   onChange: (v: string) => void;
   onResolved?: (a: ResolvedAddress) => void;
+  /** Also search the homes on our books, listed first (Dan Richards, 17 Oct
+   *  2026: the landlord lead finds a home we already manage). */
+  onOurHome?: (h: OurHome) => void;
 }) {
   const [suggestions, setSuggestions] = useState<{ id: string; label: string }[]>([]);
+  const [ours, setOurs] = useState<OurHome[]>([]);
   /* Why the lookup came back with nothing. Without this an outage, a blocked
      key and an address that genuinely isn't on the Royal Mail file all render
      as the same empty dropdown, and the field looks unhelpful rather than
@@ -53,12 +61,17 @@ export default function AddressField({
     const id = window.setTimeout(async () => {
       setBusy(true);
       try {
+        const oursP: Promise<OurHome[]> = onOurHome
+          ? fetch(`/api/homes/ours?q=${encodeURIComponent(value)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => (j?.ok ? j.homes ?? [] : [])).catch(() => [])
+          : Promise.resolve([]);
         const r = await fetch(`/api/address?q=${encodeURIComponent(value)}`, { cache: "no-store" });
         const j = await r.json();
+        const mine = await oursP;
+        setOurs(mine);
         setProblem(j.problem?.says ?? null);
         setSuggestions(j.suggestions ?? []);
         setSearched(true);
-        setOpen((j.suggestions ?? []).length > 0);
+        setOpen((j.suggestions ?? []).length > 0 || mine.length > 0);
       } catch {
         /* A 307 to /sign-in lands here as an HTML body that won't parse. That
            is an expired session, not a missing key — saying "add a key in
@@ -124,7 +137,7 @@ export default function AddressField({
             onChange(e.target.value);
             setPin(null);
           }}
-          onFocus={() => suggestions.length && setOpen(true)}
+          onFocus={() => (suggestions.length || ours.length) && setOpen(true)}
           placeholder="Start typing an address or postcode…"
           className="w-full rounded-xl border border-line/80 bg-transparent px-3.5 py-2.5 pr-10 text-[13.5px] outline-none transition-colors focus:border-ink"
         />
@@ -137,8 +150,36 @@ export default function AddressField({
         </span>
       </div>
 
-      {open && suggestions.length > 0 && (
-        <ul className="fade-up absolute z-20 mt-1.5 max-h-56 w-full overflow-y-auto rounded-xl border border-line/80 bg-card py-1 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.25)]">
+      {open && (suggestions.length > 0 || ours.length > 0) && (
+        <ul className="fade-up absolute z-20 mt-1.5 max-h-72 w-full overflow-y-auto rounded-xl border border-line/80 bg-card py-1 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.25)]">
+          {ours.length > 0 && (
+            <li className="px-3.5 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-accent-dark">On our books</li>
+          )}
+          {ours.map((h) => (
+            <li key={`ours-${h.propertyId}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  typed.current = false;
+                  onChange(h.address);
+                  onOurHome?.(h);
+                }}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-page"
+              >
+                <DoodleIcon name="home" size={14} className="shrink-0 text-accent-dark" />
+                <span className="min-w-0">
+                  <span className="block truncate text-[12.5px] font-semibold">{h.address}</span>
+                  <span className="block truncate text-[11px] text-muted">
+                    {[h.landlord ? `Landlord ${h.landlord}` : "No landlord on record", h.agent].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+          {ours.length > 0 && suggestions.length > 0 && (
+            <li className="mt-1 border-t border-line/60 px-3.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-muted">Address file</li>
+          )}
           {suggestions.map((s) => (
             <li key={s.id}>
               <button
@@ -171,7 +212,7 @@ export default function AddressField({
         </p>
       )}
 
-      {!problem && searched && !busy && suggestions.length === 0 && !pin && value.trim().length >= 3 && (
+      {!problem && searched && !busy && suggestions.length === 0 && ours.length === 0 && !pin && value.trim().length >= 3 && (
         <p className="mt-1.5 text-[10.5px] text-muted">
           No match on the address file — carry on typing it in full, it saves as-is.
         </p>

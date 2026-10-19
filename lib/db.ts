@@ -2330,6 +2330,19 @@ CREATE TABLE IF NOT EXISTS os_application_rtr (
 );
 CREATE INDEX IF NOT EXISTS os_application_rtr_app ON os_application_rtr (application_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS os_application_rtr_follow_up ON os_application_rtr (follow_up_on) WHERE follow_up_on IS NOT NULL;
+-- A proper field and a list to chase from (Kirstie Mulholland, 16 Oct 2026,
+-- ticket 066bb29e: "myself and the agents need to be able to put in expiry
+-- for right to rent if overseas so they can chase the renewals - I will need
+-- to verify all"). listing_id ties a let's record to the home it becomes on
+-- Portfolio, and a sitting tenant's record (application_id 'home:<listing>')
+-- to that home; agent_name is whose list it is on; verified_* is Kirstie's
+-- check. A new date is a new row, unverified again.
+ALTER TABLE os_application_rtr ADD COLUMN IF NOT EXISTS listing_id TEXT;
+ALTER TABLE os_application_rtr ADD COLUMN IF NOT EXISTS agent_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_application_rtr ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+ALTER TABLE os_application_rtr ADD COLUMN IF NOT EXISTS verified_by TEXT;
+ALTER TABLE os_application_rtr ADD COLUMN IF NOT EXISTS verified_by_name TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS os_application_rtr_listing ON os_application_rtr (listing_id) WHERE listing_id IS NOT NULL;
 
 -- The lead tenant on a let, when an agent changed it in the OS (Lianna, 16 Oct
 -- 2026: "when we've got multiple applicants, we can change the lead tenant").
@@ -4413,6 +4426,35 @@ CREATE TABLE IF NOT EXISTS os_property_people (
   removed_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS os_property_people_property ON os_property_people (property_id) WHERE removed_at IS NULL;
+
+-- The landlord changed in the OS (Dan Richards, 17 Oct 2026, ticket 083d7752):
+-- a home that turns out to be owned by a company, an estate under probate, or
+-- sold to a new private owner. The newest row not undone for a listing or its
+-- property is who the OS shows and writes to as the landlord, over REX's
+-- owner. OS only: nothing here is written to REX (James's hands-off rule).
+-- directors is [{name,email,phone}] for a company; previous is who it was.
+CREATE TABLE IF NOT EXISTS os_landlord_changes (
+  id             TEXT PRIMARY KEY,
+  listing_id     TEXT,
+  property_id    TEXT,
+  address        TEXT NOT NULL DEFAULT '',
+  kind           TEXT NOT NULL,
+  name           TEXT NOT NULL,
+  company_number TEXT,
+  contact_name   TEXT,
+  email          TEXT,
+  phone          TEXT,
+  directors      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  late_owner     TEXT,
+  previous       JSONB,
+  changed_by_id  TEXT,
+  changed_by     TEXT NOT NULL DEFAULT '',
+  changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  undone_at      TIMESTAMPTZ,
+  undone_by      TEXT
+);
+CREATE INDEX IF NOT EXISTS os_landlord_changes_listing ON os_landlord_changes (listing_id) WHERE undone_at IS NULL;
+CREATE INDEX IF NOT EXISTS os_landlord_changes_property ON os_landlord_changes (property_id) WHERE undone_at IS NULL;
 
 -- A sitting tenant sent their tenant portal login (Sean McMahon, 16 Oct 2026:
 -- "the way Fixflow did"). Ties the address to the home the agent sent it for,

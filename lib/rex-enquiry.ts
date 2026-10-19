@@ -20,7 +20,7 @@ import { rexCall } from "@/lib/rex";
 /** Bumped whenever the parsing changes, so enquiries read by an older
  *  parser are read again (the first one missed OnTheMarket's HTML-only
  *  messages and saved them as empty). */
-export const ENQUIRY_VERSION = 3;
+export const ENQUIRY_VERSION = 6;
 
 export type Enquiry = {
   /** Their own words, in full. Empty when the portal sent none. */
@@ -31,6 +31,13 @@ export type Enquiry = {
   receivedAt: string | null;
   /** Where it came from - "Rightmove", "OnTheMarket". */
   source: string | null;
+  /**
+   * The email exactly as the portal sent it, as text (Richard Callow, 16 Oct
+   * 2026, ticket 73375892: "we used to have this ... It shows the full
+   * enquiry email sent from the website"). The plain body, or the HTML body's
+   * lines where the portal sent no plain one (OnTheMarket).
+   */
+  email?: { subject: string | null; from: string | null; text: string; html?: string | null } | null;
 };
 
 const LABEL = /^\s*([A-Z][A-Za-z '\/()-]{1,40}):\s*(.*)$/;
@@ -82,6 +89,38 @@ function htmlLines(html: string): string[] {
     .filter(Boolean);
 }
 
+/** The entities the portals' emails use beyond the common ones. */
+function decodeMore(l: string): string {
+  return l
+    .replace(/&zwnj;|&#8204;/g, "")
+    .replace(/&bull;/g, "•")
+    .replace(/&pound;/g, "£")
+    .replace(/&copy;/g, "©")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The portal's HTML email, safe to put in a sandboxed frame: no scripts, no
+ * forms, no frames of its own, no event handlers, and links open in a new
+ * tab. Capped, since one lead's email should never be a large row.
+ */
+function emailHtml(raw: string): string | null {
+  if (!raw.trim() || raw.length > 400_000) return null;
+  const clean = raw
+    .replace(/<(script|iframe|object|embed|form)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<(script|iframe|object|embed|form|meta|base)\b[^>]*>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, "$1=$2#$2");
+  /* Portal emails are 600px tables; on a phone the frame is half that. */
+  const fit = `<style>html,body{margin:0!important;padding:0!important}table{max-width:100%!important}img{max-width:100%!important;height:auto!important}td,th,p,a{word-break:break-word}</style>`;
+  const out = `<base target="_blank">${fit}${clean}`;
+  return out.length > 200_000 ? null : out;
+}
+
 /* OnTheMarket puts the applicant's words in its HTML only, as labelled lines
    (measured 11 Sep 2026: "Requirements:", "Comments:", then a dozen of its
    own flags). These carry words a person wrote, in the order to trust them. */
@@ -100,6 +139,9 @@ export async function readEnquiry(rexLeadId: string): Promise<Enquiry | null> {
     body_snippet?: string | null;
     system_ctime?: string | number | null;
     lead_source?: { text?: string } | null;
+    subject?: string | null;
+    received_from_email?: string | null;
+    received_from_name?: string | null;
   };
   const plain = r.plain_body ?? "";
   const parsed = parseEnquiry(plain);
@@ -136,10 +178,21 @@ export async function readEnquiry(rexLeadId: string): Promise<Enquiry | null> {
   if (/getagent/i.test(source ?? "") || /getagent\.co\.uk/i.test(plain.slice(0, 600))) message = "";
 
   const t = Number(r.system_ctime ?? 0);
+  /* The portal's own email is the HTML one: Rightmove's carries the
+     applicant's address and the property, OnTheMarket's their situation,
+     Zoopla's the type of enquiry - REX's plain copy keeps only a few labelled
+     lines. Shown as sent (scripts out), with its text as the fallback. */
+  const html = emailHtml(r.html_body ?? "");
+  const htmlText = htmlLines(r.html_body ?? "").map(decodeMore).filter((l) => l.replace(/[\s\u200c]+/g, "")).join("\n");
+  const whole = htmlText.length > plain.trim().length ? htmlText : plain.replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  /* REX keeps the sending domain only ("*@rightmove.com"). */
+  const fromEmail = (r.received_from_email ?? "").replace(/^\*@/, "").trim();
+  const from = [r.received_from_name, fromEmail || null].filter(Boolean).join(" · ") || null;
   return {
     message,
     fields,
     receivedAt: t ? new Date(t * 1000).toISOString() : null,
     source,
+    email: whole || html ? { subject: r.subject?.trim() || null, from, text: whole.slice(0, 20000), html } : null,
   };
 }

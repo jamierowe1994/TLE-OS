@@ -114,7 +114,8 @@ export default function ContactMatches({
       <div className="flex items-center gap-2 text-page">
         <DoodleIcon name="search" size={15} />
         <h3 className="text-[12px] font-semibold uppercase tracking-wide">
-          {busy && !matches.length ? "Checking REX…" : "Already in REX?"}
+          {/* Agent screens never say REX (James, 15 Sep 2026). */}
+          {busy && !matches.length ? "Checking our contacts…" : "Already a contact?"}
         </h3>
       </div>
 

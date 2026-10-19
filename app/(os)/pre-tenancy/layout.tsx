@@ -25,6 +25,8 @@ const RAIL: RailGroup[] = [
       { href: "/pre-tenancy/plc", label: "PLC queue", icon: "list" },
       /* Right to Rent: the IDs agents scan and the share codes the office checks (4 Oct 2026). */
       { href: "/pre-tenancy/id-checks", label: "ID checks", icon: "user" },
+      /* Overseas tenants' expiry dates, to check and chase (ticket 066bb29e, 16 Oct 2026). */
+      { href: "/pre-tenancy/right-to-rent", label: "Right to rent", icon: "calendar" },
     ],
   },
   {

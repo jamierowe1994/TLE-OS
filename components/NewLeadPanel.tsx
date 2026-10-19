@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSlideOver } from "@/lib/use-slide-over";
-import AddressField, { type ResolvedAddress } from "@/components/AddressField";
+import AddressField, { type OurHome, type ResolvedAddress } from "@/components/AddressField";
 import { DoneTick, PressButton } from "@/components/Bits";
 import ContactMatches from "@/components/ContactMatches";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -20,12 +20,12 @@ function Continuing({ match, onClear }: { match: ScoredMatch | null; onClear: ()
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-accent-dark/40 bg-accent-soft/40 px-4 py-3 text-[12px]">
       <span className="font-semibold text-accent-dark">Continuing {match.name}&apos;s record</span>
       <span className="text-muted">
-        REX contact {match.id} · matched {match.score}%
+        Already a contact · matched {match.score}%
       </span>
       <button
         type="button"
         onClick={onClear}
-        className="ml-auto rounded-full border border-line/80 px-3 py-1 text-[11px]"
+        className="ml-auto shrink-0 whitespace-nowrap rounded-full border border-line/80 bg-white px-3 py-1 text-[11px]"
       >
         Start a new one instead
       </button>
@@ -179,6 +179,14 @@ export default function NewLeadPanel({
   const [kind, setKind] = useState<null | "tenant" | "landlord">(null);
   const [dossier, setDossier] = useState<Dossier | null>(null);
   const [dossierBusy, setDossierBusy] = useState(false);
+  /* The address is a home already on our books (Dan Richards, 17 Oct 2026,
+     ticket f252e21d): this person can go onto it as a co-owner or a point of
+     contact instead of a new lead and a second file. `joinAs` null = a new
+     lead after all. */
+  const [ourHome, setOurHome] = useState<OurHome | null>(null);
+  const [joinAs, setJoinAs] = useState<null | "joint_landlord" | "contact">(null);
+  const [relation, setRelation] = useState("");
+  const [joined, setJoined] = useState<{ listingId: string; name: string; kind: "joint_landlord" | "contact" } | null>(null);
   const [beds, setBeds] = useState(0);
   const [baths, setBaths] = useState(0);
 
@@ -227,6 +235,7 @@ export default function NewLeadPanel({
     setDossier(null);
     setDossierBusy(false);
     setBeds(0); setBaths(0);
+    setOurHome(null); setJoinAs(null); setRelation(""); setJoined(null);
   }, [open]);
 
   useEffect(() => {
@@ -341,12 +350,15 @@ export default function NewLeadPanel({
      (Howard, 24 Sep 2026): the lead sources figures are only as good as this
      answer, and a blank one is a lead nobody can credit. The route checks it
      too. A tenant still only needs a name and a mobile. */
-  const needsSource = kind === "landlord";
-  const missing = [
-    !d.name.trim() && "a name",
-    !d.mobile.trim() && "a mobile",
-    needsSource && !d.source.trim() && "where they came from",
-  ].filter(Boolean) as string[];
+  const joining = kind === "landlord" && Boolean(ourHome && joinAs);
+  const needsSource = kind === "landlord" && !joining;
+  const missing = (joining
+    ? [!d.name.trim() && "a name", !d.mobile.trim() && !d.email.trim() && "a mobile or an email"]
+    : [
+        !d.name.trim() && "a name",
+        !d.mobile.trim() && "a mobile",
+        needsSource && !d.source.trim() && "where they came from",
+      ]).filter(Boolean) as string[];
   const ready = missing.length === 0;
   const set = (k: keyof Draft) => (v: string) => setD((cur) => ({ ...cur, [k]: v }));
 
@@ -367,6 +379,25 @@ export default function NewLeadPanel({
     setSaving(true);
     setSaveError(null);
     setRexNote(null); setWelcome(null);
+    if (joining && ourHome && joinAs) {
+      /* Onto the home we already have, not a new lead. */
+      try {
+        const r = await fetch("/api/homes/person", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ propertyId: ourHome.propertyId, kind: joinAs, name: d.name, email: d.email, phone: d.mobile, relation }),
+        });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j?.ok) { setSaveError(j?.error ?? "That didn't save."); return; }
+        setJoined({ listingId: String(j.home?.listingId ?? ourHome.listingId), name: ourHome.address, kind: joinAs });
+        setSaved(true);
+      } catch {
+        setSaveError("That didn't save - the connection dropped. Nothing has been lost from this form.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     try {
       const r = await fetch("/api/contacts", {
         method: "POST",
@@ -435,7 +466,7 @@ export default function NewLeadPanel({
         <p className="mt-2 text-center text-[11px] text-muted">
           {needsSource
             ? `Add ${missing.length > 1 ? `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}` : missing[0]} to save.`
-            : "A name and a mobile is enough to start."}
+            : joining ? "A name and a mobile or an email is enough." : "A name and a mobile is enough to start."}
         </p>
       )}
       {saveError && (
@@ -563,7 +594,24 @@ export default function NewLeadPanel({
         )}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-          {saved ? (
+          {saved && joined ? (
+            <div className="mx-auto flex max-w-md flex-col items-center pt-10 text-center">
+              <DoneTick />
+              <p className="hand mt-5 text-[22px]">{d.name} is on the home</p>
+              <p className="mt-1.5 text-[12.5px] text-muted">
+                Added to {joined.name} as {joined.kind === "joint_landlord" ? "a co-owner" : "a point of contact"}. No new lead, no second file.
+              </p>
+              <a
+                href={`/portfolio/${encodeURIComponent(joined.listingId)}`}
+                className="mt-8 flex w-full items-center gap-3 rounded-xl bg-brown px-4 py-3.5 text-left text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                <DoodleIcon name="home" size={17} className="shrink-0" />
+                Open the home
+                <span className="ml-auto text-[15px]">→</span>
+              </a>
+              <button type="button" onClick={onClose} className="mt-3 text-[12px] text-muted underline">Close</button>
+            </div>
+          ) : saved ? (
             <div className="mx-auto flex max-w-md flex-col items-center pt-10 text-center">
               <DoneTick />
               <p className="hand mt-5 text-[22px]">{d.name} is saved</p>
@@ -802,12 +850,58 @@ export default function NewLeadPanel({
               <Section title="What's the address?" icon="home">
                 <AddressField
                   value={d.address}
-                  onChange={set("address")}
+                  onChange={(v) => {
+                    set("address")(v);
+                    if (ourHome && v !== ourHome.address) { setOurHome(null); setJoinAs(null); }
+                  }}
+                  onOurHome={(h) => { setOurHome(h); setJoinAs(null); }}
                   onResolved={(g) => {
                     setGeo(g);
                     void runDossier(g);
+                    /* A home picked off the address file may still be one of ours. */
+                    fetch(`/api/homes/ours?address=${encodeURIComponent(g.address)}`, { cache: "no-store" })
+                      .then((r) => r.json())
+                      .then((j) => { if (j?.ok && j.homes?.[0]) { setOurHome(j.homes[0]); setJoinAs(null); } })
+                      .catch(() => undefined);
                   }}
                 />
+                {ourHome && (
+                  <div className="mt-4 rounded-2xl border border-accent-dark/30 bg-accent-soft/40 p-4">
+                    <p className="flex items-center gap-2 text-[13px] font-semibold">
+                      <DoodleIcon name="home" size={15} className="text-accent-dark" />
+                      This home is already on our books
+                    </p>
+                    <p className="mt-1 text-[12px] text-muted">
+                      {ourHome.address}
+                      {ourHome.landlord ? ` · Landlord ${ourHome.landlord}` : " · No landlord on record"}
+                      {ourHome.agent ? ` · ${ourHome.agent}` : ""}
+                    </p>
+                    <p className="mt-3 text-[12px]">Who is {d.name.trim() || "this person"} to the home?</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      {([
+                        ["joint_landlord", "A co-owner", "Owns it with the landlord"],
+                        ["contact", "A point of contact", "We deal with them, they don't own it"],
+                        [null, "A new lead", "Somebody else, for a new file"],
+                      ] as const).map(([k, title, sub]) => (
+                        <button
+                          key={title}
+                          type="button"
+                          onClick={() => { setJoinAs(k); setSaveError(null); }}
+                          className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${joinAs === k ? "border-ink bg-white" : "border-line/80 bg-white/60 hover:border-ink/40"}`}
+                        >
+                          <span className="block text-[12.5px] font-semibold">{title}</span>
+                          <span className="block text-[11px] leading-snug text-muted">{sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {joinAs && (
+                      <p className="mt-2.5 text-[11.5px] text-muted">
+                        They go on the home&apos;s page under the landlord. No new lead is made.{" "}
+                        <a href={`/portfolio/${encodeURIComponent(ourHome.listingId)}`} target="_blank" rel="noreferrer" className="underline">Open the home ↗</a>
+                      </p>
+                    )}
+                  </div>
+                )}
                 {dossierBusy && (
                   <p className="mt-3 flex items-center gap-2.5 text-[12px] text-muted">
                     <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
@@ -1032,6 +1126,7 @@ export default function NewLeadPanel({
                       />
                     </label>
                   </div>
+                  {!joining && (
                   <label className="block">
                     <span className={label}>
                       Source <span className="normal-case tracking-normal text-accent-dark">- needed to save</span>
@@ -1060,6 +1155,7 @@ export default function NewLeadPanel({
                       ))}
                     </select>
                   </label>
+                  )}
                   <label className="block">
                     <span className={label}>Notes</span>
                     <textarea
@@ -1073,7 +1169,13 @@ export default function NewLeadPanel({
                 </div>
               </Section>
 
-              {saveButton("Add landlord lead")}
+              {joining && (
+                <label className="block">
+                  <span className={label}>Who they are</span>
+                  <input value={relation} onChange={(e) => setRelation(e.target.value)} maxLength={80} placeholder={joinAs === "joint_landlord" ? "e.g. Wife, Director" : "e.g. Son, does the talking"} className={field} />
+                </label>
+              )}
+              {saveButton(joining ? (joinAs === "joint_landlord" ? "Add as co-owner" : "Add as point of contact") : "Add landlord lead")}
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
