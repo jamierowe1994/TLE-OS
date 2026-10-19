@@ -102,7 +102,10 @@ export type AuditKind =
   | "rtr_expiry_recorded"
   /* Kirstie's check of a recorded right to rent expiry (ticket 066bb29e). */
   | "rtr_expiry_verified"
-  | "property_address_changed";
+  | "property_address_changed"
+  /* A list downloaded as a spreadsheet (19 Oct 2026, lib/exports): which
+     screen, how many rows and the filters. No emails or phones go in one. */
+  | "data_exported";
 
 export interface AuditRow {
   id: string;
