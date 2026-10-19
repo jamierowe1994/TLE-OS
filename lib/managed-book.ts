@@ -378,6 +378,20 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   /* Not caught: see activeOsProperties - an empty set is not an answer. */
   const extra: OsProperty[] = pm ?? (await activeOsProperties());
   const owned = rexUserId ? await propertiesOwnedBy(rexUserId) : null;
+  /* PayProp, read here: its responsible agent counts towards an agent's book
+     below, and its rent and agent fill the book at the end. */
+  const [pp, reg] = await Promise.all([getPortfolioBook().catch(() => null), getTenancyRegister().catch(() => null)]);
+  const ppBook = pp?.agentById ? await rentBook().catch(() => null) : null;
+  const plain = (n: string) => { const w = n.replace(/\(.*?\)/g, " ").toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/); return `${w[0] ?? ""} ${w[w.length - 1] ?? ""}`; };
+  /* PayProp's responsible agent on a home, on a sure address match; its
+     office buckets ("TLE", "Admin property") are not people. */
+  const payPropAgent = (home: { name: string; address?: string | null; postcode: string | null }): string | null => {
+    if (!ppBook || !pp?.agentById) return null;
+    const hit = matchHome(ppBook, home);
+    if (typeof hit !== "object") return null;
+    const who = pp.agentById[hit.id]?.agent?.trim();
+    return who && !/^(tle|admin property|fully managed|howard|\(none\))$/i.test(who) ? who : null;
+  };
   /* EVERY ROOM, NOT THE FIRST (James, 6 Oct 2026, 5b Newton Road). A REX PM
      home used to drop out of the book whenever its REX property was already
      in it - but the 6 Sep certificate import tied whole houses of rooms to
@@ -460,8 +474,22 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     const pcs = theirHouses.get(houseKey(d) ?? "");
     return Boolean(pcs) && (!pcOf(o.postcode) || pcs!.has("") || pcs!.has(pcOf(o.postcode)));
   };
+  /* Or the OS record names them (Rhiannon Dodge, 19 Oct 2026): 3 Newton Road,
+     4 Staddon Gardens and 5 Pottery Mews sat under her in the whole-business
+     book but not in her own. Their REX properties were made by the 19 Sep
+     sync, so REX names no owner, and REX ownership was the only test. The
+     agent REX PM names on the home is the same answer the whole book gives. */
+  /* And where nothing names an agent, PayProp's responsible agent does - the
+     same fill the whole book gets at the end (Dan Richards' let-only homes,
+     19 Oct 2026: under him in the whole book, missing from his own). */
+  const me = rexUserId ? properties.find((p) => p.agent?.id === rexUserId)?.agent?.name : null;
+  const payPropNamesMe = (o: OsProperty) => {
+    if (!me || o.agentName) return false;
+    const who = payPropAgent({ name: o.name || o.address, address: o.address, postcode: o.postcode });
+    return Boolean(who) && plain(who!) === plain(me);
+  };
   const outOfScope = (d: Parsed, o: OsProperty) =>
-    Boolean(rexUserId) && !inTheirHouse(d, o) && !(o.rexPropertyId && owned?.has(o.rexPropertyId));
+    Boolean(rexUserId) && !inTheirHouse(d, o) && !(o.rexPropertyId && owned?.has(o.rexPropertyId)) && agentOf(o)?.id !== rexUserId && !payPropNamesMe(o);
   /* A room that joins makes its house theirs too (Rhiannon Dodge, 16 Oct
      2026). Room 4 at 66a Fore Street joined her book because she owns its REX
      record, but the houses were listed before it joined, so Room 2 at 66a -
@@ -606,7 +634,6 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      property's monthly_payment_required setting is the fallback only, as it
      goes stale - 6 Ruskin Place showed £1,000 against a £1,200 invoice. A
      register over a day old is not used for this. */
-  const [pp, reg] = await Promise.all([getPortfolioBook().catch(() => null), getTenancyRegister().catch(() => null)]);
   const invoiced = reg?.rentByRentKey && Date.now() - Date.parse(reg.computedAt) < 26 * 3_600_000 ? reg.rentByRentKey : null;
   if (pp?.rentByKey || invoiced) {
     for (const p of properties) {
@@ -627,18 +654,13 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      PayProp's office buckets ("TLE", "Admin property") are not people and
      leave it blank. The REX user id is the one that agent's REX homes carry,
      so the filter by agent finds both. */
-  const book = pp?.agentById ? await rentBook().catch(() => null) : null;
-  if (book && pp?.agentById) {
-    const plain = (n: string) => { const w = n.replace(/\(.*?\)/g, " ").toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/); return `${w[0] ?? ""} ${w[w.length - 1] ?? ""}`; };
+  if (ppBook) {
     const known = new Map<string, { id: string; name: string }>();
     for (const p of properties) if (p.agent && !p.agent.id.startsWith("name:")) known.set(plain(p.agent.name), p.agent);
     for (const p of properties) {
       if (p.agent || p.test) continue;
-      const hit = matchHome(book, { name: p.name, address: p.address, postcode: p.postcode });
-      if (typeof hit !== "object") continue;
-      const who = pp.agentById[hit.id]?.agent?.trim();
-      if (!who || /^(tle|admin property|fully managed|howard|\(none\))$/i.test(who)) continue;
-      p.agent = known.get(plain(who)) ?? { id: `name:${who}`, name: who };
+      const who = payPropAgent(p);
+      if (who) p.agent = known.get(plain(who)) ?? { id: `name:${who}`, name: who };
     }
   }
   /* Landlords' homes and rent from each home's latest let only, or a landlord
