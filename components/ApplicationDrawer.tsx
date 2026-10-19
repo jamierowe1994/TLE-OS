@@ -20,6 +20,7 @@ import Guarantors from "@/components/Guarantors";
 import LetTenants from "@/components/LetTenants";
 import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
+import AdvertOffline from "@/components/listing/AdvertOffline";
 import HandoffPanel from "@/components/HandoffPanel";
 import { cardStatus, stageStatus } from "@/components/applications/LetsBoard";
 import { PORTAL_STAGES, propolyDealUrl, stagesFor } from "@/lib/business/propoly-stages";
@@ -1437,6 +1438,17 @@ export default function ApplicationDrawer({
                     hideWhenEmpty
                   />
                 </div>
+                {/* The advert (19 Oct 2026, lib/advert-offline): once there's a let,
+                    the agent takes it off the portals when they choose. */}
+                {app.listingId && !app.swapKind && (propoly.state === "in" || propoly.state === "push") && (
+                  <AdvertOffline
+                    listingId={String(app.listingId)}
+                    applicationId={app.id}
+                    propertyId={app.propertyId ?? null}
+                    address={[app.property, app.locality].filter(Boolean).join(", ")}
+                    className="mt-4"
+                  />
+                )}
               </>
             ) : (
               <>

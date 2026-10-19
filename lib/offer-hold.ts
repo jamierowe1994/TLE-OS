@@ -97,6 +97,8 @@ export async function releaseOthers(p: {
   offers: HeldOffer[];
   by: { name: string; email: string };
   paidAt: string | null;
+  /** Let go because the agent took the advert offline, before the fee (lib/advert-offline). */
+  offline?: boolean;
 }): Promise<{ declined: number; update: CustomerUpdate | null }> {
   const address = [p.accepted.property, p.accepted.locality].filter(Boolean).join(", ");
   const lead = p.accepted.applicants.find((a) => a.isPrimary)?.name ?? p.accepted.applicants[0]?.name ?? "The tenant";
@@ -112,7 +114,7 @@ export async function releaseOthers(p: {
       ref: o.ref,
       listingId: p.listingId,
       decision: "declined",
-      note: `Held until ${lead}'s holding fee was paid, then let go.`,
+      note: p.offline ? `Let go when the advert was taken offline for ${lead}.` : `Held until ${lead}'s holding fee was paid, then let go.`,
       by: p.by,
     });
     for (const person of o.people) {
@@ -137,7 +139,9 @@ export async function releaseOthers(p: {
           agentName: p.by.name,
           kind: "application_declined",
           headline: `Let the other applicants know it's gone`,
-          why: `${lead} has paid the holding fee${p.paidAt ? ` (${new Date(p.paidAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })})` : ""}, so the other offers on ${p.accepted.property} were let go.`,
+          why: p.offline
+            ? `The advert for ${p.accepted.property} was taken offline for ${lead}, so the other offers were let go.`
+            : `${lead} has paid the holding fee${p.paidAt ? ` (${new Date(p.paidAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })})` : ""}, so the other offers on ${p.accepted.property} were let go.`,
           recipients,
         },
         { tellAgent: false }

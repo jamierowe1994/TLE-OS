@@ -3,6 +3,7 @@ import OsAddressLine from "@/components/OsAddressLine";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
+import AdvertOffline from "@/components/listing/AdvertOffline";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignInAgain from "@/components/SignInAgain";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -1452,6 +1453,16 @@ function ListingDrawerBody({
                 </button>
               </div>
             </div>
+              {/* The advert (19 Oct 2026, lib/advert-offline): let agreed in the
+                  OS is not off the portals, so the agent takes it down here. */}
+              {!listing.archived && listing.letAgreed && Number(listing.id) > 0 && (
+                <AdvertOffline
+                  listingId={String(listing.id)}
+                  propertyId={listing.propertyId ? String(listing.propertyId) : null}
+                  address={[listing.name, listing.locality].filter(Boolean).join(", ")}
+                  className="mt-3"
+                />
+              )}
               {/* Filed away: why, said once. */}
               {listing.archived && (
                 <p className="mt-3 rounded-xl border border-line/60 bg-box px-3.5 py-2.5 text-[11.5px] leading-snug text-muted">

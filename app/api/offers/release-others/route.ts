@@ -8,12 +8,17 @@ import { dealForApplication } from "@/lib/application-journey";
 import { feeOf, otherOpenOffers, releaseOthers } from "@/lib/offer-hold";
 import { isIntroOnly } from "@/lib/intro-only";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { advertFor } from "@/lib/advert-offline";
 
 /**
  * GET  /api/offers/release-others?application=<id>
  *        -> { fee, offers }   the other offers held on that home
- * POST /api/offers/release-others { applicationId, refs? }
+ * POST /api/offers/release-others { applicationId, refs?, reason? }
  *        -> declines them here and puts a "not this one" with the agent
+ *
+ * reason "offline" (19 Oct 2026, lib/advert-offline): the agent has taken
+ * the advert offline, so the others can go before the holding fee is in -
+ * that is the agent's call, made on the Take offline screen.
  *
  * Only once the accepted tenant's holding fee is settled in Propoly (9 Oct
  * 2026, James: hold the others until the deposit is paid). Nothing reaches
@@ -64,12 +69,13 @@ export async function POST(req: NextRequest) {
     throw e;
   }
   if (!hasDb()) return NextResponse.json({ ok: false, error: "This can't be saved on this environment." }, { status: 503 });
-  const b = (await req.json().catch(() => ({}))) as { applicationId?: unknown; refs?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { applicationId?: unknown; refs?: unknown; reason?: unknown };
   const id = typeof b.applicationId === "string" ? b.applicationId : "";
   if (!id) return NextResponse.json({ ok: false, error: "Which application?" }, { status: 400 });
   const r = await load(req, id);
   if ("error" in r) return r.error;
-  if (!r.fee.settled) {
+  const offline = b.reason === "offline" && Boolean((await advertFor(r.listingId).catch(() => null))?.offlineAt);
+  if (!r.fee.settled && !offline) {
     return NextResponse.json({ ok: false, error: "The holding fee isn't paid yet, so the other offers are still held." }, { status: 409 });
   }
   const picked = Array.isArray(b.refs) ? new Set(b.refs.filter(isDecisionRef)) : null;
@@ -82,6 +88,7 @@ export async function POST(req: NextRequest) {
       offers,
       by: { name: r.me.name || r.me.email, email: r.me.email },
       paidAt: r.fee.paidAt,
+      offline: offline && !r.fee.settled,
     });
     return NextResponse.json({ ok: true, declined: done.declined, updateId: done.update?.id ?? null });
   } catch (e) {

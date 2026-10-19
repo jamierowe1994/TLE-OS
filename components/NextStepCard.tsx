@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { OPEN_TAKE_OFFLINE } from "@/components/listing/AdvertOffline";
 
 /**
  * NEXT STEP (9 Oct 2026). James: "rather than having the checklist on there,
@@ -28,6 +29,8 @@ export type NextAction = {
   decide?: "accepted" | "declined" | "undo";
   push?: boolean;
   release?: number;
+  /** Take the advert offline (lib/advert-offline): opens the sheet on the page. */
+  offline?: boolean;
   minor?: boolean;
 };
 
@@ -436,13 +439,20 @@ export default function NextStepCard({
             </div>
           ) : null}
 
+          {/* TAKE THE ADVERT OFFLINE: the card further down the let runs it. */}
+          {next.offline && (
+            <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_TAKE_OFFLINE))} className={`${primary} mt-4 w-full`}>
+              <DoodleIcon name="lock" size={13} /> Take It Offline
+            </button>
+          )}
+
           {/* Accept / Decline and the rest the journey can play. */}
           {mine && (next.decide || next.test) && (
             <button type="button" onClick={() => onPlay(next)} disabled={playing !== null} className={`${next.decide === "declined" || next.test === "decline" ? quiet : primary} mt-4 w-full`}>
               {playing === next.id ? "Working…" : confirming === next.id ? "Yes, decline it" : next.label}
             </button>
           )}
-          {!next.push && !next.release && !next.decide && !next.test && next.href && (
+          {!next.push && !next.release && !next.offline && !next.decide && !next.test && next.href && (
             <a href={next.href} {...(/^https?:/.test(next.href) ? { target: "_blank", rel: "noreferrer" } : {})} className={`${mine ? primary : quiet} mt-4 w-full`}>
               {/^https?:/.test(next.href) ? "Open in Propoly" : next.label}
             </a>

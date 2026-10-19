@@ -5,6 +5,7 @@ import type { ListingBook, OsListing } from "@/lib/rex-listings";
 import { cacheKeyFor, heldFor, refresh, FRESH_MS, STALE_MS } from "@/lib/listings-cache";
 import { withArchiveState } from "@/lib/listings-archive-view";
 import { withTakenState } from "@/lib/listings-taken";
+import { offlineListings } from "@/lib/advert-offline";
 import { introOnlyIds } from "@/lib/intro-only";
 import { rexConfigured } from "@/lib/rex";
 import { whoIs } from "@/lib/admin";
@@ -89,10 +90,23 @@ export async function GET(req: NextRequest) {
     /* Taken (12 Oct 2026, lib/listings-taken): let in fact though REX still
        has it published. Stamped here with the archive state, for the same
        reason - a Relist has to show the moment it is pressed. */
-    const [archived, mine, intro] = await Promise.all([withArchiveState(book).then(withTakenState), tests, introOnlyIds().catch(() => new Set<string>())]);
+    const [archived, mine, intro, off] = await Promise.all([
+      withArchiveState(book).then(withTakenState),
+      tests,
+      introOnlyIds().catch(() => new Set<string>()),
+      offlineListings().catch(() => new Map<string, unknown>()),
+    ]);
     /* Intro only (lib/intro-only), stamped at serve time too: kept in the OS,
        so the book never carries it. */
-    const withIntro = <L extends { id?: unknown; listingId?: unknown }>(ls: L[]) => (intro.size ? ls.map((l) => (intro.has(String(l.id ?? l.listingId)) ? { ...l, introOnly: true } : l)) : ls);
+    /* Offline (19 Oct 2026, lib/advert-offline): the agent took the advert
+       down from the OS. Kept in the OS, so stamped here too. */
+    const withIntro = <L extends { id?: unknown; listingId?: unknown }>(ls: L[]) =>
+      intro.size || off.size
+        ? ls.map((l) => {
+            const id = String(l.id ?? l.listingId);
+            return intro.has(id) || off.has(id) ? { ...l, ...(intro.has(id) ? { introOnly: true } : {}), ...(off.has(id) ? { offline: true } : {}) } : l;
+          })
+        : ls;
     return withTests({ ...archived, listings: withIntro(archived.listings) }, withIntro(mine));
   };
   if (held && age < FRESH_MS) {

@@ -78,6 +78,8 @@ type SampleListing = {
   /** Let in fact though still advertised, or its deal fell through: stamped
    *  by the server (lib/listings-taken, 12 Oct 2026). Both count as let agreed. */
   taken?: { why: string; at: string | null } | null;
+  /** Taken offline by the agent (lib/advert-offline). */
+  offline?: boolean;
   fellThrough?: { why: string; at: string | null } | null;
   /** The tester's own test listing - never in the counts. */
   test?: boolean;
@@ -1110,7 +1112,8 @@ export default function Listings() {
                         {l.archived ? archiveLabel(l.archiveReason ?? null) : st.label}
                       </Tag>
                       {l.introOnly && <Tag tone="neutral">Intro only</Tag>}
-                      {!l.archived && !l.letAgreed && l.taken && <Tag tone="accent">Still advertised</Tag>}
+                      {!l.archived && l.offline && <Tag tone="neutral">Offline</Tag>}
+                      {!l.archived && !l.letAgreed && !l.offline && l.taken && <Tag tone="accent">Still advertised</Tag>}
                       {!l.archived && !l.letAgreed && !l.taken && l.fellThrough && <Tag tone="accent">Fell through</Tag>}
                       {l.tenant && <Tag tone="neutral">Tenanted</Tag>}
                       {/* The jobs-to-do chips are about getting a listing OUT.
@@ -1127,7 +1130,7 @@ export default function Listings() {
                       <span className="truncate">{l.locality}</span>
                     </span>
                     {/* Why it is let agreed though the advert is still up. */}
-                    {!l.archived && !l.letAgreed && (l.taken ?? l.fellThrough) && (
+                    {!l.archived && !l.letAgreed && !l.offline && (l.taken ?? l.fellThrough) && (
                       <span className="mt-1 block text-[11px] leading-snug text-accent-dark">
                         {(l.taken ?? l.fellThrough)!.why}{l.taken ? " - take the advert down" : " - relist it if it's back on the market"}
                       </span>

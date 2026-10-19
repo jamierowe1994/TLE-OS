@@ -21,6 +21,7 @@ import { heldForTenantChanges, referencedOn } from "@/lib/tenant-swaps";
 import { q } from "@/lib/db";
 import { closedReasons, getApplications } from "@/lib/applications";
 import { feeOf, otherOpenOffers } from "@/lib/offer-hold";
+import { advertFor, stageReached } from "@/lib/advert-offline";
 import { introOnlyIds, isIntroOnly } from "@/lib/intro-only";
 
 /**
@@ -75,6 +76,8 @@ export interface JourneyAction {
   push?: boolean;
   /** Let the other applicants know: how many offers are held on the home. */
   release?: number;
+  /** Take the advert offline: the stage the agent picked has come (lib/advert-offline). */
+  offline?: boolean;
   /** A reminder, never the Next Step while anything else is open. */
   minor?: boolean;
 }
@@ -766,6 +769,29 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
         : sharesTenant && loose
           ? { url: dealUrlOf(loose), how: "found" }
           : null;
+
+  /* THE ADVERT (19 Oct 2026, lib/advert-offline). The agent picked the stage
+     to be asked at; once it comes, and while the advert is still up, taking it
+     offline is the first thing on the file. Asked, never done for them. */
+  if (accepted && app.listingId != null && !app.swap) {
+    const advert = await advertFor(String(app.listingId)).catch(() => null);
+    if (advert && !advert.offlineAt && advert.when && advert.when !== "manual") {
+      const refAt = PORTAL_STAGES.findIndex((x) => x.key === "referencing");
+      const at = dealInfo ? PORTAL_STAGES.findIndex((x) => x.key === dealInfo!.stage) : -1;
+      /* Scotland takes no holding fee: there "the money's in" is the deal being in Propoly. */
+      const feeIn = fee.settled || (scotland && dealInfo != null);
+      if (stageReached(advert.when, { feeSettled: feeIn, pastReferencing: refAt >= 0 && at > refAt })) {
+        actions.unshift({
+          id: "offline",
+          label: "Take the advert offline",
+          detail: `${advert.when === "fee" ? (fee.settled ? "The holding fee is in" : "The deal is in Propoly") : "Referencing is done"}, which is when you asked to be told. It stays on the portals until you take it off.`,
+          href: null,
+          who: "you",
+          offline: true,
+        });
+      }
+    }
+  }
 
   return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null, inPropoly, history };
 }

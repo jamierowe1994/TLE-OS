@@ -142,7 +142,7 @@ export default function CustomerUpdates({ applicationId, dealId, scope, openOnly
                   return (
                     <li key={i} className="py-2.5">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <span className="min-w-0 flex-1 basis-full sm:basis-0">
+                        <span className="min-w-0 flex-1 basis-[12rem]">
                           <span className="block text-[13px] font-semibold">
                             {r.name} <span className="font-normal text-muted">· {r.role === "tenant" ? "Tenant" : "Landlord"}</span>
                           </span>
