@@ -41,7 +41,26 @@ export async function rexHasTerms(propertyId: string): Promise<boolean | null> {
   return rexRows(res.result).some((r) => r.type_id === "terms_of_business" && r.system_record_state !== "archived");
 }
 
-export async function fileTermsToRex(p: { propertyId: string; r2Key: string; fileName: string; uploadedAt?: Date | string | null; byName?: string | null }): Promise<{ ok: boolean; note: string }> {
+/**
+ * Plain ASCII for anything written into REX's notes (19 Oct 2026). The first
+ * DocuSeal-signed terms to reach a push, 5 Strawberry Path for Richard, were
+ * named "TLE Terms of Business — England, Sep 26": REX answered 500
+ * "Malformed UTF-8 characters" to the em dash, twice, and the push was
+ * refused. The same wall lib/plc-rex plainName met on 6 Sep. Dashes become
+ * "-", accents lose their marks, anything else non-ASCII goes.
+ */
+export function rexPlain(text: string): string {
+  return text
+    .replace(/[‐-―−]/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function fileTermsToRex(p: { propertyId: string; r2Key: string; fileName: string; uploadedAt?: Date | string | null; byName?: string | null; source?: OsTerms["source"] }): Promise<{ ok: boolean; note: string }> {
   if (rexWritesLocked("Upload", "uploadFileFromUrl") || rexWritesLocked("ComplianceEntries", "create")) {
     return { ok: false, note: "Filing compliance into REX is not switched on." };
   }
@@ -61,7 +80,11 @@ export async function fileTermsToRex(p: { propertyId: string; r2Key: string; fil
             issue_date: issue,
             start_date: issue,
             file: uri,
-            notes: `Written by TLE OS from the terms uploaded on the listing${p.byName ? ` by ${p.byName}` : ""} (${p.fileName}). Issue date is the upload date.`.slice(0, 500),
+            notes: rexPlain(
+              p.source === "signed"
+                ? `Written by TLE OS from the terms signed in DocuSeal${p.byName ? ` by ${p.byName}` : ""} (${p.fileName}). Issue date is the signing date.`
+                : `Written by TLE OS from the terms uploaded on the listing${p.byName ? ` by ${p.byName}` : ""} (${p.fileName}). Issue date is the upload date.`
+            ).slice(0, 500),
           },
         },
       },
@@ -147,6 +170,6 @@ export async function ensureTermsInRex(propertyId: string): Promise<"yes" | "no"
   if (inRex === true) return "yes";
   const mine = await osTermsFor(propertyId);
   if (!mine) return inRex === false ? "no" : "unknown";
-  const r = await fileTermsToRex({ propertyId, r2Key: mine.r2_key, fileName: mine.file_name, uploadedAt: mine.at, byName: mine.by_name });
+  const r = await fileTermsToRex({ propertyId, r2Key: mine.r2_key, fileName: mine.file_name, uploadedAt: mine.at, byName: mine.by_name, source: mine.source });
   return r.ok ? "yes" : "not_filed";
 }
