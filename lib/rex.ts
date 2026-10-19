@@ -52,7 +52,10 @@ export function rexConfigured(): boolean {
   return !!(process.env.REX_API_EMAIL && process.env.REX_API_PASSWORD);
 }
 
-function rexAccountId(): string | null {
+/** The account every login is pinned to. Exported so a diagnostic can report
+ *  it: "which account are we even asking about" is half of why a correct
+ *  password gets refused. */
+export function rexAccountId(): string | null {
   return process.env.REX_ACCOUNT_ID || null;
 }
 
