@@ -272,20 +272,28 @@ export default function AppointmentDrawer({
           {appt.kind !== "slot" && (
           <Section icon="user" title={appt.kind === "viewing" ? (past ? "Who viewed" : "Who's coming") : "Who it's with"}>
             {appt.who ? <p className="font-semibold">{appt.who}</p> : <p className="text-muted">Nobody named on this entry.</p>}
-            {appt.contact ? (
+            {appt.contact && (appt.contact.phone || appt.contact.email) ? (
               <div className="mt-2 flex flex-wrap gap-2">
-                <a href={`tel:${appt.contact.phone.replace(/\s+/g, "")}`} className={secondary}>
-                  <DoodleIcon name="call" size={12} />
-                  {appt.contact.phone}
-                </a>
-                <WhatsAppButton phone={appt.contact.phone} name={appt.who || ""} className={secondary}>
-                  <DoodleIcon name="message-2" size={12} />
-                  WhatsApp
-                </WhatsAppButton>
-                <a href={`mailto:${appt.contact.email}`} className={secondary}>
-                  <DoodleIcon name="mail" size={12} />
-                  Email
-                </a>
+                {/* Each button only when there is something behind it: an
+                    OS booking can carry an email and no number. */}
+                {appt.contact.phone && (
+                  <>
+                    <a href={`tel:${appt.contact.phone.replace(/\s+/g, "")}`} className={secondary}>
+                      <DoodleIcon name="call" size={12} />
+                      {appt.contact.phone}
+                    </a>
+                    <WhatsAppButton phone={appt.contact.phone} name={appt.who || ""} className={secondary}>
+                      <DoodleIcon name="message-2" size={12} />
+                      WhatsApp
+                    </WhatsAppButton>
+                  </>
+                )}
+                {appt.contact.email && (
+                  <a href={`mailto:${appt.contact.email}`} className={secondary}>
+                    <DoodleIcon name="mail" size={12} />
+                    Email
+                  </a>
+                )}
               </div>
             ) : (
               appt.who && <p className="mt-1 text-muted">No contact details on the calendar entry.</p>
@@ -314,11 +322,11 @@ export default function AppointmentDrawer({
                         {k.label}
                         {k.heldBy ? (
                           <span className="text-accent-dark">
-                            {" "}— out with {k.heldBy}
+                            {" "}- out with {k.heldBy}
                             {k.reason ? ` (${k.reason})` : ""}
                           </span>
                         ) : (
-                          <span className="text-muted"> — on the shelf{k.location ? `, ${k.location}` : ""}</span>
+                          <span className="text-muted"> - on the shelf{k.location ? `, ${k.location}` : ""}</span>
                         )}
                       </span>
                     ))
@@ -332,9 +340,9 @@ export default function AppointmentDrawer({
                       {tenantTold === false && <span className="text-accent-dark"> · NOT yet told</span>}
                     </>
                   ) : appt.tenant === null ? (
-                    <span>Vacant — nobody to arrange around.</span>
+                    <span>Vacant - nobody to arrange around.</span>
                   ) : (
-                    <span className="text-muted">Not known whether anyone lives here — check before you travel.</span>
+                    <span className="text-muted">Not known whether anyone lives here - check before you travel.</span>
                   )}
                 </Fact>
                 <Fact label="Landlord">
@@ -356,7 +364,7 @@ export default function AppointmentDrawer({
               {appt.comms.length === 0 ? (
                 <p className="text-muted">
                   {appt.fromRex
-                    ? "REX keeps no record of what was sent for this appointment."
+                    ? "No record of what was sent for this appointment."
                     : "Nothing to send for this one."}
                 </p>
               ) : (
@@ -423,7 +431,7 @@ export default function AppointmentDrawer({
                   {appt.feedback.note ? (
                     <p className="mt-2 whitespace-pre-line leading-relaxed">{appt.feedback.note}</p>
                   ) : (
-                    <p className="mt-2 text-muted">Logged in REX, with nothing written down.</p>
+                    <p className="mt-2 text-muted">Logged, with nothing written down.</p>
                   )}
                   {appt.feedback.agent && <p className="mt-2 text-[11px] text-muted">Recorded by {appt.feedback.agent}</p>}
                 </>
@@ -518,7 +526,7 @@ export default function AppointmentDrawer({
           ) : appt.link ? (
             <Link href={appt.link.href} className={`${primary} w-full`}>
               <DoodleIcon name="folder" size={13} />
-              Take me to the file — {appt.link.label}
+              Take me to the file - {appt.link.label}
             </Link>
           ) : canCancelGeneral(appt) ? (
             <div className="flex flex-wrap items-center gap-2">

@@ -110,6 +110,8 @@ export default function DiaryCalendar({
           kind: draftKind,
           title: draftTitle.trim(),
           where: draftWhere.trim(),
+          /* Into their Outlook too, the same as New appointment on the Diary (19 Oct 2026). */
+          outlook: draftKind !== "travel",
         }),
       });
       const j = await res.json();

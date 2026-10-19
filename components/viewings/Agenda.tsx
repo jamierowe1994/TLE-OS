@@ -13,6 +13,7 @@ import {
   fmtShort,
   nearLabel,
   primary,
+  secondary,
   subOf,
   titleOf,
   toneOf,
@@ -134,6 +135,7 @@ export default function Agenda({
   onOpen,
   onPrint,
   onPickDay,
+  onNew,
 }: {
   mode: AgendaMode;
   selected: number;
@@ -147,6 +149,8 @@ export default function Agenda({
   onOpen: (a: Appt) => void;
   onPrint: () => void;
   onPickDay: (offset: number) => void;
+  /** New appointment, on this day (Richard + Rhiannon, 19 Oct 2026). */
+  onNew?: () => void;
 }) {
   /* "See more" is a question about THIS list, so it resets with the list. */
   const [shown, setShown] = useState<{ key: string; n: number }>({ key: "", n: PAGE });
@@ -310,10 +314,16 @@ export default function Agenda({
     <section className={`fade-up flex h-full flex-col ${card} p-5`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/60 pb-3">
         {title}
-        <span className="ml-auto flex items-center gap-2">
-          <span className="text-[11px] text-muted">
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <span className="whitespace-nowrap text-[11px] text-muted">
             {count ? `${count} ${count === 1 ? "appointment" : "appointments"}` : loading ? "" : "Nothing booked"}
           </span>
+          {onNew && (mode === "day" || mode === "upcoming") && (
+            <button type="button" data-steve="viewings.new-appointment" onClick={onNew} className={`${secondary} whitespace-nowrap`} title="A meeting, an inspection or something personal">
+              <DoodleIcon name="clock" size={13} />
+              New appointment
+            </button>
+          )}
           {(mode === "day" || mode === "upcoming") && (
             <button type="button" onClick={onPrint} className={primary} title="Print this as a run sheet">
               <DoodleIcon name="doc" size={13} />

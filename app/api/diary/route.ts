@@ -43,10 +43,10 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
   try {
     const rows = await q<{
       id: string; starts_at: Date; mins: number; kind: string;
-      title: string; where_at: string; who: string; author_name: string; author_id: string | null;
-      booking: { leadId?: string; listingId?: string | null; applicantEmail?: string | null; unaccompanied?: boolean } | null;
+      title: string; where_at: string; who: string; author_name: string; author_id: string | null; notes: string | null;
+      booking: { leadId?: string; listingId?: string | null; applicantEmail?: string | null; applicantPhone?: string | null; unaccompanied?: boolean } | null;
     }>(
-      `SELECT id, starts_at, mins, kind, title, where_at, who, author_name, author_id, booking
+      `SELECT id, starts_at, mins, kind, title, where_at, who, author_name, author_id, booking, notes
          FROM os_appointments
         WHERE starts_at > NOW() - INTERVAL '21 days'
           AND starts_at < NOW() + INTERVAL '60 days'
@@ -79,13 +79,18 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
         who: r.who ?? "",
         agent: r.author_name ?? "",
         comms: [],
+        /* The agenda typed with New appointment (19 Oct 2026). */
+        ...(r.notes ? { notes: r.notes } : {}),
         ...(r.author_id === selfId ? { own: true } : {}),
         /* What the booking was made with, so Change time can open the booker
            on the same person and home (6 Oct 2026). */
         ...(r.booking ? {
           leadId: r.booking.leadId ?? null,
           listingId: r.booking.listingId ?? null,
-          ...(r.booking.applicantEmail ? { contact: { email: r.booking.applicantEmail, phone: "" } } : {}),
+          /* The number too, where the booking kept one (ticket 28eb07ba). */
+          ...(r.booking.applicantEmail || r.booking.applicantPhone
+            ? { contact: { email: r.booking.applicantEmail ?? "", phone: r.booking.applicantPhone ?? "" } }
+            : {}),
           ...(r.booking.unaccompanied ? { unaccompanied: true } : {}),
         } : {}),
       } satisfies Appt;

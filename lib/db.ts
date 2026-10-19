@@ -1934,6 +1934,9 @@ CREATE INDEX IF NOT EXISTS os_appointments_lead ON os_appointments (lead_id);
 -- Kept rather than deleted, so the person's record still says it was booked and
 -- called off; every diary, list and reminder reads only the ones still on.
 ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+-- The agenda of a general appointment (Richard + Rhiannon, 19 Oct 2026): what
+-- the meeting is about, in their own words.
+ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
 
 -- A person's OS diary and their PERSONAL calendar, both read only (Amrit's
 -- ticket, 14 Oct 2026; lib/personal-calendar). Opt-in from Profile.

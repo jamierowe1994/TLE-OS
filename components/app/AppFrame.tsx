@@ -245,13 +245,17 @@ function SheetShell({ title, label, onClose, children }: { title: string; label:
    line saying what each does (James's reference, 3 Oct 2026). Adding leads,
    properties and applications stays on the full OS for now - the phone
    writes only the Right to Rent check. */
+/* Book a Viewing and Send a Passport added 19 Oct 2026 (Kirstie, fe8ebdad):
+   the app books now. Still in pairs, so the tones keep their checker. */
 const QUICK: Array<{ href: string; label: string; line: string; icon: string; tone: "pink" | "sage" }> = [
-  { href: "/agent/id-check", label: "Scan an ID", line: "Capture and check an ID.", icon: "camera", tone: "pink" },
-  { href: "/agent/day", label: "Diary", line: "Day, week and month.", icon: "calendar", tone: "sage" },
-  { href: "/agent/people?who=tenant", label: "Find a Tenant", line: "Applicants and tenants.", icon: "user", tone: "sage" },
-  { href: "/agent/people?who=landlord", label: "Find a Landlord", line: "Owners of our homes.", icon: "key", tone: "pink" },
-  { href: "/agent/properties", label: "Find a Property", line: "Every home on your book.", icon: "home", tone: "pink" },
-  { href: "/agent/search", label: "Search Everything", line: "People and properties.", icon: "search", tone: "sage" },
+  { href: "/agent/book", label: "Book a Viewing", line: "Who, which home, when.", icon: "calendar", tone: "pink" },
+  { href: "/agent/id-check", label: "Scan an ID", line: "Capture and check an ID.", icon: "camera", tone: "sage" },
+  { href: "/agent/people?who=tenant&passport=1", label: "Send a Passport", line: "Pick the tenant, then send.", icon: "doc", tone: "sage" },
+  { href: "/agent/day", label: "Diary", line: "Day, week and month.", icon: "clock", tone: "pink" },
+  { href: "/agent/people?who=tenant", label: "Find a Tenant", line: "Applicants and tenants.", icon: "user", tone: "pink" },
+  { href: "/agent/people?who=landlord", label: "Find a Landlord", line: "Owners of our homes.", icon: "key", tone: "sage" },
+  { href: "/agent/properties", label: "Find a Property", line: "Every home on your book.", icon: "home", tone: "sage" },
+  { href: "/agent/search", label: "Search Everything", line: "People and properties.", icon: "search", tone: "pink" },
 ];
 
 /**

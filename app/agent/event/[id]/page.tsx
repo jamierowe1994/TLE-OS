@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PhoneCancelViewing from "@/components/m/PhoneCancelViewing";
 import PhoneAppraisalChange from "@/components/m/PhoneAppraisalChange";
+import AfterViewing from "@/components/app/AfterViewing";
+import PhonePassport from "@/components/app/PhonePassport";
 import type { Appt } from "@/lib/diary";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { PhoneEventFacts } from "@/app/api/m/event/route";
@@ -143,6 +145,14 @@ function Event({ appt, back }: { appt: Appt; back: string }) {
   else if (appt.tenant === null) access.push("Vacant - nobody is living there.");
   else if (p) access.push("No tenant on the record. Check with the landlord before you go in.");
 
+  /* Who the offer link and passport go to: the diary's own contact, else the
+     person found by name above. */
+  const found = people?.find((x) => x.email || x.phone) ?? null;
+  const reach = {
+    email: appt.contact?.email || found?.email || "",
+    phone: appt.contact?.phone || found?.phone || "",
+  };
+
   const idHref = `/agent/id-check?${new URLSearchParams({ name: appt.who, property: appt.where, appt: appt.id }).toString()}`;
 
   return (
@@ -235,6 +245,18 @@ function Event({ appt, back }: { appt: Appt; back: string }) {
             {p.availableFrom && <Fact label="Available" value={new Date(p.availableFrom).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} />}
           </dl>
         </Section>
+      )}
+
+      {/* Viewing done, the offer link and the passport, from the day itself
+          (Dan Richards 9a7e07c5, Kirstie Mulholland fe8ebdad, 19 Oct 2026). */}
+      {appt.kind === "viewing" && appt.who && people !== null && (
+        appt.day <= 0 ? (
+          <AfterViewing appt={appt} email={reach.email} phone={reach.phone} diaryKey={DIARY_KEY} />
+        ) : (
+          <Section title="Before the Viewing">
+            <PhonePassport name={appt.who} email={reach.email} listingId={appt.listingId ?? null} address={appt.where} />
+          </Section>
+        )
       )}
 
       {appt.kind === "viewing" && appt.who && (

@@ -79,7 +79,16 @@ export async function noteRexOutlookSync(userId: string, theirs: Appt[], outlook
  */
 const OS_OUTLOOK_TITLE = /^(Market appraisal|Viewing|Unaccompanied viewing|Take-on visit) - /;
 export function withoutPulledCopies<B extends { appts: Appt[] }>(book: B): B {
-  const copy = (a: Appt) => Boolean(a.fromRex) && OS_OUTLOOK_TITLE.test(a.what ?? "");
+  /* A general appointment the OS put in Outlook (New appointment, 19 Oct
+     2026) carries the agent's own title, not one of ours: it is a copy when
+     a REX entry at that time reads the same as the OS's own row. */
+  const norm = (t: string | undefined) => (t ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  const general = book.appts.filter((a) => a.id.startsWith("os-") && !a.leadId && a.kind !== "viewing");
+  const sameAsGeneral = (a: Appt) => {
+    const w = norm(a.what);
+    return w.length > 2 && general.some((g) => g.day === a.day && Math.abs(minutesOf(g.start) - minutesOf(a.start)) <= 2 && norm(g.what).startsWith(w));
+  };
+  const copy = (a: Appt) => Boolean(a.fromRex) && (OS_OUTLOOK_TITLE.test(a.what ?? "") || sameAsGeneral(a));
   const copies = book.appts.filter(copy);
   if (!copies.length) return book;
   const drop = new Set(

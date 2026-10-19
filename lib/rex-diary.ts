@@ -52,7 +52,14 @@ interface RexEvent extends Record<string, unknown> {
   organiser_user?: { name?: string; email_address?: string } | null;
   /** What the event is attached to: the listing, the property, the contacts
    *  and the feedback written up afterwards. */
-  records?: { id?: string | number; service?: string; label?: string | null }[] | null;
+  records?: {
+    id?: string | number;
+    service?: string;
+    label?: string | null;
+    /** REX sends a short copy of the linked record: on a Contacts record that
+     *  is the name, phone_number and email_address. */
+    stub?: Record<string, unknown> | null;
+  }[] | null;
 }
 
 function ownerOf(e: RexEvent): { name: string; email: string } {
@@ -222,6 +229,23 @@ function linked(e: RexEvent, service: string): { id: string; label: string | nul
   return r?.id != null ? { id: String(r.id), label: r.label ?? null } : null;
 }
 
+/**
+ * THE PERSON COMING, WITH THEIR NUMBER (Richard Callow, ticket 28eb07ba, 19 Oct 2026).
+ *
+ * A viewing booked in REX opened with the applicant's name and "No contact
+ * details": the name came off the title and the Contacts record REX hangs off
+ * the event was never looked at. That record already carries a stub with the
+ * phone and email, in the same search the diary makes anyway (301 of 302
+ * recent viewings had a phone), so this costs no extra REX read at all.
+ */
+function contactOf(e: RexEvent): { email: string; phone: string } | null {
+  const r = (e.records ?? []).find((x) => x?.service === "Contacts" && x.stub);
+  const s = (r?.stub ?? {}) as { email_address?: unknown; phone_number?: unknown };
+  const email = typeof s.email_address === "string" ? s.email_address.trim() : "";
+  const phone = typeof s.phone_number === "string" ? s.phone_number.trim() : "";
+  return email || phone ? { email, phone } : null;
+}
+
 function toAppt(e: RexEvent, accounts?: Map<string, string>): Appt | null {
   const startIso = e.starts_at?.time;
   if (!startIso) return null;
@@ -303,7 +327,9 @@ function toAppt(e: RexEvent, accounts?: Map<string, string>): Appt | null {
       : (() => {
           const listing = linked(e, "Listings");
           const property = linked(e, "Properties");
+          const contact = contactOf(e);
           return {
+            ...(contact ? { contact } : null),
             listingId: listing?.id ?? null,
             propertyId: property?.id ?? null,
             ...(listing

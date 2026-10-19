@@ -9,6 +9,7 @@ import type { BookPerson } from "@/lib/m-people-book";
 import { ErrorLine, Sheet, Spinner, TopBar, dialable, mapsHref, whatsappHref, WhatsAppIcon } from "../bits";
 import { RadiusSheet, type RadiusPick } from "../radius";
 import SlideTabs from "@/components/app/SlideTabs";
+import PhonePassport from "@/components/app/PhonePassport";
 import FloatSearch from "@/components/app/FloatSearch";
 import { searchMatches } from "@/lib/search-match";
 
@@ -54,6 +55,8 @@ export default function PhonePeople() {
   const [near, setNear] = useState<NearbyPerson[] | null>(null);
   const [others, setOthers] = useState<PhonePerson[] | null>(null);
   const [open, setOpen] = useState<BookPerson | null>(null);
+  /* Opened from Quick Actions' Send a Passport: say what to do next. */
+  const [forPassport, setForPassport] = useState(false);
   const turn = useRef(0);
 
   const load = () => {
@@ -72,6 +75,7 @@ export default function PhonePeople() {
     load();
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("who") === "landlord") setSide("landlord");
+    if (sp.get("passport") === "1") setForPassport(true);
     const q = sp.get("q");
     if (q) setNeedle(q);
   }, []);
@@ -160,7 +164,9 @@ export default function PhonePeople() {
         />
         <div className="relative w-[56%] pt-4">
           <h1 className="m-title text-[38px] leading-[1.04]">People</h1>
-          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Find your tenants and landlords.</p>
+          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">
+            {forPassport ? "Pick the tenant, then Send Rental Passport." : "Find your tenants and landlords."}
+          </p>
         </div>
       </section>
 
@@ -449,6 +455,15 @@ function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
         <Link href={findHomeHref(p)} className="m-btn m-btn-primary m-press mt-3 w-full">
           <DoodleIcon name="home" size={17} /> Find a Home
         </Link>
+      )}
+      {/* Book them in and send their passport from the phone (Kirstie, fe8ebdad, 19 Oct 2026). */}
+      {p.side === "tenant" && (
+        <>
+          <Link href={`/agent/book?q=${encodeURIComponent(p.email || p.phone || p.name)}`} className="m-btn m-press mt-2 w-full">
+            <DoodleIcon name="calendar" size={17} /> Book a Viewing
+          </Link>
+          <PhonePassport name={p.name} email={p.email} className="mt-2" />
+        </>
       )}
 
       {facts.length > 0 && (

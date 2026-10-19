@@ -16,11 +16,12 @@ import Month from "@/components/viewings/Month";
 import PrintSheet, { type PrintGroup } from "@/components/viewings/PrintSheet";
 import Tiles from "@/components/viewings/Tiles";
 import WeekGrid from "@/components/viewings/WeekGrid";
-import { card, dateOfOffset, fmtFull, fmtShort, groupByDay, nearLabel } from "@/components/viewings/shared";
+import { card, dateOfOffset, fmtFull, fmtShort, groupByDay, nearLabel, secondary } from "@/components/viewings/shared";
 import { KIND_META, minutesOf, type Appt, type ApptKind } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { fetchMe } from "@/lib/me";
 import BookViewing from "@/components/viewings/BookViewing";
+import NewAppointment from "@/components/viewings/NewAppointment";
 import ChangeViewing from "@/components/viewings/ChangeViewing";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import { PressButton } from "@/components/Bits";
@@ -89,6 +90,8 @@ export default function Viewings() {
   const [sentExtra, setSentExtra] = useState<Set<string>>(new Set());
   /* Book a viewing from here: the person, then the home (Howard, 1 Oct 2026). */
   const [booking, setBooking] = useState(false);
+  /* A general appointment, no home or person (Richard + Rhiannon, 16 Oct 2026). */
+  const [making, setMaking] = useState(false);
 
   const { appts: DIARY, loading, everything, error } = useDiary();
 
@@ -330,6 +333,7 @@ export default function Viewings() {
                   onOpen={(a) => setQuickId(a.id)}
                   onPrint={() => window.print()}
                   onPickDay={pickDay}
+                  onNew={() => setMaking(true)}
                 />
               )}
             </div>
@@ -351,7 +355,11 @@ export default function Viewings() {
                 {listTitle}
                 <span className="figures ml-2 text-[14px] text-muted">{listRows.length}</span>
               </h2>
-              <button type="button" onClick={() => window.print()} className="ml-auto text-[11.5px] font-semibold text-muted underline hover:text-ink">
+              <button type="button" onClick={() => setMaking(true)} className={`ml-auto whitespace-nowrap ${secondary}`}>
+                <DoodleIcon name="clock" size={13} />
+                New appointment
+              </button>
+              <button type="button" onClick={() => window.print()} className="text-[11.5px] font-semibold text-muted underline hover:text-ink">
                 Print
               </button>
             </div>
@@ -428,6 +436,7 @@ export default function Viewings() {
       />
 
       <BookViewing open={booking} onClose={() => setBooking(false)} />
+      <NewAppointment open={making} onClose={() => setMaking(false)} day={dateOfOffset(selected)} />
       <ChangeViewing appt={changing} onClose={() => setChanging(null)} />
       <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
     </>

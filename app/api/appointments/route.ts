@@ -6,6 +6,7 @@ import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { whoIs } from "@/lib/admin";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { putInOutlook, removeFromOutlook } from "@/lib/outlook-calendar";
 
 /**
  * Appointments and reminders made in the OS.
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const me = userId ? await findUserById(userId) : null;
 
-  let b: { startsAt?: string; mins?: number; kind?: string; title?: string; where?: string; who?: string };
+  let b: { startsAt?: string; mins?: number; kind?: string; title?: string; where?: string; who?: string; notes?: string; outlook?: boolean };
   try {
     b = await req.json();
   } catch {
@@ -83,17 +84,40 @@ export async function POST(req: NextRequest) {
 
   try {
     const id = uid();
+    const notes = (b.notes ?? "").trim().slice(0, 4000);
     await q(
-      `INSERT INTO os_appointments (id, starts_at, mins, kind, title, where_at, who, author_id, author_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      `INSERT INTO os_appointments (id, starts_at, mins, kind, title, where_at, who, author_id, author_name, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [id, when.toISOString(), mins, (b.kind ?? "other").slice(0, 24), title.slice(0, 200),
-       (b.where ?? "").slice(0, 200), (b.who ?? "").slice(0, 120), me?.id ?? null, me?.name ?? ""]
+       (b.where ?? "").slice(0, 200), (b.who ?? "").slice(0, 120), me?.id ?? null, me?.name ?? "", notes]
     );
+    /* A general appointment made with New appointment goes into their own
+       Outlook as well (Richard + Rhiannon, 19 Oct 2026), like every other
+       booking the OS makes: their Outlook is their diary everywhere else.
+       Nobody is invited and nobody is emailed (lib/outlook-calendar). Travel
+       buffers from the booker do not ask for this. */
+    if (b.outlook && me?.id) {
+      const put = await putInOutlook({
+        userId: me.id,
+        key: `appointment|${id}`,
+        subject: title,
+        body: notes,
+        location: (b.where ?? "").trim(),
+        startsAt: when.toISOString(),
+        minutes: mins,
+      });
+      return NextResponse.json({
+        ok: true,
+        id,
+        outlook: put.ok ? { ok: true } : { ok: false, detail: put.detail },
+        note: put.ok ? "In your diary and your Outlook calendar." : `In your diary. ${put.detail}`,
+      });
+    }
     return NextResponse.json({
       ok: true,
       id,
       // Said plainly, every time, so nobody assumes it left the building.
-      note: "Saved in the OS. It has NOT been added to REX or your 365 diary — those writes are switched off.",
+      note: "In your diary here. It has not gone into your Outlook calendar.",
     });
   } catch (e) {
     return NextResponse.json(
@@ -109,9 +133,9 @@ export async function POST(req: NextRequest) {
  *
  * Only the OS's own general entries, and only the person who made them: a
  * booked viewing cancels through its own file (lib/viewing-change), a slot
- * through Remove slot, an inspection visit through the inspection. None of
- * these rows reach Outlook or anywhere else, so taking the row out is the
- * whole of it.
+ * through Remove slot, an inspection visit through the inspection. One made
+ * with New appointment also went into their Outlook (19 Oct 2026), so that
+ * copy is taken out too; the rest never left the OS.
  */
 export async function DELETE(req: NextRequest) {
   try {
@@ -136,5 +160,8 @@ export async function DELETE(req: NextRequest) {
   ).catch(() => null);
   if (gone === null) return NextResponse.json({ ok: false, said: "That didn't cancel it. Try again." }, { status: 502 });
   if (!gone.length) return NextResponse.json({ ok: false, said: "That appointment isn't yours to cancel, or it has gone already." }, { status: 404 });
-  return NextResponse.json({ ok: true, said: "Cancelled and taken out of your diary." });
+  /* Only where the OS put it in Outlook (an 'outlook-event' row keyed by it);
+     otherwise this says so quietly and nothing is touched. */
+  const outlook = await removeFromOutlook(actor.id, `appointment|${rowId}`).catch(() => ({ ok: false, detail: "" }));
+  return NextResponse.json({ ok: true, said: outlook.ok ? "Cancelled and taken out of your diary and your Outlook." : "Cancelled and taken out of your diary." });
 }

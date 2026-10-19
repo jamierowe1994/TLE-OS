@@ -22,7 +22,8 @@ import { searchMatches } from "@/lib/search-match";
  * viewings carry their feedback, so the ones REX holds nothing for read
  * "Feedback Due". A row opens the appointment screen (/agent/event), which
  * already has the viewer, the access, the tenants, the landlord and Scan ID.
- * READ ONLY - booking and moving viewings stays on the desk for now.
+ * Book a Viewing (19 Oct 2026, Kirstie fe8ebdad) opens /agent/book; moving a
+ * viewing still stays on the desk.
  */
 
 type Tab = "today" | "week" | "later" | "past";
@@ -112,6 +113,10 @@ export default function PhoneViewings() {
           items={appts ? groups.flatMap((g) => g.rows.map((a) => ({ key: a.id, title: a.who || "No viewer named", line: `${dayHeading(g.day)} ${a.start} · ${a.where || a.what}`, onPick: () => router.push(`/agent/event/${encodeURIComponent(a.id)}?from=viewings`) }))) : null}
         />
       </div>
+
+      <Link href="/agent/book" className="m-btn m-btn-primary m-press mt-4 w-full">
+        <DoodleIcon name="calendar" size={17} /> Book a Viewing
+      </Link>
 
       <SlideTabs className="mt-4" value={tab} onChange={setTab} options={TABS.map((t) => ({ id: t.id, label: t.label }))} />
 
