@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { CopyButton, InlineField } from "@/components/Bits";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import LandlordHomeAddress from "@/components/LandlordHomeAddress";
+import EmailPerson from "@/components/EmailPerson";
 
 /**
  * ONE WAY TO SHOW A PERSON (James, 12 Oct 2026).
@@ -42,6 +43,7 @@ export default function ContactBlock({
   nameClassName = "text-[14px] font-semibold",
   call = role !== "landlord",
   home,
+  about,
 }: {
   person: Person;
   personRef: string | null;
@@ -61,6 +63,8 @@ export default function ContactBlock({
   /** A landlord's own home address under the email (Rhiannon, 15 Oct 2026):
    *  pass the let's address for "Same as the let property", or {} without one. */
   home?: { propertyAddress?: string | null };
+  /** The home an email from here is about, for {{address}}, where `home` isn't passed. */
+  about?: string | null;
 }) {
   const [p, setP] = useState<Person>(person);
   const [note, setNote] = useState<{ tone: "ok" | "bad" | "busy"; text: string } | null>(null);
@@ -139,10 +143,19 @@ export default function ContactBlock({
           </>
         ))}
         {row("mail", `${role ?? ""} email`.trim(), p.email, "email", "email", (
-          <a href={`mailto:${p.email ?? ""}`} className={pill}>
+          /* The OS's own email window, not a mailto: that does nothing on a
+             computer with no mail app set up (Sean McMahon, 16 Oct 2026). */
+          <EmailPerson
+            email={p.email ?? ""}
+            name={p.name}
+            role={role}
+            address={home?.propertyAddress ?? about}
+            className={pill}
+            onSent={(subject) => setNote({ tone: "ok", text: `Sent to ${p.email}${subject ? `: ${subject}` : ""}.` })}
+          >
             <DoodleIcon name="mail" size={12} className="text-accent-dark" />
             Email
-          </a>
+          </EmailPerson>
         ))}
         {home && (
           <LandlordHomeAddress email={p.email} personRef={personRef} name={p.name} propertyAddress={home.propertyAddress ?? null} />

@@ -12,6 +12,7 @@ import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
+import EmailPerson from "@/components/EmailPerson";
 import { ContractorPick, OPEN, PAID_HOW, STATUS_LABEL, day, pounds, stamp, toPence } from "@/components/maintenance/works-ui";
 import type { Status } from "@/lib/works-orders";
 
@@ -371,7 +372,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                     tenants.map((t, i) => (
                       <div key={`${t.name}-${i}`} className={i ? "mt-2.5 border-t border-line/50 pt-2.5" : ""}>
                         <p className="text-[13.5px] font-semibold">{t.name || "Unnamed"}{t.room ? <span className="font-normal text-muted"> · {t.room}</span> : null}</p>
-                        <Reach phone={t.phone} email={t.email} />
+                        <Reach phone={t.phone} email={t.email} name={t.name} role="tenant" address={o.propertyName} />
                       </div>
                     ))
                   )}
@@ -383,7 +384,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                   {o.landlordSkipped ? (
                     <p className="mt-1 text-[12px] text-muted">Not involved in this one.</p>
                   ) : o.landlordMobile || o.landlordEmail ? (
-                    <Reach phone={o.landlordMobile} email={o.landlordEmail} />
+                    <Reach phone={o.landlordMobile} email={o.landlordEmail} name={o.landlord} role="landlord" address={o.propertyName} />
                   ) : (
                     <p className="mt-1 text-[12px] text-accent-dark">No mobile or email yet.</p>
                   )}
@@ -556,7 +557,7 @@ function Person({ tone, icon, role, action, children }: { tone: keyof typeof PER
 }
 
 /** A phone you can press and an email you can copy, or a plain "none". */
-function Reach({ phone, email }: { phone: string; email: string }) {
+function Reach({ phone, email, name, role, address }: { phone: string; email: string; name?: string; role?: "landlord" | "tenant"; address?: string }) {
   return (
     <div className="mt-1 space-y-0.5 text-[12px]">
       {phone ? (
@@ -565,7 +566,8 @@ function Reach({ phone, email }: { phone: string; email: string }) {
         <p className="text-muted">No number</p>
       )}
       {email ? (
-        <a href={`mailto:${email}`} className="flex min-w-0 items-center gap-1.5 hover:underline"><DoodleIcon name="mail" size={12} className="shrink-0 text-muted" /><span className="truncate">{email}</span></a>
+        /* Opens the OS's email window: a mailto: did nothing on Sean McMahon's Mac (16 Oct 2026). */
+        <EmailPerson email={email} name={name} role={role} address={address} className="flex min-w-0 max-w-full items-center gap-1.5 text-left hover:underline"><DoodleIcon name="mail" size={12} className="shrink-0 text-muted" /><span className="truncate">{email}</span></EmailPerson>
       ) : (
         <p className="text-muted">No email</p>
       )}
