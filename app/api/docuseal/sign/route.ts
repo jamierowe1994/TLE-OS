@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   /* replace: Change on Prepare and send (James, 17 Sep 2026) - a typo in the
      landlord's address, a wrong box - draws the contract up again and
      archives the one it replaces, so there is only ever one live contract. */
-  const body = (await req.json().catch(() => ({}))) as { id?: string; replace?: boolean };
+  const body = (await req.json().catch(() => ({}))) as { id?: string; replace?: boolean; withoutHomeAddress?: boolean };
   const id = (body.id ?? "").trim();
   if (!id) return NextResponse.json({ error: "Which appraisal?" }, { status: 400 });
 
@@ -134,7 +134,10 @@ export async function POST(req: NextRequest) {
     propertyAddress: [ma.address, ma.postcode].filter(Boolean).join(", "),
   }).catch(() => null);
   const landlordAddress = (home?.saved ? home.address : null) ?? (await directListingLandlordAddress(ma.id).catch(() => null)) ?? home?.address ?? "";
-  if (!landlordAddress.trim()) {
+  /* Unless the agent chose to send without it (19 Oct 2026, ticket f49106e6):
+     the address box is then left empty and not required on this contract. */
+  const withoutHome = !landlordAddress.trim() && body.withoutHomeAddress === true;
+  if (!landlordAddress.trim() && !withoutHome) {
     return NextResponse.json(
       { error: `Add ${ma.landlord}'s home address first. The terms are a contract, so they need the address the landlord lives at.`, needsHomeAddress: true },
       { status: 409 }
@@ -154,6 +157,7 @@ export async function POST(req: NextRequest) {
       /* Their own address, never the let's unless the agent said they live
          there ("Same as the let property") - see above. */
       landlordAddress,
+      noLandlordAddress: withoutHome,
       contactNumber: (ma.landlordMobile ?? "").trim(),
       propertyAddress: [ma.address, ma.postcode].filter(Boolean).join(", "),
       serviceLevel: service?.label ?? "",

@@ -351,6 +351,13 @@ export interface TermsPrefill {
   landlordName: string;
   landlordEmail: string;
   landlordAddress: string;
+  /**
+   * Sent without the landlord's home address on the agent's say-so (Richard
+   * Callow, ticket f49106e6, 19 Oct 2026). The template makes the box
+   * required; this lifts that on this one contract so the agent is not
+   * stopped inside the signing form. The box stays empty, never a placeholder.
+   */
+  noLandlordAddress?: boolean;
   contactNumber: string;
   propertyAddress: string;
   /** "Experts Management Service" and the like, as the contract words it. */
@@ -689,6 +696,7 @@ export async function openTermsSigning(
             "Management / Rent Collection Fee": p.managementFee,
             "Additional Fees Agreed": p.additionalFees,
           },
+          ...(p.noLandlordAddress ? { fields: [{ name: "Landlord Address", required: false }] } : {}),
         },
         {
           role: "Landlord",

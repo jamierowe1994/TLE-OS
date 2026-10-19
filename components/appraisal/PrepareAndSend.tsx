@@ -98,6 +98,9 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const homeAddress = llHome.home?.address ?? "";
   const [homeDraft, setHomeDraft] = useState("");
   const [editingHome, setEditingHome] = useState(false);
+  /* Send without it (Richard Callow, ticket f49106e6, 19 Oct 2026): the
+     contract goes with the address box empty. The agent's choice, said plainly. */
+  const [withoutHome, setWithoutHome] = useState(false);
   const [tall, setTall] = useState(0);
 
   const pull = useCallback(async () => {
@@ -160,7 +163,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
       const r = await fetch("/api/docuseal/sign", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: ma.id, replace }),
+        body: JSON.stringify({ id: ma.id, replace, withoutHomeAddress: withoutHome && !homeAddress }),
       });
       const j = (await r.json()) as { ok?: boolean; embedSrc?: string; error?: string };
       if (j.ok && j.embedSrc) setSigning(j.embedSrc);
@@ -200,7 +203,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const open = page.at >= 0;
 
   /* What is still missing, said together - none of it has to come first. */
-  const needsHome = llHome.state !== "loading" && !homeAddress;
+  const needsHome = llHome.state !== "loading" && !homeAddress && !withoutHome;
   const missing = [
     needsHome && "add their home address",
     !read && "open the presentation",
@@ -344,11 +347,18 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                 <div className="mb-3 rounded-xl border border-accent-dark/25 bg-accent-soft/30 p-3">
                   {!homeAddress && (
                     <p className="mb-2 text-[12px] leading-relaxed">
-                      The terms are a contract, so they need the address {ma.landlord} lives at.
+                      {withoutHome ? (
+                        <>
+                          Going without {ma.landlord}&apos;s home address: the address box on the contract will be empty.{" "}
+                          <button type="button" onClick={() => setWithoutHome(false)} className="font-semibold text-accent-dark underline">Add it after all</button>
+                        </>
+                      ) : (
+                        <>The terms are a contract, so they should carry the address {ma.landlord} lives at. If you don&apos;t have it, you can send without it.</>
+                      )}
                     </p>
                   )}
-                  <AddressField value={homeDraft} onChange={setHomeDraft} />
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {!withoutHome && <AddressField value={homeDraft} onChange={setHomeDraft} />}
+                  <div className={`mt-2 flex-wrap items-center gap-2 ${withoutHome ? "hidden" : "flex"}`}>
                     <button
                       type="button"
                       disabled={homeDraft.trim().length < 6 || llHome.note?.tone === "busy" || !llHome.canSave}
@@ -366,6 +376,16 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                     >
                       Same as the let property
                     </button>
+                    {!homeAddress && !withoutHome && (
+                      <button
+                        type="button"
+                        data-steve="terms.without-home"
+                        onClick={() => setWithoutHome(true)}
+                        className="text-[11.5px] font-semibold text-accent-dark underline"
+                      >
+                        Send without it
+                      </button>
+                    )}
                     {editingHome && (
                       <button type="button" onClick={() => setEditingHome(false)} className="text-[11.5px] text-muted underline">Cancel</button>
                     )}
