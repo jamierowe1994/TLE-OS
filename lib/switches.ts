@@ -273,14 +273,14 @@ export const SWITCHES: Switch[] = [
      *
      * REX can refuse a new listing on a property with no Source (More Info >
      * Source, a custom field on the property). On, when it does, the OS sets
-     * "Personal referral / word of mouth" on the property and asks for the
+     * the lead's own source (word of mouth when it has none) on the property and asks for the
      * listing once more (lib/rex-property-source). A Source already there is
      * never changed. Off, nothing is written: the agent is told the home
      * needs a Source.
      */
     key: "rex_property_source",
     label: "Fill in the Source on REX properties",
-    what: "When REX refuses a new listing because the home has no Source, the OS sets the property's Source to \"Personal referral / word of mouth\" and asks again, so the listing is made.",
+    what: "When REX refuses a new listing because the home has no Source, the OS sets the property's Source to the one picked on the landlord's lead (\"Personal referral / word of mouth\" when there isn't one) and asks again, so the listing is made.",
     who: "Nobody is emailed. This writes one field on a REX property - the live system six businesses share. CustomFields/setFieldValues must also be on REX_ALLOW_WRITES.",
     confirm: "WRITE TO REX",
     /* No old variable: this never existed before. Unset means off. */

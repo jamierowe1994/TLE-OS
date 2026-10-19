@@ -131,6 +131,33 @@ export async function currentListingOn(propertyId: string): Promise<string | nul
   return row?.id != null ? String(row.id) : null;
 }
 
+/**
+ * The source the agent picked on the landlord's lead ("Referral", "Rightmove"
+ * ...), so the property's Source in REX says the same thing (19 Oct 2026,
+ * Richard on 5 Strawberry Path: "the source is correctly added on the lead
+ * already"). By the landlord, an OS id or the REX contact they carry on, then
+ * by the appraisal's lead. null when neither has one.
+ */
+async function leadSourceFor(l: NewListing): Promise<string | null> {
+  if (!hasDb()) return null;
+  if (l.contactId) {
+    const [c] = await q<{ source: string | null }>(
+      `SELECT source FROM os_contacts WHERE (id = $1 OR rex_id = $1) AND COALESCE(source, '') <> '' ORDER BY created_at DESC LIMIT 1`,
+      [String(l.contactId)]
+    ).catch(() => []);
+    if (c?.source) return c.source;
+  }
+  if (l.appraisalId) {
+    const [c] = await q<{ source: string | null }>(
+      `SELECT c.source FROM os_market_appraisals m JOIN os_contacts c ON m.lead_id = 'os-' || c.id
+        WHERE m.id = $1 AND COALESCE(c.source, '') <> '' LIMIT 1`,
+      [String(l.appraisalId)]
+    ).catch(() => []);
+    if (c?.source) return c.source;
+  }
+  return null;
+}
+
 async function isForTestFile(l: NewListing): Promise<boolean> {
   if ((l.appraisalId || l.contactId) && (await isTestFile({ appraisalId: l.appraisalId ?? null, contactId: l.contactId ?? null }))) return true;
   if (!hasDb()) return false;
@@ -186,7 +213,7 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
      its own switch, then asked once more - a refused create made nothing, so
      asking again cannot make two (lib/rex-property-source). */
   if (!res.ok && wantsSource(res.error)) {
-    const source = await fillPropertySource(l.propertyId, token);
+    const source = await fillPropertySource(l.propertyId, token, await leadSourceFor(l));
     if (!source.ok) return { ok: false, reason: source.reason, detail: source.detail, ownerDetail: source.ownerDetail, payload };
     res = await rexCall("Listings", "create", { data: payload, return_id: true }, token);
   }
