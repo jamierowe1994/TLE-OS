@@ -3,6 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { forgetRex, rexSessionFor, signInToRex } from "@/lib/rex-user";
 import { ensureRexLink, findUserById } from "@/lib/users";
 import { record } from "@/lib/audit";
+import { agentByEmail } from "@/lib/rex-agents";
 import { isOwner } from "@/lib/agent-words";
 
 /**
@@ -61,9 +62,26 @@ export async function POST(req: NextRequest) {
        read REX's line as "the OS doesn't recognise my email", and stopped.
        Say whose password this box wants. */
     const refused = /username or password|not valid|invalid/i.test(out.error);
-    const error = refused
-      ? "REX didn't accept that email and password. This box wants the ones you use to sign in to REX itself - your REX password, not the TLE OS one you just chose."
-      : out.error;
+
+    /* ONE SENTENCE, FOUR FAULTS (19 Oct 2026). REX answers "Username or
+       password not valid" whether the password is wrong, the address is
+       unknown, the user is switched off, or - the one that cost Rovena Buci
+       and Edward Westwood a morning - the user has two-factor turned on.
+       Authentication/login has no step for a code, so those users are refused
+       whatever they type, and the old wording told them to check the password
+       they had just typed correctly.
+       So before blaming anybody's password: ask REX whether it knows this
+       address and whether that user is live. If it does and they are, the
+       password is the least likely explanation left, and the screen says so
+       instead of sending them round again. Only on the failure path, so it
+       costs a working sign-in nothing. */
+    const known = refused ? await agentByEmail(email).catch(() => null) : null;
+
+    const error = known?.active
+      ? "REX knows this address and the account is live, so your password is probably not the problem. If REX asks you for a code from an app when you sign in on its own website, that is the reason: the OS cannot pass a code on, and James is sorting it with REX. Press \u201cCarry on and connect REX later\u201d for now - everything else works."
+      : refused
+        ? "REX didn't accept that email and password. This box wants the ones you use to sign in to REX itself - your REX password, not the TLE OS one you just chose."
+        : out.error;
     /* An owner gets REX's sentence as well as ours: Susan and James are the
        two people who can do anything about a user REX has disabled, and they
        cannot if the screen will not tell them what it was told. */
