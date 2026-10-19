@@ -102,7 +102,7 @@ export async function signInToRex(
   userId: string,
   email: string,
   password: string
-): Promise<{ ok: true; expiresAt: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; expiresAt: string } | { ok: false; error: string; status: number; rex: string }> {
   const res = await fetch(`${REX_BASE}/v1/rex/Authentication/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -115,16 +115,30 @@ export async function signInToRex(
     signal: AbortSignal.timeout(15000),
   }).catch(() => null);
 
-  if (!res) return { ok: false, error: "Couldn't reach REX." };
+  if (!res) return { ok: false, error: "Couldn't reach REX.", status: 0, rex: "no answer from REX" };
   const j = (await res.json().catch(() => null)) as
-    | { result?: string; error?: { message?: string } }
+    | { result?: string; error?: { message?: string; code?: string | number } }
     | null;
 
   const token = typeof j?.result === "string" ? j.result : null;
   if (!token) {
+    /* WHAT REX ACTUALLY SAID, KEPT (19 Oct 2026). Rovena Buci and Ed Westwood
+       both reported credentials that work in REX itself being refused here,
+       and there was nothing to look at: the only trace was a sentence the
+       route wrote itself. REX distinguishes a wrong password from a user that
+       is not active, from an account the login is not allowed into - the
+       words are the diagnosis, so they are kept.
+
+       The email is kept too, because "correct email" has twice meant an
+       address on the other of our two domains. The password is not touched,
+       logged or returned, here or anywhere. */
+    const rex = j?.error?.message ?? `REX answered ${res.status} with nothing to read`;
+    console.warn(`[rex-signin] refused for ${email}: ${rex} (http ${res.status})`);
     return {
       ok: false,
       error: j?.error?.message ?? "REX wouldn't accept that email and password.",
+      status: res.status,
+      rex,
     };
   }
 

@@ -49,6 +49,12 @@ export type AuditKind =
   | "phase_changed"
   /* A Microsoft connect that bounced, with Microsoft's reason (23 Sep 2026). */
   | "mailbox_connect_failed"
+  /* A REX sign-in REX refused, in REX's own words (19 Oct 2026). Rovena Buci
+     and Ed Westwood could not connect with credentials they say are right, and
+     nothing anywhere recorded why: the route turned every refusal into the
+     same sentence about using your REX password. Never the password, and
+     never the token - only what REX said and which address was tried. */
+  | "rex_signin_failed"
   /* Somebody made a tester, or stopped being one. A tester can act where
      every other agent can only look. */
   | "area_tester_changed"
