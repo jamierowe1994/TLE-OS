@@ -69,6 +69,14 @@ export function stepOf(o: StepOrder): StepId {
      to ring about a gas safety (James). Older planned jobs walk the old line.
      A repair sent to the contractor as it was raised is ours too (9 Oct 2026),
      but the landlord still hears about a repair - unless they were skipped. */
+  /* Work already done - logged off a contractor's invoice, or done before
+     the OS was around (Rhiannon, 19 Oct 2026) - has no landlord to tell and
+     no visit to arrange. It goes straight to what is left after a visit. */
+  if (o.completedAt && o.arranging !== "landlord") {
+    if (o.kind === "repair" && !o.tenantHappy && !wasSkipped(o, "aftercare")) return "aftercare";
+    if (!o.payee) return "payment";
+    return "invoice";
+  }
   const ours = o.arranging === "us" && (o.kind === "planned" || o.landlordSkipped === true);
   if (!o.landlordToldAt && !ours && !wasSkipped(o, "tell_landlord")) return "tell_landlord";
   if (!o.arranging) return "arranging";

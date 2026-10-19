@@ -38,7 +38,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
     const order = await moveOrder(id, move, by);
-    const emails = await emailsForMove(order, move.action, subject ?? actor, { how: "how" in move ? move.how : undefined }).catch(() => []);
+    /* Work already done before the OS: nobody is told it is done (Rhiannon, 19 Oct 2026). */
+    const quietDone = move.action === "done" && move.alreadyDone === true;
+    const emails = quietDone ? [] : await emailsForMove(order, move.action, subject ?? actor, { how: "how" in move ? move.how : undefined }).catch(() => []);
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
     if (move.action === "invoice") {
       const told = await tellAccounts(order, (await invoiceSettings()).accountsEmail ?? "");

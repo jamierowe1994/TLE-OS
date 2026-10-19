@@ -77,6 +77,9 @@ export async function POST(req: NextRequest) {
     await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
     await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "invoice" } }, by);
     await moveOrder(order.id, { action: "done", note: "Done before it was logged; see the contractor's invoice.", completedAt: doneOn ? new Date(doneOn).toISOString() : null }, by);
+    /* Nobody to ask whether they're happy about work done before it was
+       logged (Rhiannon, 19 Oct 2026): it goes straight to the money. */
+    await moveOrder(order.id, { action: "skip_step", step: "aftercare", note: "Done before it was logged on the OS." }, by);
     await moveOrder(order.id, { action: "payee", payee }, by);
     const next = await moveOrder(order.id, { action: "invoice", invoicePence: Math.round(amount * 100), invoiceRef: str("ref") }, by);
     const told = await tellAccounts(next, (await invoiceSettings()).accountsEmail ?? "");

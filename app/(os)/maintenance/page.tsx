@@ -17,6 +17,8 @@ import { STEPS, stepOf } from "@/lib/works-steps";
 import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import RaiseJob from "@/components/maintenance/RaiseJob";
 import JobDrawer from "@/components/maintenance/JobDrawer";
+import { LogInvoice } from "@/components/contractors/ContractorProfile";
+import FieldSelect from "@/components/FieldSelect";
 import { OPEN, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import { usePref } from "@/lib/prefs-store";
@@ -59,6 +61,8 @@ export default function Maintenance() {
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
+  /* Work finished before it was on the OS, logged off the contractor's invoice (Rhiannon, 19 Oct 2026). */
+  const [loggingDone, setLoggingDone] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   useNoteVisit(openId ? `wo:${openId}` : null);
   const [q, setQ] = useState("");
@@ -165,17 +169,22 @@ export default function Maintenance() {
         onSearch={setQ}
         searchPlaceholder="Search jobs, addresses, contractors…"
         actions={
-          <div className="flex gap-2">
-            <PressButton onClick={() => { setSection("repair"); setRaising("repair"); }} className="flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page">
+          <div className="flex flex-wrap gap-2">
+            <PressButton onClick={() => { setSection("repair"); setRaising("repair"); }} className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page">
               <span className="text-[15px] leading-none">+</span> Report a repair
             </PressButton>
-            <PressButton onClick={() => { setSection("planned"); setRaising("planned"); }} className="flex items-center gap-2 rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold">
+            <PressButton onClick={() => { setSection("planned"); setRaising("planned"); }} className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold">
               <span className="text-[15px] leading-none">+</span> Plan a certificate
+            </PressButton>
+            <PressButton onClick={() => setLoggingDone(true)} className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold">
+              Log work already done
             </PressButton>
             <WalkthroughLink step="repair" />
           </div>
         }
       />
+
+      {loggingDone && <LogDone contractors={data?.contractors ?? []} onClose={() => setLoggingDone(false)} onSaved={(id) => { setLoggingDone(false); load(); setOpenId(id); }} />}
 
       {/* ── The four counts. ── */}
       <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -809,6 +818,41 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
         Produce assigns the next number and freezes the company details onto the invoice. Send emails the page they can open and print. A void invoice keeps its number, so the sequence always reads.{" "}
         <Link href="/marketing-hub/templates" className="underline">The invoice email is editable under Marketing.</Link>
       </p>
+    </div>
+  );
+}
+
+/**
+ * Work already done, with its invoice (Rhiannon, 19 Oct 2026): "the work was
+ * completed outside of OS... I just want to add the invoice for payment".
+ * Pick who did it, then the same form as Log an invoice on Contractors: it
+ * goes on as a finished job with the invoice, nobody but accounts is told,
+ * and it lands on the money step.
+ */
+function LogDone({ contractors, onClose, onSaved }: { contractors: Contractor[]; onClose: () => void; onSaved: (orderId: string) => void }) {
+  const [id, setId] = useState("");
+  const picked = contractors.find((c) => c.id === id) ?? null;
+  return (
+    <div className="mt-6 rounded-[22px] border border-ink/30 bg-white p-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <h3 className="text-[15px]">Log Work Already Done</h3>
+          <p className="mt-0.5 text-[11.5px] text-muted">For a job finished before it was on the OS. Nothing goes to the landlord, the tenant or the contractor. It goes on the home with the invoice, ready to pay.</p>
+        </div>
+        <button type="button" onClick={onClose} className="shrink-0 text-[11.5px] text-muted underline">Cancel</button>
+      </div>
+      <div className="mt-4 max-w-md">
+        {contractors.length === 0 ? (
+          <p className="text-[12.5px] text-muted">There are no contractors in your book yet. Add them under <a href="/contractors" className="underline">Portfolio, Contractors</a> first.</p>
+        ) : (
+          <FieldSelect value={id} onChange={setId} placeholder="Who did the work?" options={contractors.map((c) => ({ value: c.id, label: `${c.name} · ${c.trade}` }))} extra={{ label: "+ Someone not in the book", onPick: () => { window.location.href = "/contractors"; } }} />
+        )}
+      </div>
+      {picked && (
+        <div className="mt-4">
+          <LogInvoice key={picked.id} contractor={picked} onClose={onClose} onSaved={onSaved} />
+        </div>
+      )}
     </div>
   );
 }

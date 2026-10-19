@@ -567,7 +567,8 @@ export type Move =
   | { action: "approve"; approvedBy: string; note?: string }
   | { action: "assign"; contractorId: string; scheduledAt?: string | null; note?: string }
   | { action: "schedule"; scheduledAt: string; note?: string }
-  | { action: "done"; note: string; completedAt?: string | null }
+  /** alreadyDone: work finished before it was on the OS - nobody is emailed and the tenant is not asked (Rhiannon, 19 Oct 2026). */
+  | { action: "done"; note: string; completedAt?: string | null; alreadyDone?: boolean }
   | { action: "invoice"; invoicePence: number; invoiceRef?: string; note?: string }
   | { action: "paid"; paidHow: PaidHow; note?: string }
   | { action: "cancel"; reason: string }
@@ -720,7 +721,8 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       set("status", "done");
       set("completed_at", move.completedAt ? new Date(move.completedAt) : new Date());
       set("completion_note", move.note.trim());
-      text = `Done. ${move.note.trim()}`;
+      if (move.alreadyDone) set("skipped_steps", JSON.stringify([...new Set([...o.skippedSteps, "aftercare"])]));
+      text = move.alreadyDone ? `Already done before it was on the OS. ${move.note.trim()}` : `Done. ${move.note.trim()}`;
       break;
     }
     case "invoice": {

@@ -118,6 +118,10 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
   const canAssign = open;
   const canChangeInvoice = done && o.invoicePence != null;
   const more: { a: Move["action"]; label: string }[] = [];
+  /* Work finished before it was on the OS (Rhiannon, 19 Oct 2026): say when,
+     and the job skips the landlord, the contractor and the date and goes
+     straight to the money. */
+  if (open && !o.completedAt) more.push({ a: "done", label: "It was already done" });
   if (open) more.push({ a: "cancel", label: "Cancel the job" });
   if (done || o.status === "cancelled") more.push({ a: "reopen", label: "Reopen" });
   const canCert = o.status !== "cancelled" && !(o.kind === "planned" && stepOf(o) === "visit");
@@ -142,7 +146,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
     schedule: "The date",
     quote: o.quotePence != null ? "Change the quote" : "Add a quote",
     approve: "Record the landlord's approval",
-    done: "Mark it done",
+    done: f.already === "1" ? "It was already done" : "Mark it done",
     invoice: "The contractor's invoice",
     paid: "Mark it paid",
     cancel: "Cancel the job",
@@ -203,7 +207,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                   {menu && (
                     <div className="absolute right-0 top-11 z-10 w-48 overflow-hidden rounded-xl border border-line/70 bg-white py-1 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.25)]">
                       {more.map((x) => (
-                        <button key={x.a} type="button" onClick={() => start(x.a)} className="block w-full px-3.5 py-2 text-left text-[12.5px] hover:bg-accent-soft/50">{x.label}</button>
+                        <button key={x.a} type="button" onClick={() => { start(x.a); if (x.a === "done") setF({ already: "1" }); }} className="block w-full px-3.5 py-2 text-left text-[12.5px] hover:bg-accent-soft/50">{x.label}</button>
                       ))}
                     </div>
                   )}
@@ -263,6 +267,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                 )}
                 {act === "done" && (
                   <div className="grid gap-3">
+                    {f.already === "1" && <p className="text-[12px] text-muted">For work finished before it was on the OS. Nobody is emailed and the tenant isn&apos;t asked. The job goes straight to the invoice.</p>}
                     <textarea value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} rows={3} placeholder="What was done. If a certificate was issued, add it as a file too." className={field} />
                     <FieldDate withTime clearable value={f.completedAt ?? ""} onChange={(v) => setF({ ...f, completedAt: v })} placeholder="When it was done (today if left)" />
                   </div>
@@ -317,7 +322,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                         : act === "schedule" ? (f.scheduledAt ? { action: "schedule", scheduledAt: new Date(f.scheduledAt).toISOString() } : null)
                         : act === "quote" ? { action: "quote", quotePence: toPence(f.amount ?? ""), note: f.note }
                         : act === "approve" ? { action: "approve", approvedBy: f.approvedBy ?? o.landlord, note: f.note }
-                        : act === "done" ? { action: "done", note: f.note ?? "", completedAt: f.completedAt ? new Date(f.completedAt).toISOString() : null }
+                        : act === "done" ? { action: "done", note: f.note ?? "", completedAt: f.completedAt ? new Date(f.completedAt).toISOString() : null, ...(f.already === "1" ? { alreadyDone: true } : {}) }
                         : act === "invoice" ? { action: "invoice", invoicePence: toPence(f.amount ?? ""), invoiceRef: f.ref }
                         : act === "paid" ? (f.how ? { action: "paid", paidHow: f.how as PaidHow } : null)
                         : act === "cancel" ? { action: "cancel", reason: f.note ?? "" }

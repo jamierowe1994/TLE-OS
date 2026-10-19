@@ -157,7 +157,7 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
  * finished job with the invoice attached, and accounts are told - the same
  * as an invoice the contractor uploads themselves.
  */
-function LogInvoice({ contractor, onClose, onSaved }: { contractor: Contractor; onClose: () => void; onSaved: () => void }) {
+export function LogInvoice({ contractor, onClose, onSaved }: { contractor: Contractor; onClose: () => void; onSaved: (orderId: string) => void }) {
   const [props, setProps] = useState<Property[] | null>(null);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Property | null>(null);
@@ -218,7 +218,7 @@ function LogInvoice({ contractor, onClose, onSaved }: { contractor: Contractor; 
     const r = await fetch("/api/contractors/invoice", { method: "POST", body: fd }).then((x) => x.json()).catch(() => null);
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "Could not log the invoice.");
-    onSaved();
+    onSaved(String(r.order?.id ?? ""));
   }
 
   return (
