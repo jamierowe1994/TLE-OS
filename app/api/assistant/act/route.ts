@@ -63,6 +63,10 @@ export async function POST(req: NextRequest) {
       osUserId: me.id,
     });
   } catch (e) {
+    /* Always into the server log. publicError only logs database and system
+       errors, so a plain thrown Error (the shared-database guard, 17 Oct 2026)
+       reached the screen as a 502 and left nothing in Railway to find. */
+    console.error(`[assistant/act] ${proposal.kind} failed for ${me.email}:`, e);
     return NextResponse.json(
       { ok: false, error: publicError(e, "That didn't go through.") },
       { status: 502 }

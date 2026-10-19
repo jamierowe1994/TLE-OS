@@ -3,7 +3,6 @@ import "server-only";
 import type { Scope } from "@/lib/scope";
 import { bookFor, invalidateListingBook } from "@/lib/listings-cache";
 import { getListingContacts } from "@/lib/business/rex-stats";
-import { addPropertyNote } from "@/lib/business/property-notes-store";
 import { isExpiredToken, rexCall, RexWriteBlocked } from "@/lib/rex";
 import { previewMerge } from "@/lib/rex-mailmerge";
 import { MailboxNotConnected, msSendMail } from "@/lib/microsoft";
@@ -206,15 +205,24 @@ async function resolveRecipient(
    Execution. One function per kind, all reached through `perform`.
    ========================================================================== */
 
+/* Into os_notes, the table the listing's own Notes panel reads and writes
+   (app/api/listings/[id]/notes). It used to go through the ported portal's
+   property-notes store, whose `property_notes` table the OS is not allowed to
+   write to: every press of Save was refused by the shared-database guard and
+   came back to the screen as a 502 (Dan Richards, 17 Oct 2026, ticket
+   031a8219). Nothing had ever been saved that way, and nothing on screen read
+   that table anyway, so a note that had gone in would still have been
+   invisible. */
 async function doNote(p: Extract<ActionProposal, { kind: "note" }>, actor: { id: string; name: string }): Promise<ActionOutcome> {
-  await addPropertyNote({
-    listingId: p.listingId,
-    authorId: actor.id,
-    authorName: actor.name,
-    authorRole: "agent",
-    text: p.text,
-  });
-  return { ok: true, message: `Noted against ${p.address}. It's on the property file, in the OS — not in REX.` };
+  if (!hasDb()) return { ok: false, message: "There's no database on this environment, so there's nowhere to keep it." };
+  const body = p.text.trim().slice(0, 5000);
+  if (!body) return { ok: false, message: "That note is empty. Tell me what to write and I'll set it up again." };
+  await q(
+    `INSERT INTO os_notes (id, record_type, record_id, body, author_id, author_name, created_at)
+     VALUES ($1, 'listing', $2, $3, $4, $5, $6)`,
+    [uid(), String(p.listingId), body, actor.id, actor.name, new Date().toISOString()]
+  );
+  return { ok: true, message: `Saved as a note on ${p.address}. It's under Notes on the listing.` };
 }
 
 async function doReminder(p: Extract<ActionProposal, { kind: "reminder" }>, actor: { id: string; name: string }): Promise<ActionOutcome> {
