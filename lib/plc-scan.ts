@@ -342,11 +342,16 @@ export async function readDocument(
   const call = res.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_findings"
   );
-  const input = (call?.input ?? {}) as { findings?: unknown[]; facts?: Record<string, unknown> };
+  const input = asRecord(call?.input) ?? {};
 
-  const observations = (input.findings ?? []).flatMap((r): Finding[] => {
-    const f = r as { level?: string; message?: string; foundDate?: string };
-    const message = (f.message ?? "").trim();
+  /* The schema asks for an array, but the model does not always send one
+     (19 Oct 2026: 12b Cliff Road's holding deposit form came back with
+     findings as a single value, and `.flatMap is not a function` failed the
+     whole document). Nothing the model sends is trusted to be the right shape. */
+  const observations = asList(input.findings).flatMap((r): Finding[] => {
+    const f = asRecord(r);
+    if (!f) return [];
+    const message = typeof f.message === "string" ? f.message.trim() : "";
     if (!message) return [];
     /* The model's own "blocker" is shown as a query. Only the rules in
        lib/plc-rules hold a pack back (8 Oct 2026: Kirstie's pack was stopped
@@ -360,7 +365,8 @@ export async function readDocument(
         level,
         message,
         documentName: file.name,
-        foundDate: /^\d{4}-\d{2}-\d{2}$/.test(f.foundDate ?? "") ? f.foundDate! : null,
+        foundDate:
+          typeof f.foundDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f.foundDate) ? f.foundDate : null,
       },
     ];
   });
@@ -371,6 +377,27 @@ export async function readDocument(
   return { facts, result, observations, documentName: file.name };
 }
 
+/** A tool answer's value as a plain object, or null. A JSON string is opened first. */
+function asRecord(v: unknown): Record<string, unknown> | null {
+  const x = typeof v === "string" ? parseJson(v) : v;
+  return x && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : null;
+}
+
+/** A tool answer's value as a list: an array as is, one object wrapped, anything else dropped. */
+function asList(v: unknown): unknown[] {
+  const x = typeof v === "string" ? parseJson(v) : v;
+  if (Array.isArray(x)) return x;
+  return x && typeof x === "object" ? [x] : [];
+}
+
+function parseJson(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The model's facts, coerced into the shape the rules expect.
  *
@@ -379,7 +406,7 @@ export async function readDocument(
  * should look" instead of into a rule silently not firing.
  */
 function readFacts(raw: unknown): DocFacts {
-  const f = (raw ?? {}) as Record<string, unknown>;
+  const f = asRecord(raw) ?? {};
   const str = (k: string) => (typeof f[k] === "string" && f[k] ? (f[k] as string) : null);
   const date = (k: string) => {
     const v = str(k);
@@ -389,8 +416,13 @@ function readFacts(raw: unknown): DocFacts {
     const v = str(k);
     return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
   };
-  const list = (k: string) =>
-    Array.isArray(f[k]) ? (f[k] as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim()) : [];
+  /* A list sent as JSON text is opened; one plain string is a list of one. */
+  const list = (k: string) => {
+    const v = f[k];
+    const opened = typeof v === "string" ? parseJson(v) : v;
+    const items = Array.isArray(opened) ? opened : typeof v === "string" ? [v] : [];
+    return items.filter((x): x is string => typeof x === "string" && !!x.trim());
+  };
 
   return {
     documentType: str("documentType"),
