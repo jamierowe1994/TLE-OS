@@ -5,6 +5,7 @@ import { archiveBook } from "./tenancy-archive";
 import { withNotice } from "./portfolio-notice";
 import { withRecordLandlords } from "./record-landlords";
 import { withChangedLandlords } from "./landlord-change";
+import { withTakeOns } from "./take-ons";
 import { withAgentMoves } from "./agent-moves";
 import { certificatesFor, type ComplianceBook } from "./rex-compliance";
 import type { ManagedBook } from "./portfolio-types";
@@ -175,7 +176,9 @@ export async function managedBookFor(rexUserId: string | null): Promise<{
      both, a landlord an agent changed in the OS (lib/landlord-change,
      17 Oct 2026). */
   const moved = await withAgentMoves(raw.book, rexUserId, async () => (await rawBookFor(null)).book);
-  return { ...raw, book: await withChangedLandlords(await withRecordLandlords(await withNotice(moved, rexUserId))) };
+  /* Management transfers (lib/take-ons, 19 Oct 2026) last: on Portfolio the
+     moment they are saved, filling only what nothing else names. */
+  return { ...raw, book: await withTakeOns(await withChangedLandlords(await withRecordLandlords(await withNotice(moved, rexUserId))), rexUserId) };
 }
 
 async function rawBookFor(rexUserId: string | null): Promise<{

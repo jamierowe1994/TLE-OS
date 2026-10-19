@@ -158,7 +158,9 @@ export async function GET(req: NextRequest) {
     const app = await getApplicationById(id).catch(() => null);
     const refused = notTheirs(me, app?.agent);
     if (refused) return NextResponse.json({ error: refused }, { status: 403 });
-    const [mode, runs, dealOn] = await Promise.all([handoverMode(), handoversFor(id, 5), switchOn("handover_deal")]);
+    const [switchMode, runs, dealOn, held] = await Promise.all([handoverMode(), handoversFor(id, 5), switchOn("handover_deal"), heldForTenantChanges(app)]);
+    /* An add or a re-reference rehearses until tenant_changes_live is on. */
+    const mode = held ? ("shadow" as const) : switchMode;
     /* The deal the push would start, for the agent to check first. Only
        when the push would really start one. */
     const draft = mode === "live" && dealOn ? await dealDraftFor(handoff).catch(() => null) : null;
@@ -241,7 +243,7 @@ export async function POST(req: NextRequest) {
       /* The accepted emails go out from this person's own mailbox, so the
          handover needs the id and not just the name (16 Sep 2026). */
       byId: me.id ?? null,
-      mode: body.rehearse ? "shadow" : undefined,
+      mode: body.rehearse || (await heldForTenantChanges(app)) ? "shadow" : undefined,
       force: body.force === true,
       propertyUuid: uuid,
       newProperty: body.newProperty === true,
@@ -252,4 +254,15 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: publicError(e) }, { status: 409 });
   }
+}
+
+/**
+ * Add someone and Re-reference (lib/tenant-swaps, 19 Oct 2026) are saved in
+ * the OS and rehearsed, never pushed for real, until James switches on
+ * tenant_changes_live. A plain tenant swap is not held: it runs on Handover.
+ */
+async function heldForTenantChanges(app: { swap?: { kind?: string } | null } | null): Promise<boolean> {
+  const kind = app?.swap?.kind;
+  if (kind !== "add" && kind !== "rereference") return false;
+  return !(await switchOn("tenant_changes_live"));
 }

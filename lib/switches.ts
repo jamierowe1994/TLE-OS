@@ -459,6 +459,21 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "PHONE_ALERTS",
     legacyOn: "on",
   },
+  {
+    /* Tenant changes and take-ons (19 Oct 2026; Kirstie's 6a2dc73c,
+       3b7dbd10, 3fd16026 and Dan Richards' a9f80822). Adding someone to a
+       tenancy, re-referencing the tenants and adding a tenant to a let in
+       progress are all saved in the OS with this off; only their push to
+       Propoly waits on it. A tenant swap is not behind it - that already
+       runs on Handover. Off until James has sat down with the flow. */
+    key: "tenant_changes_live",
+    label: "Tenant changes and take-ons go to Propoly",
+    what: "Push to Propoly runs for real on an Add someone or Re-reference let (a new deal with everyone on it, only the chosen people referenced), and a tenant added to a let in progress goes onto its push. With it off those pushes are rehearsed: live reads, nothing written.",
+    who: "Propoly is WRITTEN TO: a new deal and its tenants. Propoly emails the people being referenced, as it does for a deal keyed in by hand. Handover must be on too.",
+    confirm: "TENANT CHANGES",
+    legacyEnv: "TENANT_CHANGES_LIVE",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

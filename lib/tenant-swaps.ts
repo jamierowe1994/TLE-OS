@@ -21,7 +21,22 @@ import { hasDb, q } from "@/lib/db";
  * it in Propoly (the swap-fee action on the let). Tenants DO take
  * reference_required and rent_share_pcm_pence, so the newcomer alone is
  * referenced and their rent portion lands on them.
+ *
+ * THREE KINDS OF CHANGE (Kirstie, 19 Oct 2026: 3b7dbd10, 3fd16026). The same
+ * row carries two more changes to the people on a tenancy, as both end the
+ * same way - a new deal in Propoly with everyone on it and a new contract:
+ *   - "swap": somebody leaves and somebody moves in (the above).
+ *   - "add": nobody leaves, somebody moves in. Today the agent starts a deal,
+ *     marks the current tenants "no references" and references the newcomer.
+ *   - "rereference": nobody leaves or joins; the current tenants are
+ *     referenced again so they get rent and legal protection and a new
+ *     contract. `rereference` names who is referenced.
+ * A swap or an add can re-reference some of the staying tenants too. The
+ * push for "add" and "rereference" waits on the tenant_changes_live switch.
  */
+
+export type TenantChangeKind = "swap" | "add" | "rereference";
+export const CHANGE_LABEL: Record<TenantChangeKind, string> = { swap: "Tenant swap", add: "Tenant added", rereference: "Re-reference" };
 
 export interface SwapPerson {
   name: string;
@@ -32,6 +47,9 @@ export interface SwapPerson {
 
 export interface TenantSwap {
   id: string;
+  kind: TenantChangeKind;
+  /** Staying tenants who are referenced again, by name (empty on a plain swap). */
+  rereference: string[];
   listingId: string;
   property: string;
   leaving: SwapPerson[];
@@ -65,16 +83,20 @@ async function tq<T extends Record<string, unknown>>(text: string, params: unkno
       cancelled_at TIMESTAMPTZ
     )`)
     .then(() => q(`ALTER TABLE os_tenant_swaps ADD COLUMN IF NOT EXISTS rent_portion NUMERIC`))
+    .then(() => q(`ALTER TABLE os_tenant_swaps ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'swap'`))
+    .then(() => q(`ALTER TABLE os_tenant_swaps ADD COLUMN IF NOT EXISTS rereference JSONB NOT NULL DEFAULT '[]'`))
     .then(() => undefined).catch((e) => { ready = null; throw e; });
   await ready;
   return q<T>(text, params);
 }
 
-type SwapRow = { id: string; listing_id: string; property: string; leaving: SwapPerson[]; staying: SwapPerson[]; joining: SwapPerson[]; move_in: Date | string; rent_pcm: string | null; rent_portion?: string | null; note: string; by_name: string; by_email: string | null; created_at: Date };
+type SwapRow = { id: string; listing_id: string; property: string; leaving: SwapPerson[]; staying: SwapPerson[]; joining: SwapPerson[]; move_in: Date | string; rent_pcm: string | null; rent_portion?: string | null; kind?: string | null; rereference?: string[] | null; note: string; by_name: string; by_email: string | null; created_at: Date };
 
 const ymd = (v: Date | string) => (typeof v === "string" ? v.slice(0, 10) : v.toISOString().slice(0, 10));
 const shape = (r: SwapRow): TenantSwap => ({
   id: r.id,
+  kind: r.kind === "add" || r.kind === "rereference" ? r.kind : "swap",
+  rereference: r.rereference ?? [],
   listingId: r.listing_id,
   property: r.property,
   leaving: r.leaving ?? [],
@@ -92,9 +114,9 @@ const shape = (r: SwapRow): TenantSwap => ({
 export async function createSwap(s: Omit<TenantSwap, "id" | "at">): Promise<TenantSwap> {
   const id = randomBytes(9).toString("base64url").replace(/[-_]/g, "x");
   const rows = await tq<SwapRow>(
-    `INSERT INTO os_tenant_swaps (id, listing_id, property, leaving, staying, joining, move_in, rent_pcm, rent_portion, note, by_name, by_email)
-     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12) RETURNING *`,
-    [id, s.listingId, s.property, JSON.stringify(s.leaving), JSON.stringify(s.staying), JSON.stringify(s.joining), s.moveIn, s.rentPcm, s.rentPortion, s.note, s.by, s.byEmail]
+    `INSERT INTO os_tenant_swaps (id, listing_id, property, leaving, staying, joining, move_in, rent_pcm, rent_portion, note, by_name, by_email, kind, rereference)
+     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14::jsonb) RETURNING *`,
+    [id, s.listingId, s.property, JSON.stringify(s.leaving), JSON.stringify(s.staying), JSON.stringify(s.joining), s.moveIn, s.rentPcm, s.rentPortion, s.note, s.by, s.byEmail, s.kind, JSON.stringify(s.rereference)]
   );
   return shape(rows[0]);
 }

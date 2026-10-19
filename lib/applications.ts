@@ -193,6 +193,10 @@ export interface Application {
   /** A tenant swap (lib/tenant-swaps): who leaves, who stays, who joins. Only
    *  the joiners are referenced, and the push starts a new deal. */
   swap?: {
+    /** swap / add / rereference (lib/tenant-swaps, 19 Oct 2026). Absent = swap. */
+    kind?: "swap" | "add" | "rereference";
+    /** Staying tenants referenced again, by name. */
+    rereference?: string[];
     leaving: string[];
     staying: string[];
     joining: string[];
@@ -763,7 +767,13 @@ async function nameOfRexUser(rexUserId: string): Promise<string | null> {
 }
 async function swapApplications(rexUserId: string | null): Promise<Application[]> {
   if (!hasDb()) return [];
-  const { openSwaps } = await import("@/lib/tenant-swaps");
+  const { openSwaps, CHANGE_LABEL } = await import("@/lib/tenant-swaps");
+  /* What the let is, in one line (19 Oct 2026: add someone, re-reference). */
+  const names = (xs: { name: string }[]) => xs.map((x) => x.name).join(", ");
+  const changeLine = (sw: Awaited<ReturnType<typeof openSwaps>>[number]) =>
+    sw.kind === "add" ? `Tenant added: ${names(sw.joining)} joining ${names(sw.staying)}.${sw.rereference.length ? ` ${sw.rereference.join(", ")} referenced again.` : ""}`
+    : sw.kind === "rereference" ? `Re-reference: ${sw.rereference.join(", ")} referenced again for a new contract.`
+    : `Tenant swap: ${names(sw.leaving)} out, ${names(sw.joining)} in.${sw.rereference.length ? ` ${sw.rereference.join(", ")} referenced again.` : ""}`;
   const out: Application[] = [];
   for (const sw of await openSwaps()) {
     /* A REX PM home has no REX listing ("pm-link-<property id>"). */
@@ -808,13 +818,15 @@ async function swapApplications(rexUserId: string | null): Promise<Application[]
       ...shaped,
       property: listing ? shaped.property : sw.property.split(",")[0],
       agent: listing ? shaped.agent : sw.by,
-      statusLabel: "Tenant swap",
-      conditions: [`Tenant swap: ${sw.leaving.map((x) => x.name).join(", ")} out, ${sw.joining.map((x) => x.name).join(", ")} in.`, sw.rentPortion != null ? `Their portion of the rent: £${sw.rentPortion.toLocaleString("en-GB")} a month.` : "", sw.note].filter(Boolean).join(" "),
+      statusLabel: CHANGE_LABEL[sw.kind],
+      conditions: [changeLine(sw), sw.rentPortion != null ? `Their portion of the rent: £${sw.rentPortion.toLocaleString("en-GB")} a month.` : "", sw.note].filter(Boolean).join(" "),
       osDecision: null,
-      applicants: [...sw.joining.map((x, i) => person(x, i === 0)), ...sw.staying.map((x) => person(x, false))],
+      applicants: [...sw.joining.map((x, i) => person(x, i === 0)), ...sw.staying.map((x, i) => person(x, !sw.joining.length && i === 0))],
       rightToRentIncomplete: !isScottish(shaped.locality, sw.property),
       locality: listing ? shaped.locality : sw.property.split(",").slice(1).join(",").trim() || shaped.locality,
       swap: {
+        kind: sw.kind,
+        rereference: sw.rereference,
         leaving: sw.leaving.map((x) => x.name),
         staying: sw.staying.map((x) => x.name),
         joining: sw.joining.map((x) => x.name),

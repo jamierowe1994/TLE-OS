@@ -23,6 +23,7 @@ import Segmented from "@/components/Segmented";
 import ListSearch from "@/components/ListSearch";
 import SendLogins from "@/components/portfolio/SendLogins";
 import ExcelButton from "@/components/ExcelButton";
+import TakeOnWizard from "@/components/portfolio/TakeOnWizard";
 import { searchMatches } from "@/lib/search-match";
 
 /**
@@ -329,6 +330,9 @@ export default function Portfolio() {
   }, [book, q, service, agent, town, lookOnly, notOnRexOnly, reletOnly, sort, attention, certBy, summaryOf]);
 
   const [logins, setLogins] = useState(false);
+  /* Management transfer (Dan Richards a9f80822, 19 Oct 2026): a home that is
+     already let comes straight here, skipping leads, listings and applications. */
+  const [takeOn, setTakeOn] = useState(false);
   const filtering = Boolean(q.trim() || service || agent || town || lookOnly || notOnRexOnly || reletOnly);
   const relets = useMemo(() => (book ? currentLets(book.properties).filter((p) => p.notice).length : 0), [book]);
 
@@ -403,6 +407,7 @@ export default function Portfolio() {
           onClose={() => setLogins(false)}
         />
       )}
+      {takeOn && <TakeOnWizard onClose={() => setTakeOn(false)} />}
       <PageHeader
         title="Properties"
         blurb={blurb}
@@ -531,6 +536,10 @@ export default function Portfolio() {
                 ].filter(Boolean).join(", "),
               })}
             />}
+            <button type="button" onClick={() => setTakeOn(true)} className={`${pillClass(false)} inline-flex items-center gap-1.5`}>
+              <DoodleIcon name="pack/house" size={12} className="text-accent-dark" />
+              Take on a managed home
+            </button>
             <span className="ml-auto">
               <ListSearch value={q} onChange={setQ} placeholder="Address, landlord, tenant or agent…" />
             </span>
