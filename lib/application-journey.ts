@@ -199,7 +199,10 @@ export function findCompleted(app: Application, rows: CompletedDeal[]): Complete
 /** A tenant swap's new deal, keyed into Propoly by hand: an open deal on the home with someone joining on it. */
 export function findSwapDeal(app: Application, all: BusinessDeal[]): BusinessDeal | null {
   if (!app.swap || !app.property?.trim()) return null;
-  const joiners = app.applicants.slice(0, app.swap.joining.length);
+  /* Who the new deal is for: those joining, or on a re-reference (19 Oct
+     2026) the tenants being referenced again. */
+  const again = new Set((app.swap.rereference ?? []).map((n) => n.trim().toLowerCase()));
+  const joiners = app.swap.joining.length ? app.applicants.slice(0, app.swap.joining.length) : app.applicants.filter((p) => again.has(p.name.trim().toLowerCase()));
   const emails = new Set(joiners.map((p) => (p.email ?? "").trim().toLowerCase()).filter(Boolean));
   const names = new Set(joiners.map((p) => p.name.trim().toLowerCase()).filter(Boolean));
   return (
@@ -672,7 +675,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     if (hf && hf.state !== "done") {
       const due = deal && !fee.settled ? deal.app.propoly?.holdingFee ?? null : null;
       if (due) Object.assign(hf, { sub: `Propoly put £${Math.round(due).toLocaleString("en-GB")} on - take it off`, tone: "warn" });
-      else Object.assign(hf, { sub: "None on a tenant swap", tone: "none", state: "off" });
+      else Object.assign(hf, { sub: app.swap.kind === "add" ? "None when adding a tenant" : app.swap.kind === "rereference" ? "None on a re-reference" : "None on a tenant swap", tone: "none", state: "off" });
     }
   }
 

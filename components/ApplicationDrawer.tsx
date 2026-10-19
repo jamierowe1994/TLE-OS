@@ -16,6 +16,7 @@ import { type SpineStop } from "@/components/StageSpine";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import ContactBlock from "@/components/ContactBlock";
 import Guarantors from "@/components/Guarantors";
+import LetTenants from "@/components/LetTenants";
 import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
 import HandoffPanel from "@/components/HandoffPanel";
@@ -109,6 +110,8 @@ export interface AppRecord {
   property: string;
   /** A tenant swap: what the person moving in pays by themselves, "£650". */
   swapPortion?: string | null;
+  /** swap / add / rereference (lib/tenant-swaps, 19 Oct 2026). */
+  swapKind?: string | null;
   /** REX property id, when the application carries one - the property file hangs off it. */
   propertyId?: string | null;
   /** The listing it was let from, for "Open the listing". */
@@ -956,6 +959,8 @@ export default function ApplicationDrawer({
   const name = app?.property ?? deal?.app.propertyName ?? "This let";
   /* "44 South Bridge (tenant swap)" in the heading (13 Oct 2026); the record keeps the plain address. */
   const isSwap = Boolean(app?.id.startsWith("swap:"));
+  /* Add someone and Re-reference ride on the swap (19 Oct 2026): say which. */
+  const swapWord = app?.swapKind === "add" ? "tenant added" : app?.swapKind === "rereference" ? "re-reference" : "tenant swap";
   const locality = app?.locality ?? deal?.app.locality ?? "";
   /* Right to Rent is England-only law: a Scottish let shows none (James, 15 Oct 2026). */
   const scottishLet = isScottish(locality, name);
@@ -1022,7 +1027,7 @@ export default function ApplicationDrawer({
           ...(scottishLet ? [] : [{ icon: "shield", label: "Right to rent", text: `${answered} of ${people.length}` }]),
         ]
       : []),
-    { icon: "wallet", label: "Holding fee", text: intro ? "None - intro only" : isSwap ? "None on a tenant swap" : scottishLet ? "None in Scotland" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
+    { icon: "wallet", label: "Holding fee", text: intro ? "None - intro only" : isSwap ? `None on a ${swapWord}` : scottishLet ? "None in Scotland" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
   ];
 
   /* The activity log, for the panel at the top: what the record holds, then
@@ -1186,7 +1191,7 @@ export default function ApplicationDrawer({
             </div>
             <div className="px-2 pb-1.5 pt-4">
               <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-                <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{name}{isSwap && <span className="text-muted"> (tenant swap)</span>}</h1>
+                <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{name}{isSwap && <span className="text-muted"> ({swapWord})</span>}</h1>
                 <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
                   <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
                   {stageLabel}
@@ -1318,6 +1323,8 @@ export default function ApplicationDrawer({
             {/* Guarantors (Lorna Fieldson, 15 Oct 2026): carried over from the
                 lead by the applicant's email, added here too (lib/guarantors). */}
             {letId && people.length > 0 && <Guarantors source={{ let: letId }} className="mt-4" />}
+            {/* A tenant added on the let, the same way (Kirstie 6a2dc73c, 19 Oct 2026, lib/let-tenants). */}
+            {letId && <LetTenants letId={letId} className="mt-3" />}
 
             {/* Where it's up to, across the box underneath (as on a listing). */}
             <div className="mt-5 border-t border-line/50 pt-4">

@@ -196,7 +196,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
   const required = h.certificates.filter((c) => c.required);
   const certsGood = required.filter((c) => c.validAtStart && c.attached).length;
   const summary = [
-    h.landlord?.name ?? (applicationId.startsWith("swap:") ? "Tenant swap: the landlord is already in Propoly" : "No landlord on the listing"),
+    h.landlord?.name ?? (applicationId.startsWith("swap:") ? "A change of tenants: the landlord is already in Propoly" : "No landlord on the listing"),
     h.rentPcm != null ? `${gbp(h.rentPcm)} pcm${h.startDate ? ` from ${niceDay(h.startDate)}` : ""}` : null,
     required.length ? `${certsGood} of ${required.length} certificates` : null,
   ].filter(Boolean).join(" · ");

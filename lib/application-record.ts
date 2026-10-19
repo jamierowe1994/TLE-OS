@@ -69,6 +69,7 @@ export function toAppRecord(a: Application): AppRecord {
     })),
     property: a.property,
     swapPortion: a.swap?.rentPortion != null ? gbp(a.swap.rentPortion) : null,
+    swapKind: a.swap ? a.swap.kind ?? "swap" : null,
     propertyId: a.propertyId,
     listingId: a.listingId != null ? String(a.listingId) : null,
     locality: a.locality,

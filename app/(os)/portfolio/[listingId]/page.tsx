@@ -39,6 +39,8 @@ import type { DueVisit, Inspection } from "@/lib/inspections";
 import type { DueReview, Review } from "@/lib/tenancy-reviews";
 import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
 import PastTenancies from "@/components/portfolio/PastTenancies";
+import TenantChange from "@/components/portfolio/TenantChange";
+import TakeOnTile from "@/components/portfolio/TakeOnTile";
 
 /**
  * One home, the whole of it, on one page.
@@ -84,7 +86,7 @@ type Loaded<T> = { state: "loading" } | { state: "failed"; error: string } | { s
 /** A tenant swap under way on the home (GET /api/tenant-swaps, 16 Oct 2026). */
 type SwapUnderWay = {
   application: string;
-  swap: { leaving: string[]; staying: string[]; joining: string[]; moveIn: string; rentPcm: number | null; rentPortion: number | null; by: string; at: string };
+  swap: { kind?: string; label?: string; rereference?: string[]; leaving: string[]; staying: string[]; joining: string[]; moveIn: string; rentPcm: number | null; rentPortion: number | null; by: string; at: string };
   plc: { state: string; label: string; who: string; short: string } | null;
 };
 
@@ -739,11 +741,22 @@ export default function PropertyPage() {
                 {swapOn ? (
                   <button type="button" onClick={() => act({ kind: "swap-open" })} className={tile}>
                     {tileIcon("user")}
-                    {tileText("Tenant swap under way", `${swapOn.swap.joining.join(", ")} in ${day(swapOn.swap.moveIn)} · ${swapOn.plc?.short ?? "PLC check next"}`)}
+                    {tileText(`${swapOn.swap.label ?? "Tenant swap"} under way`, `${(swapOn.swap.joining.length ? swapOn.swap.joining : swapOn.swap.rereference ?? []).join(", ")} from ${day(swapOn.swap.moveIn)} · ${swapOn.plc?.short ?? "PLC check next"}`)}
                   </button>
-                ) : (tenants.length > 1 || Boolean(house)) && (
-                  <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("user")}{tileText("Tenant swap", "One leaves, their replacement moves in")}</button>
+                ) : (
+                  /* Change the tenants (19 Oct 2026): the swap, plus Kirstie's
+                     add someone and re-reference, behind one button. */
+                  <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("user")}{tileText("Change the tenants", "Add someone, swap a sharer or re-reference")}</button>
                 )}
+                {/* Management transfer (Dan Richards a9f80822, 19 Oct 2026). */}
+                <TakeOnTile
+                  home={{ ref: String(p.listingId), name: p.name, locality: p.locality, landlord: p.landlord, tenants, rent: p.rentMonthly }}
+                  offer={!roomsOnly && (!tenants.length || !p.landlord || p.onRex === false)}
+                  disabled={!canAct}
+                  className={tile}
+                  icon={tileIcon("pack/house")}
+                  text={tileText}
+                />
                 {/* Sean McMahon, 16 Oct 2026: tenants report repairs in their portal, as Fixflow had them do. */}
                 <button type="button" disabled={p.test || !loginListings.length} onClick={() => setShowLogins(true)} className={tile}>{tileIcon("mail")}{tileText("Send out logins", "Tenant account, to report repairs")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
@@ -1079,13 +1092,13 @@ export default function PropertyPage() {
         </Modal>
       )}
       {action?.kind === "swap-open" && swapOn && (
-        <Modal onClose={closeAction} title="Tenant swap under way">
+        <Modal onClose={closeAction} title={`${swapOn.swap.label ?? "Tenant swap"} under way`}>
           <SwapOpen s={swapOn} onAnother={() => act({ kind: "swap" })} canAct={canAct && tenants.length > 0} />
         </Modal>
       )}
       {action?.kind === "swap" && (
-        <Modal onClose={closeAction} title="Tenant swap">
-          <SwapSheet listingId={String(p.listingId)} tenants={tenants} rent={p.rentMonthly ?? null} onClose={closeAction} />
+        <Modal onClose={closeAction} title="Change the tenants">
+          <TenantChange listingId={String(p.listingId)} tenants={tenants} rent={p.rentMonthly ?? null} onClose={closeAction} />
         </Modal>
       )}
       {/* Michael's Section 8 / 13 checklist is its own pop-up already. */}
@@ -1474,6 +1487,7 @@ function SwapOpen({ s, onAnother, canAct }: { s: SwapUnderWay; onAnother: () => 
     ["Leaving", s.swap.leaving.join(", ") || "—"],
     ["Moving in", s.swap.joining.join(", ") || "—"],
     ["Staying", s.swap.staying.join(", ") || "—"],
+    ...((s.swap.rereference ?? []).length ? [["Referenced again", (s.swap.rereference ?? []).join(", ")] as [string, string]] : []),
     ["From", day(s.swap.moveIn)],
     ["Rent for the home", s.swap.rentPcm != null ? `${pounds(s.swap.rentPcm)} a month` : "—"],
     ...(s.swap.rentPortion != null ? [["Their portion", `${pounds(s.swap.rentPortion)} a month`] as [string, string]] : []),
@@ -1495,7 +1509,7 @@ function SwapOpen({ s, onAnother, canAct }: { s: SwapUnderWay; onAnother: () => 
       <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
         {canAct && (
           <button type="button" onClick={onAnother} className="mr-auto text-[12px] font-semibold text-muted underline-offset-2 hover:text-ink hover:underline">
-            Make another swap
+            Another change to the tenants
           </button>
         )}
         <Link href={`/applications/${encodeURIComponent(s.application)}`} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-semibold hover:border-ink">
@@ -1504,132 +1518,6 @@ function SwapOpen({ s, onAnother, canAct }: { s: SwapUnderWay; onAnother: () => 
         <Link href={plcHref} className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
           {plcLabel}
         </Link>
-      </div>
-    </div>
-  );
-}
-
-/**
- * TENANT SWAP (Lianna, 12 Oct 2026; lib/tenant-swaps). Who is leaving, who is
- * coming in, and when. It becomes an application with Push to Propoly on its
- * file: a new deal with everyone on it, and only the newcomer referenced.
- */
-function SwapSheet({ listingId, tenants, rent, onClose }: { listingId: string; tenants: Party[]; rent: number | null; onClose: () => void }) {
-  const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
-  const [joining, setJoining] = useState([{ name: "", email: "", phone: "" }]);
-  const [moveIn, setMoveIn] = useState("");
-  const [rentPcm, setRentPcm] = useState(rent ? String(rent) : "");
-  /* Rent portion (James, 13 Oct 2026): what the person moving in pays, by
-     itself. The deal in Propoly keeps the rent for the whole home. */
-  const [portionOn, setPortionOn] = useState(false);
-  const [portion, setPortion] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const field = "mt-1 w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
-  const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
-  const setJoiner = (i: number, k: "name" | "email" | "phone", v: string) => setJoining((js) => js.map((j, n) => (n === i ? { ...j, [k]: v } : j)));
-
-  async function save() {
-    if (!leaving.size) return setErr("Tick who is leaving.");
-    const people = joining.filter((j) => j.name.trim());
-    if (!people.length) return setErr("Add who is moving in.");
-    const noEmail = people.find((j) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(j.email.trim()));
-    if (noEmail) return setErr(`${noEmail.name.trim()} needs an email address - their referencing is sent to it.`);
-    if (!moveIn) return setErr("When are they moving in?");
-    if (portionOn && !(Number(portion) > 0)) return setErr("Type their portion of the rent, or untick Rent portion.");
-    setBusy(true);
-    setErr(null);
-    const r = await fetch("/api/tenant-swaps", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ listingId, leaving: [...leaving], joining: people, moveIn, rentPcm: Number(rentPcm) || undefined, rentPortion: portionOn ? Number(portion) || undefined : undefined, note }),
-    }).then((x) => x.json()).catch(() => null);
-    if (!r?.ok) {
-      setBusy(false);
-      return setErr(r?.error ?? "The swap could not be saved.");
-    }
-    window.location.assign(`/applications?open=${encodeURIComponent(r.application)}`);
-  }
-
-  return (
-    <div>
-      <p className="text-[12.5px] leading-relaxed text-muted">
-        One tenant leaving and their replacement moving in, with no viewing or offer. It goes onto Applications as a tenant swap, where Push to Propoly starts a new deal with everyone on it, sends only the new tenant for referencing, and takes no holding fee.
-      </p>
-      <div className="mt-4 grid gap-4">
-        <div>
-          <span className={label}>Who is leaving</span>
-          <div className="mt-1.5 grid gap-1.5">
-            {tenants.map((t) => (
-              <label key={t.contactId} className="flex items-center gap-2.5 rounded-lg border border-line/70 bg-white px-3 py-2 text-[13px]">
-                <input
-                  type="checkbox"
-                  checked={leaving.has(t.contactId)}
-                  onChange={(e) => setLeaving((s) => { const n = new Set(s); if (e.target.checked) n.add(t.contactId); else n.delete(t.contactId); return n; })}
-                />
-                <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                {!t.email && <span className="text-[11px] text-muted">no email</span>}
-              </label>
-            ))}
-          </div>
-        </div>
-        <div>
-          <span className={label}>Who is moving in</span>
-          {joining.map((j, i) => (
-            <div key={i} className="mt-1.5 grid gap-2 sm:grid-cols-3">
-              <input value={j.name} onChange={(e) => setJoiner(i, "name", e.target.value)} placeholder="Full name" className={field} />
-              <input type="email" value={j.email} onChange={(e) => setJoiner(i, "email", e.target.value)} placeholder="Email" className={field} />
-              <input type="tel" value={j.phone} onChange={(e) => setJoiner(i, "phone", e.target.value)} placeholder="Mobile" className={field} />
-            </div>
-          ))}
-          <button type="button" onClick={() => setJoining((js) => [...js, { name: "", email: "", phone: "" }])} className="mt-2 text-[12px] font-semibold text-accent-dark underline-offset-2 hover:underline">
-            + Another person moving in
-          </button>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label>
-            <span className={label}>Moving in on</span>
-            <input type="date" value={moveIn} onChange={(e) => setMoveIn(e.target.value)} className={field} />
-          </label>
-          <label>
-            <span className={label}>Rent for the home, a month</span>
-            <input inputMode="decimal" value={rentPcm} onChange={(e) => setRentPcm(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="£" className={field} />
-          </label>
-        </div>
-        <div>
-          <label className="flex items-center gap-2.5 text-[13px]">
-            <input
-              type="checkbox"
-              checked={portionOn}
-              onChange={(e) => {
-                setPortionOn(e.target.checked);
-                /* A fair first guess: the home's rent shared by everyone on it after the swap. */
-                const heads = tenants.length - leaving.size + Math.max(1, joining.filter((j) => j.name.trim()).length);
-                if (e.target.checked && !portion && Number(rentPcm) > 0 && heads > 0) setPortion(String(Math.round((Number(rentPcm) / heads) * 100) / 100));
-              }}
-            />
-            <span className="font-semibold">Rent portion</span>
-            <span className="text-[12px] text-muted">What the person moving in pays</span>
-          </label>
-          {portionOn && (
-            <label className="mt-2 block sm:max-w-[50%]">
-              <span className={label}>Their portion, a month</span>
-              <input inputMode="decimal" value={portion} onChange={(e) => setPortion(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="£" className={field} />
-            </label>
-          )}
-        </div>
-        <label>
-          <span className={label}>Note</span>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Found through SpareRoom, documents sent, anything agreed." className={field} />
-        </label>
-      </div>
-      {err && <p className="mt-4 text-[12.5px] text-accent-dark">{err}</p>}
-      <div className="mt-5 flex items-center justify-end gap-2">
-        <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted hover:text-ink">Cancel</button>
-        <PressButton onClick={() => void save()} className={`rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
-          {busy ? "Saving…" : "Make the swap"}
-        </PressButton>
       </div>
     </div>
   );

@@ -284,7 +284,9 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
 
   const unrecognised = docs.filter((d) => !d.kind).map((d) => d.name);
 
-  const joining = new Set(application.swap?.joining ?? []);
+  /* Referenced: whoever joins, and anyone staying who is referenced again
+     (Add someone / Re-reference, 19 Oct 2026). */
+  const joining = new Set([...(application.swap?.joining ?? []), ...(application.swap?.rereference ?? [])]);
   const tenants = application.applicants.map((a) => ({
     contactId: a.contactId,
     name: a.name,
@@ -294,7 +296,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
     ...(application.swap ? { reference: joining.has(a.name) } : {}),
     /* The newcomer's rent portion goes onto them in Propoly as their rent
        share (rent_share_pcm_pence, proven on the test home 13 Oct 2026). */
-    ...(application.swap && joining.has(a.name) && application.swap.rentPortion ? { rentSharePcm: application.swap.rentPortion } : {}),
+    ...(application.swap && (application.swap.joining ?? []).includes(a.name) && application.swap.rentPortion ? { rentSharePcm: application.swap.rentPortion } : {}),
   }));
 
   const blockers: string[] = [];
@@ -370,7 +372,15 @@ export async function handoffFor(applicationId: string): Promise<Handoff | null>
   // book is pulled and matched — it is one cached-free call either way.
   const apps = await getApplications(200);
   const app = apps.find((a) => a.id === applicationId);
-  return app ? buildHandoff(app) : null;
+  if (!app) return null;
+  const packet = await buildHandoff(app);
+  /* Tenants added to the let in the OS (lib/let-tenants, 19 Oct 2026) go
+     onto its push only once tenant_changes_live is on. */
+  const { addedTenantsForPush } = await import("@/lib/let-tenants");
+  const added = await addedTenantsForPush(applicationId).catch(() => []);
+  const known = new Set(packet.tenants.map((t) => (t.email ?? t.name).trim().toLowerCase()));
+  const extra = added.filter((t) => !known.has((t.email ?? t.name).trim().toLowerCase()));
+  return extra.length ? { ...packet, tenants: [...packet.tenants, ...extra.map((t) => ({ contactId: null, name: t.name, email: t.email, phone: t.phone, isPrimary: false, ...(t.reference ? {} : { reference: false }) }))] } : packet;
 }
 
 /**
