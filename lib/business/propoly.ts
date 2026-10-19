@@ -348,16 +348,49 @@ export async function propolyOptions(
  * refused rather than merely empty. A 404 on a read is an answer, not a fault.
  * The path is kept with its ids taken out, so one broken endpoint is one bug.
  */
-function reportPropoly(method: string, path: string, status: number): void {
+function reportPropoly(method: string, path: string, status: number, body?: unknown): void {
   const write = method !== "GET";
   if (status < 400) return;
   if (!write && status === 404) return;
+  /* Propoly's own words on a refused write (19 Oct 2026). The first 422 on a
+     document upload reached the bug list as "refused the write" and nothing
+     else, though Propoly had said why; the reason was only on the PLC case.
+     Reads keep the short form so their existing tickets still group. */
+  const said = write && status !== 429 ? propolyErrorText(body) : "";
   noteFailure({
     source: "Propoly",
     what: `${method} ${path.split("?")[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}|\d+/gi, ":id")}`,
     status,
-    message: status === 429 ? "rate limited" : write ? "refused the write" : "refused the read",
+    message: status === 429 ? "rate limited" : write ? `refused the write${said ? `: ${said}` : ""}` : "refused the read",
   });
+}
+
+/**
+ * Everything Propoly said about a refusal, as one line: its message plus any
+ * field errors (Laravel-style `errors: { field: [..] }`, or a list), so the
+ * ticket and the PLC case both carry the reason rather than just a status.
+ */
+export function propolyErrorText(body: unknown): string {
+  if (body == null) return "";
+  if (typeof body === "string") return body.replace(/\s+/g, " ").trim().slice(0, 400);
+  if (typeof body !== "object") return String(body).slice(0, 400);
+  const b = body as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const k of ["message", "error", "detail", "title"]) {
+    const v = b[k];
+    if (typeof v === "string" && v.trim() && !parts.includes(v.trim())) parts.push(v.trim());
+  }
+  const errs = b.errors;
+  if (Array.isArray(errs)) {
+    for (const e of errs) parts.push(typeof e === "string" ? e : JSON.stringify(e));
+  } else if (errs && typeof errs === "object") {
+    for (const [field, v] of Object.entries(errs as Record<string, unknown>)) {
+      const list = Array.isArray(v) ? v : [v];
+      parts.push(`${field}: ${list.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ")}`);
+    }
+  }
+  const text = parts.length ? parts.join("; ") : JSON.stringify(body);
+  return text.replace(/\s+/g, " ").trim().slice(0, 400);
 }
 
 /**
@@ -440,13 +473,8 @@ async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unk
   const token = await getToken();
   let res = await send(token);
   if (res.status === 401) res = await send(await getToken(token));
-  let body: unknown = null;
-  try {
-    body = await res.json();
-  } catch {
-    body = null;
-  }
-  reportPropoly(method, path, res.status);
+  const body = await answerOf(res);
+  reportPropoly(method, path, res.status, body);
   return { status: res.status, body };
 }
 
@@ -474,14 +502,24 @@ export async function propolyUpload(path: string, form: FormData): Promise<Propo
   const token = await getToken();
   let res = await send(token);
   if (res.status === 401) res = await send(await getToken(token));
-  let body: unknown = null;
-  try {
-    body = await res.json();
-  } catch {
-    body = null;
-  }
-  reportPropoly("POST", path, res.status);
+  const body = await answerOf(res);
+  reportPropoly("POST", path, res.status, body);
   return { status: res.status, body };
+}
+
+/**
+ * A write's answer, read as text first: a refusal that is not JSON (an HTML
+ * error page, a bare sentence) is still Propoly's answer and is kept as a
+ * string rather than dropped to null.
+ */
+async function answerOf(res: Response): Promise<unknown> {
+  const raw = await res.text().catch(() => "");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw.slice(0, 2000);
+  }
 }
 export const propolyPatch = (path: string, payload: unknown) => propolyWrite("PATCH", path, payload);
 
