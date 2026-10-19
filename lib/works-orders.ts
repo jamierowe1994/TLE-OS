@@ -323,6 +323,13 @@ export async function listContractors(forUserId?: string | null): Promise<Contra
   ).map(toContractor);
 }
 
+/** Every book at once, agents' own included: the office pays the invoices,
+ *  so it sees every contractor (James, 19 Oct 2026). */
+export async function listAllContractors(): Promise<Contractor[]> {
+  if (!hasDb()) return [];
+  return (await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal ORDER BY active DESC, (owner_id IS NULL), trade, name`)).map(toContractor);
+}
+
 export async function getContractor(id: string): Promise<Contractor | null> {
   if (!hasDb()) return null;
   const [r] = await q<Row>(`SELECT * FROM os_contractors WHERE id = $1`, [id]);

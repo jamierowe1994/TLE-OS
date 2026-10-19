@@ -36,7 +36,8 @@ export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (id) {
     const c = await getContractor(id);
-    if (!c || (c.ownerId && c.ownerId !== me.id)) return NextResponse.json({ ok: false, error: "Not in your book." }, { status: 404 });
+    /* The office sees every agent's book (James, 19 Oct 2026); an agent only their own and the company's. */
+    if (!c || (c.ownerId && c.ownerId !== me.id && !can(me.role, "see:everything"))) return NextResponse.json({ ok: false, error: "Not in your book." }, { status: 404 });
     const [stats, orders] = await Promise.all([contractorStats(id), listOrders({ limit: 500 })]);
     return NextResponse.json({ ok: true, contractor: c, stats, jobs: orders.filter((o) => o.contractorId === id) });
   }

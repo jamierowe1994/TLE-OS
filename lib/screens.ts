@@ -96,13 +96,30 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Plan a certificate: a gas safety, an EICR, a boiler service, an inspection, with the date it is due. Compliance can raise one from a certificate that is coming up.",
       "Open a job for its sheet: what needs doing next, the contractor, the quote and the landlord's authority, the invoice, the timeline under each person's name, and the files on it.",
       "A quote over the landlord's authority waits on their yes and says so; under it, the job is approved on the spot.",
-      "Keep the trades book under Contractors, with Gas Safe and NICEIC numbers.",
+      "The trades book has its own place now: Portfolio > Contractors.",
     ],
     wiring: "live",
     caveats: [
       "Nothing here emails the contractor, the tenant or the landlord yet. Ring them, and put the line on the timeline.",
       "PayProp is read-only to the OS, so marking a job as charged through PayProp records the fact here; the charge is raised in PayProp by hand.",
       "A certificate that comes back from a planned job is filed on the job. Attaching it to the property's compliance file is still done from Compliance.",
+    ],
+  },
+
+  "/contractors": {
+    purpose: "Everyone you can send on a job: who is out today, who is booked in when, and what we owe them.",
+    does: [
+      "Read the four counts off the live jobs: out today, booked this week, waiting for a date, and what is owed to contractors.",
+      "Bookings: today's visits, the next seven days, works orders a contractor has not booked a time for yet, and booked days that went by without the job being marked done.",
+      "Contractors: your own book beside the company's. Each row says how many open jobs they have and what they are owed. Open one for their details, their bookings, every job they have done and the money through them.",
+      "Log an invoice on a contractor for work with no job on the OS: pick the home, say what it was, the total and their invoice number, and attach the PDF or a photo. It goes on as a finished job and accounts are told.",
+      "To pay: every contractor invoice not yet paid, oldest first, and what was paid in the last 90 days.",
+    ],
+    wiring: "live",
+    caveats: [
+      "An agent sees their own contractors and the company's. The office sees every agent's too.",
+      "Over 30 days unpaid is marked as a flag, not an agreed payment term.",
+      "There is nowhere yet for a contractor's insurance or other documents: what is required is with Michael.",
     ],
   },
 

@@ -574,18 +574,46 @@ function Payment({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Promise<
 
 function Money({ o, f, setF, move, busy, onInvoiceLandlord }: StepProps & { onInvoiceLandlord: () => void }) {
   const [paying, setPaying] = useState(false);
+  /* The invoice itself, when it came by email (Rhiannon, 19 Oct 2026:
+     contractors send it to the agent rather than use their link). It goes on
+     the job's files first, so a failed upload saves nothing. */
+  const [file, setFile] = useState<File | null>(null);
+  const [sending, setSending] = useState(false);
+  const [upErr, setUpErr] = useState<string | null>(null);
+  async function putOn() {
+    setUpErr(null);
+    setSending(true);
+    if (file) {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("scope", "document");
+      fd.append("ref", `works-${o.ref}`);
+      const r = await fetch("/api/r2/upload", { method: "POST", body: fd }).then((x) => x.json()).catch(() => null);
+      if (!r?.ok) { setSending(false); setUpErr(r?.error ?? "The invoice file did not upload, so nothing was saved."); return; }
+      await move({ action: "file", file: { key: r.key, name: r.name, type: r.type } });
+    }
+    await move({ action: "invoice", invoicePence: toPence(f.amount ?? ""), invoiceRef: f.ref });
+    setSending(false);
+    setFile(null);
+  }
   const payee = o.payee === "agent" ? `${o.raisedBy || "the agent"} (paid it themselves)` : o.contractorName || "the contractor";
   return (
     <div className="space-y-3">
       {o.invoicePence == null ? (
         <div className="rounded-xl border border-line/80 bg-card p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{o.payee === "agent" ? "What you paid" : "The contractor's invoice"}</p>
-          <p className="mt-1 text-[11.5px] text-muted">{o.payee === "agent" ? "The receipt goes on as a file." : "They can upload it from their page, or key it here off the email."}</p>
+          <p className="mt-1 text-[11.5px] text-muted">{o.payee === "agent" ? "Attach your receipt with the total." : "They can upload it from their page. If they emailed it to you, attach it here with the total."}</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
             <input value={f.amount ?? ""} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="£ total" className={field} />
             <input value={f.ref ?? ""} onChange={(e) => setF({ ...f, ref: e.target.value })} placeholder="Invoice number" className={field} />
-            <button type="button" disabled={busy || !f.amount} onClick={() => void move({ action: "invoice", invoicePence: toPence(f.amount ?? ""), invoiceRef: f.ref })} className={primary}>On the job</button>
+            <button type="button" disabled={busy || sending || !f.amount} onClick={() => void putOn()} className={primary}>{sending ? "Saving…" : "On the job"}</button>
           </div>
+          <label className={`mt-2 flex cursor-pointer items-center justify-between gap-2 ${field}`}>
+            <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : o.payee === "agent" ? "Attach the receipt (PDF or photo)" : "Attach their invoice (PDF or photo)"}</span>
+            <span className="shrink-0 text-[11.5px] underline">{file ? "Change" : "Choose"}</span>
+            <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+          </label>
+          {upErr && <p className="mt-1.5 text-[11.5px] text-accent-dark">{upErr}</p>}
         </div>
       ) : (
         <div className="rounded-xl border border-line/80 bg-card p-3 text-[13px]">

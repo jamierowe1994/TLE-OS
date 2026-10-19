@@ -14,11 +14,10 @@ import type { Contractor, WorksOrder, WorksSummary, Kind, Move, Status } from "@
 import type { CarriedDone, CarriedJob } from "@/lib/works-carried";
 import { URGENCIES } from "@/lib/works-catalogue";
 import { STEPS, stepOf } from "@/lib/works-steps";
-import { ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNow";
 import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import RaiseJob from "@/components/maintenance/RaiseJob";
 import JobDrawer from "@/components/maintenance/JobDrawer";
-import { Fact, OPEN, STATUS_LABEL, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
+import { OPEN, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import { usePref } from "@/lib/prefs-store";
 import { useNoteVisit } from "@/lib/recent-visits";
@@ -47,13 +46,15 @@ export default function Maintenance() {
   const rail = params.get("section") === "contractors" ? "contractors" : "jobs";
   const [section, setSection] = useState<Kind | "contractors" | "invoices" | "accounts">("repair");
   useEffect(() => {
-    if (rail === "contractors") setSection("contractors");
+    /* The trades book moved to Portfolio > Contractors on 19 Oct 2026; old
+       links to ?section=contractors land there. */
+    if (rail === "contractors") { setSection("contractors"); router.replace("/contractors"); }
     else if (params.get("section") === "invoices") setSection("invoices");
     else if (params.get("section") === "accounts") setSection("accounts");
     /* A link straight to the planned jobs (the Showroom's gas safety walkthrough). */
     else if (params.get("section") === "planned") setSection("planned");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
-  }, [rail, params]);
+  }, [rail, params, router]);
   const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string; ringForApproval?: string[]; mine?: { orders: string[]; carried: string[]; summary: WorksSummary; startOn: "mine" | "everyone"; note: string | null } | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
@@ -263,7 +264,7 @@ export default function Maintenance() {
       ) : section === "accounts" ? (
         <Accounts orders={orders} loaded={!!data} onOpen={setOpenId} onChanged={load} />
       ) : section === "contractors" ? (
-        <Contractors onChange={load} openJob={(id) => { router.push("/maintenance?section=jobs"); setOpenId(id); }} />
+        <p className="mt-6 text-[12.5px] text-muted">Contractors have their own place now, under Portfolio. Taking you there…</p>
       ) : !data ? (
         <p className="mt-6 text-[12.5px] text-muted">Reading the jobs…</p>
       ) : grouped.length === 0 && carried.length === 0 ? (
@@ -611,167 +612,6 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ── The trades book ────────────────────────────────────────────────────── */
-
-function Contractors({ onChange, openJob }: { onChange: () => void; openJob: (id: string) => void }) {
-  const [data, setData] = useState<{ contractors: Contractor[]; me: string | null; canCorporate: boolean } | null>(null);
-  const [editing, setEditing] = useState<Partial<Contractor> | null>(null);
-  const [profile, setProfile] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const load = useCallback(() => {
-    fetch("/api/contractors", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) setData(j); else setErr(j.error ?? "Could not read the book."); }).catch(() => setErr("Could not read the book."));
-  }, []);
-  useEffect(load, [load]);
-  const all = data?.contractors ?? [];
-  const needle = q.trim();
-  const match = (c: Contractor) => !needle || searchMatches(needle, c.name, c.contact, c.trade, c.phone, c.email, c.notes, c.registration);
-  const mine = all.filter((c) => c.ownerId && match(c));
-  const corporate = all.filter((c) => !c.ownerId && match(c));
-
-  const Shelf = ({ title, blurb, rows, canEdit }: { title: string; blurb: string; rows: Contractor[]; canEdit: boolean }) => (
-    <section className="rounded-[22px] border border-line/50 bg-white p-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <div>
-          <h2 className="text-[15px]">{title}</h2>
-          <p className="mt-0.5 text-[11.5px] text-muted">{blurb}</p>
-        </div>
-        <span className="text-[11px] text-muted">{rows.length}</span>
-      </div>
-      {rows.length === 0 ? (
-        <p className="mt-3 text-[12.5px] text-muted">Nobody here yet.</p>
-      ) : (
-        <ul className="mt-3 divide-y divide-line/50">
-          {rows.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-              <button type="button" onClick={() => setProfile(c.id)} className="min-w-0 flex-1 text-left">
-                <p className={`hand text-[13.5px] ${c.active ? "" : "text-muted line-through"}`}>{c.name} <span className="font-sans text-[11px] text-muted">· {c.trade}</span></p>
-                <p className="truncate text-[11px] text-muted">{[c.contact, c.phone, c.email, c.registration].filter(Boolean).join(" · ") || "no contact details yet"}</p>
-              </button>
-              {canEdit && <button type="button" onClick={() => setEditing(c)} className="text-[11.5px] text-muted underline hover:text-ink">Edit</button>}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-
-  return (
-    <div className="mt-4 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the book…" className="w-full max-w-xs rounded-full border border-line/80 bg-box px-4 py-2 text-[12.5px] outline-none focus:border-ink" />
-        <PressButton onClick={() => setEditing({ ...BLANK_CONTRACTOR })} className="rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page">+ Add a contractor</PressButton>
-      </div>
-      {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
-      {editing && data && (
-        <div className="rounded-[22px] border border-line/50 bg-white p-5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{editing.id ? "Edit" : "New contractor"}</p>
-          <div className="mt-3">
-            <ContractorForm initial={editing} canCorporate={data.canCorporate} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); onChange(); }} />
-          </div>
-        </div>
-      )}
-      {!data ? (
-        <p className="text-[12.5px] text-muted">Reading the book…</p>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Shelf title="Your contractors" blurb="The people you ring. Yours alone - nobody else sees them." rows={mine} canEdit />
-          <Shelf title="The company's contractors" blurb="Kept by the office. Everyone can book them." rows={corporate} canEdit={data.canCorporate} />
-        </div>
-      )}
-      {profile && <ContractorProfile id={profile} onClose={() => setProfile(null)} onEdit={(c) => { setProfile(null); setEditing(c); }} openJob={openJob} canEdit={(c) => Boolean(c.ownerId) || Boolean(data?.canCorporate)} />}
-    </div>
-  );
-}
-
-/** One contractor, pulled out: who they are, what they have done for us, what is owed. */
-function ContractorProfile({ id, onClose, onEdit, openJob, canEdit }: { id: string; onClose: () => void; onEdit: (c: Contractor) => void; openJob: (id: string) => void; canEdit: (c: Contractor) => boolean }) {
-  const [d, setD] = useState<{ contractor: Contractor; stats: { jobs: number; open: number; quotedPence: number; invoicedPence: number; paidPence: number; outstandingPence: number; lastJobAt: string | null }; jobs: WorksOrder[] } | null>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const t = requestAnimationFrame(() => setShown(true));
-    fetch(`/api/contractors?id=${encodeURIComponent(id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) setD(j); }).catch(() => {});
-    return () => cancelAnimationFrame(t);
-  }, [id]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  const c = d?.contractor;
-  return (
-    <div className="fixed inset-0 z-[130]">
-      <button aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
-      <aside className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${shown ? "translate-x-0" : "translate-x-full"}`} style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}>
-        <div className="shrink-0 border-b border-line/70 px-6 pt-5">
-          <div className="flex items-start justify-between gap-3 pb-5">
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{c ? (c.ownerId ? "Your contractor" : "Company contractor") : "Contractor"}{c && !c.active ? " · not active" : ""}</p>
-              <h2 className="mt-1 text-[20px] leading-tight">{c?.name ?? "Reading…"}</h2>
-              <p className="mt-1 text-[12px] text-muted">{c ? [c.trade, c.contact, c.registration].filter(Boolean).join(" · ") : ""}</p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              {c && canEdit(c) && <button type="button" onClick={() => onEdit(c)} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px]">Edit</button>}
-              <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
-            </div>
-          </div>
-        </div>
-        {c && d && (
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-4">
-                <section className="rounded-[22px] border border-line/50 bg-white p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted">How to reach them</p>
-                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px] sm:grid-cols-3">
-                    <Fact k="Phone" v={c.phone || "—"} />
-                    <Fact k="Email" v={c.email || "—"} />
-                    <Fact k="Website" v={c.website || "—"} />
-                    <Fact k="Address" v={c.address || "—"} />
-                    <Fact k="Registration" v={c.registration || "—"} />
-                    <Fact k="Added by" v={c.createdBy || "—"} />
-                  </dl>
-                  {c.notes && <p className="mt-3 whitespace-pre-wrap text-[12.5px] leading-relaxed">{c.notes}</p>}
-                </section>
-                <section className="rounded-[22px] border border-line/50 bg-white p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Their jobs</p>
-                  {d.jobs.length === 0 ? (
-                    <p className="mt-2 text-[12.5px] text-muted">None yet. Put them on a job and it shows here.</p>
-                  ) : (
-                    <ul className="mt-2 divide-y divide-line/50">
-                      {d.jobs.map((o) => (
-                        <li key={o.id}>
-                          <button type="button" onClick={() => { onClose(); openJob(o.id); }} className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:bg-accent-soft/20">
-                            <span className="min-w-0">
-                              <span className="block truncate text-[13px]">#{o.ref} · {o.title}</span>
-                              <span className="block truncate text-[10.5px] text-muted">{o.propertyName} · {STATUS_LABEL[o.status]}</span>
-                            </span>
-                            <span className="figures shrink-0 text-[12.5px]">{o.invoicePence != null ? pounds(o.invoicePence) : o.quotePence != null ? `${pounds(o.quotePence)} quoted` : "—"}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              </div>
-              <section className="rounded-[22px] border border-line/50 bg-white p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Money through them</p>
-                <dl className="mt-2 space-y-2 text-[12.5px]">
-                  <div className="flex justify-between"><dt className="text-muted">Jobs</dt><dd className="figures">{d.stats.jobs}{d.stats.open ? ` · ${d.stats.open} open` : ""}</dd></div>
-                  <div className="flex justify-between"><dt className="text-muted">Quoted</dt><dd className="figures">{pounds(d.stats.quotedPence)}</dd></div>
-                  <div className="flex justify-between"><dt className="text-muted">Invoiced</dt><dd className="figures">{pounds(d.stats.invoicedPence)}</dd></div>
-                  <div className="flex justify-between"><dt className="text-muted">Paid</dt><dd className="figures">{pounds(d.stats.paidPence)}</dd></div>
-                  <div className="flex justify-between border-t border-line/60 pt-2 font-semibold"><dt>Owed to them</dt><dd className="figures">{pounds(d.stats.outstandingPence)}</dd></div>
-                </dl>
-                <p className="mt-3 text-[11px] text-muted">Read off the jobs they were on: the quote logged, the invoice added, and what is marked paid.</p>
-              </section>
-            </div>
-          </div>
-        )}
-      </aside>
     </div>
   );
 }

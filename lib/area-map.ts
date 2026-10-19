@@ -142,7 +142,7 @@ export const AREA_DEFS: AreaDef[] = [
      reason given on Portfolio below. Arrives hidden (lib/db). */
   { id: "compliance", label: "Compliance", phase: 2, pages: ["/compliance"], apis: [], canHide: true },
   {
-    id: "portfolio", label: "Portfolio", phase: 2, pages: ["/portfolio", "/overview", "/maintenance", "/inspections", "/tenancy-reviews", "/move-outs"],
+    id: "portfolio", label: "Portfolio", phase: 2, pages: ["/portfolio", "/overview", "/maintenance", "/contractors", "/inspections", "/tenancy-reviews", "/move-outs"],
     /* Not /api/compliance or /api/property-file: a certificate is filed from a
        listing, an appraisal and an application too, and hiding Portfolio must
        not stop an agent attaching a gas certificate to the listing in front

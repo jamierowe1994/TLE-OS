@@ -90,6 +90,10 @@ export const BACK: NavItem[] = [
       { href: "/overview", label: "Overview" },
       { href: "/compliance", label: "Compliance" },
       { href: "/maintenance", label: "Maintenance" },
+      /* Its own place since 19 Oct 2026 (James): who is out on a job, who is
+         booked in when, and what we owe them. It was a corner of Maintenance
+         nothing linked to. */
+      { href: "/contractors", label: "Contractors" },
       { href: "/inspections", label: "Inspections" },
       { href: "/tenancy-reviews", label: "Tenancy Reviews" },
       { href: "/move-outs", label: "Move-outs" },
@@ -303,6 +307,7 @@ export const AGENT_ROUTES = [
   "/showroom",
   "/compliance",
   "/maintenance",
+  "/contractors",
   "/inspections",
   "/tenancy-reviews",
   "/move-outs",
