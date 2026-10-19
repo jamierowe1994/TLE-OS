@@ -4,7 +4,8 @@ import { hasDb } from "@/lib/db";
 import { scopeForWho } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
-import { switchOn } from "@/lib/switches";
+import { can } from "@/lib/roles";
+import { takeOnPushLive } from "@/lib/take-on-push";
 import { isLetType } from "@/lib/let-type";
 import { cancelTakeOn, createTakeOn, getTakeOn, markComm, takeOnFor, type TakeOn, type TakeOnTenant } from "@/lib/take-ons";
 
@@ -19,7 +20,7 @@ import { cancelTakeOn, createTakeOn, getTakeOn, markComm, takeOnFor, type TakeOn
  *   DELETE ?id=<take-on>             -> cancel it (the home's record stays)
  *
  * Writes to the OS only. Nothing reaches REX, Propoly or PayProp, and nobody
- * is emailed.
+ * is emailed. The pushes are /api/take-ons/push.
  */
 
 export const dynamic = "force-dynamic";
@@ -42,9 +43,15 @@ async function homeInBook(req: NextRequest, who: Awaited<ReturnType<typeof whoIs
   return book.properties.some((p) => String(p.listingId) === homeRef);
 }
 
-/** Held = its push to Propoly waits on James's switch (and his answers). */
-async function answer(t: TakeOn | null) {
-  return { ok: true, takeOn: t, held: !(await switchOn("tenant_changes_live").catch(() => false)) };
+/**
+ * Held = its push to Propoly is still rehearsed (take_on_propoly off). `push`
+ * says which of the two pushes run for real, and whether this person may
+ * press them (the office: lib/take-on-push, /api/take-ons/push).
+ */
+async function answer(t: TakeOn | null, who?: Awaited<ReturnType<typeof whoIs>> | null) {
+  const [propolyLive, rexLive] = await Promise.all([takeOnPushLive("propoly"), takeOnPushLive("rex")]);
+  const canPush = Boolean(who?.actor && !who.viewingAs && can(who.actor.role, "see:pretenancy"));
+  return { ok: true, takeOn: t, held: !propolyLive, push: { propolyLive, rexLive, canPush } };
 }
 
 export async function GET(req: NextRequest) {
@@ -56,7 +63,7 @@ export async function GET(req: NextRequest) {
   const t = id ? await getTakeOn(id) : home ? await takeOnFor(home) : null;
   if (id && !t) return NextResponse.json({ ok: false, error: "That take-on isn't here." }, { status: 404 });
   if (t && t.byEmail !== who.actor.email && !(await homeInBook(req, who, t.homeRef))) return NextResponse.json({ ok: false, error: "This home isn't in your book." }, { status: 403 });
-  return NextResponse.json(await answer(t));
+  return NextResponse.json(await answer(t, who));
 }
 
 export async function POST(req: NextRequest) {
@@ -123,7 +130,7 @@ export async function POST(req: NextRequest) {
     by: who.actor.name || who.actor.email || "unknown",
     byEmail: who.actor.email ?? null,
   });
-  return NextResponse.json(await answer(t));
+  return NextResponse.json(await answer(t, who));
 }
 
 export async function PATCH(req: NextRequest) {
@@ -136,7 +143,7 @@ export async function PATCH(req: NextRequest) {
   if (t.byEmail !== who.actor.email && !(await homeInBook(req, who, t.homeRef))) return NextResponse.json({ ok: false, error: "This home isn't in your book." }, { status: 403 });
   const next = await markComm(t.id, String(b.comm), b.done !== false, who.actor.name || who.actor.email || "unknown", clean(b.note, 300));
   if (!next) return NextResponse.json({ ok: false, error: "That letter isn't on the list." }, { status: 400 });
-  return NextResponse.json(await answer(next));
+  return NextResponse.json(await answer(next, who));
 }
 
 export async function DELETE(req: NextRequest) {

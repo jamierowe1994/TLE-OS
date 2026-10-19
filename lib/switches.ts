@@ -474,6 +474,32 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "TENANT_CHANGES_LIVE",
     legacyOn: "on",
   },
+  {
+    /* A management transfer into Propoly (lib/take-on-push, 19 Oct 2026; Dan
+       Richards' a9f80822). The take-on is saved in the OS whatever this says;
+       off, Send to Propoly on the take-on rehearses (live reads, nothing
+       written, every step recorded as what it would do). Its own switch, not
+       tenant_changes_live: a take-on makes a landlord and a home as well as a
+       deal, and its deal terms are still James's call. */
+    key: "take_on_propoly",
+    label: "Take-ons go to Propoly",
+    what: "Send to Propoly on a management transfer runs for real: the landlord (found by email, else created), the home (matched by postcode and door, else created under the agent who took it on), the two related, then a deal from the take-over date at the current rent with the sitting tenants on it, referenced only where the agent ticked it. A deal already open on the home is used, never a second. With it off the push is rehearsed: live reads, nothing written.",
+    who: "Propoly is WRITTEN TO: landlord, property, deal and tenants. Propoly emails the tenants being referenced, as it does for a deal keyed in by hand. The office presses it, never an agent. Handover must be on too (Propoly writes need it).",
+    confirm: "TAKE ONS TO PROPOLY",
+    legacyEnv: "TAKE_ON_PROPOLY",
+    legacyOn: "on",
+  },
+  {
+    /* The same take-on mirrored into REX (lib/take-on-push). Off, Add to the
+       listing system rehearses: contacts looked up by email, nothing written. */
+    key: "take_on_rex",
+    label: "Take-ons go to REX",
+    what: "Add to the listing system on a management transfer runs for real: the landlord and each sitting tenant as REX contacts (found by email first, else created and tagged Added in TLE OS), and, for a home REX does not hold, the property with the landlord as owner. A home already on REX is left as it is. With it off the push is rehearsed: REX is searched, nothing written.",
+    who: "Nobody is emailed. REX is WRITTEN TO as whoever presses it (their own REX sign-in). REX_ALLOW_WRITES must name Contacts/create, and Properties/create for a new home, which also needs Create properties in REX on.",
+    confirm: "TAKE ONS TO REX",
+    legacyEnv: "TAKE_ON_REX",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

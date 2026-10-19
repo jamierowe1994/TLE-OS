@@ -206,7 +206,7 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
  * The office's usual scheme, from Railway. Takes Propoly's key
  * ("tds_custodial") or its label ("TDS Custodial"); anything else is ignored.
  */
-function officeScheme(): DepositScheme | null {
+export function officeScheme(): DepositScheme | null {
   const raw = (process.env.PROPOLY_DEAL_DEPOSIT_SCHEME ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   return raw in DEPOSIT_SCHEMES ? (raw as DepositScheme) : null;
 }

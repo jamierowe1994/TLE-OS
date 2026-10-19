@@ -667,7 +667,7 @@ export async function runHandover(
 class Stop extends Error {}
 
 /** The Propoly user an agent is, by email. Lower case: Propoly matched only "rhiannon.dodge@", REX had "Rhiannon.Dodge@". */
-async function propolyUserFor(email: string | null): Promise<string | null> {
+export async function propolyUserFor(email: string | null): Promise<string | null> {
   if (!email) return null;
   const user = await propolyGet(`/api/v1/users?email=${encodeURIComponent(email.toLowerCase())}`);
   const hit = firstMatch(user.body, () => true);
@@ -887,7 +887,7 @@ async function pushDeal(
  * REX keeps "07779 927613" and "+447779927613" side by side; Propoly's
  * people, keyed in by hand, are all the national form with no spaces.
  */
-function ukMobile(raw: string | null): string {
+export function ukMobile(raw: string | null): string {
   const digits = (raw ?? "").replace(/[^\d+]/g, "");
   if (digits.startsWith("+44")) return `0${digits.slice(3)}`;
   if (digits.startsWith("0044")) return `0${digits.slice(4)}`;
@@ -921,7 +921,7 @@ function tenantAttributes(cc: Row, t: Handoff["tenants"][number]) {
  * REX keeps a person's parts under related.contact_names / contact_phones;
  * the flat fields are the fallback.
  */
-function landlordPayload(cc: Row, name: string, email: string) {
+export function landlordPayload(cc: Row, name: string, email: string) {
   const rel = (cc.related ?? {}) as Row;
   const n = (((rel.contact_names ?? []) as Row[])[0] ?? {}) as Row;
   const ph = (((rel.contact_phones ?? []) as Row[])[0] ?? {}) as Row;
@@ -956,7 +956,7 @@ function landlordPayload(cc: Row, name: string, email: string) {
 }
 
 /** Propoly's own reason for a refusal, in its words: "Mobile number can't be blank". */
-function refusal(res: { status: number; body: unknown }): string {
+export function refusal(res: { status: number; body: unknown }): string {
   const b = (res.body ?? {}) as Row;
   const errs = Array.isArray(b.errors) ? (b.errors as unknown[]).map(String).join("; ") : null;
   return str(b.message) ?? errs ?? `it answered ${res.status || "nothing"}.`;
@@ -969,13 +969,13 @@ export interface PropertyCandidate {
   postcode: string;
 }
 
-function candidateOf(p: Row): PropertyCandidate {
+export function candidateOf(p: Row): PropertyCandidate {
   const address = [str(p.address_line1), str(p.address_line2)].filter(Boolean).join(", ");
   return { uuid: str(p.uuid ?? p.id) ?? "", address, postcode: str(p.postcode) ?? postcodeOf(address) ?? "" };
 }
 
 /** Propoly lists come back as {data: [...]}, {landlords: [...]}, or a bare array. */
-function listOf(body: unknown): Row[] {
+export function listOf(body: unknown): Row[] {
   if (Array.isArray(body)) return body as Row[];
   const b = (body ?? {}) as Row;
   for (const key of ["data", "landlords", "properties", "users", "items", "results"]) {
@@ -983,7 +983,7 @@ function listOf(body: unknown): Row[] {
   }
   return [];
 }
-function firstMatch(body: unknown, pred: (r: Row) => boolean): Row | null {
+export function firstMatch(body: unknown, pred: (r: Row) => boolean): Row | null {
   return listOf(body).find(pred) ?? null;
 }
 
