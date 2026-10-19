@@ -62,6 +62,8 @@ export type DocFacts = {
   signed: "yes" | "no" | "unclear";
   /** Everybody the document names, for the checks that are about people. */
   peopleNamed: string[];
+  /** A referencing report only: its overall recommendation, as printed. */
+  referenceRecommendation: "accept" | "accept_with_guarantor" | "decline" | "other" | "not stated";
 };
 
 export const EMPTY_FACTS: DocFacts = {
@@ -77,7 +79,35 @@ export const EMPTY_FACTS: DocFacts = {
   outstandingDefects: [],
   signed: "unclear",
   peopleNamed: [],
+  referenceRecommendation: "not stated",
 };
+
+/**
+ * What the rules know about the pack as a whole, beyond the one document.
+ *
+ * Lianna's tenant swap on 44 South Bridge (3f1), 16 Oct 2026: the reference
+ * report was held as a blocker for "Right to Rent / Right to Reside: NO" on
+ * an Edinburgh home, and for "Accept with Guarantor" with the guarantor's own
+ * report two files along. Read one document at a time, neither could be seen.
+ */
+export type PackContext = {
+  /** A Scottish home: Right to Rent is English law and does not apply. */
+  scottish: boolean;
+  /** A guarantor's report or guarantee is filed on the pack. */
+  guarantorReport: boolean;
+};
+
+export const NO_PACK: PackContext = { scottish: false, guarantorReport: false };
+
+/** A line about Right to Rent, right to reside or a share code. */
+export const RIGHT_TO_RENT = /right[\s-]*to[\s-]*(rent|reside)|\bRTR\b|share[\s-]*code/i;
+
+/** "Accept with Guarantor", "acceptable subject to a guarantor", "guarantor required". */
+const WITH_GUARANTOR =
+  /\b(accept\w*|pass\w*|approv\w*)\W+(with|subject\W+to|on\W+condition\W+of)\W+(an?\W+)?guarantor|guarantor\W+(is\W+)?required/i;
+
+/** The shortfall a guarantor is there to cover. */
+const AFFORDABILITY = /afford|income|salary|earnings|rent\s+share/i;
 
 /* ────────────────────────────── the verdict ────────────────────────────── */
 
@@ -301,6 +331,44 @@ function outcomeRules(f: DocFacts, label: string): RuleResult["reasons"] {
  * Every entry answers one question: given what we read, what should happen?
  * Nothing here consults the model, and nothing here reads the network.
  */
+/**
+ * A reference that says "accept with guarantor" (16 Oct 2026, 44 South
+ * Bridge). That is the referencing company's answer working as intended, not
+ * a defect: the shortfall it names is what the guarantor is for. With the
+ * guarantor's report in the pack it is a question - does the guarantor cover
+ * it - and the guarantor's own report is read and judged on its own line.
+ * With no guarantor on the pack it still stops the let.
+ */
+function withGuarantorRules(f: DocFacts, pack: PackContext): RuleResult["reasons"] {
+  const saysGuarantor =
+    f.referenceRecommendation === "accept_with_guarantor" || f.outstandingDefects.some((d) => WITH_GUARANTOR.test(d));
+  if (!saysGuarantor) return outcomeRules(f, "reference");
+
+  const covered = f.outstandingDefects.filter((d) => WITH_GUARANTOR.test(d) || (pack.guarantorReport && AFFORDABILITY.test(d)));
+  const rest: DocFacts = {
+    ...f,
+    outstandingDefects: f.outstandingDefects.filter((d) => !covered.includes(d)),
+    /* The reader may mark the whole report unsatisfactory for the guarantor
+       line alone; that is the line being dealt with here. */
+    outcome: f.outcome === "unsatisfactory" ? "other" : f.outcome,
+  };
+  const shortfall = covered.filter((d) => !WITH_GUARANTOR.test(d));
+  const head = pack.guarantorReport
+    ? {
+        verdict: "review" as const,
+        rule: "Accept with guarantor",
+        because: `the reference says accept with guarantor, and the guarantor's report is in the pack${
+          shortfall.length ? ` - check it covers this: ${shortfall.join("; ")}` : " - check it covers the shortfall"
+        }.`,
+      }
+    : {
+        verdict: "fail" as const,
+        rule: "Guarantor needed",
+        because: "the reference says accept with guarantor, and there is no guarantor's report in the pack.",
+      };
+  return [head, ...outcomeRules(rest, "reference")];
+}
+
 /** The landlord's ID, AML and ownership papers: names read, never verified. */
 function landlordNames(f: DocFacts): RuleResult["reasons"] {
   const out: RuleResult["reasons"] = [];
@@ -320,7 +388,9 @@ function landlordNames(f: DocFacts): RuleResult["reasons"] {
   return out;
 }
 
-const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) => RuleResult["reasons"]>> = {
+const CHECK_RULES: Partial<
+  Record<CheckId, (f: DocFacts, moveIn: string | null, pack: PackContext) => RuleResult["reasons"]>
+> = {
   "gas-safety": (f, moveIn) => [
     ...dateRules(f, moveIn),
     ...outcomeRules(f, "gas safety record"),
@@ -369,8 +439,8 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
   "proof-of-ownership": (f) => landlordNames(f),
   "landlord-id-aml": (f) => landlordNames(f),
 
-  "tenant-checks": (f) => [
-    ...outcomeRules(f, "reference"),
+  "tenant-checks": (f, _moveIn, pack) => [
+    ...withGuarantorRules(f, pack),
     {
       verdict: "review",
       rule: "Affordability is a judgement",
@@ -420,14 +490,29 @@ function worst(reasons: RuleResult["reasons"]): Verdict {
 /** What should happen to this document, and why. */
 export function judge(
   checkId: CheckId,
-  facts: DocFacts,
-  moveInDate: string | null
+  read: DocFacts,
+  moveInDate: string | null,
+  pack: PackContext = NO_PACK
 ): RuleResult {
+  /* Right to Rent does not apply in Scotland, so on a Scottish home a line
+     about it is never a defect, whatever the document or the reader says.
+     The reader is told this too, but is not relied on. */
+  const dropped = pack.scottish ? read.outstandingDefects.filter((d) => RIGHT_TO_RENT.test(d)) : [];
+  const facts = dropped.length
+    ? { ...read, outstandingDefects: read.outstandingDefects.filter((d) => !dropped.includes(d)) }
+    : read;
   const specific = CHECK_RULES[checkId];
   const reasons = [
     ...universal(checkId, facts, moveInDate),
-    ...(specific ? specific(facts, moveInDate) : []),
+    ...(specific ? specific(facts, moveInDate, pack) : []),
   ];
+  if (dropped.length) {
+    reasons.push({
+      verdict: "pass",
+      rule: "Scottish home",
+      because: "Right to Rent does not apply in Scotland, so the right to rent lines on it were left out.",
+    });
+  }
   /* No rules for this check at all means REVIEW, not PASS. A check that has
      not been thought about must never look like one that has been cleared. */
   if (!specific) {
