@@ -239,6 +239,10 @@ export default function ComplianceDrawer({
               <a href={`/portfolio/home/${encodeURIComponent(p.id)}?name=${encodeURIComponent([p.name, p.locality].filter(Boolean).join(", "))}&tab=compliance`} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold hover:border-ink">
                 <DoodleIcon name="pack/house" size={12} />Property page
               </a>
+              {/* James, 20 Oct 2026: the certificates to the tenants by email, kept on the record. */}
+              <a href={`/portfolio/home/${encodeURIComponent(p.id)}?name=${encodeURIComponent([p.name, p.locality].filter(Boolean).join(", "))}&tab=compliance&email=certificates`} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold hover:border-ink">
+                <DoodleIcon name="mail" size={12} />Email Certificates
+              </a>
               <SaveChip scope={saves} />
               <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">
                 ✕

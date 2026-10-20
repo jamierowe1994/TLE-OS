@@ -8,6 +8,7 @@ import { openDocument } from "@/lib/doc-sheet";
 import PropertyAnswers from "@/components/PropertyAnswers";
 import { useSaveReporter } from "@/components/SaveChip";
 import { CHOICES, eicExpiry, type EicReason } from "@/lib/home-facts-shared";
+import SendRecord, { stamp } from "@/components/portfolio/SendRecord";
 
 /**
  * The property file: one panel, the same wherever a home is opened.
@@ -34,6 +35,8 @@ interface Answer {
   checked: boolean;
   match: { verdict: "confident" | "check" | "no match"; how: string; targets: Candidate[]; possible: Candidate[] } | null;
   rows: Row[];
+  /** The latest send of each file to tenants, by R2 key (lib/home-send stampsFor). */
+  sent?: Record<string, { sendId: string; at: string; by: string; to: string[] }>;
   outstanding: number;
   checking?: number;
   error?: string;
@@ -157,6 +160,7 @@ export default function PropertyFile({
      toast: "the tenant has no email address on the record" is a finding
      somebody has to act on, and it must not slide away after four seconds. */
   const [went, setWent] = useState<string | null>(null);
+  const [record, setRecord] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const forType = useRef<string | null>(null);
 
@@ -520,6 +524,17 @@ export default function PropertyFile({
                           <span className="min-w-0 truncate">{f.name}</span>
                           <span className="ml-auto shrink-0 text-[11px] text-muted">{i === 0 ? "Open" : "Earlier"}</span>
                         </button>
+                        {/* Who it went to (Email Certificates, 20 Oct 2026): the stamp, and the record behind it. */}
+                        {data.sent?.[f.key] && (() => {
+                          const st = data.sent[f.key];
+                          const names = st.to.length > 2 ? `${st.to.slice(0, 2).join(", ")} and ${st.to.length - 2} more` : st.to.join(" and ");
+                          return (
+                            <button type="button" onClick={() => setRecord(st.sendId)} className="ml-2 mt-0.5 flex items-start gap-1.5 rounded-md px-1.5 py-0.5 text-left text-[11.5px] text-[#3f5a2c] hover:bg-box">
+                              <DoodleIcon name="mail" size={12} className="mt-[2px] shrink-0" />
+                              <span>Sent to {names}, {stamp(st.at)} by {st.by} <span className="text-muted underline underline-offset-2">Record</span></span>
+                            </button>
+                          );
+                        })()}
                       </li>
                     ))}
                     {r.files.length > 1 && (
@@ -549,6 +564,7 @@ export default function PropertyFile({
       <div className="mt-5">
         <PropertyAnswers propertyId={effectiveId ?? null} address={address ?? null} />
       </div>
+      {record && <SendRecord id={record} onClose={() => setRecord(null)} />}
     </section>
   );
 }

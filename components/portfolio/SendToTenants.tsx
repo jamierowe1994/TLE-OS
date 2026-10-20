@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
+import SendRecord from "@/components/portfolio/SendRecord";
 
 /**
  * SEND TO TENANTS (Josel Banagua, 20 Oct 2026; lib/home-send).
@@ -17,10 +18,16 @@ import { PressButton } from "@/components/Bits";
  *                  with compliance for its check, is shown and can't be.
  *   2. Tenants     everyone living there, ticked; on a shared house, every
  *                  room. Nobody without an email can be ticked.
- *   3. Check       who gets what (a room's own papers only to that room), a
- *                  note of your own, and the email itself. Then Send.
+ *   3. Check       who gets what (a room's own papers only to that room),
+ *                  the subject and the words, both editable (James, 20 Oct
+ *                  2026, Email Certificates: "it'll bring up an email which is
+ *                  editable"), and the email itself as each tenant gets it.
+ *                  Then Send.
  *
  * Nothing goes until Send is pressed, and Send says what happened to each.
+ * Every email is kept as it went, with each file's fingerprint (View Record).
+ * Opened from the Compliance tab it is "Email Certificates": the same screens,
+ * with the in-date certificates ticked to start with.
  */
 
 type Doc = {
@@ -33,7 +40,7 @@ type Info = {
   via: "mailbox" | "ours"; sender: string;
 };
 type Preview = {
-  subject: string; to: string; name: string; html: string;
+  subject: string; to: string; name: string; html: string; defaults: { subject: string; message: string };
   attachments: { label: string; name: string; sizeBytes: number | null }[];
   perTenant: { key: string; name: string; email: string | null; where: string | null; documents: string[] }[];
 };
@@ -47,6 +54,7 @@ export default function SendToTenants({
   listing,
   listings,
   title,
+  heading = "Send to Tenants",
   start = null,
   onClose,
   onSent,
@@ -54,6 +62,8 @@ export default function SendToTenants({
   listing: string;
   listings: string[];
   title: string;
+  /** "Email Certificates" from the Compliance tab, "Send to Tenants" from Documents. */
+  heading?: string;
   /** Opened from one document's row: that one ticked to start with. */
   start?: string | null;
   onClose: () => void;
@@ -64,7 +74,12 @@ export default function SendToTenants({
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [docs, setDocs] = useState<Set<string>>(new Set());
   const [who, setWho] = useState<Set<string>>(new Set());
-  const [note, setNote] = useState("");
+  /* The subject and words: null until edited, so the defaults follow what is ticked. */
+  const [subject, setSubject] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [defaults, setDefaults] = useState<{ subject: string; message: string } | null>(null);
+  const [recordId, setRecordId] = useState<string | null>(null);
+  const [showRecord, setShowRecord] = useState(false);
   const [preview, setPreview] = useState<Preview | "loading" | null>(null);
   const [previewFor, setPreviewFor] = useState<string | null>(null);
   const [previewErr, setPreviewErr] = useState<string | null>(null);
@@ -98,7 +113,7 @@ export default function SendToTenants({
   const pickedDocs = useMemo(() => (info ? info.documents.filter((d) => docs.has(d.id)) : []), [info, docs]);
   const pickedTenants = useMemo(() => (info ? info.tenants.filter((t) => t.email && who.has(t.key)) : []), [info, who]);
 
-  /* Step 3 draws the email for one tenant at a time, and redraws when the note settles. */
+  /* Step 3 draws the email for one tenant at a time, and redraws when the words settle. */
   useEffect(() => {
     if (step !== 3 || !info || !pickedDocs.length || !pickedTenants.length) return;
     let live = true;
@@ -108,18 +123,18 @@ export default function SendToTenants({
       fetch("/api/portfolio/send-to-tenants", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode: "preview", listing, listings, documents: [...docs], tenants: pickedTenants.map((x) => x.key), note, previewFor: previewFor ?? pickedTenants[0].key }),
+        body: JSON.stringify({ mode: "preview", listing, listings, documents: [...docs], tenants: pickedTenants.map((x) => x.key), subject, message, previewFor: previewFor ?? pickedTenants[0].key }),
       })
         .then((r) => r.json())
         .then((j) => {
           if (!live) return;
-          if (j?.ok) setPreview(j as Preview);
+          if (j?.ok) { setPreview(j as Preview); setDefaults((j as Preview).defaults ?? null); }
           else { setPreview(null); setPreviewErr(j?.error ?? "The email couldn't be drawn."); }
         })
         .catch(() => { if (live) { setPreview(null); setPreviewErr("The email couldn't be drawn. Try again in a minute."); } });
-    }, note ? 450 : 0);
+    }, subject != null || message != null ? 450 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [step, note, previewFor, docs, pickedTenants.map((x) => x.key).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, subject, message, previewFor, docs, pickedTenants.map((x) => x.key).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function send() {
     if (sending || !info) return;
@@ -128,11 +143,12 @@ export default function SendToTenants({
     const j = await fetch("/api/portfolio/send-to-tenants", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode: "send", listing, listings, documents: [...docs], tenants: pickedTenants.map((x) => x.key), note }),
+      body: JSON.stringify({ mode: "send", listing, listings, documents: [...docs], tenants: pickedTenants.map((x) => x.key), subject, message }),
     }).then((x) => x.json()).catch(() => null);
     setSending(false);
     if (!j?.ok) { setSendErr(j?.error ?? "That couldn't be sent just now. Try again in a minute."); return; }
     setResults(j.results ?? []);
+    setRecordId(typeof j.record === "string" ? j.record : null);
     onSent?.();
   }
 
@@ -146,10 +162,10 @@ export default function SendToTenants({
       <div className="fade-up relative w-full max-w-[760px] rounded-2xl border border-line/70 bg-page p-5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)] sm:p-8">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-[22px] font-normal leading-tight">Send to Tenants</h2>
+            <h2 className="text-[22px] font-normal leading-tight">{heading}</h2>
             <p className="mt-1 text-[12.5px] text-muted">{info?.title || title}</p>
           </div>
-          <button type="button" onClick={() => !sending && onClose()} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
+          <button type="button" onClick={() => !sending && onClose()} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-muted hover:text-ink"><DoodleIcon name="cross" size={13} /></button>
         </div>
 
         {!results && (
@@ -174,7 +190,7 @@ export default function SendToTenants({
         ) : !info ? (
           <p className="flex items-center gap-2 text-[12.5px] text-muted"><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" />Reading the documents and tenants…</p>
         ) : results ? (
-          <Results results={results} onClose={onClose} />
+          <Results results={results} onClose={onClose} onRecord={recordId ? () => setShowRecord(true) : null} />
         ) : step === 1 ? (
           <>
             <p className="text-[12.5px] leading-relaxed">Tick what to send. Each tenant gets one email from you with the documents attached. References, ID, right to rent papers, the landlord&apos;s papers and invoices are never offered here.</p>
@@ -272,11 +288,24 @@ export default function SendToTenants({
               </ul>
             )}
 
-            <label className="mt-3 block text-[12px] font-semibold">
-              A note of your own <span className="font-normal text-muted">(optional, goes under the list)</span>
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={2000} placeholder="Here is the new gas safety certificate after Tuesday's visit."
-                className="mt-1 block w-full resize-y rounded-xl border border-line/80 bg-white px-3 py-2 text-[12.5px] font-normal outline-none focus:border-ink" />
-            </label>
+            <div className="mt-3 rounded-xl border border-line/50 bg-white p-3">
+              <label className="block text-[12px] font-semibold">
+                Subject
+                <input value={subject ?? defaults?.subject ?? ""} onChange={(e) => setSubject(e.target.value)} maxLength={200} disabled={!defaults}
+                  className="mt-1 block w-full rounded-xl border border-line/80 bg-white px-3 py-2 text-[12.5px] font-normal outline-none focus:border-ink disabled:bg-box" />
+              </label>
+              <label className="mt-2.5 block text-[12px] font-semibold">
+                The email <span className="font-normal text-muted">(change anything you like)</span>
+                <textarea value={message ?? defaults?.message ?? ""} onChange={(e) => setMessage(e.target.value)} rows={6} maxLength={4000} disabled={!defaults}
+                  className="mt-1 block w-full resize-y rounded-xl border border-line/80 bg-white px-3 py-2 text-[12.5px] font-normal leading-relaxed outline-none focus:border-ink disabled:bg-box" />
+              </label>
+              <p className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted">
+                <span>Each email starts &ldquo;Hi&rdquo; and their first name, lists what is attached, and ends with your name.</span>
+                {(subject != null || message != null) && (
+                  <button type="button" onClick={() => { setSubject(null); setMessage(null); }} className="font-semibold text-accent-dark underline-offset-2 hover:underline">Back to the Standard Wording</button>
+                )}
+              </p>
+            </div>
 
             <div className="mt-3 rounded-xl border border-line/50 bg-white p-3">
               {pickedTenants.length > 1 && (
@@ -321,11 +350,12 @@ export default function SendToTenants({
           </>
         )}
       </div>
+      {showRecord && recordId && <SendRecord id={recordId} onClose={() => setShowRecord(false)} />}
     </div>
   );
 }
 
-function Results({ results, onClose }: { results: Result[]; onClose: () => void }) {
+function Results({ results, onClose, onRecord }: { results: Result[]; onClose: () => void; onRecord: (() => void) | null }) {
   const sent = results.filter((r) => r.sent);
   return (
     <div>
@@ -340,8 +370,11 @@ function Results({ results, onClose }: { results: Result[]; onClose: () => void 
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-[11.5px] text-muted">Kept on the home&apos;s activity, so anyone can see what went and to whom.</p>
-      <PressButton onClick={onClose} className="mt-4 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">Done</PressButton>
+      <p className="mt-3 text-[11.5px] text-muted">Kept for good on the home&apos;s activity and against each certificate: who sent it, when, to which address, the email exactly as it went, and a fingerprint of every file.</p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <PressButton onClick={onClose} className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">Done</PressButton>
+        {onRecord && <button type="button" onClick={onRecord} className="text-[12.5px] font-semibold text-accent-dark underline-offset-2 hover:underline">View Record</button>}
+      </div>
     </div>
   );
 }

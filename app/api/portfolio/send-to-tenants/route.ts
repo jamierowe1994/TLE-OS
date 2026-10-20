@@ -5,7 +5,7 @@ import { msConnectionFor } from "@/lib/microsoft";
 import { footerFor, footerPreviewHtml, withFooter } from "@/lib/email-footer";
 import { sameSite } from "@/lib/email/preview-origin";
 import { publicOrigin } from "@/lib/origin";
-import { docsForTenant, emailFor, forScreen, homeContext, isRefusal, sendableDocs, sendsFor, sendToTenants, tenantsOf } from "@/lib/home-send";
+import { AlreadySending, defaultsFor, docsForTenant, emailFor, forScreen, homeContext, isRefusal, sendableDocs, sendRecord, sendsFor, sendToTenants, tenantsOf } from "@/lib/home-send";
 
 /**
  * Send to tenants (Josel Banagua, 20 Oct 2026; lib/home-send).
@@ -14,9 +14,14 @@ import { docsForTenant, emailFor, forScreen, homeContext, isRefusal, sendableDoc
  *                                         sitting tenants, how it would go,
  *                                         and what has gone before
  *       &history=1                       only what has gone before
- *   POST { listing, listings, documents: [id], tenants: [key], note, mode }
- *        mode "preview" + previewFor: the email that tenant would get
- *        mode "send": one email each, documents attached
+ *   GET  ?record=<send id>               the legal record of one send: every
+ *                                         email exactly as it went, each file's
+ *                                         SHA-256, the provider's id. Only for
+ *                                         somebody whose book holds the home.
+ *   POST { listing, listings, documents: [id], tenants: [key], subject, message, mode }
+ *        mode "preview" + previewFor: the email that tenant would get, and
+ *                        the default subject and words when none are given
+ *        mode "send": one email each, documents attached, written down as it goes
  *
  * The home must be in the person's book (the office's is the whole business).
  * Nothing goes while viewing as somebody, or from a test home.
@@ -30,6 +35,15 @@ const list = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) :
 export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
+    const recordId = (sp.get("record") ?? "").trim();
+    if (recordId) {
+      const rec = await sendRecord(recordId);
+      if (!rec) return NextResponse.json({ ok: false, error: "That record isn't here." }, { status: 404 });
+      /* The same gate as the home's page: the home must be in your book. */
+      const gate = await homeContext(req, rec.listingId, []);
+      if (isRefusal(gate)) return NextResponse.json({ ok: false, error: gate.error }, { status: gate.status });
+      return NextResponse.json({ ok: true, record: rec });
+    }
     const ctx = await homeContext(req, (sp.get("listing") ?? "").trim(), list(sp.get("listings")));
     if (isRefusal(ctx)) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
     /* ?history=1: only what has gone before, for the home's activity. */
@@ -73,7 +87,7 @@ export async function POST(req: NextRequest) {
     const wantTenants = new Set(list(b?.tenants));
     const docs = (await sendableDocs(ctx)).filter((d) => wantDocs.has(d.id));
     const tenants = tenantsOf(ctx).filter((t) => wantTenants.has(t.key));
-    const note = String(b?.note ?? "").slice(0, 2000);
+    const edit = { subject: typeof b?.subject === "string" ? b.subject : null, message: typeof b?.message === "string" ? b.message : null };
     if (!docs.length) return NextResponse.json({ ok: false, error: "Tick at least one document." }, { status: 400 });
     if (docs.every((d) => d.blocked)) return NextResponse.json({ ok: false, error: docs[0].blocked ?? "None of those can be sent." }, { status: 400 });
     if (!tenants.length) return NextResponse.json({ ok: false, error: "Tick at least one tenant." }, { status: 400 });
@@ -81,13 +95,14 @@ export async function POST(req: NextRequest) {
     if (mode === "preview") {
       const who = tenants.find((t) => t.key === String(b?.previewFor ?? "")) ?? tenants[0];
       const mine = docsForTenant(docs, who);
-      const { subject, html } = await emailFor(ctx, who, mine.length ? mine : docs.filter((d) => !d.blocked), note);
+      const { subject, html } = await emailFor(ctx, who, mine.length ? mine : docs.filter((d) => !d.blocked), edit);
       const [mailboxArmed, conn] = await Promise.all([switchOn("assistant_email"), msConnectionFor(ctx.me.id).catch(() => ({ connected: false }))]);
       const f = mailboxArmed && conn.connected ? await footerFor(ctx.me.id).catch(() => null) : null;
       const shown = sameSite(html, publicOrigin(req));
       return NextResponse.json({
         ok: true,
         subject,
+        defaults: defaultsFor(ctx, docs),
         to: who.email ?? "",
         name: who.name,
         html: f ? withFooter(shown, { ...f, html: footerPreviewHtml(f) }) : shown,
@@ -96,9 +111,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { results } = await sendToTenants(ctx, docs, tenants, note);
-    return NextResponse.json({ ok: true, sent: results.filter((r) => r.sent).length, results });
+    const { results, id } = await sendToTenants(ctx, docs, tenants, edit);
+    return NextResponse.json({ ok: true, sent: results.filter((r) => r.sent).length, results, record: id });
   } catch (e) {
+    if (e instanceof AlreadySending) return NextResponse.json({ ok: false, error: e.message }, { status: 409 });
     return NextResponse.json({ ok: false, error: publicError(e, "That couldn't be sent just now. Try again in a minute.") }, { status: 500 });
   }
 }

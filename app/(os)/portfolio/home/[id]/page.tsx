@@ -25,12 +25,14 @@ export default function FindHome() {
     const sp = new URLSearchParams(window.location.search);
     const name = sp.get("name") ?? "";
     const tab = sp.get("tab") ?? "";
+    /* Email Certificates from the compliance drawer opens the send on arrival. */
+    const email = sp.get("email") === "certificates" ? "&email=certificates" : "";
     setName(name);
     fetch(`/api/portfolio/find?id=${encodeURIComponent(id)}${name ? `&name=${encodeURIComponent(name)}` : ""}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (!live) return;
-        if (j?.ok && j.listingId) router.replace(`/portfolio/${encodeURIComponent(j.listingId)}${tab ? `?tab=${encodeURIComponent(tab)}` : ""}`);
+        if (j?.ok && j.listingId) router.replace(`/portfolio/${encodeURIComponent(j.listingId)}${tab ? `?tab=${encodeURIComponent(tab)}${email}` : email ? `?${email.slice(1)}` : ""}`);
         else setError(j?.error ?? "This home couldn't be found.");
       })
       .catch(() => live && setError("This home couldn't be found just now. Try again in a minute."));

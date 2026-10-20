@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { stampsFor } from "@/lib/home-send";
 import { londonToday } from "@/lib/london-clock";
 import { whoIs } from "@/lib/admin";
 import { getComplianceItemsFor, type ComplianceItem } from "@/lib/business/rex-stats";
@@ -258,8 +259,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  /* Who each file has gone to (Email Certificates, lib/home-send): the line
+     under a certificate that says when the tenants were sent it, and by whom. */
+  const sent = await stampsFor(rows.flatMap((r) => r.files.map((f) => f.key))).catch(() => ({}));
+
   return NextResponse.json({
     ok: true,
+    sent,
     live: rexConfigured(),
     propertyId,
     pendingKey: propertyId ? null : pendingKey,

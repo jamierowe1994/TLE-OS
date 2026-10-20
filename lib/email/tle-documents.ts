@@ -1670,9 +1670,12 @@ export const TENANT_DOCUMENTS = {
   mode: "blocks",
   blocks: [
     H("tdc1", "Documents for Your Home"),
-    T("tdc2", "Hi {{firstName}},<br><br>Here are your copies of these documents for <strong>{{address}}</strong>. They're attached to this email."),
+    T("tdc2", "Hi {{firstName}},"),
+    /* The sender's own words (20 Oct 2026, Email Certificates): the box on
+       the send screen is filled with the default in lib/home-send
+       defaultMessage and whatever they change it to goes here, escaped. */
+    T("tdc4", "{{messageHtml}}"),
     T("tdc3", "{{docList}}"),
-    T("tdc5", "Please keep them with your tenancy papers. If anything won't open, reply to this email and we'll send it another way."),
     T("tdc6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("tdc7", "You're getting this because you rent your home through The Letting Experts."),
   ],

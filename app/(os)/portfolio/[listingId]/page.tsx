@@ -44,6 +44,7 @@ import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
 import PastTenancies from "@/components/portfolio/PastTenancies";
 import PastTenantPeople from "@/components/portfolio/PastTenantPeople";
 import SendToTenants from "@/components/portfolio/SendToTenants";
+import SendRecord from "@/components/portfolio/SendRecord";
 import RecordFiles from "@/components/portfolio/RecordFiles";
 import FileDocuments from "@/components/FileDocuments";
 import RecordPastVisit from "@/components/inspections/RecordPastVisit";
@@ -187,8 +188,11 @@ export default function PropertyPage() {
   }, []);
   useEffect(() => {
     try {
-      const t = new URLSearchParams(window.location.search).get("tab");
+      const sp = new URLSearchParams(window.location.search);
+      const t = sp.get("tab");
       if (t && TABS.some((x) => x.id === t)) setTab(t as Tab);
+      /* ?email=certificates (the compliance drawer's Email Certificates) opens it straight away. */
+      if (sp.get("email") === "certificates") setSendOpen({ start: null, heading: "Email Certificates" });
       const o = JSON.parse(sessionStorage.getItem(ORDER_KEY) ?? "[]");
       if (Array.isArray(o)) setOrder(o.map(String));
     } catch { /* fine */ }
@@ -240,7 +244,7 @@ export default function PropertyPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || showAll || showLogins || sendOpen || lightbox != null) return;
+      if (action || openJob || showAll || showLogins || sendOpen || recordOpen || lightbox != null) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -352,7 +356,9 @@ export default function PropertyPage() {
   /* Send to tenants (Josel, 20 Oct 2026, lib/home-send): certificates and
      documents by email, from whoever presses. Each press is kept and shows
      in the latest activity. The lets are the room, or every let of the house. */
-  const [sendOpen, setSendOpen] = useState<{ start: string | null } | null>(null);
+  const [sendOpen, setSendOpen] = useState<{ start: string | null; heading?: string } | null>(null);
+  /* The record of one send (Email Certificates, 20 Oct 2026): from the activity. */
+  const [recordOpen, setRecordOpen] = useState<string | null>(null);
   const [sends, setSends] = useState<{ id: string; at: string; by: string; documents: string[]; results: { sent: boolean }[] }[]>([]);
   const sendListings = useMemo(() => (p ? (roomP ? [roomP] : house ? house.members : [p]).map((x) => String(x.listingId)) : []), [p, roomP, house]);
   const loadSends = useCallback(() => {
@@ -639,7 +645,7 @@ export default function PropertyPage() {
   }
   for (const x of sends) {
     const went = x.results.filter((r) => r.sent).length;
-    activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `Sent to tenants · ${x.documents.join(", ")}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => pickTab("documents") });
+    activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `Sent to tenants · ${x.documents.join(", ")}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => setRecordOpen(x.id) });
   }
   if (drafts.state === "ready") {
     for (const d of drafts.data) {
@@ -826,8 +832,9 @@ export default function PropertyPage() {
                 />
                 {/* Sean McMahon, 16 Oct 2026: tenants report repairs in their portal, as Fixflow had them do. */}
                 <button type="button" disabled={p.test || !loginListings.length} onClick={() => setShowLogins(true)} className={tile}>{tileIcon("mail")}{tileText("Send out logins", "Tenant account, to report repairs")}</button>
-                {/* Josel, 20 Oct 2026: certificates and documents to the tenants, from here. */}
-                <button type="button" disabled={p.test || !loginListings.length} onClick={() => setSendOpen({ start: null })} className={tile}>{tileIcon("folder")}{tileText("Send to tenants", "Certificates and documents, by email")}</button>
+                {/* Josel, 20 Oct 2026: certificates and documents to the tenants, from here.
+                    James, same day: called Email Certificates, the in-date ones ticked. */}
+                <button type="button" disabled={p.test || !loginListings.length} onClick={() => setSendOpen({ start: null, heading: "Email Certificates" })} className={tile}>{tileIcon("mail")}{tileText("Email Certificates", "To the tenants, kept on the record")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 <button type="button" disabled={p.test} onClick={() => { pickTab("documents"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("folder")}{tileText("Add a document", "An inventory, an agreement, anything else")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("notes"); setTimeout(() => { document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }); document.getElementById("home-note")?.focus({ preventScroll: true }); }, 60); }} className={tile}>{tileIcon("note")}{tileText("Add a note", "A call, an email, a query")}</button>
@@ -1040,7 +1047,7 @@ export default function PropertyPage() {
             {tab === "compliance" && (
               <div className="mt-4 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
                 {!p.test && loginListings.length > 0 && (
-                  <SendBar onSend={() => setSendOpen({ start: null })} what="this home's certificates" />
+                  <SendBar onSend={() => setSendOpen({ start: null, heading: "Email Certificates" })} what="this home's certificates" label="Email Certificates" />
                 )}
                 {houseView && house && !house.house && !lets && (
                   <p className="mb-2 text-[11.5px] text-muted">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
@@ -1149,7 +1156,7 @@ export default function PropertyPage() {
             {tab === "documents" && (
               <section className="mt-4">
                 {!p.test && loginListings.length > 0 && (
-                  <SendBar onSend={() => setSendOpen({ start: null })} what="this home's certificates and documents" />
+                  <SendBar onSend={() => setSendOpen({ start: null })} what="this home's certificates and documents" label="Send to Tenants" />
                 )}
                 {/* The home's documents (lib/file-documents): what Kirstie added
                     on the deal and the agent on the listing or application for
@@ -1257,11 +1264,13 @@ export default function PropertyPage() {
           listing={String(p.listingId)}
           listings={loginListings}
           title={roomP ? `${roomLabel(roomP)}, ${title}` : title}
+          heading={sendOpen.heading}
           start={sendOpen.start}
           onClose={() => setSendOpen(null)}
           onSent={loadSends}
         />
       )}
+      {recordOpen && <SendRecord id={recordOpen} onClose={() => setRecordOpen(null)} />}
       {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
       {action?.kind === "tenant-notice" && propertyId && (
         <Modal onClose={closeAction} title="Tenant gave notice">
@@ -1309,12 +1318,12 @@ export default function PropertyPage() {
 /* ── small pieces ─────────────────────────────────────────────────────── */
 
 /* Above the certificates and the documents: send them on from here. */
-function SendBar({ onSend, what }: { onSend: () => void; what: string }) {
+function SendBar({ onSend, what, label }: { onSend: () => void; what: string; label: string }) {
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/60 bg-white px-4 py-3">
-      <p className="min-w-0 text-[12.5px] text-muted">Email the tenants {what}, from you. You pick the files and the people, and see the email before it goes.</p>
+      <p className="min-w-0 text-[12.5px] text-muted">Email the tenants {what}, from you. You pick the files and the people, edit the email before it goes, and each send is kept on the record.</p>
       <button type="button" onClick={onSend} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page">
-        <DoodleIcon name="mail" size={13} />Send to tenants
+        <DoodleIcon name="mail" size={13} />{label}
       </button>
     </div>
   );

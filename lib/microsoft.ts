@@ -346,6 +346,9 @@ export interface GraphSend {
   rexUserId?: string | null;
   /** Files to go with it, base64 - a viewing's calendar file, say. */
   attachments?: { filename: string; content: string; contentType?: string }[];
+  /** Extra headers, "x-" ones only (Graph refuses any other): a send's own record id, so the
+   *  copy in their Sent Items, and any reply quoting it, can be matched back to it. */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -387,6 +390,9 @@ export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd
         toRecipients: [{ emailAddress: { address: msg.to.email, name: msg.to.name } }],
         ...(msg.cc?.length ? { ccRecipients: msg.cc.map((c) => ({ emailAddress: { address: c.email, name: c.name } })) } : {}),
         ...(bcc ? { bccRecipients: [{ emailAddress: { address: bcc } }] } : {}),
+        ...(msg.headers && Object.keys(msg.headers).length
+          ? { internetMessageHeaders: Object.entries(msg.headers).filter(([k]) => /^x-/i.test(k)).map(([name, value]) => ({ name, value })) }
+          : {}),
         /* Graph wants the type named on every attachment, and the bytes inline.
            Fine for what we send here - a calendar file is under a kilobyte.
            Anything over 3MB needs an upload session, which nothing does yet. */

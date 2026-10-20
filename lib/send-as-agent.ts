@@ -51,6 +51,8 @@ export interface AgentSend {
   html: string;
   /** Base64, as Resend wants it. A viewing's calendar file. */
   attachments?: { filename: string; content: string; contentType?: string }[];
+  /** "X-" headers carried on either road: a send's own record id (lib/home-send). */
+  headers?: Record<string, string>;
 }
 
 export interface AgentSendResult {
@@ -71,6 +73,8 @@ export interface AgentSendResult {
    * send answered, without anybody opening REX.
    */
   timeline: boolean;
+  /** Resend's id for the message on our sender. Graph's sendMail returns none, so a mailbox send has null. */
+  messageId?: string | null;
 }
 
 export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
@@ -103,12 +107,14 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
           body: p.html,
           rexUserId: p.me.rexUserId,
           attachments: p.attachments,
+          headers: p.headers,
         });
         await archiveSentCopy(to, p.subject, p.html).catch(() => null);
         return {
           sent: true,
           via: "mailbox",
           timeline: bccd,
+          messageId: null,
           detail: `Sent to ${to} from your Outlook, so their reply comes back to you.`,
         };
       }
@@ -123,8 +129,8 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
   }
 
   try {
-    await sendEmail({ to, subject: p.subject, html: p.html, audience: "customer", replyTo: p.me.email || undefined, attachments: p.attachments });
-    return { sent: true, via: "ours", timeline: false, detail: `Sent to ${to} from The Letting Experts, with your address to reply to.` };
+    const { id } = await sendEmail({ to, subject: p.subject, html: p.html, audience: "customer", replyTo: p.me.email || undefined, attachments: p.attachments, headers: p.headers });
+    return { sent: true, via: "ours", timeline: false, messageId: id, detail: `Sent to ${to} from The Letting Experts, with your address to reply to.` };
   } catch (e) {
     return {
       sent: false,

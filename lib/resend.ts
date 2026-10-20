@@ -164,6 +164,8 @@ export async function sendEmail(msg: {
    * else: the sending lock, the sender and the archive all still apply.
    */
   oneOff?: OneOffSend;
+  /** Extra headers, "X-" ones only: a send's own record id (lib/home-send), so the copy can be matched to it later. */
+  headers?: Record<string, string>;
 }): Promise<SendResult> {
   const audience: Audience = msg.audience ?? "internal";
   if (!process.env.RESEND_API_KEY) {
@@ -235,6 +237,7 @@ export async function sendEmail(msg: {
       ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),
       ...(cc.length ? { cc } : {}),
       ...(msg.attachments?.length ? { attachments: msg.attachments } : {}),
+      ...(msg.headers && Object.keys(msg.headers).length ? { headers: Object.fromEntries(Object.entries(msg.headers).filter(([k]) => /^x-/i.test(k))) } : {}),
     }),
     signal: AbortSignal.timeout(20_000),
   });

@@ -1581,13 +1581,14 @@ TLE_EMAILS.push(
   tenantEntry(
     "tenant-documents",
     "Documents for Your Home",
-    "Somebody presses Send to tenants on a home's page",
+    "Somebody presses Email Certificates or Send to Tenants on a home's page",
     "Wired 20 Oct 2026. lib/home-send sendToTenants, from Send to tenants on /portfolio/<listing> after the documents, the tenants and the preview. From the person who pressed it, their Outlook where that is connected. A press, not a timer, so it needs customer email only, not the Automatic tenant emails switch.",
     "Each tenant ticked, with only the documents for their own room on a shared house",
-    "Their copies attached, a list of what is attached, the sender's own note if they wrote one, and to reply if a file won't open.",
+    "Their copies attached, the sender's own message (edited on the send screen; the default says to keep them with their tenancy papers and reply if a file won't open), and a list of what is attached with each certificate's end date.",
     TENANT_DOCUMENTS,
     {
       address: "Flat 2, 14 Ruskin Place, Glasgow",
+      messageHtml: "Here are your copies of the certificates for <strong>Flat 2, 14 Ruskin Place, Glasgow</strong>. They're attached to this email.<br><br>Please keep them with your tenancy papers. If anything won't open, reply to this email and we'll send it another way.",
       docList: "<ul style=\"margin:0;padding-left:18px\"><li>Gas safety (CP12), runs to 12 March 2027</li><li>EICR, runs to 4 June 2029</li><li>Energy Performance Certificate</li></ul>",
     }
   ),
