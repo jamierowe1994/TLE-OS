@@ -72,11 +72,11 @@ type Spec = {
  */
 export const AI_FEATURES: Record<AiFeature, Spec> = {
   steve: { label: "Steve (chat)", key: "STEVE", model: "claude-opus-5-5", effort: "medium" },
-  "steve-brief": { label: "Steve's morning brief", key: "STEVE_BRIEF", model: "claude-opus-5-5", effort: "low" },
-  "knowledge-links": { label: "Steve reading links", key: "KNOWLEDGE_LINKS", model: "claude-opus-5-5", effort: "low" },
-  "library-reader": { label: "Marketing library reader", key: "LIBRARY_READER", model: "claude-sonnet-5-5", effort: "low" },
-  "plc-scan": { label: "PLC document check", key: "PLC_SCAN", model: "claude-opus-5-5", effort: "medium" },
-  "plc-sorter": { label: "PLC file sorter", key: "PLC_SORTER", model: "claude-haiku-5-5", effort: "low", legacy: "PLC_SORTER_MODEL" },
+  "steve-brief": { label: "Steve's morning brief", key: "STEVE_BRIEF", model: "claude-haiku-5-5", effort: "low" },
+  "knowledge-links": { label: "Steve reading links", key: "KNOWLEDGE_LINKS", model: "claude-haiku-5-5", effort: "low" },
+  "library-reader": { label: "Marketing library reader", key: "LIBRARY_READER", model: "claude-sonnet-5-5", effort: "high" },
+  "plc-scan": { label: "PLC document check", key: "PLC_SCAN", model: "claude-sonnet-5-5", effort: "medium" },
+  "plc-sorter": { label: "PLC file sorter", key: "PLC_SORTER", model: "claude-sonnet-5-5", effort: "low", legacy: "PLC_SORTER_MODEL" },
   "cert-reader": { label: "Certificate reader", key: "CERT_READER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },
   "cert-register": { label: "Engineer register reader", key: "CERT_REGISTER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },
   "epc-reader": { label: "EPC reader", key: "EPC_READER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },
@@ -211,7 +211,14 @@ async function send(client: Anthropic, body: Anthropic.MessageCreateParamsNonStr
     res = await client.messages.create(body);
   }
   void logUsage(feature, res);
+  for (const fn of listeners) fn(feature, res);
   return res;
+}
+
+const listeners: Array<(feature: AiFeature, res: Anthropic.Message) => void> = [];
+/** Every response as it arrives - for scripts/ai-compare to count what a run cost. */
+export function onAiResponse(fn: (feature: AiFeature, res: Anthropic.Message) => void) {
+  listeners.push(fn);
 }
 
 function called(res: Anthropic.Message, name: string): boolean {

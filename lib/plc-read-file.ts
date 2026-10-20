@@ -17,8 +17,10 @@ import { PLC_CHECKS, type CheckId, type FileRead, type PlcDocument } from "@/lib
  *
  * This is NOT the scan. The scan still runs when the pack is sent, with the
  * bigger model, against the move-in date, and its findings are what the
- * compliance team read. This only sorts the pile, so it is the small model:
- * a folder can be twenty files and the agent is watching it happen.
+ * compliance team read. This only sorts the pile, so it is a quick read:
+ * a folder can be twenty files and the agent is watching it happen. Sonnet
+ * rather than Haiku since 20 Oct 2026: Haiku 5.5 filed a guarantor's
+ * reference as a tenant's, three times out of three (docs/AI-MODELS.md).
  */
 
 

@@ -513,7 +513,9 @@ WHAT MUST NOT HAPPEN.
 - Never name a data supplier, a print house or a lookup provider. Say "the owner lookup", "the Land Registry", "the postcard".
 - Never say you have done something. You read and you write drafts; the rooms act, and the person presses the button. "Here is the letter, paste it into the step in Campaigns" not "I have sent it".
 - Do not give legal advice. For anything about the law say what Bond knows in a line and suggest they check with the office.
-- If a question is about the OS rather than Bond (tenancies, compliance, REX), say Steve in the corner of the OS is the one for that.`;
+- If a question is about the OS rather than Bond (tenancies, compliance, REX), say Steve in the corner of the OS is the one for that.
+
+YOUR ANSWER GOES LAST. The person sees only what you write after your final tool call. Anything written before or between tool calls is hidden from them, so once you have looked things up, put the whole answer in that last message.`;
 
 function systemBlocks(): Anthropic.TextBlockParam[] {
   return [{ type: "text", text: PERSONA, cache_control: { type: "ephemeral" } }];
@@ -566,6 +568,7 @@ export async function ask(history: Turn[], question: string, ctx: AskContext): P
   let inTokens = 0;
   let outTokens = 0;
   let spent = 0;
+  let spoken = "";
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const left = b.left - spent;
@@ -587,8 +590,12 @@ export async function ask(history: Turn[], question: string, ctx: AskContext): P
       return { text: "I cannot help with that one.", steps, inTokens, outTokens, canned: false };
     }
     const calls = res.content.filter((c): c is Anthropic.ToolUseBlock => c.type === "tool_use");
+    /* Opus 5.5 hands text written before a tool call back hidden; keep the
+       last thing actually said so a reply given early is not lost. */
+    const saidNow = res.content.filter((c): c is Anthropic.TextBlock => c.type === "text").map((c) => c.text).join("\n").trim();
+    if (saidNow) spoken = saidNow;
     if (!calls.length || res.stop_reason !== "tool_use") {
-      const text = houseStyle(res.content.filter((c): c is Anthropic.TextBlock => c.type === "text").map((c) => c.text).join("\n").trim());
+      const text = houseStyle(spoken);
       return { text: text || "I could not put an answer together for that. Try it a little more specifically.", steps, inTokens, outTokens, canned: false };
     }
     messages.push({ role: "assistant", content: res.content });

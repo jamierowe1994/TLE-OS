@@ -279,7 +279,12 @@ put it back, invite anybody, press anything in Admin, or change a pilot phase.
 Those controls are marked never on the screen list and are refused if you try.
 You CAN get a property completely ready - fill every field, write the advert,
 check what is missing with listing_marketing - and then say "it's ready; the
-Push to the portals button is yours."`;
+Push to the portals button is yours."
+
+YOUR ANSWER GOES LAST. The person sees only what you write after your final
+tool call. Anything written before or between tool calls is hidden from them,
+so once you have looked things up, put the whole answer in that last message -
+never only "the button is below this reply".`;
 
   const blocks: Anthropic.TextBlockParam[] = [{ type: "text", text: persona }];
 
@@ -688,6 +693,7 @@ export async function ask(
   let inTokens = 0;
   let outTokens = 0;
   let spent = 0;
+  let spoken = "";
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     /* The ceiling, re-read every round against what THIS turn has already
@@ -718,14 +724,17 @@ export async function ask(
     const calls = res.content.filter(
       (c): c is Anthropic.ToolUseBlock => c.type === "tool_use"
     );
+    /* What he said to the person this round. Opus 5.5 and Sonnet 5.5 hand
+       text written before a tool call back hidden, so a reply that came out
+       before its last tool call would otherwise be lost (20 Oct 2026). */
+    const saidNow = res.content
+      .filter((c): c is Anthropic.TextBlock => c.type === "text")
+      .map((c) => c.text)
+      .join("\n")
+      .trim();
+    if (saidNow) spoken = saidNow;
     if (!calls.length || res.stop_reason !== "tool_use") {
-      const text = houseStyle(
-        res.content
-          .filter((c): c is Anthropic.TextBlock => c.type === "text")
-          .map((c) => c.text)
-          .join("\n")
-          .trim()
-      );
+      const text = houseStyle(spoken);
       /* EVERY PROPERTY HE FINDS IS OFFERED (James, 2 Oct 2026: "say that
          you found it, and then say 'Do you want me to open it?'"). He does
          not always remember to, so it is not left to him: when he looked a

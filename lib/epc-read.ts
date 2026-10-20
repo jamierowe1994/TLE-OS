@@ -98,7 +98,19 @@ export async function readEpcFile(fileUrl: string): Promise<EpcRead> {
   if (!res.ok) throw new Error("The EPC file would not open.");
   const bytes = Buffer.from(await res.arrayBuffer());
   if (bytes.length > 12 * 1024 * 1024) throw new Error("That EPC is too large to read.");
-  const type = res.headers.get("content-type") ?? "";
+  const read = await readEpc(bytes, res.headers.get("content-type") ?? "");
+  if (hasDb() && (read.band || read.current)) {
+    await q(
+      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
+      [KEY(url), JSON.stringify({ data: read })]
+    ).catch(() => {});
+  }
+  return read;
+}
+
+/** One EPC's band, scores and date, from its bytes. Nothing kept. */
+export async function readEpc(bytes: Buffer, type: string): Promise<EpcRead> {
   const isPdf = type.includes("pdf") || bytes.subarray(0, 4).toString() === "%PDF";
   const media = isPdf ? null : /png/.test(type) ? "image/png" : /jpe?g/.test(type) ? "image/jpeg" : /webp/.test(type) ? "image/webp" : null;
   if (!isPdf && !media) throw new Error("Only a PDF or a photo of the EPC can be read.");
@@ -127,13 +139,5 @@ export async function readEpcFile(fileUrl: string): Promise<EpcRead> {
   const printed = typeof x.band === "string" && /^[A-G]$/.test(x.band) ? (x.band as EpcBand) : null;
   /* The score decides the band when both are read and they disagree: the
      letter is the easier thing to misread off a coloured chart. */
-  const read: EpcRead = { band: bandForScore(current) ?? printed, current, potential, lodged: lodgedFrom(x.certificate_date, x.valid_until) };
-  if (hasDb() && (read.band || read.current)) {
-    await q(
-      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
-       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
-      [KEY(url), JSON.stringify({ data: read })]
-    ).catch(() => {});
-  }
-  return read;
+  return { band: bandForScore(current) ?? printed, current, potential, lodged: lodgedFrom(x.certificate_date, x.valid_until) };
 }
