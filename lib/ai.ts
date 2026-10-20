@@ -83,7 +83,7 @@ export const AI_FEATURES: Record<AiFeature, Spec> = {
   advert: { label: "Advert writer", key: "ADVERT", model: "claude-opus-5-5", effort: "medium", legacy: "ADVERT_WRITER_MODEL" },
   "listing-autofill": { label: "Listing auto-fill", key: "LISTING_AUTOFILL", model: "claude-opus-5-5", effort: "medium", legacy: "ADVERT_WRITER_MODEL" },
   "bond-ask": { label: "Ask Bond", key: "BOND_ASK", model: "claude-opus-5-5", effort: "medium" },
-  "planning-reader": { label: "Planning reader", key: "PLANNING_READER", model: "claude-opus-5-5", effort: "low" },
+  "planning-reader": { label: "Planning reader", key: "PLANNING_READER", model: "claude-sonnet-5-5", effort: "low" },
   translate: { label: "Translation", key: "TRANSLATE", model: "claude-opus-5-5", effort: "low", legacy: "TRANSLATE_MODEL" },
 };
 

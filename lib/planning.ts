@@ -457,6 +457,25 @@ function parsedRows(res: { content: Array<{ type: string; text?: string }> }): R
   }
 }
 
+type Unread = { ref: string; description: string; address: string; app_type: string | null; app_size: string | null };
+
+/** One call to the reader for up to BATCH applications. Writes nothing, so
+ *  scripts/ai-compare can put the models side by side on the same batch. */
+export async function readBatch(batch: Unread[]): Promise<{ rows: ReadRow[]; outTokens: number }> {
+  const { aiCreate } = await import("@/lib/ai");
+  const listing = batch
+    .map((a, n) => `${n + 1}. id: ${a.ref}\n   address: ${a.address}\n   type: ${a.app_type ?? "unknown"} (${a.app_size ?? "unknown size"})\n   description: ${a.description}`)
+    .join("\n\n");
+  const res = await aiCreate("planning-reader", {
+    max_tokens: 8000,
+    /* The brief never changes, so it caches; the applications ride after it. */
+    system: [{ type: "text", text: READER_BRIEF, cache_control: { type: "ephemeral" } }],
+    output_config: { format: { type: "json_schema", schema: READER_SCHEMA } },
+    messages: [{ role: "user", content: `Read these ${batch.length} planning applications.\n\n${listing}` }],
+  });
+  return { rows: parsedRows(res), outTokens: res.usage?.output_tokens ?? 0 };
+}
+
 async function readTokensToday(): Promise<number> {
   const [r] = await q<{ n: string }>(
     `SELECT COALESCE(SUM(out_tokens), 0)::text AS n FROM os_planning_sync WHERE started_at >= date_trunc('day', NOW())`
@@ -471,7 +490,7 @@ async function readTokensToday(): Promise<number> {
 export async function readPlanning(limit = 600): Promise<{ read: number; skipped: string | null }> {
   if (!hasDb()) return { read: 0, skipped: "no database" };
   if (!process.env.ANTHROPIC_API_KEY) return { read: 0, skipped: "no ANTHROPIC_API_KEY, so nothing was read" };
-  const pending = await q<{ ref: string; description: string; address: string; app_type: string | null; app_size: string | null }>(
+  const pending = await q<Unread>(
     `SELECT ref, description, address, app_type, app_size FROM os_planning_applications
       WHERE kind = 'unread' ORDER BY started_on DESC NULLS LAST LIMIT $1`,
     [limit]
@@ -479,7 +498,6 @@ export async function readPlanning(limit = 600): Promise<{ read: number; skipped
   if (pending.length === 0) return { read: 0, skipped: null };
   if ((await readTokensToday()) >= READ_CAP) return { read: 0, skipped: "the daily reading ceiling is used up" };
 
-  const { aiCreate } = await import("@/lib/ai");
   let done = 0;
   let out = 0;
 
@@ -502,25 +520,16 @@ export async function readPlanning(limit = 600): Promise<{ read: number; skipped
       const mine = next++;
       if (mine >= batches.length) return;
       const batch = batches[mine];
-      const listing = batch
-        .map((a, n) => `${n + 1}. id: ${a.ref}\n   address: ${a.address}\n   type: ${a.app_type ?? "unknown"} (${a.app_size ?? "unknown size"})\n   description: ${a.description}`)
-        .join("\n\n");
-      let res;
+      let read;
       try {
-        res = await aiCreate("planning-reader", {
-          max_tokens: 8000,
-          /* The brief never changes, so it caches; the applications ride after it. */
-          system: [{ type: "text", text: READER_BRIEF, cache_control: { type: "ephemeral" } }],
-          output_config: { format: { type: "json_schema", schema: READER_SCHEMA } },
-          messages: [{ role: "user", content: `Read these ${batch.length} planning applications.\n\n${listing}` }],
-        });
+        read = await readBatch(batch);
       } catch (e) {
         console.error("[planning] reader", (e as Error).message);
         stop = true;
         return;
       }
-      out += res.usage?.output_tokens ?? 0;
-      const rows = parsedRows(res);
+      out += read.outTokens;
+      const rows = read.rows;
       const seen = new Set<string>();
       for (const row of rows) {
         if (!batch.some((b) => b.ref === row.id) || seen.has(row.id)) continue;
