@@ -395,7 +395,7 @@ export function feeWording(
   const standardPct = id.includes("manage") ? "14% + VAT (16.8% inc VAT)" : "12% + VAT (14.4% inc VAT)";
 
   const management = intro
-    ? "Not applicable - Intro only"
+    ? "Not applicable - Marketing only"
     : tenantFind
     ? "Not applicable — Tenant Find"
     : feePercent != null

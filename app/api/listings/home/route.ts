@@ -173,7 +173,7 @@ export async function PATCH(req: NextRequest) {
     try {
       await setIntroOnly(lid, b.introOnly, { by: actor.name || actor.email, source: "listing" });
       await forgetListing(lid);
-      await record({ kind: "listing_edited", actorId: actor.id, actorEmail: actor.email, detail: `listing ${lid} ${b.introOnly ? "marked intro only" : "no longer intro only"} (kept in the OS only)` }).catch(() => {});
+      await record({ kind: "listing_edited", actorId: actor.id, actorEmail: actor.email, detail: `listing ${lid} ${b.introOnly ? "marked marketing only" : "no longer marketing only"} (kept in the OS only)` }).catch(() => {});
       if (testId) {
         const t = await testAnswer(lid);
         return t ? NextResponse.json(t) : NextResponse.json({ ok: false, error: "That test listing has gone.", test: true }, { status: 404 });

@@ -45,7 +45,7 @@ const SERVICES = [
   { id: "full_managed", label: "Fully managed" },
   { id: "tenant_find", label: "Tenant find" },
   { id: "rent_collect", label: "Rent collect" },
-  { id: "intro_only", label: "Intro only" },
+  { id: "intro_only", label: "Marketing only" },
 ] as const;
 const STEPS = ["The Home", "The Landlord", "The Let", "Check", "Terms"] as const;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -224,7 +224,7 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
     const fee = Number(feePct);
     if (service !== "intro_only" && (feePct === "" || !Number.isFinite(fee) || fee < 0 || fee > 100)) n[2].feePct = "The fee, as a percentage";
     const setup = Number(setupFee);
-    if (setupFee === "" || !Number.isFinite(setup) || setup < 0) n[2].setupFee = service === "intro_only" ? "The intro fee" : "The set-up fee (0 if none)";
+    if (setupFee === "" || !Number.isFinite(setup) || setup < 0) n[2].setupFee = service === "intro_only" ? "The marketing fee" : "The set-up fee (0 if none)";
     return n;
   }, [picked, fresh, pickedListing, typeId, name, email, mobile, source, landlordAddress, office, officeAnswer, rent, service, feePct, setupFee]);
 
@@ -623,7 +623,7 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
                   <Err k="feePct" />
                 </label>}
                 <label className="block">
-                  <Label>{intro ? "Intro fee" : "Set-up fee"}</Label>
+                  <Label>{intro ? "Marketing fee" : "Set-up fee"}</Label>
                   <div className="relative mt-1.5">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13.5px] text-muted">£</span>
                     <input type="number" min={0} inputMode="decimal" value={setupFee} onChange={(e) => setSetupFee(e.target.value)} className={`${field} pl-7 ${bad("setupFee")}`} />
@@ -658,7 +658,7 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
                 <Row k="Available from" v={availableFrom ? new Date(availableFrom).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "-"} />
                 <Row k="Service" v={serviceLabel} />
                 {!intro && <Row k="Fee" v={`${Number(feePct)}% of the rent`} />}
-                <Row k={intro ? "Intro fee" : "Set-up fee"} v={money(Number(setupFee))} />
+                <Row k={intro ? "Marketing fee" : "Set-up fee"} v={money(Number(setupFee))} />
               </section>
               {needsSignIn && <SignInAgain doing="create the listing" onDone={() => void create()} />}
               {existing && (
@@ -685,7 +685,7 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
               <section className="rounded-[18px] border border-line/50 bg-white p-4">
                 <p className="text-[13px] font-semibold">Terms of business</p>
                 <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
-                  The listing can't go on the portals until {name.trim().split(/\s+/)[0]} has signed them. Drawn up from what you put in: {money(Number(rent))} pcm, {serviceLabel.toLowerCase()}, {intro ? `${money(Number(setupFee))} for the introduction` : `${Number(feePct)}% and ${money(Number(setupFee))} to set up`}.
+                  The listing can't go on the portals until {name.trim().split(/\s+/)[0]} has signed them. Drawn up from what you put in: {money(Number(rent))} pcm, {serviceLabel.toLowerCase()}, {intro ? `${money(Number(setupFee))} for the marketing` : `${Number(feePct)}% and ${money(Number(setupFee))} to set up`}.
                 </p>
                 {!made.appraisalId ? (
                   <p className="mt-3 text-[12px] text-[#9d4340]">The file behind the listing did not save, so the terms can't be drawn up here. Ask the office.</p>

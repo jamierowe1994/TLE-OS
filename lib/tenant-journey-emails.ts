@@ -525,7 +525,7 @@ export async function applicationEmails(given: Dry, out: Out) {
       /* Intro only (lib/intro-only): the accepted email walks the tenant
          through the holding fee to the keys, which are the landlord's here.
          Nothing is put with the agent; they tell the tenant themselves. */
-      out.push({ key: `accepted:${a.id}`, emailId: "customer-update", to: a.agent ?? "", subject: "", state: "skipped", detail: `Intro only, so no accepted email: ${address}.` });
+      out.push({ key: `accepted:${a.id}`, emailId: "customer-update", to: a.agent ?? "", subject: "", state: "skipped", detail: `Marketing only, so no accepted email: ${address}.` });
       await seen(a);
       continue;
     }

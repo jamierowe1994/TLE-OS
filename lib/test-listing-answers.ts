@@ -46,7 +46,7 @@ export async function testDetails(id: number): Promise<{ ok: true; details: List
     receptions: 1,
     propertyType: l.propertyType,
     letType: "Long term",
-    service: (await isIntroOnly(l.listingId).catch(() => false)) ? "Intro only" : "Fully managed",
+    service: (await isIntroOnly(l.listingId).catch(() => false)) ? "Marketing only" : "Fully managed",
     serviceOnRecord: "Fully managed",
     councilTaxBand: "B",
     parking: "On street",

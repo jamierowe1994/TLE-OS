@@ -310,7 +310,7 @@ function ChangeFeesSheet({
                       : next.feePct != null
                         ? `Before VAT. The landlord sees ${Math.round(next.feePct * (1 + VAT) * 100) / 100}% including VAT.`
                         : level === "tenant_find" || level === "intro_only"
-                          ? `${level === "intro_only" ? "Intro only" : "Tenant find"} has no management fee - leave it blank.`
+                          ? `${level === "intro_only" ? "Marketing only" : "Tenant find"} has no management fee - leave it blank.`
                           : "Before VAT. Blank if there isn't one."
                   }
                 >

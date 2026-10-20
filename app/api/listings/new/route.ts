@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
   const feePct = service === "intro_only" ? 0 : money(b.feePct);
   if (feePct == null || feePct > 100) return NextResponse.json({ ok: false, step: "let", error: "Put in the fee, as a percentage of the rent." }, { status: 400 });
   const setupFee = money(b.setupFee);
-  if (setupFee == null) return NextResponse.json({ ok: false, step: "let", error: service === "intro_only" ? "Put in the intro fee." : "Put in the set-up fee (0 if there isn't one)." }, { status: 400 });
+  if (setupFee == null) return NextResponse.json({ ok: false, step: "let", error: service === "intro_only" ? "Put in the marketing fee." : "Put in the set-up fee (0 if there isn't one)." }, { status: 400 });
   const homeLabel = str(b.homeLabel);
   if (!homeLabel) return NextResponse.json({ ok: false, step: "home", error: "Which home is it?" }, { status: 400 });
   const availableFrom = /^\d{4}-\d{2}-\d{2}$/.test(str(b.availableFrom)) ? str(b.availableFrom) : null;

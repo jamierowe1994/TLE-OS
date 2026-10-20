@@ -1033,7 +1033,7 @@ export default function ApplicationDrawer({
     { icon: "coin", label: isSwap ? "Rent, the home" : "Rent", text: rent ? `${rent} ${per}` : "No offer recorded" },
     ...(app?.swapPortion ? [{ icon: "coin", label: "Their portion", text: `${app.swapPortion} pcm` }] : []),
     { icon: "user", label: "Agent", text: agent },
-    { icon: "home", label: "Service", text: intro ? "Intro only" : deal?.serviceLevel ?? deal?.app.propoly?.service ?? (listingService ? listingService.charAt(0) + listingService.slice(1).toLowerCase() : "Not known yet") },
+    { icon: "home", label: "Service", text: intro ? "Marketing only" : deal?.serviceLevel ?? deal?.app.propoly?.service ?? (listingService ? listingService.charAt(0) + listingService.slice(1).toLowerCase() : "Not known yet") },
     ...(app
       ? [
           { icon: "target", label: "Came in", text: received ? niceDate(received.when) : "No date" },
@@ -1041,7 +1041,7 @@ export default function ApplicationDrawer({
           ...(scottishLet ? [] : [{ icon: "shield", label: "Right to rent", text: `${answered} of ${people.length}` }]),
         ]
       : []),
-    { icon: "wallet", label: "Holding fee", text: intro ? "None - intro only" : isSwap ? (app?.swapKind === "add" ? "None when adding a tenant" : `None on a ${swapWord}`) : scottishLet ? "None in Scotland" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
+    { icon: "wallet", label: "Holding fee", text: intro ? "None - marketing only" : isSwap ? (app?.swapKind === "add" ? "None when adding a tenant" : `None on a ${swapWord}`) : scottishLet ? "None in Scotland" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
   ];
 
   /* The activity log, for the panel at the top: what the record holds, then
@@ -1116,7 +1116,7 @@ export default function ApplicationDrawer({
           {intro ? (
             <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#56634a]/25 bg-[#f1f4ec] px-3.5 text-[12.5px] font-semibold text-[#56634a]">
               <DoodleIcon name="key" size={13} />
-              Intro only
+              Marketing only
             </span>
           ) : propoly.state === "checking" ? (
             <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line/80 bg-white px-3.5 text-[12.5px] font-semibold text-muted">
@@ -1233,7 +1233,7 @@ export default function ApplicationDrawer({
               {/* The PLC check: from the record once the landlord has the
                   offer, done once it is approved. */}
               {intro ? (
-                <Tile icon="shield" dark label="No PLC check" sub="Intro only - the landlord's" off />
+                <Tile icon="shield" dark label="No PLC check" sub="Marketing only - the landlord's" off />
               ) : (
               <Tile
                 icon="shield"
@@ -1261,7 +1261,7 @@ export default function ApplicationDrawer({
                 onClick={() => setPerson({ role: "landlord", index: 0 })}
               />
               <Tile icon="mail" label="Customer update" sub="Email tenant or landlord" onClick={() => setBuilder({ mode: "update" })} />
-              <Tile icon="clock" label="Send a reminder" sub={intro ? "Intro only - nothing to chase" : "Sign, pay, references"} off={Boolean(cancelled) || Boolean(intro)} onClick={() => setBuilder({ mode: "reminder" })} />
+              <Tile icon="clock" label="Send a reminder" sub={intro ? "Marketing only - nothing to chase" : "Sign, pay, references"} off={Boolean(cancelled) || Boolean(intro)} onClick={() => setBuilder({ mode: "reminder" })} />
               <Tile
                 icon="logout"
                 label={cancelled ? "Deal cancelled" : "Cancel the deal"}
@@ -1345,7 +1345,7 @@ export default function ApplicationDrawer({
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <p className="flex flex-wrap items-baseline gap-x-3">
                   <span className="hand text-[16px]">Where it&apos;s up to</span>
-                  <span className="text-[11.5px] text-muted">{intro ? "The offer, and that's the end of it - intro only." : <>The offer, then Kirstie&apos;s stages.</>}</span>
+                  <span className="text-[11.5px] text-muted">{intro ? "The offer, and that's the end of it - marketing only." : <>The offer, then Kirstie&apos;s stages.</>}</span>
                 </p>
                 {stops && here && <span className="text-[11.5px] text-muted">Step {(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of {stops.length}</span>}
               </div>
@@ -1387,8 +1387,8 @@ export default function ApplicationDrawer({
                   <div className="mb-4 flex items-start gap-3 rounded-xl border border-[#56634a]/20 bg-[#f1f4ec] px-4 py-3.5 text-[#3f5a32]">
                     <DoodleIcon name="checklist" size={16} className="mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-[14px] font-semibold">Intro only - nothing more to do</p>
-                      <p className="mt-0.5 text-[12px] leading-relaxed">The landlord has agreed the tenant. Invoice the introduction and the file is finished: the landlord takes it from here.</p>
+                      <p className="text-[14px] font-semibold">Marketing only - nothing more to do</p>
+                      <p className="mt-0.5 text-[12px] leading-relaxed">The landlord has agreed the tenant. Invoice the marketing fee and the file is finished: the landlord takes it from here.</p>
                     </div>
                   </div>
                 )}

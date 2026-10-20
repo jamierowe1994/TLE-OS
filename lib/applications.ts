@@ -1180,7 +1180,7 @@ export async function closedReasons(apps: Application[]): Promise<Map<string, st
        happens here, so it leaves the lets in progress. */
     const agreed = a.status === "accepted" || a.osDecision?.decision === "accepted";
     if (agreed && !a.swap && a.listingId != null && intro.has(String(a.listingId))) {
-      out.set(a.id, "Intro only - done");
+      out.set(a.id, "Marketing only - done");
       continue;
     }
     if (a.status === "accepted") {

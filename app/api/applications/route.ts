@@ -113,9 +113,9 @@ export async function GET(req: NextRequest) {
       !a.swap && a.listingId != null && intro.has(String(a.listingId)) && a.status !== "unsuccessful" && (a.status === "accepted" || decided.get(`rex:${a.id}`)?.decision === "accepted");
     const tests = testRows.map((a) => ({
       ...a,
-      stageLabel: introDone(a) ? "Intro only" : a.stageLabel ?? a.statusLabel,
+      stageLabel: introDone(a) ? "Marketing only" : a.stageLabel ?? a.statusLabel,
       test: true,
-      ...(cancelledRefs.has(String(a.id)) ? { closed: "Deal cancelled" } : introDone(a) ? { closed: "Intro only - done" } : {}),
+      ...(cancelledRefs.has(String(a.id)) ? { closed: "Deal cancelled" } : introDone(a) ? { closed: "Marketing only - done" } : {}),
     }));
     /* ?include=<id>: one application asked for by name - the PLC wizard's
        "Open the application" (6 Oct 2026). The board's cut drops accepted
@@ -130,8 +130,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       applications: [...tests, ...[...shown, ...extra].map((a) => ({
         ...a,
-        stageLabel: introDone(a) ? "Intro only" : stages.get(a.id) ?? a.statusLabel,
-        closed: introDone(a) ? "Intro only - done" : closed.get(a.id) ?? null,
+        stageLabel: introDone(a) ? "Marketing only" : stages.get(a.id) ?? a.statusLabel,
+        closed: introDone(a) ? "Marketing only - done" : closed.get(a.id) ?? null,
         osDecision: decided.get(`rex:${a.id}`) ?? null,
       }))],
       osAccepted,

@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
   /* Intro only ends at the landlord's yes (lib/intro-only): no PLC pack. */
   if (body.applicationRef) {
     if (await applicationIsIntroOnly(body.applicationRef)) {
-      return NextResponse.json({ ok: false, error: "This let is intro only, so there is no PLC check - the landlord takes it from here." }, { status: 409 });
+      return NextResponse.json({ ok: false, error: "This let is marketing only, so there is no PLC check - the landlord takes it from here." }, { status: 409 });
     }
   }
 

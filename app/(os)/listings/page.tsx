@@ -911,7 +911,7 @@ export default function Listings() {
                 { label: "Sort by", options: SORTS, value: sort, onChange: setSort },
                 { label: "Rent", options: RENT_BANDS, value: rentBand, onChange: setRentBand },
                 { label: "Location", options: localities, value: loc, onChange: setLoc, searchable: true },
-                { label: "Service", options: [{ id: "intro_only", label: "Intro only" }, { id: "other", label: "Every other service" }], value: svc, onChange: setSvc },
+                { label: "Service", options: [{ id: "intro_only", label: "Marketing only" }, { id: "other", label: "Every other service" }], value: svc, onChange: setSvc },
                 { label: "Date listed", options: PERIODS.filter((x) => x.id !== "any").map((x) => ({ id: x.id, label: x.label })), value: period === "any" ? null : period, onChange: (v) => setPeriod((v ?? "any") as PeriodId) },
               ]}
             />
@@ -1111,7 +1111,7 @@ export default function Listings() {
                       <Tag tone={l.archived ? "neutral" : st.tone}>
                         {l.archived ? archiveLabel(l.archiveReason ?? null) : st.label}
                       </Tag>
-                      {l.introOnly && <Tag tone="neutral">Intro only</Tag>}
+                      {l.introOnly && <Tag tone="neutral">Marketing only</Tag>}
                       {!l.archived && l.offline && <Tag tone="neutral">Offline</Tag>}
                       {!l.archived && !l.letAgreed && !l.offline && l.taken && <Tag tone="accent">Still advertised</Tag>}
                       {!l.archived && !l.letAgreed && !l.taken && l.fellThrough && <Tag tone="accent">Fell through</Tag>}

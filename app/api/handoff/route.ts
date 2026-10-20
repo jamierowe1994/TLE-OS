@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
   if (isTestId(body.applicationId)) {
     const t = await testApplication(String(body.applicationId)).catch(() => null);
     if (await isIntroOnly(t?.app.listingId).catch(() => false)) {
-      return NextResponse.json({ error: "This is an intro only, so nothing goes to Propoly - the landlord takes it from here." }, { status: 409 });
+      return NextResponse.json({ error: "This is marketing only, so nothing goes to Propoly - the landlord takes it from here." }, { status: 409 });
     }
     try {
       const deal = await pushTestDeal(String(body.applicationId), { email: me.email });
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
   }
   /* Intro only ends at the landlord's yes (lib/intro-only): nothing of it goes to Propoly. */
   if (await isIntroOnly(app.listingId).catch(() => false)) {
-    return NextResponse.json({ error: "This is an intro only, so nothing goes to Propoly - the landlord takes it from here." }, { status: 409 });
+    return NextResponse.json({ error: "This is marketing only, so nothing goes to Propoly - the landlord takes it from here." }, { status: 409 });
   }
   /* Force sends a second live run. Only the office, with the first in front of them. */
   if (body.force === true && !isOffice(me)) {

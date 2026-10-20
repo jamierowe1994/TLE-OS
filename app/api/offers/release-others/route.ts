@@ -50,7 +50,7 @@ async function load(req: NextRequest, applicationId: string) {
   const offers = await otherOpenOffers(listingId, `rex:${app.id}`, here, closed);
   /* Intro only takes no holding fee (lib/intro-only): the landlord's yes is the end of it. */
   const intro = await isIntroOnly(listingId).catch(() => false);
-  return { me, app, listingId, fee: intro ? { settled: true, paidAt: null, words: "Intro only, so no holding fee" } : feeOf(deal), offers };
+  return { me, app, listingId, fee: intro ? { settled: true, paidAt: null, words: "Marketing only, so no holding fee" } : feeOf(deal), offers };
 }
 
 export async function GET(req: NextRequest) {

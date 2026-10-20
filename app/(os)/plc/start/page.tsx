@@ -36,9 +36,9 @@ export default async function StartPlc({
   if (listing ? await isIntroOnly(listing).catch(() => false) : await applicationIsIntroOnly(application)) {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
-        <h1 className="text-2xl tracking-normal">Intro Only - Nothing More to Do</h1>
+        <h1 className="text-2xl tracking-normal">Marketing Only - Nothing More to Do</h1>
         <p className="mt-3 text-sm text-neutral-500">
-          This let is intro only, so there is no PLC check. The landlord takes it from here - referencing, the agreement, the deposit and the move-in are theirs.
+          This let is marketing only, so there is no PLC check. The landlord takes it from here - referencing, the agreement, the deposit and the move-in are theirs.
         </p>
         {application && (
           <a href={`/applications/${encodeURIComponent(application)}`} className="mt-6 inline-block rounded-full bg-[var(--brown)] px-4 py-2 text-[12.5px] font-semibold text-white hover:opacity-90">

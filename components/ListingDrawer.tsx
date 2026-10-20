@@ -1042,8 +1042,8 @@ function ListingDrawerBody({
     home?.introOnly && trackHere.id === "handover"
       ? {
           ...trackHere,
-          title: "Intro only - nothing more to do",
-          detail: "The landlord has agreed the tenant. Invoice the landlord for the introduction; the referencing, the agreement, the deposit and the move-in are theirs.",
+          title: "Marketing only - nothing more to do",
+          detail: "The landlord has agreed the tenant. Invoice the landlord for the marketing; the referencing, the agreement, the deposit and the move-in are theirs.",
         }
       : trackHere;
   const advance = () => setStep(step + 1);
@@ -1261,7 +1261,7 @@ function ListingDrawerBody({
       { icon: "pack/photo", label: "Photos", text: `${photos.length} on file` },
       { icon: "home", label: "Type of let", text: home ? LET_TYPES.find((t) => t.value === home.letType)?.label ?? "Not set" : homeProblem ? "Did not load" : "Reading…" },
       /* Intro only is chosen here (16 Oct 2026, lib/intro-only); the rest is the listing's own. */
-      { icon: "home", label: "Service", text: home?.introOnly ? "Intro only" : live ? (live.serviceOnRecord ?? live.service ?? "Not set") : wait ?? "Not set" },
+      { icon: "home", label: "Service", text: home?.introOnly ? "Marketing only" : live ? (live.serviceOnRecord ?? live.service ?? "Not set") : wait ?? "Not set" },
     ];
   })();
 
@@ -1274,7 +1274,7 @@ function ListingDrawerBody({
     enquiries: enquiries === null ? "Reading…" : `${enquirers} ${enquirers === 1 ? "person" : "people"}`,
     applications: savedOffers === null ? "Reading…" : openOffers ? `${openOffers} to decide` : `${savedOffers.length} so far`,
     marketing: marketingToGo == null ? "Facts, write-up, photos" : marketingToGo === 0 ? "Complete" : `${marketingToGo} to fill in`,
-    compliance: introOnly ? (termsKnown && !termsOnFile ? "Terms to add" : "The landlord's, intro only") : certs === null ? "Reading…" : certOk("epc") && (certOk("gas_safety") || home?.noGas) && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : /let\s*only|tenant\s*find/i.test(live?.service ?? "") ? "Copies from the landlord" : "Certificates to add",
+    compliance: introOnly ? (termsKnown && !termsOnFile ? "Terms to add" : "The landlord's, marketing only") : certs === null ? "Reading…" : certOk("epc") && (certOk("gas_safety") || home?.noGas) && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : /let\s*only|tenant\s*find/i.test(live?.service ?? "") ? "Copies from the landlord" : "Certificates to add",
     portals: pub && !pub.onPortals ? "Off for now" : "Live adverts, how they do",
   };
   const needsOf: Record<TabKey, boolean> = {
@@ -1559,7 +1559,7 @@ function ListingDrawerBody({
                     value={home.introOnly ? "intro_only" : "own"}
                     options={[
                       { value: "own", label: live.serviceOnRecord ?? "As agreed", sub: "The service on the terms" },
-                      { value: "intro_only", label: "Intro only", sub: "We find the tenant, the landlord does the rest" },
+                      { value: "intro_only", label: "Marketing only", sub: "We find the tenant, the landlord does the rest" },
                     ]}
                     onChange={(v) => void setIntroOnly(v === "intro_only")}
                   />

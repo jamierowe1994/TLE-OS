@@ -188,7 +188,7 @@ export const SERVICE_LEVELS: { id: ServiceLevel; label: string }[] = [
   { id: "full_managed", label: "Fully managed" },
   { id: "tenant_find", label: "Tenant find" },
   { id: "rent_collect", label: "Rent collect" },
-  { id: "intro_only", label: "Intro only" },
+  { id: "intro_only", label: "Marketing only" },
 ];
 
 /**

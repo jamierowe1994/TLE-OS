@@ -276,7 +276,7 @@ const dayWords = (iso: string | null | undefined) => {
 export function introStop(accepted: boolean, unsuccessful = false): JourneyStop {
   return {
     id: "intro",
-    label: "Intro only",
+    label: "Marketing only",
     sub: unsuccessful ? null : accepted ? "Tenant introduced - nothing more to do" : "Ends once the landlord agrees the tenant",
     tone: accepted ? "ok" : "none",
     state: unsuccessful ? "off" : accepted ? "done" : "upcoming",
@@ -285,8 +285,8 @@ export function introStop(accepted: boolean, unsuccessful = false): JourneyStop 
 
 export const INTRO_INVOICE: JourneyAction = {
   id: "intro-invoice",
-  label: "Invoice the landlord for the introduction",
-  detail: "It's an intro only, so this is the last step: the landlord takes it from here - referencing, the agreement, the deposit and the move-in are theirs. Nothing goes to Kirstie or Propoly.",
+  label: "Invoice the landlord for the marketing",
+  detail: "It's marketing only, so this is the last step: the landlord takes it from here - referencing, the agreement, the deposit and the move-in are theirs. Nothing goes to Kirstie or Propoly.",
   href: null,
   who: "you",
 };
@@ -830,7 +830,7 @@ export async function stageLabels(apps: Application[]): Promise<Map<string, stri
     if (!isAccepted(a) && a.status === "received") { out.set(a.id, "Not put to landlord"); continue; }
     if (!isAccepted(a) && a.status === "communicated") { out.set(a.id, "Landlord decision"); continue; }
     /* Intro only ends at the landlord's yes (lib/intro-only): never "Handover due". */
-    if (!a.swap && a.listingId != null && intro.has(String(a.listingId))) { out.set(a.id, "Intro only"); continue; }
+    if (!a.swap && a.listingId != null && intro.has(String(a.listingId))) { out.set(a.id, "Marketing only"); continue; }
     /* A swap's home has the old tenancy's deal: its own shows up once pushed. */
     if (a.swap) {
       const keyed = all ? findSwapDeal(a, all) : null;

@@ -237,7 +237,7 @@ export default function ListingCompliance({
         <p className="flex items-start gap-2.5 rounded-[18px] bg-accent-soft/60 px-4 py-3 text-[12.5px] leading-snug text-ink">
           <DoodleIcon name="shield" size={15} className="mt-0.5 shrink-0 text-accent-dark" />
           <span>
-            Intro only, so the certificates are the landlord&apos;s and nothing here is chased. The advert still needs the EPC
+            Marketing only, so the certificates are the landlord&apos;s and nothing here is chased. The advert still needs the EPC
             rating, and the terms of business still need signing before it goes live.
           </span>
         </p>
