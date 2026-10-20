@@ -92,6 +92,16 @@ async function keep(listingId: string, landlord: Landlord | null, propertyId: st
   }
 }
 
+/**
+ * Forget the held landlord for a listing (20 Oct 2026): a landlord's details
+ * changed on a let, through REX, must read back changed at once, or the
+ * let's card is redrawn with the old number from up to twelve hours ago.
+ */
+export async function forgetLandlord(listingId: string): Promise<void> {
+  if (!hasDb()) return;
+  await q("DELETE FROM os_cache WHERE key = $1", [cacheKey(listingId)]).catch(() => undefined);
+}
+
 export type LandlordAnswer =
   /** REX answered. `landlord` null means it genuinely holds no owner. */
   | { ok: true; landlord: Landlord | null }

@@ -44,6 +44,7 @@ export default function ContactBlock({
   call = role !== "landlord",
   home,
   about,
+  saver,
 }: {
   person: Person;
   personRef: string | null;
@@ -65,11 +66,15 @@ export default function ContactBlock({
   home?: { propertyAddress?: string | null };
   /** The home an email from here is about, for {{address}}, where `home` isn't passed. */
   about?: string | null;
+  /** Somebody with no REX or OS contact behind them (a person only a let
+   *  holds, 20 Oct 2026): the screen saves them its own way. Makes the block
+   *  editable without a personRef. */
+  saver?: (field: "name" | "email" | "phone", value: string) => Promise<{ ok: boolean; error?: string; detail?: string }>;
 }) {
   const [p, setP] = useState<Person>(person);
   const [note, setNote] = useState<{ tone: "ok" | "bad" | "busy"; text: string } | null>(null);
   useEffect(() => setP(person), [person.name, person.email, person.phone]); // eslint-disable-line react-hooks/exhaustive-deps
-  const editable = Boolean(personRef);
+  const editable = Boolean(personRef || saver);
 
   async function save(field: "name" | "email" | "phone", value: string) {
     const v = value.trim();
@@ -78,6 +83,20 @@ export default function ContactBlock({
     const before = p;
     setP((cur) => ({ ...cur, [field]: v || null }));
     setNote({ tone: "busy", text: "Saving…" });
+    if (!personRef && saver) {
+      const j = await saver(field, v).catch(() => ({ ok: false, error: "That didn't go through. Try again." }) as { ok: boolean; error?: string; detail?: string });
+      if (!j.ok) {
+        setP(before);
+        setNote({ tone: "bad", text: j.error ?? "That didn't save." });
+        return;
+      }
+      const next = { ...before, [field]: v || null };
+      setP(next);
+      onSaved?.(next);
+      setNote({ tone: "ok", text: j.detail ?? "Saved." });
+      window.setTimeout(() => setNote((n) => (n?.tone === "ok" ? null : n)), 6000);
+      return;
+    }
     try {
       const r = await fetch("/api/people/contact", {
         method: "PATCH",

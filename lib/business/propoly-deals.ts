@@ -566,6 +566,12 @@ function toApplication(d: Record<string, unknown>, statusKey: string): AgentAppl
       landlordUuids: (arr(d.landlords).length ? arr(d.landlords) : arr(d.landlord_details))
         .map((l) => (typeof l.uuid === "string" ? l.uuid : null))
         .filter((u): u is string => Boolean(u)),
+      /* Every landlord on the deal, not only the lead (20 Oct 2026): a home
+         owned by several people, and a let opened as the deal alone, which
+         had no other way to name them (Apartment 30, 21 Wheatsheaf Court). */
+      landlords: (arr(d.landlords).length ? arr(d.landlords) : arr(d.landlord_details))
+        .map((l) => ({ uuid: str(l.uuid), name: personName(l), email: str(l.email), phone: str(l.phone) }))
+        .filter((l) => l.name || l.email),
       guarantors: partyList(arr(d.guarantors).length ? d.guarantors : d.guarantors_details),
       /* Wired in 2 Oct 2026 (James, checking 4 Williams Court): the holding
          fee is paid by card inside Propoly, and referencing is tracked there,

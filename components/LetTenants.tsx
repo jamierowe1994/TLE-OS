@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { PropolyLine, type Party, type Picture } from "@/components/LetPeople";
 
 /**
  * Add a tenant to a let in progress (Kirstie 6a2dc73c, 19 Oct 2026;
@@ -10,15 +11,25 @@ import { useCallback, useEffect, useState } from "react";
  */
 
 type Added = { id: string; name: string; email: string | null; phone: string | null; reference: boolean; by: string; at: string };
-type Propoly = "pushed" | "held" | "with-push";
+type Propoly = "pushed" | "held" | "with-push" | "to-deal" | "to-deal-practice";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const WHERE: Record<Propoly, string> = {
   "with-push": "Goes to Propoly with Push to Propoly, with everyone else.",
   held: "Not sent to Propoly from here yet: add them to the deal in Propoly by hand.",
   pushed: "The deal is already in Propoly: add them to it there by hand.",
+  "to-deal": "The deal is in Propoly: they go onto it straight away.",
+  "to-deal-practice": "The deal is in Propoly. Practice mode: what would go is shown on them, nothing is sent yet.",
 };
 
-export default function LetTenants({ letId, className = "" }: { letId: string; className?: string }) {
+export default function LetTenants({ letId, className = "", onChange, picture = null, people = null }: {
+  letId: string;
+  className?: string;
+  /** Told after an add or a take-off, so the let reads its people again. */
+  onChange?: () => void;
+  /** Each added tenant against the let's Propoly deal (lib/let-propoly-sync). */
+  picture?: Picture | null;
+  people?: Party[] | null;
+}) {
   const [rows, setRows] = useState<Added[] | null>(null);
   const [where, setWhere] = useState<Propoly>("held");
   const [open, setOpen] = useState(false);
@@ -52,6 +63,8 @@ export default function LetTenants({ letId, className = "" }: { letId: string; c
       .then((r) => r.json()).catch(() => null);
     setBusy(false);
     if (!take(j)) { setMsg(j?.error ?? "That didn't save. Try again."); return false; }
+    /* What went to Propoly shows on their row, from the let's people. */
+    onChange?.();
     return true;
   }
   async function save() {
@@ -80,6 +93,10 @@ export default function LetTenants({ letId, className = "" }: { letId: string; c
                   <span className="block text-[13px] font-semibold">{t.name}</span>
                   <span className="block truncate text-[11.5px] text-muted">{[t.email, t.phone].filter(Boolean).join(" · ") || "No email or mobile"}</span>
                   <span className="block text-[11px] text-muted">{t.reference ? "To be referenced" : "No references"} · added by {t.by}</span>
+                  {(() => {
+                    const party = people?.find((p) => p.key === `let-tenant:${t.id}`);
+                    return party && onChange ? <PropolyLine letId={letId} party={party} picture={picture} onAnswer={() => onChange()} /> : null;
+                  })()}
                 </span>
                 <button type="button" disabled={busy} onClick={() => void send("DELETE", { id: t.id })} className="shrink-0 text-[11.5px] font-semibold text-muted hover:text-ink">Take off</button>
               </li>
@@ -88,6 +105,7 @@ export default function LetTenants({ letId, className = "" }: { letId: string; c
           <p className="mt-3 rounded-lg bg-card px-3 py-2 text-[11.5px] leading-relaxed">{WHERE[where]}</p>
         </div>
       )}
+      {msg && !open && <p className="mt-2 text-[12px] text-muted">{msg}</p>}
 
       {open && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">

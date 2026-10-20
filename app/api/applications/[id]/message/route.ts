@@ -46,7 +46,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const r = await letPeople(id, actor);
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: r.status });
-  const who = role === "landlord" ? r.let.landlord : r.let.tenants[Math.max(0, Number(body.index ?? 0) || 0)];
+  /* Several landlords on a let (20 Oct 2026): the index picks one, the first by default. */
+  const landlords = r.let.people.filter((p) => p.role === "landlord");
+  const who = role === "landlord" ? landlords[Math.max(0, Number(body.index ?? 0) || 0)] ?? r.let.landlord : r.let.tenants[Math.max(0, Number(body.index ?? 0) || 0)];
   if (!who) {
     return NextResponse.json({ ok: false, error: role === "landlord" ? r.let.landlordProblem ?? "No landlord is held for this let." : "That tenant isn't on the let." }, { status: 404 });
   }

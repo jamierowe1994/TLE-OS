@@ -18,6 +18,7 @@ import ContactBlock from "@/components/ContactBlock";
 import RightToRentField, { type RtrShown } from "@/components/RightToRentField";
 import Guarantors from "@/components/Guarantors";
 import LetTenants from "@/components/LetTenants";
+import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
 import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
 import AdvertOffline from "@/components/listing/AdvertOffline";
@@ -393,7 +394,7 @@ const REMINDERS: Template[] = [
 
 type LetPerson = { name: string; email: string | null; phone: string | null; contactId: string | null; isPrimary: boolean };
 type LetLandlord = { name: string; email: string | null; phone: string | null; contactId: string | null; from?: "rex" | "record" };
-type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null };
+type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[] };
 type Cancellation = { reason: string; note: string; by: string; at: string };
 
 function EmailBuilder({ letId, mode, people, start, scotland, onClose }: {
@@ -409,7 +410,12 @@ function EmailBuilder({ letId, mode, people, start, scotland, onClose }: {
   const list = mode === "update" ? UPDATES : scotland ? REMINDERS.filter((t) => t.kind !== "nudge_holding_fee") : REMINDERS;
   const parties = [
     ...(people?.tenants ?? []).map((t, i) => ({ key: `tenant:${i}`, role: "tenant" as const, index: i, name: t.name, email: t.email, tag: t.isPrimary ? "Lead tenant" : "Tenant" })),
-    ...(people?.landlord ? [{ key: "landlord", role: "landlord" as const, index: 0, name: people.landlord.name, email: people.landlord.email, tag: "Landlord" }] : []),
+    /* Every landlord on the let (20 Oct 2026), each by their place in the list. */
+    ...(() => {
+      const all = (people?.people ?? []).filter((p) => p.role === "landlord");
+      if (!all.length) return people?.landlord ? [{ key: "landlord", role: "landlord" as const, index: 0, name: people.landlord.name, email: people.landlord.email, tag: "Landlord" }] : [];
+      return all.map((l, i) => ({ key: i ? `landlord:${i}` : "landlord", role: "landlord" as const, index: i, name: l.name, email: l.email, tag: "Landlord" }));
+    })(),
   ];
   const [to, setTo] = useState<string>(start?.to ?? parties[0]?.key ?? "");
   const [kind, setKind] = useState<string>(start?.kind ?? list[0].kind);
@@ -727,15 +733,31 @@ export default function ApplicationDrawer({
      it was cancelled - for the drawers, the email builder and Cancel deal. */
   const [info, setInfo] = useState<LetInfo | null>(null);
   const [cancelled, setCancelled] = useState<Cancellation | null>(null);
+  /* Each person against the let's Propoly deal (lib/let-propoly-sync, 20 Oct 2026). */
+  const [picture, setPicture] = useState<Picture | null>(null);
+  /* A change to the people answers with the let as it now stands. */
+  const takePeople = useCallback((j: PeopleAnswer) => {
+    if (!j?.ok || !j.let) return;
+    setInfo(j.let as unknown as LetInfo);
+    setPicture(j.propoly ?? null);
+  }, []);
+  const reloadPeople = useCallback(() => {
+    if (!letId) return;
+    fetch(`/api/applications/${encodeURIComponent(letId)}/people`, { cache: "no-store" })
+      .then((r) => r.json() as Promise<PeopleAnswer>)
+      .then(takePeople)
+      .catch(() => { /* the cards keep what they show */ });
+  }, [letId, takePeople]);
   useEffect(() => {
     if (!letId) return;
     let live = true;
     fetch(`/api/applications/${encodeURIComponent(letId)}/people`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; let?: LetInfo; cancelled?: Cancellation | null }) => {
+      .then((j: { ok?: boolean; let?: LetInfo; cancelled?: Cancellation | null; propoly?: Picture | null }) => {
         if (!live) return;
         if (j.ok && j.let) setInfo(j.let);
         else setInfo({ tenants: [], landlord: null, landlordProblem: "Who is on this let couldn't be read just now.", listingId: null });
+        setPicture(j.propoly ?? null);
         setCancelled(j.cancelled ?? null);
       })
       .catch(() => live && setInfo({ tenants: [], landlord: null, landlordProblem: "Who is on this let couldn't be read just now.", listingId: null }));
@@ -1083,7 +1105,16 @@ export default function ApplicationDrawer({
      on the right, with the let's notes. */
   const tenantShown = person?.role === "tenant" ? people[person.index] ?? people[0] ?? null : null;
   const tenantFile = tenantShown?.contactId ? leadIds[tenantShown.contactId] : null;
-  const landlordShown = info?.landlord ?? null;
+  /* Every landlord on the let (20 Oct 2026); the drawer shows the one picked. */
+  const landlordsAll: Party[] = (info?.people ?? []).filter((p) => p.role === "landlord");
+  const landlordParty: Party | null = person?.role === "landlord" ? landlordsAll[person.index] ?? landlordsAll[0] ?? null : null;
+  const landlordShown = landlordParty ?? info?.landlord ?? null;
+  const [addLandlordOpen, setAddLandlordOpen] = useState(false);
+  /* The server's person for an applicant card, matched as the cards are named. */
+  const partyFor = (p: { name: string; email?: string | null }): Party | null =>
+    (info?.people ?? []).find(
+      (x) => x.role === "tenant" && ((p.email && x.email && x.email.toLowerCase() === p.email.toLowerCase()) || x.name.trim().toLowerCase() === p.name.trim().toLowerCase())
+    ) ?? null;
 
   return (
     <SaveScopeProvider scope={saves}>
@@ -1256,9 +1287,9 @@ export default function ApplicationDrawer({
               />
               <Tile
                 icon="home"
-                label="The landlord"
-                sub={info === null ? "Reading…" : info.landlord ? info.landlord.name : "Not held on the listing"}
-                onClick={() => setPerson({ role: "landlord", index: 0 })}
+                label={landlordsAll.length > 1 ? "The landlords" : "The landlord"}
+                sub={info === null ? "Reading…" : landlordsAll.length ? `${landlordsAll[0].name}${landlordsAll.length > 1 ? ` + ${landlordsAll.length - 1}` : ""}` : info.landlord ? info.landlord.name : "None yet - add one"}
+                onClick={() => (info && !landlordsAll.length && !info.landlord ? setAddLandlordOpen(true) : setPerson({ role: "landlord", index: 0 }))}
               />
               <Tile icon="mail" label="Customer update" sub="Email tenant or landlord" onClick={() => setBuilder({ mode: "update" })} />
               <Tile icon="clock" label="Send a reminder" sub={intro ? "Marketing only - nothing to chase" : "Sign, pay, references"} off={Boolean(cancelled) || Boolean(intro)} onClick={() => setBuilder({ mode: "reminder" })} />
@@ -1299,6 +1330,8 @@ export default function ApplicationDrawer({
                 <ul className="mt-1 list-disc pl-4">{flags.map((f) => <li key={f}>{f}</li>)}</ul>
               </div>
             )}
+            {/* The let's Propoly deal, and who on it differs (20 Oct 2026). */}
+            {picture?.deal && <div className="mt-5"><PropolySummary picture={picture} people={info?.people ?? []} /></div>}
             <p className={`${eyebrow} mb-3 mt-5`}>{people.length === 1 ? "The applicant" : `The applicants · ${people.length}`}</p>
             {people.length ? (
               <ul className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
@@ -1322,12 +1355,22 @@ export default function ApplicationDrawer({
                         </button>
                       ) : null}
                     </div>
-                    <ContactBlock
-                      showName={false}
-                      role={p.isPrimary ? "lead applicant" : "applicant"}
-                      person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
-                      personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
-                    />
+                    {(() => {
+                      const party = partyFor(p);
+                      return party && letId ? (
+                        <>
+                          <PartyContact letId={letId} party={{ ...party, isPrimary: p.isPrimary }} propertyAddress={name} onAnswer={takePeople} />
+                          <PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />
+                        </>
+                      ) : (
+                        <ContactBlock
+                          showName={false}
+                          role={p.isPrimary ? "lead applicant" : "applicant"}
+                          person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
+                          personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
+                        />
+                      );
+                    })()}
                   </li>
                 ))}
               </ul>
@@ -1338,7 +1381,19 @@ export default function ApplicationDrawer({
                 lead by the applicant's email, added here too (lib/guarantors). */}
             {letId && people.length > 0 && <Guarantors source={{ let: letId }} className="mt-4" />}
             {/* A tenant added on the let, the same way (Kirstie 6a2dc73c, 19 Oct 2026, lib/let-tenants). */}
-            {letId && <LetTenants letId={letId} className="mt-3" />}
+            {letId && <LetTenants letId={letId} className="mt-3" onChange={reloadPeople} picture={picture} people={info?.people ?? null} />}
+            {/* Every landlord, each changeable, and Add landlord always (James, 20 Oct 2026). */}
+            {letId && (
+              <LandlordsBox
+                letId={letId}
+                people={info === null ? null : info.people ?? []}
+                picture={picture}
+                problem={info?.landlordProblem ?? null}
+                propertyAddress={[name, locality].filter(Boolean).join(", ")}
+                onAnswer={takePeople}
+                onOpen={(i) => setPerson({ role: "landlord", index: i })}
+              />
+            )}
 
             {/* Where it's up to, across the box underneath (as on a listing). */}
             <div className="mt-5 border-t border-line/50 pt-4">
@@ -1533,6 +1588,22 @@ export default function ApplicationDrawer({
         )}
       </Drawer>
 
+      {addLandlordOpen && letId && (
+        <AddLandlord
+          letId={letId}
+          hasDeal={Boolean(picture?.deal)}
+          live={Boolean(picture?.live)}
+          propertyAddress={[name, locality].filter(Boolean).join(", ")}
+          onClose={() => setAddLandlordOpen(false)}
+          onAdded={(j) => {
+            setAddLandlordOpen(false);
+            takePeople(j);
+            const n = ((j.let?.people ?? []) as Party[]).filter((p) => p.role === "landlord").length;
+            setPerson({ role: "landlord", index: Math.max(0, n - 1) });
+          }}
+        />
+      )}
+
       {/* The tenant, or the landlord: details left, everything said right. */}
       <Drawer open={Boolean(person)} width="lg:max-w-[min(1040px,calc(100%-4rem))]" label={person?.role === "landlord" ? "The landlord" : "The tenant"} onClose={closePerson}>
         {person && (
@@ -1544,6 +1615,24 @@ export default function ApplicationDrawer({
                 sub={person.role === "landlord" ? `Landlord of ${name}` : `${tenantShown?.isPrimary ? "Lead tenant" : "Tenant"} on ${name}`}
                 onClose={closePerson}
               >
+                {/* Every landlord, one press apart, and Add beside them (20 Oct 2026). */}
+                {person.role === "landlord" && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {landlordsAll.length > 1 && landlordsAll.map((p, i) => (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setPerson({ role: "landlord", index: i })}
+                        className={`rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors ${i === person.index ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
+                      >
+                        {firstName(p.name) || `Landlord ${i + 1}`}
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => setAddLandlordOpen(true)} className="rounded-full border border-accent-dark/50 bg-white px-3 py-1 text-[11.5px] font-semibold text-accent-dark hover:bg-accent-soft">
+                      + Add landlord
+                    </button>
+                  </div>
+                )}
                 {person.role === "tenant" && people.length > 1 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {people.map((p, i) => (
@@ -1563,12 +1652,24 @@ export default function ApplicationDrawer({
                 {person.role === "tenant" && tenantShown ? (
                   <>
                     <section className="rounded-xl border border-line/50 bg-white p-4">
-                      <ContactBlock
-                        showName={false}
-                        role={tenantShown.isPrimary ? "lead applicant" : "applicant"}
-                        person={{ name: tenantShown.name, email: tenantShown.email ?? null, phone: tenantShown.phone ?? null }}
-                        personRef={/^\d+$/.test(String(tenantShown.contactId ?? "")) ? `rex:${tenantShown.contactId}` : null}
-                      />
+                      {(() => {
+                        const party = partyFor(tenantShown);
+                        return party && letId ? (
+                          <>
+                            <p className={`${eyebrow} mb-1`}>Their details</p>
+                            <PartyContact letId={letId} party={{ ...party, isPrimary: tenantShown.isPrimary }} propertyAddress={name} onAnswer={takePeople} showName />
+                            {sourceWords(party) && <p className="mt-1.5 text-[11px] text-muted">{sourceWords(party)}</p>}
+                            <PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />
+                          </>
+                        ) : (
+                          <ContactBlock
+                            showName={false}
+                            role={tenantShown.isPrimary ? "lead applicant" : "applicant"}
+                            person={{ name: tenantShown.name, email: tenantShown.email ?? null, phone: tenantShown.phone ?? null }}
+                            personRef={/^\d+$/.test(String(tenantShown.contactId ?? "")) ? `rex:${tenantShown.contactId}` : null}
+                          />
+                        );
+                      })()}
                       {canChangeLead && !tenantShown.isPrimary && (
                         <button
                           type="button"
@@ -1638,13 +1739,22 @@ export default function ApplicationDrawer({
                   ) : landlordShown ? (
                     <>
                       <section className="rounded-xl border border-line/50 bg-white p-4">
-                        <ContactBlock
-                          showName={false}
-                          role="landlord"
-                          person={{ name: landlordShown.name, email: landlordShown.email, phone: landlordShown.phone }}
-                          personRef={landlordShown.contactId && landlordShown.from !== "record" ? `rex:${landlordShown.contactId}` : null}
-                        />
-                        {landlordShown.from === "record" && (
+                        {landlordParty && letId ? (
+                          <>
+                            <p className={`${eyebrow} mb-1`}>Their details</p>
+                            <PartyContact letId={letId} party={landlordParty} propertyAddress={[name, locality].filter(Boolean).join(", ")} onAnswer={takePeople} showName />
+                            {sourceWords(landlordParty) && <p className="mt-1.5 text-[11px] text-muted">{sourceWords(landlordParty)}</p>}
+                            <PropolyLine letId={letId} party={landlordParty} picture={picture} onAnswer={takePeople} />
+                          </>
+                        ) : (
+                          <ContactBlock
+                            showName={false}
+                            role="landlord"
+                            person={{ name: landlordShown.name, email: landlordShown.email, phone: landlordShown.phone }}
+                            personRef={landlordShown.contactId && (landlordShown as LetLandlord).from !== "record" ? `rex:${landlordShown.contactId}` : null}
+                          />
+                        )}
+                        {!landlordParty && (landlordShown as LetLandlord).from === "record" && (
                           <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">{info.listingId ? "From the managed property record. They are not on the listing yet." : "From the home's record in the OS. Change them on the home's page."}</p>
                         )}
                       </section>
@@ -1655,7 +1765,10 @@ export default function ApplicationDrawer({
                       )}
                     </>
                   ) : (
-                    <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">{info.landlordProblem ?? "No landlord is held on the listing for this let."}</p>
+                    <div className="rounded-xl bg-[#fdefec] px-4 py-3 text-[12.5px] text-[#9d4340]">
+                      <p><b className="font-semibold">No landlord on this let.</b> Every let needs one. {info.landlordProblem ?? ""}</p>
+                      <button type="button" onClick={() => setAddLandlordOpen(true)} className="mt-2.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page">Add the landlord</button>
+                    </div>
                   )
                 ) : null}
               </div>
@@ -1670,7 +1783,7 @@ export default function ApplicationDrawer({
                   !letId
                     ? null
                     : person.role === "landlord"
-                      ? landlordShown ? `/api/applications/${encodeURIComponent(letId)}/conversation?with=landlord` : null
+                      ? landlordShown ? `/api/applications/${encodeURIComponent(letId)}/conversation?with=landlord&i=${person.index}` : null
                       : `/api/applications/${encodeURIComponent(letId)}/conversation?with=tenant&i=${person.index}`
                 }
                 noConversation={person.role === "landlord" ? "No landlord is held on the listing, so there's no conversation to show." : "Nobody is held for them on this let."}

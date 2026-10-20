@@ -474,6 +474,23 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "TENANT_CHANGES_LIVE",
     legacyOn: "on",
   },
+  {
+    /* People changed on a let that is already in Propoly (James, 20 Oct
+       2026, lib/let-propoly-sync). Propoly's API can ADD a tenant to a deal
+       and ADD a landlord to the home, and nothing else: it has no way to
+       change somebody already on a deal (probed 20 Oct - no PATCH or PUT on
+       deals, tenants, landlords or properties). So with this on, a tenant or
+       landlord added on the let goes across once, and an edit to someone
+       already there is listed on the let to change in Propoly by hand. With
+       it off the same thing is rehearsed: live reads, nothing written. */
+    key: "propoly_people_live",
+    label: "People added on a let go to its Propoly deal",
+    what: "Once a let has a deal in Propoly, a tenant added on the let is added to that deal (POST /tenants), and a landlord added on the let is found or created in Propoly and linked to the home (POST /landlords, then the landlord-to-property link). One write per addition, never repeated. Changes to someone already on the deal can't be sent - Propoly has no way to take them - so the let lists them to change in Propoly by hand.",
+    who: "Propoly is WRITTEN TO: new tenants on an existing deal, new landlords and their link to the home. Propoly emails a tenant it is told to reference, as it does when one is keyed in by hand. Handover must be on too.",
+    confirm: "PEOPLE TO PROPOLY",
+    legacyEnv: "PROPOLY_PEOPLE_LIVE",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

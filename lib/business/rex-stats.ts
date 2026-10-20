@@ -2143,6 +2143,8 @@ export interface AgentApplication {
      *  this property's deal from one it would be linking for the first time. */
     propertyUuid?: string | null;
     landlordUuids?: string[];
+    /** Every landlord on the deal, with Propoly's uuid (20 Oct 2026). */
+    landlords?: Array<{ uuid: string | null; name: string | null; email: string | null; phone: string | null }>;
     /** Guarantors, where the deal has them (~31%). */
     guarantors?: Array<{ name: string | null; email: string | null; phone: string | null }>;
     /** payments.holding_deposit: Propoly takes the holding fee itself (card),

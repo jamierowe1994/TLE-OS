@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const sp = req.nextUrl.searchParams;
   const person =
     sp.get("with") === "landlord"
-      ? r.let.landlord
+      ? r.let.people.filter((p) => p.role === "landlord")[Math.max(0, Number(sp.get("i") ?? 0) || 0)] ?? r.let.landlord
       : r.let.tenants[Math.max(0, Number(sp.get("i") ?? 0) || 0)] ?? null;
   if (!person) return NextResponse.json({ ok: true, items: [], notes: ["Nobody is held for them on this let, so there's no conversation to show."] });
   const emails = person.email ? [person.email] : [];

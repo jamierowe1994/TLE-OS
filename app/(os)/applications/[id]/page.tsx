@@ -8,6 +8,7 @@ import HandoffPanel from "@/components/HandoffPanel";
 import { peekJson, readJson } from "@/lib/page-cache";
 import { applicationOrder } from "@/lib/application-order";
 import { checksFor, isLet, toAppRecord } from "@/lib/application-record";
+import { sameHome } from "@/lib/address-parse";
 import type { Application } from "@/lib/applications";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
@@ -37,6 +38,10 @@ function dealFor(a: Application, deals: PreTenancyDeal[]): PreTenancyDeal | null
     (a.propolyDealId ? deals.find((d) => d.app.id === a.propolyDealId) : undefined) ??
     deals.find((d) => a.listingId != null && d.app.listingId != null && Number(d.app.listingId) === a.listingId) ??
     deals.find((d) => d.app.propertyName.trim().toLowerCase() === name) ??
+    /* The same home written Propoly's way (20 Oct 2026): "Apartment 30 21
+       Wheatsheaf Court, Leicester" against REX's "Apartment 30, 21 Wheatsheaf
+       Court" opened the deal on its own, with no landlord and no PLC. */
+    (a.swap ? undefined : deals.find((d) => sameHome(`${a.property}, ${a.locality}`, `${d.app.propertyName}, ${d.app.locality}`))) ??
     null
   );
 }

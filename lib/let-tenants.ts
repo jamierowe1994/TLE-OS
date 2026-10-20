@@ -14,8 +14,9 @@ import { switchOn } from "@/lib/switches";
  * the let's Push to Propoly with everyone else (lib/deal-handoff handoffFor) -
  * but only once James switches on tenant_changes_live. Until then, and
  * always once the deal is already in Propoly, the agent adds them in Propoly
- * by hand; the let says so. (Adding to a deal already pushed would be a new
- * Propoly write, POST /tenants on that deal - not built, James's question.)
+ * by hand; the let says so. Adding to a deal already in Propoly is
+ * lib/let-propoly-sync (20 Oct 2026), behind its own switch,
+ * propoly_people_live.
  */
 
 export interface LetTenant {
@@ -66,6 +67,19 @@ export async function addLetTenant(t: Omit<LetTenant, "id" | "at">): Promise<Let
     [id, t.letRef, t.name, t.email, t.phone, t.reference, t.by]
   );
   return shape(rows[0]);
+}
+
+/** Change one added tenant's details (20 Oct 2026). Only the fields given change. */
+export async function updateLetTenant(id: string, change: Partial<Pick<LetTenant, "name" | "email" | "phone">>): Promise<LetTenant | null> {
+  const rows = await tq<Row>(
+    `UPDATE os_let_tenants SET
+       name = COALESCE($2, name),
+       email = CASE WHEN $3::boolean THEN $4 ELSE email END,
+       phone = CASE WHEN $5::boolean THEN $6 ELSE phone END
+     WHERE id = $1 AND removed_at IS NULL RETURNING *`,
+    [id, change.name ?? null, "email" in change, change.email ?? null, "phone" in change, change.phone ?? null]
+  );
+  return rows[0] ? shape(rows[0]) : null;
 }
 
 export async function removeLetTenant(id: string): Promise<LetTenant | null> {

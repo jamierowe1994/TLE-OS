@@ -917,7 +917,7 @@ function ukMobile(raw: string | null): string {
 }
 
 /** A tenant for POST /api/v1/tenants, from the REX contact where it has the parts. */
-function tenantAttributes(cc: Row, t: Handoff["tenants"][number]) {
+export function tenantAttributes(cc: Row, t: Pick<Handoff["tenants"][number], "name" | "email" | "phone">) {
   const rel = (cc.related ?? {}) as Row;
   const n = (((rel.contact_names ?? []) as Row[])[0] ?? {}) as Row;
   const ph = (((rel.contact_phones ?? []) as Row[])[0] ?? {}) as Row;
@@ -943,7 +943,7 @@ function tenantAttributes(cc: Row, t: Handoff["tenants"][number]) {
  * REX keeps a person's parts under related.contact_names / contact_phones;
  * the flat fields are the fallback.
  */
-function landlordPayload(cc: Row, name: string, email: string) {
+export function landlordPayload(cc: Row, name: string, email: string) {
   const rel = (cc.related ?? {}) as Row;
   const n = (((rel.contact_names ?? []) as Row[])[0] ?? {}) as Row;
   const ph = (((rel.contact_phones ?? []) as Row[])[0] ?? {}) as Row;
@@ -978,7 +978,7 @@ function landlordPayload(cc: Row, name: string, email: string) {
 }
 
 /** Propoly's own reason for a refusal, in its words: "Mobile number can't be blank". */
-function refusal(res: { status: number; body: unknown }): string {
+export function refusal(res: { status: number; body: unknown }): string {
   const b = (res.body ?? {}) as Row;
   const errs = Array.isArray(b.errors) ? (b.errors as unknown[]).map(String).join("; ") : null;
   return str(b.message) ?? errs ?? `it answered ${res.status || "nothing"}.`;
@@ -1005,7 +1005,7 @@ function listOf(body: unknown): Row[] {
   }
   return [];
 }
-function firstMatch(body: unknown, pred: (r: Row) => boolean): Row | null {
+export function firstMatch(body: unknown, pred: (r: Row) => boolean): Row | null {
   return listOf(body).find(pred) ?? null;
 }
 
