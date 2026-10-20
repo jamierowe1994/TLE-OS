@@ -1631,6 +1631,28 @@ export const TENANT_PORTAL_LOGIN = {
   branding: { showSignoff: false },
 } as const;
 
+/**
+ * Certificates and documents for the home, sent by a person from the home's
+ * page (Josel Banagua, 20 Oct 2026: "send compliance documents directly to
+ * tenants through OS, rather than having to manage this separately").
+ * docList is the list of what is attached, with the sender's own note under
+ * it when they wrote one. Never an invoice: the page offers no invoice to pick.
+ */
+export const TENANT_DOCUMENTS = {
+  subject: "Documents for {{address}}",
+  preheader: "Your copies, attached to this email.",
+  mode: "blocks",
+  blocks: [
+    H("tdc1", "Documents for Your Home"),
+    T("tdc2", "Hi {{firstName}},<br><br>Here are your copies of these documents for <strong>{{address}}</strong>. They're attached to this email."),
+    T("tdc3", "{{docList}}"),
+    T("tdc5", "Please keep them with your tenancy papers. If anything won't open, reply to this email and we'll send it another way."),
+    T("tdc6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("tdc7", "You're getting this because you rent your home through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /** Two days after the passport invite, nothing typed. */
 export const TENANT_PASSPORT_NUDGE_1 = {
   subject: "Your tenant passport is ready when you are",

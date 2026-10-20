@@ -43,6 +43,7 @@ export const AUDIT_KIND: Record<string, string> = {
   sign_in_locked: "tried to sign in while locked",
   reading_paused: "paused for reading too fast",
   data_exported: "downloaded a spreadsheet",
+  tenant_documents_sent: "sent documents to tenants",
 };
 
 /**

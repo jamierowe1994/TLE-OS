@@ -219,6 +219,10 @@ function HomePanel({ id, onBack, onChanged }: { id: string; onBack: () => void; 
               home either system does not hold says so rather than hiding the
               button (James, 28 Sep 2026). */}
           <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+            {/* Everything about the home in one place (Josel, 20 Oct 2026): its own page. */}
+            <a href={`/portfolio/home/${encodeURIComponent(h.id)}?name=${encodeURIComponent(h.address)}`} target="tle-sweep-home" rel="noopener" className="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page">
+              <DoodleIcon name="pack/house" size={12} /> Property page
+            </a>
             {d.links.rexPm ? (
               <a href={d.links.rexPm} target="tle-sweep-rexpm" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page">
                 <DoodleIcon name="link" size={12} /> Open in REX PM

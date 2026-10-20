@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
-import { scopeForWho } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { addPerson, cleanPerson, isKind, KIND_LABEL, peopleOn, personById, removePerson, updatePerson } from "@/lib/property-people";
 import { record } from "@/lib/audit";
@@ -26,7 +26,7 @@ type Who = Awaited<ReturnType<typeof whoIs>>;
 
 /** The home, if it is in this person's book; otherwise the answer to send back. */
 async function homeFor(req: NextRequest, who: Who, propertyId: string) {
-  const scope = await scopeForWho(req, who);
+  const scope = await bookScope(req, who);
   if (scope.unlinked) return { error: NextResponse.json({ ok: false, error: "We can't tell which agent you are, so this can't be saved." }, { status: 403 }) };
   const { book } = await managedBookFor(scope.rexUserId);
   const home = book.properties.find((p) => p.propertyId === propertyId);

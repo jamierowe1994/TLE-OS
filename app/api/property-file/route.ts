@@ -12,7 +12,7 @@ import { notNeededAll } from "@/lib/cert-not-needed";
 import { renewalHeld, renewalHoldEnds } from "@/lib/compliance";
 import { isOsPropertyId } from "@/lib/os-properties";
 import { managedBookFor } from "@/lib/managed-book-cache";
-import { scopeFor } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 import { homeFactsFor } from "@/lib/home-facts";
 
@@ -86,7 +86,7 @@ const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license"
    record lacks a type, the house's row (or another room's) stands in for it,
    labelled with where it is held. */
 async function houseRowsFor(req: NextRequest, propertyId: string, seen: Set<string>): Promise<FileRow[]> {
-  const scope = await scopeFor(req).catch(() => null);
+  const scope = await bookScope(req).catch(() => null);
   if (!scope || scope.unlinked) return [];
   const { book } = await managedBookFor(scope.rexUserId).catch(() => ({ book: null }));
   if (!book) return [];

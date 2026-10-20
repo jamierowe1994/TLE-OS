@@ -235,6 +235,10 @@ export default function ComplianceDrawer({
               </p>
             </div>
             <div className="flex items-center justify-end gap-2 sm:shrink-0">
+              {/* Everything about the home in one place (Josel, 20 Oct 2026). */}
+              <a href={`/portfolio/home/${encodeURIComponent(p.id)}?name=${encodeURIComponent([p.name, p.locality].filter(Boolean).join(", "))}&tab=compliance`} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold hover:border-ink">
+                <DoodleIcon name="pack/house" size={12} />Property page
+              </a>
               <SaveChip scope={saves} />
               <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">
                 ✕
