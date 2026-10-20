@@ -13,6 +13,7 @@ import { applySweep, holdToNextTenancy } from "@/lib/sweep-certs";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 import { allAgents } from "@/lib/rex-agents";
 import { listTegPeople, normEmail } from "@/lib/teg-people";
+import { withoutRemoved } from "@/lib/certificate-remove";
 
 /**
  * The compliance book, live from REX.
@@ -284,7 +285,9 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     if (!again.ok) throw new Error(`REX did not give the certificates for ${chunk.length} homes (${again.error ?? again.status}).`);
     return rexRows(again.result) as RexEntry[];
   });
-  const entries = results.flat();
+  /* Less any entry still carrying a certificate somebody took off as wrong or
+     replaced (lib/certificate-remove): the duty shows as missing, not met. */
+  const entries = await withoutRemoved(results.flat());
 
   /**
    * Who is on each home, batched the same way the certificates are.

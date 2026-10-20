@@ -16,6 +16,7 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { bookScope } from "@/lib/scope";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 import { homeFactsFor } from "@/lib/home-facts";
+import { removedFor } from "@/lib/certificate-remove";
 
 /**
  * GET /api/property-file?property=<REX property id>
@@ -79,6 +80,8 @@ export interface FileRow {
   checking?: CertChecking;
   /** The certificate shown was verified by the compliance team: the green tick. */
   verified?: { by: string; at: string };
+  /** The last certificate taken off this row, and why (lib/certificate-remove). */
+  removed?: { name: string; reason: "wrong" | "replaced"; by: string; at: string };
 }
 
 const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"]);
@@ -239,6 +242,16 @@ export async function GET(req: NextRequest) {
       const key = VAULT_KEY[r.type];
       if (!key) continue;
       if ((owed && !owed.has(key)) || (notHmo && HMO_ONLY.has(key))) r.state = "not-required";
+    }
+  }
+  /* What somebody took off (lib/certificate-remove, 20 Oct 2026): said on the
+     row it came off, so a duty that has just gone back to missing explains
+     itself. The newest per type. */
+  if (propertyId) {
+    const gone = await removedFor(propertyId).catch(() => []);
+    for (const r of rows) {
+      const g = gone.find((x) => x.type === r.type);
+      if (g) r.removed = { name: g.name, reason: g.reason, by: g.by, at: g.at };
     }
   }
   rows.sort((a, b) => (ORDER.indexOf(a.type) + 1 || 99) - (ORDER.indexOf(b.type) + 1 || 99));
