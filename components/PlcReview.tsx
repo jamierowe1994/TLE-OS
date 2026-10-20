@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { gateOf, sentAnywayNow, type Check, type CheckId, type Finding, type PlcCase, type SentAnyway } from "@/lib/plc";
+import { finalAskNow, finalAskSent, gateOf, sentAnywayNow, type Check, type CheckId, type Finding, type PlcCase, type SentAnyway } from "@/lib/plc";
 
 /**
  * The compliance side of a PLC handover, and the pieces it is built from.
@@ -27,7 +27,14 @@ export type Loaded = {
   scanConfigured: boolean;
   /** What the person looking may do. Absent on the practice and preview
    *  screens, where one person plays every part. */
-  me?: { canCheck: boolean; canApprove: boolean; approveBlocked: string | null; approvers?: string };
+  me?: {
+    canCheck: boolean;
+    canApprove: boolean;
+    approveBlocked: string | null;
+    approvers?: string;
+    /** Send to Susan for Final Approval: who it goes to, and whether this person may press it. */
+    finalAsk?: { approver: { name: string; firstName: string } | null; canSend: boolean; blocked: string | null };
+  };
   /** The RLP request as it would go, when the agent asked for cover. */
   rlp?: { preview: { subject: string; html: string; files: string[] }; teamSet: boolean; switchOn: boolean } | null;
 };
@@ -202,6 +209,88 @@ export function SentAnywayTag({ c }: { c: Pick<PlcCase, "sentAnyway" | "submitte
   return <span className="shrink-0 whitespace-nowrap rounded-full bg-[#fdefec] px-2.5 py-1 text-[11px] font-semibold text-[#9d4340]">Sent anyway</span>;
 }
 
+/** A small tag for the queue: sent to Susan and waiting on her (20 Oct 2026). */
+export function FinalAskTag({ c }: { c: Pick<PlcCase, "finalAsks" | "checkedAt" | "state"> }) {
+  const ask = finalAskSent(c);
+  if (!ask) return null;
+  return (
+    <span className="shrink-0 whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+      With {ask.test ? "you (test)" : firstOf(ask.toName)}
+    </span>
+  );
+}
+
+const firstOf = (name: string) => name.trim().split(/\s+/)[0] || name;
+
+/**
+ * Send to Susan for Final Approval (20 Oct 2026).
+ *
+ * The first check is done; the pack waits on the final approver. Whoever did
+ * the check presses this and Susan is emailed a link straight to the pack.
+ * Once sent it says so - "With Susan for final approval, sent 20 Oct at 14:12
+ * by Kirstie" - and the button becomes Send Again, a reminder. It shows only
+ * on a pack that is complete enough to approve (the server's gate decides).
+ */
+function FinalAskCard({
+  c,
+  offer,
+  busy,
+  notice,
+  onSend,
+}: {
+  c: PlcCase;
+  offer: NonNullable<NonNullable<Loaded["me"]>["finalAsk"]>;
+  busy: boolean;
+  notice: string | null;
+  onSend: () => void;
+}) {
+  const sent = finalAskSent(c);
+  const last = finalAskNow(c);
+  const failed = last && !last.sent ? last : null;
+  const name = offer.approver?.firstName ?? (sent ? firstOf(sent.toName) : "the approver");
+  const times = (c.finalAsks ?? []).filter((a) => a.sent && c.checkedAt && a.at >= c.checkedAt).length;
+  /* Susan looking at her own pack: no button, just whose turn it is. */
+  const mine = !offer.canSend && !offer.blocked && Boolean(offer.approver);
+  if (!sent && !offer.canSend && !offer.blocked) return null;
+  return (
+    <section className="rounded-[18px] border border-line/70 bg-card p-5 text-[13.5px]">
+      <h2 className="flex items-center gap-2.5 text-[15px] font-normal tracking-normal">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+          <DoodleIcon name={sent ? "clock" : "mail"} size={14} />
+        </span>
+        {sent ? (mine ? "With You for Final Approval" : `With ${name} for Final Approval`) : `Send to ${name} for Final Approval`}
+      </h2>
+      {sent ? (
+        <p className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-amber-800" data-final-ask="sent">
+          {sent.test ? "Test email to you, sent" : `Sent to ${mine ? "you" : name}`} {prettyWhen(sent.at).replace(", ", " at ")} by{" "}
+          {firstOf(sent.by)}
+          {times > 1 ? ` (${times} emails, the last a reminder)` : ""}.
+        </p>
+      ) : (
+        <p className="mt-3 leading-relaxed text-ink/70">
+          {name} gives the final approval. Send it and {name} gets an email with a link straight to this pack.
+        </p>
+      )}
+      {failed && (
+        <p className="mt-3 rounded-xl bg-[#fdefec] px-4 py-2.5 text-[#9d4340]">
+          The last try, {prettyWhen(failed.at)} by {firstOf(failed.by)}, did not go: {failed.note || "no reason given"}.
+        </p>
+      )}
+      {offer.canSend ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Btn onClick={onSend} busy={busy} tone={sent ? "plain" : "primary"}>
+            {sent ? "Send Again" : `Send to ${name} for Final Approval`}
+          </Btn>
+          {sent && <span className="text-[12px] text-ink/60">Sends {name} a reminder.</span>}
+        </div>
+      ) : offer.blocked ? (
+        <p className="mt-2 text-[12px] text-ink/60">{offer.blocked}</p>
+      ) : null}
+      {notice && last?.sent && <p className="mt-2 text-[12px] font-semibold text-[#56634a]" role="status">{notice}</p>}
+    </section>
+  );
+}
+
 /** Renders its own <li>, so the caller keys it and does NOT wrap it — an li
  *  inside an li is a hydration error, not just untidy markup. */
 function FindingRow({ f, checks }: { f: Finding; checks: Check[] }) {
@@ -253,24 +342,36 @@ export function ComplianceSide({
   const c = data.case;
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  /* One press at a time. `busy` greys the button only once React has
+     rendered, so a fast double-click got two requests out first; the server
+     refuses the second Send to Susan, but the refusal read as an error. */
+  const inFlight = useRef(false);
 
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(action);
     say(null);
+    setNotice(null);
     try {
       if (perform) {
         await perform(action, extra);
       } else {
-        await api(`/api/plc/${c.id}`, {
+        const res = await api<{ message?: string }>(`/api/plc/${c.id}`, {
           method: "POST",
           body: JSON.stringify({ action, ...extra }),
         });
+        if (res.message) setNotice(res.message);
       }
       await reload();
-      if (action === "decide" || action === "check") onDecided();
+      /* The first check no longer closes the pack (20 Oct 2026): it lands on
+         the final approval step, where Send to Susan is the next press. */
+      if (action === "decide") onDecided();
     } catch (e) {
       say((e as Error).message);
     } finally {
+      inFlight.current = false;
       setBusy(null);
     }
   };
@@ -492,6 +593,10 @@ export function ComplianceSide({
           </p>
           {c.checkNote && <p className="mt-1 whitespace-pre-wrap text-ink/70">{c.checkNote}</p>}
         </section>
+      )}
+
+      {c.state === "checked" && data.me?.finalAsk && (
+        <FinalAskCard c={c} offer={data.me.finalAsk} busy={busy === "ask-final"} notice={notice} onSend={() => act("ask-final")} />
       )}
 
       {/* ── Step two: the final approval ── a named approver, and never the

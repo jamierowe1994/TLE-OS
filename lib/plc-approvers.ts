@@ -71,3 +71,29 @@ export async function savePlcApprovers(emails: string[], by: string): Promise<st
   );
   return list;
 }
+
+/**
+ * Who "Send for Final Approval" emails (20 Oct 2026): Susan, found rather
+ * than written in. She is the approver who runs the business, so she is the
+ * person on the approvers list who holds an owner or super_admin role in
+ * os_users (on 20 Oct: Susan alone - Kirstie is pretenancy, Michael
+ * compliance), with the address she signs in with. Should the list ever hold
+ * two such people, the one listed first wins. An approver list without her
+ * answers null and the button says why. A locked-out account is never emailed.
+ */
+export type FinalApprover = { email: string; name: string; firstName: string };
+
+export async function finalApprover(): Promise<FinalApprover | null> {
+  if (!hasDb()) return null;
+  const emails = await plcApprovers();
+  const rows = await q<{ email: string; name: string | null }>(
+    `SELECT lower(email) AS email, name FROM os_users
+      WHERE role IN ('owner', 'super_admin') AND lower(email) = ANY($1) AND locked_at IS NULL`,
+    [emails]
+  ).catch(() => []);
+  const r = rows.sort((a, b) => emails.indexOf(a.email) - emails.indexOf(b.email))[0];
+  if (!r) return null;
+  const name = (r.name ?? "").trim() || r.email.split("@")[0];
+  const first = name.split(/\s+/)[0];
+  return { email: r.email, name, firstName: first.charAt(0).toUpperCase() + first.slice(1) };
+}

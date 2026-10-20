@@ -32,6 +32,7 @@ import { switchOn } from "@/lib/switches";
 import { isTestCase } from "@/lib/test-guard";
 import { isTestId } from "@/lib/test-overlay";
 import { moveInToRex } from "@/lib/plc-move-in-rex";
+import { askFinalApproval, finalAskOffer } from "@/lib/plc-final-ask";
 
 /**
  * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
@@ -69,6 +70,7 @@ async function payload(c: PlcCase | null, req: NextRequest) {
   const canApprove = dryRun || ((await isPlcApprover(email)) && !checker);
   const rlpOn = c.rlpWanted ? await switchOn("rlp_requests") : false;
   const approvers = await plcApproverNames();
+  const canCheck = dryRun || Boolean(me && can(me.role, "work:plc"));
   return {
     case: { ...c, findings: sortFindings(c.findings) },
     checks: PLC_CHECKS,
@@ -76,12 +78,15 @@ async function payload(c: PlcCase | null, req: NextRequest) {
     summary: c.scannedAt ? scanSummary(c.findings) : null,
     scanConfigured: scanConfigured(),
     me: {
-      canCheck: dryRun || Boolean(me && can(me.role, "work:plc")),
+      canCheck,
       canApprove,
       /* Why not, in a sentence, when they cannot. */
       approveBlocked: canApprove ? null : checker ? "You did the first check, so the final approval has to be somebody else." : `The final approval is for ${approvers}.`,
       /* Who gives the final approval, for the copy on the pack. */
       approvers,
+      /* Send to Susan for Final Approval (20 Oct 2026): who it would go to,
+         and whether this person may press it. */
+      finalAsk: await finalAskOffer(c, me, canCheck),
     },
     rlp: c.rlpWanted
       ? { preview: rlpEmail(c), teamSet: Boolean(rlpTeamEmail()), switchOn: rlpOn }
@@ -281,7 +286,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
      first check, defer or decline; the final approval is a short named list
      (Kirstie, Michael and Susan, lib/plc-approvers), and never the person who did
      the first check on the same pack. */
-  const COMPLIANCE_ONLY = new Set(["check", "decide", "push-rex", "push-propoly", "rlp-send"]);
+  const COMPLIANCE_ONLY = new Set(["check", "ask-final", "decide", "push-rex", "push-propoly", "rlp-send"]);
   /* A test file's pack (lib/test-guard isTestCase, 5 Oct 2026): the tester
      plays every side - first check AND final approval, still behind work:plc - so
      Howard can walk the whole check. It is safe because nothing about a test
@@ -469,6 +474,16 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           to: "checked",
         });
         return NextResponse.json({ ok: true, ...(await payload(checked, req)) });
+      }
+
+      case "ask-final": {
+        /* Send to Susan for Final Approval, or Send Again as a reminder. The
+           pack does not move: it is recorded and Susan is emailed. */
+        if (!found) return NextResponse.json({ ok: false, error: "No handover with that reference." }, { status: 404 });
+        const me = await currentUser(req);
+        const by = me?.name ?? (await actorName(req, "Compliance"));
+        const asked = await askFinalApproval(found, { name: by, email: me?.email ?? null });
+        return NextResponse.json({ ok: true, message: asked.message, ...(await payload(asked.case, req)) });
       }
 
       case "rlp": {

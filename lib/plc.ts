@@ -577,6 +577,46 @@ export const sentAnywayNow = (c: Pick<PlcCase, "sentAnyway" | "submittedAt" | "s
   return (c.sentAnyway ?? []).find((s) => s.at === c.submittedAt) ?? null;
 };
 
+/**
+ * Sent for final approval (20 Oct 2026). Kirstie does the first check, then
+ * "sent to Sue to check over and do final check" (ticket c2ad920f) - which
+ * until now meant telling Susan herself. The button emails Susan a link to
+ * the pack, and this is the record of each press: who, when, to whom, and
+ * whether the email went. Every press is kept, so a reminder is a second row,
+ * not an overwrite.
+ */
+export type FinalAsk = {
+  at: string;
+  by: string;
+  byEmail?: string | null;
+  /** The approver it went to, read from os_users at the time. */
+  to: string;
+  toName: string;
+  sent: boolean;
+  /** Why it did not go, in a sentence, when it did not. */
+  note?: string;
+  /** A test pack's email goes to whoever pressed, never to the approver. */
+  test?: boolean;
+};
+
+/**
+ * The ask that stands for THIS final approval: the last one since the first
+ * check, and only while the pack is still waiting on it. An approval, a send
+ * back or a fresh first check after a reopen all end it on their own.
+ */
+export const finalAskNow = (c: Pick<PlcCase, "finalAsks" | "checkedAt" | "state">): FinalAsk | null => {
+  if (c.state !== "checked" || !c.checkedAt) return null;
+  const since = (c.finalAsks ?? []).filter((a) => a.at >= c.checkedAt!);
+  return since.length ? since[since.length - 1] : null;
+};
+
+/** The last ask since the first check that actually reached somebody. */
+export const finalAskSent = (c: Pick<PlcCase, "finalAsks" | "checkedAt" | "state">): FinalAsk | null => {
+  if (c.state !== "checked" || !c.checkedAt) return null;
+  const sent = (c.finalAsks ?? []).filter((a) => a.at >= c.checkedAt! && a.sent);
+  return sent.length ? sent[sent.length - 1] : null;
+};
+
 /** One document's fate in a push to Propoly. */
 export type PushResult = {
   checkId: CheckId;
@@ -663,6 +703,8 @@ export type PlcCase = {
   checkedBy?: string | null;
   checkedByEmail?: string | null;
   checkNote?: string;
+  /** Every Send to Susan for Final Approval, oldest first (20 Oct 2026). */
+  finalAsks?: FinalAsk[];
   /**
    * Rent and Legal Protection, as the agent asked for it. Null until they
    * answer, and the pack cannot be sent until they do. It is a request, not

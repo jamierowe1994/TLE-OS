@@ -29,7 +29,7 @@ import { tleBrand, type EmailAudience } from "@/lib/campaign-mail";
 import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
-import { certificateChaseEmail, ownComplianceEmail, ownComplianceRollupEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail } from "@/lib/email/agent-emails";
+import { certificateChaseEmail, ownComplianceEmail, ownComplianceRollupEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail, plcFinalApprovalEmail } from "@/lib/email/agent-emails";
 import { accountsInvoiceEmail, certificateSharedEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import type { WorksOrder } from "@/lib/works-orders";
 import {
@@ -448,6 +448,32 @@ export const TLE_EMAILS: CatalogEntry[] = [
         { id: 1, dealId: "d1", property: "8 Recreation Terrace, Nottingham", event: "references_back", fromStatus: "references", toStatus: "plc", at: new Date().toISOString(), amount: null, agentEmail: null, agentName: "Rhiannon" } as never,
         SITE
       );
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "plc-final-approval",
+    group: "Pre-tenancy",
+    name: "PLC Ready for Your Approval",
+    audience: "partner",
+    trigger: "Kirstie (or whoever did the first check) presses Send to Susan for Final Approval on a checked PLC pack; Send Again sends the reminder version",
+    fires: "app/api/plc/[id] action ask-final",
+    to: "The final approver who runs the business: on the PLC approvers list with an owner or super-admin role (Susan)",
+    summary:
+      "One pack, one link straight to it on the PLC queue. Susan approves in the OS, never by replying; a reply goes to whoever sent it.",
+    render: () => {
+      const m = plcFinalApprovalEmail({
+        firstName: "Susan",
+        property: "12b Cliff Road, Wellingborough NN8 1AB",
+        agentName: "Rhiannon Davies",
+        moveIn: "Fri 30 Oct 2026",
+        checkedBy: "Kirstie Mulholland",
+        checkNote: "Gas and EICR both in date on the move-in. Landlord ID from his other home.",
+        sentBy: "Kirstie Mulholland",
+        sentAnyway: false,
+        reminder: false,
+        link: `${SITE}/pre-tenancy/plc?case=plc-example`,
+      });
       return { subject: m.subject, html: m.html };
     },
   },

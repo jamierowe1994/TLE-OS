@@ -7,7 +7,7 @@ import { ROUND_HELP } from "@/components/GuideButton";
 import DoodleIcon from "@/components/DoodleIcon";
 import PreTenancyHero from "@/components/pretenancy/Hero";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
-import { api, ComplianceSide, Note, Pill, prettyDate, prettyWhen, PLC_GREEN, PLC_RED, SentAnywayTag, type Loaded } from "@/components/PlcReview";
+import { api, ComplianceSide, Note, Pill, prettyDate, prettyWhen, PLC_GREEN, PLC_RED, SentAnywayTag, FinalAskTag, type Loaded } from "@/components/PlcReview";
 import type { PlcCase } from "@/lib/plc";
 
 /**
@@ -230,6 +230,7 @@ export default function PlcQueuePage() {
                       </span>
                     </span>
                     <SentAnywayTag c={c} />
+                    <FinalAskTag c={c} />
                     <Pill state={c.state} />
                     <span className="text-muted"><DoodleIcon name="trend-up" size={13} /></span>
                   </button>
@@ -261,6 +262,7 @@ export default function PlcQueuePage() {
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                       <Pill state={openCase.state} />
                       <SentAnywayTag c={openCase} />
+                      <FinalAskTag c={openCase} />
                       {ageOf(openCase.submittedAt).over ? <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${PLC_RED}`}>Past {TARGET_HOURS} hours</span> : null}
                     </div>
                   </div>

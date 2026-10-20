@@ -16,6 +16,7 @@ import {
   type FileRead,
   type LetType,
   COVERABLE,
+  type FinalAsk,
   type Finding,
   type PlcCase,
   type PlcDocument,
@@ -75,6 +76,7 @@ interface Row extends Record<string, unknown> {
   let_type: string | null;
   file_keys: string[] | null;
   sent_anyway: SentAnyway[] | null;
+  final_asks: FinalAsk[] | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -115,6 +117,7 @@ function rowTo(r: Row): PlcCase {
     findings: Array.isArray(r.findings) ? r.findings : [],
     waivers: Array.isArray(r.waivers) ? r.waivers : [],
     sentAnyway: Array.isArray(r.sent_anyway) ? r.sent_anyway : [],
+    finalAsks: Array.isArray(r.final_asks) ? r.final_asks : [],
     propolyPush: r.propoly_push ?? null,
     rexPush: r.rex_push ?? null,
     checkedAt: iso(r.checked_at),
@@ -135,7 +138,7 @@ function rowTo(r: Row): PlcCase {
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at,
-              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway`;
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -597,6 +600,61 @@ export async function recordPropolyPush(id: string, push: PropolyPush): Promise<
 
 export async function recordRexPush(id: string, push: RexPush): Promise<PlcCase> {
   return mutate(id, (c) => ({ ...c, rexPush: push }));
+}
+
+/* ─────────────────────── sent for final approval ──────────────────────── */
+
+/** The file backend's stand-in for final_ask_lock: one process, one map. */
+const fileAskLocks = new Map<string, number>();
+const ASK_LOCK_SECONDS = 60;
+
+/**
+ * Claim the right to email the approver about this pack, or be told no.
+ *
+ * One UPDATE, so two presses landing together cannot both win: Postgres
+ * re-reads the WHERE for the second after the first commits, finds the lock
+ * fresh, and returns nothing. A double-click is one email. The lock lapses on
+ * its own after a minute, so Send Again works as a reminder after that, and
+ * it is released at once when the email did not go, so a retry is not made
+ * to wait for a send that never happened.
+ */
+export async function claimFinalAsk(id: string): Promise<boolean> {
+  if (hasDb()) {
+    const rows = await q<{ id: string }>(
+      `UPDATE os_plc_cases SET final_ask_lock = NOW()
+        WHERE id = $1 AND state = 'checked'
+          AND (final_ask_lock IS NULL OR final_ask_lock < NOW() - make_interval(secs => $2))
+        RETURNING id`,
+      [id, ASK_LOCK_SECONDS]
+    );
+    return rows.length > 0;
+  }
+  const now = Date.now();
+  if (now - (fileAskLocks.get(id) ?? 0) < ASK_LOCK_SECONDS * 1000) return false;
+  fileAskLocks.set(id, now);
+  return true;
+}
+
+export async function releaseFinalAsk(id: string): Promise<void> {
+  if (hasDb()) {
+    await q(`UPDATE os_plc_cases SET final_ask_lock = NULL WHERE id = $1`, [id]);
+    return;
+  }
+  fileAskLocks.delete(id);
+}
+
+/** One press, on the record. Appended in SQL so it can never be lost to a save running beside it. */
+export async function recordFinalAsk(id: string, ask: FinalAsk): Promise<PlcCase> {
+  if (hasDb()) {
+    const rows = await q<Row>(
+      `UPDATE os_plc_cases SET final_asks = final_asks || $2::jsonb, updated_at = NOW()
+        WHERE id = $1 RETURNING ${COLS}`,
+      [id, JSON.stringify([ask])]
+    );
+    if (!rows[0]) throw new PlcRefused("That handover no longer exists.");
+    return rowTo(rows[0]);
+  }
+  return mutate(id, (c) => ({ ...c, finalAsks: [...(c.finalAsks ?? []), ask] }));
 }
 
 /** A Send anyway, written once the pack has gone (at = its submittedAt). */

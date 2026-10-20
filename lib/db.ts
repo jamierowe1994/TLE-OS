@@ -2685,6 +2685,11 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rex_property_id TEXT;
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS landlord_name TEXT;
 -- Send anyway (16 Oct 2026): who sent the pack past the reader's warnings, which ones, and why.
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS sent_anyway JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Send to Susan for Final Approval (20 Oct 2026): every press, and a short lock so a
+-- double-click cannot send her the same email twice. The lock is claimed in one UPDATE
+-- (lib/plc-store claimFinalAsk) and never written by the store's general save.
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS final_asks JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS final_ask_lock TIMESTAMPTZ;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
 -- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the

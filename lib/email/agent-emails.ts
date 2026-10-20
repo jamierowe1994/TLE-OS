@@ -144,6 +144,86 @@ export function documentQueriedEmail(input: {
   };
 }
 
+/* ── A PLC pack sent for final approval (20 Oct 2026) ─────────────────── */
+
+/** "Room 2, 5b Newton Road, Northampton NN1 3AB" is "Room 2, 5b Newton Road" in a subject line. */
+export function shortAddress(address: string): string {
+  const parts = address
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p && !/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(p));
+  return parts.slice(0, 2).join(", ") || address.trim();
+}
+
+/** REX's "Apartment Apartment 28, ..." and "kirstie Mulholland", tidied for a reader. */
+const oneWord = (s: string) => s.trim().replace(/^(\S+)\s+\1\b/i, "$1");
+const nameCase = (s: string) => s.trim().replace(/(^|[\s'-])([a-z])/g, (_, a: string, b: string) => a + b.toUpperCase());
+
+/**
+ * Kirstie's first check is done and the pack waits on Susan. Until now that
+ * was a message Kirstie sent herself ("sent to Sue to check over and do final
+ * check", 19 Oct). One link, straight to the pack; Susan approves in the OS,
+ * where the approval is recorded and the pushes run, never by replying.
+ */
+export function plcFinalApprovalEmail(input: {
+  firstName: string;
+  property: string;
+  agentName: string;
+  moveIn: string | null;
+  checkedBy: string;
+  checkNote: string;
+  sentBy: string;
+  sentAnyway: boolean;
+  reminder: boolean;
+  link: string;
+}): AgentEmail {
+  input = { ...input, property: oneWord(input.property), agentName: nameCase(input.agentName), checkedBy: nameCase(input.checkedBy), sentBy: nameCase(input.sentBy) };
+  const short = shortAddress(input.property);
+  const sender = input.sentBy.split(/\s+/)[0] || input.sentBy;
+  const subject = input.reminder ? `Reminder: PLC waiting for your approval - ${short}` : `PLC ready for your approval - ${short}`;
+  const heading = input.reminder ? `A PLC Is Still Waiting for You, ${input.firstName}` : `A PLC Is Ready for Your Approval, ${input.firstName}`;
+  const intro = input.reminder
+    ? `A reminder from ${sender}: the pre-let compliance pack for ${input.property} is still waiting for your final approval.`
+    : `${sender} has done the first check on the pre-let compliance pack for ${input.property}, and it is ready for your final approval.`;
+  const letLine = [input.agentName ? `${input.agentName}'s let` : "", input.moveIn ? `moving in ${input.moveIn}` : ""].filter(Boolean).join(" · ");
+  const rows: ShellRow[] = [
+    { title: input.property, detail: letLine || undefined, tone: "neutral", icon: "mark-home.png" },
+    { title: `First check by ${input.checkedBy}`, detail: input.checkNote.trim() || "Every document checked against the pack.", tone: "neutral", icon: "mark-doc.png" },
+  ];
+  if (input.sentAnyway) {
+    rows.push({ title: "Sent past the reader's warnings", detail: "The agent sent this pack anyway, with a reason. It is at the top of the pack.", tone: "attention" });
+  }
+  const tip = "Approve it in the OS. If something is wrong, Send Back with a note: the agent reads exactly what you write.";
+  return {
+    subject,
+    html: skyListShell({
+      heading,
+      intro,
+      rows,
+      rowsLead: "The pack",
+      rowStyle: "bare",
+      button: "Open the Pack",
+      link: input.link,
+      hero: "hero-certificates.png",
+      tip,
+      tipQuiet: true,
+    }),
+    text: [
+      heading,
+      "",
+      intro,
+      "",
+      `${input.property}${letLine ? ` - ${letLine}` : ""}`,
+      `First check by ${input.checkedBy}${input.checkNote.trim() ? `: ${input.checkNote.trim()}` : ""}`,
+      ...(input.sentAnyway ? ["Sent past the reader's warnings: the reason is at the top of the pack."] : []),
+      "",
+      `Open the pack: ${input.link}`,
+      "",
+      tip,
+    ].join("\n"),
+  };
+}
+
 /* ── An agent's own compliance (item 11) ──────────────────────────────── */
 
 export function ownComplianceEmail(input: { firstName: string; lines: string[] }): AgentEmail {
