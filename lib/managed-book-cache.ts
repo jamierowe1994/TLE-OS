@@ -4,6 +4,7 @@ import { fetchManagedBook } from "./managed-book";
 import { archiveBook } from "./tenancy-archive";
 import { withNotice } from "./portfolio-notice";
 import { withRecordLandlords } from "./record-landlords";
+import { withRecordService } from "./record-service";
 import { withChangedLandlords } from "./landlord-change";
 import { withTakeOns } from "./take-ons";
 import { withAgentMoves } from "./agent-moves";
@@ -176,9 +177,10 @@ export async function managedBookFor(rexUserId: string | null): Promise<{
      both, a landlord an agent changed in the OS (lib/landlord-change,
      17 Oct 2026). */
   const moved = await withAgentMoves(raw.book, rexUserId, async () => (await rawBookFor(null)).book);
-  /* Management transfers (lib/take-ons, 19 Oct 2026) last: on Portfolio the
-     moment they are saved, filling only what nothing else names. */
-  return { ...raw, book: await withTakeOns(await withChangedLandlords(await withRecordLandlords(await withNotice(moved, rexUserId))), rexUserId) };
+  /* The service from the OS record over REX's unkept field (lib/record-service,
+     20 Oct 2026). Management transfers (lib/take-ons, 19 Oct 2026) last: on
+     Portfolio the moment they are saved, filling only what nothing else names. */
+  return { ...raw, book: await withTakeOns(await withChangedLandlords(await withRecordService(await withRecordLandlords(await withNotice(moved, rexUserId)))), rexUserId) };
 }
 
 async function rawBookFor(rexUserId: string | null): Promise<{
