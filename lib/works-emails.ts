@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
-import { accountsInvoiceEmail, complianceJobEmail } from "@/lib/email/works-internal";
+import { accountsInvoiceEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
 import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
@@ -129,6 +129,12 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
       ? `It's already booked for <strong>${esc(when(o.scheduledAt))}</strong>. If that changes, tell us on the same page.`
       : "Once you've agreed a time with the tenants, press the button and tell us the date and time.",
     buttonLabel: o.scheduledAt ? "Open the job" : "Let us know the date and time",
+    /* The landlord's invoice page (Kirstie Mulholland, 20 Oct 2026), each
+       button opening it with that answer picked. */
+    invoice: pounds(o.invoicePence),
+    invoicePayLink: `${ORIGIN}/invoice/ok/${o.landlordInvoiceToken ?? ""}?answer=pay`,
+    invoiceDirectLink: `${ORIGIN}/invoice/ok/${o.landlordInvoiceToken ?? ""}?answer=direct`,
+    invoiceQueryLink: `${ORIGIN}/invoice/ok/${o.landlordInvoiceToken ?? ""}?answer=query`,
     happyLink: `${ORIGIN}/repair/${o.tenantToken ?? ""}?happy=yes`,
     notHappyLink: `${ORIGIN}/repair/${o.tenantToken ?? ""}?happy=no`,
   };
@@ -221,6 +227,26 @@ export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promis
     const attachments = await invoiceAttachments(o);
     await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text, ...(attachments.length ? { attachments } : {}) });
     return { to: "accounts", sent: true, address, via: "internal sender" };
+  } catch (e) {
+    return { to: "accounts", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
+  }
+}
+
+/**
+ * The landlord's answer on an invoice, to accounts with the home's agent
+ * copied in (Kirstie Mulholland, 20 Oct 2026). Same inbox as the invoice
+ * itself went to.
+ */
+export async function tellInvoiceAnswer(o: WorksOrder): Promise<SendOutcome> {
+  const address = ((await invoiceSettings()).accountsEmail ?? "").trim() || (await invoiceSettings()).complianceEmail.trim();
+  if (!address.includes("@")) return { to: "accounts", sent: false, reason: "no accounts or compliance inbox set under Maintenance, Invoices, Who invoices are from" };
+  const mail = landlordInvoiceAnswerEmail(o);
+  if (o.rehearsal) return keep(o.id, "accounts", address, mail.subject, mail.html);
+  const agent = await propertyAgentFor(o).catch(() => null);
+  const cc = agent && agent.email.includes("@") && agent.email.toLowerCase() !== address.toLowerCase() ? agent : null;
+  try {
+    await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text, ...(cc ? { cc: [cc.email] } : {}) });
+    return { to: "accounts", sent: true, address, via: "internal sender", ...(cc ? { cc: cc.name } : {}) };
   } catch (e) {
     return { to: "accounts", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
   }
@@ -370,6 +396,10 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       await contractorBooked();
       await tenantBooked();
       await landlord("works-landlord-arranged", "notice");
+      break;
+    case "ask_landlord_invoice":
+      /* The agent's own press of a button, so it goes as asked, like the report. */
+      out.push(await send(o, "works-landlord-invoice", o.landlordEmail, vars, me, "landlord"));
       break;
     case "request_quote":
       if (contractor) out.push(await send(o, "works-contractor-quote-request", contractor.email, vars, me, "contractor"));

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Contractor, Move, RankedContractor, WorksOrder, PaidHow } from "@/lib/works-orders";
-import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_REQUIRED, type StepId } from "@/lib/works-steps";
+import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_REQUIRED, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type StepId } from "@/lib/works-steps";
 import { categoriesOf, CATEGORY_CERT_TYPE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
 import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
@@ -658,6 +658,7 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord }: StepProps & { onIn
           <p className="mt-0.5 text-[11.5px] text-muted">{o.accountsToldAt ? `Sent for PayProp ${stamp(o.accountsToldAt)}${o.files.some((fl) => fl.kind === "invoice") ? ", with the invoice attached" : ""}.` : "The invoice email has not gone yet - the timeline says why."}</p>
         </div>
       )}
+      {o.invoicePence != null && o.status !== "paid" && o.status !== "cancelled" && <LandlordSays o={o} move={move} busy={busy} />}
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={onInvoiceLandlord} className={o.invoicePence != null && o.status !== "paid" ? primary : btn} title="Drafts our invoice to the landlord: their name, the job as the reference, the cost as the first line">Invoice the landlord</button>
         {o.invoicePence != null && !paying && <button type="button" onClick={() => setPaying(true)} className={btn}>Mark paid</button>}
@@ -673,6 +674,84 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord }: StepProps & { onIn
           <div className="mt-2 flex justify-end gap-2">
             <button type="button" onClick={() => setPaying(false)} className={btn}>Back</button>
             <button type="button" disabled={busy || !f.how} onClick={() => void move({ action: "paid", paidHow: f.how as PaidHow })} className={primary}>Paid</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The landlord authorises the invoice (Kirstie Mulholland, 20 Oct 2026):
+ * send it to them with three buttons - pay it from the rent, they pay the
+ * contractor direct, or a query - or record what they said on the phone.
+ * Their answer goes to accounts with the agent copied in.
+ */
+function LandlordSays({ o, move, busy }: Pick<StepProps, "o" | "move" | "busy">) {
+  const [recording, setRecording] = useState(false);
+  const [answer, setAnswer] = useState<LandlordInvoiceAnswer | null>(null);
+  const [note, setNote] = useState("");
+  const [email, setEmail] = useState("");
+  const noEmail = !o.landlordEmail.includes("@");
+  const said = LANDLORD_INVOICE_ANSWERS.find((a) => a.id === o.landlordInvoiceAnswer);
+  const who = o.landlord ? o.landlord.split(/\s+/)[0] : "the landlord";
+  const tone = o.landlordInvoiceAnswer === "pay" ? "border-[#56634a]/40 bg-[#f1f3ec]" : o.landlordInvoiceAnswer ? "border-accent/40 bg-accent-soft/50" : "border-line/80 bg-card";
+  return (
+    <div className={`rounded-xl border p-3 text-[12.5px] ${tone}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted">The landlord&apos;s say</p>
+      {said ? (
+        <>
+          <p className="mt-1 font-semibold">{said.line}.</p>
+          {o.landlordInvoiceNote && <p className="mt-0.5 whitespace-pre-wrap">&ldquo;{o.landlordInvoiceNote}&rdquo;</p>}
+          <p className="mt-0.5 text-[11.5px] text-muted">{o.landlordInvoiceBy === "The landlord" ? "From their link" : `Recorded by ${o.landlordInvoiceBy || "the agent"}`}{o.landlordInvoiceAnsweredAt ? ` ${stamp(o.landlordInvoiceAnsweredAt)}` : ""}. Their answer is emailed to accounts; the timeline says whether it went.</p>
+        </>
+      ) : o.landlordInvoiceAskedAt ? (
+        <p className="mt-1">Sent to {who} {stamp(o.landlordInvoiceAskedAt)}. Waiting on their answer.</p>
+      ) : (
+        <p className="mt-1 text-muted">Ask {who} whether to pay it from the rent, or whether they&apos;ll pay the contractor direct.</p>
+      )}
+      {!recording && noEmail && (
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="The landlord's email (blank uses the one on the home)"
+          aria-label="The landlord's email"
+          className={`mt-2 ${field}`}
+        />
+      )}
+      {!recording && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            title={noEmail ? "Emails the landlord the invoice with three buttons" : `Emails ${o.landlordEmail} the invoice with three buttons`}
+            onClick={() => void move({ action: "ask_landlord_invoice", ...(email.trim() ? { email: email.trim() } : {}) })}
+            className={o.landlordInvoiceAskedAt ? btn : primary}
+          >
+            {o.landlordInvoiceAskedAt ? "Send it again" : "Send to the landlord to authorise"}
+          </button>
+          <button type="button" disabled={busy} onClick={() => { setRecording(true); setAnswer(null); setNote(""); }} className={btn}>They&apos;ve told me</button>
+        </div>
+      )}
+      {recording && (
+        <div className="mt-2 rounded-lg border border-line/80 bg-box p-2.5">
+          <div className="grid gap-1.5">
+            {LANDLORD_INVOICE_ANSWERS.map((a) => (
+              <label key={a.id} className="flex items-center gap-2"><input type="radio" name="ll-invoice" checked={answer === a.id} onChange={() => setAnswer(a.id)} />{a.line}</label>
+            ))}
+          </div>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={answer === "query" ? "What's their query?" : "What they said (optional)"} className={`mt-2 ${field}`} />
+          <div className="mt-2 flex justify-end gap-2">
+            <button type="button" onClick={() => setRecording(false)} className={btn}>Back</button>
+            <button
+              type="button"
+              disabled={busy || !answer || (answer === "query" && !note.trim())}
+              onClick={() => { if (answer) void move({ action: "landlord_invoice", answer, note }).then(() => setRecording(false)); }}
+              className={primary}
+            >
+              Save
+            </button>
           </div>
         </div>
       )}

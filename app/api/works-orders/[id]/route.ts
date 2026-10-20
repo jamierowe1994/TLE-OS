@@ -3,10 +3,11 @@ import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getOrder, moveOrder, logEvent, markAccountsTold, type Move } from "@/lib/works-orders";
-import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
+import { emailsForMove, outcomeLine, tellAccounts, tellInvoiceAnswer } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { invoiceSettings } from "@/lib/invoices";
 import { pounds } from "@/lib/works-orders";
+import { managedBookFor } from "@/lib/managed-book-cache";
 
 /**
  * One job: read it with its timeline, or move it along.
@@ -37,6 +38,17 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!move || typeof move.action !== "string") return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
+    /* The landlord's email for the invoice ask, from the home's record when
+       the job has none and the agent typed none (a job logged off a
+       contractor's invoice is raised with the landlord skipped). */
+    if (move.action === "ask_landlord_invoice" && !move.email) {
+      const cur = (await getOrder(id))?.order;
+      if (cur && !cur.landlordEmail.includes("@") && cur.propertyId) {
+        const { book } = await managedBookFor(null).catch(() => ({ book: null }));
+        const home = book?.properties.find((p) => p.propertyId === cur.propertyId);
+        if (home?.landlord?.email?.includes("@")) move.email = home.landlord.email;
+      }
+    }
     const order = await moveOrder(id, move, by);
     /* Work already done before the OS: nobody is told it is done (Rhiannon, 19 Oct 2026). */
     const quietDone = move.action === "done" && move.alreadyDone === true;
@@ -47,6 +59,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       if (told.sent) await markAccountsTold(order.id);
       await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(order.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
     }
+    /* The landlord's answer on the invoice, recorded by the agent after a call. */
+    if (move.action === "landlord_invoice") await logEvent(order.id, "TLE OS", "email", outcomeLine(await tellInvoiceAnswer(order)));
     await pingCompliance(order, move.action);
     const found = await getOrder(id);
     return NextResponse.json({ ok: true, order, events: found?.events ?? [], emails });

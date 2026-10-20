@@ -22,6 +22,7 @@ import BookForm, { type Person } from "@/components/inspections/BookForm";
 import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
 import HomeAgent from "@/components/portfolio/HomeAgent";
+import HomeKeys from "@/components/portfolio/HomeKeys";
 import ContactBlock from "@/components/ContactBlock";
 import HomePeople from "@/components/portfolio/HomePeople";
 import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
@@ -45,6 +46,7 @@ import FileDocuments from "@/components/FileDocuments";
 import RecordPastVisit from "@/components/inspections/RecordPastVisit";
 import TenantChange from "@/components/portfolio/TenantChange";
 import TakeOnTile from "@/components/portfolio/TakeOnTile";
+import HomeNotes from "@/components/portfolio/HomeNotes";
 
 /**
  * One home, the whole of it, on one page.
@@ -61,7 +63,7 @@ import TakeOnTile from "@/components/portfolio/TakeOnTile";
  * fails says it failed and the rest of the page stands. Nothing is a sample.
  */
 
-type Tab = "maintenance" | "compliance" | "inspections" | "tenancy" | "documents";
+type Tab = "maintenance" | "compliance" | "inspections" | "tenancy" | "documents" | "notes";
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "maintenance", label: "Maintenance", icon: "setting" },
   { id: "compliance", label: "Compliance", icon: "shield" },
@@ -70,6 +72,9 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   /* Kirstie Mulholland, 19 Oct 2026: somewhere for everything that isn't a
      certificate, and a way to add it once the let has gone through. */
   { id: "documents", label: "Documents", icon: "folder" },
+  /* Sean McMahon, 20 Oct 2026: a tenant's email or a query, and nowhere on
+     the home to note it. */
+  { id: "notes", label: "Notes", icon: "note" },
 ];
 
 /** The pop-up open over the page: an action, picked up from a draft or fresh. */
@@ -164,6 +169,7 @@ export default function PropertyPage() {
 
   const [book, setBook] = useState<Loaded<Book>>({ state: "loading" });
   const [tab, setTab] = useState<Tab>("maintenance");
+  const [noteCount, setNoteCount] = useState(0);
   const [room, setRoom] = useState<string>("house");
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [order, setOrder] = useState<string[]>([]);
@@ -247,6 +253,18 @@ export default function PropertyPage() {
   const [tenancy, setTenancy] = useState<Loaded<Tenancy>>({ state: "loading" });
   const [certs, setCerts] = useState<Loaded<{ outstanding: number; checking: number; checked: boolean; rows: number; filed: { label: string; at: string }[] }>>({ state: "loading" });
   const [notices, setNotices] = useState<Loaded<Notice[]>>({ state: "loading" });
+  /* How many notes the home holds, for the Notes tab's count before it is opened. */
+  useEffect(() => {
+    if (!p) return;
+    let live = true;
+    const sp = new URLSearchParams({ listing: String(p.listingId) });
+    if (propertyId) sp.set("property", propertyId);
+    fetch(`/api/property/notes?${sp}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok) setNoteCount((j.notes as unknown[]).length); })
+      .catch(() => null);
+    return () => { live = false; };
+  }, [propertyId, p?.listingId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadWorks = useCallback(() => {
     if (!propertyId) return;
@@ -795,6 +813,7 @@ export default function PropertyPage() {
                 <button type="button" disabled={p.test || !loginListings.length} onClick={() => setShowLogins(true)} className={tile}>{tileIcon("mail")}{tileText("Send out logins", "Tenant account, to report repairs")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 <button type="button" disabled={p.test} onClick={() => { pickTab("documents"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("folder")}{tileText("Add a document", "An inventory, an agreement, anything else")}</button>
+                <button type="button" disabled={!propertyId} onClick={() => { pickTab("notes"); setTimeout(() => { document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }); document.getElementById("home-note")?.focus({ preventScroll: true }); }, 60); }} className={tile}>{tileIcon("note")}{tileText("Add a note", "A call, an email, a query")}</button>
                 {canAct && noticeIn ? (
                   <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className={tile}>{tileIcon("key")}{tileText("Book the check-out", leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in")}</button>
                 ) : null}
@@ -817,6 +836,8 @@ export default function PropertyPage() {
                 <Info icon="calendar" label="Let since" text={p.letSince ? day(p.letSince) : "Not set"} />
                 <HomeAgent propertyId={p.test ? null : p.propertyId} agent={p.agent} movedFrom={p.agentMovedFrom} everything={everything} />
                 <Info icon="clock" label="On the books since" text={day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince)} />
+                {/* Sean McMahon, 20 Oct 2026: the key numbers, from REX's key register. */}
+                {!p.test && <HomeKeys propertyId={p.propertyId} />}
               </div>
 
               {/* How it stands: one chip per board, each opens its section. */}
@@ -982,6 +1003,7 @@ export default function PropertyPage() {
                   <DoodleIcon name={t.icon} size={13} />
                   {t.label}
                   {t.id === "maintenance" && works.state === "ready" && openJobs.length > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${tab === t.id ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{openJobs.length}</span>}
+                  {t.id === "notes" && noteCount > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${tab === t.id ? "bg-page/20" : "bg-line/60 text-muted"}`}>{noteCount}</span>}
                   {t.id === "compliance" && certs.state === "ready" && certs.data.outstanding > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${tab === t.id ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{certs.data.outstanding}</span>}
                 </button>
               ))}
@@ -1076,6 +1098,12 @@ export default function PropertyPage() {
                   </section>
                 )}
               </div>
+            )}
+
+            {tab === "notes" && (
+              <section className="mt-4">
+                <HomeNotes key={`${propertyId}-${p.listingId}`} propertyId={propertyId} listingId={String(p.listingId)} onCount={setNoteCount} />
+              </section>
             )}
 
             {tab === "documents" && (

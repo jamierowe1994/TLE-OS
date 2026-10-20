@@ -746,6 +746,16 @@ ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS appointment_id TEXT;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rexpm_task_id TEXT;
 -- When the contractor was asked for a quote before any works order (Sean, 20 Oct 2026).
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS quote_requested_at TIMESTAMPTZ;
+-- The landlord authorises a contractor's invoice (Kirstie Mulholland, 20 Oct
+-- 2026): asked by email with a link, answered pay from the rent, pay direct,
+-- or a query. The token is the landlord's link; nothing else opens with it.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_token       TEXT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_asked_at    TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_answer      TEXT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_answered_at TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_note        TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_by          TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS os_works_orders_ll_invoice_token ON os_works_orders (landlord_invoice_token) WHERE landlord_invoice_token IS NOT NULL;
 
 -- REX PM's own task lists, read off its screens (1 Oct 2026). REX refused API
 -- access, so this is the stopgap: inspections (and next tenancy reviews) are
@@ -2926,6 +2936,20 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_read_at TIMESTAMPTZ;
 -- marked not required, and REX is read-only to us - so the answer lives here.
 -- Michael had ticked every HMO certificate on two such homes Not needed.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS not_hmo BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Key numbers the OS holds on a home (Sean McMahon, 20 Oct 2026: "Where do we
+-- find key numbers?"). REX's key register is read live beside these
+-- (lib/rex-keys); a number recorded here stays in the OS, never written to REX.
+CREATE TABLE IF NOT EXISTS os_home_keys (
+  id          TEXT PRIMARY KEY,
+  home_key    TEXT NOT NULL,
+  label       TEXT NOT NULL,
+  location    TEXT NOT NULL DEFAULT '',
+  by_name     TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  removed_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_home_keys_home ON os_home_keys (home_key);
 
 -- What a person in the OS has said about a home (19 Oct 2026, Rhiannon's flat
 -- and Dan's tickets): is it an HMO, is there a gas supply, how is the water

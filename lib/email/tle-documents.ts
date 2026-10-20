@@ -990,6 +990,32 @@ export const WORKS_CONTRACTOR_QUOTE_REQUEST = {
   branding: { showSignoff: false },
 } as const;
 
+/* The contractor's invoice to the landlord, to authorise (Kirstie Mulholland,
+   20 Oct 2026): pay it from the rent, pay the contractor direct, or a query.
+   Each button opens the landlord's page with that answer picked. */
+export const WORKS_LANDLORD_INVOICE = {
+  subject: "Invoice to authorise: {{title}} at {{address}}, {{invoice}}",
+  preheader: "Pay it from the rent, pay the contractor yourself, or ask us a question.",
+  mode: "blocks",
+  blocks: [
+    H("wli1", "An invoice for you to authorise"),
+    T("wli2", "Hi {{landlordName}},<br><br>{{contractorName}} have sent their invoice for <strong>{{title}}</strong> at {{address}} (job #{{ref}}). The total is <strong>{{invoice}}</strong>."),
+    T("wli3", "How would you like it paid? Nothing is paid until you tell us."),
+    SP("wli4", 4),
+    BTN("wli5", "Authorise to pay from the rent", "{{invoicePayLink}}"),
+    SP("wli6", 4),
+    BTN("wli7", "I'll pay the contractor direct", "{{invoiceDirectLink}}"),
+    SP("wli8", 4),
+    BTN("wli9", "Raise a query", "{{invoiceQueryLink}}"),
+    SP("wli10", 8),
+    T("wli11", "You can see the invoice itself on the same page. If you'd rather talk it through, ring {{agentPhone}}."),
+    SP("wli12", 8),
+    T("wli13", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wli14", "You're getting this because The Letting Experts manage this property for you."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /* The report to a contractor, asking if they'll take it (step 4). */
 export const WORKS_CONTRACTOR_REPORT = {
   subject: "Can you take this? {{title}} at {{address}}",

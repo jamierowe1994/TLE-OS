@@ -94,6 +94,12 @@ function blankOrder(over: Partial<WorksOrder> & Pick<WorksOrder, "id" | "ref" | 
   return {
     status: "reported",
     quoteRequestedAt: null,
+    landlordInvoiceToken: null,
+    landlordInvoiceAskedAt: null,
+    landlordInvoiceAnswer: null,
+    landlordInvoiceAnsweredAt: null,
+    landlordInvoiceNote: "",
+    landlordInvoiceBy: "",
     propertyId: null,
     propertyName: CAST.property,
     locality: CAST.locality,

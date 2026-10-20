@@ -1,7 +1,7 @@
 import "server-only";
 import { emailShell, type ShellRow } from "@/lib/email/shell";
 import { skyListShell } from "@/lib/email/shell-sky";
-import { pounds, type WorksOrder } from "@/lib/works-orders";
+import { LANDLORD_INVOICE_ANSWERS, pounds, type WorksOrder } from "@/lib/works-orders";
 import type { AgentEmail } from "@/lib/email/agent-emails";
 
 /**
@@ -61,6 +61,41 @@ export function accountsInvoiceEmail(o: WorksOrder): AgentEmail {
       tipQuiet: true,
     }),
     text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}. Reference #${o.ref}. Open: ${jobLink(o.id)}`,
+  };
+}
+
+/**
+ * The landlord has answered on a contractor's invoice (Kirstie Mulholland,
+ * 20 Oct 2026): accounts, so they know whether to take it from the rent, and
+ * the home's agent, copied in. Internal, like its twin above.
+ */
+export function landlordInvoiceAnswerEmail(o: WorksOrder): AgentEmail {
+  const a = LANDLORD_INVOICE_ANSWERS.find((x) => x.id === o.landlordInvoiceAnswer);
+  const line = a?.line ?? "The landlord has answered";
+  const what =
+    o.landlordInvoiceAnswer === "pay" ? "Take it from the rent through PayProp as usual."
+    : o.landlordInvoiceAnswer === "direct" ? "Don't pay it from the rent: the landlord is paying the contractor themselves."
+    : "Hold it. Don't pay it until the agent has answered the landlord.";
+  const subject = `${line}: #${o.ref} ${o.title}, ${pounds(o.invoicePence)}`;
+  const rows: ShellRow[] = [
+    { title: where(o), detail: `${o.title} · job #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`, tone: "neutral", icon: "mark-home.png" },
+    { title: `${pounds(o.invoicePence)} to ${o.contractorName || "the contractor"}`, detail: `Invoice ${o.invoiceRef || "no number"} · ${what}`, tone: o.landlordInvoiceAnswer === "pay" ? "neutral" : "attention", icon: "mark-money.png" },
+  ];
+  if (o.landlordInvoiceNote) rows.push({ title: o.landlordInvoiceAnswer === "query" ? "Their query" : "What they said", detail: o.landlordInvoiceNote, tone: "attention", icon: "mark-doc.png" });
+  return {
+    subject,
+    html: skyListShell({
+      heading: line,
+      intro: `${o.landlordInvoiceBy === "The landlord" ? "The landlord answered from the link we sent them" : `${o.landlordInvoiceBy || "The agent"} recorded the landlord's answer`} on job #${o.ref}.`,
+      rows,
+      rowsLead: "The invoice",
+      rowStyle: "bare",
+      button: "Open the job",
+      link: jobLink(o.id),
+      hero: "hero-invoice.png",
+      tipQuiet: true,
+    }),
+    text: `${line}. Job #${o.ref}: ${o.title} at ${where(o)}. ${pounds(o.invoicePence)}. ${what}${o.landlordInvoiceNote ? ` They said: ${o.landlordInvoiceNote}` : ""} Open: ${jobLink(o.id)}`,
   };
 }
 

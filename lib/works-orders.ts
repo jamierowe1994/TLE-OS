@@ -74,7 +74,8 @@ export const OPEN_STATUSES: Status[] = ["reported", "approval", "approved", "sch
  * through one thing at a time."
  */
 export { STEPS, stepOf, type StepId } from "@/lib/works-steps";
-import { stepOf as stepOfOrder, isSkippable, skippedLine, type SkippableStep } from "@/lib/works-steps";
+import { stepOf as stepOfOrder, isSkippable, skippedLine, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type SkippableStep } from "@/lib/works-steps";
+export { LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer };
 
 export const PAID_HOW = [
   { id: "payprop", label: "Charged to the landlord through PayProp" },
@@ -171,6 +172,15 @@ export interface WorksOrder {
   propertyLng: number | null;
   accountsToldAt: string | null;
   complianceToldAt: string | null;
+  /* ── the landlord authorises the invoice (Kirstie Mulholland, 20 Oct 2026) ── */
+  landlordInvoiceToken: string | null;
+  landlordInvoiceAskedAt: string | null;
+  /** pay: take it from the rent. direct: they pay the contractor themselves. query: don't pay yet. */
+  landlordInvoiceAnswer: LandlordInvoiceAnswer | null;
+  landlordInvoiceAnsweredAt: string | null;
+  landlordInvoiceNote: string;
+  /** "the landlord" from their link, or the agent who recorded a phone answer. */
+  landlordInvoiceBy: string;
   /** A walkthrough job: real machinery, invented people, no email leaves. */
   rehearsal: boolean;
   title: string;
@@ -273,6 +283,12 @@ function toOrder(r: Row): WorksOrder {
     propertyLng: n(r.property_lng),
     accountsToldAt: iso(r.accounts_told_at),
     complianceToldAt: iso(r.compliance_told_at),
+    landlordInvoiceToken: r.landlord_invoice_token ? s(r.landlord_invoice_token) : null,
+    landlordInvoiceAskedAt: iso(r.landlord_invoice_asked_at),
+    landlordInvoiceAnswer: r.landlord_invoice_answer === "pay" || r.landlord_invoice_answer === "direct" || r.landlord_invoice_answer === "query" ? r.landlord_invoice_answer : null,
+    landlordInvoiceAnsweredAt: iso(r.landlord_invoice_answered_at),
+    landlordInvoiceNote: s(r.landlord_invoice_note),
+    landlordInvoiceBy: s(r.landlord_invoice_by),
     rehearsal: r.rehearsal === true,
     title: s(r.title),
     description: s(r.description),
@@ -310,7 +326,8 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
-  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, skipped_steps, quote_requested_at, created_at, updated_at`;
+  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, skipped_steps, quote_requested_at,
+  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -580,7 +597,11 @@ export type Move =
   | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantPhone" | "tenantEmail" | "landlord" | "landlordEmail" | "landlordMobile" | "access" | "authorityPence" | "reportedBy">> }
   | { action: "file"; file: { key: string; name: string; type: string; kind?: "invoice" | "quote" } }
   /** Ask the contractor for a quote before any works order goes (Sean, 20 Oct 2026). */
-  | { action: "request_quote"; contractorId?: string; note?: string };
+  | { action: "request_quote"; contractorId?: string; note?: string }
+  /** Send the invoice to the landlord to authorise (Kirstie Mulholland, 20 Oct 2026). */
+  | { action: "ask_landlord_invoice"; email?: string; note?: string }
+  /** The landlord's answer: from their link, or recorded by the agent after a call. */
+  | { action: "landlord_invoice"; answer: LandlordInvoiceAnswer; note?: string };
 
 export const pounds = (pence: number | null | undefined) =>
   pence == null ? "—" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: pence % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
@@ -758,6 +779,39 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       text = `Invoice ${pounds(move.invoicePence)}${move.invoiceRef ? ` (${move.invoiceRef.trim()})` : ""}${o.contractorName ? ` from ${o.contractorName}` : ""}.${move.note ? ` ${move.note}` : ""}`;
       break;
     }
+    case "ask_landlord_invoice": {
+      if (o.invoicePence == null) throw new Error("Put the invoice on the job first, so the landlord sees the figure.");
+      /* A job logged straight off a contractor's invoice carries no landlord
+         email (it is raised with the landlord skipped), so the ask can bring one. */
+      const email = (move.email ?? "").trim().toLowerCase();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("That email address doesn't look right.");
+      if (email) { set("landlord_email", email); o.landlordEmail = email; }
+      if (!o.landlordEmail.includes("@")) throw new Error("There's no email for the landlord on this job. Type it in, or ring them and record their answer.");
+      if (!o.landlordInvoiceToken) set("landlord_invoice_token", randomBytes(18).toString("base64url"));
+      set("landlord_invoice_asked_at", new Date());
+      /* Asking again starts a fresh question: a query answered on the phone
+         and the invoice sent back is a new ask, not the old answer. */
+      set("landlord_invoice_answer", null);
+      set("landlord_invoice_answered_at", null);
+      set("landlord_invoice_note", "");
+      set("landlord_invoice_by", "");
+      eventKind = "note";
+      text = `Invoice ${pounds(o.invoicePence)} sent to the landlord to authorise.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "landlord_invoice": {
+      const a = LANDLORD_INVOICE_ANSWERS.find((x) => x.id === move.answer);
+      if (!a) throw new Error("Which answer?");
+      const note = (move.note ?? "").trim().slice(0, 2000);
+      if (a.id === "query" && !note) throw new Error("Say what the query is.");
+      set("landlord_invoice_answer", a.id);
+      set("landlord_invoice_answered_at", new Date());
+      set("landlord_invoice_note", note);
+      set("landlord_invoice_by", by);
+      eventKind = "note";
+      text = `${a.line}${by === LANDLORD_SELF ? "" : ` (recorded by ${by})`}.${note ? ` "${note}"` : ""}`;
+      break;
+    }
     case "paid": {
       const how = PAID_HOW.find((h) => h.id === move.paidHow);
       if (!how) throw new Error("Say how it was paid.");
@@ -855,11 +909,14 @@ export async function logEvent(orderId: string, by: string, kind: string, text: 
 
 /* ── the two public doors ───────────────────────────────────────────────── */
 
-export async function orderByToken(kind: "contractor" | "tenant", token: string): Promise<WorksOrder | null> {
+/** Who answered from the landlord's own link, for the timeline. */
+export const LANDLORD_SELF = "The landlord";
+
+export async function orderByToken(kind: "contractor" | "tenant" | "landlord_invoice", token: string): Promise<WorksOrder | null> {
   /* A token we could never have issued is not asked of Postgres (Rig run 4,
      P-048): a null byte in one was an empty 500 instead of "not one of ours". */
   if (!hasDb() || !token || token.length > 200 || /[\u0000-\u001f]/.test(token)) return null;
-  const [r] = await q<Row>(`SELECT ${COLS} FROM os_works_orders WHERE ${kind === "contractor" ? "contractor_token" : "tenant_token"} = $1`, [token]);
+  const [r] = await q<Row>(`SELECT ${COLS} FROM os_works_orders WHERE ${kind === "contractor" ? "contractor_token" : kind === "tenant" ? "tenant_token" : "landlord_invoice_token"} = $1`, [token]);
   return r ? toOrder(r) : null;
 }
 

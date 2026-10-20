@@ -9,7 +9,8 @@ import { checkingFor, osCertRows } from "@/lib/os-certs";
 import { HELD_FOR_CHECK, type CertChecking } from "@/lib/cert-hold";
 import { q } from "@/lib/db";
 import { notNeededAll } from "@/lib/cert-not-needed";
-import { renewalHeld, renewalHoldEnds } from "@/lib/compliance";
+import { HMO_SET, renewalHeld, renewalHoldEnds, requiredCerts } from "@/lib/compliance";
+import { heldComplianceBook } from "@/lib/compliance-cache";
 import { isOsPropertyId } from "@/lib/os-properties";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { scopeFor } from "@/lib/scope";
@@ -81,6 +82,8 @@ export interface FileRow {
 }
 
 const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"]);
+/** The duties only an HMO carries (lib/compliance HMO_SET plus alarms). */
+const HMO_ONLY = new Set<string>([...HMO_SET, "alarms"]);
 
 /* A shared house: the certificate is the building's. When a room's own
    record lacks a type, the house's row (or another room's) stands in for it,
@@ -220,6 +223,22 @@ export async function GET(req: NextRequest) {
     }
     if (facts?.electrical === "eic") {
       for (const r of rows) if (r.type === "eicr") r.label = "Electrical (EIC)";
+    }
+    /* What the home owes is the Compliance page's rule, not REX's list of
+       rows (20 Oct 2026, Rhiannon's Flat 11, Grand Banks: the Compliance page
+       had it as not an HMO and Michael had marked the licence not needed, but
+       the property page counted REX's licence row as outstanding). A duty the
+       home does not have - the HMO set on a home that is not an HMO, legionella
+       in England, anything marked not needed - is never outstanding here. */
+    const held = await heldComplianceBook().catch(() => null);
+    const home = held?.book.properties.find((p) => p.id === propertyId);
+    const notHmo = facts?.homeType === "single" || (home ? !home.hmo : false);
+    const owed = home ? new Set<string>(requiredCerts(home)) : null;
+    for (const r of rows) {
+      if (r.state !== "missing" && r.state !== "expired" && r.state !== "expiring") continue;
+      const key = VAULT_KEY[r.type];
+      if (!key) continue;
+      if ((owed && !owed.has(key)) || (notHmo && HMO_ONLY.has(key))) r.state = "not-required";
     }
   }
   rows.sort((a, b) => (ORDER.indexOf(a.type) + 1 || 99) - (ORDER.indexOf(b.type) + 1 || 99));

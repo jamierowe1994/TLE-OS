@@ -14,6 +14,18 @@ export type StepOrder = {
   quotePence?: number | null;
 };
 
+/**
+ * The landlord's answer on a contractor's invoice (Kirstie Mulholland, 20 Oct
+ * 2026: "sometimes the landlords say take it out of the rent, sometimes
+ * they'll say I'll pay this one direct, especially if it's over the rent").
+ */
+export type LandlordInvoiceAnswer = "pay" | "direct" | "query";
+export const LANDLORD_INVOICE_ANSWERS: { id: LandlordInvoiceAnswer; label: string; line: string }[] = [
+  { id: "pay", label: "Authorise to pay", line: "Authorised: take it from the rent" },
+  { id: "direct", label: "We'll pay direct", line: "The landlord is paying the contractor direct" },
+  { id: "query", label: "Raise a query", line: "The landlord has a query: don't pay it yet" },
+];
+
 export const STEPS = [
   { id: "quote", label: "The quote", blurb: "The contractor has been asked for a price. Nothing is booked and no works order goes until the quote is approved." },
   { id: "tell_landlord", label: "Tell the landlord", blurb: "Ring them first. Email the report if you can't get them, or to put it in writing." },

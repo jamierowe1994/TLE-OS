@@ -30,7 +30,7 @@ import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
 import { certificateChaseEmail, ownComplianceEmail, ownComplianceRollupEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail } from "@/lib/email/agent-emails";
-import { accountsInvoiceEmail, certificateSharedEmail, complianceJobEmail } from "@/lib/email/works-internal";
+import { accountsInvoiceEmail, certificateSharedEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import type { WorksOrder } from "@/lib/works-orders";
 import {
   bodyFor,
@@ -67,6 +67,7 @@ import {
   WORKS_TENANT_BOOKED,
   WORKS_TENANT_DONE,
   WORKS_LANDLORD_APPROVAL,
+  WORKS_LANDLORD_INVOICE,
   WORKS_LANDLORD_REPORT,
   WORKS_CONTRACTOR_REPORT,
   WORKS_CONTRACTOR_QUOTE_REQUEST,
@@ -1235,6 +1236,7 @@ const WORKS_SAMPLE: Record<string, string> = {
   number: "INV-00042", toName: "Raj", total: "£264", dueDate: "21 September 2026", reference: "job #1042, boiler repair", link: `${SITE}/invoice/sample`,
   dueDay: "Monday 26 April 2027", tenantsList: "Sophie Turner (Room 1) · 07700 900456 · sophie@example.com<br>Raj Patel (Room 2) · 07700 900789",
   bookingLine: "Once you've agreed a time with the tenants, press the button and tell us the date and time.", buttonLabel: "Let us know the date and time",
+  invoice: "£264", invoicePayLink: `${SITE}/invoice/ok/sample?answer=pay`, invoiceDirectLink: `${SITE}/invoice/ok/sample?answer=direct`, invoiceQueryLink: `${SITE}/invoice/ok/sample?answer=query`,
   contractorLink: `${SITE}/contractor/sample`, happyLink: `${SITE}/repair/sample?happy=yes`, notHappyLink: `${SITE}/repair/sample?happy=no`,
 };
 const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc, group = "Maintenance"): CatalogEntry => ({
@@ -1250,6 +1252,7 @@ TLE_EMAILS.push(
   worksEntry("works-tenant-booked", "Contractor Booked to the Tenant", "tenant", "When a job is booked for a date", "The tenant", "Who is coming and when, and how to move it.", WORKS_TENANT_BOOKED as unknown as EmailDoc),
   worksEntry("works-tenant-done", "Job Done to the Tenant", "tenant", "When a job is marked done", "The tenant", "It's done, here's what was done, tell us if it isn't right.", WORKS_TENANT_DONE as unknown as EmailDoc),
   worksEntry("works-landlord-approval", "Quote for Approval to the Landlord", "landlord", "When a quote comes in over the landlord's authority", "The landlord", "The quote, why we're asking, and a one-word reply to go ahead.", WORKS_LANDLORD_APPROVAL as unknown as EmailDoc),
+  worksEntry("works-landlord-invoice", "Invoice to Authorise to the Landlord", "landlord", "When the agent sends a contractor's invoice to the landlord from the job", "The landlord", "The contractor, the job and the total, and three buttons: pay it from the rent, pay the contractor direct, or raise a query.", WORKS_LANDLORD_INVOICE as unknown as EmailDoc),
   worksEntry("works-landlord-report", "Repair Reported to the Landlord", "landlord", "Step 1: when the agent emails the report after ringing", "The landlord", "What the tenant reported, how urgent, and the two ways forward: they arrange it, or we do.", WORKS_LANDLORD_REPORT as unknown as EmailDoc),
   worksEntry("works-contractor-quote-request", "Quote Please to the Contractor", "contractor", "When an agent asks for a quote before any works order", "The contractor", "The job, that nothing is booked until the landlord approves the price, and the button to send the quote.", WORKS_CONTRACTOR_QUOTE_REQUEST as unknown as EmailDoc),
   worksEntry("works-contractor-report", "Can You Take This? to the Contractor", "contractor", "Step 4: when the agent contacts a contractor about a job", "The contractor", "The job in brief and a yes-or-no. The works order follows once they say yes.", WORKS_CONTRACTOR_REPORT as unknown as EmailDoc),
@@ -1418,6 +1421,21 @@ TLE_EMAILS.push(
       "A figure to key into PayProp, not a receipt: nothing in it has been paid. Says who is owed, against which job and which property, and drops off the accounts list once it is marked paid.",
     render: () => {
       const m = accountsInvoiceEmail(JOB_SAMPLE);
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "works-landlord-invoice-answer",
+    group: "Maintenance",
+    name: "Landlord's Answer on an Invoice - Accounts",
+    audience: "internal",
+    trigger: "When the landlord answers on a contractor's invoice, from their link or recorded by the agent",
+    fires: "lib/works-emails → tellInvoiceAnswer",
+    to: "The accounts inbox (or compliance, when none is set), with the home's agent copied in",
+    summary:
+      "Pay it from the rent, the landlord is paying the contractor direct, or hold it for a query - with anything the landlord wrote.",
+    render: () => {
+      const m = landlordInvoiceAnswerEmail({ ...JOB_SAMPLE, landlordInvoiceAnswer: "query", landlordInvoiceBy: "The landlord", landlordInvoiceNote: "I didn't agree a callout over £150. Can you send me the photos first?" } as WorksOrder);
       return { subject: m.subject, html: m.html };
     },
   },
