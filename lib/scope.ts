@@ -168,6 +168,29 @@ export async function searchScope(req: NextRequest, scope: Scope): Promise<strin
  *
  * Never while an owner is viewing as somebody: that scope is the point.
  */
+/**
+ * The managed book for the office: the whole business for anybody whose ROLE
+ * sees everything, the same widening leadScope makes for leads.
+ *
+ * Josel Banagua, 20 Oct 2026: "a dedicated tab for each property where all
+ * relevant information could be stored and easily accessed in one place".
+ * That place exists (/portfolio/<listing>), but the compliance and
+ * pre-tenancy desks were scoped to their own REX user there, which lets
+ * nothing, so every home said "not in your book" - while the same people see
+ * every home on Compliance and the clean sweep. Portfolio and the routes its
+ * property page reads use this; an agent's answer is scopeForWho's, unchanged.
+ *
+ * Never while an owner is viewing as somebody: that scope is the point.
+ */
+export async function bookScope(req: NextRequest, who: Who | null = null): Promise<Scope> {
+  const scope = await scopeForWho(req, who);
+  if (scope.everything || !hasDb()) return scope;
+  const { actor, viewingAs } = who ?? (await whoIs(req));
+  if (!actor || viewingAs || actor.role === "owner") return scope;
+  if (!can(actor.role, "see:everything")) return scope;
+  return { rexUserId: null, everything: true, unlinked: false, label: "the whole business" };
+}
+
 export async function leadScope(req: NextRequest): Promise<Scope> {
   const scope = await scopeFor(req);
   if (scope.everything || !hasDb()) return scope;

@@ -108,7 +108,10 @@ export type AuditKind =
   | "property_address_changed"
   /* A list downloaded as a spreadsheet (19 Oct 2026, lib/exports): which
      screen, how many rows and the filters. No emails or phones go in one. */
-  | "data_exported";
+  | "data_exported"
+  /* Certificates and documents emailed to a home's tenants from its page
+     (Josel, 20 Oct 2026, lib/home-send): who, which files, to whom. */
+  | "tenant_documents_sent";
 
 export interface AuditRow {
   id: string;

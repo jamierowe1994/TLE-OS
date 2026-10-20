@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { scopeForWho } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { listArchive } from "@/lib/tenancy-archive";
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   const who = await whoIs(req).catch(() => null);
   if (!who?.actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  const scope = await scopeForWho(req, who);
+  const scope = await bookScope(req, who);
   if (scope.unlinked) {
     return NextResponse.json({ ok: false, error: "We can't tell which REX user you are, so we can't show you past tenancies - and we won't show you everybody's." });
   }

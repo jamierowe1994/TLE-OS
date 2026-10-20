@@ -3,7 +3,7 @@ import { maskContactFields, seesContactLists } from "@/lib/contact-mask";
 import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
-import { scopeFor } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 import { factsByRexId } from "@/lib/os-properties";
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
     bookError = "REX isn't connected on this environment, so nothing can be worked out as due.";
   } else {
-    const scope = await scopeFor(req);
+    const scope = await bookScope(req);
     if (scope.unlinked) {
       bookError = "We can't tell which REX user you are, so we can't work out what's due on your book.";
     } else {

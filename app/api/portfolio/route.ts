@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
-import { scopeForWho } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { testHomesFor } from "@/lib/test-overlay";
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   }
 
   const who = hasDb() ? await whoIs(req).catch(() => null) : null;
-  const scope = await scopeForWho(req, who);
+  const scope = await bookScope(req, who);
   if (scope.unlinked) {
     return NextResponse.json({
       ok: false,

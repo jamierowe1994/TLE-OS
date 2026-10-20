@@ -97,6 +97,7 @@ import {
   TENANT_ADDED_WELCOME,
   TENANT_PASSPORT_THANKS,
   TENANT_PORTAL_LOGIN,
+  TENANT_DOCUMENTS,
   TENANT_PASSPORT_NUDGE_1,
   TENANT_PASSPORT_NUDGE_2,
   TENANT_MATCHES,
@@ -1576,6 +1577,19 @@ TLE_EMAILS.push(
     "Thank you, the profile is complete and with the agent, the agent will be in touch if they're successful, and a button to log in any time.",
     TENANT_PASSPORT_THANKS,
     { link: `${SITE}/tenant/sign-in` }
+  ),
+  tenantEntry(
+    "tenant-documents",
+    "Documents for Your Home",
+    "Somebody presses Send to tenants on a home's page",
+    "Wired 20 Oct 2026. lib/home-send sendToTenants, from Send to tenants on /portfolio/<listing> after the documents, the tenants and the preview. From the person who pressed it, their Outlook where that is connected. A press, not a timer, so it needs customer email only, not the Automatic tenant emails switch.",
+    "Each tenant ticked, with only the documents for their own room on a shared house",
+    "Their copies attached, a list of what is attached, the sender's own note if they wrote one, and to reply if a file won't open.",
+    TENANT_DOCUMENTS,
+    {
+      address: "Flat 2, 14 Ruskin Place, Glasgow",
+      docList: "<ul style=\"margin:0;padding-left:18px\"><li>Gas safety (CP12), runs to 12 March 2027</li><li>EICR, runs to 4 June 2029</li><li>Energy Performance Certificate</li></ul>",
+    }
   ),
   tenantEntry(
     "tenant-portal-login",

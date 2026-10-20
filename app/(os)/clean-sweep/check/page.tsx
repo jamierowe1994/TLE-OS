@@ -258,6 +258,12 @@ export default function SecondPass() {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* Everything about the home in one place (Josel, 20 Oct 2026): its own page. */}
+            {detail && (
+              <a href={`/portfolio/home/${encodeURIComponent(detail.home.id)}?name=${encodeURIComponent(detail.home.address)}`} target="tle-sweep-home" rel="noopener" className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-[12.5px] font-semibold text-page">
+                <DoodleIcon name="pack/house" size={12} />Property page
+              </a>
+            )}
             {detail && (detail.links.rexPm
               ? <a href={detail.links.rexPm} target="tle-sweep-rexpm" rel="noopener" className="rounded-full border border-line px-3 py-1.5 text-[12.5px] font-semibold hover:border-ink">REX PM ↗</a>
               : <span title="REX PM does not hold this home" className="rounded-full border border-dashed border-line px-3 py-1.5 text-[12.5px] font-semibold text-muted">Not in REX PM</span>)}

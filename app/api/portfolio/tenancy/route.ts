@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { scopeForWho } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { managedBookFor } from "@/lib/managed-book-cache";
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The book isn't connected on this environment." });
 
   const who = hasDb() ? await whoIs(req).catch(() => null) : null;
-  const scope = await scopeForWho(req, who);
+  const scope = await bookScope(req, who);
   if (scope.unlinked) return NextResponse.json({ ok: false, error: "We can't tell whose book this is." }, { status: 403 });
 
   const { book } = await managedBookFor(scope.rexUserId);

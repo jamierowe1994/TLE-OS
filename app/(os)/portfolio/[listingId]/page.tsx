@@ -42,6 +42,9 @@ import type { DueVisit, Inspection } from "@/lib/inspections";
 import type { DueReview, Review } from "@/lib/tenancy-reviews";
 import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
 import PastTenancies from "@/components/portfolio/PastTenancies";
+import PastTenantPeople from "@/components/portfolio/PastTenantPeople";
+import SendToTenants from "@/components/portfolio/SendToTenants";
+import RecordFiles from "@/components/portfolio/RecordFiles";
 import FileDocuments from "@/components/FileDocuments";
 import RecordPastVisit from "@/components/inspections/RecordPastVisit";
 import TenantChange from "@/components/portfolio/TenantChange";
@@ -237,7 +240,7 @@ export default function PropertyPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || showAll || showLogins || lightbox != null) return;
+      if (action || openJob || showAll || showLogins || sendOpen || lightbox != null) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -345,6 +348,21 @@ export default function PropertyPage() {
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [showLogins, setShowLogins] = useState(false);
+
+  /* Send to tenants (Josel, 20 Oct 2026, lib/home-send): certificates and
+     documents by email, from whoever presses. Each press is kept and shows
+     in the latest activity. The lets are the room, or every let of the house. */
+  const [sendOpen, setSendOpen] = useState<{ start: string | null } | null>(null);
+  const [sends, setSends] = useState<{ id: string; at: string; by: string; documents: string[]; results: { sent: boolean }[] }[]>([]);
+  const sendListings = useMemo(() => (p ? (roomP ? [roomP] : house ? house.members : [p]).map((x) => String(x.listingId)) : []), [p, roomP, house]);
+  const loadSends = useCallback(() => {
+    if (!p || p.test) return;
+    fetch(`/api/portfolio/send-to-tenants?history=1&listing=${encodeURIComponent(p.listingId)}&listings=${encodeURIComponent(sendListings.join(","))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j?.ok) setSends(j.sends ?? []); })
+      .catch(() => undefined);
+  }, [p?.listingId, sendListings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadSends(); }, [loadSends]);
 
   /* A swap made on this home (Lianna, 16 Oct 2026): she came back to the
      home for the swap's PLC check and found no sign of it here, so the
@@ -619,6 +637,10 @@ export default function PropertyPage() {
   if (certs.state === "ready") {
     for (const f of certs.data.filed) activity.push({ key: `cert-${f.label}-${f.at}`, at: f.at, icon: "shield", title: `${f.label} filed`, sub: "Certificate on the file", go: () => pickTab("compliance") });
   }
+  for (const x of sends) {
+    const went = x.results.filter((r) => r.sent).length;
+    activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `Sent to tenants · ${x.documents.join(", ")}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => pickTab("documents") });
+  }
   if (drafts.state === "ready") {
     for (const d of drafts.data) {
       const what = String((d.data as RaiseDraft).title || (d.data as { leaving?: string }).leaving && `leaving ${day(String((d.data as { leaving?: string }).leaving))}` || "");
@@ -804,6 +826,8 @@ export default function PropertyPage() {
                 />
                 {/* Sean McMahon, 16 Oct 2026: tenants report repairs in their portal, as Fixflow had them do. */}
                 <button type="button" disabled={p.test || !loginListings.length} onClick={() => setShowLogins(true)} className={tile}>{tileIcon("mail")}{tileText("Send out logins", "Tenant account, to report repairs")}</button>
+                {/* Josel, 20 Oct 2026: certificates and documents to the tenants, from here. */}
+                <button type="button" disabled={p.test || !loginListings.length} onClick={() => setSendOpen({ start: null })} className={tile}>{tileIcon("folder")}{tileText("Send to tenants", "Certificates and documents, by email")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 <button type="button" disabled={p.test} onClick={() => { pickTab("documents"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("folder")}{tileText("Add a document", "An inventory, an agreement, anything else")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("notes"); setTimeout(() => { document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }); document.getElementById("home-note")?.focus({ preventScroll: true }); }, 60); }} className={tile}>{tileIcon("note")}{tileText("Add a note", "A call, an email, a query")}</button>
@@ -895,6 +919,11 @@ export default function PropertyPage() {
                 {/* Overseas tenants' right to rent expiry (Kirstie, ticket 066bb29e). */}
                 {tenants.length > 0 && !roomsOnly && !p.test && (
                   <HomeRightToRent key={String(p.listingId)} listingId={String(p.listingId)} tenants={tenants.map((t) => ({ name: t.name, email: t.email }))} className="mt-3" />
+                )}
+                {!p.test && (
+                  <button type="button" onClick={() => { pickTab("tenancy"); setTimeout(() => document.getElementById("past-tenants")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80); }} className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark underline-offset-2 hover:underline">
+                    <DoodleIcon name="user" size={12} />Past tenants and how to reach them
+                  </button>
                 )}
                 {tenants.length > 0 && (
                   <div className="mt-3 rounded-xl bg-box px-4 py-3 text-[12.5px]">
@@ -1010,6 +1039,9 @@ export default function PropertyPage() {
             </nav>
             {tab === "compliance" && (
               <div className="mt-4 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
+                {!p.test && loginListings.length > 0 && (
+                  <SendBar onSend={() => setSendOpen({ start: null })} what="this home's certificates" />
+                )}
                 {houseView && house && !house.house && !lets && (
                   <p className="mb-2 text-[11.5px] text-muted">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
                 )}
@@ -1063,6 +1095,14 @@ export default function PropertyPage() {
                   )}
                 </section>
 
+                {/* Who lived here before, with how to reach them (Josel, 20 Oct 2026). */}
+                {!p.test && (
+                  <section id="past-tenants" className={`${card} scroll-mt-6 p-5 md:col-span-2`}>
+                    <p className={`${eyebrow} mb-3`}>Past tenants</p>
+                    <PastTenantPeople key={p.listingId} listing={String(p.listingId)} listings={sendListings} about={homeLine} />
+                  </section>
+                )}
+
                 {/* Every let this home has had since the archive started, with
                     what was owed at the last PayProp read (lib/tenancy-archive). */}
                 {p.propertyId && (
@@ -1108,6 +1148,9 @@ export default function PropertyPage() {
 
             {tab === "documents" && (
               <section className="mt-4">
+                {!p.test && loginListings.length > 0 && (
+                  <SendBar onSend={() => setSendOpen({ start: null })} what="this home's certificates and documents" />
+                )}
                 {/* The home's documents (lib/file-documents): what Kirstie added
                     on the deal and the agent on the listing or application for
                     this address are all here, and anything added here is on
@@ -1121,6 +1164,8 @@ export default function PropertyPage() {
                   dropZone
                   intro="Inventories, agreements and anything else that isn't a certificate. Kept on this home, so the office and the agent both see them, including what was added at pre-tenancy. Uploading sends nothing to the landlord or tenant."
                 />
+                {/* The clean sweep's papers, for the office (Josel, 20 Oct 2026). */}
+                {!p.test && <RecordFiles key={`record-${p.listingId}`} listing={String(p.listingId)} listings={sendListings} />}
               </section>
             )}
 
@@ -1207,6 +1252,16 @@ export default function PropertyPage() {
           />
         </Modal>
       )}
+      {sendOpen && (
+        <SendToTenants
+          listing={String(p.listingId)}
+          listings={loginListings}
+          title={roomP ? `${roomLabel(roomP)}, ${title}` : title}
+          start={sendOpen.start}
+          onClose={() => setSendOpen(null)}
+          onSent={loadSends}
+        />
+      )}
       {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
       {action?.kind === "tenant-notice" && propertyId && (
         <Modal onClose={closeAction} title="Tenant gave notice">
@@ -1252,6 +1307,18 @@ export default function PropertyPage() {
 }
 
 /* ── small pieces ─────────────────────────────────────────────────────── */
+
+/* Above the certificates and the documents: send them on from here. */
+function SendBar({ onSend, what }: { onSend: () => void; what: string }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/60 bg-white px-4 py-3">
+      <p className="min-w-0 text-[12.5px] text-muted">Email the tenants {what}, from you. You pick the files and the people, and see the email before it goes.</p>
+      <button type="button" onClick={onSend} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page">
+        <DoodleIcon name="mail" size={13} />Send to tenants
+      </button>
+    </div>
+  );
+}
 
 function Info({ icon, label, text }: { icon: string; label: string; text: string }) {
   return (
