@@ -6,6 +6,11 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import { Tag } from "@/components/ListingTags";
 import PassportAnswers from "@/components/passport/PassportAnswers";
+import dynamic from "next/dynamic";
+import { readJson } from "@/lib/page-cache";
+import type { Lead } from "@/lib/leads-sample";
+
+const LeadDrawer = dynamic(() => import("@/components/LeadDrawer"), { ssr: false });
 
 /**
  * A LISTING'S ENQUIRIES, WITH THEIR PASSPORTS (James, 8 Oct 2026).
@@ -20,6 +25,17 @@ import PassportAnswers from "@/components/passport/PassportAnswers";
  * goes on its own through POST /api/tenant/passport/invite - from the
  * agent's own mailbox, behind the customer email switch, one passport per
  * tenant - and the row turns to Sent. Nothing goes until Send is pressed.
+ *
+ * OPENED IN PLACE (20 Oct 2026). A row was a plain link to /leads?open=, so
+ * working through a listing's enquirers loaded the whole OS twice a person -
+ * once onto Leads, once back onto the listing - about 22 calls each, and
+ * Sean McMahon was paused by the pace cap doing exactly that with his own
+ * leads. Now the lead's file opens over the listing, Next and Previous step
+ * through the enquirers, and closing it leaves you where you were. The lead
+ * comes from the board read the Leads page already holds in this tab
+ * (lib/page-cache), or a search on file for one older than the newest 500;
+ * if neither finds it, the row goes to Leads as before. Cmd/Ctrl-click still
+ * opens Leads in a new tab.
  */
 
 export type Enquiry = { id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; message?: string };
@@ -58,6 +74,9 @@ export default function ListingEnquiries({ enquiries, home }: {
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<Result[] | null>(null);
   const [viewing, setViewing] = useState<{ email: string; name: string } | null>(null);
+  /* The enquirer whose lead file is open over the listing, and which row is fetching it. */
+  const [openLead, setOpenLead] = useState<Lead | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
 
   const emails = useMemo(() => [...new Set(enquiries.map((e) => e.email.trim().toLowerCase()).filter(emailOk))], [enquiries]);
   const readStatuses = useCallback(() => {
@@ -104,6 +123,34 @@ export default function ListingEnquiries({ enquiries, home }: {
     setPicking(true);
   };
   const recipients = people.filter((e) => chosen.has(e.email.trim().toLowerCase()));
+
+  /* The lead behind an enquiry: the tab's own board read first, then the file. */
+  async function findLead(e: Enquiry): Promise<Lead | null> {
+    const board = await readJson<{ ok?: boolean; live?: boolean; leads?: Lead[] }>("/api/leads", (j) => Boolean(j?.ok && j.live && Array.isArray(j.leads))).catch(() => null);
+    const hit = board?.leads?.find((l) => l.id === e.id);
+    if (hit) return hit;
+    const needle = emailOk(e.email) ? e.email.trim() : e.name.trim();
+    if (needle.length < 3) return null;
+    const found = await fetch(`/api/leads/search?q=${encodeURIComponent(needle)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<{ ok?: boolean; leads?: Lead[] }>) : null))
+      .catch(() => null);
+    return found?.leads?.find((l) => l.id === e.id) ?? null;
+  }
+  async function openEnquirer(e: Enquiry) {
+    if (opening) return;
+    setOpening(e.id);
+    const lead = await findLead(e);
+    setOpening(null);
+    if (lead) setOpenLead(lead);
+    else window.location.assign(`/leads?open=${encodeURIComponent(e.id)}`);
+  }
+  /* Next / Previous in the lead file walk this listing's enquirers. */
+  function stepEnquirer(delta: number) {
+    if (!openLead) return;
+    const at = people.findIndex((e) => e.id === openLead.id);
+    const next = at < 0 ? null : people[at + delta];
+    if (next) void openEnquirer(next);
+  }
 
   async function openReview() {
     setReviewing(true);
@@ -218,9 +265,20 @@ export default function ListingEnquiries({ enquiries, home }: {
                     className="h-4 w-4 shrink-0 accent-[var(--accent-dark)] disabled:opacity-30"
                   />
                 )}
-                <a href={`/leads?open=${encodeURIComponent(e.id)}`} className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 transition-colors hover:bg-page sm:grid-cols-[minmax(0,1.2fr)_96px_minmax(0,1fr)_80px]">
+                <a
+                  href={`/leads?open=${encodeURIComponent(e.id)}`}
+                  onClick={(ev) => {
+                    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
+                    ev.preventDefault();
+                    void openEnquirer(e);
+                  }}
+                  aria-busy={opening === e.id}
+                  className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 transition-colors hover:bg-page sm:grid-cols-[minmax(0,1.2fr)_96px_minmax(0,1fr)_80px]">
                   <span className="min-w-0">
-                    <span className="hand block truncate text-[13px]">{e.name}</span>
+                    <span className="hand flex items-center gap-1.5 truncate text-[13px]">
+                      {e.name}
+                      {opening === e.id && <span aria-hidden className="h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />}
+                    </span>
                     <span className="block truncate text-[10.5px] text-muted">{[e.phone, e.email].filter(Boolean).join(" · ") || "No contact details"}</span>
                   </span>
                   <span className="hidden sm:block"><Tag tone="neutral">{e.source}</Tag></span>
@@ -320,6 +378,15 @@ export default function ListingEnquiries({ enquiries, home }: {
         )}
 
       <PassportAnswers email={viewing?.email ?? null} name={viewing?.name} home={home} onClose={() => setViewing(null)} />
+
+      {/* Over the listing's own panels (z-130), in a layer of its own. */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <div className="relative z-[160]">
+            <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onStep={stepEnquirer} />
+          </div>,
+          document.body
+        )}
     </section>
   );
 }

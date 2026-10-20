@@ -776,13 +776,45 @@ async function doorState(req: NextRequest, userId: string): Promise<DoorState> {
 
    Counted in this process's memory, per person. Railway runs one instance;
    if that ever changes, each instance counts its own share, and a copy job
-   is still caught, only a little later. */
+   is still caught, only a little later.
+
+   RECORDS, NOT CALLS (20 Oct 2026). Sean McMahon was paused twice in an hour
+   working through a listing's enquirers - his own Rightmove and OnTheMarket
+   leads, one every eight seconds. Each lead he opened was about 22 calls
+   (the lead's facts, tasks, guarantors, viewings, case states, plus the whole
+   board reloading round it), and the hourly line counted every distinct
+   address, so twenty-odd leads looked like four hundred records. It now
+   counts the records a call names - a lead, a listing, a property, a
+   contact, an email - so a lead opened is one to three, however many calls
+   it takes. A call that names none counts as its own address. Measured over
+   the week to 20 Oct: the busiest agent touched 135 records in an hour (364
+   addresses); the line stays at 400 records. The call lines rise to where
+   an open screen's own fan-out cannot reach them; they are there for a
+   script hammering, which the record line alone would not see. */
 const PACE = {
-  perMinute: 180,
-  perTenMinutes: 600,
-  distinctPerHour: 400,
+  perMinute: 300,
+  perTenMinutes: 1500,
+  recordsPerHour: 400,
   pauseMs: 15 * 60_000,
 };
+/* What a call names: REX/OS lead and contact ids, numeric ids of five digits
+   or more (listings, properties, contacts, applications), UUIDs, emails.
+   "property-123" and "123" are the same home. */
+const RECORD_ID = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?:rex|contact|os)-\d+|\d{5,}|[^=&?/\s]+@[^=&?/\s]+)/gi;
+function recordKeys(req: NextRequest): string[] {
+  const path = req.nextUrl.pathname;
+  const search = req.nextUrl.search;
+  let text = path;
+  try {
+    text = decodeURIComponent(path + search);
+  } catch {
+    text = path + search;
+  }
+  const ids = new Set<string>();
+  for (const m of text.matchAll(RECORD_ID)) ids.add(m[1].toLowerCase().replace(/^property-/, ""));
+  if (ids.size) return [...ids];
+  return [path + search];
+}
 const PAUSED_MESSAGE =
   "You've opened a lot very quickly, so TLE OS has paused for a few minutes. If this is your real work, tell James.";
 type Pace = { calls: number[]; seen: Map<string, number>; pausedUntil: number; why: string };
@@ -802,9 +834,10 @@ function paceCheck(req: NextRequest, userId: string): { until: number; why: stri
   while (p.calls.length && now - p.calls[0] > 10 * 60_000) p.calls.shift();
   p.calls.push(now);
   if (req.method === "GET") {
-    const key = req.nextUrl.pathname + req.nextUrl.search;
-    p.seen.delete(key); // re-set moves it to the end, so the oldest stay first
-    p.seen.set(key, now);
+    for (const key of recordKeys(req)) {
+      p.seen.delete(key); // re-set moves it to the end, so the oldest stay first
+      p.seen.set(key, now);
+    }
     for (const [k, at] of p.seen) {
       if (now - at <= 60 * 60_000) break;
       p.seen.delete(k);
@@ -818,7 +851,7 @@ function paceCheck(req: NextRequest, userId: string): { until: number; why: stri
       ? `${lastMinute} calls in a minute`
       : p.calls.length > PACE.perTenMinutes
         ? `${p.calls.length} calls in ten minutes`
-        : p.seen.size > PACE.distinctPerHour
+        : p.seen.size > PACE.recordsPerHour
           ? `${p.seen.size} different records in an hour`
           : null;
   if (!why) return null;
