@@ -8,7 +8,11 @@ import type { OsUser } from "@/lib/users";
 import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 import { recordLandlordFor } from "@/lib/record-landlords";
 import { listingRead } from "@/lib/listing-details";
-import { letLandlords, personEdits, type PersonEdit } from "@/lib/let-landlords";
+import { personEdits, type PersonEdit } from "@/lib/let-landlords";
+import { peopleOn } from "@/lib/property-people";
+import { propertyIdForListing } from "@/lib/rex-landlord";
+import { managedBookFor } from "@/lib/managed-book-cache";
+import { sameHome } from "@/lib/address-parse";
 import { letTenants } from "@/lib/let-tenants";
 import { dealForLet, type LetDeal } from "@/lib/let-deal";
 
@@ -60,10 +64,16 @@ export type LetPeople = {
   /** null: none held. `problem`: the listings system didn't answer. */
   landlord: Landlord | null;
   landlordProblem: string | null;
-  /** Everyone, with how each is changed (20 Oct 2026). `landlord` above is landlords[0]. */
+  /** Everyone, with how each is changed (20 Oct 2026). `landlord` above is landlords[0]. Points of contact are not here: they are on the home. */
   people: LetParty[];
   /** The let's Propoly deal, from the saved copy of the book (no call of its own). */
   deal: LetDeal | null;
+  /**
+   * The home this let is on, as every screen keys a home's extra landlords and
+   * points of contact (lib/property-people): the REX property id, a REX PM
+   * home's id, or "listing:<id>" / "let:<ref>" where there is no home to name.
+   */
+  homeKey: string;
 };
 
 export type LetAnswer = { ok: true; let: LetPeople; app: Application | null } | { ok: false; status: number; error: string };
@@ -101,8 +111,10 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
        handover already sends them all to Propoly. Off the same cached read. */
     const coOwners = listingId && !isTestId(listingId) && landlord?.from !== "os" ? await otherOwners(listingId, landlord?.contactId ?? null) : [];
     const deal = await dealForLet({ ref, app, propertyName: app.property, locality: app.locality, listingId }).catch(() => null);
+    const homeKey = await homeKeyFor({ ref, listingId, rexPropertyId: app.swap?.rexPropertyId ?? null, property: app.property, locality: app.locality });
     const base: Omit<LetPeople, "people" | "deal"> = {
       ref,
+      homeKey,
       kind: "application",
       property: app.property,
       locality: app.locality,
@@ -144,8 +156,10 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
   const listed = ll && ll.ok ? ll.landlord : null;
   const landlord: Landlord | null = listed ?? (fromDeal[0] ? { contactId: null, name: fromDeal[0].name ?? "", email: fromDeal[0].email, phone: fromDeal[0].phone } : null);
   const deal = await dealForLet({ ref, app: null, propertyName: d.app.propertyName, locality: d.app.locality, listingId }).catch(() => null);
+  const homeKey = await homeKeyFor({ ref, listingId, rexPropertyId: null, property: d.app.propertyName, locality: d.app.locality });
   const base: Omit<LetPeople, "people" | "deal"> = {
     ref,
+    homeKey,
     kind: "deal",
     property: d.app.propertyName,
     locality: d.app.locality,
@@ -174,6 +188,25 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
         }))),
   ];
   return { ok: true, app: null, let: await withPeople(base, held, deal) };
+}
+
+/**
+ * Which home a let is on (see LetPeople.homeKey). The listing's REX property
+ * first, then a swap's home, then the managed book by address, then the
+ * listing or the let itself, so there is always somewhere to keep people.
+ */
+async function homeKeyFor(h: { ref: string; listingId: string | null; rexPropertyId: string | null; property: string; locality: string }): Promise<string> {
+  if (h.listingId && isTestId(h.listingId)) return `let:${h.ref}`;
+  if (h.listingId) {
+    const pid = await propertyIdForListing(h.listingId).catch(() => null);
+    if (pid) return pid;
+  }
+  if (h.rexPropertyId) return h.rexPropertyId;
+  const book = await managedBookFor(null).then((b) => b.book.properties).catch(() => []);
+  const here = `${h.property}, ${h.locality}`;
+  const hit = book.find((p) => !p.test && sameHome(here, [p.name, p.locality].filter(Boolean).join(", ")));
+  if (hit?.propertyId) return hit.propertyId;
+  return h.listingId ? `listing:${h.listingId}` : `let:${h.ref}`;
 }
 
 type DealLandlord = { uuid: string | null; name: string | null; email: string | null; phone: string | null };
@@ -224,11 +257,14 @@ async function otherOwners(listingId: string, firstId: string | null): Promise<L
 
 /** Adds the people kept on the let in the OS, and the OS's edits over Propoly's copy. */
 async function withPeople(base: Omit<LetPeople, "people" | "deal">, held: LetParty[], deal: LetDeal | null): Promise<LetPeople> {
-  const [edits, addedLandlords, addedTenants] = await Promise.all([
+  const [edits, onHome, addedTenants] = await Promise.all([
     personEdits(base.ref).catch(() => new Map<string, PersonEdit>()),
-    letLandlords(base.ref).catch(() => []),
+    peopleOn(base.homeKey).catch(() => []),
     letTenants(base.ref).catch(() => []),
   ]);
+  /* A home's joint landlords are the let's landlords too, wherever they were
+     added: the let, the listing, the home's page or an appraisal (20 Oct 2026). */
+  const addedLandlords = onHome.filter((p) => p.kind === "joint_landlord");
   const over = (p: LetParty): LetParty => {
     const e = edits.get(p.key);
     if (!e) return p;
@@ -242,7 +278,7 @@ async function withPeople(base: Omit<LetPeople, "people" | "deal">, held: LetPar
   const people: LetParty[] = [
     ...held.filter((p) => !(p.source === "propoly" && p.email && addedEmails.has(p.email.trim().toLowerCase()))).map(over),
     ...addedTenants.map((t) => ({ key: `let-tenant:${t.id}`, role: "tenant" as const, source: "added" as const, name: t.name, email: t.email, phone: t.phone, contactId: null, isPrimary: false, address: null, reference: t.reference })),
-    ...addedLandlords.map((l) => ({ key: `let-landlord:${l.id}`, role: "landlord" as const, source: "added" as const, name: l.name, email: l.email, phone: l.phone, contactId: null, isPrimary: false, address: l.address })),
+    ...addedLandlords.map((l) => ({ key: `home-person:${l.id}`, role: "landlord" as const, source: "added" as const, name: l.name, email: l.email, phone: l.phone, contactId: null, isPrimary: false, address: null })),
   ];
   /* With nobody else held, the first landlord added on the let IS the
      let's landlord: the customer update and the conversation write to them. */

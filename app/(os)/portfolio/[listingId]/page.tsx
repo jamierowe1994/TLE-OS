@@ -24,7 +24,7 @@ import ServiceTag from "@/components/portfolio/ServiceTag";
 import HomeAgent from "@/components/portfolio/HomeAgent";
 import HomeKeys from "@/components/portfolio/HomeKeys";
 import ContactBlock from "@/components/ContactBlock";
-import HomePeople from "@/components/portfolio/HomePeople";
+import HomeLandlords from "@/components/HomeLandlords";
 import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
 import { HomeRightToRent } from "@/components/RightToRentField";
 import SendLogins from "@/components/portfolio/SendLogins";
@@ -460,13 +460,6 @@ export default function PropertyPage() {
   /* The lets whose tenants Send out logins covers: the room picked, or every
      let of the house, or the home. */
   const loginListings = (roomP ? [roomP] : house ? house.members : [p]).filter((x) => x.tenants.length > 0).map((x) => String(x.listingId));
-
-  /* A landlord added on this page shows at once, on every let of the home
-     that names nobody else. */
-  const setLandlordHere = (l: Party) =>
-    setBook((b) => (b.state === "ready"
-      ? { ...b, data: { ...b.data, properties: b.data.properties.map((x) => (x.propertyId === propertyId && (!x.landlord || x.landlord.contactId.startsWith("record:")) ? { ...x, landlord: l } : x)) } }
-      : b));
 
   /* Change landlord (Dan Richards, 17 Oct 2026, lib/landlord-change): the
      new one shows on every let of the home at once; an undo reads the book
@@ -914,49 +907,56 @@ export default function PropertyPage() {
               </section>
 
               <section className={`${card} p-3.5 sm:p-5`}>
-                <p className={`${eyebrow} mb-3`}>Landlord</p>
-                {landlord && landlord.contactId.startsWith("changed:") && propertyId ? (
-                  /* Changed in the OS to a company, an estate or a new owner
-                     (Dan Richards, 17 Oct 2026): kind, who it was, Undo, papers. */
-                  <div className="text-[13px]">
-                    <ListingChangedLandlord
-                      key={landlord.contactId}
-                      listingId={String(p.listingId)}
-                      propertyId={propertyId}
+                {/* The landlords section, the same on every screen (James, 20 Oct
+                    2026): the landlord, every field changeable here (REX's
+                    through REX, the home's own record on the record), plus
+                    additional landlords and points of contact on the home. */}
+                {(() => {
+                  const changed = Boolean(landlord && landlord.contactId.startsWith("changed:") && propertyId);
+                  const jobEmails = landlord?.email && landlord.email.includes("@") ? (
+                    <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
+                  ) : null;
+                  const isRecord = Boolean(landlord?.contactId.startsWith("record:"));
+                  return (
+                    <HomeLandlords
+                      homeKey={p.test ? null : propertyId}
                       address={homeLine}
-                      onChanged={landlordUndone}
+                      readOnly={p.test ? "A test home keeps its own people." : null}
+                      main={
+                        landlord && !changed
+                          ? [{
+                              key: landlord.contactId,
+                              name: landlord.name,
+                              email: landlord.email,
+                              phone: landlord.phone,
+                              personRef: /^\d+$/.test(landlord.contactId) ? `rex:${landlord.contactId}` : isRecord && propertyId ? `home:${propertyId}` : null,
+                              note: isRecord ? "From the home's record in the OS - REX names no owner." : null,
+                              after: jobEmails,
+                            }]
+                          : []
+                      }
+                      mainSlot={
+                        changed && landlord && propertyId ? (
+                          /* Changed in the OS to a company, an estate or a new owner
+                             (Dan Richards, 17 Oct 2026): kind, who it was, Undo, papers. */
+                          <div className="text-[13px]">
+                            <ListingChangedLandlord key={landlord.contactId} listingId={String(p.listingId)} propertyId={propertyId} address={homeLine} onChanged={landlordUndone} />
+                            {jobEmails}
+                          </div>
+                        ) : undefined
+                      }
+                      mainAction={
+                        propertyId && !p.test ? (
+                          <ChangeLandlordButton
+                            where={{ listingId: String(p.listingId), propertyId, address: homeLine }}
+                            current={landlord ? { name: landlord.name, email: landlord.email, phone: landlord.phone } : null}
+                            onChanged={landlordChanged}
+                          />
+                        ) : null
+                      }
                     />
-                    {landlord.email && landlord.email.includes("@") && (
-                      <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
-                    )}
-                  </div>
-                ) : landlord ? (
-                  <div className="text-[13px]">
-                    <PartyCard p={landlord} plain role="landlord" home={{ propertyAddress: homeLine }} />
-                    {landlord.email && landlord.email.includes("@") && (
-                      <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
-                    )}
-                    {/* Kept on the OS record only (lib/record-landlords): changed here, not on the card. */}
-                    {landlord.contactId.startsWith("record:") && propertyId && !p.test && (
-                      <RecordLandlord propertyId={propertyId} current={landlord} onSaved={setLandlordHere} />
-                    )}
-                    {propertyId && !p.test && (
-                      <ChangeLandlordButton
-                        where={{ listingId: String(p.listingId), propertyId, address: homeLine }}
-                        current={{ name: landlord.name, email: landlord.email, phone: landlord.phone }}
-                        onChanged={landlordChanged}
-                      />
-                    )}
-                  </div>
-                ) : propertyId && !p.test ? (
-                  <RecordLandlord propertyId={propertyId} current={null} onSaved={setLandlordHere} />
-                ) : (
-                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord on record for this home.</p>
-                )}
-                {/* A joint owner, or the person the agent actually deals with (agent call, 16 Oct 2026). OS only. */}
-                {propertyId && !p.test && (
-                  <HomePeople key={propertyId} propertyId={propertyId} />
-                )}
+                  );
+                })()}
               </section>
             </div>
           </section>
@@ -1292,61 +1292,6 @@ function TenancyLine({ t, long = false }: { t: { startDate: string | null; endDa
 /** A tenant or the landlord: the same block as every person in the OS, changeable
  *  where REX knows them (James, 12 Oct 2026). REX PM's own tenants carry no REX
  *  contact, so theirs is read only. */
-/**
- * The landlord of a home REX names no owner for, kept on the OS's own record
- * (Lorna Fieldson, 14 Oct 2026, 44 Pilots Way). "Add the landlord" when there
- * is nobody, "Change" on one already kept here. Never written to REX.
- */
-function RecordLandlord({ propertyId, current, onSaved }: { propertyId: string; current: Party | null; onSaved: (l: Party) => void }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState(current?.name ?? "");
-  const [email, setEmail] = useState(current?.email ?? "");
-  const [phone, setPhone] = useState(current?.phone ?? "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const field = "w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]";
-
-  if (!open) {
-    return current ? (
-      <button type="button" onClick={() => setOpen(true)} className="mt-2 block text-[11.5px] text-muted underline">Edit their details</button>
-    ) : (
-      <div className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
-        <p>No landlord on record for this home.</p>
-        <button type="button" onClick={() => setOpen(true)} className="mt-1.5 font-semibold text-ink underline">Add the landlord</button>
-      </div>
-    );
-  }
-  async function save() {
-    if (saving || name.trim().length < 2) return;
-    setSaving(true);
-    setError(null);
-    const r = await fetch("/api/portfolio/landlord", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ propertyId, name, email, phone }),
-    }).then((x) => x.json()).catch(() => null);
-    setSaving(false);
-    if (!r?.ok) { setError(r?.error ?? "The landlord couldn't be saved just now. Try again in a minute."); return; }
-    onSaved(r.landlord as Party);
-    setOpen(false);
-  }
-  return (
-    <form className="mt-2 space-y-2 rounded-xl bg-accent-soft/30 p-3" onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <label className="block text-[11.5px] text-muted">Name<input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="off" className={`${field} mt-1`} /></label>
-      <label className="block text-[11.5px] text-muted">Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" className={`${field} mt-1`} /></label>
-      <label className="block text-[11.5px] text-muted">Phone<input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="off" className={`${field} mt-1`} /></label>
-      <p className="text-[11px] text-muted">Kept on this home&apos;s file in the OS.</p>
-      {error && <p className="text-[11.5px] text-accent-dark">{error}</p>}
-      <div className="flex flex-wrap items-center gap-3">
-        <PressButton onClick={() => void save()} disabled={saving || name.trim().length < 2} className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">
-          {saving ? "Saving…" : "Save"}
-        </PressButton>
-        <button type="button" onClick={() => { setOpen(false); setError(null); }} className="text-[11.5px] text-muted underline">Cancel</button>
-      </div>
-    </form>
-  );
-}
-
 function PartyCard({ p, plain = false, role, home, about }: { p: Party; plain?: boolean; role?: string; home?: { propertyAddress?: string | null }; about?: string }) {
   const body = (
     <ContactBlock

@@ -394,7 +394,7 @@ const REMINDERS: Template[] = [
 
 type LetPerson = { name: string; email: string | null; phone: string | null; contactId: string | null; isPrimary: boolean };
 type LetLandlord = { name: string; email: string | null; phone: string | null; contactId: string | null; from?: "rex" | "record" };
-type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[] };
+type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string };
 type Cancellation = { reason: string; note: string; by: string; at: string };
 
 function EmailBuilder({ letId, mode, people, start, scotland, onClose }: {
@@ -1391,7 +1391,8 @@ export default function ApplicationDrawer({
                 problem={info?.landlordProblem ?? null}
                 propertyAddress={[name, locality].filter(Boolean).join(", ")}
                 onAnswer={takePeople}
-                onOpen={(i) => setPerson({ role: "landlord", index: i })}
+                homeKey={info?.homeKey ?? null}
+                reload={reloadPeople}
               />
             )}
 
@@ -1742,7 +1743,7 @@ export default function ApplicationDrawer({
                         {landlordParty && letId ? (
                           <>
                             <p className={`${eyebrow} mb-1`}>Their details</p>
-                            <PartyContact letId={letId} party={landlordParty} propertyAddress={[name, locality].filter(Boolean).join(", ")} onAnswer={takePeople} showName />
+                            <PartyContact letId={letId} party={landlordParty} propertyAddress={[name, locality].filter(Boolean).join(", ")} onAnswer={takePeople} showName homeKey={info?.homeKey ?? null} />
                             {sourceWords(landlordParty) && <p className="mt-1.5 text-[11px] text-muted">{sourceWords(landlordParty)}</p>}
                             <PropolyLine letId={letId} party={landlordParty} picture={picture} onAnswer={takePeople} />
                           </>

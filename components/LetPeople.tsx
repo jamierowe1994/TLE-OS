@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import ContactBlock from "@/components/ContactBlock";
+import HomeLandlords, { AddPersonModal, type MainLandlord } from "@/components/HomeLandlords";
 
 /**
  * THE PEOPLE ON A LET, EACH ONE OPENABLE AND CHANGEABLE (James, 20 Oct 2026).
@@ -140,97 +141,82 @@ export function PropolySummary({ picture, people }: { picture: Picture | null; p
 
 export function LandlordsBox({
   letId,
+  homeKey,
   people,
   picture,
   problem,
   propertyAddress,
   onAnswer,
-  onOpen,
+  reload,
 }: {
   letId: string;
+  /** Where the home's extra landlords and points of contact are kept (lib/let-people homeKey). */
+  homeKey: string | null;
   people: Party[] | null;
   picture: Picture | null;
   problem: string | null;
   propertyAddress: string;
   onAnswer: (j: PeopleAnswer) => void;
-  onOpen: (index: number) => void;
+  reload: () => void;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const landlords = (people ?? []).filter((p) => p.role === "landlord");
-
-  async function remove(p: Party) {
-    setMsg(null);
-    const j = await changePeople(letId, { action: "remove-landlord", key: p.key });
-    if (!j.ok) return setMsg(j.error ?? "That didn't save.");
-    onAnswer(j);
-    if (j.sync?.detail) setMsg(j.sync.detail);
-  }
-
+  /* The landlords the let's records hold; additional ones are the home's, shown by the section. */
+  const main: MainLandlord[] | null =
+    people === null
+      ? null
+      : people
+          .filter((p) => p.role === "landlord" && !p.key.startsWith("home-person:"))
+          .map((p) => ({
+            key: p.key,
+            name: p.name,
+            email: p.email,
+            phone: p.phone,
+            personRef: refFor(p, homeKey),
+            saver: p.source === "propoly" ? saverFor(letId, p, onAnswer) : undefined,
+            note: sourceWords(p),
+            after: <PropolyLine letId={letId} party={p} picture={picture} onAnswer={onAnswer} />,
+            onSaved: () => void changePeople(letId, { action: "changed", key: p.key }).then(onAnswer),
+          }));
   return (
-    <div data-steve="application.landlords">
-      <div className="mb-3 mt-5 flex items-center justify-between gap-3">
-        <p className={eyebrow}>{landlords.length > 1 ? `The landlords · ${landlords.length}` : "The landlord"}</p>
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          disabled={people === null}
-          className="inline-flex items-center gap-1.5 rounded-full border border-accent-dark/50 bg-white px-3 py-1 text-[11.5px] font-semibold text-accent-dark transition-colors hover:bg-accent-soft disabled:opacity-50"
-        >
-          + Add landlord
-        </button>
-      </div>
-      {people === null ? (
-        <p className="flex items-center gap-2 text-[12px] text-muted">
-          <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-          Looking up the landlord&hellip;
-        </p>
-      ) : landlords.length ? (
-        <ul className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
-          {landlords.map((p, i) => (
-            <li key={p.key} className="rounded-xl border border-line/50 bg-white p-3.5">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <button type="button" onClick={() => onOpen(i)} className="truncate text-left text-[13px] font-semibold underline-offset-2 hover:underline">
-                  {p.name}
-                </button>
-                {p.source === "added" && landlords.length > 1 && (
-                  <button type="button" onClick={() => void remove(p)} className="shrink-0 text-[11.5px] font-semibold text-muted hover:text-ink">Take off</button>
-                )}
-              </div>
-              <PartyContact letId={letId} party={p} propertyAddress={propertyAddress} onAnswer={onAnswer} />
-              {sourceWords(p) && <p className="mt-1.5 text-[11px] text-muted">{sourceWords(p)}</p>}
-              <PropolyLine letId={letId} party={p} picture={picture} onAnswer={onAnswer} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#fdefec] px-4 py-3 text-[12.5px] text-[#9d4340]">
-          <span>
-            <b className="font-semibold">No landlord on this let.</b> Every let needs one.{problem ? ` ${problem}` : ""}
-          </span>
-          <button type="button" onClick={() => setAdding(true)} className="shrink-0 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page">
-            Add the landlord
-          </button>
-        </div>
-      )}
-      {msg && <p className="mt-2 text-[12px] text-muted">{msg}</p>}
-      {adding && (
-        <AddLandlord
-          letId={letId}
-          hasDeal={Boolean(picture?.deal)}
-          live={Boolean(picture?.live)}
-          propertyAddress={propertyAddress}
-          onClose={() => setAdding(false)}
-          onAdded={(j) => {
-            setAdding(false);
-            onAnswer(j);
-            /* With a deal, their own Propoly line says what happened. */
-            if (j.sync?.detail && !j.propoly?.deal) setMsg(j.sync.detail);
-          }}
-        />
-      )}
+    <div className="mt-5" data-steve="application.landlords">
+      <HomeLandlords
+        homeKey={homeKey}
+        address={propertyAddress}
+        main={main}
+        mainProblem={problem}
+        addLandlord={async (f) => {
+          const j = await changePeople(letId, { action: "add-landlord", name: f.name, email: f.email, phone: f.phone, address: f.address, relation: f.relation });
+          if (!j.ok) return { ok: false, error: j.error ?? "That didn't save." };
+          onAnswer(j);
+          return { ok: true };
+        }}
+        extraLine={(h) => {
+          const party = (people ?? []).find((p) => p.key === `home-person:${h.id}`);
+          return party ? <PropolyLine letId={letId} party={party} picture={picture} onAnswer={onAnswer} /> : null;
+        }}
+        onChanged={(h) => {
+          /* A changed additional landlord is checked against Propoly again; anything else just reads again. */
+          if (h?.kind === "joint_landlord") void changePeople(letId, { action: "changed", key: `home-person:${h.id}` }).then((j) => (j.ok ? onAnswer(j) : reload()));
+          else reload();
+        }}
+      />
     </div>
   );
+}
+
+/** How a person on the let is changed: REX, the home's record, or (null) the screen's own saver. */
+export function refFor(p: Party, homeKey: string | null): string | null {
+  if (p.source === "rex" && p.contactId && /^\d+$/.test(p.contactId)) return `rex:${p.contactId}`;
+  if (p.source === "record" && homeKey) return `home:${homeKey}`;
+  return null;
+}
+
+/** Somebody only the let holds (Propoly's copy, added on the let): saved on the let. */
+export function saverFor(letId: string, p: Party, onAnswer: (j: PeopleAnswer) => void) {
+  return async (field: "name" | "email" | "phone", value: string) => {
+    const j = await changePeople(letId, { action: "edit", key: p.key, [field]: value });
+    if (j.ok) onAnswer(j);
+    return { ok: Boolean(j.ok), error: j.error, detail: j.sync?.detail ?? "Saved on the let." };
+  };
 }
 
 /**
@@ -238,97 +224,42 @@ export function LandlordsBox({
  * contact block's own route (and REX); anybody else saves on the let. Either
  * way the let is then checked against Propoly again.
  */
-export function PartyContact({ letId, party, propertyAddress, onAnswer, showName = false }: { letId: string; party: Party; propertyAddress?: string; onAnswer: (j: PeopleAnswer) => void; showName?: boolean }) {
-  const rex = party.source === "rex" && party.contactId && /^\d+$/.test(party.contactId);
-  const editable = party.source === "added" || party.source === "propoly";
+export function PartyContact({ letId, party, propertyAddress, onAnswer, showName = false, homeKey = null }: { letId: string; party: Party; propertyAddress?: string; onAnswer: (j: PeopleAnswer) => void; showName?: boolean; homeKey?: string | null }) {
+  const ref = refFor(party, homeKey);
+  const editable = !ref && (party.source === "added" || party.source === "propoly");
   return (
     <ContactBlock
       showName={showName}
       role={party.role === "landlord" ? "landlord" : party.isPrimary ? "lead applicant" : "applicant"}
       person={{ name: party.name, email: party.email, phone: party.phone }}
-      personRef={rex ? `rex:${party.contactId}` : null}
+      personRef={ref}
       home={party.role === "landlord" ? { propertyAddress } : undefined}
       about={propertyAddress}
-      onSaved={rex ? () => void changePeople(letId, { action: "changed", key: party.key }).then(onAnswer) : undefined}
-      saver={
-        editable
-          ? async (field, value) => {
-              const j = await changePeople(letId, { action: "edit", key: party.key, [field]: value });
-              if (j.ok) onAnswer(j);
-              return { ok: Boolean(j.ok), error: j.error, detail: j.sync?.detail ?? "Saved on the let." };
-            }
-          : undefined
-      }
+      onSaved={ref ? () => void changePeople(letId, { action: "changed", key: party.key }).then(onAnswer) : undefined}
+      saver={editable ? saverFor(letId, party, onAnswer) : undefined}
     />
   );
 }
 
+/** Add a landlord from the let (its drawer): onto the home, then to Propoly where the let has a deal. */
 export function AddLandlord({ letId, hasDeal, live, propertyAddress, onClose, onAdded }: { letId: string; hasDeal: boolean; live: boolean; propertyAddress: string; onClose: () => void; onAdded: (j: PeopleAnswer) => void }) {
-  const [d, setD] = useState({ name: "", email: "", phone: "", address: "" });
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
-
-  async function save() {
-    if (!d.name.trim()) return setMsg("What is the landlord's name?");
-    if (!d.email.trim()) return setMsg("They need an email address - the contracts and Propoly go to it.");
-    if (!EMAIL.test(d.email.trim())) return setMsg("That email doesn't look right.");
-    setBusy(true);
-    setMsg(null);
-    const j = await changePeople(letId, { action: "add-landlord", ...d });
-    setBusy(false);
-    if (!j.ok) return setMsg(j.error ?? "That didn't save. Try again.");
-    onAdded(j);
-  }
-
-  const where = !hasDeal
-    ? "Kept on the let. There's no Propoly deal for it yet: once there is, press Add to the Propoly deal on them."
+  const note = !hasDeal
+    ? "Kept on the home, so they show on its listing, its lets and its page. There's no Propoly deal for this let yet: once there is, press Add to the Propoly deal on them."
     : live
-      ? "Goes to Propoly straight away: found or created as a landlord and linked to the home."
-      : "Kept on the let. Practice mode: Propoly isn't sent anything yet, the let shows what would go.";
-  const field = "mt-1 w-full rounded-xl border border-line/80 bg-white px-3 py-2 text-[13px] outline-none focus:border-ink/40";
-  const label = "block text-[11px] font-semibold text-muted";
+      ? "Kept on the home, and sent to Propoly straight away: found or created as a landlord and linked to the home. Propoly needs an email and a mobile number."
+      : "Kept on the home. Practice mode: Propoly isn't sent anything yet, the let shows what would go. Propoly needs an email and a mobile number.";
   return (
-    <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
-      <button type="button" aria-label="Cancel" onClick={() => !busy && onClose()} className="absolute inset-0 cursor-default bg-ink/45" />
-      <div role="dialog" aria-label="Add a landlord" className="fade-up relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
-        <div className="px-6 pb-2 pt-5">
-          <h2 className="text-[20px] font-normal tracking-normal">Add a Landlord</h2>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-muted">Somebody else who owns {propertyAddress || "the home"}, or the landlord if none is held.</p>
-          <div
-            className="mt-4 space-y-3"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
-                e.preventDefault();
-                void save();
-              }
-            }}
-          >
-            <label className="block"><span className={label}>Full name</span><input autoFocus value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} className={field} placeholder="As on their ID, or the company's name" /></label>
-            <label className="block"><span className={label}>Email</span><input type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} className={field} placeholder="name@example.com" /></label>
-            <label className="block"><span className={label}>Mobile</span><input type="tel" value={d.phone} onChange={(e) => setD({ ...d, phone: e.target.value })} className={field} placeholder="07..." /></label>
-            <label className="block">
-              <span className={label}>Their own home address</span>
-              <input value={d.address} onChange={(e) => setD({ ...d, address: e.target.value })} className={field} placeholder="Where they live, with the postcode" />
-            </label>
-            {propertyAddress && (
-              <button type="button" onClick={() => setD({ ...d, address: propertyAddress })} className="text-[11.5px] font-semibold text-accent-dark hover:underline">
-                Same as the let property
-              </button>
-            )}
-            <p className="text-[11.5px] leading-relaxed text-muted">{where} Propoly needs an email and a mobile number.</p>
-          </div>
-          {msg && <p className="mt-3 text-[12.5px] font-semibold text-accent-dark">{msg}</p>}
-        </div>
-        <div className="flex items-center justify-between gap-2 border-t border-line/60 px-6 py-4">
-          <button type="button" onClick={onClose} disabled={busy} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold hover:border-ink/40 disabled:opacity-50">Cancel</button>
-          <button type="button" onClick={() => void save()} disabled={busy} className="rounded-full bg-accent-dark px-5 py-2 text-[12.5px] font-semibold text-page disabled:opacity-50">{busy ? "Saving…" : "Add them"}</button>
-        </div>
-      </div>
-    </div>
+    <AddPersonModal
+      kind="joint_landlord"
+      address={propertyAddress}
+      note={note}
+      onClose={onClose}
+      onSubmit={async (f) => {
+        const j = await changePeople(letId, { action: "add-landlord", name: f.name, email: f.email, phone: f.phone, address: f.address, relation: f.relation });
+        if (!j.ok) return { ok: false, error: j.error ?? "That didn't save." };
+        onAdded(j);
+        return { ok: true };
+      }}
+    />
   );
 }

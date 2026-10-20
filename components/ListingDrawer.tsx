@@ -60,6 +60,7 @@ import FieldSelect from "@/components/FieldSelect";
 import { LET_TYPES, type LetType } from "@/lib/let-type";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
 import ContactBlock from "@/components/ContactBlock";
+import HomeLandlords from "@/components/HomeLandlords";
 import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
 import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
 import ListingEnquiries from "@/components/listing/ListingEnquiries";
@@ -1573,59 +1574,56 @@ function ListingDrawerBody({
           <div className="my-4 grid grid-cols-1 content-start gap-4 border-t border-line/50 pt-4 @[34rem]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             {/* The REAL landlord, off the listing's owner relationship in REX. */}
             <div className="min-w-0">
-              <p className={`${eyebrow} mb-2.5`}>Landlord</p>
-              {landlord.status === "loading" || landlord.status === "idle" ? (
-                <p className="flex items-center gap-2 text-[12px] text-muted">
-                  <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-                  Looking them up…
-                </p>
-              ) : landlord.status === "known" && landlord.landlord.from === "os" ? (
-                /* Changed in the OS to a company, an estate or a new owner (Dan
-                   Richards, 17 Oct 2026): what kind, who it was, Undo, the papers. */
-                <ListingChangedLandlord
-                  listingId={String(listing.id)}
-                  propertyId={listing.propertyId ?? null}
-                  address={[listing.name, listing.locality].filter(Boolean).join(", ")}
-                  onChanged={() => setLandlordRev((n) => n + 1)}
-                />
-              ) : landlord.status === "known" ? (
-                <div className="text-[13px]">
-                  {/* The same block as every person in the OS: change the name, number
-                      or email here and REX follows (James, 12 Oct 2026). A landlord off
-                      the managed record has no REX contact here, so it is read only. */}
-                  <ContactBlock
-                    className="max-w-[440px]"
-                    role="landlord"
-                    person={{ name: landlord.landlord.name, email: landlord.landlord.email, phone: landlord.landlord.phone }}
-                    personRef={landlord.landlord.contactId && landlord.landlord.from !== "record" ? `rex:${landlord.landlord.contactId}` : null}
-                    home={{ propertyAddress: [listing.name, listing.locality].filter(Boolean).join(", ") }}
+              {/* The landlords section, the same on every screen (James, 20 Oct
+                  2026: "we always need to be able to update their details"):
+                  the landlord, every field changeable, plus additional
+                  landlords and points of contact kept on the home. */}
+              {(() => {
+                const where = { listingId: String(listing.id), propertyId: listing.propertyId ?? null, address: [listing.name, listing.locality].filter(Boolean).join(", ") };
+                const l = landlord.status === "known" ? landlord.landlord : null;
+                return (
+                  <HomeLandlords
+                    homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`}
+                    address={where.address}
+                    readOnly={testListing ? "A test listing keeps its own landlord." : null}
+                    requireOne={landlord.status !== "problem"}
+                    main={
+                      landlord.status === "loading" || landlord.status === "idle"
+                        ? null
+                        : l && l.from !== "os"
+                          ? [{
+                              key: l.contactId ?? `record:${l.name}`,
+                              name: l.name,
+                              email: l.email,
+                              phone: l.phone,
+                              /* REX's owner changes in REX; the home's own record on the record. */
+                              personRef: l.contactId && l.from !== "record" ? `rex:${l.contactId}` : listing.propertyId ? `home:${listing.propertyId}` : null,
+                              note: l.from === "record" ? "From the home's record in the OS. Not on this listing in REX yet." : null,
+                            }]
+                          : []
+                    }
+                    mainSlot={
+                      l && l.from === "os" ? (
+                        /* Changed in the OS to a company, an estate or a new owner (Dan
+                           Richards, 17 Oct 2026): what kind, who it was, Undo, the papers. */
+                        <ListingChangedLandlord listingId={where.listingId} propertyId={where.propertyId} address={where.address} onChanged={() => setLandlordRev((n) => n + 1)} />
+                      ) : undefined
+                    }
+                    mainProblem={landlord.status === "problem" ? landlord.says : null}
+                    mainAction={
+                      !testListing && landlord.status !== "loading" && landlord.status !== "idle" ? (
+                        <ChangeLandlordButton
+                          where={where}
+                          current={l ? { name: l.name, email: l.email, phone: l.phone } : null}
+                          className="mt-2 text-[12px] font-semibold text-ink underline"
+                          onChanged={() => setLandlordRev((n) => n + 1)}
+                        />
+                      ) : null
+                    }
+                    onChanged={() => setLandlordRev((n) => n + 1)}
                   />
-                  {landlord.landlord.from === "record" && (
-                    <p className="mt-2 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>
-                  )}
-                  {!testListing && (
-                    <ChangeLandlordButton
-                      where={{ listingId: String(listing.id), propertyId: listing.propertyId ?? null, address: [listing.name, listing.locality].filter(Boolean).join(", ") }}
-                      current={{ name: landlord.landlord.name, email: landlord.landlord.email, phone: landlord.landlord.phone }}
-                      onChanged={() => setLandlordRev((n) => n + 1)}
-                    />
-                  )}
-                </div>
-              ) : landlord.status === "none" ? (
-                <div className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
-                  <p>No landlord is held against this property.</p>
-                  {!testListing && (
-                    <ChangeLandlordButton
-                      where={{ listingId: String(listing.id), propertyId: listing.propertyId ?? null, address: [listing.name, listing.locality].filter(Boolean).join(", ") }}
-                      current={null}
-                      className="mt-1.5 font-semibold text-ink underline"
-                      onChanged={() => setLandlordRev((n) => n + 1)}
-                    />
-                  )}
-                </div>
-              ) : (
-                <p className="text-[12px] leading-relaxed text-accent-dark">{landlord.says}</p>
-              )}
+                );
+              })()}
             </div>
 
             {/* How we get in - and, when it is through the tenant, the tenant. */}

@@ -5,6 +5,7 @@ import { rexCall, rexConfigured } from "@/lib/rex";
 import { getContact, markRex, updateContact, type OsContact } from "@/lib/contacts-store";
 import { pushContactUpdateToRex } from "@/lib/rex-contacts";
 import { record } from "@/lib/audit";
+import { recordLandlordFor, recordRowsFor, saveRecordLandlord } from "@/lib/record-landlords";
 import { publicError } from "@/lib/public-error";
 
 /**
@@ -66,6 +67,29 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ ok: true, person: out(contact), sync: { ok: sync.ok, detail: sync.ok ? "Saved, and changed in REX." : `Saved here. REX not changed: ${sync.detail}` } });
     }
 
+    /* The landlord the OS's own record of a home holds - REX PM's name for
+       them, with no REX contact behind it (20 Oct 2026). It used to be read
+       only everywhere it showed; now it is changed on the record itself.
+       Never written to REX (James's hands-off rule). */
+    if (ref.startsWith("home:")) {
+      if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here." }, { status: 503 });
+      const key = ref.slice(5);
+      const was = await recordLandlordFor(key);
+      const rows = await recordRowsFor(key);
+      if (!was || !rows.length) return NextResponse.json({ ok: false, error: "That home's record has no landlord to change. Use Add additional landlord." }, { status: 404 });
+      const next = { name: name ?? was.name, email: email !== undefined ? email || null : was.email, phone: phone !== undefined ? phone || null : was.phone };
+      await saveRecordLandlord(rows.map((r) => r.id), next);
+      /* Every listing's held landlord for this home is read again. */
+      await q(`DELETE FROM os_cache WHERE key LIKE 'landlord:v2:%' AND payload->>'propertyId' = $1`, [key]).catch(() => undefined);
+      await record({
+        kind: "record_landlord_saved",
+        actorId: actor.id,
+        actorEmail: actor.email,
+        detail: `Home ${key}: landlord "${was.name}" ${was.email ?? ""} ${was.phone ?? ""} -> "${next.name}" ${next.email ?? ""} ${next.phone ?? ""}. OS record only, not REX.`,
+      }).catch(() => undefined);
+      return NextResponse.json({ ok: true, person: next, sync: { ok: true, detail: "Saved on the home's record." } });
+    }
+
     /* A person who only exists in REX. */
     if (ref.startsWith("rex:") && /^\d+$/.test(ref.slice(4))) {
       if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected here." }, { status: 503 });
@@ -94,6 +118,10 @@ export async function PATCH(req: NextRequest) {
       if (hasDb()) {
         await q(`UPDATE os_leads SET name = $2, email = $3, phone = $4 WHERE contact_id = $1`, [rexId, next.name, next.email, next.mobile]).catch(() => undefined);
         if (name !== undefined) await q(`UPDATE os_market_appraisals SET landlord = $2 WHERE lead_id IN (SELECT id FROM os_leads WHERE contact_id = $1)`, [rexId, next.name]).catch(() => undefined);
+        /* Any listing holding them as its landlord reads them again (20 Oct
+           2026): the held copy lasts twelve hours, and a card redrawn from it
+           would show the old number straight after the change. */
+        await q(`DELETE FROM os_cache WHERE key LIKE 'landlord:v2:%' AND payload->'landlord'->>'contactId' = $1`, [rexId]).catch(() => undefined);
       }
       await audit(actor, rexId, was, next, true);
       return NextResponse.json({ ok: true, person: { name: next.name, email: next.email, phone: next.mobile }, sync: { ok: true, detail: "Changed in REX." } });

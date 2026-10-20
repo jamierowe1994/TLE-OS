@@ -102,6 +102,23 @@ export async function forgetLandlord(listingId: string): Promise<void> {
   await q("DELETE FROM os_cache WHERE key = $1", [cacheKey(listingId)]).catch(() => undefined);
 }
 
+/**
+ * The REX property behind a listing - the key every screen keeps a home's
+ * extra landlords and points of contact under (lib/property-people, 20 Oct
+ * 2026). From the held landlord read where there is one, else the listing.
+ */
+export async function propertyIdForListing(listingId: string): Promise<string | null> {
+  const hit = await cached(listingId);
+  if (hit?.propertyId) return hit.propertyId;
+  const id = Number(listingId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const res = await listingRead(id, "Listings", "read", { id }).catch(() => null);
+  if (!res?.ok) return null;
+  const r = (res.result ?? {}) as Row;
+  const prop = (r.property ?? null) as Row | null;
+  return str(prop?.id) ?? str(r.property_id);
+}
+
 export type LandlordAnswer =
   /** REX answered. `landlord` null means it genuinely holds no owner. */
   | { ok: true; landlord: Landlord | null }

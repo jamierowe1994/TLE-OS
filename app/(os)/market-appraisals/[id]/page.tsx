@@ -27,6 +27,7 @@ import {
 } from "@/lib/market-appraisal";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import ContactBlock from "@/components/ContactBlock";
+import HomeLandlords from "@/components/HomeLandlords";
 import { LandlordOnFile } from "@/components/LandlordHomeAddress";
 import FileDocuments from "@/components/FileDocuments";
 
@@ -436,6 +437,17 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                   }
                 : undefined
             }
+          />
+          {/* Another owner, or who we deal with instead (James, 20 Oct 2026):
+              the same section as the let, the listing and the home's page,
+              kept on the home once it has a REX property, else on the appraisal. */}
+          <HomeLandlords
+            className="mb-4"
+            heading={null}
+            homeKey={ma.rexPropertyId ?? `appraisal:${ma.id}`}
+            address={[ma.address, ma.postcode && !ma.address.includes(ma.postcode) ? ma.postcode : null].filter(Boolean).join(", ")}
+            main={[]}
+            requireOne={false}
           />
           {/* Their ID, AML and bank details already held from their other
               homes (Jade Grewal, 14 Oct 2026). Nothing shown when there are none. */}

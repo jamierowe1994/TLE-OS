@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
-import { scopeForWho } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { addPerson, cleanPerson, isKind, KIND_LABEL, peopleOn, personById, removePerson, updatePerson } from "@/lib/property-people";
 import { record } from "@/lib/audit";
@@ -16,7 +15,8 @@ import { publicError } from "@/lib/public-error";
  *   PATCH  { id, name, email?, phone?, relation? }
  *   DELETE ?id=<id>
  *
- * The person must have the home in their own book. Every change is audited.
+ * Anyone signed in may change them, from wherever the landlord shows (20 Oct
+ * 2026); every change is audited.
  * Kept in the OS only: nothing here is written to REX.
  */
 export const dynamic = "force-dynamic";
@@ -24,15 +24,21 @@ export const runtime = "nodejs";
 
 type Who = Awaited<ReturnType<typeof whoIs>>;
 
-/** The home, if it is in this person's book; otherwise the answer to send back. */
-async function homeFor(req: NextRequest, who: Who, propertyId: string) {
-  const scope = await scopeForWho(req, who);
-  if (scope.unlinked) return { error: NextResponse.json({ ok: false, error: "We can't tell which agent you are, so this can't be saved." }, { status: 403 }) };
-  const { book } = await managedBookFor(scope.rexUserId);
-  const home = book.properties.find((p) => p.propertyId === propertyId);
-  if (!home) return { error: NextResponse.json({ ok: false, error: "This home isn't in your book." }, { status: 403 }) };
-  if (home.test) return { error: NextResponse.json({ ok: false, error: "A test home keeps its own people." }, { status: 400 }) };
-  return { home };
+/**
+ * The home, for the audit line. NEVER a reason to refuse (James, 20 Oct 2026:
+ * "we always need to be able to update their details. We should never stop
+ * them from doing it"): the same people are changed from a let, a listing, an
+ * appraisal and the home's page, and most of those homes are not in the
+ * agent's own managed book - a listing isn't on the book until it is let. So
+ * any home key is taken: a REX property id, a REX PM home ("pm-..."), or the
+ * screen's own key where there is no home yet ("listing:<id>", "let:<ref>",
+ * "appraisal:<id>"). A test home still keeps its own people.
+ */
+async function homeFor(_req: NextRequest, _who: Who, propertyId: string) {
+  const { book } = await managedBookFor(null).catch(() => ({ book: { properties: [] as Array<{ propertyId: string; name: string; test?: boolean }> } }));
+  const home = (book.properties as Array<{ propertyId: string; name: string; test?: boolean }>).find((p) => p.propertyId === propertyId);
+  if (home?.test) return { error: NextResponse.json({ ok: false, error: "A test home keeps its own people." }, { status: 400 }) };
+  return { home: { name: home?.name ?? propertyId } };
 }
 
 async function signedIn(req: NextRequest) {
@@ -66,7 +72,7 @@ export async function POST(req: NextRequest) {
   try {
     const h = await homeFor(req, who, propertyId);
     if (h.error) return h.error;
-    if ((await peopleOn(propertyId)).length >= 8) return NextResponse.json({ ok: false, error: "That's eight people on this home already. Remove one first." }, { status: 400 });
+    if ((await peopleOn(propertyId)).length >= 12) return NextResponse.json({ ok: false, error: "That's twelve people on this home already. Remove one first." }, { status: 400 });
     const person = await addPerson(propertyId, { kind, ...c.value }, actor.name || actor.email);
     await record({
       kind: "property_person_added",
