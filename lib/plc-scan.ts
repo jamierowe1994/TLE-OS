@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate, usageOf, type Effort, type Usage } from "@/lib/ai";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import {
@@ -69,10 +70,8 @@ export type DocRead = {
   documentName: string;
 };
 
-const MODEL = "claude-opus-4-8";
-
-/** Enough for a handful of sentences about one document. */
-const MAX_TOKENS = 700;
+/** A handful of sentences about one document, and the thinking before them. */
+const MAX_TOKENS = 12000;
 
 /** Bytes we will pull out of the bucket for one document. Above this the file
  *  is almost certainly a scan of the whole tenancy pack rather than one
@@ -307,8 +306,10 @@ export function contentBlock(f: Fetched): Anthropic.ContentBlockParam {
 export async function readDocument(
   client: Anthropic,
   file: { name: string; media: string; base64: string },
-  context: { checkId: CheckId; address: string; moveInDate: string | null }
-): Promise<DocRead> {
+  context: { checkId: CheckId; address: string; moveInDate: string | null },
+  /** The bench only: another model or effort, to compare side by side. */
+  trial?: { model?: string; effort?: Effort }
+): Promise<DocRead & { model: string; usage: Usage; stop: string | null }> {
   const asDoc: PlcDocument = {
     checkId: context.checkId,
     name: file.name,
@@ -322,8 +323,7 @@ export async function readDocument(
     moveInDate: context.moveInDate,
   } as PlcCase;
 
-  const res = await client.messages.create({
-    model: MODEL,
+  const res = await aiCreate("plc-scan", {
     max_tokens: MAX_TOKENS,
     system: SYSTEM,
     tools: [REPORT_TOOL],
@@ -337,12 +337,25 @@ export async function readDocument(
         ],
       },
     ],
-  });
+  }, { client, model: trial?.model, effort: trial?.effort });
 
   const call = res.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_findings"
   );
   const input = asRecord(call?.input) ?? {};
+  /* No report at all - a declined read, or one cut off - is said out loud.
+     The facts are then all missing, so every rule lands on review. */
+  const unread: Finding[] = call
+    ? []
+    : [
+        {
+          checkId: context.checkId,
+          level: "query",
+          message: `The reader returned nothing for ${file.name}${res.stop_reason === "refusal" ? " (it declined to read it)" : ""}. Check it by hand.`,
+          documentName: file.name,
+          foundDate: null,
+        },
+      ];
 
   /* The schema asks for an array, but the model does not always send one
      (19 Oct 2026: 12b Cliff Road's holding deposit form came back with
@@ -374,7 +387,7 @@ export async function readDocument(
   const facts = readFacts(input.facts);
   const result = judge(context.checkId, facts, context.moveInDate);
 
-  return { facts, result, observations, documentName: file.name };
+  return { facts, result, observations: [...unread, ...observations], documentName: file.name, model: res.model, usage: usageOf(res), stop: res.stop_reason };
 }
 
 /** A tool answer's value as a plain object, or null. A JSON string is opened first. */

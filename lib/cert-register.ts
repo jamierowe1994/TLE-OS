@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -38,8 +39,6 @@ import { londonParts } from "@/lib/london-time";
  * which is where renewals land until go-live - is copied in and put on his
  * list too. See feedRexRenewals.
  */
-
-const MODEL = process.env.CERT_READER_MODEL ?? "claude-haiku-4-5-20251001";
 
 export type Scheme = "gas_safe" | "niceic" | "napit" | "elecsa" | "stroma" | "other" | "none";
 
@@ -206,9 +205,8 @@ export async function readOne(kind: "certificate" | "landlord_document", id: str
   if (file.bytes.length > 12 * 1024 * 1024) return failed("Too large to read - probably a whole pack, not one certificate.");
 
   try {
-    const res = await new Anthropic().messages.create({
-      model: MODEL,
-      max_tokens: 300,
+    const res = await aiCreate("cert-register", {
+      max_tokens: 4000,
       system: SYSTEM,
       tools: [TOOL],
       tool_choice: { type: "tool", name: "report_engineer" },

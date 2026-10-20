@@ -1,6 +1,7 @@
 import "server-only";
 import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
@@ -30,7 +31,6 @@ import { LIBRARY_SECTION } from "@/lib/marketing-library";
  * entry needs no note - the entry is the proof.
  */
 
-const MODEL = "claude-sonnet-5-5";
 const SHELF = "library/shelf/";
 /** Claude takes a PDF up to 32MB and 100 pages; past that it's text only. */
 const MAX_DOC_BYTES = 30 * 1024 * 1024;
@@ -172,7 +172,7 @@ export async function readLibraryFile(key: string, by = "Steve read it on upload
       ];
     }
 
-    const r = await new Anthropic().messages.create({ model: MODEL, max_tokens: 1500, messages: [{ role: "user", content }] });
+    const r = await aiCreate("library-reader", { max_tokens: 8000, messages: [{ role: "user", content }] });
     const raw = r.content.map((c) => (c.type === "text" ? c.text : "")).join("");
     const w = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as WriteUp;
     if (!w.title || !w.what) return done("failed", "Steve couldn't make sense of it.");

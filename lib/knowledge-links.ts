@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { upsertKnowledge, listKnowledge, type KnowledgeEntry } from "@/lib/business/knowledge-store";
@@ -23,7 +24,6 @@ import { noDashes } from "@/lib/no-dashes";
  */
 
 export const LAW_SECTION = "Law and news";
-const MODEL = "claude-opus-4-8";
 const MAX_BYTES = 3_000_000;
 const MAX_TEXT = 60_000;
 
@@ -100,10 +100,8 @@ async function fetchPage(u: URL): Promise<{ title: string; published: string | n
 }
 
 async function summarise(url: string, page: { title: string; published: string | null; text: string }): Promise<{ title: string; summary: string }> {
-  const client = new Anthropic();
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1400,
+  const res = await aiCreate("knowledge-links", {
+    max_tokens: 8000,
     system:
       "You read articles, guidance and legislation for The Letting Experts, a UK lettings and property management agency, and write them up for the agency's knowledge base, which their assistant answers staff from. UK English. No em dashes. Plain, factual, no hype. Never invent a date, figure or rule that is not in the text.",
     messages: [

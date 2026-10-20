@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 
 /**
  * Translation for agents (Amrit Bhogal, 14 Oct 2026: "Please can we add
@@ -14,10 +15,10 @@ import Anthropic from "@anthropic-ai/sdk";
  *        to the agent to check and use - they press Send themselves
  *
  * Opus 5.5 at low effort: translation is not hard thinking, and a lettings
- * reply has to read like a person wrote it. TRANSLATE_MODEL overrides.
+ * reply has to read like a person wrote it. The model is set in lib/ai.ts
+ * (AI_MODEL_TRANSLATE overrides).
  */
 
-const MODEL = process.env.TRANSLATE_MODEL ?? "claude-opus-5-5";
 const MAX_CHARS = 8000;
 
 export class TranslateError extends Error {}
@@ -32,9 +33,8 @@ Rules:
 - Never add anything of your own: no notes, greetings or explanations that are not in the original.
 - Name languages in English, e.g. "Polish", "Romanian", "Portuguese (Brazil)".`;
 
-function client(): Anthropic {
+function connected(): void {
   if (!process.env.ANTHROPIC_API_KEY) throw new TranslateError("Translation isn't connected here.");
-  return new Anthropic();
 }
 
 function textOf(res: Anthropic.Message): string {
@@ -56,11 +56,10 @@ function clean(text: string): string {
 /** Their message, into English. `english` is true when it already was. */
 export async function toEnglish(text: string): Promise<{ language: string; english: boolean; translation: string }> {
   const t = clean(text);
-  const res = await client().messages.create({
-    model: MODEL,
+  connected();
+  const res = await aiCreate("translate", {
     max_tokens: 6000,
     output_config: {
-      effort: "low",
       format: {
         type: "json_schema",
         schema: {
@@ -97,10 +96,9 @@ export async function fromEnglish(text: string, language: string): Promise<strin
   const lang = language.trim().slice(0, 60);
   if (!lang) throw new TranslateError("Say which language to translate into.");
   if (/^(uk |british |american )?english$/i.test(lang)) throw new TranslateError("That's already English.");
-  const res = await client().messages.create({
-    model: MODEL,
+  connected();
+  const res = await aiCreate("translate", {
     max_tokens: 8000,
-    output_config: { effort: "low" },
     system: SYSTEM,
     messages: [
       {

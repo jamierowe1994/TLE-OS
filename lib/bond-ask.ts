@@ -1,6 +1,7 @@
 import "server-only";
 import { londonToday } from "@/lib/london-clock";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { hasDb, q } from "@/lib/db";
 import { SIGNALS, SIGNAL_ORDER, STAGE_LABEL, type Prospect, type SignalKey } from "@/lib/radar-signals";
 import { getProspect, listProspects } from "@/lib/radar";
@@ -49,7 +50,6 @@ import { searchMatches } from "@/lib/search-match";
  * days.
  */
 
-const MODEL = "claude-opus-5";
 const DAILY_CAP = Number(process.env.BOND_ASK_DAILY_TOKEN_CAP ?? 300_000);
 const MAX_TOOL_ROUNDS = 6;
 
@@ -557,7 +557,6 @@ export async function ask(history: Turn[], question: string, ctx: AskContext): P
     return { text: "I have used my thinking budget for today. Ask me again tomorrow, or James can raise it.", steps: [], inTokens: 0, outTokens: 0, canned: true };
   }
 
-  const client = new Anthropic();
   const messages: Anthropic.MessageParam[] = [
     ...history.slice(-10).map((t) => ({ role: t.role, content: t.text })),
     { role: "user" as const, content: `${contextNote(ctx)}\n\n${question}` },
@@ -574,10 +573,8 @@ export async function ask(history: Turn[], question: string, ctx: AskContext): P
       steps.push("Stopped: daily budget reached");
       break;
     }
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: Math.min(2000, Math.max(300, left)),
-      output_config: { effort: "medium" },
+    const res = await aiCreate("bond-ask", {
+      max_tokens: Math.min(8000, Math.max(2000, left)),
       system,
       tools: TOOL_SCHEMAS,
       messages,

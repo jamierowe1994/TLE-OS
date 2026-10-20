@@ -2,6 +2,7 @@ import { noDashes } from "@/lib/no-dashes";
 import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { whoIs } from "@/lib/admin";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { SERVICE_LEVELS } from "@/lib/market-appraisal";
@@ -32,8 +33,6 @@ import { takeOnDetails } from "@/lib/takeon";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 90;
-
-const MODEL = process.env.ADVERT_WRITER_MODEL ?? "claude-opus-5";
 
 const ADVERT: Anthropic.Tool = {
   name: "write_advert",
@@ -123,13 +122,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const images: Anthropic.ContentBlockParam[] = urls.map((url) => ({ type: "image", source: { type: "url", url } }));
 
   try {
-    const client = new Anthropic();
     if (body.action === "gaps") {
       const missing = (body.missing ?? []).slice(0, 20);
       if (!missing.length) return NextResponse.json({ ok: true, fields: [] });
-      const res = await client.messages.create({
-        model: MODEL,
-        max_tokens: 2000,
+      const res = await aiCreate("advert", {
+        max_tokens: 12000,
         tools: [GAPS],
         messages: [
           {
@@ -156,9 +153,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       });
     }
 
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4000,
+    const res = await aiCreate("advert", {
+      max_tokens: 16000,
       tools: [ADVERT],
       messages: [
         {

@@ -2,6 +2,7 @@ import "server-only";
 import { LIBRARY_SECTION, libraryEntries, libraryIndex } from "@/lib/marketing-library";
 import type { OpenSurface } from "@/lib/open-record";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { hasDb, q } from "@/lib/db";
 import { filesFrom } from "@/lib/assistant-steve-more";
 import { listKnowledge } from "@/lib/business/knowledge-store";
@@ -40,8 +41,6 @@ import type { Scope } from "@/lib/scope";
  * text. A timestamp in the system prompt would invalidate the whole cache on
  * every single request and quietly triple the bill.
  */
-
-const MODEL = "claude-opus-4-8";
 
 /** Output tokens a day across everybody. Deliberately modest for a pilot. */
 const DAILY_CAP = Number(process.env.ASSISTANT_DAILY_TOKEN_CAP ?? 200_000);
@@ -669,7 +668,6 @@ export async function ask(
     };
   }
 
-  const client = new Anthropic();
   const note = contextNote(ctx);
   const messages: Anthropic.MessageParam[] = [
     ...history.slice(-10).map((t) => ({ role: t.role, content: t.text })),
@@ -701,14 +699,13 @@ export async function ask(
       break;
     }
 
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: Math.min(1200, Math.max(200, left)),
-      /* Medium, not low. Low is explicitly "fewer and more consolidated tool
-         calls" — the right setting when there was nothing to call and the
-         wrong one now: it produced an assistant that would rather answer from
-         memory than go and look. */
-      output_config: { effort: "medium" },
+    /* Effort is medium (lib/ai.ts), not low. Low is explicitly "fewer and
+       more consolidated tool calls" — the right setting when there was
+       nothing to call and the wrong one now: it produced an assistant that
+       would rather answer from memory than go and look. The thinking counts
+       toward max_tokens, so it has room for that as well as the answer. */
+    const res = await aiCreate("steve", {
+      max_tokens: Math.min(8000, Math.max(2000, left)),
       system,
       tools: TOOL_SCHEMAS,
       messages,

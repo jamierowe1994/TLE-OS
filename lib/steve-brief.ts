@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { hasDb, q } from "@/lib/db";
 import { remindersFor } from "@/lib/reminders";
 import { runsFor } from "@/lib/steve-jobs";
@@ -22,7 +23,6 @@ import { noDashes } from "@/lib/no-dashes";
  * system. It is capped and coerced before it goes anywhere near a prompt.
  */
 
-const MODEL = "claude-opus-4-8";
 const BRIEF_KEY = "steve.brief";
 const OFF_KEY = "steve.brief.off";
 
@@ -147,9 +147,8 @@ export async function makeBrief(
   if (assistantConfigured() && b.left > 600) {
     try {
       const weekday = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
-      const res = await new Anthropic().messages.create({
-        model: MODEL,
-        max_tokens: 500,
+      const res = await aiCreate("steve-brief", {
+        max_tokens: 4000,
         system:
           "You are Steve, the assistant inside TLE OS for The Letting Experts, a UK lettings agency. Write a person's morning brief: warm, quick, practical, like a good PA. UK English, no em dashes, no emoji, no bold, no headings. Use ONLY the facts given - never invent an appointment, task, name or figure.",
         messages: [

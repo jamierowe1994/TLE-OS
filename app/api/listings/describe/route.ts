@@ -2,6 +2,7 @@ import { noDashes } from "@/lib/no-dashes";
 import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { whoIs } from "@/lib/admin";
 import { forAgent, isOwner } from "@/lib/agent-words";
@@ -22,8 +23,6 @@ import { forAgent, isOwner } from "@/lib/agent-words";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const MODEL = process.env.ADVERT_WRITER_MODEL ?? "claude-opus-5";
 
 const TOOL: Anthropic.Tool = {
   name: "write_advert",
@@ -100,10 +99,8 @@ export async function POST(req: NextRequest) {
   ];
 
   try {
-    const client = new Anthropic();
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4000,
+    const res = await aiCreate("advert", {
+      max_tokens: 16000,
       tools: [TOOL],
       messages: [{ role: "user", content }],
     });

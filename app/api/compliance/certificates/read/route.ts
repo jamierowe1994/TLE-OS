@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { whoIs } from "@/lib/admin";
 import { realDayOrNull } from "@/lib/real-day";
 
@@ -15,14 +16,13 @@ import { realDayOrNull } from "@/lib/real-day";
  * document, a forced tool call so the answer is structured.
  *
  * A small model on purpose: a certificate is a form, and the run is a few
- * thousand of them. CERT_READER_MODEL overrides.
+ * thousand of them. The model is set in lib/ai.ts (AI_MODEL_CERT_READER overrides).
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MODEL = process.env.CERT_READER_MODEL ?? "claude-haiku-4-5-20251001";
 const MAX_BYTES = 12 * 1024 * 1024;
 
 const SYSTEM = `You are reading one document from a UK lettings compliance file. Report only what
@@ -83,10 +83,8 @@ export async function POST(req: NextRequest) {
     : { type: "image", source: { type: "base64", media_type: media as "image/jpeg" | "image/png" | "image/webp", data: bytes.toString("base64") } };
 
   try {
-    const client = new Anthropic();
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: 400,
+    const res = await aiCreate("cert-reader", {
+      max_tokens: 4000,
       system: SYSTEM,
       tools: [TOOL],
       tool_choice: { type: "tool", name: "report_certificate" },

@@ -4509,6 +4509,21 @@ CREATE TABLE IF NOT EXISTS os_tenant_portal_homes (
 );
 CREATE INDEX IF NOT EXISTS os_tenant_portal_homes_listing ON os_tenant_portal_homes (listing_id);
 
+-- Every call to Claude, one row each (lib/ai.ts). What Admin > AI costs adds up
+-- per feature and month. Tokens only: the price list lives in lib/ai.ts.
+CREATE TABLE IF NOT EXISTS os_ai_usage (
+  id          BIGSERIAL PRIMARY KEY,
+  feature     TEXT NOT NULL,
+  model       TEXT NOT NULL,
+  in_tokens   INTEGER NOT NULL DEFAULT 0,
+  out_tokens  INTEGER NOT NULL DEFAULT 0,
+  cache_read  INTEGER NOT NULL DEFAULT 0,
+  cache_write INTEGER NOT NULL DEFAULT 0,
+  stop_reason TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_ai_usage_created ON os_ai_usage (created_at);
+
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

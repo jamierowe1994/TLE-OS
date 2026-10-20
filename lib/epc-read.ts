@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { hasDb, q } from "@/lib/db";
 import { bandForScore, type EpcBand } from "@/lib/listing-record";
 
@@ -14,7 +15,6 @@ import { bandForScore, type EpcBand } from "@/lib/listing-record";
  * boxes and can change them; nothing here writes anywhere.
  */
 
-const MODEL = process.env.CERT_READER_MODEL ?? "claude-haiku-4-5-20251001";
 /* v2 (15 Oct 2026): the date as well as the scores, so a listing read under
    v1 is read once more rather than kept without one. */
 const KEY = (fileUrl: string) => `epc-read:v2:${fileUrl.replace(/^https?:/, "")}`;
@@ -103,9 +103,8 @@ export async function readEpcFile(fileUrl: string): Promise<EpcRead> {
   const media = isPdf ? null : /png/.test(type) ? "image/png" : /jpe?g/.test(type) ? "image/jpeg" : /webp/.test(type) ? "image/webp" : null;
   if (!isPdf && !media) throw new Error("Only a PDF or a photo of the EPC can be read.");
 
-  const out = await new Anthropic().messages.create({
-    model: MODEL,
-    max_tokens: 300,
+  const out = await aiCreate("epc-reader", {
+    max_tokens: 4000,
     system: SYSTEM,
     tools: [TOOL],
     tool_choice: { type: "tool", name: "report_epc" },
