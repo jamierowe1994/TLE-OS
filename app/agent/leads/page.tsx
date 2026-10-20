@@ -6,6 +6,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import type { Lead } from "@/lib/leads-sample";
 import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref } from "../bits";
 import SlideTabs from "@/components/app/SlideTabs";
+import PhonePassport from "@/components/app/PhonePassport";
+import Link from "next/link";
 import FloatSearch from "@/components/app/FloatSearch";
 import { searchMatches } from "@/lib/search-match";
 
@@ -310,6 +312,17 @@ function Detail({ l, onClose }: { l: Lead; onClose: () => void }) {
           );
         })}
       </div>
+
+      {/* Sean McMahon, 20 Oct 2026: waiting at a viewing, send the passport
+          from the lead itself. The same send as the people card's. */}
+      {isTenant(l) && (
+        <>
+          <PhonePassport name={l.name} email={l.email ?? ""} listingId={l.listingId != null ? String(l.listingId) : null} address={l.address ?? ""} className="mt-3" />
+          <Link href={`/agent/book?q=${encodeURIComponent(l.email || l.phone || l.name)}`} className="m-btn m-press mt-2 w-full">
+            <DoodleIcon name="calendar" size={17} /> Book a Viewing
+          </Link>
+        </>
+      )}
 
       {isTenant(l) && <IdCheck l={l} />}
 

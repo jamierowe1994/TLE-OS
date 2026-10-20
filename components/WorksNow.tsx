@@ -6,6 +6,7 @@ import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_
 import { categoriesOf, CATEGORY_CERT_TYPE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
 import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
+import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
 
 /**
  * The Now card on a job: one thing at a time, in the order James and
@@ -617,6 +618,21 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord }: StepProps & { onIn
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [upErr, setUpErr] = useState<string | null>(null);
+  /* The total read off the invoice as it is attached (20 Oct 2026), to check. */
+  const [reading, setReading] = useState(false);
+  const [readSaid, setReadSaid] = useState<string | null>(null);
+  async function attach(fl: File | null) {
+    setFile(fl);
+    setReadSaid(null);
+    if (!fl) return;
+    setReading(true);
+    const r = await readInvoiceFile(fl);
+    setReading(false);
+    const line = readLine(r);
+    if (!line) return setReadSaid("Couldn't read the total off it. Type it in.");
+    setF({ ...f, amount: f.amount?.trim() || (r?.total != null ? r.total.toFixed(2) : ""), ref: f.ref?.trim() || r?.ref || "" });
+    setReadSaid(`Read from the invoice: ${line}. Check it before you put it on the job.`);
+  }
   async function putOn() {
     setUpErr(null);
     setSending(true);
@@ -648,8 +664,14 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord }: StepProps & { onIn
           <label className={`mt-2 flex cursor-pointer items-center justify-between gap-2 ${field}`}>
             <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : o.payee === "agent" ? "Attach the receipt (PDF or photo)" : "Attach their invoice (PDF or photo)"}</span>
             <span className="shrink-0 text-[11.5px] underline">{file ? "Change" : "Choose"}</span>
-            <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+            <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
           </label>
+          {(reading || readSaid) && (
+            <p className="mt-1.5 flex items-center gap-2 text-[11.5px] text-muted">
+              {reading && <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />}
+              {reading ? "Reading the invoice…" : readSaid}
+            </p>
+          )}
           {upErr && <p className="mt-1.5 text-[11.5px] text-accent-dark">{upErr}</p>}
         </div>
       ) : (

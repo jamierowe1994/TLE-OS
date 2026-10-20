@@ -8,6 +8,7 @@ import { hasDb, q } from "@/lib/db";
 import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
 import { bindPages, canBind } from "@/lib/doc-pages";
 import { followUpFor } from "@/lib/id-checks";
+import { leadIdsByContact } from "@/lib/rex-viewings";
 
 /**
  * RIGHT TO RENT ID, photographed on a viewing (16 Sep 2026).
@@ -195,12 +196,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "The photos did not send. Nothing was saved - try again." }, { status: 502 });
   }
 
+  /* Scanned from the menu at a viewing (Dan Richards, 16 Oct 2026: Mr Gill's
+     ID at 149 Gold Thornhill was saved with no lead and no home, so it could
+     not be found again). With neither given, the agent's own viewing on now -
+     from two hours ago to an hour ahead - names the lead and the home, when
+     there is exactly one. */
+  let linkedLead = leadId;
+  let linkedHome = property;
+  let linkedBy: string | null = null;
+  if (!leadId && !apptId) {
+    const near = await q<{ title: string; contacts: { id?: string }[] | null; starts_at: Date }>(
+      `SELECT title, contacts, starts_at FROM os_viewings
+        WHERE agent = $1 AND NOT cancelled AND kind = 'viewing'
+          AND starts_at BETWEEN NOW() - INTERVAL '2 hours' AND NOW() + INTERVAL '1 hour'`,
+      [actor.name ?? ""]
+    ).catch(() => []);
+    if (near.length === 1) {
+      const contactIds = (near[0].contacts ?? []).map((c) => String(c?.id ?? "")).filter(Boolean);
+      const leads = await leadIdsByContact(contactIds).catch(() => new Map<string, string>());
+      const lead = contactIds.map((c) => leads.get(c)).find(Boolean) ?? null;
+      if (lead) {
+        linkedLead = lead;
+        linkedHome = property || near[0].title || "";
+        linkedBy = new Date(near[0].starts_at).toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Europe/London" });
+      }
+    }
+  }
+
   try {
     await q(
       `INSERT INTO os_id_checks (id, person_name, property, appt_id, doc_type, pages, file_key, file_type, seen_in_person, checked_by, checked_by_name, lead_id, likeness,
                                  method, right_until, no_time_limit, follow_up_on)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, TRUE, 'document', $12, $13, $14)`,
-      [id, name, property, apptId, docType, files.length, key, file.type, actor.id, actor.name ?? "", leadId,
+      [id, name, linkedHome, apptId, docType, files.length, key, file.type, actor.id, actor.name ?? "", linkedLead,
         lasts === "until" ? rightUntil : null, lasts === "none", lasts === "until" ? followUpFor(rightUntil) : null]
     );
   } catch (e) {
@@ -208,5 +236,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "The photos went up but the check was not recorded. Try sending again." }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, id, pages: files.length });
+  return NextResponse.json({ ok: true, id, pages: files.length, linked: linkedBy && linkedLead ? { lead: linkedLead, home: linkedHome, at: linkedBy } : null });
 }

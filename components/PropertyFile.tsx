@@ -1,5 +1,6 @@
 "use client";
 
+import QueryThread from "@/components/QueryThread";
 import { CHECKING_LABEL, VERIFIED_LABEL, type CertChecking } from "@/lib/cert-hold";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -490,6 +491,7 @@ export default function PropertyFile({
                       : `${liveOk ? `New certificate, ${CHECKING_LABEL.toLowerCase()}. ` : ""}Filed ${day(r.checking.at.slice(0, 10))}${r.checking.by ? ` by ${r.checking.by}` : ""}, runs to ${day(r.checking.expiry)}. It goes live once the compliance team have verified it.`}
                   </p>
                 )}
+                {r.checking?.queried && <QueryThread kind="certificate" id={r.checking.id} />}
                 {/* Uploaded as a document but never read in as the certificate
                     (James, 12 Oct: "they have a gas safety uploaded to this
                     property ... why this hasn't tagged the gas"). */}

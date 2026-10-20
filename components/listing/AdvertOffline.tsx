@@ -44,6 +44,9 @@ type Viewing = {
   contacts: { name: string; email: string | null }[];
 };
 type Line = { id: string; label: string; state: "waiting" | "doing" | "done" | "failed"; note?: string };
+/** Everyone else who enquired or viewed (lib/let-notice). */
+type Other = { email: string; name: string; why: "enquired" | "viewed" | "both" };
+const WHY: Record<Other["why"], string> = { enquired: "Enquired", viewed: "Viewed it", both: "Enquired and viewed" };
 
 export const OPEN_TAKE_OFFLINE = "open-take-offline";
 
@@ -274,6 +277,11 @@ function TakeOfflineSheet({
   const [letGo, setLetGo] = useState<Set<string>>(new Set());
   const [callOff, setCallOff] = useState<Set<string>>(new Set());
   const [tellViewers, setTellViewers] = useState(true);
+  /* Sean McMahon and Dan Richards, 20 Oct 2026: tell the other enquirers and
+     viewers too. Off until the agent ticks it (James: not hundreds at once). */
+  const [others, setOthers] = useState<Other[] | null>(null);
+  const [tellOthers, setTellOthers] = useState(false);
+  const [pickOthers, setPickOthers] = useState<Set<string>>(new Set());
   const [step, setStep] = useState(0);
   const [lines, setLines] = useState<Line[] | null>(null);
   const [finished, setFinished] = useState(false);
@@ -299,6 +307,15 @@ function TakeOfflineSheet({
         setCallOff(new Set(up.map((v) => v.id)));
       })
       .catch(() => live && setViewings([]));
+    fetch(`/api/listings/let-notice?listing=${encodeURIComponent(listingId)}${propertyId ? `&property=${encodeURIComponent(propertyId)}` : ""}`, { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ ok?: boolean; people?: Other[] }>)
+      .then((j) => {
+        if (!live) return;
+        const list = j.ok ? j.people ?? [] : [];
+        setOthers(list);
+        setPickOthers(new Set(list.map((o) => o.email)));
+      })
+      .catch(() => live && setOthers([]));
     return () => {
       live = false;
     };
@@ -315,13 +332,14 @@ function TakeOfflineSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
 
-  const loading = offers === null || viewings === null;
+  const loading = offers === null || viewings === null || others === null;
   /* Offers can only be let go from the let in progress. */
   const offerList = letId ? offers ?? [] : [];
-  const steps = ["advert", ...(offerList.length ? ["offers"] : []), ...((viewings ?? []).length ? ["viewings"] : []), "check"] as const;
+  const steps = ["advert", ...(offerList.length ? ["offers"] : []), ...((viewings ?? []).length ? ["viewings"] : []), ...((others ?? []).length ? ["others"] : []), "check"] as const;
   const at = steps[Math.min(step, steps.length - 1)];
   const pickedOffers = offerList.filter((o) => letGo.has(o.ref));
   const pickedViewings = (viewings ?? []).filter((v) => callOff.has(v.id));
+  const pickedOthers = tellOthers ? (others ?? []).filter((o) => pickOthers.has(o.email)) : [];
 
   const toggle = (set: (f: (s: Set<string>) => Set<string>) => void, id: string, on: boolean) =>
     set((s) => {
@@ -337,6 +355,7 @@ function TakeOfflineSheet({
       { id: "mark", label: "Marked Offline in the OS", state: "waiting" },
       ...(pickedOffers.length ? [{ id: "offers", label: `${pickedOffers.length} other offer${pickedOffers.length === 1 ? "" : "s"} let go`, state: "waiting" as const }] : []),
       ...pickedViewings.map((v) => ({ id: `v:${v.id}`, label: `Viewing ${when(v.startsAt)} called off`, state: "waiting" as const })),
+      ...(pickedOthers.length ? [{ id: "others", label: `${pickedOthers.length} ${pickedOthers.length === 1 ? "person" : "people"} told it's been let`, state: "waiting" as const }] : []),
     ];
     setLines(plan);
     const set = (id: string, state: Line["state"], note?: string) => setLines((ls) => (ls ?? []).map((l) => (l.id === id ? { ...l, state, note } : l)));
@@ -389,6 +408,13 @@ function TakeOfflineSheet({
         notify: tellViewers,
       }).catch(() => null);
       set(id, j?.ok ? "done" : "failed", j?.ok ? (tellViewers ? `${who || "The viewer"} emailed.` : "Nobody emailed.") : j?.said ?? j?.error ?? "That didn't cancel it.");
+    }
+
+    /* 5. Everyone else who enquired or viewed, when ticked. */
+    if (pickedOthers.length) {
+      set("others", "doing");
+      const j = (await post("/api/listings/let-notice", { listingId, propertyId, address, emails: pickedOthers.map((o) => o.email) }).catch(() => null)) as { ok?: boolean; error?: string; said?: string; sent?: number } | null;
+      set("others", j?.ok && (j.sent ?? 0) > 0 ? "done" : "failed", j?.said ?? j?.error ?? "That didn't send.");
     }
     setFinished(true);
   }
@@ -521,6 +547,42 @@ function TakeOfflineSheet({
                 </>
               )}
 
+              {at === "others" && (
+                <>
+                  <p className="text-[13px] leading-relaxed">Tell everyone else who asked about it?</p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-muted">
+                    {(others ?? []).length} {(others ?? []).length === 1 ? "person has" : "people have"} enquired about it or already viewed it. Nobody on an offer, and nobody with a viewing still booked, is on this list.
+                  </p>
+                  <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[12.5px]">
+                    <input type="checkbox" className="mt-0.5 accent-[var(--brown)]" checked={tellOthers} onChange={(e) => setTellOthers(e.target.checked)} />
+                    <span>Email them to say it&apos;s been let</span>
+                  </label>
+                  {tellOthers && (
+                    <>
+                      <ul className="mt-3 max-h-[240px] space-y-1.5 overflow-y-auto">
+                        {(others ?? []).map((o) => (
+                          <li key={o.email}>
+                            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line/60 bg-white px-3 py-2.5 text-[12.5px]">
+                              <input type="checkbox" className="mt-0.5 accent-[var(--brown)]" checked={pickOthers.has(o.email)} onChange={(e) => toggle(setPickOthers, o.email, e.target.checked)} />
+                              <span className="min-w-0">
+                                {o.name}
+                                <span className="block truncate text-[11.5px] text-muted">{WHY[o.why]} · {o.email}</span>
+                              </span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-2.5 rounded-xl border border-dashed border-line/80 bg-white px-3.5 py-3 text-[12px] leading-relaxed text-muted">
+                        <p className="text-[10.5px] font-semibold uppercase tracking-wide">What they&apos;ll read</p>
+                        <p className="mt-1">
+                          Hi {firstName((others ?? [])[0]?.name ?? "")}, thanks for your interest in {address}. It has now been let, so it&apos;s no longer available. If you&apos;re still looking, just reply to this email with what you&apos;re after and I&apos;ll let you know as soon as something similar comes up.
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
               {at === "check" && (
                 <>
                   <p className="text-[13px] leading-relaxed">When you press Take It Offline:</p>
@@ -549,6 +611,12 @@ function TakeOfflineSheet({
                             : "No viewings booked."}
                       </span>
                     </li>
+                    {(others ?? []).length > 0 && (
+                      <li className="flex gap-2.5">
+                        <DoodleIcon name="mail" size={14} className="mt-0.5 shrink-0 text-accent-dark" />
+                        <span>{pickedOthers.length ? `${pickedOthers.length} other ${pickedOthers.length === 1 ? "enquirer is" : "enquirers and viewers are"} told it's been let.` : "The other enquirers and viewers aren't emailed."}</span>
+                      </li>
+                    )}
                   </ul>
                 </>
               )}

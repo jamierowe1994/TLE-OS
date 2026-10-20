@@ -102,3 +102,32 @@ export async function applicationIsIntroOnly(applicationId: string | null | unde
     return false;
   }
 }
+
+/**
+ * The keys on a marketing-only let (Sean McMahon, 20 Oct 2026: "the last
+ * thing is the move-in date and hand over the keys ... I need to be around to
+ * give the keys out"). Off unless the agent turns it on: Dan Richards's
+ * OpenRent landlord holds her own.
+ */
+export type IntroKeys = { on: boolean; at: string | null; note: string; doneAt: string | null; by: string };
+
+export async function introKeys(listingId: string | number): Promise<IntroKeys | null> {
+  if (!hasDb()) return null;
+  const rows = await q<{ keys_handover: boolean; keys_at: Date | null; keys_note: string; keys_done_at: Date | null; keys_by: string }>(
+    `SELECT keys_handover, keys_at, keys_note, keys_done_at, keys_by FROM os_intro_only WHERE listing_id = $1`,
+    [String(listingId)]
+  ).catch(() => []);
+  const r = rows[0];
+  if (!r) return null;
+  return { on: r.keys_handover, at: r.keys_at ? new Date(r.keys_at).toISOString() : null, note: r.keys_note, doneAt: r.keys_done_at ? new Date(r.keys_done_at).toISOString() : null, by: r.keys_by };
+}
+
+export async function setIntroKeys(listingId: string | number, p: { on: boolean; at: string | null; note: string; done: boolean; by: string }): Promise<IntroKeys | null> {
+  await q(
+    `UPDATE os_intro_only SET keys_handover = $2, keys_at = $3, keys_note = $4,
+            keys_done_at = CASE WHEN $5 THEN COALESCE(keys_done_at, NOW()) ELSE NULL END, keys_by = $6
+      WHERE listing_id = $1`,
+    [String(listingId), p.on, p.on ? p.at : null, p.note.slice(0, 300), p.on && p.done, p.by]
+  );
+  return introKeys(listingId);
+}

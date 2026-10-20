@@ -6,6 +6,8 @@ import { Fact, STATUS_LABEL, day, pounds, type Property } from "@/components/mai
 import { hhmm } from "@/lib/london-clock";
 import { searchMatches } from "@/lib/search-match";
 import FieldDate from "@/components/FieldDate";
+import ContractorDocs from "@/components/contractors/ContractorDocs";
+import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
 
 type Stats = { jobs: number; open: number; quotedPence: number; invoicedPence: number; paidPence: number; outstandingPence: number; lastJobAt: string | null };
 
@@ -94,6 +96,8 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
                   </dl>
                   {c.notes && <p className="mt-3 whitespace-pre-wrap text-[12.5px] leading-relaxed">{c.notes}</p>}
                 </section>
+                {/* The agents' call, 20 Oct 2026: their insurance, our terms, their registration. */}
+                <ContractorDocs contractorId={c.id} trade={c.trade} />
                 {upcoming.length > 0 && (
                   <section className="rounded-[22px] border border-line/50 bg-white p-4">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Booked in</p>
@@ -169,6 +173,23 @@ export function LogInvoice({ contractor, onClose, onSaved }: { contractor: Contr
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /* The figure read off the invoice as it is attached (20 Oct 2026: "can I
+     not see how much it is?"), for the agent to check. */
+  const [reading, setReading] = useState(false);
+  const [readSaid, setReadSaid] = useState<string | null>(null);
+  async function attach(f: File | null) {
+    setFile(f);
+    setReadSaid(null);
+    if (!f) return;
+    setReading(true);
+    const r = await readInvoiceFile(f);
+    setReading(false);
+    const line = readLine(r);
+    if (!line) return setReadSaid("Couldn't read the total off it. Type it in.");
+    if (r?.total != null) setAmount((a) => a.trim() || r.total!.toFixed(2));
+    if (r?.ref) setRef((x) => x.trim() || r.ref!);
+    setReadSaid(`Read from the invoice: ${line}. Check it before you log it.`);
+  }
   /* The office reads the whole compliance book; an agent is refused it and
      searches their own Portfolio instead, the same as Raise a repair. */
   useEffect(() => {
@@ -261,8 +282,14 @@ export function LogInvoice({ contractor, onClose, onSaved }: { contractor: Contr
         <label className={`${field} flex cursor-pointer items-center justify-between gap-2`}>
           <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : "Attach the invoice (PDF or photo)"}</span>
           <span className="shrink-0 text-[11.5px] underline">{file ? "Change" : "Choose"}</span>
-          <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+          <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
         </label>
+        {(reading || readSaid) && (
+          <p className="flex items-center gap-2 text-[12px] text-muted sm:col-span-2">
+            {reading && <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />}
+            {reading ? "Reading the invoice…" : readSaid}
+          </p>
+        )}
         <div className="flex flex-wrap gap-4 text-[12.5px] sm:col-span-2">
           <label className="flex items-center gap-2"><input type="radio" name="payee" checked={payee === "contractor"} onChange={() => setPayee("contractor")} />Pay {contractor.name}</label>
           <label className="flex items-center gap-2"><input type="radio" name="payee" checked={payee === "agent"} onChange={() => setPayee("agent")} />I paid them myself - reimburse me</label>

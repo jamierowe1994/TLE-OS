@@ -30,6 +30,8 @@ export interface Queried {
   at: string;
   /** The agent the query was emailed to (4 Oct 2026). */
   told?: string | null;
+  /** The agent's answers to it (20 Oct 2026). */
+  replies?: { id: string; body: string; by: string; at: string }[];
 }
 
 export default function CheckRow({
@@ -115,6 +117,12 @@ export default function CheckRow({
           {queried.told && <span className="mt-1 block text-[11.5px] opacity-80">Emailed to {queried.told}.</span>}
         </p>
       )}
+      {/* The agent's answers (20 Oct 2026). */}
+      {queried?.replies?.map((r) => (
+        <p key={r.id} className="mt-2 rounded-xl bg-page px-3.5 py-2.5 text-[12.5px] leading-snug">
+          <span className="font-semibold">{r.by} answered on {new Date(r.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.</span> <span className="whitespace-pre-wrap">{r.body}</span>
+        </p>
+      ))}
 
       {asking ? (
         <div className="mt-3">
