@@ -5,7 +5,7 @@ import { hasDb } from "@/lib/db";
 import { worksSnapshotAround } from "@/lib/works-trend";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
-import { createOrder, listOrders, listContractors, worksSummary, logEvent, KINDS, type Kind, type NewOrder } from "@/lib/works-orders";
+import { createOrder, listOrders, listContractors, worksSummary, logEvent, moveOrder, KINDS, type Kind, type NewOrder } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 import { alreadyTakenOn, carriedJobs, markTakenOn, withCarried } from "@/lib/works-carried";
 import { landlordKey, landlordPrefsFor, ringsForApproval } from "@/lib/landlord-prefs";
@@ -102,6 +102,14 @@ export async function POST(req: NextRequest) {
        timeline so the sheet says who was told. */
     const emails = await emailsForMove(order, "raised", subject ?? actor).catch(() => []);
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
+    /* Quote first (Sean, 20 Oct 2026): the contractor is asked for a price,
+       and no works order goes until it is approved. */
+    if ((b as { askQuote?: unknown }).askQuote === true && order.contractorId && b.send !== true) {
+      const asked = await moveOrder(order.id, { action: "request_quote" }, by);
+      const sent = await emailsForMove(asked, "request_quote", subject ?? actor).catch(() => []);
+      for (const e of sent) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
+      return NextResponse.json({ ok: true, order: asked, emails: [...emails, ...sent] });
+    }
     return NextResponse.json({ ok: true, order, emails });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "Could not raise the job.") }, { status: 400 });

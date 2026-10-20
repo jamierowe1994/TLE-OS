@@ -99,7 +99,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const [access, setAccess] = useState(draft?.access ?? "");
   const [place, setPlace] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [filled, setFilled] = useState<string[] | null>(null);
-  const [sent, setSent] = useState<{ order: WorksOrder; to: string | null } | null>(null);
+  const [sent, setSent] = useState<{ order: WorksOrder; to: string | null; quote?: boolean } | null>(null);
   /* One added here stays on the list while the page behind refreshes its own
      copy of the book, which would otherwise drop it and unpick it. */
   const [added, setAdded] = useState<Contractor[]>([]);
@@ -237,13 +237,15 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  async function raise(send = false) {
+  /* askQuote: the contractor is asked for a price first and no works order
+     goes until the landlord has approved it (Sean, 20 Oct 2026). */
+  async function raise(send = false, askQuote = false) {
     const propertyName = picked?.name ?? manual.trim();
     /* Whatever was skipped, the required answers are checked again here, and
        a missing one takes the agent straight to its screen. */
     const gap = steps.find((x) => x.required && missing(x.id));
     if (gap) { jump(gap.id); return setErr(missing(gap.id)); }
-    if (send && !contractorId) return setErr("Pick a contractor to send it to.");
+    if ((send || askQuote) && !contractorId) return setErr(askQuote ? "Pick a contractor to ask." : "Pick a contractor to send it to.");
     setBusy(true);
     setErr(null);
     const first = onJob[0] ?? null;
@@ -258,7 +260,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         propertyLat: place.lat, propertyLng: place.lng,
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: planned ? new Date(dueAt).toISOString() : null,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-        tenants: onJob, landlordSkipped, send,
+        tenants: onJob, landlordSkipped, send, askQuote,
         tellTenants,
         skipped: steps.filter((x) => skipped.has(x.id)).map((x) => x.title),
       }),
@@ -266,7 +268,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "Could not raise the job.");
     /* The "message sent" moment James asked for, then the job itself. */
-    setSent({ order: r.order, to: send ? contractor?.name ?? "the contractor" : null });
+    setSent({ order: r.order, to: send || askQuote ? contractor?.name ?? "the contractor" : null, quote: askQuote });
     setTimeout(() => onRaised(r.order), 1300);
   }
 
@@ -417,9 +419,11 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             <span className="fade-up flex h-16 w-16 items-center justify-center rounded-full bg-ink text-page">
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
             </span>
-            <p className="hand mt-4 text-[22px]">{sent.to ? `Sent to ${sent.to}` : kind === "repair" ? "Repair reported" : "Job planned"}</p>
+            <p className="hand mt-4 text-[22px]">{sent.quote ? `Quote asked from ${sent.to}` : sent.to ? `Sent to ${sent.to}` : kind === "repair" ? "Repair reported" : "Job planned"}</p>
             <p className="mt-1 text-[12px] text-muted">
-              {kind === "repair"
+              {sent.quote
+                ? "Nothing is booked. The landlord approves the price before any works order goes."
+                : kind === "repair"
                 ? `${sent.to ? "They'll arrange a time with the tenants. " : ""}${tellTenants && onJob.some((t) => t.email) ? "The tenants have been told. " : ""}${landlordSkipped ? "" : "Now the landlord."}`
                 : sent.to
                   ? `They'll arrange a time with the tenants and tell us the date.${tellTenants && !scheduledAt && onJob.some((t) => t.email) ? " The tenants have been told to expect them." : ""}`
@@ -841,6 +845,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                 <button type="button" disabled={busy} onClick={() => void raise(false)} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] hover:border-ink/40 disabled:opacity-50" title="The job goes on the board; nothing is sent to the contractor">
                   {planned ? "Plan it without sending" : "Report it without sending"}
                 </button>
+                {!planned && <button type="button" disabled={busy} onClick={() => void raise(false, true)} className="rounded-full border border-ink/70 bg-white px-4 py-2 text-[12.5px] font-semibold hover:bg-panel disabled:opacity-50" title="They're emailed for a price. No works order goes until the landlord has approved it">
+                  Ask {contractor!.name} for a quote
+                </button>}
                 <PressButton onClick={() => void raise(true)} className={`flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></svg>
                   {busy ? "Sending…" : `Send to ${contractor!.name}`}

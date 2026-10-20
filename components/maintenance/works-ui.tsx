@@ -39,6 +39,9 @@ export function nextFor(o: WorksOrder, ringForApproval = false): { text: string;
      request, so nobody is "waiting" - somebody has to ring (6 Oct 2026). */
   if (ringForApproval && o.status === "approval") return { text: `Ring ${o.landlord || "the landlord"} for approval of ${pounds(o.quotePence)}`, hot: true };
   switch (stepOf(o)) {
+    case "quote": return o.status === "approval"
+      ? { text: `Quote ${pounds(o.quotePence)} - waiting on the landlord's yes`, hot: false }
+      : { text: `Waiting on ${o.contractorName || "the contractor"}'s quote`, hot: late };
     case "tell_landlord": return { text: `Tell the landlord${clock}`, hot: late || o.urgency === "emergency" };
     case "arranging": return { text: "Who's arranging it?", hot: late || o.urgency === "emergency" };
     case "landlord_follow_up": return { text: `Landlord organising · follow up ${day(o.landlordFollowUpAt)}`, hot: !!o.landlordFollowUpAt && new Date(o.landlordFollowUpAt).getTime() < Date.now() };

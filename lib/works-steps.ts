@@ -9,9 +9,13 @@ export type StepOrder = {
   landlordSkipped?: boolean;
   /** Steps the agent chose to skip for now (Howard, 15 Oct 2026). Only SKIPPABLE ones, and never a faked fact. */
   skippedSteps?: string[];
+  /** Asked for a quote first (Sean, 20 Oct 2026); the quote and its approval come before anything else. */
+  quoteRequestedAt?: string | null;
+  quotePence?: number | null;
 };
 
 export const STEPS = [
+  { id: "quote", label: "The quote", blurb: "The contractor has been asked for a price. Nothing is booked and no works order goes until the quote is approved." },
   { id: "tell_landlord", label: "Tell the landlord", blurb: "Ring them first. Email the report if you can't get them, or to put it in writing." },
   { id: "arranging", label: "Who's arranging it?", blurb: "The landlord with their own people, or us." },
   { id: "landlord_follow_up", label: "Landlord organising", blurb: "Their contractor, their timescale. Chase on the follow-up date until it's resolved." },
@@ -38,6 +42,8 @@ export type SkippableStep = (typeof SKIPPABLE)[number];
 export const isSkippable = (id: string): id is SkippableStep => (SKIPPABLE as readonly string[]).includes(id);
 
 export const WHY_REQUIRED: Partial<Record<StepId, string>> = {
+  /* Sean McMahon, 20 Oct 2026. */
+  quote: "The landlord approves the price before any works order goes.",
   arranging: "It decides whether it's the landlord's people or ours.",
   landlord_follow_up: "It's the landlord's job now, and it stays open until it's resolved.",
   pick_contractor: "Nothing after this works without somebody on the job.",
@@ -77,6 +83,9 @@ export function stepOf(o: StepOrder): StepId {
     if (!o.payee) return "payment";
     return "invoice";
   }
+  /* Quote first (Sean, 20 Oct 2026): waiting on the contractor's price, or
+     on the landlord's yes to it. Once approved, the job walks on as usual. */
+  if (o.quoteRequestedAt && (o.quotePence == null || o.status === "approval")) return "quote";
   const ours = o.arranging === "us" && (o.kind === "planned" || o.landlordSkipped === true);
   if (!o.landlordToldAt && !ours && !wasSkipped(o, "tell_landlord")) return "tell_landlord";
   if (!o.arranging) return "arranging";

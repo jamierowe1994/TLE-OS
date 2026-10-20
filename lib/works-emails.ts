@@ -371,6 +371,9 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       await tenantBooked();
       await landlord("works-landlord-arranged", "notice");
       break;
+    case "request_quote":
+      if (contractor) out.push(await send(o, "works-contractor-quote-request", contractor.email, vars, me, "contractor"));
+      break;
     case "done_request":
       if (contractor) out.push(await send(o, "works-contractor-done-request", contractor.email, vars, me, "contractor"));
       break;

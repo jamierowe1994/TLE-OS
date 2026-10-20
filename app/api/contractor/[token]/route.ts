@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb } from "@/lib/db";
-import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, tenantsOf, type WorksOrder } from "@/lib/works-orders";
+import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, tenantsOf, getOrder, type WorksOrder } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { agentFor } from "@/lib/works-agent";
@@ -44,11 +44,15 @@ function publicView(o: WorksOrder) {
      invoiced, paid or cancelled job went on showing a key-safe code and the
      tenants' phones to whoever held it. The invoice step still works. */
   const live = !["done", "invoiced", "paid", "cancelled"].includes(o.status);
+  /* Asked for a price only (Sean, 20 Oct 2026): no works order yet, so no
+     tenants' numbers or way in until the quote is approved. */
+  const pricing = stepOf(o) === "quote";
   return {
     ref: o.ref, kind: o.kind, title: o.title, category: o.category, description: o.description, status: o.status, step: stepOf(o),
-    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: live ? o.access : null, contractorName: o.contractorName,
+    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: live && !pricing ? o.access : null, contractorName: o.contractorName,
+    quoteStage: pricing ? (o.quotePence == null ? "asked" : "with_landlord") : null, quotePence: o.quotePence,
     /* Every tenant to arrange access with (a shared house has several). */
-    tenant: live ? tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "",
+    tenant: live && !pricing ? tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "",
     scheduledAt: o.scheduledAt, completedAt: o.completedAt, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef,
     files: o.files.map((f) => ({ name: f.name, at: f.at })),
   };
@@ -78,6 +82,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       if (file.size > 50 * 1024 * 1024) return NextResponse.json({ ok: false, error: "Files up to 50 MB, please." }, { status: 400 });
       if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't connected on this environment." }, { status: 503 });
       const kind = String(form.get("kind") ?? "photo");
+      if (kind === "quote") {
+        const amount = Number(String(form.get("amount") ?? "").replace(/[£,\s]/g, ""));
+        if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, error: "Put the total in first." }, { status: 400 });
+        const key = `documents/works-${o.ref}/${Date.now()}-${safeName(file.name) || "quote"}`;
+        const body = Buffer.from(await file.arrayBuffer());
+        await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
+        await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "quote" } }, by);
+        const next = await takeQuote(o.id, amount, String(form.get("note") ?? ""), by, me);
+        return NextResponse.json({ ok: true, job: publicView(next) });
+      }
       if (kind === "certificate") {
         /* Filed properly, not just attached (lib/works-certificate). The type
            and the expiry are the two facts nobody can read off the PDF
@@ -139,6 +153,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       if (me) for (const e of await emailsForMove(next, "schedule", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
       return NextResponse.json({ ok: true, job: publicView(next) });
     }
+    if (b.action === "quote") {
+      const amount = Number(String((b as { amount?: unknown }).amount ?? "").replace(/[£,\s]/g, ""));
+      if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, error: "Put the total in first." }, { status: 400 });
+      const next = await takeQuote(o.id, amount, b.note ?? "", by, me);
+      return NextResponse.json({ ok: true, job: publicView(next) });
+    }
     if (b.action === "done") {
       const next = await moveOrder(o.id, { action: "done", note: (b.note ?? "").trim() || "Marked done by the contractor." }, by);
       if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
@@ -149,4 +169,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
   }
+}
+
+/** The contractor's price on a job they were asked to quote. Over the
+ *  landlord's authority it goes to them for a yes (the existing approval
+ *  email); within it, it is approved and the job walks on. */
+async function takeQuote(id: string, amount: number, note: string, by: string, me: Awaited<ReturnType<typeof agentFor>>): Promise<WorksOrder> {
+  const found = await getOrder(id);
+  if (!found) throw new Error("No such job.");
+  if (stepOf(found.order) !== "quote" || found.order.quotePence != null) throw new Error("We already have your quote for this job. Ring us if it needs to change.");
+  const next = await moveOrder(id, { action: "quote", quotePence: Math.round(amount * 100), note: `From ${by}'s page.${note.trim() ? ` ${note.trim()}` : ""}` }, by);
+  if (me) for (const e of await emailsForMove(next, "quote", me).catch(() => [])) await logEvent(id, "TLE OS", "email", outcomeLine(e));
+  return next;
 }

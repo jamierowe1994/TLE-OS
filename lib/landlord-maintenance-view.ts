@@ -69,6 +69,7 @@ const dayShort = (iso: string | null | undefined) =>
 
 /** The step, said to the landlord rather than the agent. */
 const NOW: Record<StepId, string> = {
+  quote: "Getting a quote for you to approve",
   tell_landlord: "We're getting in touch with you about it",
   arranging: "Deciding who arranges it - we'll ask you",
   landlord_follow_up: "You're arranging it with your own contractor",

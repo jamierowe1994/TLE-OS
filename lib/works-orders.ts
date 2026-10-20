@@ -145,6 +145,8 @@ export interface WorksOrder {
   quietTenants: boolean;
   /** Steps skipped for now (lib/works-steps SKIPPABLE). Nothing is stamped to fake them. */
   skippedSteps: string[];
+  /** The contractor was asked for a quote first, before any works order (Sean, 20 Oct 2026). */
+  quoteRequestedAt: string | null;
   /** Planned jobs: when the tenants were sent the booking, by hand. */
   tenantsToldBookedAt: string | null;
   /** Planned jobs: the tenants are told who will be in touch to arrange access (a tick, off by default). */
@@ -198,7 +200,7 @@ export interface WorksOrder {
   paidHow: PaidHow | null;
   cancelledReason: string;
   /** Files on the job: photos of the fault, the invoice, the certificate. R2 keys. */
-  files: { key: string; name: string; type: string; at: string; by: string; kind?: "invoice" }[];
+  files: { key: string; name: string; type: string; at: string; by: string; kind?: "invoice" | "quote" }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -252,6 +254,7 @@ function toOrder(r: Row): WorksOrder {
     quietTenants: r.quiet_tenants === true,
     skippedSteps: Array.isArray(r.skipped_steps) ? (r.skipped_steps as unknown[]).filter((x): x is string => typeof x === "string") : [],
     tenantsToldBookedAt: iso(r.tenants_told_booked_at),
+    quoteRequestedAt: iso(r.quote_requested_at),
     accessNotice: r.tenants_access_notice === true,
     landlordToldAt: iso(r.landlord_told_at),
     arranging: r.arranging === "landlord" || r.arranging === "us" ? r.arranging : null,
@@ -307,7 +310,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
-  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, skipped_steps, created_at, updated_at`;
+  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, skipped_steps, quote_requested_at, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -575,7 +578,9 @@ export type Move =
   | { action: "reopen"; note?: string }
   | { action: "note"; note: string }
   | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantPhone" | "tenantEmail" | "landlord" | "landlordEmail" | "landlordMobile" | "access" | "authorityPence" | "reportedBy">> }
-  | { action: "file"; file: { key: string; name: string; type: string; kind?: "invoice" } };
+  | { action: "file"; file: { key: string; name: string; type: string; kind?: "invoice" | "quote" } }
+  /** Ask the contractor for a quote before any works order goes (Sean, 20 Oct 2026). */
+  | { action: "request_quote"; contractorId?: string; note?: string };
 
 export const pounds = (pence: number | null | undefined) =>
   pence == null ? "—" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: pence % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
@@ -676,6 +681,23 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       text = move.payee === "agent" ? `To be paid to the agent, who paid the contractor themselves.${move.note ? ` ${move.note}` : ""}` : `To be paid to ${o.contractorName || "the contractor"}.${move.note ? ` ${move.note}` : ""}`;
       break;
     }
+    case "request_quote": {
+      const cid = move.contractorId || o.contractorId;
+      if (!cid) throw new Error("Pick a contractor to ask.");
+      if (move.contractorId && move.contractorId !== o.contractorId) {
+        const [c] = await q<Row>(`SELECT name FROM os_contractors WHERE id = $1`, [move.contractorId]);
+        if (!c) throw new Error("No such contractor.");
+        set("contractor_id", move.contractorId);
+        set("contractor_name", s(c.name));
+      }
+      set("quote_requested_at", new Date());
+      /* Asking our contractor for a price is us arranging it. */
+      if (!o.arranging) set("arranging", "us");
+      eventKind = "quote_requested";
+      const name = move.contractorId && move.contractorId !== o.contractorId ? "the contractor" : o.contractorName || "the contractor";
+      text = `${o.quoteRequestedAt ? "Asked again" : "Asked"} ${name} for a quote. No works order goes until it is approved.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
     case "quote": {
       if (!Number.isFinite(move.quotePence) || move.quotePence < 0) throw new Error("A quote needs a figure.");
       set("quote_pence", Math.round(move.quotePence));
@@ -694,6 +716,8 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       set("approved_by", move.approvedBy.trim());
       set("approved_at", new Date());
       if (["reported", "approval"].includes(o.status)) set("status", o.contractorId && o.scheduledAt ? "scheduled" : "approved");
+      /* A landlord who has said yes to the quote knows about the job. */
+      if (o.quoteRequestedAt && !o.landlordToldAt) set("landlord_told_at", new Date());
       text = `Approved by ${move.approvedBy.trim()}.${move.note ? ` ${move.note}` : ""}`;
       break;
     }
@@ -803,11 +827,16 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
   if (move.action === "file" && !o.rehearsal) {
     const address = [o.propertyName, o.locality].filter(Boolean).join(", ");
     const invoice = move.file.kind === "invoice";
+    const quote = move.file.kind === "quote";
     await addFileDoc({
       home: { address, propertyId: o.propertyId },
       from: { kind: "job", id: o.id },
       type: invoice ? "contractor_invoice" : OTHER_DOC,
-      name: invoice ? `Invoice${o.contractorName ? ` - ${o.contractorName}` : ""} (job #${o.ref})` : `Job #${o.ref} - ${move.file.name}`,
+      name: invoice
+        ? `Invoice${o.contractorName ? ` - ${o.contractorName}` : ""} (job #${o.ref})`
+        : quote
+          ? `Quote${o.contractorName ? ` - ${o.contractorName}` : ""} (job #${o.ref})`
+          : `Job #${o.ref} - ${move.file.name}`,
       fileName: move.file.name,
       r2Key: move.file.key,
       mime: move.file.type || "application/octet-stream",

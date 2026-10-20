@@ -22,6 +22,8 @@ import { JOB_CERT_TYPES } from "@/lib/works-catalogue";
 type Job = {
   ref: number; kind?: string; title: string; category: string; description: string; status: string; step: string; address: string; access: string; tenant: string;
   contractorName: string; scheduledAt: string | null; completedAt: string | null; invoicePence: number | null; invoiceRef: string; files: { name: string; at: string }[];
+  /** Asked for a price only (Sean, 20 Oct 2026): "asked" for their quote, or it is "with_landlord". */
+  quoteStage?: "asked" | "with_landlord" | null; quotePence?: number | null;
 };
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "");
@@ -39,6 +41,9 @@ export default function ContractorPage() {
   const [certType, setCertType] = useState("");
   const [certExpiry, setCertExpiry] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [quote, setQuote] = useState("");
+  const [quoteNote, setQuoteNote] = useState("");
+  const [quoteFile, setQuoteFile] = useState<File | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,6 +82,28 @@ export default function ContractorPage() {
     setFlash(kind === "invoice" ? "Thanks - your invoice is on the job and accounts have been told." : "Photo added.");
   }
 
+  /* Their price, with the quote document if they have one. */
+  async function sendQuote() {
+    setBusy("quote");
+    setErr(null);
+    let r: { ok?: boolean; error?: string; job?: Job } | null;
+    if (quoteFile) {
+      const fd = new FormData();
+      fd.append("file", quoteFile);
+      fd.append("kind", "quote");
+      fd.append("amount", quote);
+      fd.append("note", quoteNote);
+      r = await fetch(`/api/contractor/${token}`, { method: "POST", body: fd }).then((x) => x.json()).catch(() => null);
+    } else {
+      r = await fetch(`/api/contractor/${token}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "quote", amount: quote, note: quoteNote }) }).then((x) => x.json()).catch(() => null);
+    }
+    setBusy(null);
+    if (!r?.ok || !r.job) return setErr(r?.error ?? "Your quote didn't send. Try again, or reply to the email with it.");
+    setJob(r.job);
+    setQuoteFile(null);
+    setFlash(r.job.quoteStage === "with_landlord" ? "Thanks - your quote is with the landlord. We'll send the works order once they've approved it." : "Thanks - your quote is in. We'll send you the works order shortly.");
+  }
+
   const box: React.CSSProperties = { background: "#fff", border: "1px solid #cdc9c0", borderRadius: 16, padding: 20, marginTop: 16 };
   const field: React.CSSProperties = { width: "100%", border: "1px solid #cdc9c0", borderRadius: 8, padding: "10px 12px", font: "inherit", fontSize: 14 };
   const btn: React.CSSProperties = { border: 0, background: "#101014", color: "#fff", borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
@@ -85,7 +112,7 @@ export default function ContractorPage() {
   return (
     <main style={{ minHeight: "100vh", background: "#f2f0eb", padding: "24px 12px 48px", fontFamily: "var(--font-body)", color: "#101014" }}>
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
-        <p style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b6b70", margin: 0 }}>The Letting Experts · works order</p>
+        <p style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b6b70", margin: 0 }}>The Letting Experts · {job?.quoteStage ? "quote request" : "works order"}</p>
         {err && !job && <p style={{ color: "#a85a51", marginTop: 12 }}>{err}</p>}
         {!job && !err && <p style={{ color: "#6b6b70", marginTop: 12 }}>Loading the job…</p>}
         {job && (
@@ -95,82 +122,107 @@ export default function ContractorPage() {
             <div style={box}>
               <span style={label}>The job</span>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{job.description || job.category}</p>
-              <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.access || "none recorded"}<br /><strong>{job.tenant.includes(";") ? "Tenants" : "Tenant"}:</strong> {job.tenant ? job.tenant.split("; ").map((t, i) => <span key={i}>{i ? <br /> : null}{t}</span>) : "on the works order"}</p>
+              <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.quoteStage ? "we'll arrange it if you need a look" : job.access || "none recorded"}<br /><strong>{job.tenant.includes(";") ? "Tenants" : "Tenant"}:</strong> {job.tenant ? job.tenant.split("; ").map((t, i) => <span key={i}>{i ? <br /> : null}{t}</span>) : job.quoteStage ? "on the works order, once the quote is approved" : "on the works order"}</p>
             </div>
             {flash && <p style={{ ...box, borderColor: "#3f8f5f", color: "#3f8f5f", fontSize: 14 }}>{flash}</p>}
             {err && job && <p style={{ color: "#a85a51", marginTop: 12, fontSize: 13 }}>{err}</p>}
 
-            {!job.scheduledAt && !job.completedAt && (
+            {job.quoteStage === "asked" && (
               <div style={box}>
-                <span style={label}>When have you agreed with the tenant?</span>
-                <input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} style={field} />
-                <button type="button" disabled={!date || busy === "date"} onClick={() => void post({ action: "date", scheduledAt: new Date(date).toISOString() }, "date")} style={{ ...btn, marginTop: 10 }}>{busy === "date" ? "Saving…" : "That's the date"}</button>
-              </div>
-            )}
-            {job.scheduledAt && !job.completedAt && (
-              <div style={box}>
-                <span style={label}>Booked</span>
-                <p style={{ margin: 0, fontSize: 14 }}>{when(job.scheduledAt)}. If it moves, set the new time here.</p>
-                <input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...field, marginTop: 8 }} />
-                <button type="button" disabled={!date || busy === "date"} onClick={() => void post({ action: "date", scheduledAt: new Date(date).toISOString() }, "date")} style={{ ...btn, marginTop: 10, background: "#fff", color: "#101014", border: "1px solid #101014" }}>Move it</button>
-              </div>
-            )}
-
-            {!job.completedAt && (
-              <div style={box}>
-                <span style={label}>All done?</span>
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="What you did, in a line or two" style={field} />
-                <button type="button" disabled={busy === "done"} onClick={() => void post({ action: "done", note }, "done")} style={{ ...btn, marginTop: 10 }}>{busy === "done" ? "Saving…" : "Mark it done"}</button>
-              </div>
-            )}
-
-            <div style={box}>
-              <span style={label}>Photos of the work</span>
-              <label style={{ ...btn, display: "inline-block", background: "#fff", color: "#101014", border: "1px solid #101014" }}>
-                {busy === "photo" ? "Uploading…" : "Add a photo"}
-                <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "photo"); e.target.value = ""; }} disabled={busy === "photo"} />
-              </label>
-              {job.files.length > 0 && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#6b6b70" }}>{job.files.length} file{job.files.length === 1 ? "" : "s"} on the job.</p>}
-            </div>
-
-            <div style={box}>
-              <span style={label}>A certificate from the visit</span>
-              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Gas, electrical, PAT, anything with an expiry date. It goes on the property&apos;s record, and once our compliance team has checked it we send a copy to the landlord and the tenant.</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <select value={certType} onChange={(e) => setCertType(e.target.value)} style={field}>
-                  <option value="">What is it?</option>
-                  {CERT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
-                <input type="date" value={certExpiry} onChange={(e) => setCertExpiry(e.target.value)} style={field} aria-label="The date it runs out" />
-              </div>
-              <label style={{ ...btn, display: "inline-block", marginTop: 10, opacity: certType && certExpiry ? 1 : 0.5 }}>
-                {busy === "certificate" ? "Filing…" : "Choose the certificate"}
-                <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "certificate"); e.target.value = ""; }} disabled={busy === "certificate" || !certType || !certExpiry} />
-              </label>
-              {!(certType && certExpiry) && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>Say what it is and when it runs out, then choose the file.</p>}
-            </div>
-
-            {job.invoicePence == null ? (
-              <div style={box}>
-                <span style={label}>Your invoice</span>
-                <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Quote job #{job.ref} on it. It goes straight to accounts.</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="£ total" style={field} />
-                  <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Invoice number" style={field} />
-                </div>
-                <label style={{ ...btn, display: "inline-block", marginTop: 10, opacity: amount ? 1 : 0.5 }}>
-                  {busy === "invoice" ? "Uploading…" : "Choose the invoice file"}
-                  <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "invoice"); e.target.value = ""; }} disabled={busy === "invoice" || !amount} />
+                <span style={label}>Your quote</span>
+                <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Nothing is booked yet. The landlord approves the price first, then we send you the works order with the tenant&apos;s details.</p>
+                <input value={quote} onChange={(e) => setQuote(e.target.value)} inputMode="decimal" placeholder="£ total, including VAT if you charge it" style={field} />
+                <textarea value={quoteNote} onChange={(e) => setQuoteNote(e.target.value)} rows={3} placeholder="What it covers, in a line or two (optional)" style={{ ...field, marginTop: 8 }} />
+                <label style={{ ...field, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", color: quoteFile ? "#101014" : "#6b6b70" }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{quoteFile ? quoteFile.name : "Attach your quote (optional)"}</span>
+                  <span style={{ fontSize: 12, textDecoration: "underline", flexShrink: 0, marginLeft: 8 }}>{quoteFile ? "Change" : "Choose"}</span>
+                  <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { setQuoteFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
                 </label>
-                {!amount && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>Put the total in first, then choose the file.</p>}
-              </div>
-            ) : (
-              <div style={box}>
-                <span style={label}>Your invoice</span>
-                <p style={{ margin: 0, fontSize: 14 }}>Received: £{(job.invoicePence / 100).toFixed(2)}{job.invoiceRef ? ` (${job.invoiceRef})` : ""}. Accounts have it.</p>
+                <button type="button" disabled={!quote || busy === "quote"} onClick={() => void sendQuote()} style={{ ...btn, marginTop: 10, opacity: quote ? 1 : 0.5 }}>{busy === "quote" ? "Sending…" : "Send the quote"}</button>
               </div>
             )}
-            <p style={{ marginTop: 24, fontSize: 12, color: "#6b6b70" }}>Anything else, reply to the works order email.</p>
+            {job.quoteStage === "with_landlord" && (
+              <div style={box}>
+                <span style={label}>Your quote</span>
+                <p style={{ margin: 0, fontSize: 14 }}>£{((job.quotePence ?? 0) / 100).toFixed(2)} is with the landlord. We&apos;ll send you the works order once they&apos;ve approved it.</p>
+              </div>
+            )}
+
+            {!job.quoteStage && (
+              <>
+              {!job.scheduledAt && !job.completedAt && (
+                <div style={box}>
+                  <span style={label}>When have you agreed with the tenant?</span>
+                  <input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} style={field} />
+                  <button type="button" disabled={!date || busy === "date"} onClick={() => void post({ action: "date", scheduledAt: new Date(date).toISOString() }, "date")} style={{ ...btn, marginTop: 10 }}>{busy === "date" ? "Saving…" : "That's the date"}</button>
+                </div>
+              )}
+              {job.scheduledAt && !job.completedAt && (
+                <div style={box}>
+                  <span style={label}>Booked</span>
+                  <p style={{ margin: 0, fontSize: 14 }}>{when(job.scheduledAt)}. If it moves, set the new time here.</p>
+                  <input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...field, marginTop: 8 }} />
+                  <button type="button" disabled={!date || busy === "date"} onClick={() => void post({ action: "date", scheduledAt: new Date(date).toISOString() }, "date")} style={{ ...btn, marginTop: 10, background: "#fff", color: "#101014", border: "1px solid #101014" }}>Move it</button>
+                </div>
+              )}
+
+              {!job.completedAt && (
+                <div style={box}>
+                  <span style={label}>All done?</span>
+                  <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="What you did, in a line or two" style={field} />
+                  <button type="button" disabled={busy === "done"} onClick={() => void post({ action: "done", note }, "done")} style={{ ...btn, marginTop: 10 }}>{busy === "done" ? "Saving…" : "Mark it done"}</button>
+                </div>
+              )}
+
+              <div style={box}>
+                <span style={label}>Photos of the work</span>
+                <label style={{ ...btn, display: "inline-block", background: "#fff", color: "#101014", border: "1px solid #101014" }}>
+                  {busy === "photo" ? "Uploading…" : "Add a photo"}
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "photo"); e.target.value = ""; }} disabled={busy === "photo"} />
+                </label>
+                {job.files.length > 0 && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#6b6b70" }}>{job.files.length} file{job.files.length === 1 ? "" : "s"} on the job.</p>}
+              </div>
+
+              <div style={box}>
+                <span style={label}>A certificate from the visit</span>
+                <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Gas, electrical, PAT, anything with an expiry date. It goes on the property&apos;s record, and once our compliance team has checked it we send a copy to the landlord and the tenant.</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <select value={certType} onChange={(e) => setCertType(e.target.value)} style={field}>
+                    <option value="">What is it?</option>
+                    {CERT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  </select>
+                  <input type="date" value={certExpiry} onChange={(e) => setCertExpiry(e.target.value)} style={field} aria-label="The date it runs out" />
+                </div>
+                <label style={{ ...btn, display: "inline-block", marginTop: 10, opacity: certType && certExpiry ? 1 : 0.5 }}>
+                  {busy === "certificate" ? "Filing…" : "Choose the certificate"}
+                  <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "certificate"); e.target.value = ""; }} disabled={busy === "certificate" || !certType || !certExpiry} />
+                </label>
+                {!(certType && certExpiry) && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>Say what it is and when it runs out, then choose the file.</p>}
+              </div>
+
+              {job.invoicePence == null ? (
+                <div style={box}>
+                  <span style={label}>Your invoice</span>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Quote job #{job.ref} on it. It goes straight to accounts.</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="£ total" style={field} />
+                    <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Invoice number" style={field} />
+                  </div>
+                  <label style={{ ...btn, display: "inline-block", marginTop: 10, opacity: amount ? 1 : 0.5 }}>
+                    {busy === "invoice" ? "Uploading…" : "Choose the invoice file"}
+                    <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "invoice"); e.target.value = ""; }} disabled={busy === "invoice" || !amount} />
+                  </label>
+                  {!amount && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>Put the total in first, then choose the file.</p>}
+                </div>
+              ) : (
+                <div style={box}>
+                  <span style={label}>Your invoice</span>
+                  <p style={{ margin: 0, fontSize: 14 }}>Received: £{(job.invoicePence / 100).toFixed(2)}{job.invoiceRef ? ` (${job.invoiceRef})` : ""}. Accounts have it.</p>
+                </div>
+              )}
+              </>
+            )}
+            <p style={{ marginTop: 24, fontSize: 12, color: "#6b6b70" }}>Anything else, reply to the {job.quoteStage ? "quote request" : "works order"} email.</p>
           </>
         )}
       </div>

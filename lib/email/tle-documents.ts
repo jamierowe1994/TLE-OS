@@ -968,6 +968,28 @@ export const WORKS_LANDLORD_REPORT = {
   branding: { showSignoff: false },
 } as const;
 
+/* A price first, before any works order (Sean McMahon, 20 Oct 2026: "ideally
+   I want a quotation first, in order to get it approved by the landlord").
+   No tenants' details: nothing is booked yet, and access is ours to arrange
+   if they need a look. */
+export const WORKS_CONTRACTOR_QUOTE_REQUEST = {
+  subject: "Quote please: {{title}} at {{address}}",
+  preheader: "Could you price this job for us? Nothing is booked yet.",
+  mode: "blocks",
+  blocks: [
+    H("wqr1", "Could you quote for this?"),
+    T("wqr2", "Hi {{contractorGreeting}},<br><br>Could you give us a price for the job below at <strong>{{address}}</strong>? Nothing is booked yet: the landlord approves the quote first, then we send you the works order."),
+    T("wqr3", "<strong>{{title}}</strong><br>{{category}} · {{urgency}}<br><br>{{description}}"),
+    T("wqr4", "If you need to see it before you can price it, reply to this email and we'll arrange access with the tenant."),
+    SP("wqr5", 8),
+    BTN("wqr6", "Send us your quote", "{{contractorLink}}"),
+    SP("wqr7", 8),
+    T("wqr8", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}} · {{agentEmail}}"),
+    FOOT("wqr9", "You're getting this because you're on The Letting Experts' trades book."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /* The report to a contractor, asking if they'll take it (step 4). */
 export const WORKS_CONTRACTOR_REPORT = {
   subject: "Can you take this? {{title}} at {{address}}",

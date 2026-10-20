@@ -121,6 +121,8 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
   /* Work finished before it was on the OS (Rhiannon, 19 Oct 2026): say when,
      and the job skips the landlord, the contractor and the date and goes
      straight to the money. */
+  /* Quote first (Sean, 20 Oct 2026): before any works order has gone. */
+  if (open && o.contractorId && !o.contractorConfirmedAt && !o.quoteRequestedAt && o.quotePence == null) more.push({ a: "request_quote", label: "Ask for a quote" });
   if (open && !o.completedAt) more.push({ a: "done", label: "It was already done" });
   if (open) more.push({ a: "cancel", label: "Cancel the job" });
   if (done || o.status === "cancelled") more.push({ a: "reopen", label: "Reopen" });
@@ -147,6 +149,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
     quote: o.quotePence != null ? "Change the quote" : "Add a quote",
     approve: "Record the landlord's approval",
     done: f.already === "1" ? "It was already done" : "Mark it done",
+    request_quote: `Ask ${o.contractorName || "the contractor"} for a quote`,
     invoice: "The contractor's invoice",
     paid: "Mark it paid",
     cancel: "Cancel the job",
@@ -289,6 +292,9 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                     <p className="text-[11px] text-muted">PayProp is read-only to the OS: choosing it records the fact here, and the charge is raised in PayProp by hand.</p>
                   </div>
                 )}
+                {act === "request_quote" && (
+                  <p className="text-[12.5px] text-muted">They&apos;re emailed the job and asked for a price, with a button to send it. No works order goes until the quote is approved: within the landlord&apos;s {pounds(o.authorityPence)} straight away, over it once the landlord says yes.</p>
+                )}
                 {(act === "cancel" || act === "note" || act === "reopen") && (
                   <textarea value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} rows={2} placeholder={act === "cancel" ? "Why" : "The note"} className={field} />
                 )}
@@ -328,6 +334,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                         : act === "cancel" ? { action: "cancel", reason: f.note ?? "" }
                         : act === "reopen" ? { action: "reopen", note: f.note }
                         : act === "note" ? { action: "note", note: f.note ?? "" }
+                        : act === "request_quote" ? { action: "request_quote" }
                         : act === "edit" ? { action: "edit", fields: { title: f.title, description: f.description, tenant: f.tenant, tenantPhone: f.tenantPhone, tenantEmail: f.tenantEmail, landlord: f.landlord, landlordEmail: f.landlordEmail, access: f.access, authorityPence: f.authority ? toPence(f.authority) : undefined, urgency: f.urgency as Urgency | undefined, dueAt: f.dueAt !== undefined ? (f.dueAt ? new Date(f.dueAt).toISOString() : null) : undefined } }
                         : null;
                       if (!m) return setErr(act === "assign" ? "Pick a contractor." : act === "paid" ? "Say how it was paid." : "Fill it in first.");

@@ -93,6 +93,7 @@ export function rankedFor(o: WorksOrder): RankedContractor[] {
 function blankOrder(over: Partial<WorksOrder> & Pick<WorksOrder, "id" | "ref" | "kind" | "title" | "category" | "reportedAt">): WorksOrder {
   return {
     status: "reported",
+    quoteRequestedAt: null,
     propertyId: null,
     propertyName: CAST.property,
     locality: CAST.locality,

@@ -41,6 +41,7 @@ const tile = "flex-1 rounded-xl border px-4 py-3 text-left transition-colors";
 
 /** The steps by a short name, for the labelled track on the job sheet. */
 const SHORT: Record<StepId, string> = {
+  quote: "Quote",
   tell_landlord: "Landlord",
   arranging: "Who arranges",
   landlord_follow_up: "Landlord",
@@ -76,11 +77,13 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
   const step = stepOf(o);
   const [f, setF] = useState<Record<string, string>>({});
   useEffect(() => setF({}), [step, o.id]);
-  const at = LINE.indexOf(step);
+  /* A quote-first job starts with the quote (Sean, 20 Oct 2026). */
+  const track: StepId[] = o.quoteRequestedAt ? ["quote", ...LINE] : LINE;
+  const at = track.indexOf(step);
   const meta = STEPS.find((s) => s.id === step)!;
   const hot = o.urgency === "emergency" && step !== "closed";
-  const line = LINE.filter((s) => o.kind === "repair" || s !== "aftercare");
-  const isDone = (s: StepId) => { const idx = LINE.indexOf(s); return at > idx || (step === "landlord_follow_up" && idx < 2); };
+  const line = track.filter((s) => o.kind === "repair" || s !== "aftercare");
+  const isDone = (s: StepId) => { const idx = track.indexOf(s); return at > idx || (step === "landlord_follow_up" && idx <= track.indexOf("arranging")); };
   const isHere = (s: StepId) => s === step || (step === "landlord_follow_up" && s === "arranging");
   /* Skipped and still not done: the track shows it hollow, not ticked. */
   const isSkipped = (s: StepId) => !isHere(s) && wasSkipped(o, s) && (s === "tell_landlord" ? !o.landlordToldAt : s === "aftercare" ? !o.tenantHappy : false);
@@ -88,6 +91,7 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
   const body = (
     <>
       {step !== "closed" && <Need step={step} />}
+      {step === "quote" && <Quote o={o} f={f} setF={setF} move={move} busy={busy} />}
       {step === "tell_landlord" && <TellLandlord o={o} f={f} setF={setF} move={move} busy={busy} />}
       {step === "arranging" && <Arranging o={o} f={f} setF={setF} move={move} busy={busy} />}
       {step === "landlord_follow_up" && <LandlordFollowUp o={o} f={f} setF={setF} move={move} busy={busy} />}
@@ -536,6 +540,39 @@ export function CertificateUpload({ o, busy, onCertificate, title = "Add a certi
       {!ready && !done && <p className="mt-1.5 text-[11px] text-muted">Say what it is and when it runs out, then choose the file.</p>}
       {done && <p className="mt-1.5 text-[11.5px] text-accent-dark">{done} is on the job and waiting for compliance to check it.</p>}
       {problem && <p className="mt-1.5 text-[11.5px] text-accent-dark">{problem}</p>}
+    </div>
+  );
+}
+
+/**
+ * Quote first (Sean McMahon, 20 Oct 2026): the contractor has been asked for
+ * a price. It comes back from their link or is keyed in off their reply; over
+ * the landlord's authority it waits on the landlord's yes. Only then does the
+ * job go on to the works order.
+ */
+function Quote({ o, f, setF, move, busy }: StepProps) {
+  const who = o.contractorName || "The contractor";
+  if (o.status === "approval") {
+    return (
+      <div className="space-y-3">
+        <p className="text-[13px]">{who} quoted <strong>{pounds(o.quotePence)}</strong>, over the landlord&apos;s {pounds(o.authorityPence)} authority. The landlord has been sent the quote to approve.</p>
+        <input value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="How they said yes - phone, email (optional)" className={field} />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={busy} onClick={() => void move({ action: "approve", approvedBy: o.landlord || "The landlord", note: f.note })} className={primary}>The landlord approved it</button>
+        </div>
+        <p className="text-[11.5px] text-muted">A different price? Change the quote on Money below and the landlord is asked again.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px]">Asked {who} for a quote {stamp(o.quoteRequestedAt)}. They can send it from their link, or type it in here when they reply.</p>
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+        <input value={f.amount ?? ""} onChange={(e) => setF({ ...f, amount: e.target.value })} inputMode="decimal" placeholder="£ their quote" className={field} />
+        <button type="button" disabled={busy || !f.amount} onClick={() => void move({ action: "quote", quotePence: toPence(f.amount ?? ""), note: "Keyed in off their reply." })} className={primary}>Add the quote</button>
+      </div>
+      <p className="text-[11.5px] text-muted">Within the landlord&apos;s {pounds(o.authorityPence)} it&apos;s approved straight away. Over it, the landlord is sent the quote to approve.</p>
+      <button type="button" disabled={busy} onClick={() => void move({ action: "request_quote" })} className={btn}>Ask them again</button>
     </div>
   );
 }

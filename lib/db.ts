@@ -744,6 +744,8 @@ ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS checks JSONB NOT NULL DEFAUL
 ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS appointment_id TEXT;
 -- The REX PM maintenance task a works order was taken on from (1 Oct 2026).
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rexpm_task_id TEXT;
+-- When the contractor was asked for a quote before any works order (Sean, 20 Oct 2026).
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS quote_requested_at TIMESTAMPTZ;
 
 -- REX PM's own task lists, read off its screens (1 Oct 2026). REX refused API
 -- access, so this is the stopgap: inspections (and next tenancy reviews) are
