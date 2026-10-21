@@ -478,6 +478,7 @@ const MACHINE_ROUTES = [
   "/api/bugs/bot",                    // the bug bot: takes bugs, records its fixes (cron key)
   "/api/landlord/property-answers/chase", // signed but questions unfinished: 2, 5, 9 days
   "/api/viewings/sweep",              // the viewings ledger, nightly
+  "/api/rex/snapshot",                // REX down: take the copy before it goes (cron key)
   "/api/viewings/texts/run",          // the hour-before viewing text, every five minutes (cron key)
   "/api/viewings/texts/test",         // one test text to a typed number (owner or cron key)
   /* Twilio POSTs a text back to the TLE number here. 503 with no
@@ -647,6 +648,8 @@ const LOG_NOISE = new Set([
   "/api/business/freshness",
   "/api/clean-sweep/summary",
   "/api/pretenancy/refresh",
+  "/api/rex/status",
+  "/api/rex/waiting",
 ]);
 /* The same, for addresses that carry an id (12 Oct 2026): an open chat asks
    for new messages every few seconds, and each face in it is one image call.
@@ -883,6 +886,11 @@ async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
   const userId = await sessionUserId(req.cookies.get("os_session")?.value, process.env.AUTH_SECRET);
   if (userId) {
     const door = await doorState(req, userId);
+    /* The REX copy asking the screens again as each person (lib/rex-snapshot,
+       21 Oct 2026): not their reading, so not in the read log or their pace. */
+    if (!door.locked && process.env.CRON_SECRET && req.headers.get("x-os-rex-snapshot") === process.env.CRON_SECRET) {
+      return NextResponse.next();
+    }
     if (!door.locked) {
       noteCall(req, userId);
       const paused =

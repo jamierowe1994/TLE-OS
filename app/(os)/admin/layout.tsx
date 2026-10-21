@@ -123,6 +123,9 @@ const GROUPS: Array<{
          that can arm one by accident. This is the one that arms, and it is
          owner-gated rather than merely admin-gated. */
       { href: "/admin/switches", label: "Switches", needs: "manage:switches" },
+      /* REX down for maintenance (21 Oct 2026): up, down or automatic, the
+         copy, and the changes waiting to go (lib/rex-outage). */
+      { href: "/admin/rex-status", label: "REX status", needs: "manage:switches" },
       /* What buzzes the office's phones, kind by kind (5 Oct 2026). Beside
          Switches, whose Phone alerts switch decides whether any of it goes. */
       { href: "/admin/alerts", label: "Phone alerts", needs: "manage:switches" },

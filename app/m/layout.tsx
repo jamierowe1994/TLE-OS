@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import PhoneFrame from "@/components/m/PhoneFrame";
 import PageTracker from "@/components/PageTracker";
+import RexOutageBar from "@/components/RexOutageBar";
 
 /**
  * THE PHONE VIEW (16 Sep 2026).
@@ -39,6 +40,7 @@ export const viewport: Viewport = {
 export default function PhoneLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="os-type min-h-dvh bg-page text-ink">
+      <RexOutageBar compact />
       <PhoneFrame>{children}</PhoneFrame>
       {/* Which screens are opened and for how long (Admin > Tracking). */}
       <PageTracker />

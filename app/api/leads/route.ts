@@ -1,4 +1,5 @@
 import { after, NextRequest, NextResponse } from "next/server";
+import { staleForWalk } from "@/lib/rex-outage";
 import { publicError } from "@/lib/public-error";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { leadScope } from "@/lib/scope";
@@ -277,8 +278,10 @@ export async function GET(req: NextRequest) {
   };
 
   const age = held ? Date.now() - held.at : Infinity;
+  /* The REX copy's walk reads it again (lib/rex-outage, 21 Oct 2026). */
+  const walk = await staleForWalk(held?.at);
 
-  if (held && age < FRESH_MS) {
+  if (held && age < FRESH_MS && !walk) {
     return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await out(held.book)), onFile, ageMs: age });
   }
 
@@ -293,11 +296,11 @@ export async function GET(req: NextRequest) {
         /* the next open tries again; this one already has its answer */
       })
     );
-  if (held && age < STALE_MS) {
+  if (held && age < STALE_MS && !walk) {
     behind();
     return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await out(held.book)), onFile, ageMs: age, stale: true });
   }
-  const filed = held ? await fromLedger(held.book, scope.rexUserId) : await ledgerBook(scope.rexUserId);
+  const filed = walk ? null : held ? await fromLedger(held.book, scope.rexUserId) : await ledgerBook(scope.rexUserId);
   if (filed) {
     behind();
     return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await out(filed)), onFile, ageMs: held ? age : null, stale: true });

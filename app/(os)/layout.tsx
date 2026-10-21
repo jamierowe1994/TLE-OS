@@ -3,6 +3,7 @@ import IntroGate from "@/components/IntroGate";
 import Shell from "@/components/Shell";
 import ThemeGate from "@/components/ThemeGate";
 import ViewAsBar from "@/components/ViewAsBar";
+import RexOutageBar from "@/components/RexOutageBar";
 import HelpDock from "@/components/HelpDock";
 import PageTracker from "@/components/PageTracker";
 import SetupGate from "@/components/SetupGate";
@@ -28,6 +29,8 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
             the content column — an owner must not be able to scroll away from
             the fact that they are wearing somebody else's face. */}
         <ViewAsBar />
+        {/* REX down: the copy on screen says so (lib/rex-outage). */}
+        <RexOutageBar />
         <Suspense fallback={null}>
           <Shell>{children}</Shell>
         </Suspense>

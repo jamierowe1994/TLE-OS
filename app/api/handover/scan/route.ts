@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { heldForRex } from "@/lib/rex-jobs";
 import { introOnlyIds } from "@/lib/intro-only";
 import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
@@ -37,6 +38,9 @@ function authorised(req: NextRequest): boolean {
 export async function GET(req: NextRequest) {
   if (!authorised(req)) return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected here." }, { status: 503 });
+  /* REX down (lib/rex-jobs): step aside; the next turn picks it up. */
+  const held = await heldForRex(req, { rerunWhenBack: false });
+  if (held) return held;
 
   const todos = await ensureHandoverTodos();
 

@@ -2405,6 +2405,53 @@ CREATE TABLE IF NOT EXISTS os_home_addresses (
   set_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- REX's answers, kept so the OS can keep going when REX is down (21 Oct
+-- 2026, lib/rex-outage): one row per exact question asked, the answer and
+-- when it was taken. Served only while REX is down, under the band.
+CREATE TABLE IF NOT EXISTS os_rex_snapshot (
+  key            TEXT PRIMARY KEY,
+  service        TEXT NOT NULL,
+  method         TEXT NOT NULL,
+  body           JSONB NOT NULL DEFAULT '{}'::jsonb,
+  result         JSONB,
+  taken_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  bytes          INTEGER NOT NULL DEFAULT 0,
+  hits           INTEGER NOT NULL DEFAULT 0,
+  last_served_at TIMESTAMPTZ,
+  -- The same question with its times rounded to the day, for a screen that
+  -- puts "now" in what it asks.
+  loose_key      TEXT,
+  -- ...and with its dates dropped, for the morning after (lib/rex-outage).
+  shape_key      TEXT
+);
+ALTER TABLE os_rex_snapshot ADD COLUMN IF NOT EXISTS loose_key TEXT;
+ALTER TABLE os_rex_snapshot ADD COLUMN IF NOT EXISTS shape_key TEXT;
+CREATE INDEX IF NOT EXISTS os_rex_snapshot_taken ON os_rex_snapshot (taken_at);
+CREATE INDEX IF NOT EXISTS os_rex_snapshot_loose ON os_rex_snapshot (loose_key, taken_at DESC);
+CREATE INDEX IF NOT EXISTS os_rex_snapshot_shape ON os_rex_snapshot (shape_key, taken_at DESC);
+
+-- Changes for REX made while it was down, sent in order when it is back
+-- (lib/rex-queue). Only writes already armed in REX_ALLOW_WRITES get here.
+CREATE TABLE IF NOT EXISTS os_rex_write_queue (
+  id             BIGSERIAL PRIMARY KEY,
+  service        TEXT NOT NULL,
+  method         TEXT NOT NULL,
+  body           JSONB NOT NULL DEFAULT '{}'::jsonb,
+  actor_user_id  TEXT,
+  actor_name     TEXT NOT NULL DEFAULT '',
+  as_person      BOOLEAN NOT NULL DEFAULT FALSE,
+  record_kind    TEXT,
+  record_id      TEXT,
+  summary        TEXT NOT NULL DEFAULT '',
+  state          TEXT NOT NULL DEFAULT 'waiting',
+  queued_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  tried_at       TIMESTAMPTZ,
+  sent_at        TIMESTAMPTZ,
+  error          TEXT
+);
+CREATE INDEX IF NOT EXISTS os_rex_write_queue_state ON os_rex_write_queue (state, id);
+CREATE INDEX IF NOT EXISTS os_rex_write_queue_record ON os_rex_write_queue (record_kind, record_id);
+
 CREATE TABLE IF NOT EXISTS os_cache (
   key            TEXT PRIMARY KEY,
   payload        JSONB NOT NULL,

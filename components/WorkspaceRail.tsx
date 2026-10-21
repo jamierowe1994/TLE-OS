@@ -116,7 +116,7 @@ export default function WorkspaceRail({
            quiet section names, the page you are on as a soft fill. From lg it
            sits on the shell's grey at the window's left and the page's white
            panel starts after it; the spacer below holds its place. */
-        className="sticky top-3 mb-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-200 md:flex lg:fixed lg:left-2 lg:z-[50] lg:mb-0"
+        className="sticky top-[calc(12px+var(--os-band-h,0px))] mb-3 hidden h-[calc(100vh-24px-var(--os-band-h,0px))] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-200 md:flex lg:fixed lg:left-2 lg:z-[50] lg:mb-0"
       >
         <div className={`flex h-9 items-center ${collapsed ? "justify-center" : "gap-2 px-2"}`}>
           <Wordmark collapsed={collapsed} size={21} />

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { heldForRex } from "@/lib/rex-jobs";
 import { publicError } from "@/lib/public-error";
 import { requireAnyCapability } from "@/lib/admin";
 import { FRESH_MS, refreshComplianceBook } from "@/lib/compliance-cache";
@@ -57,6 +58,9 @@ export async function POST(req: NextRequest) {
   if (!byCron && !byPerson) {
     return NextResponse.json({ ok: false, error: "Not allowed." }, { status: 403 });
   }
+  /* REX down (lib/rex-jobs): step aside, and run again once it is back. */
+  const held = await heldForRex(req, { rerunWhenBack: true });
+  if (held) return held;
 
   if (!rexConfigured()) {
     return NextResponse.json({ ok: true, warmed: false, reason: "REX isn't connected here." });

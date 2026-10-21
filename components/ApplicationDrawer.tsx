@@ -10,6 +10,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import PropertyFile from "@/components/PropertyFile";
+import RexWaitingChip from "@/components/RexWaitingChip";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
 import { type SpineStop } from "@/components/StageSpine";
@@ -1126,6 +1127,7 @@ export default function ApplicationDrawer({
               <span aria-hidden>←</span> Applications
             </Link>
             <SaveChip scope={saves} className="bg-white" />
+            <RexWaitingChip refs={[["TenancyApplications", app?.id], ["listing", app?.listingId]]} />
           </div>
           {/* Activity and notes at the top, as on a listing (James, 12 Oct 2026). */}
           {([

@@ -1,4 +1,5 @@
 import { londonDayOffset, londonHHMM } from "@/lib/london-time";
+import { staleForWalk } from "@/lib/rex-outage";
 import { publicError } from "@/lib/public-error";
 import { FRESH_MS, STALE_MS, heldDiary, refreshDiaryBook } from "@/lib/diary-cache";
 import { NextRequest, NextResponse, after } from "next/server";
@@ -447,10 +448,12 @@ export async function GET(req: NextRequest) {
      yesterday, it is dropped and the screen gets a read or an honest error. */
   const held = found && londonDayOffset(found.at) === 0 ? found : null;
   const age = held ? Date.now() - held.at : Infinity;
-  if (held && age < FRESH_MS) {
+  /* The REX copy's walk reads it again (lib/rex-outage, 21 Oct 2026). */
+  const walk = await staleForWalk(held?.at);
+  if (held && age < FRESH_MS && !walk) {
     return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: false, ageMs: age });
   }
-  if (held && age < STALE_MS) {
+  if (held && age < STALE_MS && !walk) {
     /* After the response, and caught: a REX read that fails behind a held
        book is the next request's problem, not an unhandled rejection. */
     after(() => refreshDiaryBook().then(() => undefined, () => undefined));

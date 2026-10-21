@@ -1,4 +1,5 @@
 import "server-only";
+import { staleForWalk } from "@/lib/rex-outage";
 import { hasDb, q } from "./db";
 import { fetchManagedBook } from "./managed-book";
 import { archiveBook } from "./tenancy-archive";
@@ -191,8 +192,10 @@ async function rawBookFor(rexUserId: string | null): Promise<{
   const key = bookKeyFor(rexUserId);
   const h = await held<ManagedBook>(key);
   const age = h ? Date.now() - h.at : Infinity;
-  if (h && age < BOOK_FRESH_MS) return { book: h.data, ageMs: age, stale: false };
-  if (h && age < BOOK_STALE_MS) {
+  /* The REX copy's walk reads it again (lib/rex-outage, 21 Oct 2026). */
+  const walk = await staleForWalk(h?.at);
+  if (h && age < BOOK_FRESH_MS && !walk) return { book: h.data, ageMs: age, stale: false };
+  if (h && age < BOOK_STALE_MS && !walk) {
     void refresh(key, () => readBook(rexUserId)).catch(() => {});
     return { book: h.data, ageMs: age, stale: true };
   }

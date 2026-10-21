@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { heldForRex } from "@/lib/rex-jobs";
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { rexConfigured } from "@/lib/rex";
@@ -31,6 +32,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." });
+  /* REX down (lib/rex-jobs): step aside; the next turn picks it up. */
+  const held = await heldForRex(req, { rerunWhenBack: false });
+  if (held) return held;
   const days = Math.min(3650, Math.max(1, Number(req.nextUrl.searchParams.get("days") ?? 730) || 730));
   const started = Date.now();
   const pages = Math.min(80, Math.max(1, Number(req.nextUrl.searchParams.get("pages") ?? 50) || 50));

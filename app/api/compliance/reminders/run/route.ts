@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { heldForRex } from "@/lib/rex-jobs";
 import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
@@ -206,6 +207,9 @@ export async function POST(req: NextRequest) {
   if (!cronAuthorised(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  /* REX down (lib/rex-jobs): step aside, and run again once it is back. */
+  const held = await heldForRex(req, { rerunWhenBack: true });
+  if (held) return held;
 
   const p = await plan();
   if (!p.live) return NextResponse.json({ sent: false, reason: p.reason });
