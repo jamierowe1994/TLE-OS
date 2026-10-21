@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { heldForRex } from "@/lib/rex-jobs";
 import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb, q } from "@/lib/db";
@@ -34,6 +35,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." });
+  /* REX down (lib/rex-jobs): step aside; the next turn picks it up. */
+  const held = await heldForRex(req, { rerunWhenBack: false });
+  if (held) return held;
   const started = Date.now();
   /* Everyone's REX sign-in, pushed out before it can lapse - first, so a
      failed lead read below never skips it (lib/rex-user keepEveryoneRexAlive). */

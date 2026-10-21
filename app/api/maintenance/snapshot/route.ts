@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { heldForRex } from "@/lib/rex-jobs";
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { snapshotWorks } from "@/lib/works-trend";
@@ -28,6 +29,9 @@ export async function POST(req: NextRequest) {
   if (!cronAuthorised(req) && !(await requireCapability(req, "manage:switches"))) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
+  /* REX down (lib/rex-jobs): step aside, and run again once it is back. */
+  const held = await heldForRex(req, { rerunWhenBack: true });
+  if (held) return held;
   const out = await snapshotWorks();
   return NextResponse.json(out);
 }

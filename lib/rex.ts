@@ -1,5 +1,7 @@
 import "server-only";
 import { noteFailure } from "@/lib/auto-bugs";
+import { mayAskRex, noteRexOutcome, readSnapshot, recordRead, rexIsDown } from "@/lib/rex-outage";
+import { kickReplay, queueRexWrite } from "@/lib/rex-queue";
 
 // REX CRM client for TLE OS — ported from the portal's lib/rex.ts.
 //
@@ -64,6 +66,10 @@ export interface RexResponse {
   ok: boolean; // HTTP ok AND no `error` in the envelope
   result: unknown;
   error: string | null;
+  /** Set when REX was down and this answer came from the copy (lib/rex-outage). */
+  snapshotAt?: string;
+  /** Set when REX was down and this write was kept to send later (lib/rex-queue). */
+  queuedId?: number;
 }
 
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
@@ -96,10 +102,19 @@ async function rexPost(path: string, body: unknown, token?: string): Promise<Rex
     clearTimeout(timer);
   }
   let data: { result?: unknown; error?: unknown } = {};
+  let parsed = false;
   try {
     data = (await res.json()) as { result?: unknown; error?: unknown };
+    parsed = true;
   } catch {
     /* empty/non-JSON body */
+  }
+  /* A web page where the data should be is REX's maintenance page, or a proxy
+     in front of it (21 Oct 2026). It used to read as "ok, nothing there",
+     which during an outage would have shown every board empty instead of
+     falling back to the copy. */
+  if (!parsed && (res.status >= 500 || /html/i.test(res.headers.get("content-type") ?? ""))) {
+    return { status: res.ok ? 503 : res.status, ok: false, result: undefined, error: `REX answered ${res.status} without data` };
   }
   const error = safeError(data?.error);
   return { status: res.status, ok: res.ok && !error, result: data?.result, error };
@@ -298,7 +313,7 @@ export async function rexCall(
   actorToken?: string | null,
   /** `quiet`: a first try the caller will make again - its failure is not a
    *  ticket yet (lib/rex-compliance, 25 Sep 2026). */
-  opts?: { quiet?: boolean }
+  opts?: { quiet?: boolean; fromQueue?: boolean }
 ): Promise<RexResponse> {
   /* Any write to a listing empties the short per-listing read cache the
      drawer uses (lib/listing-details, 2 Oct 2026) - here, in the one place
@@ -323,7 +338,7 @@ async function rexCallOnce(
   method: string,
   body?: unknown,
   actorToken?: string | null,
-  opts?: { quiet?: boolean }
+  opts?: { quiet?: boolean; fromQueue?: boolean }
 ): Promise<RexResponse> {
   if (!rexConfigured()) {
     throw new Error("Rex isn't connected yet (missing REX_API_EMAIL/PASSWORD).");
@@ -334,6 +349,18 @@ async function rexCallOnce(
   }
   const accountId = rexAccountId();
   const path = `${service}/${method}`;
+  const readOnly = isReadOnlyMethod(method);
+
+  /* REX DOWN (21 Oct 2026, lib/rex-outage). Nothing goes to REX at all: a
+     read is answered from the copy in milliseconds rather than after a
+     twenty-second fuse, and a write James has armed is kept to send when REX
+     is back. Once a minute one call is let through as the probe. */
+  const gate = await mayAskRex({ write: !readOnly });
+  if (!gate.live) {
+    if (readOnly) return fromCopy(service, method, body);
+    if (opts?.fromQueue) return { status: 503, ok: false, result: undefined, error: "REX went down again." };
+    return queueRexWrite(service, method, body, actorToken ?? null);
+  }
 
   let res: RexResponse;
   try {
@@ -363,7 +390,14 @@ async function rexCallOnce(
   } catch (e) {
     const name = (e as Error)?.name ?? "";
     const gaveUpWaiting = name === "AbortError";
-    if (!opts?.quiet) noteFailure({
+    noteRexOutcome(false, path, { probe: gate.probe, outage: true });
+    if (readOnly) {
+      const copy = await fromCopy(service, method, body, true);
+      if (copy.ok) return copy;
+    }
+    /* While REX is down every call fails the same way; one ticket per call
+       would bury the bug list overnight. */
+    if (!opts?.quiet && !(await rexIsDown())) noteFailure({
       source: "REX",
       what: path,
       status: null,
@@ -374,10 +408,41 @@ async function rexCallOnce(
     });
     throw e;
   }
+  const outage = !res.ok && outageShaped(res);
+  noteRexOutcome(!outage, path, { probe: gate.probe, outage });
+  if (res.ok && readOnly) recordRead(service, method, body, res.result);
+  if (!outage) kickReplay();
+  if (outage && readOnly) {
+    const copy = await fromCopy(service, method, body, true);
+    if (copy.ok) return copy;
+  }
+  if (outage && (await rexIsDown())) return res;
   if (!res.ok && !opts?.quiet && worthReporting(res, service, method, Boolean(actorToken))) {
     noteFailure({ source: "REX", what: path, status: res.status, message: res.error ?? `answered ${res.status}` });
   }
   return res;
+}
+
+/** Fails the way an outage fails - no answer, a gateway error, a page
+ *  instead of data - rather than REX answering and saying no. */
+function outageShaped(res: RexResponse): boolean {
+  if (res.status === 502 || res.status === 503 || res.status === 504) return true;
+  if (res.status >= 520 && res.status <= 530) return true; // Cloudflare in front of REX
+  return res.status >= 500 && res.result === undefined && !res.error?.includes("Exception");
+}
+
+/** The kept answer, shaped like REX's own. */
+async function fromCopy(service: string, method: string, body: unknown, afterFailure = false): Promise<RexResponse> {
+  const copy = await readSnapshot(service, method, body);
+  if (copy) return { status: 200, ok: true, result: copy.result, error: null, snapshotAt: copy.takenAt };
+  return {
+    status: 503,
+    ok: false,
+    result: undefined,
+    error: afterFailure
+      ? "REX did not answer and there is no copy of this yet."
+      : "REX is down for maintenance and this was not in the copy taken before it went.",
+  };
 }
 
 /**

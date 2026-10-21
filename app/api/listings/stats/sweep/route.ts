@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { heldForRex } from "@/lib/rex-jobs";
 import { timingSafeEqual } from "node:crypto";
 import { sweepMarket } from "@/lib/portal-market";
 
@@ -23,6 +24,9 @@ function cronAuthorised(req: NextRequest): boolean {
 
 export async function POST(req: NextRequest) {
   if (!cronAuthorised(req)) return NextResponse.json({ ok: false, error: "Not allowed." }, { status: 401 });
+  /* REX down (lib/rex-jobs): step aside, and run again once it is back. */
+  const held = await heldForRex(req, { rerunWhenBack: true });
+  if (held) return held;
   const read = await sweepMarket().catch(() => -1);
   return NextResponse.json({ ok: read >= 0, read });
 }
