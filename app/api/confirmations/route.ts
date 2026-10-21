@@ -16,6 +16,7 @@ import { sendAsAgent } from "@/lib/send-as-agent";
 import { logSystemEvent } from "@/lib/business/deal-store";
 import { logToPortal, portalText } from "@/lib/portal-log";
 import { withBodyHtml } from "@/lib/customer-update-copy";
+import { newMarker, threadStarted, THREAD_HEADER } from "@/lib/mail-threads";
 
 /**
  * POST → a booking confirmation, seen before it goes (17 Sep 2026).
@@ -157,7 +158,15 @@ export async function POST(req: NextRequest) {
         const subject = (body.subject ?? "").trim();
         const html = body.html ?? "";
         if (!subject || !html) return NextResponse.json({ sent: false, detail: "The email is empty." });
-        const r = await sendAsAgent({ me: actor, to: who.email, toName: who.name, subject, html });
+        /* A PLC decision to the landlord (key plc:<case>:…): their reply is
+           followed onto the pack when it went from the agent's Outlook
+           (lib/mail-threads, 21 Oct 2026). */
+        const plcCase = u.key.startsWith("plc:") ? u.key.split(":")[1] : null;
+        const marker = plcCase ? newMarker() : null;
+        const r = await sendAsAgent({ me: actor, to: who.email, toName: who.name, subject, html, ...(marker ? { headers: { [THREAD_HEADER]: marker } } : {}) });
+        if (r.sent && plcCase && marker && r.via === "mailbox") {
+          await threadStarted({ caseId: plcCase, userId: actor.id, marker, subject, to: who.email, what: `PLC decision to the ${who.role}`, by: actor.name || actor.email });
+        }
         if (r.sent) {
           await settleRecipient(u.id, Number(body.index), { state: "emailed", by: actor.name || actor.email, note: subject });
           if (u.dealId) {

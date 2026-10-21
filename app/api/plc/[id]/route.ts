@@ -482,7 +482,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         if (!found) return NextResponse.json({ ok: false, error: "No handover with that reference." }, { status: 404 });
         const me = await currentUser(req);
         const by = me?.name ?? (await actorName(req, "Compliance"));
-        const asked = await askFinalApproval(found, { name: by, email: me?.email ?? null });
+        const asked = await askFinalApproval(found, { id: me?.id ?? null, name: by, email: me?.email ?? null });
         return NextResponse.json({ ok: true, message: asked.message, ...(await payload(asked.case, req)) });
       }
 

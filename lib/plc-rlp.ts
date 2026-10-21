@@ -2,6 +2,7 @@ import "server-only";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { msConnectionFor, msSendMail } from "@/lib/microsoft";
+import { newMarker, threadStarted, THREAD_HEADER } from "@/lib/mail-threads";
 import { switchOn } from "@/lib/switches";
 import { getCase, recordRlpRequest } from "@/lib/plc-store";
 import type { CheckId, PlcCase, PlcDocument, RlpRequest } from "@/lib/plc";
@@ -131,13 +132,18 @@ export async function sendRlpRequest(
     files: mail.files,
   });
 
+  /* The RLP team's answer comes back on this conversation; the five-minute
+     check logs it on the pack (lib/mail-threads, 21 Oct 2026). */
+  const marker = newMarker();
+  const subject = opts.test ? `[Test] ${mail.subject}` : mail.subject;
   try {
     const attachments = await attachmentsFor(c);
     await msSendMail(sender.id, {
       to: { email: to },
-      subject: opts.test ? `[Test] ${mail.subject}` : mail.subject,
+      subject,
       body: mail.html,
       attachments,
+      ...(opts.test ? {} : { headers: { [THREAD_HEADER]: marker } }),
     });
   } catch (e) {
     const why = e instanceof Error ? e.message : "The send failed.";
@@ -145,6 +151,7 @@ export async function sendRlpRequest(
     throw new Error(why);
   }
   if (opts.test) return { case: c, sentTo: to };
+  await threadStarted({ caseId: c.id, userId: sender.id, marker, subject, to, what: "RLP request", by: sender.name });
   const saved = await recordRlpRequest(
     id,
     record("sent", mail.files.length ? `${mail.files.length} file${mail.files.length === 1 ? "" : "s"} attached` : "Sent without files")

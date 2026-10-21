@@ -4,6 +4,8 @@ import { claimFinalAsk, PlcRefused, recordFinalAsk, releaseFinalAsk } from "@/li
 import { finalApprover } from "@/lib/plc-approvers";
 import { plcFinalApprovalEmail } from "@/lib/email/agent-emails";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
+import { msConnectionFor, msSendMail } from "@/lib/microsoft";
+import { newMarker, threadStarted, THREAD_HEADER } from "@/lib/mail-threads";
 import { isTestCase } from "@/lib/test-guard";
 
 /**
@@ -21,6 +23,12 @@ import { isTestCase } from "@/lib/test-guard";
  * The email is internal mail on the OS sender (lib/resend sendEmail): the
  * same sending lock, internal-recipient guard and archive as every other
  * email to our own people. A reply goes to whoever pressed.
+ *
+ * From 21 Oct 2026 it goes from the presser's own Outlook where that is
+ * connected (lib/mail-threads): Susan's reply ("you've missed the EICR")
+ * then lands in the same conversation in their mailbox, and the five-minute
+ * check logs it on the pack. Without Outlook it goes as before, and her
+ * reply is not followed.
  */
 
 const SITE = (process.env.OS_PUBLIC_URL || process.env.OS_ORIGIN || "https://tle-os.co.uk").replace(/\/+$/, "");
@@ -59,7 +67,7 @@ export async function finalAskOffer(
 
 export async function askFinalApproval(
   c: PlcCase,
-  me: { name: string; email: string | null }
+  me: { id?: string | null; name: string; email: string | null }
 ): Promise<{ case: PlcCase; message: string }> {
   if (c.state !== "checked") throw new PlcRefused("This pack isn't waiting on the final approval.");
   if (!gateFor(c).ready) throw new PlcRefused("Something required is missing from the pack, so it can't go for final approval yet.");
@@ -96,14 +104,26 @@ export async function askFinalApproval(
 
   let sent = false;
   let note: string | undefined;
+  const subject = test ? `[Test] ${mail.subject}` : mail.subject;
   try {
-    await sendEmail({
-      to,
-      subject: test ? `[Test] ${mail.subject}` : mail.subject,
-      html: mail.html,
-      text: mail.text,
-      replyTo: myEmail || undefined,
-    });
+    /* Their own Outlook first, so the reply can be followed. A test pack
+       stays on our sender: nothing about a test is logged as a thread. */
+    const marker = newMarker();
+    const viaMailbox = !test && me.id ? await msConnectionFor(me.id).then((c) => c.connected).catch(() => false) : false;
+    let mailboxSent = false;
+    if (viaMailbox && me.id) {
+      try {
+        await msSendMail(me.id, { to: { email: to, name: approver.name }, subject, body: mail.html, headers: { [THREAD_HEADER]: marker } });
+        mailboxSent = true;
+      } catch {
+        /* Outlook refused: our sender below, as before. */
+      }
+    }
+    if (mailboxSent && me.id) {
+      await threadStarted({ caseId: c.id, userId: me.id, marker, subject, to, what: reminder ? "Final approval reminder" : "Sent for final approval", by: me.name });
+    } else {
+      await sendEmail({ to, subject, html: mail.html, text: mail.text, replyTo: myEmail || undefined });
+    }
     sent = true;
   } catch (e) {
     note = (e instanceof ResendBlocked || e instanceof Error ? e.message : "it failed").replace(/\.+$/, "");

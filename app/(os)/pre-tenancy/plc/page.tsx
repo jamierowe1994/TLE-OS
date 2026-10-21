@@ -7,6 +7,7 @@ import { ROUND_HELP } from "@/components/GuideButton";
 import DoodleIcon from "@/components/DoodleIcon";
 import PreTenancyHero from "@/components/pretenancy/Hero";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
+import { PlcEmails } from "@/components/MailThreads";
 import { api, ComplianceSide, Note, Pill, prettyDate, prettyWhen, PLC_GREEN, PLC_RED, SentAnywayTag, FinalAskTag, type Loaded } from "@/components/PlcReview";
 import type { PlcCase } from "@/lib/plc";
 
@@ -272,6 +273,7 @@ export default function PlcQueuePage() {
                 </div>
                 <div className="mt-5">
                   {open && open.case.id === openCase.id ? (
+                    <>
                     <ComplianceSide
                       data={open}
                       reload={reload}
@@ -287,6 +289,9 @@ export default function PlcQueuePage() {
                          show a panel for something no longer on the list. */
                       onDecided={() => setOpenId(null)}
                     />
+                    {/* Email replies on the pack's threads (James, 21 Oct 2026). Not on the sample. */}
+                    {!sample && <PlcEmails key={`${open.case.state}:${open.case.finalAsks?.length ?? 0}:${open.case.rlpRequest?.at ?? ""}:${open.case.decidedAt ?? ""}`} caseId={openCase.id} />}
+                    </>
                   ) : (
                     <WorkspaceLoading height="min-h-[360px]" label="Opening the pack" />
                   )}

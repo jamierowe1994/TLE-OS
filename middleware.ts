@@ -462,6 +462,7 @@ const MACHINE_ROUTES = [
   "/api/resend/webhook",              // Resend: delivered / bounced, signed by Resend
   "/api/pretenancy/alerts/run",       // the pre-tenancy digest
   "/api/pretenancy/watch",            // the Propoly watcher, every five minutes
+  "/api/mail-threads/poll",           // PLC email replies, by hand (the watcher runs it every five minutes)
   "/api/compliance/warm",             // sweeps the book before anybody asks
   "/api/compliance/reminders/run",    // the 30/14/7 certificate chase
   "/api/agent-compliance/remind",     // the agent's own 30/14/7, and Michael's list

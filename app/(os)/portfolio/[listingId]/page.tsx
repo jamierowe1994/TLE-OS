@@ -45,6 +45,7 @@ import PastTenancies from "@/components/portfolio/PastTenancies";
 import PastTenantPeople from "@/components/portfolio/PastTenantPeople";
 import SendToTenants from "@/components/portfolio/SendToTenants";
 import SendRecord from "@/components/portfolio/SendRecord";
+import { oneLine, ThreadView, type Thread } from "@/components/MailThreads";
 import RecordFiles from "@/components/portfolio/RecordFiles";
 import FileDocuments from "@/components/FileDocuments";
 import RecordPastVisit from "@/components/inspections/RecordPastVisit";
@@ -244,7 +245,7 @@ export default function PropertyPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || showAll || showLogins || sendOpen || recordOpen || lightbox != null) return;
+      if (action || openJob || showAll || showLogins || sendOpen || recordOpen || threadOpen || lightbox != null) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -369,6 +370,20 @@ export default function PropertyPage() {
       .catch(() => undefined);
   }, [p?.listingId, sendListings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { loadSends(); }, [loadSends]);
+
+  /* Email replies on this home's PLC threads (lib/mail-threads, 21 Oct 2026):
+     each message logged is a line in the latest activity, opening its thread. */
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [threadOpen, setThreadOpen] = useState<Thread | null>(null);
+  useEffect(() => {
+    if (!p || p.test) return;
+    let live = true;
+    fetch(`/api/mail-threads?listing=${encodeURIComponent(p.listingId)}&listings=${encodeURIComponent(sendListings.join(","))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok) setThreads(j.threads ?? []); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [p?.listingId, sendListings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* A swap made on this home (Lianna, 16 Oct 2026): she came back to the
      home for the swap's PLC check and found no sign of it here, so the
@@ -646,6 +661,16 @@ export default function PropertyPage() {
   for (const x of sends) {
     const went = x.results.filter((r) => r.sent).length;
     activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `Sent to tenants · ${x.documents.join(", ")}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => setRecordOpen(x.id) });
+  }
+  for (const t of threads) {
+    for (const m of t.messages) {
+      activity.push({
+        key: `mail-${m.id}`, at: m.at, icon: "mail",
+        title: m.ours ? `Email from ${m.fromName || m.fromEmail}` : `Reply from ${m.fromName || m.fromEmail}`,
+        sub: `${t.caseId ? "PLC · " : ""}${oneLine(m.preview) || m.subject}`.slice(0, 140),
+        go: () => setThreadOpen(t),
+      });
+    }
   }
   if (drafts.state === "ready") {
     for (const d of drafts.data) {
@@ -1271,6 +1296,7 @@ export default function PropertyPage() {
         />
       )}
       {recordOpen && <SendRecord id={recordOpen} onClose={() => setRecordOpen(null)} />}
+      {threadOpen && <ThreadView thread={threadOpen} onClose={() => setThreadOpen(null)} />}
       {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
       {action?.kind === "tenant-notice" && propertyId && (
         <Modal onClose={closeAction} title="Tenant gave notice">
