@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 
@@ -45,6 +45,11 @@ type Row = {
   sentAt: string | null;
   error: string | null;
 };
+type Item = { id: string; label: string; detail: string; at: string | null; href?: string };
+type PhaseCheck = { key: string; label: string; what: string; items: Item[]; error: string | null };
+type Hand = { id: string; what: string; summary: string; who: string; at: string; recordKind: string | null; recordId: string | null; href: string | null };
+type PhaseRun = { key: string; sent: number; stopped: { id: string; label: string; error: string } | null; skippedBecause?: string };
+type CatchupProgress = { running: boolean; by: string; startedAt: string | null; finishedAt: string | null; phase: string | null; results: PhaseRun[] };
 type Run = { running: boolean; planned: number; done: number; failed: number; current: string | null; lastError: string | null; deadline: string | null };
 
 const when = (iso: string | null) =>
@@ -73,14 +78,19 @@ export default function RexStatusPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [from, setFrom] = useState("");
   const [until, setUntil] = useState("");
+  const [check, setCheck] = useState<{ since: string; phases: PhaseCheck[]; hand: Hand[] } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [catchup, setCatchup] = useState<CatchupProgress | null>(null);
+  const [openPhase, setOpenPhase] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/admin/rex-status", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j: { status: Status; queue: Row[]; run: Run }) => {
+      .then((j: { status: Status; queue: Row[]; run: Run; catchup: CatchupProgress }) => {
         setS(j.status);
         setRows(j.queue);
         setRun(j.run);
+        setCatchup(j.catchup);
         setFrom((f) => f || toLocalInput(j.status.setting.plannedFrom));
         setUntil((u) => u || toLocalInput(j.status.setting.plannedUntil));
       })
@@ -119,6 +129,22 @@ export default function RexStatusPage() {
       load();
     }
   };
+
+  const lookAgain = useCallback(() => {
+    setChecking(true);
+    fetch("/api/admin/rex-status?catchup=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && setCheck({ since: j.since, phases: j.phases, hand: j.hand }))
+      .catch(() => {})
+      .finally(() => setChecking(false));
+  }, []);
+
+  /* A run finishing: look again, so the counts say what is left. */
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (wasRunning.current && catchup && !catchup.running) lookAgain();
+    wasRunning.current = Boolean(catchup?.running);
+  }, [catchup, lookAgain]);
 
   if (denied) return <p className="text-[12.5px] text-muted">Only an owner can see this.</p>;
   if (!s) return <p className="text-[12.5px] text-muted">Loading…</p>;
@@ -260,6 +286,121 @@ export default function RexStatusPage() {
 
       <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-[13.5px]">Morning Catch-up</span>
+          {catchup?.running && <Pill tone="accent">sending</Pill>}
+        </div>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+          Once REX is back and the waiting changes have gone: every phase of a file, in order, for anything made while REX was down that is still not in REX. Each record goes in with the agent&rsquo;s own REX sign-in, through the same step the screen uses, so it is never sent twice. The first refusal stops the run.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" disabled={checking} onClick={lookAgain} className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] disabled:opacity-40">
+            {checking ? "Looking…" : check ? "Look again" : "Check what is missing"}
+          </button>
+          {check && (
+            <button
+              type="button"
+              disabled={busy || s.down || catchup?.running || !check.phases.some((p) => p.items.length)}
+              onClick={() => act({ action: "catchup", since: check.since }, "Catch-up started. This page shows each phase as it goes.")}
+              className="rounded-lg bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+            >
+              Send everything, in order
+            </button>
+          )}
+        </div>
+        {s.down && check && <p className="mt-2 text-[11px] text-muted">REX is still down, so nothing can be sent yet.</p>}
+        {catchup && (catchup.running || catchup.results.length > 0) && (
+          <ul className="mt-3 space-y-1 text-[12px]">
+            {catchup.results.map((r) => (
+              <li key={r.key}>
+                {check?.phases.find((p) => p.key === r.key)?.label ?? r.key}: {r.sent} sent
+                {r.skippedBecause ? ` - not run, ${r.skippedBecause}` : ""}
+                {r.stopped ? ` - stopped at ${r.stopped.label}: ${r.stopped.error}` : ""}
+                {r.stopped && r.stopped.id && !catchup.running && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => act({ action: "catchup-skip", phase: r.key, id: r.stopped!.id }, `${r.stopped!.label} left out. Send again to carry on.`).then(lookAgain)}
+                    className="ml-2 rounded-lg border border-line/80 px-2 py-0.5 text-[11px]"
+                  >
+                    Skip this one
+                  </button>
+                )}
+              </li>
+            ))}
+            {catchup.running && <li className="text-muted">Now: {check?.phases.find((p) => p.key === catchup.phase)?.label ?? catchup.phase ?? "starting"}…</li>}
+          </ul>
+        )}
+        {check && (
+          <>
+            <p className="mt-3 text-[11px] text-muted">Looking at everything since {when(check.since)} (half an hour before REX went).</p>
+            <ul className="mt-2 space-y-1.5">
+              {check.phases.map((p, i) => (
+                <li key={p.key} className="rounded-xl border border-line/50 p-2.5 text-[12px]">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <button type="button" onClick={() => setOpenPhase(openPhase === p.key ? null : p.key)} className="text-left">
+                      {i + 1}. {p.label}
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <Pill tone={p.items.length ? "accent" : "neutral"}>{p.error ? "could not look" : p.items.length ? `${p.items.length} to send` : "nothing missing"}</Pill>
+                      {p.items.length > 0 && (
+                        <button
+                          type="button"
+                          disabled={busy || s.down || catchup?.running}
+                          onClick={() => act({ action: "catchup", phase: p.key, since: check.since }, `${p.label}: sending.`)}
+                          className="rounded-lg border border-line/80 px-2.5 py-1 text-[11.5px] disabled:opacity-40"
+                        >
+                          Send this phase
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-muted">{p.error ?? p.what}</p>
+                  {openPhase === p.key && p.items.length > 0 && (
+                    <ul className="mt-1.5 space-y-1 border-t border-line/40 pt-1.5">
+                      {p.items.slice(0, 50).map((it) => (
+                        <li key={it.id} className="text-[11.5px]">
+                          {it.href ? <a href={it.href} className="underline">{it.label}</a> : it.label}
+                          <span className="text-muted"> · {it.detail}</span>
+                        </li>
+                      ))}
+                      {p.items.length > 50 && <li className="text-[11px] text-muted">and {p.items.length - 50} more</li>}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4">
+              <span className="text-[12.5px] font-semibold">Redo by Hand</span>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+                REX turned these away and the screen kept nothing to send again - a new listing, photos, publishing, an application, a contract for signing. Open the file, do it again, then tick it off.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {check.hand.map((h) => (
+                  <li key={h.id} className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-line/50 p-2.5 text-[12px]">
+                    <span>
+                      {h.summary}
+                      {h.recordId ? (h.href ? <a href={h.href} className="ml-1 underline">{h.recordKind} {h.recordId}</a> : <span className="text-muted"> · {h.recordKind} {h.recordId}</span>) : null}
+                      <span className="text-muted"> · {h.who}, {when(h.at)}</span>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => act({ action: "hand-done", id: h.id }, "Ticked off.").then(lookAgain)}
+                      className="rounded-lg border border-line/80 px-2.5 py-1 text-[11.5px]"
+                    >
+                      Done
+                    </button>
+                  </li>
+                ))}
+                {!check.hand.length && <li className="text-[12px] text-muted">Nothing to redo by hand.</li>}
+              </ul>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className="text-[13.5px]">Waiting for REX</span>
           <Pill tone={waiting.length ? "accent" : "neutral"}>{waiting.length}</Pill>
         </div>
@@ -284,7 +425,7 @@ export default function RexStatusPage() {
                   #{r.id} {r.summary}
                   {r.recordKind ? <span className="text-muted"> · {r.recordKind} {r.recordId}</span> : null}
                 </span>
-                <Pill tone={r.state === "failed" ? "accent" : "neutral"}>{r.state}</Pill>
+                <Pill tone={r.state === "failed" ? "accent" : "neutral"}>{r.state.replace("_", " ")}</Pill>
               </div>
               <p className="mt-0.5 text-[11px] text-muted">
                 {r.actorName || "the office"}

@@ -98,12 +98,24 @@ export async function queueRexWrite(
   body: unknown,
   actorToken: string | null
 ): Promise<RexResponse> {
-  if (!hasDb() || !keptForLater(service, method)) {
-    return { status: 503, ok: false, result: undefined, error: DOWN_REFUSAL };
-  }
+  if (!hasDb()) return { status: 503, ok: false, result: undefined, error: DOWN_REFUSAL };
+  const keep = keptForLater(service, method);
   try {
     const who = await whoIsAsking();
     const rec = recordOf(service, body);
+    /* Turned away, but written down (James, 21 Oct 2026): the backlog for the
+       morning's catch-up has to know about everything REX did not get, not
+       only what can be sent on as it is. Never sent from here - a create is
+       redone by the catch-up through the OS's own push, so the new REX id
+       lands on the OS record (lib/rex-catchup). */
+    if (!keep) {
+      await q(
+        `INSERT INTO os_rex_write_queue (service, method, body, actor_user_id, actor_name, as_person, record_kind, record_id, summary, state)
+         VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, 'turned_away')`,
+        [service, method, JSON.stringify(body ?? {}), who.id, who.name, Boolean(actorToken), rec?.kind ?? null, rec?.id ?? null, summaryOf(service, method)]
+      );
+      return { status: 503, ok: false, result: undefined, error: DOWN_REFUSAL };
+    }
     const rows = await q<{ id: string }>(
       `INSERT INTO os_rex_write_queue (service, method, body, actor_user_id, actor_name, as_person, record_kind, record_id, summary)
        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9) RETURNING id::text`,
@@ -129,6 +141,18 @@ function summaryOf(service: string, method: string): string {
     "TenancyApplications/update": "Application changed",
     "ComplianceEntries/update": "Certificate changed",
     "CustomFields/setFieldValues": "Custom fields changed",
+    "Contacts/create": "New contact",
+    "Notes/create": "Note",
+    "CalendarEvents/create": "New diary entry",
+    "Listings/create": "New listing",
+    "Properties/create": "New property",
+    "TenancyApplications/create": "New application",
+    "ComplianceEntries/create": "New certificate",
+    "Upload/uploadFileFromUrl": "File upload",
+    "EsignRequests/create": "Contract sent for signing",
+    "ListingPublication/publish": "Listing published",
+    "ListingPublication/setActivePublicationChannels": "Portals chosen",
+    "MailMerge/queueMergeUsingObjects": "Mail merge",
   };
   return what[`${service}/${method}`] ?? `${service} ${method}`;
 }
@@ -176,7 +200,7 @@ export interface QueueRow {
   recordKind: string | null;
   recordId: string | null;
   summary: string;
-  state: "waiting" | "sent" | "failed" | "held" | "skipped";
+  state: "waiting" | "sent" | "failed" | "held" | "skipped" | "turned_away" | "caught_up";
   queuedAt: string;
   triedAt: string | null;
   sentAt: string | null;
@@ -188,7 +212,7 @@ export async function queueRows(limit = 200): Promise<QueueRow[]> {
   const rows = await q<Record<string, unknown>>(
     `SELECT id::text, service, method, actor_name, as_person, record_kind, record_id, summary, state,
             queued_at, tried_at, sent_at, error
-       FROM os_rex_write_queue ORDER BY (state IN ('waiting','failed')) DESC, id DESC LIMIT $1`,
+       FROM os_rex_write_queue ORDER BY (state IN ('waiting','failed','turned_away')) DESC, id DESC LIMIT $1`,
     [limit]
   );
   const t = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
@@ -213,7 +237,7 @@ export async function queueRows(limit = 200): Promise<QueueRow[]> {
 export async function waitingFor(kind: string, id: string): Promise<number> {
   if (!hasDb()) return 0;
   const rows = await q<{ n: string }>(
-    `SELECT COUNT(*)::text AS n FROM os_rex_write_queue WHERE record_kind = $1 AND record_id = $2 AND state IN ('waiting','failed')`,
+    `SELECT COUNT(*)::text AS n FROM os_rex_write_queue WHERE record_kind = $1 AND record_id = $2 AND state IN ('waiting','failed','turned_away')`,
     [kind, id]
   ).catch(() => []);
   return Number(rows[0]?.n ?? 0);
