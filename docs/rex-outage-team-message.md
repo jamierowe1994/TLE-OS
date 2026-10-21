@@ -11,9 +11,10 @@ TLE OS stays open the whole time. You'll see a brown band across the top while R
 - Your diary for the rest of today and tomorrow morning, as booked before 2.30pm.
 - Editing a listing's details, a contact, a diary time or an application. It saves in TLE OS straight away, shows "Waiting for REX" on the file, and goes into REX on its own when REX is back.
 - Notes, tasks, messages, Huddles, emails and texts from TLE OS. The viewing reminder texts still go out.
+- Landlord terms through DocuSeal: send them and get them signed as normal. The landlord and the home go into REX on their own after 8am.
 
 **What won't work until REX is back**
-- Anything that creates something new in REX: a new contact, a new listing, booking a new viewing or appraisal into the diary, sending a contract for e-signature, or uploading a certificate or document into REX. You'll get a message saying to try again after 8am.
+- Anything that creates something new in REX: a new contact, a new listing, booking a new viewing or appraisal into the diary, or uploading a certificate or document into REX. They're saved in TLE OS and caught up into REX tomorrow morning; a new listing, photos and applications need redoing then.
 - Publishing a listing to the portals, or taking one down.
 - Anything that happens in REX after 2.30pm won't show in TLE OS until tomorrow morning.
 

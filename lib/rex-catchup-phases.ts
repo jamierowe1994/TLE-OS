@@ -253,7 +253,7 @@ const signedTerms: Phase = {
   key: "signed-terms",
   covers: ["Properties/create"],
   label: "Signed Terms",
-  what: "Landlords who signed while REX was down: the landlord and the property into REX (the hourly retry does this too).",
+  what: "Landlords who signed their DocuSeal terms while REX was down: the landlord and the property into REX (the hourly retry does this too).",
   async find(since) {
     const rows = await q<{ appraisal_id: string; address: string; completed_at: Date }>(
       `SELECT DISTINCT ON (d.appraisal_id) d.appraisal_id, a.address, d.completed_at
@@ -307,9 +307,14 @@ const certificates: Phase = {
   },
 };
 
-export const CATCHUP_PHASES: Phase[] = [contacts, notes, documents, appraisals, viewings, signedTerms, certificates];
+/* Signed terms straight after contacts: the landlord and the home are what
+   every later step on the file hangs on, and the landlord is a contact. */
+export const CATCHUP_PHASES: Phase[] = [contacts, signedTerms, notes, documents, appraisals, viewings, certificates];
 
-/** What can only be redone by hand: the screens kept nothing when REX said no. */
+/** What can only be redone by hand: the screens kept nothing when REX said no.
+ *  Landlord terms are not here: they go through DocuSeal, which never touches
+ *  REX, and the instruction they lead to is the Signed Terms phase. The e-sign
+ *  row is REX's own old DocuSign route, locked and never used. */
 export const BY_HAND = new Set([
   "Listings/create",
   "Upload/uploadFileFromUrl", // listing photos and plans only - see handList

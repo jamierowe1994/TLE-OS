@@ -177,7 +177,8 @@ export interface HandRow {
 /**
  * What only a person can redo: the creates REX turned away whose screens
  * kept nothing (a new listing, photos, publishing, an application, an
- * e-sign request), from the backlog the write queue wrote down overnight.
+ * REX e-sign request on the old route - not DocuSeal terms, which never need
+ * REX), from the backlog the write queue wrote down overnight.
  * Uploads are listed only for listing photos and plans - the others are a
  * lead's document or a certificate, which the phases above redo.
  */

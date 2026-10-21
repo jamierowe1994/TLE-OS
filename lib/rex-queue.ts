@@ -149,7 +149,7 @@ function summaryOf(service: string, method: string): string {
     "TenancyApplications/create": "New application",
     "ComplianceEntries/create": "New certificate",
     "Upload/uploadFileFromUrl": "File upload",
-    "EsignRequests/create": "Contract sent for signing",
+    "EsignRequests/create": "REX e-sign request (old route, not DocuSeal)",
     "ListingPublication/publish": "Listing published",
     "ListingPublication/setActivePublicationChannels": "Portals chosen",
     "MailMerge/queueMergeUsingObjects": "Mail merge",

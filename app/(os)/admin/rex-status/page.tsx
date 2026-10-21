@@ -372,7 +372,7 @@ export default function RexStatusPage() {
             <div className="mt-4">
               <span className="text-[12.5px] font-semibold">Redo by Hand</span>
               <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
-                REX turned these away and the screen kept nothing to send again - a new listing, photos, publishing, an application, a contract for signing. Open the file, do it again, then tick it off.
+                REX turned these away and the screen kept nothing to send again - a new listing, photos, publishing, an application. Open the file, do it again, then tick it off. Landlord terms are not here: DocuSeal never needed REX.
               </p>
               <ul className="mt-2 space-y-1.5">
                 {check.hand.map((h) => (
