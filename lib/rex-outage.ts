@@ -76,6 +76,8 @@ interface OutageState {
   oldestServed: number | null;
   servedCount: number;
   missedCount: number;
+  /** Which questions the copy could not answer, for Admin: "Listings/read" -> 12. */
+  missed: Map<string, number>;
   queuedSinceDown: number;
   recordedAt: Map<string, number>;
   prunedAt: number;
@@ -99,6 +101,7 @@ function st(): OutageState {
       oldestServed: null,
       servedCount: 0,
       missedCount: 0,
+      missed: new Map(),
       queuedSinceDown: 0,
       recordedAt: new Map(),
       prunedAt: 0,
@@ -237,6 +240,7 @@ export function noteRexOutcome(ok: boolean, what: string, opts: { probe?: boolea
     s.oldestServed = null;
     s.servedCount = 0;
     s.missedCount = 0;
+    s.missed.clear();
     s.queuedSinceDown = 0;
     console.warn(`[rex-outage] REX looks down (${s.fails.length} failures in 2 min, last ${what}) - serving the copy`);
   }
@@ -376,7 +380,11 @@ export function recordRead(service: string, method: string, body: unknown, resul
      ON CONFLICT (key) DO UPDATE SET result = EXCLUDED.result, taken_at = NOW(), bytes = EXCLUDED.bytes,
        loose_key = EXCLUDED.loose_key, shape_key = EXCLUDED.shape_key`,
     [key, service, method, JSON.stringify(body ?? {}), json, json.length, looseKey(service, method, body), shapeKey(service, method, body)]
-  ).catch((e) => console.warn("[rex-outage] could not keep a read", `${service}/${method}`, e instanceof Error ? e.message : e));
+  ).catch((e) => {
+    /* Not kept, so not "kept five minutes ago" either: the next ask tries again. */
+    s.recordedAt.delete(key);
+    console.warn("[rex-outage] could not keep a read", `${service}/${method}`, e instanceof Error ? e.message : e);
+  });
   /* A week is plenty: the copy is for an overnight outage, not an archive. */
   if (now - s.prunedAt > 3_600_000) {
     s.prunedAt = now;
@@ -421,6 +429,8 @@ export async function readSnapshot(
   const row = rows[0];
   if (!row) {
     s.missedCount += 1;
+    const what = `${service}/${method}`;
+    s.missed.set(what, (s.missed.get(what) ?? 0) + 1);
     return null;
   }
   const at = new Date(row.taken_at).getTime();
@@ -463,6 +473,7 @@ export interface RexStatusView {
   oldestServedAt: string | null;
   servedCount: number;
   missedCount: number;
+  missedWhat: Array<{ what: string; n: number }>;
   waiting: number;
   lastOkAt: string | null;
   lastFailAt: string | null;
@@ -506,6 +517,7 @@ export async function rexStatusView(opts: { detail?: boolean } = {}): Promise<Re
     oldestServedAt: iso(s.oldestServed),
     servedCount: s.servedCount,
     missedCount: s.missedCount,
+    missedWhat: [...s.missed.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([what, n]) => ({ what, n })),
     waiting,
     lastOkAt: iso(s.lastOkAt),
     lastFailAt: iso(s.lastFailAt),

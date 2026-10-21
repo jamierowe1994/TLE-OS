@@ -1,7 +1,8 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { createSessionToken } from "@/lib/auth";
-import { saveSnapshotRun, setSnapshotRun, type SnapshotRunReport } from "@/lib/rex-outage";
+import { readRexSetting, saveSnapshotRun, setSnapshotRun, type SnapshotRunReport } from "@/lib/rex-outage";
+import { cacheKeyFor } from "@/lib/listings-cache";
 
 /* ==========================================================================
    TAKING THE COPY (21 Oct 2026, lib/rex-outage).
@@ -17,9 +18,9 @@ import { saveSnapshotRun, setSnapshotRun, type SnapshotRunReport } from "@/lib/r
 
    - One request at a time, with a pause between, so REX sees an ordinary
      busy half hour and not a burst.
-   - Boards first (what a person opens first thing), then the record pages
-     they opened, most recent first, so a run stopped by its deadline still
-     holds the parts that matter.
+   - Boards first (what a person opens first thing), then every live
+     listing's page, then the single records people opened, most recent
+     first, so a run stopped by its deadline still holds what matters.
    - Only routes that read REX are walked: nothing that writes, sends,
      downloads or asks an AI. And the walk is neither written into the read
      log nor counted towards anyone's pace (middleware, x-os-rex-snapshot).
@@ -63,13 +64,15 @@ const WALK = [
 /** Never walked, whatever the prefix says: writes by GET, AI, files, search text. */
 const NEVER = [
   /\/(export|exports|download|csv|pdf|print)(\/|$)/i,
-  /\/(send|run|sweep|scan|warm|sync|publish|push|create|nudge|chase|remind)(\/|$)/i,
+  /\/(send|run|sweep|scan|warm|sync|snapshot|backfill|push|create|nudge|chase|remind)(\/|$)/i,
   /\/api\/(assistant|ai|steve|search|r2|bugs|auth|notifications|track|present|esign)(\/|$)/i,
   /\/api\/m\/(chats|rooms|face|focus|id-check)/i,
 ];
 
 const PACE_MS = 600;
-const STEP_TIMEOUT_MS = 90_000;
+/* A board read again from scratch for the copy can be two dozen REX calls
+   one after another (the managed book). */
+const STEP_TIMEOUT_MS = 180_000;
 const MAX_STEPS = 4_000;
 
 function walkable(path: string): boolean {
@@ -96,7 +99,7 @@ interface Progress {
   lastError: string | null;
 }
 
-const gp = globalThis as { __rexSnapshotProgress?: Progress; __rexSnapshotStop?: boolean };
+const gp = globalThis as { __rexSnapshotProgress?: Progress; __rexSnapshotStop?: boolean; __rexSnapshotDeadline?: number | null };
 function progress(): Progress {
   if (!gp.__rexSnapshotProgress) {
     gp.__rexSnapshotProgress = { running: false, by: "", startedAt: null, finishedAt: null, deadline: null, planned: 0, done: 0, failed: 0, current: null, lastError: null };
@@ -113,7 +116,7 @@ export function stopSnapshotRun(): void {
 }
 
 /** What to walk, boards per person first, then records most recent first. */
-async function plan(hours: number): Promise<Step[]> {
+async function plan(hours: number, asUser: string | null): Promise<Step[]> {
   const rows = await q<{ user_id: string; path: string; query: string; last: Date; n: string }>(
     `SELECT r.user_id, r.path, r.query, MAX(r.at) AS last, COUNT(*)::text AS n
        FROM os_read_log r JOIN os_users u ON u.id = r.user_id
@@ -145,7 +148,42 @@ async function plan(hours: number): Promise<Step[]> {
     }
   }
   records.sort((a, b) => b.last - a.last);
-  return [...boards, ...records].slice(0, MAX_STEPS);
+  const steps: Step[] = [...boards];
+
+  /* Then every listing on the market or let agreed, whether or not anybody
+     opened it: its page asked for as an owner, so an agent who opens it
+     tonight still finds it in the copy. Before the single records, because
+     a run that meets its deadline should have spent its time here. */
+  const owner = await q<{ id: string }>(
+    `SELECT id FROM os_users WHERE role = 'owner' AND locked_at IS NULL ORDER BY (id = $1) DESC, created_at LIMIT 1`,
+    [asUser ?? ""]
+  ).catch(() => []);
+  const book = await q<{ listings: Array<{ id?: unknown; propertyId?: unknown; publicationStatus?: unknown; letAgreed?: unknown }> }>(
+    `SELECT payload->'book'->'listings' AS listings FROM os_cache WHERE key = $1`,
+    [cacheKeyFor(null)]
+  ).catch(() => []);
+  const seen = new Set(steps.map((x) => x.url));
+  if (owner[0]) {
+    for (const l of book[0]?.listings ?? []) {
+      if (l.publicationStatus !== "published" && !l.letAgreed) continue;
+      const id = encodeURIComponent(String(l.id ?? ""));
+      if (!id) continue;
+      const prop = l.propertyId ? `&property=${encodeURIComponent(String(l.propertyId))}` : "";
+      for (const url of [
+        `/api/listings/details?id=${id}`,
+        `/api/listings/landlord?id=${id}`,
+        `/api/listings/viewings?id=${id}${prop}`,
+        `/api/listings/portals?id=${id}`,
+        `/api/listings/publish?id=${id}`,
+      ]) {
+        if (seen.has(url)) continue;
+        seen.add(url);
+        steps.push({ userId: owner[0].id, url, board: false });
+      }
+    }
+  }
+  for (const r of records) if (!seen.has(r.url)) steps.push(r);
+  return steps.slice(0, MAX_STEPS);
 }
 
 function selfBase(origin?: string): string {
@@ -158,12 +196,25 @@ function selfBase(origin?: string): string {
  * Start a run in the background. `deadline` stops it at a time (the refresh
  * before 2.30pm must not still be asking when REX goes).
  */
-export function startSnapshotRun(by: string, opts: { origin?: string; deadline?: Date; hours?: number } = {}): { ok: boolean; error?: string } {
+export function startSnapshotRun(
+  by: string,
+  opts: { origin?: string; deadline?: Date; hours?: number; asUser?: string | null } = {}
+): { ok: boolean; error?: string } {
   if (!hasDb()) return { ok: false, error: "No database here." };
   if (!process.env.CRON_SECRET) return { ok: false, error: "CRON_SECRET is not set, so the walk cannot pass the door quietly." };
   const p = progress();
   if (p.running) return { ok: false, error: "A copy is already being taken." };
   gp.__rexSnapshotStop = false;
+  void readRexSetting(true).then((setting) => {
+    /* Never still asking when REX goes: with a planned window saved, a run
+       stops itself a quarter of an hour before it, whoever started it. */
+    const from = setting.plannedFrom ? Date.parse(setting.plannedFrom) - 15 * 60_000 : NaN;
+    if (Number.isFinite(from) && from > Date.now() && (!gp.__rexSnapshotDeadline || from < gp.__rexSnapshotDeadline)) {
+      gp.__rexSnapshotDeadline = from;
+      p.deadline = new Date(from).toISOString();
+    }
+  }).catch(() => {});
+  gp.__rexSnapshotDeadline = opts.deadline?.getTime() ?? null;
   Object.assign(p, {
     running: true,
     by,
@@ -176,7 +227,7 @@ export function startSnapshotRun(by: string, opts: { origin?: string; deadline?:
     current: null,
     lastError: null,
   });
-  void walk(by, selfBase(opts.origin), opts.deadline ?? null, opts.hours ?? 36).catch((e) => {
+  void walk(by, selfBase(opts.origin), opts.deadline ?? null, opts.hours ?? 36, opts.asUser ?? null).catch((e) => {
     p.lastError = e instanceof Error ? e.message : String(e);
     console.error("[rex-snapshot] run failed", e);
   }).finally(() => {
@@ -188,9 +239,9 @@ export function startSnapshotRun(by: string, opts: { origin?: string; deadline?:
   return { ok: true };
 }
 
-async function walk(by: string, base: string, deadline: Date | null, hours: number): Promise<void> {
+async function walk(by: string, base: string, deadline: Date | null, hours: number, asUser: string | null): Promise<void> {
   const p = progress();
-  const steps = await plan(hours);
+  const steps = await plan(hours, asUser);
   p.planned = steps.length;
   const startedAt = new Date();
   setSnapshotRun(true);
@@ -199,7 +250,8 @@ async function walk(by: string, base: string, deadline: Date | null, hours: numb
   let stoppedEarly: string | undefined;
   for (const s of steps) {
     if (gp.__rexSnapshotStop) { stoppedEarly = "stopped by hand"; break; }
-    if (deadline && Date.now() > deadline.getTime()) { stoppedEarly = `stopped at the deadline, ${p.done} of ${steps.length} asked`; break; }
+    const stopAt = gp.__rexSnapshotDeadline ?? deadline?.getTime() ?? null;
+    if (stopAt && Date.now() > stopAt) { stoppedEarly = `stopped at the deadline, ${p.done} of ${steps.length} asked`; break; }
     p.current = s.url;
     let cookie = cookies.get(s.userId);
     if (!cookie) {

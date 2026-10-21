@@ -2405,6 +2405,8 @@ CREATE TABLE IF NOT EXISTS os_rex_snapshot (
   -- ...and with its dates dropped, for the morning after (lib/rex-outage).
   shape_key      TEXT
 );
+ALTER TABLE os_rex_snapshot ADD COLUMN IF NOT EXISTS loose_key TEXT;
+ALTER TABLE os_rex_snapshot ADD COLUMN IF NOT EXISTS shape_key TEXT;
 CREATE INDEX IF NOT EXISTS os_rex_snapshot_taken ON os_rex_snapshot (taken_at);
 CREATE INDEX IF NOT EXISTS os_rex_snapshot_loose ON os_rex_snapshot (loose_key, taken_at DESC);
 CREATE INDEX IF NOT EXISTS os_rex_snapshot_shape ON os_rex_snapshot (shape_key, taken_at DESC);

@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, setting: value });
   }
   if (body.action === "snapshot") {
-    const started = startSnapshotRun(by, { origin: req.nextUrl.origin });
+    const started = startSnapshotRun(by, { origin: req.nextUrl.origin, asUser: me.id });
     return NextResponse.json({ ok: started.ok, error: started.error, run: snapshotProgress() });
   }
   if (body.action === "replay") {

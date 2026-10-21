@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * The band that says REX is down and the screen is showing the copy
@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
  * James's live-figures rule allows the copy only because it is labelled, so
  * this sits across every OS screen and the phone view while REX is down -
  * with the time the copy was taken, and the earlier time too if anything on
- * screen is older than that. It asks once a minute and goes away by itself
+ * screen is older than that. It asks every half minute and goes away by itself
  * when REX is back.
  */
 
@@ -41,7 +41,7 @@ export default function RexOutageBar({ compact = false }: { compact?: boolean })
         })
         .catch(() => {});
     void read();
-    const t = setInterval(read, 60_000);
+    const t = setInterval(read, 30_000);
     const onFocus = () => void read();
     window.addEventListener("focus", onFocus);
     return () => {
@@ -50,6 +50,27 @@ export default function RexOutageBar({ compact = false }: { compact?: boolean })
       window.removeEventListener("focus", onFocus);
     };
   }, []);
+
+  /* The band's height for the shell's sticky rail (--os-band-h), so the
+     rail sits under it rather than behind it when the page scrolls. */
+  const ref = useRef<HTMLDivElement | null>(null);
+  const down = Boolean(s?.down);
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = ref.current;
+    if (!down || !el) {
+      root.style.removeProperty("--os-band-h");
+      return;
+    }
+    const set = () => root.style.setProperty("--os-band-h", `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--os-band-h");
+    };
+  }, [down]);
 
   if (!s?.down) return null;
 
@@ -64,6 +85,7 @@ export default function RexOutageBar({ compact = false }: { compact?: boolean })
 
   return (
     <div
+      ref={ref}
       role="status"
       data-rex-outage
       className="sticky top-0 z-[199] flex items-start gap-2.5 bg-[#5b3a29] px-4 py-2.5 text-white"

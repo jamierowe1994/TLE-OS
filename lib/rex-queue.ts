@@ -110,7 +110,7 @@ export async function queueRexWrite(
       [service, method, JSON.stringify(body ?? {}), who.id, who.name, Boolean(actorToken), rec?.kind ?? null, rec?.id ?? null, summaryOf(service, method)]
     );
     noteQueued();
-    maybeWaiting = true;
+    qs().maybeWaiting = true;
     await showOnCopy(service, body).catch((e) => console.warn("[rex-queue] could not show the change on the copy", e));
     console.log(`[rex-queue] kept ${service}/${method} #${rows[0]?.id} for when REX is back`);
     return { status: 202, ok: true, result: null, error: null, queuedId: Number(rows[0]?.id) };
@@ -219,9 +219,17 @@ export async function waitingFor(kind: string, id: string): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
-let maybeWaiting = true; // unknown after a restart: the first good REX call looks
-let running: Promise<ReplayReport> | null = null;
-let lastKick = 0;
+/* On globalThis, not module scope: a route bundle can carry its own copy of
+   this module, and two copies each thinking they were the only replay sent a
+   refused change four times in testing (21 Oct 2026). The lease in the
+   database below is what actually keeps it to one at a time. */
+const gq = globalThis as {
+  __rexQueue?: { maybeWaiting: boolean; running: Promise<ReplayReport> | null; lastKick: number; hooked: boolean };
+};
+function qs() {
+  if (!gq.__rexQueue) gq.__rexQueue = { maybeWaiting: true, running: null, lastKick: 0, hooked: false };
+  return gq.__rexQueue;
+}
 
 export interface ReplayReport {
   sent: number;
@@ -232,59 +240,97 @@ export interface ReplayReport {
 
 /** Something is waiting (a write kept, a job stepped aside): look on the next good answer. */
 export function markWaiting(): void {
-  maybeWaiting = true;
+  qs().maybeWaiting = true;
 }
 
 /** A good REX answer came back: if anything may be waiting, send it (at most once a minute). */
 export function kickReplay(): void {
-  if (!maybeWaiting || running || Date.now() - lastKick < 60_000) return;
-  lastKick = Date.now();
+  const g = qs();
+  if (!g.maybeWaiting || g.running || Date.now() - g.lastKick < 60_000) return;
+  g.lastKick = Date.now();
   /* Thirty seconds' grace: REX's first good answer after an outage is not
      yet proof it will take a run of writes. */
   setTimeout(() => void replayQueue("automatic").catch((e) => console.error("[rex-queue] replay failed", e)), 30_000);
 }
 
-onRexBack(() => {
-  maybeWaiting = true;
-  lastKick = 0;
-  kickReplay();
-});
+if (!qs().hooked) {
+  qs().hooked = true;
+  onRexBack(() => {
+    const g = qs();
+    g.maybeWaiting = true;
+    g.lastKick = 0;
+    kickReplay();
+  });
+}
 
 const PACE_MS = 1_500;
 
 export function replayQueue(by: string): Promise<ReplayReport> {
-  if (running) return running;
-  running = doReplay(by).finally(() => {
-    running = null;
+  const g = qs();
+  if (g.running) return g.running;
+  g.running = doReplay(by).finally(() => {
+    g.running = null;
   });
-  return running;
+  return g.running;
+}
+
+/* One replay at a time, across every copy of this module and every server:
+   a lease in os_settings, taken only if nobody holds a live one, renewed as
+   each change goes, and let go at the end. */
+const LEASE_KEY = "rex_queue_lease";
+const LEASE_MS = 3 * 60_000;
+async function takeLease(holder: string): Promise<boolean> {
+  const until = new Date(Date.now() + LEASE_MS).toISOString();
+  const rows = await q<{ key: string }>(
+    `INSERT INTO os_settings (key, value, updated_at, updated_by) VALUES ($1, jsonb_build_object('holder', $2::text, 'until', $3::text), NOW(), 'rex-queue')
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+       WHERE (os_settings.value->>'until')::timestamptz < NOW() OR os_settings.value->>'holder' = $2
+     RETURNING key`,
+    [LEASE_KEY, holder, until]
+  );
+  return rows.length > 0;
+}
+async function dropLease(holder: string): Promise<void> {
+  await q(`DELETE FROM os_settings WHERE key = $1 AND value->>'holder' = $2`, [LEASE_KEY, holder]).catch(() => {});
 }
 
 async function doReplay(by: string): Promise<ReplayReport> {
   const report: ReplayReport = { sent: 0, held: 0, stopped: null };
   if (!hasDb()) return { ...report, skippedBecause: "no database" };
   if (await rexIsDown()) return { ...report, skippedBecause: "REX is still down" };
+  const holder = `${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+  if (!(await takeLease(holder))) return { ...report, skippedBecause: "another send is already going" };
+  try {
+    return await sendInOrder(by, holder, report);
+  } finally {
+    await dropLease(holder);
+  }
+}
+
+async function sendInOrder(by: string, holder: string, report: ReplayReport): Promise<ReplayReport> {
   /* A row that stopped the last run stays in the way until somebody looks:
      Try again or Skip it, on Admin > REX status. */
-  const blocked = await q<{ id: string; service: string; method: string; error: string | null }>(
-    `SELECT id::text, service, method, error FROM os_rex_write_queue WHERE state = 'failed' ORDER BY id LIMIT 1`
-  );
-  if (blocked[0]) {
-    return { ...report, stopped: { id: blocked[0].id, what: `${blocked[0].service}/${blocked[0].method}`, error: blocked[0].error ?? "" } };
-  }
   const { rexCall, rexWritesLocked } = await import("@/lib/rex");
   const { rexTokenFor } = await import("@/lib/rex-user");
   for (;;) {
-    const rows = await q<{ id: string; service: string; method: string; body: unknown; actor_user_id: string | null; as_person: boolean }>(
-      `SELECT id::text, service, method, body, actor_user_id, as_person FROM os_rex_write_queue
-        WHERE state = 'waiting' ORDER BY id LIMIT 1`
+    /* The first row not yet sent - and if that is one that stopped a run,
+       stop here too. Asked afresh every time, never from a list read at the
+       start, so nothing can be sent past a refusal. */
+    const rows = await q<{ id: string; service: string; method: string; body: unknown; actor_user_id: string | null; as_person: boolean; state: string; error: string | null }>(
+      `SELECT id::text, service, method, body, actor_user_id, as_person, state, error FROM os_rex_write_queue
+        WHERE state IN ('waiting','failed') ORDER BY id LIMIT 1`
     );
     const row = rows[0];
     if (!row) {
-      maybeWaiting = false;
+      qs().maybeWaiting = false;
       break;
     }
     const what = `${row.service}/${row.method}`;
+    if (row.state === "failed") {
+      report.stopped = { id: row.id, what, error: row.error ?? "" };
+      break;
+    }
+    if (!(await takeLease(holder))) break; // renewed; lost only if this run stalled past the lease
     /* Disarmed since it was kept: not sent, and not an error either. */
     if (rexWritesLocked(row.service, row.method)) {
       await q(`UPDATE os_rex_write_queue SET state = 'held', tried_at = NOW(), error = $2 WHERE id = $1`, [
@@ -346,7 +392,7 @@ async function doReplay(by: string): Promise<ReplayReport> {
 /** Admin's two buttons on a stopped row. */
 export async function retryRow(id: string): Promise<void> {
   await q(`UPDATE os_rex_write_queue SET state = 'waiting', error = NULL WHERE id = $1 AND state = 'failed'`, [id]);
-  maybeWaiting = true;
+  qs().maybeWaiting = true;
 }
 export async function skipRow(id: string, by: string): Promise<void> {
   await q(`UPDATE os_rex_write_queue SET state = 'skipped', error = COALESCE(error, '') || $2 WHERE id = $1 AND state IN ('failed','waiting')`, [

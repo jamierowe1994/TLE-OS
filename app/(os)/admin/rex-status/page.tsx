@@ -22,6 +22,7 @@ type Status = {
   oldestServedAt: string | null;
   servedCount: number;
   missedCount: number;
+  missedWhat: Array<{ what: string; n: number }>;
   waiting: number;
   lastOkAt: string | null;
   lastFailAt: string | null;
@@ -154,6 +155,11 @@ export default function RexStatusPage() {
           {s.lastFailAt ? ` · last failure ${when(s.lastFailAt)} (${s.lastFailWhat})` : ""}
           {s.down ? ` · served from the copy ${s.servedCount}, not in the copy ${s.missedCount}` : ""}
         </p>
+        {s.down && s.missedWhat.length > 0 && (
+          <p className="mt-1 text-[11px] text-muted">
+            Not in the copy: {s.missedWhat.map((m) => `${m.what} ${m.n}`).join(" · ")}
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           {(["auto", "down", "up"] as const).map((m) => (
             <button

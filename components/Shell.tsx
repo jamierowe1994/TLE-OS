@@ -284,7 +284,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <aside
         ref={sideRef}
         data-os-sidebar
-        className={`sticky top-3 z-[50] mb-3 ml-2 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
+        className={`sticky top-[calc(12px+var(--os-band-h,0px))] z-[50] mb-3 ml-2 mt-3 hidden h-[calc(100vh-24px-var(--os-band-h,0px))] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
           collapsed ? "w-[72px]" : "w-60"
         }`}
       >
