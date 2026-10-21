@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   let emailed = false;
   try {
     const message = await recordLandlordMessage({ accountId: me.id, appraisalId: journey?.appraisal.id ?? null, body: words, toEmail: to });
-    const link = `${publicOrigin(req)}/maintenance?open=${encodeURIComponent(order.id)}`;
+    const link = `${publicOrigin(req)}/maintenance/${encodeURIComponent(order.id)}`;
     const mail = agentMessageEmail({ landlord: me.name, address: home.name, body: words, link, landlordEmail: me.email });
     try {
       await sendEmail({ to, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me.email });

@@ -13,7 +13,7 @@ import FieldSelect from "@/components/FieldSelect";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
 import EmailPerson from "@/components/EmailPerson";
-import { ContractorPick, OPEN, PAID_HOW, STATUS_LABEL, day, pounds, stamp, toPence } from "@/components/maintenance/works-ui";
+import { ContractorPick, OPEN, PAID_HOW, PAYRUN_LINE, day, pounds, stamp, statusLabel, toPence } from "@/components/maintenance/works-ui";
 import type { Status } from "@/lib/works-orders";
 
 /* ── The job sheet ──────────────────────────────────────────────────────── */
@@ -21,6 +21,8 @@ import type { Status } from "@/lib/works-orders";
 export default function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { order: WorksOrder; contractors: Contractor[]; canCorporate: boolean; onClose: () => void; onChanged: (o: WorksOrder) => void }) {
   const [o, setO] = useState(order);
   const [events, setEvents] = useState<WorksEvent[]>([]);
+  /* The office may put the invoice on the payment run (James, 21 Oct 2026); the job's own read says. */
+  const [canPayrun, setCanPayrun] = useState(false);
   const [shown, setShown] = useState(false);
   const [act, setAct] = useState<Move["action"] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
   useEffect(() => setO(order), [order]);
   useEffect(() => {
     const id = requestAnimationFrame(() => setShown(true));
-    fetch(`/api/works-orders/${order.id}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) { setO(j.order); setEvents(j.events); } }).catch(() => {});
+    fetch(`/api/works-orders/${order.id}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) { setO(j.order); setEvents(j.events); setCanPayrun(j.canPayrun === true); } }).catch(() => {});
     return () => cancelAnimationFrame(id);
   }, [order.id]);
   useEffect(() => {
@@ -192,7 +194,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="mr-1 text-[11px] font-semibold text-muted">Job #{o.ref}</span>
                 <Pill tone="plain">{o.kind === "repair" ? "Repair" : "Planned"}</Pill>
-                <Pill tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Pill>
+                <Pill tone={STATUS_TONE[o.status]}>{statusLabel(o)}</Pill>
                 {urgency && open && <Pill tone={o.urgency === "emergency" ? "hot" : o.urgency === "urgent" ? "warm" : "sage"}>{urgency}</Pill>}
                 {late && <Pill tone="hot">Overdue</Pill>}
               </div>
@@ -230,6 +232,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
             err={act ? null : err}
             canCorporate={canCorporate}
             onInvoiceLandlord={() => void invoiceLandlord()}
+            canPayrun={canPayrun}
             onCertificate={certificate}
           />
 
@@ -461,6 +464,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                   {o.payee && <Figure k="Paying" v={o.payee === "agent" ? `${o.raisedBy} (paid it themselves)` : o.contractorName || "The contractor"} />}
                   {o.invoicePence != null && <Figure k="Invoice" v={`${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}`} />}
                   {o.accountsToldAt && <Figure k="Accounts told" v={day(o.accountsToldAt)} />}
+                  {o.payrunAt && <Figure k="On the payment run" v={`${day(o.payrunAt)} · ${PAYRUN_LINE}`} />}
                   {o.paidAt && <Figure k="Paid" v={`${day(o.paidAt)} · ${PAID_HOW.find((h) => h.id === o.paidHow)?.label ?? ""}`} />}
                 </div>
               </Card>

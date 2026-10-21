@@ -94,9 +94,12 @@ export const BACK: NavItem[] = [
          booked in when, and what we owe them. It was a corner of Maintenance
          nothing linked to. */
       { href: "/contractors", label: "Contractors" },
-      { href: "/inspections", label: "Inspections" },
-      { href: "/tenancy-reviews", label: "Tenancy Reviews" },
-      { href: "/move-outs", label: "Move-outs" },
+      /* Inspections, Tenancy Reviews and Move-outs came off here on 21 Oct
+         2026 - James: "Under Portfolio, we should be able to get rid of a
+         bunch of these different tabs ... we're just hiding it within the
+         Overview tab." Their tiles on Overview open each board in a pop-out
+         (/overview?panel=inspections etc). The pages still answer at their
+         addresses; see OFF_RAIL below. */
     ],
   },
   /* Emails (the audit of REX's send log, /emails) came off the rail on 2 Oct
@@ -320,6 +323,15 @@ export const AGENT_ROUTES = [
 export type AgentRoute = (typeof AGENT_ROUTES)[number];
 
 /**
+ * Screens that are real and described in lib/screens.ts, but are not doors on
+ * the rail. James, 21 Oct 2026: Inspections, Tenancy Reviews and Move-outs are
+ * reached from their tiles on Overview, which open each one in a pop-out. The
+ * assistant still needs to know them, so they stay in AGENT_ROUTES, and the
+ * rail check below counts them as accounted for rather than missing.
+ */
+export const OFF_RAIL: readonly AgentRoute[] = ["/inspections", "/tenancy-reviews", "/move-outs"];
+
+/**
  * The rail and the route union describe the same thing twice, which is exactly
  * the duplication this file exists to prevent — so it is checked rather than
  * trusted. Called once at module load in lib/screens.ts.
@@ -332,7 +344,7 @@ export function navRoutesMismatch(): string[] {
      strings are stripped: /leads?side=tenant is the Leads screen. */
   const nav = [
     ...new Set(
-      AGENT_NAV.flatMap((n) => [n.href, ...(n.children ?? []).map((c) => c.href)]).map(
+      [...AGENT_NAV.flatMap((n) => [n.href, ...(n.children ?? []).map((c) => c.href)]), ...OFF_RAIL].map(
         (h) => h.split("?")[0]
       )
     ),

@@ -4,6 +4,7 @@ import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { listAllContractors, listContractors, listOrders } from "@/lib/works-orders";
 import { publicError } from "@/lib/public-error";
+import { scopeJobs } from "@/lib/contractor-scope";
 
 /**
  * Portfolio > Contractors (James, 19 Oct 2026): every contractor you can
@@ -13,6 +14,11 @@ import { publicError } from "@/lib/public-error";
  * Whose contractors: an agent sees their own book and the company's. The
  * office (see:everything - Michael, Josel, Kirstie, Susan, the owners) sees
  * every agent's book too, because the office pays the invoices.
+ *
+ * Whose JOBS (James, 21 Oct 2026: "I would like people to only see their
+ * own, so we can't see each other's"): an agent sees only their own jobs -
+ * Maintenance's "mine", lib/contractor-scope - even on a company contractor
+ * everybody books. The office sees everyone's, with its own marked.
  *
  * Every figure is read off the jobs as they stand now. Nothing is stored or
  * snapshotted here, so a booking moved or an invoice paid shows on the next
@@ -26,7 +32,8 @@ const LIVE = ["reported", "approval", "approved", "scheduled", "done", "invoiced
 const PAID_KEEP_DAYS = 90;
 
 export async function GET(req: NextRequest) {
-  const { actor, subject } = await whoIs(req);
+  const who = await whoIs(req);
+  const { actor, subject } = who;
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment, so there are no contractors to read." }, { status: 503 });
   const me = subject ?? actor;
@@ -38,15 +45,19 @@ export async function GET(req: NextRequest) {
     ]);
     const ids = new Set(contractors.map((c) => c.id));
     const paidSince = Date.now() - PAID_KEEP_DAYS * 86400000;
-    const jobs = orders
+    const onBoard = orders
       .filter((o) => o.contractorId && ids.has(o.contractorId))
-      .filter((o) => LIVE.includes(o.status) || (o.status === "paid" && o.paidAt && new Date(o.paidAt).getTime() >= paidSince))
+      .filter((o) => LIVE.includes(o.status) || (o.status === "paid" && o.paidAt && new Date(o.paidAt).getTime() >= paidSince));
+    const scoped = await scopeJobs(req, who, onBoard);
+    const jobs = scoped.orders
       .map((o) => ({
         id: o.id, ref: o.ref, kind: o.kind, status: o.status, title: o.title, category: o.category,
         propertyName: o.propertyName, locality: o.locality, contractorId: o.contractorId, contractorName: o.contractorName,
         dueAt: o.dueAt, scheduledAt: o.scheduledAt, completedAt: o.completedAt, contractorContactedAt: o.contractorContactedAt,
         quotePence: o.quotePence, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef, invoicedAt: o.invoicedAt,
         paidAt: o.paidAt, payee: o.payee, raisedBy: o.raisedBy, urgency: o.urgency,
+        /* On the payment run (James, 21 Oct 2026): keyed on PayProp, coming out of the rent. */
+        payrunAt: o.payrunAt,
       }));
     /* Whose book each agent's contractor is in, by name, for the office's view. */
     const owners = [...new Set(contractors.map((c) => c.ownerId).filter((x): x is string => Boolean(x)))];
@@ -59,6 +70,9 @@ export async function GET(req: NextRequest) {
       ok: true,
       contractors: contractors.map((c) => ({ ...c, ownerName: c.ownerId ? ownerNames[c.ownerId] || "an agent" : null })),
       jobs,
+      /* The office's own jobs, for Mine / Everyone. An agent's list is already only theirs. */
+      mineJobs: scoped.mine,
+      mineNote: scoped.note,
       me: me.id,
       office,
       canCorporate: can(actor.role, "see:business"),

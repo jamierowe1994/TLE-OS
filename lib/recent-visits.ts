@@ -50,5 +50,7 @@ export function refFromPath(pathname: string | null): string | null {
   if (seg[0] === "applications" && seg.length === 2 && seg[1] !== "flatfair" && seg[1] !== "updates") return `app:${seg[1]}`;
   if (seg[0] === "market-appraisals" && seg.length >= 2) return `ma:${seg[1]}`;
   if (seg[0] === "maintenance" && seg[1] === "invoices" && seg.length === 3) return `inv:${seg[2]}`;
+  /* A job's own page (21 Oct 2026). */
+  if (seg[0] === "maintenance" && seg.length === 2 && seg[1] !== "invoices") return `wo:${seg[1]}`;
   return null;
 }

@@ -16,10 +16,9 @@ import { URGENCIES } from "@/lib/works-catalogue";
 import { STEPS, stepOf } from "@/lib/works-steps";
 import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import RaiseJob from "@/components/maintenance/RaiseJob";
-import JobDrawer from "@/components/maintenance/JobDrawer";
 import { LogInvoice } from "@/components/contractors/ContractorProfile";
 import FieldSelect from "@/components/FieldSelect";
-import { OPEN, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
+import { OPEN, PAYRUN_LABEL, PayrunTag, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import { usePref } from "@/lib/prefs-store";
 import { useNoteVisit } from "@/lib/recent-visits";
@@ -57,13 +56,17 @@ export default function Maintenance() {
     else if (params.get("section") === "planned") setSection("planned");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params, router]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string; ringForApproval?: string[]; mine?: { orders: string[]; carried: string[]; summary: WorksSummary; startOn: "mine" | "everyone"; note: string | null } | null } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; canPayrun?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string; ringForApproval?: string[]; mine?: { orders: string[]; carried: string[]; summary: WorksSummary; startOn: "mine" | "everyone"; note: string | null } | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
   /* Work finished before it was on the OS, logged off the contractor's invoice (Rhiannon, 19 Oct 2026). */
   const [loggingDone, setLoggingDone] = useState(false);
+  /* A job opens on its own page (James, 21 Oct 2026: the works order was "a
+     completely blank page"): app/(os)/maintenance/[id]. Whatever used to open
+     the sheet here - a row, a raised job, a logged one - goes there. */
   const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => { if (openId) router.push(`/maintenance/${encodeURIComponent(openId)}`); }, [openId, router]);
   useNoteVisit(openId ? `wo:${openId}` : null);
   const [q, setQ] = useState("");
 
@@ -140,8 +143,6 @@ export default function Maintenance() {
   /* The month-ago snapshot is the whole business's, so Mine draws no delta
      rather than one measured against everybody's jobs. */
   const was = view === "mine" ? null : data?.lastMonth ?? null;
-  /* A job opened by link opens whoever's it is. */
-  const open = allOrders.find((o) => o.id === openId) ?? null;
 
   return (
     <>
@@ -271,7 +272,7 @@ export default function Maintenance() {
       {section === "invoices" ? (
         <Invoices onOpen={(id) => router.push(`/maintenance/invoices/${id}`)} />
       ) : section === "accounts" ? (
-        <Accounts orders={orders} loaded={!!data} onOpen={setOpenId} onChanged={load} />
+        <Accounts orders={orders} loaded={!!data} onOpen={setOpenId} onChanged={load} canPayrun={data?.canPayrun === true} />
       ) : section === "contractors" ? (
         <p className="mt-6 text-[12.5px] text-muted">Contractors have their own place now, under Portfolio. Taking you there…</p>
       ) : !data ? (
@@ -341,6 +342,7 @@ export default function Maintenance() {
                             <Pill tone={o.urgency === "emergency" ? "accent" : "neutral"}>{URGENCIES.find((u) => u.id === o.urgency)?.label}</Pill>
                           )}
                           <span className="text-[11px] text-muted">{o.category}</span>
+                          <PayrunTag o={o} />
                         </span>
                         <span className={`col-start-2 text-[12px] md:col-start-auto ${next.hot ? "font-semibold text-accent-dark" : "text-muted"}`}>{next.text}</span>
                       </button>
@@ -362,15 +364,6 @@ export default function Maintenance() {
           contractors={data?.contractors ?? []}
           onClose={() => setRaising(null)}
           onRaised={(o) => { setRaising(null); load(); setOpenId(o.id); }}
-        />
-      )}
-      {open && (
-        <JobDrawer
-          order={open}
-          contractors={data?.contractors ?? []}
-          canCorporate={!!data?.canCorporate}
-          onClose={() => setOpenId(null)}
-          onChanged={(o) => { setData((d) => (d ? { ...d, orders: d.orders.map((x) => (x.id === o.id ? o : x)) } : d)); load(); }}
         />
       )}
     </>
@@ -477,11 +470,17 @@ function DoneOnCertificates({ jobs }: { jobs: CarriedDone[] }) {
  * it has gone through and it drops off. PayProp is read-only to the OS, so
  * the payment itself is made there.
  */
-function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[]; loaded: boolean; onOpen: (id: string) => void; onChanged: () => void }) {
+function Accounts({ orders, loaded, onOpen, onChanged, canPayrun = false }: { orders: WorksOrder[]; loaded: boolean; onOpen: (id: string) => void; onChanged: () => void; canPayrun?: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  const rows = orders.filter((o) => o.status === "invoiced" || (o.status === "done" && o.invoicePence != null)).sort((a, b) => (a.invoicedAt ?? "").localeCompare(b.invoicedAt ?? ""));
+  /* On the payment run (James, 21 Oct 2026): the list splits into what is
+     still to key on PayProp and what is keyed and coming out of the rent. */
+  const [run, setRun] = useState<"to_payprop" | "on_run">("to_payprop");
+  const unpaid = orders.filter((o) => o.status === "invoiced" || (o.status === "done" && o.invoicePence != null)).sort((a, b) => (a.invoicedAt ?? "").localeCompare(b.invoicedAt ?? ""));
+  const toPayprop = unpaid.filter((o) => !o.payrunAt);
+  const onRun = unpaid.filter((o) => !!o.payrunAt);
+  const rows = run === "on_run" ? onRun : toPayprop;
   const total = rows.reduce((a, o) => a + (o.invoicePence ?? 0), 0);
   /* WHAT MICHAEL TYPES INTO PAYPROP, in the order he types it.
 
@@ -557,6 +556,14 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
     if (!r?.ok) return setErr(r?.error ?? "Could not mark it paid.");
     onChanged();
   }
+  async function payrun(o: WorksOrder, undo = false) {
+    setBusy(o.id);
+    setErr(null);
+    const r = await fetch(`/api/works-orders/${o.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: undo ? "payrun_undo" : "payrun" } satisfies Move) }).then((x) => x.json()).catch(() => null);
+    setBusy(null);
+    if (!r?.ok) return setErr(r?.error ?? (undo ? "Could not take it off the payment run." : "Could not put it on the payment run."));
+    onChanged();
+  }
   return (
     <div className="mt-4 space-y-4">
       <div className="rounded-[22px] border border-line/50 bg-white p-5">
@@ -564,7 +571,7 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="mt-0.5 max-w-[68ch] text-[11.5px] text-muted">
             Every invoice on a job that has not been paid, with what PayProp needs. {loaded ? `${rows.length} to pay · ${pounds(total)}.` : ""} Copy a line
-            rather than re-typing it, or take the whole run as a file. Mark it paid once it has gone through and it drops off.
+            rather than re-typing it, or take the whole run as a file. Once it&apos;s keyed on PayProp, put it on the payment run so the agent can see it&apos;s being paid. Mark it paid once it has gone through and it drops off.
           </p>
           {rows.length > 0 && (
             <button
@@ -576,13 +583,26 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
             </button>
           )}
         </div>
+        <Segmented
+          className="mt-3 w-full sm:w-auto"
+          value={run}
+          onChange={(v) => setRun(v)}
+          options={[
+            { id: "to_payprop" as const, label: loaded ? `To put on PayProp ${toPayprop.length}` : "To put on PayProp", icon: <DoodleIcon name="doc" size={14} /> },
+            { id: "on_run" as const, label: loaded ? `${PAYRUN_LABEL} ${onRun.length}` : PAYRUN_LABEL, icon: <DoodleIcon name="wallet" size={14} /> },
+          ]}
+        />
       </div>
       {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
       <div className="rounded-[22px] border border-line/50 bg-white p-5">
         {!loaded ? (
           <p className="text-[12.5px] text-muted">Reading…</p>
         ) : rows.length === 0 ? (
-          <p className="text-[12.5px] text-muted">Nothing to pay. An invoice lands here the moment a contractor uploads it or an agent keys it onto a job.</p>
+          <p className="text-[12.5px] text-muted">
+            {run === "on_run"
+              ? "Nothing on the payment run. An invoice moves here once it's keyed on PayProp, and drops off when it's marked paid."
+              : "Nothing to put on PayProp. An invoice lands here the moment a contractor uploads it or an agent keys it onto a job."}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[12.5px]">
@@ -600,7 +620,7 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
                     <td className="py-3 pr-3">{o.payee === "agent" ? <>{o.raisedBy} <span className="text-muted">(paid it themselves)</span></> : o.contractorName || <span className="text-muted">—</span>}</td>
                     <td className="py-3 pr-3 text-muted">{o.invoiceRef || "no number"}</td>
                     <td className="figures py-3 pr-3 text-right">{pounds(o.invoicePence)}</td>
-                    <td className="py-3 pr-3 text-muted">{day(o.invoicedAt)}</td>
+                    <td className="py-3 pr-3 text-muted">{day(o.invoicedAt)}{o.payrunAt && <span className="block text-[10.5px]">On the run {day(o.payrunAt)}</span>}</td>
                     <td className="py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -611,6 +631,12 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
                         >
                           {copied === o.id ? "Copied" : "Copy"}
                         </button>
+                        {canPayrun && !o.payrunAt && (
+                          <button type="button" disabled={busy === o.id} onClick={() => void payrun(o)} title="Keyed on PayProp: the agent sees it's coming out of the rent" className="whitespace-nowrap rounded-full border border-ink px-3.5 py-1.5 text-[12px] font-semibold disabled:opacity-50">{PAYRUN_LABEL}</button>
+                        )}
+                        {canPayrun && o.payrunAt && (
+                          <button type="button" disabled={busy === o.id} onClick={() => void payrun(o, true)} className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-[12px] text-muted transition hover:border-ink/40 disabled:opacity-50">Take off</button>
+                        )}
                         <button type="button" disabled={busy === o.id} onClick={() => void paid(o)} className="whitespace-nowrap rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50">Paid in PayProp</button>
                       </div>
                     </td>

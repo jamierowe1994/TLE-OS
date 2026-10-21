@@ -514,6 +514,20 @@ ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS contact      TEXT NOT NULL D
 ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS website      TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS address      TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS created_by   TEXT NOT NULL DEFAULT '';
+-- Their credentials, one box each (James, 21 Oct 2026: "gas safety numbers
+-- or NAPIT numbers ... a public liability option, the public liability
+-- number"). The old free-text registration stays, read as "Registration"
+-- while the new boxes are blank. logo_url is read off their website
+-- (lib/contractor-logo).
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS gas_safe_number             TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS niceic_number               TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS napit_number                TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS other_registration          TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS public_liability_insurer    TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS public_liability_number     TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS public_liability_expiry     DATE;
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS public_liability_cover_pence BIGINT;
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS logo_url                    TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS os_contractors_owner ON os_contractors (owner_id);
 CREATE SEQUENCE IF NOT EXISTS os_works_orders_ref START 1001;
 CREATE TABLE IF NOT EXISTS os_works_orders (
@@ -755,6 +769,11 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_answer    
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_answered_at TIMESTAMPTZ;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_note        TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_by          TEXT NOT NULL DEFAULT '';
+-- On the payment run (James, 21 Oct 2026): the office has keyed the
+-- contractor's invoice on PayProp, so it is coming out of the rent. A fact
+-- on the job, not a status: the job stays invoiced until it is marked paid.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payrun_at                    TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payrun_by                    TEXT NOT NULL DEFAULT '';
 CREATE UNIQUE INDEX IF NOT EXISTS os_works_orders_ll_invoice_token ON os_works_orders (landlord_invoice_token) WHERE landlord_invoice_token IS NOT NULL;
 
 -- REX PM's own task lists, read off its screens (1 Oct 2026). REX refused API

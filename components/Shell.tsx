@@ -30,7 +30,11 @@ import { fetchMe } from "@/lib/me";
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const search = useSearchParams();
-  const currentHref = search.toString() ? `${pathname}?${search}` : pathname;
+  /* A pop-out over a page (?panel=, Overview's boards, 21 Oct 2026) is still
+     that page, so its menu entry stays lit. */
+  const menuSearch = new URLSearchParams(search.toString());
+  menuSearch.delete("panel");
+  const currentHref = menuSearch.toString() ? `${pathname}?${menuSearch}` : pathname;
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   /*

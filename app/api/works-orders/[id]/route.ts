@@ -8,6 +8,13 @@ import { pingCompliance } from "@/lib/works-compliance";
 import { invoiceSettings } from "@/lib/invoices";
 import { pounds } from "@/lib/works-orders";
 import { managedBookFor } from "@/lib/managed-book-cache";
+import { can } from "@/lib/roles";
+
+/* On the payment run (James, 21 Oct 2026): only the office - Kirstie,
+   Michael, Josel - and the owners key invoices on PayProp, so only they say
+   it is on the run. Agents see it and cannot press it. Decided on the actor. */
+const PAYRUN_ACTIONS = new Set<Move["action"]>(["payrun", "payrun_undo"]);
+const canPayrun = (role: string | null | undefined) => can(role, "see:everything");
 
 /**
  * One job: read it with its timeline, or move it along.
@@ -26,7 +33,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const { id } = await ctx.params;
   const found = await getOrder(id);
   if (!found) return NextResponse.json({ ok: false, error: "No such job." }, { status: 404 });
-  return NextResponse.json({ ok: true, ...found });
+  return NextResponse.json({ ok: true, ...found, canPayrun: canPayrun(actor.role) });
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -36,6 +43,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   const move = (await req.json().catch(() => null)) as Move | null;
   if (!move || typeof move.action !== "string") return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
+  if (PAYRUN_ACTIONS.has(move.action) && !canPayrun(actor.role)) {
+    return NextResponse.json({ ok: false, error: "Only the office can put an invoice on the payment run." }, { status: 403 });
+  }
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
     /* The landlord's email for the invoice ask, from the home's record when
@@ -63,7 +73,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (move.action === "landlord_invoice") await logEvent(order.id, "TLE OS", "email", outcomeLine(await tellInvoiceAnswer(order)));
     await pingCompliance(order, move.action);
     const found = await getOrder(id);
-    return NextResponse.json({ ok: true, order, events: found?.events ?? [], emails });
+    return NextResponse.json({ ok: true, order, events: found?.events ?? [], emails, canPayrun: canPayrun(actor.role) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
   }

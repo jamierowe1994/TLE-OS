@@ -100,6 +100,8 @@ function blankOrder(over: Partial<WorksOrder> & Pick<WorksOrder, "id" | "ref" | 
     landlordInvoiceAnsweredAt: null,
     landlordInvoiceNote: "",
     landlordInvoiceBy: "",
+    payrunAt: null,
+    payrunBy: "",
     propertyId: null,
     propertyName: CAST.property,
     locality: CAST.locality,

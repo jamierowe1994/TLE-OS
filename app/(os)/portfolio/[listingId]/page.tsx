@@ -16,8 +16,7 @@ import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/co
 import { Pill } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
 import RaiseJob, { type RaiseDraft } from "@/components/maintenance/RaiseJob";
-import JobDrawer from "@/components/maintenance/JobDrawer";
-import { OPEN, STATUS_LABEL, day as shortDay, nextFor } from "@/components/maintenance/works-ui";
+import { OPEN, day as shortDay, nextFor, statusLabel } from "@/components/maintenance/works-ui";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
 import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
@@ -349,7 +348,10 @@ export default function PropertyPage() {
 
   /* ── the things you do to a home ────────────────────────────────────── */
   const [action, setAction] = useState<Action | null>(null);
+  /* A job opens on its own page, /maintenance/<id> (James, 21 Oct 2026), with
+     this home's photos at the top. A row, the activity list and a raised job all go there. */
   const [openJob, setOpenJob] = useState<WorksOrder | null>(null);
+  useEffect(() => { if (openJob) router.push(`/maintenance/${encodeURIComponent(openJob.id)}`); }, [openJob, router]);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [showLogins, setShowLogins] = useState(false);
@@ -619,7 +621,7 @@ export default function PropertyPage() {
   if (works.state === "ready") {
     for (const o of works.data.orders) {
       const next = nextFor(o);
-      activity.push({ key: `job-${o.id}`, at: o.reportedAt ?? o.createdAt, icon: o.kind === "repair" ? "setting" : "calendar", title: `${o.kind === "repair" ? "Repair" : "Planned job"} · ${o.title}`, sub: `${STATUS_LABEL[o.status]} · ${next.text}`, hot: next.hot && OPEN.includes(o.status), go: () => setOpenJob(o) });
+      activity.push({ key: `job-${o.id}`, at: o.reportedAt ?? o.createdAt, icon: o.kind === "repair" ? "setting" : "calendar", title: `${o.kind === "repair" ? "Repair" : "Planned job"} · ${o.title}`, sub: `${statusLabel(o)} · ${next.text}`, hot: next.hot && OPEN.includes(o.status), go: () => setOpenJob(o) });
     }
     for (const c of works.data.carried) {
       if (c.reportedOn) activity.push({ key: `carried-${c.taskId}`, at: c.reportedOn, icon: "setting", title: c.title, sub: `${c.progress || "Not started"} · from the old system`, hot: c.overdue, go: () => pickTab("maintenance") });
@@ -1328,15 +1330,6 @@ export default function PropertyPage() {
         <HomeNotices key={`start-${action.start}-${p.listingId}`} home={noticeHome} start={action.start} bare onDone={() => { setAction(null); loadNotices(); }} />
       )}
 
-      {openJob && (
-        <JobDrawer
-          order={openJob}
-          contractors={works.state === "ready" ? works.data.contractors : []}
-          canCorporate={works.state === "ready" && works.data.canCorporate}
-          onClose={() => setOpenJob(null)}
-          onChanged={(o) => { setOpenJob(o); loadWorks(); }}
-        />
-      )}
     </SaveScopeProvider>
   );
 }
@@ -1427,7 +1420,7 @@ function JobsList({ orders, carried, onOpen }: { orders: WorksOrder[]; carried: 
             <span className={`mt-0.5 block truncate text-[11.5px] 2xl:hidden ${next.hot ? "font-semibold text-accent-dark" : "text-muted"}`}>{next.text}</span>
           </span>
           <span className={`hidden truncate text-[12px] 2xl:block ${next.hot ? "font-semibold text-accent-dark" : "text-muted"}`}>{next.text}</span>
-          <Pill tone={o.status === "done" || o.status === "paid" ? "good" : next.hot ? "accent" : "neutral"}>{STATUS_LABEL[o.status]}</Pill>
+          <Pill tone={o.status === "done" || o.status === "paid" ? "good" : next.hot ? "accent" : "neutral"}>{statusLabel(o)}</Pill>
         </button>
       </li>
     );

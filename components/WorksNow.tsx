@@ -6,6 +6,8 @@ import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_
 import { categoriesOf, CATEGORY_CERT_TYPE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
 import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
+/* Render-time use only, so the circle with works-ui (which draws ContractorForm) is harmless. */
+import { PAYRUN_LABEL, PAYRUN_LINE, PayrunTrack, awaitingPay } from "@/components/maintenance/works-ui";
 
 /**
  * The Now card on a job: one thing at a time, in the order James and
@@ -55,8 +57,10 @@ const SHORT: Record<StepId, string> = {
   closed: "Closed",
 };
 
-export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true, onCertificate, variant = "card" }: {
+export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true, onCertificate, variant = "card", canPayrun = false }: {
   o: WorksOrder;
+  /** The office may say the invoice is on the payment run (James, 21 Oct 2026); everyone else sees it read-only. */
+  canPayrun?: boolean;
   /** "feature": the job sheet's own (9 Oct 2026, James: "very overwhelming:
    *  where to look, what to click on") - a coloured band with the step by
    *  name and a labelled track. "card": the plain one the property page uses. */
@@ -101,7 +105,7 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
       {step === "visit" && <Visit o={o} f={f} setF={setF} move={move} busy={busy} onCertificate={onCertificate} />}
       {step === "aftercare" && <Aftercare o={o} f={f} setF={setF} move={move} busy={busy} />}
       {step === "payment" && <Payment o={o} move={move} busy={busy} />}
-      {step === "invoice" && <Money o={o} f={f} setF={setF} move={move} busy={busy} onInvoiceLandlord={onInvoiceLandlord} />}
+      {step === "invoice" && <Money o={o} f={f} setF={setF} move={move} busy={busy} onInvoiceLandlord={onInvoiceLandlord} canPayrun={canPayrun} />}
       {isSkippable(step) && <SkipForNow o={o} step={step} move={move} busy={busy} />}
       {step !== "closed" && <StillSkipped o={o} step={step} move={move} busy={busy} />}
       {step === "closed" && (
@@ -609,7 +613,7 @@ function Payment({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Promise<
   );
 }
 
-function Money({ o, f, setF, move, busy, onInvoiceLandlord }: StepProps & { onInvoiceLandlord: () => void }) {
+function Money({ o, f, setF, move, busy, onInvoiceLandlord, canPayrun = false }: StepProps & { onInvoiceLandlord: () => void; canPayrun?: boolean }) {
   const [paying, setPaying] = useState(false);
   /* The invoice itself, when it came by email (Rhiannon, 19 Oct 2026:
      contractors send it to the agent rather than use their link). It goes on
@@ -659,6 +663,27 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord }: StepProps & { onIn
         </div>
       )}
       {o.invoicePence != null && o.status !== "paid" && o.status !== "cancelled" && <LandlordSays o={o} move={move} busy={busy} />}
+      {/* On the payment run (James, 21 Oct 2026): so the agent can see it is
+          being processed. The office says so; everyone sees the line. */}
+      {awaitingPay(o) && (
+        <div className={`rounded-xl border p-3 ${o.payrunAt ? "border-[#56634a]/40 bg-[#f1f3ec]" : "border-line/80 bg-card"}`}>
+          <PayrunTrack o={o} />
+          <p className="mt-1.5 text-[11.5px] text-muted">
+            {o.payrunAt
+              ? `${PAYRUN_LABEL} - ${PAYRUN_LINE.toLowerCase()}. Keyed on PayProp by ${o.payrunBy || "the office"} ${stamp(o.payrunAt)}.`
+              : canPayrun
+                ? "Once it's keyed on PayProp, press On the payment run so the agent can see it's being paid."
+                : "Waiting to go on PayProp. The office marks it on the payment run once it's keyed in."}
+          </p>
+          {canPayrun && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {!o.payrunAt
+                ? <button type="button" disabled={busy} onClick={() => void move({ action: "payrun" })} className={primary} title="Keyed on PayProp: the agent sees it's coming out of the rent">On the payment run</button>
+                : <button type="button" disabled={busy} onClick={() => void move({ action: "payrun_undo" })} className={btn}>Take off the payment run</button>}
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={onInvoiceLandlord} className={o.invoicePence != null && o.status !== "paid" ? primary : btn} title="Drafts our invoice to the landlord: their name, the job as the reference, the cost as the first line">Invoice the landlord</button>
         {o.invoicePence != null && !paying && <button type="button" onClick={() => setPaying(true)} className={btn}>Mark paid</button>}
@@ -761,7 +786,10 @@ function LandlordSays({ o, move, busy }: Pick<StepProps, "o" | "move" | "busy">)
 
 /* ── The trades book's form, used from the book and from inside a job ───── */
 
-export const BLANK_CONTRACTOR: Partial<Contractor> = { name: "", contact: "", trade: "", phone: "", email: "", website: "", address: "", registration: "", notes: "", active: true };
+export const BLANK_CONTRACTOR: Partial<Contractor> = {
+  name: "", contact: "", trade: "", phone: "", email: "", website: "", address: "", registration: "", notes: "", active: true,
+  gasSafeNumber: "", niceicNumber: "", napitNumber: "", otherRegistration: "", publicLiabilityInsurer: "", publicLiabilityNumber: "",
+};
 
 /** The form, used from the book and from inside a job. */
 export function ContractorForm({ initial, canCorporate, onSaved, onClose, compact = false }: { initial: Partial<Contractor>; canCorporate: boolean; onSaved: (c: Contractor) => void; onClose: () => void; compact?: boolean }) {
@@ -770,16 +798,34 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
   const [err, setErr] = useState<string | null>(null);
   const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
   const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
+  /* Credentials in their own boxes, grouped (James, 21 Oct 2026). The cover
+     is typed in pounds and kept in pence. */
+  const [cover, setCover] = useState(initial.publicLiabilityCoverPence != null ? String(initial.publicLiabilityCoverPence / 100) : "");
+  const group = (title: string, blurb: string) => (
+    <div className="border-t border-line/60 pt-4 sm:col-span-2 lg:col-span-3">
+      <h3 className="text-[14px]">{title}</h3>
+      <p className="mt-0.5 text-[11.5px] text-muted">{blurb}</p>
+    </div>
+  );
   async function save() {
     if (!c.name?.trim() || !c.trade?.trim()) return setErr("A name and a trade, at least.");
+    const coverPounds = Number(cover.replace(/[£,\s]/g, ""));
+    if (!compact && cover.trim() && (!Number.isFinite(coverPounds) || coverPounds < 0)) return setErr("The cover should be an amount in pounds, e.g. 5,000,000.");
+    const body = compact ? c : { ...c, publicLiabilityExpiry: c.publicLiabilityExpiry || null, publicLiabilityCoverPence: cover.trim() ? Math.round(coverPounds * 100) : null };
     setBusy(true);
-    const r = await fetch("/api/contractors", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(c) }).then((x) => x.json()).catch(() => null);
+    const r = await fetch("/api/contractors", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((x) => x.json()).catch(() => null);
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "Could not save.");
     onSaved(r.contractor);
   }
   return (
     <div className={`grid gap-3 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
+      {!compact && (
+        <div className="sm:col-span-2 lg:col-span-3">
+          <h3 className="text-[14px]">Contact</h3>
+          <p className="mt-0.5 text-[11.5px] text-muted">Who they are and how to reach them.</p>
+        </div>
+      )}
       <div><label className={label}>Company or name</label><input value={c.name ?? ""} onChange={(e) => setC({ ...c, name: e.target.value })} placeholder="JD Plumbing & Heating" className={`mt-1 ${field}`} /></div>
       <div><label className={label}>Trade</label><input value={c.trade ?? ""} onChange={(e) => setC({ ...c, trade: e.target.value })} placeholder="Gas Safe engineer, electrician, handyman…" className={`mt-1 ${field}`} /></div>
       <div><label className={label}>Who you ring</label><input value={c.contact ?? ""} onChange={(e) => setC({ ...c, contact: e.target.value })} placeholder="Contact name" className={`mt-1 ${field}`} /></div>
@@ -787,9 +833,23 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
       <div><label className={label}>Email</label><input type="email" value={c.email ?? ""} onChange={(e) => setC({ ...c, email: e.target.value })} placeholder="Where the works orders go" className={`mt-1 ${field}`} /></div>
       {!compact && (
         <>
-          <div><label className={label}>Website</label><input value={c.website ?? ""} onChange={(e) => setC({ ...c, website: e.target.value })} placeholder="https://" className={`mt-1 ${field}`} /></div>
-          <div className="sm:col-span-2"><label className={label}>Address</label><input value={c.address ?? ""} onChange={(e) => setC({ ...c, address: e.target.value })} className={`mt-1 ${field}`} /></div>
-          <div><label className={label}>Registration</label><input value={c.registration ?? ""} onChange={(e) => setC({ ...c, registration: e.target.value })} placeholder="Gas Safe / NICEIC / NAPIT number" className={`mt-1 ${field}`} /></div>
+          <div><label className={label}>Address</label><input value={c.address ?? ""} onChange={(e) => setC({ ...c, address: e.target.value })} className={`mt-1 ${field}`} /></div>
+          {group("Registrations", "The numbers their trade carries. Leave blank any that don't apply.")}
+          <div><label className={label}>Gas Safe number</label><input value={c.gasSafeNumber ?? ""} onChange={(e) => setC({ ...c, gasSafeNumber: e.target.value })} placeholder="e.g. 123456" className={`mt-1 ${field}`} /></div>
+          <div><label className={label}>NICEIC number</label><input value={c.niceicNumber ?? ""} onChange={(e) => setC({ ...c, niceicNumber: e.target.value })} className={`mt-1 ${field}`} /></div>
+          <div><label className={label}>NAPIT number</label><input value={c.napitNumber ?? ""} onChange={(e) => setC({ ...c, napitNumber: e.target.value })} className={`mt-1 ${field}`} /></div>
+          <div><label className={label}>Other registration</label><input value={c.otherRegistration ?? ""} onChange={(e) => setC({ ...c, otherRegistration: e.target.value })} placeholder="ELECSA, Stroma, OFTEC…" className={`mt-1 ${field}`} /></div>
+          {/* The old one box, kept while it holds something, so nothing typed before is lost. */}
+          {(c.registration ?? "").trim() !== "" && (
+            <div className="sm:col-span-2"><label className={label}>Registration (the old box)</label><input value={c.registration ?? ""} onChange={(e) => setC({ ...c, registration: e.target.value })} className={`mt-1 ${field}`} /><p className="mt-1 text-[11px] text-muted">Move the number into its own box above, then clear this one.</p></div>
+          )}
+          {group("Public Liability", "Their insurance. The record warns when it is about to run out.")}
+          <div><label className={label}>Insurer</label><input value={c.publicLiabilityInsurer ?? ""} onChange={(e) => setC({ ...c, publicLiabilityInsurer: e.target.value })} className={`mt-1 ${field}`} /></div>
+          <div><label className={label}>Policy number</label><input value={c.publicLiabilityNumber ?? ""} onChange={(e) => setC({ ...c, publicLiabilityNumber: e.target.value })} className={`mt-1 ${field}`} /></div>
+          <div><label className={label}>Expires</label><div className="mt-1"><FieldDate value={c.publicLiabilityExpiry ?? ""} onChange={(v) => setC({ ...c, publicLiabilityExpiry: v || null })} placeholder="The policy's end date" clearable /></div></div>
+          <div><label className={label}>Cover</label><input value={cover} onChange={(e) => setCover(e.target.value)} inputMode="decimal" placeholder="£ e.g. 5,000,000" className={`mt-1 ${field}`} /></div>
+          {group("Website", "Add their website and the OS reads their logo off it.")}
+          <div className="sm:col-span-2"><label className={label}>Website</label><input value={c.website ?? ""} onChange={(e) => setC({ ...c, website: e.target.value })} placeholder="jdplumbing.co.uk" className={`mt-1 ${field}`} /></div>
           <div className="sm:col-span-2 lg:col-span-3"><label className={label}>Notes</label><textarea value={c.notes ?? ""} onChange={(e) => setC({ ...c, notes: e.target.value })} rows={2} placeholder="Areas they cover, rates, hours, how they like to be booked" className={`mt-1 ${field}`} /></div>
         </>
       )}
@@ -818,3 +878,22 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
   );
 }
 
+
+/* The job's own page (/maintenance/<id>, James, 21 Oct 2026: "all of the
+   different stages so they can jump around in that process a little bit")
+   opens any stage's form, not only the one the job is on. One copy of each. */
+export {
+  Quote as QuoteStep,
+  TellLandlord as TellLandlordStep,
+  Arranging as ArrangingStep,
+  LandlordFollowUp as LandlordFollowUpStep,
+  PickContractor as PickContractorStep,
+  ContractorConfirm as ContractorConfirmStep,
+  Booking as BookingStep,
+  Visit as VisitStep,
+  TellTenants as TellTenantsStep,
+  Aftercare as AftercareStep,
+  Payment as PaymentStep,
+  Money as MoneyStep,
+  LandlordSays as LandlordSaysStep,
+};

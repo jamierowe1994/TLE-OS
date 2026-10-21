@@ -575,7 +575,7 @@ const VISITS: BackOfficeJourney = {
       screen: { kind: "office-maintenance", at: "sent", section: "planned" },
     },
   ],
-  agent: { says: "Book and record visits on Inspections, under Portfolio. Planned jobs are on Maintenance.", href: "/inspections" },
+  agent: { says: "Book and record visits on Inspections: the tile on Overview, under Portfolio. Planned jobs are on Maintenance.", href: "/inspections" },
   notYet: [
     "Planned maintenance is raised by hand. Nothing raises a yearly boiler service or alarm test on its own yet.",
     "The due list is read from the old system's open visit tasks for now; the OS's own cadence (3 months, then every 6, HMOs every 3) is ready behind it.",

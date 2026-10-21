@@ -110,7 +110,8 @@ export function jobOf(o: WorksOrder): MaintJob {
     property: o.propertyName,
     kind: o.kind,
     state,
-    now: state === "done" ? "Done" : state === "cancelled" ? "Not going ahead" : o.scheduledAt && step === "visit" ? `Booked for ${dayShort(o.scheduledAt)}` : NOW[step],
+    /* On the payment run (James, 21 Oct 2026): keyed on PayProp, so the landlord hears it is coming out of their rent. */
+    now: state === "done" ? (o.payrunAt && o.status !== "paid" ? "Done - being paid from your rent" : "Done") : state === "cancelled" ? "Not going ahead" : o.scheduledAt && step === "visit" ? `Booked for ${dayShort(o.scheduledAt)}` : NOW[step],
     when,
     contractor: o.contractorName || null,
     cost: o.invoicePence != null ? pounds(o.invoicePence) : quote,

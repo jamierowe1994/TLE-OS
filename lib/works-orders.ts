@@ -101,8 +101,22 @@ export interface Contractor {
   email: string;
   website: string;
   address: string;
-  /** Gas Safe number, NICEIC number, whatever the trade carries. */
+  /** The old one-box registration. Still read, as "Registration", when the boxes below are blank. */
   registration: string;
+  /* Their credentials, one box each (James, 21 Oct 2026). Optional on the
+     type so a contractor made up elsewhere (the showroom) still fits; a row
+     read from the database always carries them. */
+  gasSafeNumber?: string;
+  niceicNumber?: string;
+  napitNumber?: string;
+  otherRegistration?: string;
+  publicLiabilityInsurer?: string;
+  publicLiabilityNumber?: string;
+  /** YYYY-MM-DD, or null when not given. */
+  publicLiabilityExpiry?: string | null;
+  publicLiabilityCoverPence?: number | null;
+  /** Read off their website (lib/contractor-logo). Blank when there is none. */
+  logoUrl?: string;
   notes: string;
   active: boolean;
   /** Whose book they are in. Null is the company's: everyone can use them. */
@@ -181,6 +195,10 @@ export interface WorksOrder {
   landlordInvoiceNote: string;
   /** "the landlord" from their link, or the agent who recorded a phone answer. */
   landlordInvoiceBy: string;
+  /** On the payment run (James, 21 Oct 2026): when the office keyed the
+   *  invoice on PayProp, and who. The job stays invoiced until marked paid. */
+  payrunAt: string | null;
+  payrunBy: string;
   /** A walkthrough job: real machinery, invented people, no email leaves. */
   rehearsal: boolean;
   title: string;
@@ -289,6 +307,8 @@ function toOrder(r: Row): WorksOrder {
     landlordInvoiceAnsweredAt: iso(r.landlord_invoice_answered_at),
     landlordInvoiceNote: s(r.landlord_invoice_note),
     landlordInvoiceBy: s(r.landlord_invoice_by),
+    payrunAt: iso(r.payrun_at),
+    payrunBy: s(r.payrun_by),
     rehearsal: r.rehearsal === true,
     title: s(r.title),
     description: s(r.description),
@@ -327,7 +347,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
   cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, skipped_steps, quote_requested_at,
-  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, created_at, updated_at`;
+  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -335,7 +355,26 @@ function toContractor(r: Row): Contractor {
   return {
     id: s(r.id), name: s(r.name), contact: s(r.contact), trade: s(r.trade), phone: s(r.phone), email: s(r.email), website: s(r.website), address: s(r.address),
     registration: s(r.registration), notes: s(r.notes), active: r.active !== false, ownerId: r.owner_id ? s(r.owner_id) : null, createdBy: s(r.created_by),
+    gasSafeNumber: s(r.gas_safe_number), niceicNumber: s(r.niceic_number), napitNumber: s(r.napit_number), otherRegistration: s(r.other_registration),
+    publicLiabilityInsurer: s(r.public_liability_insurer), publicLiabilityNumber: s(r.public_liability_number),
+    publicLiabilityExpiry: plainDate(r.public_liability_expiry),
+    publicLiabilityCoverPence: r.public_liability_cover_pence == null ? null : Number(r.public_liability_cover_pence),
+    logoUrl: s(r.logo_url),
   };
+}
+
+/** A DATE column as YYYY-MM-DD. pg hands it over as local midnight, so read it back in local parts. */
+function plainDate(v: unknown): string | null {
+  if (!v) return null;
+  if (v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v));
+  return m ? m[1] : null;
+}
+
+/** The logo read off their website, kept on its own so a save never wipes it. */
+export async function setContractorLogo(id: string, logoUrl: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`UPDATE os_contractors SET logo_url = $2, updated_at = NOW() WHERE id = $1`, [id, logoUrl]);
 }
 
 /** The company's contractors and this person's own. Nobody else's. */
@@ -362,18 +401,37 @@ export async function getContractor(id: string): Promise<Contractor | null> {
 export async function saveContractor(input: Partial<Contractor> & { name: string; trade: string }, by: string): Promise<Contractor> {
   const id = input.id || uid();
   const [r] = await q<Row>(
-    `INSERT INTO os_contractors (id, name, contact, trade, phone, email, website, address, registration, notes, active, owner_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-     ON CONFLICT (id) DO UPDATE SET name = $2, contact = $3, trade = $4, phone = $5, email = $6, website = $7, address = $8, registration = $9, notes = $10, active = $11, owner_id = $12, updated_at = NOW()
+    `INSERT INTO os_contractors (id, name, contact, trade, phone, email, website, address, registration, notes, active, owner_id, created_by,
+        gas_safe_number, niceic_number, napit_number, other_registration, public_liability_insurer, public_liability_number,
+        public_liability_expiry, public_liability_cover_pence)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+        coalesce($14, ''), coalesce($15, ''), coalesce($16, ''), coalesce($17, ''), coalesce($18, ''), coalesce($19, ''), $20::date, $21::bigint)
+     ON CONFLICT (id) DO UPDATE SET name = $2, contact = $3, trade = $4, phone = $5, email = $6, website = $7, address = $8, registration = $9, notes = $10, active = $11, owner_id = $12,
+        gas_safe_number = coalesce($14, os_contractors.gas_safe_number), niceic_number = coalesce($15, os_contractors.niceic_number),
+        napit_number = coalesce($16, os_contractors.napit_number), other_registration = coalesce($17, os_contractors.other_registration),
+        public_liability_insurer = coalesce($18, os_contractors.public_liability_insurer), public_liability_number = coalesce($19, os_contractors.public_liability_number),
+        public_liability_expiry = CASE WHEN $22 THEN $20::date ELSE os_contractors.public_liability_expiry END,
+        public_liability_cover_pence = CASE WHEN $23 THEN $21::bigint ELSE os_contractors.public_liability_cover_pence END,
+        updated_at = NOW()
      RETURNING *`,
     [
       id, input.name.trim(), (input.contact ?? "").trim(), input.trade.trim(), (input.phone ?? "").trim(), (input.email ?? "").trim().toLowerCase(),
       (input.website ?? "").trim(), (input.address ?? "").trim(), (input.registration ?? "").trim(), (input.notes ?? "").trim(), input.active !== false,
       input.ownerId ?? null, by,
+      /* The credentials (21 Oct 2026): a box left out of the save keeps what
+         it held, so a form that does not show them (the one inside a job)
+         never wipes them. */
+      given(input.gasSafeNumber), given(input.niceicNumber), given(input.napitNumber), given(input.otherRegistration),
+      given(input.publicLiabilityInsurer), given(input.publicLiabilityNumber),
+      /^\d{4}-\d{2}-\d{2}$/.test(input.publicLiabilityExpiry ?? "") ? input.publicLiabilityExpiry : null,
+      input.publicLiabilityCoverPence != null && Number.isFinite(Number(input.publicLiabilityCoverPence)) ? Math.round(Number(input.publicLiabilityCoverPence)) : null,
+      input.publicLiabilityExpiry !== undefined, input.publicLiabilityCoverPence !== undefined,
     ]
   );
   return toContractor(r);
 }
+
+const given = (v: string | undefined) => (v === undefined ? null : String(v).trim());
 
 /** Their record with us: the jobs, and the money through them. */
 export async function contractorStats(id: string): Promise<ContractorStats> {
@@ -601,7 +659,11 @@ export type Move =
   /** Send the invoice to the landlord to authorise (Kirstie Mulholland, 20 Oct 2026). */
   | { action: "ask_landlord_invoice"; email?: string; note?: string }
   /** The landlord's answer: from their link, or recorded by the agent after a call. */
-  | { action: "landlord_invoice"; answer: LandlordInvoiceAnswer; note?: string };
+  | { action: "landlord_invoice"; answer: LandlordInvoiceAnswer; note?: string }
+  /** On the payment run (James, 21 Oct 2026): the office keyed the invoice on
+   *  PayProp. Office only (the route checks). payrun_undo takes it back off. */
+  | { action: "payrun"; note?: string }
+  | { action: "payrun_undo"; note?: string };
 
 export const pounds = (pence: number | null | undefined) =>
   pence == null ? "—" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: pence % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
@@ -810,6 +872,29 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       set("landlord_invoice_by", by);
       eventKind = "note";
       text = `${a.line}${by === LANDLORD_SELF ? "" : ` (recorded by ${by})`}.${note ? ` "${note}"` : ""}`;
+      break;
+    }
+    /* On the payment run (James, 21 Oct 2026): "they don't know whether it's
+       been processed, so they don't know whether it's going to get paid".
+       The office says so once it is keyed on PayProp; the agent sees it.
+       PayProp is read-only to the OS - this records the fact, nothing more.
+       Mark paid still works from invoiced either way. */
+    case "payrun": {
+      if (o.invoicePence == null || !["done", "invoiced"].includes(o.status)) throw new Error("Only an invoice waiting to be paid can go on the payment run.");
+      if (o.payrunAt) throw new Error("It's already on the payment run.");
+      set("payrun_at", new Date());
+      set("payrun_by", by);
+      eventKind = "note";
+      text = `On the payment run: keyed on PayProp by ${by}, ${pounds(o.invoicePence)} to come out of the rent.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "payrun_undo": {
+      if (!o.payrunAt) throw new Error("It isn't on the payment run.");
+      if (o.status === "paid") throw new Error("It's already paid.");
+      set("payrun_at", null);
+      set("payrun_by", "");
+      eventKind = "note";
+      text = `Taken off the payment run.${move.note ? ` ${move.note}` : ""}`;
       break;
     }
     case "paid": {

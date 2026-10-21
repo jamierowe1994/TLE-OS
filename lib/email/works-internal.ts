@@ -25,7 +25,7 @@ import type { AgentEmail } from "@/lib/email/agent-emails";
  */
 
 const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
-const jobLink = (id: string) => `${ORIGIN}/maintenance?open=${encodeURIComponent(id)}`;
+const jobLink = (id: string) => `${ORIGIN}/maintenance/${encodeURIComponent(id)}`;
 const where = (o: WorksOrder) => o.propertyName + (o.locality ? `, ${o.locality}` : "");
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";

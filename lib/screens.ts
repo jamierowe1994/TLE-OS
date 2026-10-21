@@ -298,7 +298,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   },
 
   "/inspections": {
-    purpose: "Every visit we owe the managed book, the tenant's permission to make it, and what was found.",
+    purpose: "Every visit we owe the managed book, the tenant's permission to make it, and what was found. Opened from the Inspections tile on Overview (it is not on the menu).",
     does: [
       "Read the Due list, which is worked out from the cadence against today - not a stored schedule.",
       "Press Book it on a due home to open the visit on the booking form.",
@@ -328,6 +328,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     does: [
       "Read the tiles: properties, maintenance, inspections, tenancy reviews, compliance, upcoming vacancies, applications, lettings and, for the owners, rent arrears.",
       "Press View all on a tile to open the screen it comes from.",
+      /* James, 21 Oct 2026: these three came off the Portfolio menu and live here. */
+      "Inspections, Tenancy Reviews and Move-outs are not on the menu any more: click the Inspections, Tenancy Reviews or Upcoming Vacancies tile here and the whole board opens in a pop-out, with everything the old tab had. Close it with the cross, Esc or Back.",
       "Press Read again at the bottom to refresh every tile.",
     ],
     wiring: "live",
@@ -339,7 +341,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   },
 
   "/tenancy-reviews": {
-    purpose: "Every tenancy coming up to its anniversary, and what was decided about it.",
+    purpose: "Every tenancy coming up to its anniversary, and what was decided about it. Opened from the Tenancy Reviews tile on Overview (it is not on the menu).",
     does: [
       "Read the list of tenancies owed a review, latest first by how late they are, with the agreement and the rent on each.",
       "Press Record review and say what was decided: the rent goes up (with the new rent and the date), renewed at the same rent, left as it is, the tenancy is ending, or something else.",
@@ -354,7 +356,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   },
 
   "/move-outs": {
-    purpose: "Every tenancy that is ending: the day the tenants go, and the jobs that close it off.",
+    purpose: "Every tenancy that is ending: the day the tenants go, and the jobs that close it off. Opened from the Upcoming Vacancies tile on Overview (it is not on the menu).",
     does: [
       "Read the list of tenancies ending, the late ones first, with the move-out day, the landlord, how far along it is and any follow-up date.",
       "Press Close move-out and say what happened: they moved out (the day, and which of the check-out, keys, meters, deposit and re-let are done), they are staying after all, or something else.",

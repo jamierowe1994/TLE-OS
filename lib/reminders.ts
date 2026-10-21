@@ -243,7 +243,7 @@ async function worksReminders(list: Person[], now: number): Promise<Reminder[]> 
   for (const r of rows) {
     const who = whose(list, r.raised_by);
     if (!who) continue;
-    const href = `/maintenance?open=${encodeURIComponent(r.id)}`;
+    const href = `/maintenance/${encodeURIComponent(r.id)}`;
     const t = (d: Date | null) => (d ? new Date(d).getTime() : 0);
     /* Skipped for now on the job (Howard, 15 Oct 2026): no nag to do it. */
     const skipped = Array.isArray(r.skipped_steps) && r.skipped_steps.includes("tell_landlord");

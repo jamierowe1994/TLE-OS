@@ -151,7 +151,7 @@ export default function InvoiceEditor() {
           {(inv.status === "issued" || inv.status === "sent") && <PressButton onClick={() => setAsking("paid")} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px]">Mark paid</PressButton>}
           {inv.status !== "void" && inv.status !== "paid" && <PressButton onClick={() => setAsking("void")} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted">Void</PressButton>}
           <a href={`/invoice/${inv.token}`} target="_blank" rel="noreferrer" className="rounded-full border border-line/80 px-4 py-2 text-[12.5px]">Open the page</a>
-          {inv.orderId && <button type="button" onClick={() => router.push(`/maintenance?open=${inv.orderId}`)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted">The job</button>}
+          {inv.orderId && <button type="button" onClick={() => router.push(`/maintenance/${encodeURIComponent(inv.orderId ?? "")}`)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted">The job</button>}
         </div>
       </div>
 

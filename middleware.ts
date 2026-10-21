@@ -575,7 +575,9 @@ function backIntoDemo(req: NextRequest): NextResponse | null {
    The page it lands on is behind every check below like any other. */
 function movedToOwnPage(req: NextRequest): NextResponse | null {
   const { pathname, searchParams } = req.nextUrl;
-  if (pathname !== "/listings" && pathname !== "/applications" && pathname !== "/portfolio") return null;
+  /* /maintenance?open=<job> goes to the job's own page (James, 21 Oct 2026),
+     so every emailed link and reminder built before it lands there. */
+  if (pathname !== "/listings" && pathname !== "/applications" && pathname !== "/portfolio" && pathname !== "/maintenance") return null;
   const id = searchParams.get("open") ?? (pathname === "/applications" ? searchParams.get("deal") : null);
   if (!id) return null;
   const url = req.nextUrl.clone();

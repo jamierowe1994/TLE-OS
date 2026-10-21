@@ -16,7 +16,20 @@ import FieldSelect from "@/components/FieldSelect";
 
 export const REPORTED_BY = ["Tenant", "Landlord", "Agent", "Inspection", "Compliance tracker", "Contractor"];
 export const STATUS_LABEL: Record<Status, string> = { reported: "Reported", approval: "Awaiting landlord", approved: "Approved", scheduled: "Booked", done: "Done", invoiced: "Invoiced", paid: "Paid", cancelled: "Cancelled" };
-export const STATUS_ORDER: Status[] = ["reported", "approval", "approved", "scheduled", "done", "invoiced", "paid", "cancelled"];
+/* On the payment run (James, 21 Oct 2026): "they don't know whether it's
+   been processed, so they don't know whether it's going to get paid". An
+   invoice waiting to be paid says which side of PayProp it is on. */
+export const PAYRUN_LABEL = "On the payment run";
+export const PAYRUN_LINE = "Coming out of the rent";
+export const TO_PAYPROP_LABEL = "Invoiced - waiting to go on PayProp";
+/** An invoice in and not yet paid: done or invoiced, with a figure. */
+export const awaitingPay = (o: Pick<WorksOrder, "status" | "invoicePence">) => o.invoicePence != null && (o.status === "invoiced" || o.status === "done");
+/** The job's status in words, with the payment run read in. Use this over STATUS_LABEL[o.status] wherever a job is shown. */
+export function statusLabel(o: Pick<WorksOrder, "status" | "invoicePence" | "payrunAt">): string {
+  if (o.status === "invoiced" || (o.status === "done" && o.invoicePence != null)) return o.payrunAt ? PAYRUN_LABEL : TO_PAYPROP_LABEL;
+  return STATUS_LABEL[o.status];
+}
+export const STATUS_ORDER: Status[] =["reported", "approval", "approved", "scheduled", "done", "invoiced", "paid", "cancelled"];
 export const OPEN: Status[] = ["reported", "approval", "approved", "scheduled"];
 export const PAID_HOW: { id: PaidHow; label: string }[] = [
   { id: "payprop", label: "Charged to the landlord through PayProp" },
@@ -51,9 +64,40 @@ export function nextFor(o: WorksOrder, ringForApproval = false): { text: string;
     case "visit": return { text: `${o.contractorName || "Contractor"} booked for ${stamp(o.scheduledAt)}`, hot: false };
     case "aftercare": return { text: o.tenantHappy === "no" ? "Tenant not happy" : "Done - is the tenant happy?", hot: o.tenantHappy === "no" };
     case "payment": return { text: "Who's being paid?", hot: false };
-    case "invoice": return { text: o.invoicePence != null ? `${pounds(o.invoicePence)} in - invoice the landlord` : "Waiting on the invoice", hot: false };
+    case "invoice": return { text: o.invoicePence == null ? "Waiting on the invoice" : o.payrunAt ? `${pounds(o.invoicePence)} on the payment run - coming out of the rent` : `${pounds(o.invoicePence)} in - invoice the landlord`, hot: false };
     case "closed": return { text: o.status === "paid" ? `Paid ${day(o.paidAt)}` : o.status === "cancelled" ? (o.cancelledReason || "Cancelled") : `Landlord sorted it · ${day(o.landlordResolvedAt)}`, hot: false };
   }
+}
+
+/** The payment run tag for a row: nothing unless an invoice is in and unpaid. */
+export function PayrunTag({ o, className = "" }: { o: Pick<WorksOrder, "status" | "invoicePence" | "payrunAt">; className?: string }) {
+  if (!awaitingPay(o)) return null;
+  return (
+    <span title={o.payrunAt ? `${PAYRUN_LABEL} - ${PAYRUN_LINE.toLowerCase()}` : TO_PAYPROP_LABEL} className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-[2px] text-[10.5px] font-semibold ${o.payrunAt ? "bg-[#f1f4ec] text-[#56634a]" : "bg-accent-soft text-accent-dark"} ${className}`}>
+      {o.payrunAt ? PAYRUN_LABEL : "To go on PayProp"}
+    </span>
+  );
+}
+
+/** Invoice in, on the payment run, paid - with dates. Read-only: what the agent sees. */
+export function PayrunTrack({ o }: { o: Pick<WorksOrder, "status" | "invoicePence" | "invoicedAt" | "payrunAt" | "paidAt"> }) {
+  if (o.invoicePence == null) return null;
+  const steps: { label: string; at: string | null; done: boolean }[] = [
+    { label: "Invoice in", at: o.invoicedAt, done: true },
+    { label: PAYRUN_LABEL, at: o.payrunAt, done: !!o.payrunAt || o.status === "paid" },
+    { label: "Paid", at: o.paidAt, done: o.status === "paid" },
+  ];
+  return (
+    <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px]">
+      {steps.map((s, i) => (
+        <li key={s.label} className="flex items-center gap-2">
+          {i > 0 && <span aria-hidden className={`h-[2px] w-4 ${s.done ? "bg-[#56634a]" : "bg-line"}`} />}
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${s.done ? "bg-[#56634a]" : "border-2 border-line bg-white"}`} aria-hidden />
+          <span className={s.done ? "text-ink" : "text-muted"}>{s.label}{s.at ? ` · ${day(s.at)}` : ""}</span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 export type Property = { id: string; name: string; locality: string; landlord?: string; tenant?: string | null; certs?: Record<string, { expires: number | null }> };

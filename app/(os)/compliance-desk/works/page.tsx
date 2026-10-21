@@ -50,7 +50,7 @@ export default function WorksToCheck() {
               sub={`${o.contractor ? `${o.contractor}. ` : ""}Raised by ${o.raisedBy || "somebody"}.${o.completionNote ? ` "${o.completionNote}"` : ""}`}
               chips={[o.kind === "planned" ? "Planned" : "Repair", ...categoriesOf(o.category), o.status === "done" ? "No invoice yet" : o.status === "invoiced" ? "Invoiced" : o.status === "paid" ? "Paid" : o.status, o.files.length ? "" : "No files on the job"]}
               files={o.files.map((f) => ({ key: f.key, name: f.name }))}
-              openHref={`/maintenance?open=${encodeURIComponent(o.id)}`}
+              openHref={`/maintenance/${encodeURIComponent(o.id)}`}
               openLabel="Open the job"
               addedAt={o.completedAt}
               lateAfterDays={LATE_AFTER_DAYS}

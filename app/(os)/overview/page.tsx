@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
+import OverviewPanel, { useOverviewPanel } from "@/components/portfolio/OverviewPanel";
 
 /**
  * Overview (1 Oct 2026): property management at a glance, one tile per part
@@ -12,6 +13,11 @@ import DoodleIcon from "@/components/DoodleIcon";
  * /api/overview, which reads each screen's own route, so a tile always
  * agrees with the page it opens. A tile that cannot be read says so; the
  * rest still draw.
+ *
+ * James, 21 Oct 2026: Inspections, Tenancy Reviews and Move-outs came off the
+ * Portfolio menu and are "hidden within the Overview tab". Their tiles
+ * (Upcoming Vacancies is the Move-outs list) open the whole board in a pop-out
+ * here rather than navigating - see components/portfolio/OverviewPanel.
  */
 
 type Tile<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -49,6 +55,14 @@ export default function Overview() {
       .catch(() => setError("The overview couldn't be read."));
   }, []);
   useEffect(load, [load]);
+  const { panel, open, closeNow } = useOverviewPanel();
+  /* Re-read the tiles once a board closes (by Esc, the button or Back), so a
+     review recorded or a visit booked in the pop-out shows on its tile. */
+  const hadPanel = useRef(false);
+  useEffect(() => {
+    if (panel) hadPanel.current = true;
+    else if (hadPanel.current) { hadPanel.current = false; load(); }
+  }, [panel, load]);
 
   return (
     <>
@@ -118,7 +132,7 @@ export default function Overview() {
           )}
         </Card>
 
-        <Card icon="search" title="Inspections" href="/inspections" tile={data?.inspections}>
+        <Card icon="search" title="Inspections" onOpen={() => open("inspections")} tile={data?.inspections}>
           {(d) => (
             <>
               <Big value={d.due} label="visits due" />
@@ -131,7 +145,7 @@ export default function Overview() {
           )}
         </Card>
 
-        <Card icon="file-contract" title="Tenancy Reviews" href="/tenancy-reviews" tile={data?.reviews}>
+        <Card icon="file-contract" title="Tenancy Reviews" onOpen={() => open("tenancy-reviews")} tile={data?.reviews}>
           {(d) => (
             <>
               <Big value={d.due} label="to review" />
@@ -156,10 +170,10 @@ export default function Overview() {
           )}
         </Card>
 
-        <Card icon="key" title="Upcoming Vacancies" href="/move-outs" tile={data?.moveOuts && data?.lettings ? combine(data.moveOuts, data.lettings) : undefined}>
+        <Card icon="key" title="Upcoming Vacancies" onOpen={() => open("move-outs")} tile={data?.moveOuts && data?.lettings ? combine(data.moveOuts, data.lettings) : undefined}>
           {(d) => (
             <>
-              <Big value={d.open} label="tenancies ending" />
+              <Big value={d.open} label="tenancies ending - the move-outs list" />
               <Stats items={[
                 ["Overdue", String(d.overdue), d.overdue > 0],
                 ["Next 30 days", String(d.next30)],
@@ -211,6 +225,8 @@ export default function Overview() {
           <button type="button" onClick={() => { setData(null); load(); }} className="underline transition-colors hover:text-ink">Read again</button>
         </p>
       )}
+
+      <OverviewPanel panel={panel} onClose={closeNow} />
     </>
   );
 }
@@ -225,17 +241,32 @@ function combine(
   return { ok: true, data: { ...m.data, available: l.data.available, letAgreed: l.data.letAgreed } };
 }
 
-function Card<T>({ icon, title, href, tile, quiet, children }: { icon: string; title: string; href: string; tile: Tile<T> | undefined; quiet?: boolean; children: (d: T) => React.ReactNode }) {
+/**
+ * One tile. `href` navigates to the screen it comes from; `onOpen` (21 Oct
+ * 2026) opens the board in the Overview's pop-out instead, and then the whole
+ * tile is the button, not only View all.
+ */
+function Card<T>({ icon, title, href, onOpen, openLabel = "View all", tile, quiet, children }: { icon: string; title: string; href?: string; onOpen?: () => void; openLabel?: string; tile: Tile<T> | undefined; quiet?: boolean; children: (d: T) => React.ReactNode }) {
+  const pill = "ml-auto shrink-0 whitespace-nowrap rounded-full border border-line/80 px-3 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40";
   return (
-    <section className="flex min-w-0 flex-col rounded-[22px] border border-line/50 bg-white p-5">
-      <div className="flex items-center gap-2">
+    <section
+      onClick={onOpen}
+      className={`flex min-w-0 flex-col rounded-[22px] border border-line/50 bg-white p-5 ${onOpen ? "cursor-pointer transition-colors hover:border-ink/30" : ""}`}
+    >
+      <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
           <DoodleIcon name={icon} size={15} />
         </span>
-        <h2 className="text-[15px]">{title}</h2>
-        <Link href={href} className="ml-auto shrink-0 whitespace-nowrap rounded-full border border-line/80 px-3 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40">
-          View all
-        </Link>
+        <h2 className="min-w-0 truncate text-[15px]">{title}</h2>
+        {onOpen ? (
+          <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }} className={pill}>
+            {openLabel}
+          </button>
+        ) : href ? (
+          <Link href={href} className={pill}>
+            {openLabel}
+          </Link>
+        ) : null}
       </div>
       <div className="mt-4 flex-1">
         {!tile ? (

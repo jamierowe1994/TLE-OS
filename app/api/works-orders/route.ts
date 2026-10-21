@@ -67,6 +67,8 @@ export async function GET(req: NextRequest) {
     lastMonth: lastMonth?.summary ?? null,
     lastMonthOn: lastMonth?.day ?? null,
     canCorporate: can(actor.role, "see:business"),
+    /* The office says an invoice is on the payment run (James, 21 Oct 2026). */
+    canPayrun: can(actor.role, "see:everything"),
   });
 }
 

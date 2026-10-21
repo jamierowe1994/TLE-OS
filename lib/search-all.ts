@@ -141,7 +141,7 @@ export const worksRow = (r: { id: string; ref: number; status: string; property_
   label: `Works order ${r.ref}`,
   title: r.title || r.category || "A job",
   sub: [r.property_name, r.status.replace(/_/g, " "), r.contractor_name].filter(Boolean).join(" · "),
-  href: `/maintenance?open=${encodeURIComponent(r.id)}`,
+  href: `/maintenance/${encodeURIComponent(r.id)}`,
   image,
   score: 1,
 });
