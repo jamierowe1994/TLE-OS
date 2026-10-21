@@ -153,6 +153,9 @@ const GROUPS: Array<{
       /* Where James feeds the assistant. The agent-facing side of it lives in
          the help panel; this is the console behind it. */
       { href: "/admin/assistant", label: "Steve", needs: "see:reports" },
+      /* What each AI feature costs this month, from every call (lib/ai.ts),
+         and which model each one is on. */
+      { href: "/admin/ai-costs", label: "AI costs", needs: "see:reports" },
       /* Where Steve's knowledge is written. The same screen Susan, Francesca,
          Michael and Kirstie get as a workspace of their own. */
       { href: "/knowledge", label: "Knowledge", needs: "edit:knowledge" },

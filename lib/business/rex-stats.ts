@@ -3,6 +3,7 @@ import { londonToday, londonMonth } from "@/lib/london-clock";
 import type { FunnelStats } from "./types";
 import { rexCall, rexRows, rexConfigured, rexLettingsAgents } from "./rex";
 import { readCache, writeCache } from "./integration-cache";
+import { withoutRemoved } from "@/lib/certificate-remove";
 
 // Per-agent funnel stats from REX — live pulls confirmed against the live
 // account (3517, "The Property Experts" — Property + Lettings share it) via the
@@ -1439,6 +1440,9 @@ async function fetchComplianceByParent(ids: string[]): Promise<ComplianceFetch> 
   const unchecked = new Set<string>();
   const unmappedByParent = new Map<string, Set<string>>();
 
+  /* Less any entry still carrying a certificate somebody took off
+     (lib/certificate-remove). */
+  for (const r of results) r.rows = await withoutRemoved(r.rows);
   for (const { chunk, rows, complete } of results) {
     if (!complete) for (const id of chunk) unchecked.add(id);
     for (const row of rows) {

@@ -2787,6 +2787,30 @@ ALTER TABLE os_compliance_checks ADD COLUMN IF NOT EXISTS told_at TIMESTAMPTZ;
 -- to REX, not counted as in date anywhere, shown as "Being processed by the
 -- compliance team". His Verified clears it, writes it to REX and sends it on.
 ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS awaiting_check BOOLEAN NOT NULL DEFAULT false;
+-- Filed to replace another certificate (lib/certificate-remove, 20 Oct 2026):
+-- its REX write brings REX's entry to this one's dates even when the one it
+-- replaces ran later - an EPC filed as the EICR had blocked the real EICR.
+ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS replaces_id TEXT;
+-- Certificates taken off a home: the wrong document, or one a newer one
+-- replaced. The row as it was, and the file moved under removed/. While REX
+-- still holds the entry with the removed one's expiry, every screen leaves
+-- that entry out, so a wrong certificate stops counting the moment it goes.
+CREATE TABLE IF NOT EXISTS os_certificates_removed (
+  id            TEXT PRIMARY KEY,
+  property_id   TEXT NOT NULL,
+  type_id       TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  r2_key        TEXT NOT NULL,
+  moved_to      TEXT,
+  expiry        DATE,
+  rex_entry_id  TEXT,
+  replaced_by   TEXT,
+  row           JSONB NOT NULL DEFAULT '{}'::jsonb,
+  reason        TEXT NOT NULL,
+  removed_by    TEXT NOT NULL,
+  removed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_certificates_removed_property ON os_certificates_removed (property_id);
 -- Not needed (James, 7 Oct 2026): a certificate the rule asks for that this
 -- home does not need - a fire risk assessment on one of the few exceptions,
 -- say. Marked by the compliance office from the tracker, with a reason, and
@@ -4508,6 +4532,21 @@ CREATE TABLE IF NOT EXISTS os_tenant_portal_homes (
   PRIMARY KEY (email, listing_id)
 );
 CREATE INDEX IF NOT EXISTS os_tenant_portal_homes_listing ON os_tenant_portal_homes (listing_id);
+
+-- Every call to Claude, one row each (lib/ai.ts). What Admin > AI costs adds up
+-- per feature and month. Tokens only: the price list lives in lib/ai.ts.
+CREATE TABLE IF NOT EXISTS os_ai_usage (
+  id          BIGSERIAL PRIMARY KEY,
+  feature     TEXT NOT NULL,
+  model       TEXT NOT NULL,
+  in_tokens   INTEGER NOT NULL DEFAULT 0,
+  out_tokens  INTEGER NOT NULL DEFAULT 0,
+  cache_read  INTEGER NOT NULL DEFAULT 0,
+  cache_write INTEGER NOT NULL DEFAULT 0,
+  stop_reason TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_ai_usage_created ON os_ai_usage (created_at);
 
 `;
 

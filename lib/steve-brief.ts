@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { hasDb, q } from "@/lib/db";
 import { remindersFor } from "@/lib/reminders";
 import { runsFor } from "@/lib/steve-jobs";
@@ -22,7 +23,6 @@ import { noDashes } from "@/lib/no-dashes";
  * system. It is capped and coerced before it goes anywhere near a prompt.
  */
 
-const MODEL = "claude-opus-4-8";
 const BRIEF_KEY = "steve.brief";
 const OFF_KEY = "steve.brief.off";
 
@@ -146,27 +146,10 @@ export async function makeBrief(
   const b = await budget().catch(() => ({ left: 0 }));
   if (assistantConfigured() && b.left > 600) {
     try {
-      const weekday = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
-      const res = await new Anthropic().messages.create({
-        model: MODEL,
-        max_tokens: 500,
-        system:
-          "You are Steve, the assistant inside TLE OS for The Letting Experts, a UK lettings agency. Write a person's morning brief: warm, quick, practical, like a good PA. UK English, no em dashes, no emoji, no bold, no headings. Use ONLY the facts given - never invent an appointment, task, name or figure.",
-        messages: [
-          {
-            role: "user",
-            content:
-              `It is ${weekday}, ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} London time - greet them with "${greeting()}", not another time of day. Write ${first}'s brief for today; if it is the afternoon or evening, say what is left of today and what is first tomorrow.\n\n` +
-              `Their diary today (their own, already scoped):\n${diary.length ? diary.map((d) => `- ${d.start} (${d.mins} min) ${d.kind}: ${d.what}${d.where ? ` at ${d.where}` : ""}${d.who ? ` with ${d.who}` : ""}`).join("\n") : "- nothing booked"}\n\n` +
-              `Everything else waiting for them (JSON):\n${JSON.stringify(facts)}\n\n` +
-              `Shape: one short greeting line; then at most six short lines starting "- " covering the diary, what is overdue, what is due today, what is flagged and what their standing jobs reported (leave out anything empty); then a final line "Start with: ..." naming the ONE thing to do first and why in a few words. If the day is clear, say so and suggest one useful thing. Under 130 words.`,
-          },
-        ],
-      });
-      const out = res.content.filter((c): c is Anthropic.TextBlock => c.type === "text").map((c) => c.text).join("").trim();
-      if (out) text = houseStyle(noDashes(out));
-      inTokens = res.usage.input_tokens;
-      outTokens = res.usage.output_tokens;
+      const w = await writeBrief(first, diary, facts);
+      if (w.text) text = houseStyle(noDashes(w.text));
+      inTokens = w.inTokens;
+      outTokens = w.outTokens;
     } catch {
       /* The plain brief stands. */
     }
@@ -178,4 +161,31 @@ export async function makeBrief(
     await logLine({ userId: user.id, userEmail: user.email, thread: "brief", role: "assistant", text, kind: "ask", inTokens, outTokens });
   }
   return { text, fresh: true };
+}
+
+/** The model's brief from the day's facts, or null. Apart from makeBrief so it
+ *  can be tried on real days without keeping anything (scripts/ai-compare). */
+export async function writeBrief(
+  first: string,
+  diary: DiaryLine[],
+  facts: Awaited<ReturnType<typeof dayFacts>>
+): Promise<{ text: string | null; inTokens: number; outTokens: number }> {
+  const weekday = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
+  const res = await aiCreate("steve-brief", {
+    max_tokens: 4000,
+    system:
+      "You are Steve, the assistant inside TLE OS for The Letting Experts, a UK lettings agency. Write a person's morning brief: warm, quick, practical, like a good PA. UK English, no em dashes, no emoji, no bold, no headings. Use ONLY the facts given - never invent an appointment, task, name or figure.",
+    messages: [
+      {
+        role: "user",
+        content:
+          `It is ${weekday}, ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} London time - greet them with "${greeting()}", not another time of day. Write ${first}'s brief for today; if it is the afternoon or evening, say what is left of today and what is first tomorrow.\n\n` +
+          `Their diary today (their own, already scoped):\n${diary.length ? diary.map((d) => `- ${d.start} (${d.mins} min) ${d.kind}: ${d.what}${d.where ? ` at ${d.where}` : ""}${d.who ? ` with ${d.who}` : ""}`).join("\n") : "- nothing booked"}\n\n` +
+          `Everything else waiting for them (JSON):\n${JSON.stringify(facts)}\n\n` +
+          `Shape: one short greeting line; then at most six short lines starting "- " covering the diary, what is overdue, what is due today, what is flagged and what their standing jobs reported (leave out anything empty); then a final line "Start with: ..." naming the ONE thing to do first and why in a few words. If the day is clear, say so and suggest one useful thing. Under 130 words.`,
+      },
+    ],
+  });
+  const out = res.content.filter((c): c is Anthropic.TextBlock => c.type === "text").map((c) => c.text).join("").trim();
+  return { text: out || null, inTokens: res.usage.input_tokens, outTokens: res.usage.output_tokens };
 }

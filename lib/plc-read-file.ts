@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { realDayOrNull } from "@/lib/real-day";
 import { contentBlock, fetchDocument } from "@/lib/plc-scan";
 import { PLC_CHECKS, type CheckId, type FileRead, type PlcDocument } from "@/lib/plc";
@@ -16,11 +17,12 @@ import { PLC_CHECKS, type CheckId, type FileRead, type PlcDocument } from "@/lib
  *
  * This is NOT the scan. The scan still runs when the pack is sent, with the
  * bigger model, against the move-in date, and its findings are what the
- * compliance team read. This only sorts the pile, so it is the small model:
- * a folder can be twenty files and the agent is watching it happen.
+ * compliance team read. This only sorts the pile, so it is a quick read:
+ * a folder can be twenty files and the agent is watching it happen. Sonnet
+ * rather than Haiku since 20 Oct 2026: Haiku 5.5 filed a guarantor's
+ * reference as a tenant's, three times out of three (docs/AI-MODELS.md).
  */
 
-const MODEL = process.env.PLC_SORTER_MODEL ?? "claude-haiku-4-5-20251001";
 
 const SYSTEM = `You are sorting documents dropped into a UK letting agent's pre-let check pack.
 For ONE document, say what it is, which slot it belongs in, the dates printed on it and the
@@ -141,10 +143,8 @@ export async function readDroppedFile(
     .join(" ");
 
   try {
-    const client = new Anthropic();
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: 400,
+    const res = await aiCreate("plc-sorter", {
+      max_tokens: 4000,
       system: SYSTEM,
       tools: [TOOL],
       tool_choice: { type: "tool", name: "sort_document" },

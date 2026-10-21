@@ -1,6 +1,7 @@
 import { noDashes } from "@/lib/no-dashes";
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { hs } from "@/lib/bond";
 import { listAppraisals } from "@/lib/appraisal-store";
 import type { ListingDetails } from "@/lib/listing-details";
@@ -48,8 +49,6 @@ export interface AutofillResult {
 type FactKey =
   | "councilTaxBand" | "parking" | "electricity" | "water" | "sewerage" | "broadband" | "heating"
   | "furnishing" | "pets" | "outsideSpace" | "beds" | "baths" | "receptions" | "deposit" | "floorAreaSqft";
-
-const MODEL = process.env.ADVERT_WRITER_MODEL ?? "claude-opus-5";
 
 /* ── the landlord's answers, in the form's words ─────────────────────────── */
 
@@ -357,8 +356,7 @@ async function writeCopy(d: ListingDetails, facts: AutofillResult["facts"], cont
         `Rules: British English. Warm, plain, confident; no clichés like "stunning" or "must-see"; never use an em dash. Never invent rooms, dimensions, transport links, schools or features that are not in the sources or visible. For each fact, answer "unknown" unless it is stated or plainly visible. Use the fill_listing tool.`,
     },
   ];
-  const client = new Anthropic();
-  const res = await client.messages.create({ model: MODEL, max_tokens: 4000, tools: [TOOL], tool_choice: { type: "tool", name: "fill_listing" }, messages: [{ role: "user", content }] });
+  const res = await aiCreate("listing-autofill", { max_tokens: 16000, tools: [TOOL], tool_choice: { type: "tool", name: "fill_listing" }, messages: [{ role: "user", content }] });
   if (res.stop_reason === "refusal") throw new Error("The writer declined this one.");
   const call = res.content.find((c): c is Anthropic.ToolUseBlock => c.type === "tool_use" && c.name === "fill_listing");
   if (!call) throw new Error("The writer did not hand anything back.");

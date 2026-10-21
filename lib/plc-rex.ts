@@ -203,6 +203,9 @@ export async function writeCertificateToRex(input: {
   provenance: string;
   /** An entry the OS already wrote: update it (needs ComplianceEntries/update) rather than make a second. */
   existingEntryId?: string | null;
+  /** Filed to replace the certificate REX holds (lib/certificate-remove): REX's
+   *  entry takes this one's dates even when the one it replaces ran later. */
+  replace?: boolean;
 }): Promise<{ ok: boolean; note: string; entryId?: string }> {
   try {
     /* An entry the OS already made: the Documents copy is always worth
@@ -279,7 +282,10 @@ export async function writeCertificateToRex(input: {
         const theirs = existing?.details?.[input.type]?.expiry_date ?? null;
         const doc = await attachCertificateToListing({ propertyId: input.propertyId, uri, name: input.name, description: docDescription(input.type, input.expiry, input.name) });
         if (!existingId) return { ok: false, note: `REX says an entry exists but would not show it. Documents: ${doc.note}` };
-        if (theirs && theirs >= input.expiry) {
+        /* A later date in REX wins - unless a person has said this one
+           replaces it (an EPC filed as the EICR ran to 2029 and blocked the
+           real EICR, 20 Oct 2026). */
+        if (theirs && theirs >= input.expiry && !input.replace) {
           return { ok: true, note: `REX already holds this type to ${theirs}, not older than ours; left as it is. Documents: ${doc.note}`, entryId: existingId };
         }
         if (rexWritesLocked("ComplianceEntries", "update")) {

@@ -5,6 +5,7 @@ import { pendingKeyFor } from "@/lib/property-match";
 import { hasDb, q } from "@/lib/db";
 import { r2Configured } from "@/lib/r2";
 import { rexWriteBlockedBecause } from "@/lib/plc-rex";
+import { removeCertificate } from "@/lib/certificate-remove";
 import {
   CERT_TYPES,
   FilingFailed,
@@ -131,6 +132,9 @@ async function post(req: NextRequest) {
   const issueRaw = String(form.get("issue") ?? "").trim();
   const propertyName = (String(form.get("propertyName") ?? "").trim() || address).slice(0, 200);
   const source = String(form.get("source") ?? "dropped file").trim().slice(0, 120);
+  /* Replace (Dan, 20 Oct 2026): the R2 key of the certificate on the home
+     this one takes the place of. It comes off once this one is kept. */
+  const replacesKey = String(form.get("replaces") ?? "").trim();
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
   if (!/^(\d+|pending-[a-z0-9-]+|pm-[0-9a-f-]+)$/i.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, an OS property id, or give an address." }, { status: 400 });
   if (!CERT_TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...CERT_TYPES].join(", ")}.` }, { status: 400 });
@@ -139,6 +143,9 @@ async function post(req: NextRequest) {
   if (file.size > 50 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 50MB, so it was not kept. Save a smaller copy and upload that." }, { status: 413 });
 
   const name = file.name || `${type}.pdf`;
+  const replaced = replacesKey
+    ? (await q<{ id: string }>(`SELECT id FROM os_certificates WHERE property_id = $1 AND r2_key = $2`, [propertyId, replacesKey]).catch(() => []))[0] ?? null
+    : null;
   /* Said, not thrown (15 Oct 2026, Dan's EPC on 11 Oct; Josel on the
      compliance desk, 7-12 Oct): a filing that broke came back as an HTML
      error page the screens could not read. Now it is a sentence, and it says
@@ -160,6 +167,7 @@ async function post(req: NextRequest) {
       refreshBook: req.nextUrl.searchParams.get("refresh") === "1",
       /* The compliance office filing it has checked it already (4 Oct 2026). */
       checkedBy: can(me.role, "see:agent-compliance") ? by : null,
+      replacesId: replacesKey ? replaced?.id ?? replacesKey : null,
     });
   } catch (e) {
     if (e instanceof FilingFailed) return NextResponse.json({ ok: false, kept: e.kept, error: e.message }, { status: 500 });
@@ -167,5 +175,12 @@ async function post(req: NextRequest) {
     return NextResponse.json({ ok: false, kept: false, error: "The certificate did not file, so it has not been counted. Try again in a minute, or send it to the compliance team." }, { status: 500 });
   }
   if (filed.duplicate) return NextResponse.json({ ok: true, duplicate: true, certificate: outCert(filed.row) });
-  return NextResponse.json({ ok: true, certificate: outCert(filed.row), share: filed.share });
+  /* The one it replaces comes off now the new one is kept. If that fails
+     the new one still stands; the old one can be taken off by hand. */
+  let replacedNote: string | null = null;
+  if (replacesKey) {
+    const off = await removeCertificate({ propertyId, key: replacesKey, reason: "replaced", by, replacedBy: filed.row.id }).catch(() => null);
+    replacedNote = off?.ok ? `${off.name} has been taken off.` : "The old one could not be taken off just now - use Remove on it.";
+  }
+  return NextResponse.json({ ok: true, certificate: outCert(filed.row), share: filed.share, replaced: replacedNote });
 }

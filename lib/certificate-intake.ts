@@ -105,6 +105,8 @@ export interface CertRow extends Record<string, unknown> {
   shared_at?: Date | null;
   /** Held for compliance's check (lib/cert-hold): not in REX, not counted. */
   awaiting_check?: boolean;
+  /** The certificate this one was filed to replace (lib/certificate-remove). */
+  replaces_id?: string | null;
 }
 
 export const ymd = (v: Date | string | null) =>
@@ -148,7 +150,7 @@ export async function writeCertificateRow(r: CertRow, provenance: string, wantRe
   const blocked = await rexWriteBlockedBecause();
   const w = blocked
     ? { ok: false, note: blocked, entryId: undefined as string | undefined }
-    : await writeCertificateToRex({ propertyId: r.property_id, type: r.type_id, expiry: ymd(r.expiry) as string, issue: ymd(r.issue), key: r.r2_key, name: r.name, provenance, existingEntryId: r.rex_entry_id || null });
+    : await writeCertificateToRex({ propertyId: r.property_id, type: r.type_id, expiry: ymd(r.expiry) as string, issue: ymd(r.issue), key: r.r2_key, name: r.name, provenance, existingEntryId: r.rex_entry_id || null, replace: Boolean(r.replaces_id) });
   /* A refused UPDATE keeps the entry id: the entry exists in REX, only its
      file is missing, and forgetting the id would make the next retry create
      a second one. */
@@ -206,6 +208,8 @@ export interface FileCertificate {
   /** Filed by the compliance office: checked as it was filed, so it is ticked
    *  off their list and goes on to the landlord and tenants straight away. */
   checkedBy?: string | null;
+  /** The certificate this one replaces, by id (lib/certificate-remove). */
+  replacesId?: string | null;
 }
 
 /** What filing says about the send, while the certificate waits for its check. */
@@ -291,9 +295,9 @@ export async function fileCertificate(input: FileCertificate): Promise<{ row: Ce
      note, never null (12 Oct: null here failed every filing that was not held
      - Michael's gas records, the agents' EPCs - from 9 Oct to 12 Oct). */
   const rows = await q<CertRow>(
-    `INSERT INTO os_certificates (id, property_id, property_name, type_id, expiry, issue, r2_key, name, source, added_by, share_people, awaiting_check, rex_note, rex_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, CASE WHEN $12 THEN NOW() END) RETURNING *`,
-    [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? []), held, held ? "Waiting for compliance to verify it before it goes into REX." : ""]
+    `INSERT INTO os_certificates (id, property_id, property_name, type_id, expiry, issue, r2_key, name, source, added_by, share_people, awaiting_check, rex_note, rex_at, replaces_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, CASE WHEN $12 THEN NOW() END, $14) RETURNING *`,
+    [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? []), held, held ? "Waiting for compliance to verify it before it goes into REX." : "", input.replacesId ?? null]
   ).catch(notKept("saving it on the home"));
   if (held) return { row: rows[0], duplicate: false, share: waitingForCheck(true) };
 

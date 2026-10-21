@@ -25,7 +25,7 @@ import SendRecord, { stamp } from "@/components/portfolio/SendRecord";
  */
 
 interface VaultFile { key: string; certKey: string; label: string; name: string; size: number; uploadedAt: string | null; open: string }
-interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string; renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string }; checking?: CertChecking; verified?: { by: string; at: string } }
+interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string; renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string }; checking?: CertChecking; verified?: { by: string; at: string }; removed?: { name: string; reason: "wrong" | "replaced"; by: string; at: string } }
 interface Candidate { id: string; name: string; locality: string }
 interface Answer {
   ok: boolean;
@@ -108,6 +108,11 @@ const stateLabel = (r: Row) => (r.state === "not-required" && r.type === "gas_sa
    document on it still shows, so nothing filed goes out of sight. */
 const worthShowing = (r: Row) => r.state !== "not-required" || r.files.length > 0;
 
+/* A document uploaded after the certificate on the row: offered as its
+   replacement (Dan, 20 Oct 2026 - "even when uploading via Documents it
+   doesn't replace the document originally assigned"). */
+const newerThanFiled = (d: LooseDoc, r: Row) => Boolean(r.files[0]?.uploadedAt && d.at > (r.files[0].uploadedAt as string));
+
 /* Any licence answers "HMO licence". */
 const LICENCES = new Set(["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"]);
 const answers = (row: Row, type: string) => row.type === type || (type === "mandatory_hmo_license" && LICENCES.has(row.type)) || (type === "smoke_alarms" && row.type === "co_alarms");
@@ -155,7 +160,9 @@ export default function PropertyFile({
   const [error, setError] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(null); // a candidate the person chose
   const [open, setOpen] = useState<Record<string, boolean>>({}); // rows showing every file, not just the latest
-  const [pending, setPending] = useState<{ file: File; forType: string | null; read: Read | null; type: string; expiry: string; issue: string; how: string; busy: boolean; note: string | null; eicReason?: EicReason | "" } | null>(null);
+  const [pending, setPending] = useState<{ file: File; forType: string | null; read: Read | null; type: string; expiry: string; issue: string; how: string; busy: boolean; note: string | null; eicReason?: EicReason | ""; replaces?: { key: string; name: string } | null } | null>(null);
+  /* Taking one off (Dan, 20 Oct 2026): the file being asked about, and why. */
+  const [removing, setRemoving] = useState<{ key: string; name: string; label: string; reason: "wrong" | "replaced" | null; busy: boolean; note: string | null } | null>(null);
   /* Who the certificate reached, on the same screen as the filing. Not a
      toast: "the tenant has no email address on the record" is a finding
      somebody has to act on, and it must not slide away after four seconds. */
@@ -163,6 +170,8 @@ export default function PropertyFile({
   const [record, setRecord] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const forType = useRef<string | null>(null);
+  /* Replace: the certificate the next attachment takes the place of. */
+  const replacing = useRef<{ key: string; name: string } | null>(null);
 
   const key = propertyId ? `property=${encodeURIComponent(propertyId)}` : address ? `address=${encodeURIComponent(address)}` : null;
   const effectiveId = propertyId ?? pick ?? data?.propertyId ?? null;
@@ -226,7 +235,7 @@ export default function PropertyFile({
 
   async function chose(file: File) {
     setWent(null);
-    setPending({ file, forType: forType.current, read: null, type: forType.current ?? "", expiry: "", issue: "", how: SOURCES[0].id, busy: true, note: null });
+    setPending({ file, forType: forType.current, read: null, type: forType.current ?? "", expiry: "", issue: "", how: SOURCES[0].id, busy: true, note: null, replaces: replacing.current });
     const body = new FormData();
     body.set("file", file);
     if (forType.current) body.set("expect", forType.current);
@@ -257,11 +266,12 @@ export default function PropertyFile({
     if (address) body.set("propertyName", address);
     const why = eic ? CHOICES.eicReason.find((c) => c.value === pending.eicReason)?.label.toLowerCase() : null;
     body.set("source", `${eic ? `EIC (${why}), ` : ""}${pending.how}, on ${screen}`);
+    if (pending.replaces) body.set("replaces", pending.replaces.key);
     /* Reported to the screen's Auto save chip as well as the line under the
        form, which stays: it is where the agent is looking. A failure keeps
        the form and what was typed into it. */
     const settle = reporter.begin("Certificate");
-    type Filed = { ok?: boolean; error?: string; duplicate?: boolean; share?: { line?: string } };
+    type Filed = { ok?: boolean; error?: string; duplicate?: boolean; share?: { line?: string }; replaced?: string | null };
     const j: Filed = await fetch("/api/compliance/certificates", { method: "POST", body })
       .then(async (r) => {
         const b = (await r.json().catch(() => null)) as Filed | null;
@@ -281,7 +291,35 @@ export default function PropertyFile({
       await fetch("/api/home-facts", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ home: effectiveId, electrical: "eic", eicReason: pending.eicReason }) }).catch(() => null);
     }
     setPending(null);
-    setWent(j.duplicate ? "That certificate is already on this home; nothing was sent again." : (j.share?.line ?? null));
+    setWent(j.duplicate ? "That certificate is already on this home; nothing was sent again." : [j.replaced, j.share?.line].filter(Boolean).join(" ") || null);
+    replacing.current = null;
+    load();
+  }
+
+  /* Take a certificate off the home: the wrong document, or one that is out
+     of date. It stops counting everywhere at once; the file is kept aside. */
+  async function removeFile() {
+    /* A file held against the address (no property yet) sits on the address's shelf. */
+    const home = effectiveId ?? data?.pendingKey ?? null;
+    if (!removing?.reason || !home) return;
+    setRemoving((r) => (r ? { ...r, busy: true, note: null } : r));
+    const settle = reporter.begin("Certificate");
+    const j = (await fetch("/api/compliance/certificates/remove", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ propertyId: home, key: removing.key, reason: removing.reason }),
+    })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, error: "That did not go through - the connection dropped." }))) as { ok?: boolean; error?: string; name?: string };
+    if (!j.ok) {
+      const problem = j.error ?? "It could not be taken off just now.";
+      settle({ ok: false, problem, retry: () => void removeFile() });
+      setRemoving((r) => (r ? { ...r, busy: false, note: problem } : r));
+      return;
+    }
+    settle({ ok: true });
+    setWent(`${removing.name} has been taken off the ${removing.label}. It no longer counts for this home.`);
+    setRemoving(null);
     load();
   }
 
@@ -294,8 +332,9 @@ export default function PropertyFile({
   }
 
 
-  const openPicker = (type: string | null) => {
+  const openPicker = (type: string | null, replace: { key: string; name: string } | null = null) => {
     forType.current = type;
+    replacing.current = replace;
     input.current?.click();
   };
 
@@ -324,8 +363,9 @@ export default function PropertyFile({
 
   /* Read a document already uploaded on the file as this row's certificate:
      the same reader and form as a fresh Attach. */
-  async function readIn(d: LooseDoc, type: string) {
+  async function readIn(d: LooseDoc, type: string, replace: { key: string; name: string } | null = null) {
     forType.current = type;
+    replacing.current = replace;
     try {
       const blob = await fetch(`${d.url}${d.url.includes("?") ? "&" : "?"}bytes=1`).then((r) => (r.ok ? r.blob() : Promise.reject()));
       await chose(new File([blob], d.name, { type: blob.type || "application/pdf" }));
@@ -374,6 +414,7 @@ export default function PropertyFile({
       {pending && (
         <div className="mb-4 rounded-xl border border-accent-dark/40 bg-card p-4">
           <p className="text-[12.5px] font-semibold">{pending.file.name}</p>
+          {pending.replaces && <p className="mt-0.5 text-[12px] text-muted">Replaces {pending.replaces.name}, which comes off this home once this one is kept.</p>}
           {pending.busy && !pending.read ? (
             <p className="mt-1 text-[12px] text-muted">Reading the document…</p>
           ) : (
@@ -494,17 +535,22 @@ export default function PropertyFile({
                       : `${liveOk ? `New certificate, ${CHECKING_LABEL.toLowerCase()}. ` : ""}Filed ${day(r.checking.at.slice(0, 10))}${r.checking.by ? ` by ${r.checking.by}` : ""}, runs to ${day(r.checking.expiry)}. It goes live once the compliance team have verified it.`}
                   </p>
                 )}
+                {r.removed && !r.files.length && (
+                  <p className="mt-2 text-[12px] text-muted">
+                    {r.removed.name} was taken off {day(r.removed.at.slice(0, 10))} by {r.removed.by}: {r.removed.reason === "wrong" ? "the wrong document" : "out of date or replaced"}.
+                  </p>
+                )}
                 {/* Uploaded as a document but never read in as the certificate
                     (James, 12 Oct: "they have a gas safety uploaded to this
                     property ... why this hasn't tagged the gas"). */}
-                {r.state !== "valid" && !r.checking && loose.filter((d) => answers(r, d.type) || d.type === r.type).slice(0, 2).map((d) => (
+                {!r.checking && loose.filter((d) => (answers(r, d.type) || d.type === r.type) && (r.state !== "valid" || newerThanFiled(d, r))).slice(0, 2).map((d) => (
                   <div key={d.url} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-box px-2.5 py-1.5 text-[12px]">
                     <DoodleIcon name="doc" size={13} className="shrink-0 text-muted" />
                     <span className="min-w-0 flex-1 truncate">
                       Uploaded as a document {day(d.at.slice(0, 10))}: <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-semibold hover:underline">{d.name}</a>
                     </span>
-                    <button type="button" onClick={() => void readIn(d, r.type)} className="rounded-full bg-accent-dark px-3 py-1 text-[11px] font-semibold text-page">
-                      Read it in
+                    <button type="button" onClick={() => void readIn(d, r.type, r.files[0] ? { key: r.files[0].key, name: r.files[0].name } : null)} className="rounded-full bg-accent-dark px-3 py-1 text-[11px] font-semibold text-page">
+                      {r.files[0] ? "Use this instead" : "Read it in"}
                     </button>
                   </div>
                 ))}
@@ -515,15 +561,47 @@ export default function PropertyFile({
                   <ul className="mt-2 space-y-1.5">
                     {(open[r.type] ? r.files : r.files.slice(0, 1)).map((f, i) => (
                       <li key={f.key}>
-                        <button
-                          type="button"
-                          onClick={() => openDocument({ key: f.key, name: f.name, label: r.label, property: propertyName, url: f.open })}
-                          className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-box ${i > 0 ? "text-muted" : ""}`}
-                        >
-                          <DoodleIcon name="doc" size={13} className="shrink-0 text-muted" />
-                          <span className="min-w-0 truncate">{f.name}</span>
-                          <span className="ml-auto shrink-0 text-[11px] text-muted">{i === 0 ? "Open" : "Earlier"}</span>
-                        </button>
+                        <div className="flex items-center gap-1 rounded-lg transition-colors hover:bg-box">
+                          <button
+                            type="button"
+                            onClick={() => openDocument({ key: f.key, name: f.name, label: r.label, property: propertyName, url: f.open })}
+                            className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-[12px] ${i > 0 ? "text-muted" : ""}`}
+                          >
+                            <DoodleIcon name="doc" size={13} className="shrink-0 text-muted" />
+                            <span className="min-w-0 truncate">{f.name}</span>
+                            <span className="ml-auto shrink-0 text-[11px] text-muted">{i === 0 ? "Open" : "Earlier"}</span>
+                          </button>
+                          {i === 0 && (
+                            <button type="button" onClick={() => openPicker(r.type, { key: f.key, name: f.name })} className="shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold text-accent-dark hover:underline">
+                              Replace
+                            </button>
+                          )}
+                          <button type="button" onClick={() => setRemoving({ key: f.key, name: f.name, label: r.label, reason: null, busy: false, note: null })} className="mr-1 shrink-0 rounded-full px-2 py-1 text-[11px] text-muted hover:text-accent-dark hover:underline">
+                            Remove
+                          </button>
+                        </div>
+                        {removing?.key === f.key && (
+                          <div className="mt-1.5 rounded-lg border border-accent-dark/30 bg-accent-soft/20 px-3 py-2.5 text-[12px]">
+                            <p className="font-semibold">Take {f.name} off the {r.label}?</p>
+                            <p className="mt-0.5 text-muted">It stops counting for this home straight away. The file is kept aside with your name on it, not deleted.</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {([["wrong", "It's the wrong document"], ["replaced", "It's out of date or replaced"]] as const).map(([v, l]) => (
+                                <button key={v} type="button" onClick={() => setRemoving((x) => (x ? { ...x, reason: v } : x))} className={`rounded-full border px-3 py-1 text-[11.5px] ${removing.reason === v ? "border-accent-dark bg-accent-dark text-page" : "border-line/80 hover:border-ink/40"}`}>
+                                  {l}
+                                </button>
+                              ))}
+                            </div>
+                            {removing.note && <p className="mt-2 text-accent-dark">{removing.note}</p>}
+                            <div className="mt-2.5 flex gap-2">
+                              <button type="button" disabled={!removing.reason || removing.busy} onClick={() => void removeFile()} className="rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-page disabled:opacity-50">
+                                {removing.busy ? "Taking it off…" : "Take it off"}
+                              </button>
+                              <button type="button" onClick={() => setRemoving(null)} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px]">
+                                Keep it
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         {/* Who it went to (Email Certificates, 20 Oct 2026): the stamp, and the record behind it. */}
                         {data.sent?.[f.key] && (() => {
                           const st = data.sent[f.key];

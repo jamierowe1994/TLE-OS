@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { upsertKnowledge, listKnowledge, type KnowledgeEntry } from "@/lib/business/knowledge-store";
@@ -23,7 +24,6 @@ import { noDashes } from "@/lib/no-dashes";
  */
 
 export const LAW_SECTION = "Law and news";
-const MODEL = "claude-opus-4-8";
 const MAX_BYTES = 3_000_000;
 const MAX_TEXT = 60_000;
 
@@ -37,7 +37,7 @@ function privateAddress(ip: string): boolean {
   return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
 }
 
-async function safeUrl(raw: string): Promise<URL> {
+export async function safeUrl(raw: string): Promise<URL> {
   let u: URL;
   try {
     u = new URL(raw.trim());
@@ -76,7 +76,7 @@ function readable(html: string): { title: string; published: string | null; text
   return { title: title.replace(/\s+/g, " "), published, text: body.slice(0, MAX_TEXT) };
 }
 
-async function fetchPage(u: URL): Promise<{ title: string; published: string | null; text: string }> {
+export async function fetchPage(u: URL): Promise<{ title: string; published: string | null; text: string }> {
   const res = await fetch(u, {
     redirect: "manual",
     signal: AbortSignal.timeout(15_000),
@@ -99,11 +99,9 @@ async function fetchPage(u: URL): Promise<{ title: string; published: string | n
   return page;
 }
 
-async function summarise(url: string, page: { title: string; published: string | null; text: string }): Promise<{ title: string; summary: string }> {
-  const client = new Anthropic();
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1400,
+export async function summarise(url: string, page: { title: string; published: string | null; text: string }): Promise<{ title: string; summary: string }> {
+  const res = await aiCreate("knowledge-links", {
+    max_tokens: 8000,
     system:
       "You read articles, guidance and legislation for The Letting Experts, a UK lettings and property management agency, and write them up for the agency's knowledge base, which their assistant answers staff from. UK English. No em dashes. Plain, factual, no hype. Never invent a date, figure or rule that is not in the text.",
     messages: [

@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiCreate } from "@/lib/ai";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -38,8 +39,6 @@ import { londonParts } from "@/lib/london-time";
  * which is where renewals land until go-live - is copied in and put on his
  * list too. See feedRexRenewals.
  */
-
-const MODEL = process.env.CERT_READER_MODEL ?? "claude-haiku-4-5-20251001";
 
 export type Scheme = "gas_safe" | "niceic" | "napit" | "elecsa" | "stroma" | "other" | "none";
 
@@ -199,16 +198,25 @@ export async function readOne(kind: "certificate" | "landlord_document", id: str
   if (!process.env.ANTHROPIC_API_KEY) return failed("The reader is not set up on this environment.");
   const file = await bytesOf(rows[0].r2_key).catch(() => null);
   if (!file) return failed("Could not open the file to read it.");
-  const name = rows[0].name.toLowerCase();
+  return save(await readRegisterFile(file, rows[0].name));
+}
+
+/**
+ * The registration read off one stored certificate, not yet saved. Apart
+ * from readOne so a model can be tried on real certificates without the
+ * database (scripts/ai-compare).
+ */
+export async function readRegisterFile(file: { bytes: Buffer; type: string }, fileName: string): Promise<Omit<RegisterRead, "confirmed">> {
+  const failed = (note: string) => ({ scheme: "none" as Scheme, number: "", licence: "", engineer: "", business: "", state: "failed" as const, note });
+  const name = fileName.toLowerCase();
   const isPdf = file.type.includes("pdf") || name.endsWith(".pdf") || file.bytes.subarray(0, 4).toString() === "%PDF";
   const media = isPdf ? null : /png/.test(file.type) || name.endsWith(".png") ? "image/png" : /webp/.test(file.type) || name.endsWith(".webp") ? "image/webp" : /jpe?g/.test(file.type) || /\.jpe?g$/.test(name) ? "image/jpeg" : null;
   if (!isPdf && !media) return failed("Only PDFs and photos can be read.");
   if (file.bytes.length > 12 * 1024 * 1024) return failed("Too large to read - probably a whole pack, not one certificate.");
 
   try {
-    const res = await new Anthropic().messages.create({
-      model: MODEL,
-      max_tokens: 300,
+    const res = await aiCreate("cert-register", {
+      max_tokens: 4000,
       system: SYSTEM,
       tools: [TOOL],
       tool_choice: { type: "tool", name: "report_engineer" },
@@ -244,16 +252,16 @@ export async function readOne(kind: "certificate" | "landlord_document", id: str
       note = "Read a phone number, not a registration number - check the certificate by eye.";
       number = "";
     }
-    return save({
+    return {
       /* A number we threw out still tells him which register: keep the scheme. */
       scheme: number || (scheme === "gas_safe" && note) ? scheme : "none",
       number,
       licence,
       engineer: clean(x.engineer, 80),
       business: clean(x.business, 120),
-      state: "read",
+      state: "read" as const,
       note,
-    });
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "read failed";
     return failed(/credit balance/i.test(msg) ? "The reader's Anthropic account has run out of credit." : "Could not read it this time.");

@@ -3,6 +3,7 @@ import { publicError } from "@/lib/public-error";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkById, type CheckId } from "@/lib/plc";
 import { readDocument, scanConfigured } from "@/lib/plc-scan";
+import { aiEffort, aiModel, costOf, type Effort } from "@/lib/ai";
 import { summarise } from "@/lib/plc-rules";
 
 /**
@@ -38,7 +39,14 @@ import { summarise } from "@/lib/plc-rules";
  *
  * It runs the SAME prompt, tool schema and model as the real scan, via
  * readDocument. A bench with its own prompt would test the bench.
+ *
+ * Optionally another model and effort (20 Oct 2026), so the page can read
+ * one document with two or three models side by side before a feature is
+ * moved to a cheaper one. Only the models listed below can be asked for.
  */
+
+const MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"];
+const EFFORTS: Effort[] = ["low", "medium", "high"];
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -86,6 +94,10 @@ export async function POST(req: NextRequest) {
   const address = String(form.get("address") ?? "").trim();
   const moveInRaw = String(form.get("moveInDate") ?? "").trim();
   const moveInDate = /^\d{4}-\d{2}-\d{2}$/.test(moveInRaw) ? moveInRaw : null;
+  const askedModel = String(form.get("model") ?? "");
+  const askedEffort = String(form.get("effort") ?? "") as Effort;
+  const model = MODELS.includes(askedModel) ? askedModel : aiModel("plc-scan");
+  const effort = EFFORTS.includes(askedEffort) ? askedEffort : aiEffort("plc-scan");
 
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
@@ -126,7 +138,8 @@ export async function POST(req: NextRequest) {
     const read = await readDocument(
       new Anthropic(),
       { name: file.name, media: file.type, base64 },
-      { checkId, address: address || "the property", moveInDate }
+      { checkId, address: address || "the property", moveInDate },
+      { model, effort }
     );
     return NextResponse.json({
       ok: true,
@@ -145,6 +158,9 @@ export async function POST(req: NextRequest) {
          move-in date answers a different question from the real scan. */
       asked: { check: check.label, address: address || "the property", moveInDate },
       ms: Date.now() - started,
+      model: read.model,
+      effort,
+      cost: costOf(read.model, read.usage),
     });
   } catch (e) {
     return NextResponse.json(
@@ -160,5 +176,6 @@ export async function GET() {
     ok: true,
     available: process.env.NODE_ENV !== "production",
     scanConfigured: scanConfigured(),
+    live: { model: aiModel("plc-scan"), effort: aiEffort("plc-scan") },
   });
 }

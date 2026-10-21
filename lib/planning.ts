@@ -374,7 +374,6 @@ export async function syncPlanning(
 
 /* ── Pass two: what is it, actually ───────────────────────────────────────── */
 
-const READER_MODEL = "claude-opus-5";
 /**
  * Output tokens a day, as a runaway guard rather than a budget.
  *
@@ -447,6 +446,17 @@ interface ReadRow {
   confident: boolean;
 }
 
+/** The structured answer. A refusal or a cut-off answer reads as nothing,
+ *  and those applications stay unread for the next run. */
+function parsedRows(res: { content: Array<{ type: string; text?: string }> }): ReadRow[] {
+  const text = res.content.map((c) => (c.type === "text" ? c.text ?? "" : "")).join("");
+  try {
+    return (JSON.parse(text) as { applications?: ReadRow[] }).applications ?? [];
+  } catch {
+    return [];
+  }
+}
+
 async function readTokensToday(): Promise<number> {
   const [r] = await q<{ n: string }>(
     `SELECT COALESCE(SUM(out_tokens), 0)::text AS n FROM os_planning_sync WHERE started_at >= date_trunc('day', NOW())`
@@ -469,8 +479,7 @@ export async function readPlanning(limit = 600): Promise<{ read: number; skipped
   if (pending.length === 0) return { read: 0, skipped: null };
   if ((await readTokensToday()) >= READ_CAP) return { read: 0, skipped: "the daily reading ceiling is used up" };
 
-  const { default: Anthropic } = await import("@anthropic-ai/sdk");
-  const client = new Anthropic();
+  const { aiCreate } = await import("@/lib/ai");
   let done = 0;
   let out = 0;
 
@@ -498,12 +507,11 @@ export async function readPlanning(limit = 600): Promise<{ read: number; skipped
         .join("\n\n");
       let res;
       try {
-        res = await client.messages.parse({
-          model: READER_MODEL,
-          max_tokens: 4000,
+        res = await aiCreate("planning-reader", {
+          max_tokens: 8000,
           /* The brief never changes, so it caches; the applications ride after it. */
           system: [{ type: "text", text: READER_BRIEF, cache_control: { type: "ephemeral" } }],
-          output_config: { effort: "low", format: { type: "json_schema", schema: READER_SCHEMA } },
+          output_config: { format: { type: "json_schema", schema: READER_SCHEMA } },
           messages: [{ role: "user", content: `Read these ${batch.length} planning applications.\n\n${listing}` }],
         });
       } catch (e) {
@@ -512,7 +520,7 @@ export async function readPlanning(limit = 600): Promise<{ read: number; skipped
         return;
       }
       out += res.usage?.output_tokens ?? 0;
-      const rows = (res.parsed_output as { applications?: ReadRow[] } | null)?.applications ?? [];
+      const rows = parsedRows(res);
       const seen = new Set<string>();
       for (const row of rows) {
         if (!batch.some((b) => b.ref === row.id) || seen.has(row.id)) continue;
