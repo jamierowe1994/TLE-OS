@@ -31,6 +31,7 @@
  */
 
 import type { DealMeta, DealNote, DealTask } from "@/lib/business/types";
+import type { DealFlatbond } from "@/lib/business/stage-evidence";
 import { CHECKLIST_ITEMS, DEPOSIT_SCHEMES, PORTAL_STAGES, portalStageOf, recordTicks } from "@/lib/business/propoly-stages";
 import { PLC_CHECKS, PLC_STATES, missingDocuments, scanSummary, sortFindings, type Finding, type PlcCase, type PlcDocument } from "@/lib/plc";
 import { CAST } from "@/lib/showroom/demo-world";
@@ -80,6 +81,10 @@ export interface PretenancyBook {
   tasks: DealTask[];
   cases: PlcCase[];
   seq: number;
+  /** Flatfair's record of a deal, as the half-hourly read would have it (the Flatfair walkthrough, lib/showroom/demo-flatfair). */
+  flatbonds?: Record<string, DealFlatbond>;
+  /** The deal sent to Flatfair as a draft from the hand-off screen. */
+  flatfairDraft?: { draftId: number; by: string; at: string; test: boolean } | null;
 }
 
 /* ─────────────────────────── the pack ─────────────────────────── */
@@ -258,7 +263,7 @@ function stageOf(book: PretenancyBook, d: DemoDeal, now: number): string {
   if (d.live === "cancelled") return "cancelled";
   if (m?.stageOverride === "move_day" && m.stageBasedOn === d.live) return "move_day";
   const plc = caseFor(book, d);
-  const depositDone = d.depositDone || m?.checklist?.deposit_registered?.done === true || Boolean(m?.depositScheme);
+  const depositDone = d.depositDone || m?.checklist?.deposit_registered?.done === true || Boolean(m?.depositScheme) || book.flatbonds?.[d.id]?.done === true;
   switch (d.live) {
     case "start_deal": return "deal_started";
     case "holding_fee": return "holding_fee";
@@ -289,7 +294,8 @@ function boardDeal(book: PretenancyBook, d: DemoDeal, now: number): Loose {
     tenants: [{ name: d.tenant, email: `${d.tenant.split(" ")[0].toLowerCase()}.sample@example.com`, phone: "07700 900" + String(100 + (d.id.length * 37) % 900), isPrimary: true }],
     propoly: { statusKey: d.live, ...d.propoly },
   };
-  const auto = recordTicks(app as never, null);
+  const flatbond = book.flatbonds?.[d.id] ?? null;
+  const auto = recordTicks(app as never, flatbond);
   const done = CHECKLIST_ITEMS.filter((i) => m?.checklist[i.key]?.done || auto[i.key]).length;
   return {
     app, statusKey: d.live, effectiveStatusKey: eff,
@@ -302,7 +308,7 @@ function boardDeal(book: PretenancyBook, d: DemoDeal, now: number): Loose {
       checklistDone: done, checklistTotal: CHECKLIST_ITEMS.length,
     },
     compliance: { outstanding: 0, expired: 0, problems: [], checked: true },
-    flags: [], archived: false,
+    flags: [], archived: false, flatbond,
     ...d.extra,
   };
 }

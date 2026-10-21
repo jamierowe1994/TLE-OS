@@ -15,7 +15,7 @@ import BackOfficeView from "@/components/showroom/BackOfficeView";
 /* The fourth tab (James, 7 Oct 2026): the back office's walkthroughs, which are
    a different shape - live demos across every side - so they have their own
    view (components/showroom/BackOfficeView) rather than steps. */
-const BACK_OFFICE_SAYS = "How the office keeps every home safe and fixed: compliance, a repair from every door, the gas safety, and visits with planned maintenance. Each one to read as a guide, or click through as a live demo from the tenant's, the landlord's and the office's side.";
+const BACK_OFFICE_SAYS = "How the office keeps every home safe and fixed, and a let moving: compliance, a repair from every door, the gas safety, visits with planned maintenance, and a deposit with Flatfair. Each one to read as a guide, or click through as a live demo from the tenant's, the landlord's and the office's side.";
 
 /**
  * The Showroom's screen (lib/showroom/content says what and why).

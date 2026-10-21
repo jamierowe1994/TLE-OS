@@ -52,7 +52,9 @@ export type ScreenKind =
   /* Raj's portal at "Sign your contract", signing on the demo's stand-in (app/landlord/demo ?standin=1). */
   | "landlord-sign"
   /* Pre-tenancy (lib/showroom/office-walk): the board (`open` opens Sophie's deal) and the PLC queue (`section` is the pack to open). */
-  | "office-pretenancy" | "office-plc";
+  | "office-pretenancy" | "office-plc"
+  /* The agent's Set up in Flatfair hand-off for Sophie's let (lib/showroom/demo-flatfair). */
+  | "office-flatfair";
 
 export interface DemoScreen {
   kind: ScreenKind;
@@ -585,8 +587,69 @@ const VISITS: BackOfficeJourney = {
   ],
 };
 
-/** In the order James listed them. */
-export const BACK_OFFICE: BackOfficeJourney[] = [COMPLIANCE, REPAIR, GAS, VISITS];
+/* ─────────────────────────── Flatfair ─────────────────────────── */
+
+/**
+ * James, 21 Oct 2026: "can you make one" - a Flatfair demo. Sophie's let is
+ * on Flatfair instead of a cash deposit: the PLC passes, Sam sends the deal
+ * across from the hand-off screen, and the Deposit stage is done by his tick
+ * or by Flatfair's own record. Checked against app/api/pretenancy/flatfair,
+ * components/FlatfairHandoff, lib/flatfair-sync and the board on 21 Oct 2026.
+ */
+const FLATFAIR: BackOfficeJourney = {
+  id: "flatfair",
+  title: "Deposit with Flatfair",
+  lead: "When the tenant takes Flatfair instead of paying a cash deposit. The PLC passes, the agent sends the deal to Flatfair from the OS, and the Deposit stage is done without anybody chasing it.",
+  sees: ["The let waiting at Deposit", "Set up in Flatfair: send it as a draft", "Done in Flatfair, or Flatfair's own record"],
+  story: "flatfair",
+  who: ["pretenancy", "office"],
+  scenes: () => [
+    {
+      id: "ff-waiting", actor: "pretenancy", title: "The Let Waits at Deposit",
+      says: "Sophie's PLC pack is approved, so her let has moved on to Deposit by itself. Propoly's clauses say Flatfair, so there is no cash deposit to register: the drawer shows Flatfair as the deposit, and Deposit is the step it is on.",
+      where: "Pre-tenancy > Board",
+      screen: { kind: "office-pretenancy", at: "approved" },
+      try: { says: "Click Sophie's let, 8 Recreation Terrace, in the Deposit column.", hint: "8 Recreation Terrace", did: [] },
+    },
+    {
+      id: "ff-draft", actor: "office", title: "Send It to Flatfair",
+      says: "Sam opens the let and presses Set the deal up in Flatfair. Every fact the Flatfair form asks for is on one screen: the home, the rent, the cover, the move-in, Sophie and Raj. Send to Flatfair as a draft puts it all into Flatfair in one go, with nothing typed twice.",
+      where: "Applications > the let > Set the deal up in Flatfair",
+      screen: { kind: "office-flatfair", at: "approved" },
+      try: { says: "Press Send to Flatfair as a draft.", hint: "Send to Flatfair as a draft", did: ["flatfair_draft"] },
+    },
+    {
+      id: "ff-done", actor: "office", title: "Check It, Submit It, Tick It",
+      says: "The draft waits in Flatfair for Sam to check and submit, because a person still looks before Flatfair writes to the tenant. Once it is submitted he presses Done in Flatfair, and the board knows straight away.",
+      where: "Applications > the let > Set up in Flatfair",
+      screen: { kind: "office-flatfair", at: "drafted" },
+      try: { says: "Press Done in Flatfair.", hint: "Done in Flatfair", did: ["flatfair_done"] },
+    },
+    {
+      id: "ff-moved", actor: "pretenancy", title: "The Board Moves On",
+      says: "With the Flatfair set-up ticked, the Deposit stage is done and Sophie's let has moved on to Tenancy agreement. The tick is on the checklist with Sam's name, both of his presses are on the let's activity, and the Deposit step says Flatfair is waiting on Sophie.",
+      where: "Pre-tenancy > Board > the deal",
+      screen: { kind: "office-pretenancy", at: "keyed", open: true },
+      try: { says: "Press Outstanding and find Deposit registered, ticked by Sam.", hint: "Outstanding", did: [] },
+    },
+    {
+      id: "ff-record", actor: "pretenancy", title: "And If Nobody Ticks It",
+      says: "Every half hour the OS reads Flatfair. Once Sophie has signed up and her plan is active, Deposit registered is ticked for you with Flatfair beside it, the Deposit step says the plan is active, and the let moves on just the same. Nobody has to ask the agent whether it was done.",
+      where: "Pre-tenancy > Board > the deal",
+      screen: { kind: "office-pretenancy", at: "active", open: true },
+      try: { says: "Press Outstanding and find Deposit registered, ticked by Flatfair.", hint: "Outstanding", did: [] },
+    },
+  ],
+  agent: { says: "Open the let on Applications: once the PLC passes on a Flatfair deal, Needs you offers Set the deal up in Flatfair.", href: "/applications" },
+  notYet: [
+    "A draft is never submitted for you: it waits in Flatfair until the agent checks it and submits it there.",
+    "Flatfair emails the tenant itself. The OS sends nothing to Sophie or Raj at this step.",
+    "Flatfair does not tell us the moment it changes yet. The OS reads it every half hour, so the board can be up to 30 minutes behind Flatfair.",
+  ],
+};
+
+/** In the order James listed them, then Flatfair (21 Oct 2026). */
+export const BACK_OFFICE: BackOfficeJourney[] = [COMPLIANCE, REPAIR, GAS, VISITS, FLATFAIR];
 
 /** Every email any walkthrough shows: the Showroom's email route renders only these. */
 export const BACK_OFFICE_EMAIL_IDS: string[] = Array.from(
