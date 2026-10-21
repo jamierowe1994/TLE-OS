@@ -390,8 +390,10 @@ async function rexCallOnce(
   } catch (e) {
     const name = (e as Error)?.name ?? "";
     const gaveUpWaiting = name === "AbortError";
-    noteRexOutcome(false, path, { probe: gate.probe, outage: true });
-    if (readOnly) {
+    noteRexOutcome(false, path, { probe: gate.probe, outage: true, timeout: gaveUpWaiting });
+    /* The copy only once REX counts as down - so only ever under the band,
+       never as a quiet stand-in for one slow answer on a normal day. */
+    if (readOnly && (await rexIsDown())) {
       const copy = await fromCopy(service, method, body, true);
       if (copy.ok) return copy;
     }
@@ -412,11 +414,12 @@ async function rexCallOnce(
   noteRexOutcome(!outage, path, { probe: gate.probe, outage });
   if (res.ok && readOnly) recordRead(service, method, body, res.result);
   if (!outage) kickReplay();
-  if (outage && readOnly) {
+  const down = outage && (await rexIsDown());
+  if (down && readOnly) {
     const copy = await fromCopy(service, method, body, true);
     if (copy.ok) return copy;
   }
-  if (outage && (await rexIsDown())) return res;
+  if (down) return res;
   if (!res.ok && !opts?.quiet && worthReporting(res, service, method, Boolean(actorToken))) {
     noteFailure({ source: "REX", what: path, status: res.status, message: res.error ?? `answered ${res.status}` });
   }

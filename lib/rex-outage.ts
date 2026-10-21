@@ -50,7 +50,10 @@ export interface RexStatusSetting {
 const SETTING_KEY = "rex_status";
 const SETTING_TTL_MS = 15_000;
 
-/** Three outage-shaped failures inside two minutes and the switch trips. */
+/** Three outage-shaped failures inside two minutes and the switch trips. A
+ *  call that merely ran out of time counts as half of one: REX takes ~15s
+ *  on a normal day and a 20s fuse goes now and then without anything being
+ *  wrong, so it takes six of those, with no good answer between, to trip. */
 const TRIP_FAILS = 3;
 const TRIP_WINDOW_MS = 120_000;
 /** While tripped, one call a minute is let through to see if REX is back. */
@@ -215,7 +218,7 @@ export async function mayAskRex(opts: { write?: boolean } = {}): Promise<{ live:
 }
 
 /** A REX answer came back, or did not. Trips and un-trips the switch. */
-export function noteRexOutcome(ok: boolean, what: string, opts: { probe?: boolean; outage?: boolean } = {}): void {
+export function noteRexOutcome(ok: boolean, what: string, opts: { probe?: boolean; outage?: boolean; timeout?: boolean } = {}): void {
   const s = st();
   const now = Date.now();
   if (opts.probe) s.probing = false;
@@ -232,9 +235,11 @@ export function noteRexOutcome(ok: boolean, what: string, opts: { probe?: boolea
   if (!opts.outage) return;
   s.lastFailAt = now;
   s.lastFailWhat = what;
-  s.fails = s.fails.filter((t) => now - t < TRIP_WINDOW_MS);
-  s.fails.push(now);
-  if (s.trippedAt == null && s.fails.length >= TRIP_FAILS) {
+  s.fails = s.fails.filter((t) => now - Math.abs(t) < TRIP_WINDOW_MS);
+  /* A timeout is kept as a negative time: same window, half the weight. */
+  s.fails.push(opts.timeout ? -now : now);
+  const weight = s.fails.reduce((n, t) => n + (t < 0 ? 0.5 : 1), 0);
+  if (s.trippedAt == null && weight >= TRIP_FAILS) {
     s.trippedAt = now;
     s.lastProbeAt = now;
     s.oldestServed = null;
@@ -242,7 +247,7 @@ export function noteRexOutcome(ok: boolean, what: string, opts: { probe?: boolea
     s.missedCount = 0;
     s.missed.clear();
     s.queuedSinceDown = 0;
-    console.warn(`[rex-outage] REX looks down (${s.fails.length} failures in 2 min, last ${what}) - serving the copy`);
+    console.warn(`[rex-outage] REX looks down (${weight} failures in 2 min, last ${what}) - serving the copy`);
   }
 }
 

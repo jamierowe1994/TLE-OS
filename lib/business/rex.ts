@@ -1,5 +1,5 @@
 import "server-only";
-import { mayAskRex, noteRexOutcome, readSnapshot, recordRead } from "@/lib/rex-outage";
+import { mayAskRex, noteRexOutcome, readSnapshot, recordRead, rexIsDown } from "@/lib/rex-outage";
 
 // REX CRM client for The Lettings Expert portal — ported from the TEG PAID
 // ADS repo's lib/rex.ts (TLE shares the Property/Lettings REX account).
@@ -184,14 +184,16 @@ export async function rexCall(
        to connect counts towards the switch. */
     const aborted = (e as Error)?.name === "AbortError";
     noteRexOutcome(false, path, { probe: gate.probe, outage: !aborted });
-    const copy = await fromCopy(service, method, body);
-    if (copy.ok) return copy;
+    if (await rexIsDown()) {
+      const copy = await fromCopy(service, method, body);
+      if (copy.ok) return copy;
+    }
     throw e;
   }
   const outage = !res.ok && (res.status === 502 || res.status === 503 || res.status === 504 || (res.status >= 500 && res.result === undefined));
   noteRexOutcome(!outage, path, { probe: gate.probe, outage });
   if (res.ok) recordRead(service, method, body, res.result);
-  else if (outage) {
+  else if (outage && (await rexIsDown())) {
     const copy = await fromCopy(service, method, body);
     if (copy.ok) return copy;
   }
