@@ -1,4 +1,5 @@
 import { fetchListingBook, fetchRetiredListings, type ListingBook, type OsListing } from "./rex-listings";
+import { staleForWalk } from "@/lib/rex-outage";
 import { hasDb, q } from "./db";
 import { RULES } from "./staleness";
 
@@ -114,10 +115,11 @@ export function refresh(key: string, rexUserId: string | null): Promise<Cached> 
 export async function bookFor(rexUserId: string | null): Promise<ListingBook> {
   const key = cacheKeyFor(rexUserId);
   const held = await heldFor(key);
-  if (held && Date.now() - held.at < STALE_MS) {
+  /* The REX copy's walk reads it again (lib/rex-outage, 21 Oct 2026). */
+  if (held && Date.now() - held.at < STALE_MS && !(await staleForWalk(held.at))) {
     /* Warm it behind them if it's going off, but answer from what we hold —
        a person waiting on a reply should not pay for a book refresh. */
-    if (Date.now() - held.at >= FRESH_MS) void refresh(key, rexUserId);
+    if (Date.now() - held.at >= FRESH_MS) void refresh(key, rexUserId).catch(() => {});
     return held.book;
   }
   return (await refresh(key, rexUserId)).book;

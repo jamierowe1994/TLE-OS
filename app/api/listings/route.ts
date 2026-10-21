@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { staleForWalk } from "@/lib/rex-outage";
 import { scopeForWho } from "@/lib/scope";
 import { hasDb } from "@/lib/db";
 import type { ListingBook, OsListing } from "@/lib/rex-listings";
@@ -109,11 +110,14 @@ export async function GET(req: NextRequest) {
         : ls;
     return withTests({ ...archived, listings: withIntro(archived.listings) }, withIntro(mine));
   };
-  if (held && age < FRESH_MS) {
+  /* The REX copy's walk reads it again (lib/rex-outage, 21 Oct 2026). */
+  const walk = await staleForWalk(held?.at);
+  if (held && age < FRESH_MS && !walk) {
     return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await serve(held.book)), ageMs: age });
   }
-  if (held && age < STALE_MS) {
-    void refresh(key, scope.rexUserId);
+  if (held && age < STALE_MS && !walk) {
+    /* Caught (21 Oct 2026): a failed refresh behind a held book was an unhandled rejection. */
+    void refresh(key, scope.rexUserId).catch(() => {});
     return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await serve(held.book)), ageMs: age, stale: true });
   }
 

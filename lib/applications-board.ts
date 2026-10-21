@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { staleForWalk } from "@/lib/rex-outage";
 import { RULES } from "@/lib/staleness";
 import { hasDb, q } from "@/lib/db";
 import { closedReasons, getApplications } from "@/lib/applications";
@@ -147,8 +148,10 @@ export async function assembled(rexUserId: string | null): Promise<{ held: Held;
   /* Older than the last application filed here: not to be shown at all. */
   if (h && h.at < board.dirtyAt) h = null;
   const age = h ? Date.now() - h.at : Infinity;
-  if (h && age < FRESH_MS) return { held: h, stale: false };
-  if (h && age < KEEP_MS) {
+  /* The REX copy's walk reads it again (lib/rex-outage, 21 Oct 2026). */
+  const walk = await staleForWalk(h?.at);
+  if (h && age < FRESH_MS && !walk) return { held: h, stale: false };
+  if (h && age < KEEP_MS && !walk) {
     after(() => assemble(rexUserId).catch(() => {
       /* REX busy: the held copy stands and the next caller tries again */
     }));

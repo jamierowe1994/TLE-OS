@@ -1,4 +1,5 @@
 import "server-only";
+import { mayAskRex, noteRexOutcome, readSnapshot, recordRead } from "@/lib/rex-outage";
 
 // REX CRM client for The Lettings Expert portal — ported from the TEG PAID
 // ADS repo's lib/rex.ts (TLE shares the Property/Lettings REX account).
@@ -85,16 +86,28 @@ async function rexPost(
     clearTimeout(timer);
   }
   let data: { result?: unknown; error?: unknown } = {};
+  let parsed = false;
   try {
     data = (await res.json()) as { result?: unknown; error?: unknown };
+    parsed = true;
   } catch {
     /* empty/non-JSON body */
   }
+  /* REX's maintenance page, not data (21 Oct 2026, as lib/rex). */
+  if (!parsed && (res.status >= 500 || /html/i.test(res.headers.get("content-type") ?? ""))) {
+    return { status: res.ok ? 503 : res.status, ok: false, result: undefined, error: `REX answered ${res.status} without data` };
+  }
+  /* Message and type only: REX echoes the session token inside the rest of
+     its error object (see safeError in lib/rex), and this text can reach the
+     owners' Diagnostics tab. */
+  const raw = data?.error as { message?: unknown; type?: unknown } | string | undefined;
   const error =
-    typeof data?.error === "string"
-      ? data.error
-      : data?.error
-        ? JSON.stringify(data.error)
+    typeof raw === "string"
+      ? raw
+      : raw
+        ? typeof raw.message === "string"
+          ? `${raw.message}${typeof raw.type === "string" ? ` (${raw.type})` : ""}`
+          : "REX returned an error."
         : null;
   return { status: res.status, ok: res.ok && !error, result: data?.result, error };
 }
@@ -153,13 +166,42 @@ export async function rexCall(
   }
   const accountId = rexAccountId();
   const path = `${service}/${method}`;
-  let token = await getToken(accountId);
-  let res = await rexPost(path, body, token, opts?.timeoutMs);
-  if (isTokenError(res)) {
-    token = await getToken(accountId, true); // force re-login
+  /* REX down (21 Oct 2026, lib/rex-outage): this client only reads, so a
+     down REX is answered from the same copy lib/rex keeps, and every good
+     answer here is kept for it too. */
+  const gate = await mayAskRex();
+  if (!gate.live) return fromCopy(service, method, body);
+  let res: RexResponse;
+  try {
+    let token = await getToken(accountId);
     res = await rexPost(path, body, token, opts?.timeoutMs);
+    if (isTokenError(res)) {
+      token = await getToken(accountId, true); // force re-login
+      res = await rexPost(path, body, token, opts?.timeoutMs);
+    }
+  } catch (e) {
+    /* An 8s fuse on a slow REX is not an outage by itself - only a refusal
+       to connect counts towards the switch. */
+    const aborted = (e as Error)?.name === "AbortError";
+    noteRexOutcome(false, path, { probe: gate.probe, outage: !aborted });
+    const copy = await fromCopy(service, method, body);
+    if (copy.ok) return copy;
+    throw e;
+  }
+  const outage = !res.ok && (res.status === 502 || res.status === 503 || res.status === 504 || (res.status >= 500 && res.result === undefined));
+  noteRexOutcome(!outage, path, { probe: gate.probe, outage });
+  if (res.ok) recordRead(service, method, body, res.result);
+  else if (outage) {
+    const copy = await fromCopy(service, method, body);
+    if (copy.ok) return copy;
   }
   return res;
+}
+
+async function fromCopy(service: string, method: string, body: unknown): Promise<RexResponse> {
+  const copy = await readSnapshot(service, method, body);
+  if (copy) return { status: 200, ok: true, result: copy.result, error: null };
+  return { status: 503, ok: false, result: undefined, error: "REX is down for maintenance and this was not in the copy." };
 }
 
 // Rex results are either a bare array or { rows: [...] } — normalise to rows.

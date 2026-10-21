@@ -2401,10 +2401,13 @@ CREATE TABLE IF NOT EXISTS os_rex_snapshot (
   last_served_at TIMESTAMPTZ,
   -- The same question with its times rounded to the day, for a screen that
   -- puts "now" in what it asks.
-  loose_key      TEXT
+  loose_key      TEXT,
+  -- ...and with its dates dropped, for the morning after (lib/rex-outage).
+  shape_key      TEXT
 );
 CREATE INDEX IF NOT EXISTS os_rex_snapshot_taken ON os_rex_snapshot (taken_at);
 CREATE INDEX IF NOT EXISTS os_rex_snapshot_loose ON os_rex_snapshot (loose_key, taken_at DESC);
+CREATE INDEX IF NOT EXISTS os_rex_snapshot_shape ON os_rex_snapshot (shape_key, taken_at DESC);
 
 -- Changes for REX made while it was down, sent in order when it is back
 -- (lib/rex-queue). Only writes already armed in REX_ALLOW_WRITES get here.

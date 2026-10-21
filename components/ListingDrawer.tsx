@@ -53,6 +53,7 @@ import type { ListingDetails } from "@/lib/listing-details";
 import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-requirements";
 import { useListingTerms } from "@/lib/use-listing-terms";
 import { fetchMe } from "@/lib/me";
+import RexWaitingChip from "@/components/RexWaitingChip";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import ListingOwner from "@/components/listing/ListingOwner";
 import ListingCompliance, { useListingHome } from "@/components/listing/ListingCompliance";
@@ -1318,6 +1319,7 @@ function ListingDrawerBody({
             <span aria-hidden>←</span> Listings
           </Link>
           <SaveChip scope={saves} className="bg-white" />
+          <RexWaitingChip refs={[["listing", listing.id], ["property", listing.propertyId]]} />
         </div>
         {/* The side panel (10 Oct 2026), a pull-out over the page: the
             landlord's messages and the listing's notes. */}

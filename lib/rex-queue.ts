@@ -30,7 +30,16 @@ import { noteQueued, onRexBack, rexIsDown } from "@/lib/rex-outage";
 
 /** Writes that are kept and sent later. Anything else is turned away while REX is down. */
 const KEEP_FOR_LATER = new Set<string>([
-  // filled from the audit, 21 Oct 2026 - see the note above
+  /* Updates to a record REX already has, where the caller only asks "did it
+     go" (audit, 21 Oct 2026). Creates, uploads, notes, e-sign requests, mail
+     merges and publishing all need REX's own answer, so they are turned away. */
+  "Listings/update",
+  "Properties/update",
+  "Contacts/update",
+  "CalendarEvents/update",
+  "TenancyApplications/update",
+  "ComplianceEntries/update",
+  "CustomFields/setFieldValues",
 ]);
 
 export function keptForLater(service: string, method: string): boolean {
@@ -102,6 +111,7 @@ export async function queueRexWrite(
     );
     noteQueued();
     maybeWaiting = true;
+    await showOnCopy(service, body).catch((e) => console.warn("[rex-queue] could not show the change on the copy", e));
     console.log(`[rex-queue] kept ${service}/${method} #${rows[0]?.id} for when REX is back`);
     return { status: 202, ok: true, result: null, error: null, queuedId: Number(rows[0]?.id) };
   } catch (e) {
@@ -111,8 +121,48 @@ export async function queueRexWrite(
 }
 
 function summaryOf(service: string, method: string): string {
-  const what: Record<string, string> = {};
+  const what: Record<string, string> = {
+    "Listings/update": "Listing changed",
+    "Properties/update": "Property changed",
+    "Contacts/update": "Contact changed",
+    "CalendarEvents/update": "Diary entry changed",
+    "TenancyApplications/update": "Application changed",
+    "ComplianceEntries/update": "Certificate changed",
+    "CustomFields/setFieldValues": "Custom fields changed",
+  };
   return what[`${service}/${method}`] ?? `${service} ${method}`;
+}
+
+/**
+ * The change shown on the copy straight away (21 Oct 2026). Without this an
+ * agent edits a listing, the screen reads it back from the copy taken before
+ * the edit, and the change looks lost. Only the kept "read" of that one
+ * record is touched, and only fields the copy already has with the same kind
+ * of value - a field the update names differently is left alone rather than
+ * risk a shape the screen does not expect. REX gets the real thing later.
+ */
+async function showOnCopy(service: string, body: unknown): Promise<void> {
+  const data = ((body ?? {}) as { data?: Record<string, unknown> }).data;
+  const id = data?.id;
+  if (!data || id == null || !["Listings", "Properties", "Contacts"].includes(service)) return;
+  const rows = await q<{ key: string; result: Record<string, unknown> | null }>(
+    `SELECT key, result FROM os_rex_snapshot WHERE service = $1 AND method = 'read' AND body->>'id' = $2`,
+    [service, String(id)]
+  );
+  for (const row of rows) {
+    const r = row.result;
+    if (!r || typeof r !== "object") continue;
+    let changed = false;
+    for (const [k, v] of Object.entries(data)) {
+      if (k === "id" || !(k in r)) continue;
+      const was = r[k];
+      const same = v === null || was === null || typeof v === typeof was;
+      if (!same || (v !== null && typeof v === "object")) continue;
+      r[k] = v;
+      changed = true;
+    }
+    if (changed) await q(`UPDATE os_rex_snapshot SET result = $2::jsonb WHERE key = $1`, [row.key, JSON.stringify(r)]);
+  }
 }
 
 /* ───────────────────────── sending it on ───────────────────────── */

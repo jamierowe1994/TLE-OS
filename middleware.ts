@@ -646,6 +646,7 @@ const LOG_NOISE = new Set([
   "/api/clean-sweep/summary",
   "/api/pretenancy/refresh",
   "/api/rex/status",
+  "/api/rex/waiting",
 ]);
 /* The same, for addresses that carry an id (12 Oct 2026): an open chat asks
    for new messages every few seconds, and each face in it is one image call.

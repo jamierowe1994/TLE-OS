@@ -299,6 +299,52 @@ export function looseKey(service: string, method: string, body: unknown): string
   return createHash("sha256").update(`${service}/${method}\n${JSON.stringify(loosen(body ?? {}))}`).digest("hex");
 }
 
+/* Looser still, for the morning after: the diary asks "from a fortnight ago
+   to three months on", counted from today, so at 7am tomorrow every date in
+   the question has moved and neither key above finds it. The shape key drops
+   dates altogether and serves the latest answer to the same question asked
+   on another day. The screens work out "today" from each appointment's own
+   time, so yesterday's answer still files tomorrow's viewings correctly. */
+const DATE_LIKE = /^\d{4}-\d{2}-\d{2}([T ][\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;
+function shapeOf(v: unknown): unknown {
+  if (typeof v === "string") return DATE_LIKE.test(v) ? "<date>" : v;
+  if (typeof v === "number" && ((v > 1e12 && v < 3e12) || (v > 1e9 && v < 3e9))) return "<time>";
+  if (Array.isArray(v)) return v.map(shapeOf);
+  if (v && typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(v as Record<string, unknown>).sort()) out[k] = shapeOf((v as Record<string, unknown>)[k]);
+    return out;
+  }
+  return v;
+}
+export function shapeKey(service: string, method: string, body: unknown): string {
+  return createHash("sha256").update(`${service}/${method}\n${JSON.stringify(shapeOf(body ?? {}))}`).digest("hex");
+}
+
+/**
+ * Is this request the copy's own walk, and if so when did the run start?
+ * A cache holding something older than the run reads REX again rather than
+ * answering from what it holds - otherwise the walk would find every board
+ * warm and keep none of the REX answers the boards will need overnight.
+ * Request-scoped (the walk's header), so nobody else's screen slows down.
+ */
+export async function walkRunStart(): Promise<number | null> {
+  const run = gr.__rexSnapshotRun;
+  if (!run || !process.env.CRON_SECRET) return null;
+  try {
+    const { headers } = await import("next/headers");
+    return (await headers()).get("x-os-rex-snapshot") === process.env.CRON_SECRET ? run.startedAt : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when a held copy from `at` must be read again for the walk. */
+export async function staleForWalk(at: number | null | undefined): Promise<boolean> {
+  const start = await walkRunStart();
+  return start != null && (at ?? 0) < start;
+}
+
 const gr = globalThis as { __rexSnapshotRun?: { startedAt: number } | null };
 /** A snapshot run is going: keep every answer, however recently it was kept. */
 export function snapshotRunActive(): boolean {
@@ -325,10 +371,11 @@ export function recordRead(service: string, method: string, body: unknown, resul
   }
   if (json.length > RECORD_MAX_BYTES) return;
   void q(
-    `INSERT INTO os_rex_snapshot (key, service, method, body, result, taken_at, bytes, loose_key)
-     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, NOW(), $6, $7)
-     ON CONFLICT (key) DO UPDATE SET result = EXCLUDED.result, taken_at = NOW(), bytes = EXCLUDED.bytes, loose_key = EXCLUDED.loose_key`,
-    [key, service, method, JSON.stringify(body ?? {}), json, json.length, looseKey(service, method, body)]
+    `INSERT INTO os_rex_snapshot (key, service, method, body, result, taken_at, bytes, loose_key, shape_key)
+     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, NOW(), $6, $7, $8)
+     ON CONFLICT (key) DO UPDATE SET result = EXCLUDED.result, taken_at = NOW(), bytes = EXCLUDED.bytes,
+       loose_key = EXCLUDED.loose_key, shape_key = EXCLUDED.shape_key`,
+    [key, service, method, JSON.stringify(body ?? {}), json, json.length, looseKey(service, method, body), shapeKey(service, method, body)]
   ).catch((e) => console.warn("[rex-outage] could not keep a read", `${service}/${method}`, e instanceof Error ? e.message : e));
   /* A week is plenty: the copy is for an overnight outage, not an archive. */
   if (now - s.prunedAt > 3_600_000) {
@@ -359,6 +406,15 @@ export async function readSnapshot(
                       ORDER BY taken_at DESC LIMIT 1)
         RETURNING result, taken_at`,
       [looseKey(service, method, body), SERVE_MAX_AGE_H]
+    ).catch(() => []);
+  }
+  if (!rows[0]) {
+    rows = await q<{ result: unknown; taken_at: Date }>(
+      `UPDATE os_rex_snapshot SET hits = hits + 1, last_served_at = NOW()
+        WHERE key = (SELECT key FROM os_rex_snapshot WHERE shape_key = $1 AND taken_at > NOW() - make_interval(hours => $2)
+                      ORDER BY taken_at DESC LIMIT 1)
+        RETURNING result, taken_at`,
+      [shapeKey(service, method, body), SERVE_MAX_AGE_H]
     ).catch(() => []);
   }
   const s = st();

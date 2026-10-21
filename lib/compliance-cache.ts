@@ -1,4 +1,5 @@
 import "server-only";
+import { staleForWalk } from "@/lib/rex-outage";
 import { fetchComplianceBook, ukDayNumber, type ComplianceBook } from "@/lib/rex-compliance";
 import { londonDay, londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
@@ -162,9 +163,11 @@ export async function getComplianceBook(): Promise<{
 }> {
   const held = memory ?? (await readStored());
   const age = held ? Date.now() - held.at : Infinity;
+  /* The REX copy's walk reads it again (lib/rex-outage, 21 Oct 2026). */
+  const walk = await staleForWalk(held?.at);
 
-  if (held && age < FRESH_MS) return { book: asOfToday(held.book, held.at), ageMs: age, stale: false };
-  if (held && age < STALE_MS) {
+  if (held && age < FRESH_MS && !walk) return { book: asOfToday(held.book, held.at), ageMs: age, stale: false };
+  if (held && age < STALE_MS && !walk) {
     /* Caught (1 Oct 2026): a background refresh that failed was an
        unhandled rejection. The held copy stands, and says how old it is. */
     void refreshComplianceBook().catch((e) => console.error("[compliance-cache] background refresh failed", e instanceof Error ? e.message : e));
