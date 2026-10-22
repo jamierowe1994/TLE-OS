@@ -14,6 +14,7 @@ import { newLeadsFor } from "@/lib/lead-ledger";
 import { newBookingsFor } from "@/lib/rex-viewings";
 import { decisionsFor, waitingOnDesk } from "@/lib/section-notices";
 import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
+import { gapsForBell } from "@/lib/propoly-mail";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -396,6 +397,23 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
           : `${credit ? "The Anthropic account ran out of credit" : "The Anthropic key was refused"}${back ? `, back since ${new Date(back).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}` : ""}. Waiting PLC files read themselves once it answered.`,
         href: "/admin/ai-costs",
         tone: open ? "warn" : "none",
+      });
+    }
+  }
+  /* Whose Outlook isn't connected, so Propoly's copies to them (the move-in
+     pack above all) can't be logged (lib/propoly-mail, 22 Oct 2026). Owners,
+     one line per set of names: told once, gone once ticked. */
+  if (me.role === "owner") {
+    const gaps = await gapsForBell().catch(() => null);
+    if (gaps) {
+      out.push({
+        id: `propoly-gap:${gaps.names.join("|")}`,
+        kind: "compliance",
+        at: gaps.since,
+        title: gaps.names.length === 1 ? `${gaps.names[0]}'s Outlook isn't connected` : `${gaps.names.length} people's Outlook isn't connected`,
+        body: `${gaps.names.join(", ")}. Propoly's emails to them, the move-in pack included, can't be logged on the let until they connect it on their Profile.`,
+        href: "/admin/propoly",
+        tone: "warn",
       });
     }
   }

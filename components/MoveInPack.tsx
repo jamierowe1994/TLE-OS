@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { PACK_EMAIL, PACK_FILES } from "@/lib/propoly-pack";
 
 /**
  * THE MOVE-IN PACK ON A LET (lib/propoly-mail, 22 Oct 2026).
@@ -10,6 +11,8 @@ import DoodleIcon from "@/components/DoodleIcon";
  *                  and its files; until one is seen, when it is due by.
  * PropolyMailView  one Propoly email, full screen, with every attachment the
  *                  OS copied out of Outlook.
+ * ExpectedPackEmail what the pack email looks like and what it should carry
+ *                  (lib/propoly-pack), so anybody can tell it when they see it.
  *
  * The pack goes from Propoly when Kirstie executes the deal, and has to reach
  * the tenant within about 28 days of moving in, or the landlord cannot later
@@ -23,7 +26,46 @@ export type PropolyMail = {
   subject: string; preview: string; text: string; at: string;
   attachments: MailFile[]; attachmentsNote: string | null;
   mailboxes: string[]; dealId: string | null; address: string; matchedOn: string; matchedBy: string | null;
+  /** On a move-in pack: the expected files it came without. */
+  missing?: string[];
 };
+
+/**
+ * The email we are looking for, in words (James, 22 Oct 2026: "build the
+ * email in so we know what we're looking for"). `compact` folds it under a
+ * line for the let; Admin shows it open.
+ */
+export function ExpectedPackEmail({ compact = false }: { compact?: boolean }) {
+  const body = (
+    <div className={compact ? "mt-2 space-y-2 text-[11.5px] leading-relaxed" : "space-y-3 text-sm leading-relaxed"}>
+      <dl className={`grid gap-x-3 gap-y-1 ${compact ? "grid-cols-[64px_1fr]" : "grid-cols-[72px_1fr] sm:grid-cols-[110px_1fr]"}`}>
+        <dt className="text-muted">From</dt><dd className="break-words">&quot;{PACK_EMAIL.fromName}&quot; &lt;{PACK_EMAIL.from}&gt;</dd>
+        <dt className="text-muted">Subject</dt><dd>{PACK_EMAIL.subject}</dd>
+        <dt className="text-muted">To</dt><dd>{PACK_EMAIL.to}</dd>
+        <dt className="text-muted">When</dt><dd>{PACK_EMAIL.when}</dd>
+      </dl>
+      <div>
+        <p className="text-muted">Attached</p>
+        <ul className="mt-1 space-y-0.5">
+          {PACK_FILES.map((f) => (
+            <li key={f.key} className="flex items-baseline gap-2">
+              <DoodleIcon name="doc" size={11} className="shrink-0 translate-y-[1px]" />
+              <span>{f.label}{f.hmoOnly ? <span className="text-muted"> - on an HMO</span> : f.notScotland ? <span className="text-muted"> - England and Wales</span> : null}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p className="text-muted">{PACK_EMAIL.why}</p>
+    </div>
+  );
+  if (!compact) return body;
+  return (
+    <details className="mt-2 border-t border-current/10 pt-2">
+      <summary className="cursor-pointer text-[11.5px] font-semibold">What the email looks like</summary>
+      {body}
+    </details>
+  );
+}
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
 const at = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", "");
@@ -88,6 +130,9 @@ export function PropolyMailView({ mail, onClose }: { mail: PropolyMail; onClose:
             </ul>
           )}
           {mail.attachmentsNote && <p className="mt-2 text-[11.5px] text-accent-dark">{mail.attachmentsNote}</p>}
+          {mail.kind === "move-in" && (mail.missing?.length ?? 0) > 0 && (
+            <p className="mt-2 text-[11.5px] text-accent-dark">Not attached: {mail.missing!.join(", ")}.</p>
+          )}
           <div className="mt-3 max-h-[52vh] overflow-y-auto whitespace-pre-wrap break-words border-t border-line/50 pt-3 text-[12.5px] leading-relaxed">{readable(mail.text || mail.preview)}</div>
         </div>
         <p className="mt-3 text-[11px] text-muted">
@@ -151,6 +196,12 @@ export function MoveInPackCard({ dealId, address, moveIn, className = "" }: { de
               <button type="button" onClick={() => setOpen(first)} className="shrink-0 rounded-full border border-current/30 px-3 py-1 text-[11.5px] font-semibold hover:bg-white/60">Open</button>
             )}
           </div>
+          {first && (first.missing?.length ?? 0) > 0 && (
+            <p className="mt-2 rounded-lg bg-white/70 px-3 py-2 text-[11.5px] leading-relaxed text-accent-dark">
+              Not attached: {first.missing!.join(", ")}. If the home needs {first.missing!.length === 1 ? "it" : "them"}, check with Kirstie that the tenant has {first.missing!.length === 1 ? "it" : "them"} another way.
+            </p>
+          )}
+          {!first && <ExpectedPackEmail compact />}
           {(packs.length > 1 || others.length > 0) && (
             <ul className="mt-2.5 space-y-1 border-t border-current/10 pt-2.5">
               {[...packs.slice(0, -1), ...others].map((m) => (

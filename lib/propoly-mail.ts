@@ -6,6 +6,8 @@ import { MailboxNotConnected, msAccessTokenFor } from "@/lib/microsoft";
 import { isInternalAddress } from "@/lib/email-policy";
 import { postcodeOf, sameHome } from "@/lib/address-parse";
 import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
+import { isScottishHome } from "@/lib/compliance";
+import { missingFiles } from "@/lib/propoly-pack";
 import { getAllPropolyDeals, getPropolyCompletes } from "@/lib/business/propoly-deals";
 
 /**
@@ -49,6 +51,12 @@ export interface PropolyMailSettings {
   senders: string[];
   /** What marks the move-in pack, a regular expression over the subject and the attachment names. */
   moveInWords: string;
+  /**
+   * Mailboxes read on every run, never left fifteen minutes, and named first
+   * when they stop being connected: the office's backstop (22 Oct 2026), so
+   * the log never rests on one agent's Outlook alone.
+   */
+  alwaysWatch: string[];
   updatedBy?: string;
   updatedAt?: string;
 }
@@ -107,13 +115,14 @@ function ensureTables(): Promise<void> {
 /* ── the setting ───────────────────────────────────────────────────────── */
 
 export async function mailSettings(): Promise<PropolyMailSettings> {
-  const blank: PropolyMailSettings = { senders: DEFAULT_SENDERS, moveInWords: DEFAULT_MOVE_IN_WORDS };
+  const blank: PropolyMailSettings = { senders: DEFAULT_SENDERS, moveInWords: DEFAULT_MOVE_IN_WORDS, alwaysWatch: [] };
   if (!hasDb()) return blank;
   const [row] = await q<{ value: Partial<PropolyMailSettings> }>(`SELECT value FROM os_settings WHERE key = $1`, [SETTINGS_KEY]).catch(() => []);
   const v = row?.value ?? {};
   return {
     senders: Array.isArray(v.senders) ? v.senders.map((s) => String(s).trim().toLowerCase()).filter(Boolean) : DEFAULT_SENDERS,
     moveInWords: typeof v.moveInWords === "string" && v.moveInWords.trim() ? v.moveInWords : DEFAULT_MOVE_IN_WORDS,
+    alwaysWatch: Array.isArray(v.alwaysWatch) ? v.alwaysWatch.map((s) => String(s).trim().toLowerCase()).filter(Boolean) : [],
     updatedBy: v.updatedBy,
     updatedAt: v.updatedAt,
   };
@@ -121,7 +130,7 @@ export async function mailSettings(): Promise<PropolyMailSettings> {
 
 export class SettingRefused extends Error {}
 
-export async function saveMailSettings(p: { senders: string[]; moveInWords?: string }, by: string): Promise<PropolyMailSettings> {
+export async function saveMailSettings(p: { senders: string[]; moveInWords?: string; alwaysWatch?: string[] }, by: string): Promise<PropolyMailSettings> {
   const senders = [...new Set(p.senders.map((s) => s.trim().toLowerCase()).filter(Boolean))];
   for (const s of senders) {
     if (!/^[^@\s]*@[a-z0-9.-]+\.[a-z]{2,}$/.test(s)) throw new SettingRefused(`"${s}" isn't an email address or a domain like @propoly.com.`);
@@ -132,7 +141,11 @@ export async function saveMailSettings(p: { senders: string[]; moveInWords?: str
   } catch {
     throw new SettingRefused("The move-in words aren't a pattern the OS can read.");
   }
-  const value: PropolyMailSettings = { senders, moveInWords: words, updatedBy: by, updatedAt: new Date().toISOString() };
+  const alwaysWatch = [...new Set((p.alwaysWatch ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean))];
+  for (const s of alwaysWatch) {
+    if (!/^[^@\s]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(s)) throw new SettingRefused(`"${s}" isn't a mailbox address.`);
+  }
+  const value: PropolyMailSettings = { senders, moveInWords: words, alwaysWatch, updatedBy: by, updatedAt: new Date().toISOString() };
   await q(
     `INSERT INTO os_settings (key, value, updated_at, updated_by) VALUES ($1, $2::jsonb, NOW(), $3)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
@@ -324,7 +337,7 @@ export function matchDeal(deals: DealLite[], m: { to: string[]; text: string; at
 
 export const newId = () => randomBytes(12).toString("hex");
 
-export interface ScanResult { mailboxes: number; read: number; logged: number; seenAgain: number; problems: number; skipped?: string }
+export interface ScanResult { mailboxes: number; read: number; logged: number; seenAgain: number; problems: number; rematched?: number; skipped?: string }
 
 /**
  * Every connected mailbox, each at most every fifteen minutes unless `force`.
@@ -349,7 +362,8 @@ export async function scanPropolyMail(opts: { force?: boolean; from?: string; us
 
   for (const box of boxes) {
     if (Date.now() > stopAt) break;
-    if (!opts.force && box.last_run_at && Date.now() - new Date(box.last_run_at).getTime() < EVERY_MS) continue;
+    const always = settings.alwaysWatch.includes(box.ms_email.toLowerCase());
+    if (!opts.force && !always && box.last_run_at && Date.now() - new Date(box.last_run_at).getTime() < EVERY_MS) continue;
     result.mailboxes += 1;
     /* An hour's overlap: a message stamped just before the last read can land after it. */
     const since = opts.from ?? (box.read_to ? new Date(new Date(box.read_to).getTime() - 3600_000).toISOString() : GO_LIVE);
@@ -427,7 +441,95 @@ export async function scanPropolyMail(opts: { force?: boolean; from?: string; us
       ).catch(() => undefined);
     }
   }
+  /* What couldn't be placed is tried again every run: a deal Kirstie has just
+     executed has left the live book and isn't in the completed one until its
+     hourly read (12b Cliff Road, 22 Oct 2026, unplaced for that reason). */
+  result.rematched = await rematchUnfiled(deals).catch(() => 0);
+  await noteGaps().catch(() => undefined);
   return result;
+}
+
+/** Emails on no deal, matched again against today's books. Hand-placed ones are never touched. */
+export async function rematchUnfiled(held?: DealLite[] | null): Promise<number> {
+  if (!hasDb()) return 0;
+  await ensureTables();
+  const rows = await q<Row>(`SELECT * FROM os_propoly_mail WHERE deal_id IS NULL AND matched_on <> 'hand' ORDER BY at DESC LIMIT 200`);
+  if (!rows.length) return 0;
+  const deals = held ?? (await dealBook()) ?? [];
+  let placed = 0;
+  for (const r of rows) {
+    const m = matchDeal(deals, { to: [...(r.to_list ?? []), ...(r.cc_list ?? [])].map((a) => a.email), text: `${r.subject}\n${r.body_text}`, at: new Date(r.at).toISOString() });
+    if (!m) continue;
+    placed += (await q(`UPDATE os_propoly_mail SET deal_id = $2, address = $3, matched_on = $4 WHERE id = $1 AND deal_id IS NULL RETURNING id`, [r.id, m.dealId, m.address, m.on])).length;
+  }
+  return placed;
+}
+
+/* ── whose Propoly copies can't be caught ──────────────────────────────── */
+
+export interface MailboxGap { name: string; email: string; role: string; why: string; alwaysWatch: boolean }
+
+const GAPS_KEY = "propoly_mail_gaps";
+/** The roles that get Propoly's copies: the agents on lets, Kirstie, the compliance desk. Owners only when they manage a deal. */
+const WATCHED_ROLES = new Set(["agent", "pretenancy", "compliance"]);
+
+/**
+ * Everybody whose Propoly copies the OS can't read: staff in a role that
+ * gets them, or anybody Propoly names as a deal's manager, with no Outlook
+ * connected; and any always-watch mailbox not connected. Locked accounts
+ * are left out.
+ */
+export async function connectionGaps(): Promise<MailboxGap[]> {
+  if (!hasDb()) return [];
+  const [users, settings, live] = await Promise.all([
+    q<{ name: string; email: string; role: string; ms_email: string | null }>(
+      `SELECT u.name, u.email, u.role, t.ms_email FROM os_users u LEFT JOIN os_ms_tokens t ON t.user_id = u.id
+        WHERE u.locked_at IS NULL AND u.id NOT LIKE 'u-test%'`
+    ),
+    mailSettings(),
+    getAllPropolyDeals().catch(() => null),
+  ]);
+  const managers = new Set((live ?? []).map((d) => (d.managerEmail ?? "").toLowerCase()).filter(Boolean));
+  const connected = new Set(users.map((u) => (u.ms_email ?? "").toLowerCase()).filter(Boolean));
+  const gaps: MailboxGap[] = [];
+  for (const box of settings.alwaysWatch) {
+    if (connected.has(box)) continue;
+    const u = users.find((x) => x.email.toLowerCase() === box);
+    gaps.push({ name: u?.name || box, email: box, role: u?.role ?? "mailbox", why: "On the always-watch list, but its Outlook isn't connected to the OS.", alwaysWatch: true });
+  }
+  for (const u of users) {
+    if (u.ms_email || settings.alwaysWatch.includes(u.email.toLowerCase())) continue;
+    const manages = managers.has(u.email.toLowerCase());
+    if (!WATCHED_ROLES.has(u.role) && !manages) continue;
+    gaps.push({ name: u.name || u.email, email: u.email, role: u.role, why: manages ? "Manages a live Propoly deal, and their Outlook isn't connected." : "Their Outlook isn't connected, so Propoly's copies to them aren't read.", alwaysWatch: false });
+  }
+  return gaps.sort((a, b) => Number(b.alwaysWatch) - Number(a.alwaysWatch) || a.name.localeCompare(b.name));
+}
+
+/**
+ * The gaps as the owners' bell reads them: one line, kept with the day it
+ * was first seen. A changed set of names is a new line; the same set is the
+ * same line, so it is told once and stays done once ticked.
+ */
+async function noteGaps(): Promise<void> {
+  const gaps = await connectionGaps();
+  const names = gaps.map((g) => g.name);
+  const [row] = await q<{ value: { names?: string[]; since?: string } }>(`SELECT value FROM os_settings WHERE key = $1`, [GAPS_KEY]);
+  const had = row?.value?.names ?? [];
+  if (had.join("|") === names.join("|")) return;
+  await q(
+    `INSERT INTO os_settings (key, value, updated_at, updated_by) VALUES ($1, $2::jsonb, NOW(), 'propoly-mail')
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
+    [GAPS_KEY, JSON.stringify({ names, since: new Date().toISOString() })]
+  );
+}
+
+/** For the bell (owners): the names, and since when. Null when nobody is missing. */
+export async function gapsForBell(): Promise<{ names: string[]; since: string } | null> {
+  if (!hasDb()) return null;
+  const [row] = await q<{ value: { names?: string[]; since?: string } }>(`SELECT value FROM os_settings WHERE key = $1`, [GAPS_KEY]).catch(() => []);
+  const names = row?.value?.names ?? [];
+  return names.length && row?.value?.since ? { names, since: row.value.since } : null;
 }
 
 /* ── finding the sender (owner only, read live, nothing kept) ──────────── */
@@ -486,6 +588,8 @@ export interface PropolyMail {
   subject: string; preview: string; text: string; at: string;
   attachments: StoredAttachment[]; attachmentsNote: string | null;
   mailboxes: string[]; dealId: string | null; address: string; matchedOn: string; matchedBy: string | null;
+  /** On a move-in pack: the expected files it came without (lib/propoly-pack). */
+  missing?: string[];
 }
 
 type Row = {
@@ -499,6 +603,23 @@ const shape = (r: Row): PropolyMail => ({
   subject: r.subject, preview: r.preview, text: r.body_text, at: new Date(r.at).toISOString(), attachments: r.attachments ?? [],
   attachmentsNote: r.attachments_note, mailboxes: r.mailboxes ?? [], dealId: r.deal_id, address: r.address, matchedOn: r.matched_on, matchedBy: r.matched_by,
 });
+
+/**
+ * Each move-in pack checked against what it should carry. An HMO's pack
+ * should also hold the PAT and legionella; a Scottish let has no deposit
+ * leaflet from Propoly. HMO is the home's own record (os_properties).
+ */
+async function withMissing(mail: PropolyMail[]): Promise<PropolyMail[]> {
+  const packs = mail.filter((m) => m.kind === "move-in");
+  if (!packs.length) return mail;
+  const homes = await q<{ address: string; hmo: boolean }>(`SELECT address, hmo FROM os_properties WHERE active AND hmo`).catch(() => []);
+  for (const m of packs) {
+    const hmo = Boolean(m.address) && homes.some((h) => sameHome(h.address, m.address));
+    const scotland = Boolean(m.address) && isScottishHome({ name: m.address, locality: "" });
+    m.missing = missingFiles(m.attachments.map((f) => f.name), { hmo, scotland });
+  }
+  return mail;
+}
 
 /**
  * Propoly's emails about one let or one home: on its deal, or (a deal the
@@ -515,29 +636,44 @@ export async function mailFor(p: { dealIds?: string[]; addresses?: string[] }): 
     `SELECT * FROM os_propoly_mail WHERE deal_id = ANY($1) OR (address <> '' AND $2::int > 0) ORDER BY at DESC LIMIT 400`,
     [dealIds, addresses.length]
   );
-  return rows.filter((r) => (r.deal_id && dealIds.includes(r.deal_id)) || addresses.some((a) => r.address && sameHome(r.address, a))).slice(0, 40).map(shape);
+  return withMissing(rows.filter((r) => (r.deal_id && dealIds.includes(r.deal_id)) || addresses.some((a) => r.address && sameHome(r.address, a))).slice(0, 40).map(shape));
 }
 
 /** For the owner's page: the latest kept, and whatever is on no file yet. */
-export async function recentMail(limit = 60): Promise<{ recent: PropolyMail[]; unfiled: PropolyMail[]; boxes: { email: string; readTo: string | null; lastRunAt: string | null; found: number; note: string | null }[] }> {
-  if (!hasDb()) return { recent: [], unfiled: [], boxes: [] };
+export interface MailboxRead { email: string; readTo: string | null; lastRunAt: string | null; found: number; note: string | null; kept: number }
+
+export async function recentMail(limit = 60): Promise<{ recent: PropolyMail[]; unfiled: PropolyMail[]; boxes: MailboxRead[]; gaps: MailboxGap[]; total: number; onlyOneBox: number }> {
+  if (!hasDb()) return { recent: [], unfiled: [], boxes: [], gaps: [], total: 0, onlyOneBox: 0 };
   await ensureTables();
-  const [recent, unfiled, boxes] = await Promise.all([
+  const [recent, unfiled, boxes, gaps, spread] = await Promise.all([
     q<Row>(`SELECT * FROM os_propoly_mail ORDER BY at DESC LIMIT $1`, [limit]),
     q<Row>(`SELECT * FROM os_propoly_mail WHERE deal_id IS NULL ORDER BY at DESC LIMIT 100`),
     q<{ mailbox_email: string; read_to: Date | null; last_run_at: Date | null; found: number; note: string | null }>(
       `SELECT t.ms_email AS mailbox_email, b.read_to, b.last_run_at, coalesce(b.found, 0) AS found, b.note
          FROM os_ms_tokens t LEFT JOIN os_propoly_mail_boxes b ON b.user_id = t.user_id ORDER BY t.ms_email`
     ),
+    connectionGaps().catch(() => []),
+    /* How many mailboxes each email was found in, and which boxes hold what. */
+    q<{ total: string; one: string; boxes: Record<string, number> | null }>(
+      `SELECT count(*)::text AS total, count(*) FILTER (WHERE jsonb_array_length(mailboxes) <= 1)::text AS one,
+              (SELECT jsonb_object_agg(b, n) FROM (SELECT jsonb_array_elements_text(mailboxes) AS b, count(*) AS n FROM os_propoly_mail GROUP BY 1) x) AS boxes
+         FROM os_propoly_mail`
+    ),
   ]);
+  const kept = spread[0]?.boxes ?? {};
   return {
-    recent: recent.map(shape),
-    unfiled: unfiled.map(shape),
-    boxes: boxes.map((b) => ({ email: b.mailbox_email, readTo: b.read_to ? new Date(b.read_to).toISOString() : null, lastRunAt: b.last_run_at ? new Date(b.last_run_at).toISOString() : null, found: Number(b.found), note: b.note })),
+    recent: await withMissing(recent.map(shape)),
+    unfiled: await withMissing(unfiled.map(shape)),
+    boxes: boxes
+      .map((b) => ({ email: b.mailbox_email, readTo: b.read_to ? new Date(b.read_to).toISOString() : null, lastRunAt: b.last_run_at ? new Date(b.last_run_at).toISOString() : null, found: Number(b.found), note: b.note, kept: Number(kept[b.mailbox_email] ?? 0) }))
+      .sort((a, b) => b.kept - a.kept || a.email.localeCompare(b.email)),
+    gaps,
+    total: Number(spread[0]?.total ?? 0),
+    onlyOneBox: Number(spread[0]?.one ?? 0),
   };
 }
 
-/** An owner puts an email on a deal by hand (one the reader couldn't place). */
+/** The owner or the office puts an email on a deal by hand (one the reader couldn't place). */
 export async function fileMail(id: string, dealId: string, by: string): Promise<PropolyMail> {
   await ensureTables();
   const deals = (await dealBook()) ?? [];

@@ -160,8 +160,9 @@ const GROUPS: Array<{
          and which model each one is on. */
       { href: "/admin/ai-costs", label: "AI costs", needs: "see:reports" },
       /* Propoly's emails read from Outlook (the move-in pack) and a let's
-         certificates pushed into its deal (22 Oct 2026). Owners only. */
-      { href: "/admin/propoly", label: "Propoly", needs: "see:tracking" },
+         certificates pushed into its deal (22 Oct 2026). Owners, and the office
+         to place an email nobody could match. */
+      { href: "/admin/propoly", label: "Propoly", needs: "see:pretenancy" },
       /* Where Steve's knowledge is written. The same screen Susan, Francesca,
          Michael and Kirstie get as a workspace of their own. */
       { href: "/knowledge", label: "Knowledge", needs: "edit:knowledge" },

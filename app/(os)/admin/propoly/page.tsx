@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PropolyMailView, type PropolyMail } from "@/components/MoveInPack";
+import { ExpectedPackEmail, PropolyMailView, type PropolyMail } from "@/components/MoveInPack";
 
 /**
- * PROPOLY, FROM THE OS'S SIDE (owners only, 22 Oct 2026).
+ * PROPOLY, FROM THE OS'S SIDE (22 Oct 2026). Owners see everything; the
+ * office (pre-tenancy, compliance) sees the log and puts on its let any email
+ * the reader couldn't place.
  *
+ * Needs attention       emails on no let, whose Outlook isn't connected, and
+ *                       how many emails only one mailbox caught.
+ * What we look for      the move-in pack email in words (lib/propoly-pack).
  * Move-in pack emails   Propoly's sender address (one setting), every
  *                       connected Outlook's read, what was kept, and anything
  *                       the reader couldn't put on a let. Find the Sender
@@ -15,13 +20,17 @@ import { PropolyMailView, type PropolyMail } from "@/components/MoveInPack";
  *                       found in the OS and REX, Check first, then Push.
  */
 
-type Box = { email: string; readTo: string | null; lastRunAt: string | null; found: number; note: string | null };
-type Settings = { senders: string[]; moveInWords: string; updatedBy?: string; updatedAt?: string };
+type Box = { email: string; readTo: string | null; lastRunAt: string | null; found: number; note: string | null; kept: number };
+type Settings = { senders: string[]; moveInWords: string; alwaysWatch: string[]; updatedBy?: string; updatedAt?: string };
+type Gap = { name: string; email: string; role: string; why: string; alwaysWatch: boolean };
 type DocPlan = { kind: string; label: string; slot: string; found: { where: string; name: string; expiry: string; expired: boolean } | null; note: string; outcome?: string };
 type Plan = { dealId: string; address: string; status: string; moveIn: string | null; propertyIds: string[]; rexNote: string | null; docs: DocPlan[] };
 type Push = { id: string; dealId: string; address: string; by: string; at: string; results: DocPlan[] };
 type Sender = { address: string; name: string; count: number; mailboxes: number; subjects: string[] };
-type Answer = { ok: boolean; error?: string; goLive: string; settings: Settings; recent: PropolyMail[]; unfiled: PropolyMail[]; boxes: Box[]; pushes: Push[] };
+type Answer = {
+  ok: boolean; error?: string; owner: boolean; goLive: string; settings: Settings; recent: PropolyMail[]; unfiled: PropolyMail[]; boxes: Box[];
+  gaps: Gap[]; total: number; onlyOneBox: number; pushes: Push[];
+};
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
 const at = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(",", "");
@@ -44,6 +53,7 @@ export default function PropolyAdmin() {
   const [said, setSaid] = useState<string | null>(null);
   const [senders, setSenders] = useState("");
   const [words, setWords] = useState("");
+  const [watch, setWatch] = useState<string | null>(null);
   const [found, setFound] = useState<Sender[] | null>(null);
   const [open, setOpen] = useState<PropolyMail | null>(null);
   const [fileDeal, setFileDeal] = useState<Record<string, string>>({});
@@ -58,6 +68,7 @@ export default function PropolyAdmin() {
     setData(j);
     setSenders((s) => s || j.settings.senders.join(", "));
     setWords((w) => w || j.settings.moveInWords);
+    setWatch((w) => w ?? j.settings.alwaysWatch.join(", "));
   }, []);
   useEffect(() => { void load(); }, [load]);
 
@@ -83,8 +94,63 @@ export default function PropolyAdmin() {
 
       {data && (
         <>
+          {/* ── needs attention ─────────────────────────────────────────── */}
+          <section className={`mt-8 rounded-xl border p-5 ${data.unfiled.length || data.gaps.length ? "border-accent-dark/30 bg-accent-dark/5" : "border-line"}`}>
+            <h2 className="text-lg font-normal text-ink">Needs Attention</h2>
+            {!data.unfiled.length && !data.gaps.length && <p className="mt-1 text-sm text-muted">Every email is on its let, and everybody who gets Propoly&apos;s copies has Outlook connected.</p>}
+
+            {data.unfiled.length > 0 && (
+              <div className="mt-3">
+                <p className="text-sm text-ink">On no let yet · {data.unfiled.length}</p>
+                <p className="mt-0.5 text-sm text-muted">
+                  The reader couldn&apos;t tell which deal these are about, and tries again every few minutes. Paste the deal&apos;s Propoly link, or the address, to put one on its let now.
+                </p>
+                <ul className="mt-2 divide-y divide-line rounded-lg border border-line bg-page">
+                  {data.unfiled.map((m) => (
+                    <li key={m.id} className="flex flex-col gap-2 px-3 py-2.5 text-sm sm:flex-row sm:items-center">
+                      <button type="button" onClick={() => setOpen(m)} className="min-w-0 flex-1 text-left hover:underline">
+                        <span className="text-ink">{m.kind === "move-in" ? "Move-in pack" : "Propoly email"}</span>
+                        <span className="block text-xs text-muted">{m.subject} · {at(m.at)} · {m.mailboxes.join(", ")}</span>
+                      </button>
+                      <input value={fileDeal[m.id] ?? ""} onChange={(e) => setFileDeal((f) => ({ ...f, [m.id]: e.target.value }))} placeholder="Deal link or address" className="w-full rounded-lg border border-line bg-page px-2.5 py-1.5 text-xs sm:w-56" />
+                      <button type="button" disabled={busy !== null || !fileDeal[m.id]} onClick={() => act(`file-${m.id}`, { action: "file", id: m.id, deal: fileDeal[m.id] }, () => { void load(); return "Put on the let."; })} className="self-start rounded-full border border-line px-3 py-1.5 text-xs disabled:opacity-50 sm:self-auto">Match to a Deal</button>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" disabled={busy !== null} onClick={() => act("rematch", { action: "rematch" }, (j) => { void load(); return Number(j.placed) ? `${j.placed} put on ${Number(j.placed) === 1 ? "its let" : "their lets"}.` : "Still no deal for these. Match them by hand."; })} className="mt-2 text-xs text-accent-dark underline-offset-2 hover:underline disabled:opacity-50">
+                  {busy === "rematch" ? "Trying…" : "Try Them Again Now"}
+                </button>
+              </div>
+            )}
+
+            {data.gaps.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm text-ink">Outlook not connected · {data.gaps.length}</p>
+                <p className="mt-0.5 text-sm text-muted">Propoly&apos;s copies to these people, the move-in pack included, aren&apos;t being caught. They connect it on their Profile.</p>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {data.gaps.map((g) => (
+                    <li key={g.email}><span className="text-ink">{g.name}</span> <span className="text-xs text-muted">· {g.why}</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <p className="mt-4 text-xs text-muted">
+              {data.total ? `${data.onlyOneBox} of ${data.total} emails were found in one mailbox only` : "Nothing kept yet"}
+              {data.total && data.onlyOneBox === data.total ? ": Propoly copies only the agent on the let, so nothing else in the office holds a second copy. Add a mailbox under Always Watch once one gets them." : "."}
+            </p>
+          </section>
+
+          {/* ── what we are looking for ─────────────────────────────────── */}
+          <section className="mt-6 rounded-xl border border-line p-5">
+            <h2 className="text-lg font-normal text-ink">The Email We Look For</h2>
+            <p className="mt-1 mb-3 text-sm text-muted">The move-in pack, as Propoly sends it. A let shows it as sent once a copy reaches any connected Outlook.</p>
+            <ExpectedPackEmail />
+          </section>
+
           {/* ── the setting ─────────────────────────────────────────────── */}
-          <section className="mt-8 rounded-xl border border-line p-5">
+          {data.owner && (
+          <section className="mt-6 rounded-xl border border-line p-5">
             <h2 className="text-lg font-normal text-ink">Move-in Pack Emails</h2>
             <p className="mt-1 text-sm text-muted">
               Only mail from these addresses is read, from {day(data.goLive)} onwards. A whole domain can be written as @propoly.com.
@@ -93,8 +159,10 @@ export default function PropolyAdmin() {
             <input id="senders" value={senders} onChange={(e) => setSenders(e.target.value)} placeholder="Not set yet" className="mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-sm" />
             <label className="mt-3 block text-xs text-muted" htmlFor="words">What marks the move-in pack (subject or file names)</label>
             <input id="words" value={words} onChange={(e) => setWords(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 font-mono text-xs" />
+            <label className="mt-3 block text-xs text-muted" htmlFor="watch">Always watch these mailboxes (read every run, and named first if they disconnect)</label>
+            <input id="watch" value={watch ?? ""} onChange={(e) => setWatch(e.target.value)} placeholder="e.g. kirstie.mulholland@thelettingexperts.co.uk" className="mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-sm" />
             <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" disabled={busy !== null} onClick={() => act("save", { action: "settings", senders, moveInWords: words }, () => { void load(); return "Saved."; })} className="rounded-full bg-ink px-4 py-2 text-sm text-page disabled:opacity-50">
+              <button type="button" disabled={busy !== null} onClick={() => act("save", { action: "settings", senders, moveInWords: words, alwaysWatch: watch ?? "" }, () => { void load(); return "Saved."; })} className="rounded-full bg-ink px-4 py-2 text-sm text-page disabled:opacity-50">
                 {busy === "save" ? "Saving…" : "Save"}
               </button>
               <button type="button" disabled={busy !== null} onClick={() => act("discover", { action: "discover" }, (j) => { setFound((j.senders as Sender[]) ?? []); return `Looked in ${j.mailboxes} mailboxes${Number(j.problems) ? `, ${j.problems} couldn't be read` : ""}.`; })} className="rounded-full border border-line px-4 py-2 text-sm disabled:opacity-50">
@@ -126,26 +194,9 @@ export default function PropolyAdmin() {
               </div>
             )}
           </section>
+          )}
 
           {/* ── what was kept ───────────────────────────────────────────── */}
-          {data.unfiled.length > 0 && (
-            <section className="mt-6 rounded-xl border border-line p-5">
-              <h2 className="text-lg font-normal text-ink">Not on a Let Yet · {data.unfiled.length}</h2>
-              <p className="mt-1 text-sm text-muted">The reader couldn&apos;t tell which deal these are about. Paste the deal&apos;s Propoly link, or the address, to put one on its let.</p>
-              <ul className="mt-3 divide-y divide-line">
-                {data.unfiled.map((m) => (
-                  <li key={m.id} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
-                    <button type="button" onClick={() => setOpen(m)} className="min-w-0 flex-1 text-left hover:underline">
-                      <span className="text-ink">{m.subject || "(no subject)"}</span>
-                      <span className="block text-xs text-muted">{at(m.at)} · to {m.to.map((t) => t.email).join(", ")}</span>
-                    </button>
-                    <input value={fileDeal[m.id] ?? ""} onChange={(e) => setFileDeal((f) => ({ ...f, [m.id]: e.target.value }))} placeholder="Deal link or address" className="w-56 rounded-lg border border-line bg-page px-2.5 py-1.5 text-xs" />
-                    <button type="button" disabled={busy !== null || !fileDeal[m.id]} onClick={() => act(`file-${m.id}`, { action: "file", id: m.id, deal: fileDeal[m.id] }, () => { void load(); return "Put on the let."; })} className="rounded-full border border-line px-3 py-1.5 text-xs disabled:opacity-50">Put on Let</button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
 
           <section className="mt-6 rounded-xl border border-line p-5">
             <h2 className="text-lg font-normal text-ink">Kept From Outlook</h2>
@@ -154,14 +205,18 @@ export default function PropolyAdmin() {
             ) : (
               <div className="mt-3 overflow-x-auto rounded-lg border border-line">
                 <table className="w-full min-w-[640px] text-left text-sm">
-                  <thead className="bg-box text-xs text-muted"><tr><th className="px-3 py-2 font-normal">Sent</th><th className="px-3 py-2 font-normal">Email</th><th className="px-3 py-2 font-normal">Let</th><th className="px-3 py-2 text-right font-normal">Files</th></tr></thead>
+                  <thead className="bg-box text-xs text-muted"><tr><th className="px-3 py-2 font-normal">Sent</th><th className="px-3 py-2 font-normal">Email</th><th className="px-3 py-2 font-normal">Let</th><th className="px-3 py-2 font-normal">Caught in</th><th className="px-3 py-2 text-right font-normal">Files</th></tr></thead>
                   <tbody>
                     {data.recent.map((m) => (
                       <tr key={m.id} onClick={() => setOpen(m)} className="cursor-pointer border-t border-line align-top hover:bg-box">
                         <td className="figures whitespace-nowrap px-3 py-2 text-muted">{at(m.at)}</td>
                         <td className="px-3 py-2"><span className="text-ink">{m.kind === "move-in" ? "Move-in pack" : "Propoly email"}</span><span className="block text-xs text-muted">{m.subject}</span></td>
                         <td className="px-3 py-2 text-xs">{m.address || <span className="text-accent-dark">Not on a let</span>}<span className="block text-muted">{m.matchedOn === "tenant" ? "by the tenant's email" : m.matchedOn === "address" ? "by the address" : m.matchedOn === "hand" ? `by ${m.matchedBy}` : ""}</span></td>
-                        <td className="figures px-3 py-2 text-right">{m.attachments.filter((f) => f.key).length} of {m.attachments.length}</td>
+                        <td className="px-3 py-2 text-xs text-muted">{m.mailboxes.map((b) => b.split("@")[0].replace(/\./g, " ")).join(", ")}{m.mailboxes.length <= 1 && <span className="block text-[11px] text-accent-dark">Only copy</span>}</td>
+                        <td className="figures px-3 py-2 text-right">
+                          {m.attachments.filter((f) => f.key).length} of {m.attachments.length}
+                          {m.kind === "move-in" && (m.missing?.length ?? 0) > 0 && <span className="block text-left text-xs font-normal text-accent-dark">Not attached: {m.missing!.join(", ")}</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -169,12 +224,13 @@ export default function PropolyAdmin() {
               </div>
             )}
             <details className="mt-4 text-sm">
-              <summary className="cursor-pointer text-muted">Mailboxes read · {data.boxes.length}</summary>
+              <summary className="cursor-pointer text-muted">Mailboxes read · {data.boxes.length}, most Propoly email first</summary>
               <ul className="mt-2 space-y-1 text-xs">
                 {data.boxes.map((b) => (
                   <li key={b.email} className="flex flex-wrap gap-x-3">
                     <span className="text-ink">{b.email}</span>
-                    <span className="text-muted">{b.lastRunAt ? `read ${at(b.lastRunAt)}, ${b.found} kept` : "not read yet"}</span>
+                    <span className="text-muted">{b.lastRunAt ? `read ${at(b.lastRunAt)}, ${b.kept} ${b.kept === 1 ? "email" : "emails"} found here` : "not read yet"}</span>
+                    {data.settings.alwaysWatch.includes(b.email) && <span className="text-ink">Always watched</span>}
                     {b.note && <span className="text-accent-dark">{b.note}</span>}
                   </li>
                 ))}
@@ -183,6 +239,7 @@ export default function PropolyAdmin() {
           </section>
 
           {/* ── missing documents on a deal ─────────────────────────────── */}
+          {data.owner && (
           <section className="mt-6 rounded-xl border border-line p-5">
             <h2 className="text-lg font-normal text-ink">Missing Documents on a Deal</h2>
             <p className="mt-1 text-sm text-muted">
@@ -246,6 +303,7 @@ export default function PropolyAdmin() {
               </details>
             )}
           </section>
+          )}
         </>
       )}
       {open && <PropolyMailView mail={open} onClose={() => setOpen(null)} />}
