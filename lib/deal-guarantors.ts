@@ -223,7 +223,9 @@ export async function sendGuarantors(plan: GuarantorPlan, letRef: string, by: st
       ? `"Guarantor details" (${names}) is on the deal under General Documents. Key them into the deal's guarantors in Propoly.`
       : sent.outcome === "already"
         ? "Propoly says the deal's General Document slot is already filled, so the guarantor details couldn't go there. Upload them in Propoly by hand."
-        : `Propoly said no: ${sent.note}`;
+        : sent.outcome === "skipped"
+          ? sent.note
+          : `Propoly said no: ${sent.note}`;
     await finish(held, sent.outcome === "uploaded" ? "uploaded" : sent.outcome, detail);
     return { outcome: sent.outcome, detail };
   } catch (e) {

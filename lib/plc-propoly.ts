@@ -109,20 +109,25 @@ export function expiryFor(c: PlcCase, doc: PlcDocument): string | null {
 }
 
 /**
- * A file name Propoly will take. Its only refusal so far (19 Oct 2026, 422
- * "Failed to upload document", nothing more) was the one upload in the pack
- * with a long name, "6 New Cut Building Regulations-GROUND FLOOR PLAN 1-4 AND
- * 7 (1).pdf" at 66 characters; every name up to 37 went. The file itself
- * looked ordinary (0.7 MB, one-page PDF 1.7, not encrypted) and a 1.15 MB
- * image went fine, so the name is the likeliest cause, not a proven one.
- * REX refused a long dash the same day (lib/terms-to-rex rexPlain). So:
- * plain ASCII, dashes as "-",
- * nothing but letters, digits, spaces and . _ - ( ), and at most 60
- * characters with the extension kept.
+ * A file name Propoly will take. 19 Oct 2026: a 66-character name came back
+ * 422 "Failed to upload document" with nothing more, so names were made plain
+ * and capped at 60. 21-22 Oct, once Propoly's own words reached the ticket:
+ * "Name Too long (maximum is 40 characters)", on 44 to 63 character names
+ * across five packs (10 Richmond Avenue, 7 Caernarvon Close, 28 Wheatsheaf
+ * Court, 6 Ruskin Place). A 40-character name went; 41 did not. So: plain
+ * ASCII, dashes as "-", nothing but letters, digits, spaces and . _ - ( ),
+ * at most 40 characters with the extension kept.
+ *
+ * Shortened so it still reads: a folder path ("Property Files - 10_WV39JB/")
+ * and a long id (a UUID, a 12+ digit run) go first, then the end is cut at a
+ * word break, never mid-word where a break is near.
  */
+export const PROPOLY_NAME_MAX = 40;
+
 export function propolyFileName(name: string, fallback = "document.pdf"): string {
-  const plain = name
-    .replace(/[‐-―−]/g, "-")
+  const base = name.split(/[\\/]/).pop() ?? name;
+  const plain = base
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
     .normalize("NFKD")
     .replace(/[^A-Za-z0-9 ._()-]/g, "")
     .replace(/\s+/g, " ")
@@ -130,39 +135,104 @@ export function propolyFileName(name: string, fallback = "document.pdf"): string
   if (!plain || plain.startsWith(".")) return fallback;
   const dot = plain.lastIndexOf(".");
   const ext = dot > 0 && plain.length - dot <= 6 ? plain.slice(dot) : "";
-  const stem = (ext ? plain.slice(0, dot) : plain).slice(0, 60 - ext.length).trim();
+  let stem = ext ? plain.slice(0, dot) : plain;
+  const room = PROPOLY_NAME_MAX - ext.length;
+  if (stem.length > room) {
+    stem = stem
+      .replace(/[_ -]?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "")
+      .replace(/[_ -]?\d{12,}/g, "")
+      .trim();
+  }
+  if (stem.length > room) {
+    const cut = stem.slice(0, room);
+    const brk = Math.max(cut.lastIndexOf(" "), cut.lastIndexOf("_"), cut.lastIndexOf("-"));
+    /* Ends on a whole word already, or the last break is too far back to use. */
+    stem = /[ _-]/.test(stem[room]) || brk < room / 2 ? cut : cut.slice(0, brk);
+  }
+  stem = stem.replace(/[ _.(-]+$/, "").trim();
   return `${stem || "document"}${ext}`;
 }
 
 /**
- * One file into one slot on a deal. Shared by the PLC pack's push and the
- * owner's push of a let's certificates (lib/deal-documents). Throws
- * PropolyWriteBlocked when the switch is off; every answer from Propoly comes
- * back as an outcome.
+ * What Propoly takes: "Please try again using jpg, jpeg, png, pdf format"
+ * (22 Oct 2026, 7 Caernarvon Close, two Word files Kirstie had filed under
+ * right to rent). Anything else is not sent: Propoly refuses it and then says
+ * "Attached can't be blank" as well. There is no Word-to-PDF converter on
+ * Railway (no LibreOffice in the image, and a text-only redraw would lose the
+ * layout of a signed statement), so the file is skipped with a note saying
+ * it needs saving as a PDF.
+ */
+const PROPOLY_FILE_TYPES: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+};
+
+/** The extension Propoly will see, or null when the file is a kind it refuses. */
+export function propolyExtension(fileName: string, mime: string): string | null {
+  const m = /\.([A-Za-z0-9]{1,5})$/.exec(fileName.trim());
+  if (m) {
+    const ext = `.${m[1].toLowerCase()}`;
+    return PROPOLY_FILE_TYPES[ext] ? ext : null;
+  }
+  const byMime = Object.entries(PROPOLY_FILE_TYPES).find(([, t]) => t === mime.toLowerCase().split(";")[0].trim());
+  return byMime ? byMime[0] : null;
+}
+
+/** Propoly's 409, "A Gas Safety Certificate already exists for this property". */
+export function isAlreadyThere(status: number, body: unknown): boolean {
+  return status === 409 || /already exists/i.test(propolyErrorText(body));
+}
+
+export type SendOutcome = "uploaded" | "already" | "skipped" | "failed";
+
+/**
+ * One file into one slot on a deal. Shared by the PLC pack's push, the
+ * owner's push of a let's certificates (lib/deal-documents), the repush and
+ * the guarantors. Throws PropolyWriteBlocked when the switch is off; every
+ * answer from Propoly comes back as an outcome.
+ *
+ * "already" is done, not a fault: Propoly holds one file per slot, and a
+ * certificate on the property (gas, EPC, EICR) or a landlord AML check or
+ * proof of ownership on the deal answers 409 when it is there already
+ * (21-22 Oct 2026, five tickets). It is said on the pack and raises no bug.
  */
 export async function sendToDeal(
   dealId: string,
   f: { bytes: Uint8Array; mime: string; type: string; fileName: string; label?: string | null; expiry: string | null }
-): Promise<{ outcome: "uploaded" | "already" | "failed"; note: string }> {
+): Promise<{ outcome: SendOutcome; note: string }> {
+  const ext = propolyExtension(f.fileName, f.mime);
+  if (!ext) {
+    const kind = /\.([A-Za-z0-9]{1,5})$/.exec(f.fileName.trim())?.[1]?.toLowerCase();
+    return {
+      outcome: "skipped",
+      note: `Propoly only takes PDF, JPG or PNG${kind ? `, not .${kind}` : ""}. Save it as a PDF and upload it to the deal in Propoly.`,
+    };
+  }
+  if (!f.bytes.byteLength) return { outcome: "skipped", note: "The stored file is empty, so there was nothing to send." };
   const form = new FormData();
   /* deal_uuid, as Propoly's spec has it. deal_id was sent until 9 Oct
      2026 and Propoly answers it "Missing required parameter: deal_uuid" -
      no approved pack had reached here yet, so nothing was lost. */
   form.set("deal_uuid", dealId);
   form.set("type", f.type);
-  const fileName = propolyFileName(f.fileName, f.mime === "application/pdf" ? "document.pdf" : "document");
+  const named = propolyFileName(f.fileName, `document${ext}`);
+  const fileName = /\.[A-Za-z0-9]{1,5}$/.test(named) ? named : propolyFileName(`${named}${ext}`, `document${ext}`);
   form.set("name", f.label ? propolyFileName(f.label, "Document") : fileName);
   if (f.expiry) form.set("expiration", f.expiry);
   /* Copied into a plain ArrayBuffer: the S3 client hands back a view over
      a buffer the Blob constructor will not accept as-is. */
   const copy = new Uint8Array(f.bytes.byteLength);
   copy.set(f.bytes);
-  form.set("attached", new Blob([copy.buffer], { type: f.mime }), fileName);
-  const res = await propolyUpload("/api/v1/documents", form);
+  form.set("attached", new Blob([copy.buffer], { type: PROPOLY_FILE_TYPES[ext] }), fileName);
+  const res = await propolyUpload("/api/v1/documents", form, { expected: isAlreadyThere });
   /* Everything Propoly said, field errors included, not just .message. */
   const msg = propolyErrorText(res.body);
   if (res.status === 201 || res.status === 200) return { outcome: "uploaded", note: "Uploaded." };
-  if (res.status === 409 || /already exists/i.test(msg)) return { outcome: "already", note: "Propoly already holds a document in this slot." };
+  if (isAlreadyThere(res.status, res.body)) {
+    return { outcome: "already", note: msg ? `Already in Propoly ("${msg}"), so it keeps the one it has.` : "Propoly already holds a document in this slot." };
+  }
   return { outcome: "failed", note: msg || `Propoly answered ${res.status}.` };
 }
 
@@ -237,7 +307,7 @@ export async function pushCaseToPropoly(caseId: string, by: string): Promise<Pro
       const { bytes, type: mime } = await bytesOf(doc);
       /* The agent's own name for an Anything else file (16 Oct 2026), else the file name. */
       const sent = await sendToDeal(dealId, { bytes, mime, type, fileName: doc.name, label: doc.label ?? null, expiry });
-      if (sent.outcome !== "failed") taken.add(type);
+      if (sent.outcome === "uploaded" || sent.outcome === "already") taken.add(type);
       results.push({ checkId: doc.checkId, name: doc.name, type, ...sent });
     } catch (e) {
       if (e instanceof PropolyWriteBlocked) {

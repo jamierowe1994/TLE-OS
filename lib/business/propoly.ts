@@ -494,9 +494,10 @@ export const propolyPost = (path: string, payload: unknown) => propolyWrite("POS
  * A multipart upload, behind ITS OWN switch. Documents are the second kind of
  * Propoly write and are armed separately from the handover: attaching a gas
  * certificate to a deal is not the same decision as creating a landlord.
- * Content-Type is left to fetch, which sets the boundary.
+ * Content-Type is left to fetch, which sets the boundary. `expected` works as
+ * it does on propolyWrite: a slot Propoly already holds (409) is an answer.
  */
-export async function propolyUpload(path: string, form: FormData): Promise<PropolyResult> {
+export async function propolyUpload(path: string, form: FormData, opts?: PropolyWriteOpts): Promise<PropolyResult> {
   const { switchOn } = await import("@/lib/switches");
   if (!(await switchOn("propoly_documents"))) {
     throw new PropolyWriteBlocked("POST (multipart)", path);
@@ -513,7 +514,7 @@ export async function propolyUpload(path: string, form: FormData): Promise<Propo
   let res = await send(token);
   if (res.status === 401) res = await send(await getToken(token));
   const body = await answerOf(res);
-  reportPropoly("POST", path, res.status, body);
+  if (!opts?.expected?.(res.status, body)) reportPropoly("POST", path, res.status, body);
   return { status: res.status, body };
 }
 
