@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PhoneCancelViewing from "@/components/m/PhoneCancelViewing";
 import PhoneAppraisalChange from "@/components/m/PhoneAppraisalChange";
+import PhoneViewingComplete from "@/components/m/PhoneViewingComplete";
 import type { Appt } from "@/lib/diary";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { PhoneEventFacts } from "@/app/api/m/event/route";
@@ -141,7 +142,13 @@ function Event({ appt }: { appt: Appt }) {
   else if (appt.tenant === null) access.push("Vacant - nobody is living there.");
   else if (p) access.push("No tenant on the record. Check with the landlord before you go in.");
 
-  const idHref = `/m/id-check?${new URLSearchParams({ name: appt.who, property: appt.where, appt: appt.id }).toString()}`;
+  /* The viewer's own email and number for the offer link: the diary's, else the one found by name. */
+  const reach = {
+    email: appt.contact?.email || people?.find((x) => x.email)?.email || "",
+    phone: appt.contact?.phone || people?.find((x) => x.phone)?.phone || "",
+  };
+
+  const idHref =`/m/id-check?${new URLSearchParams({ name: appt.who, property: appt.where, appt: appt.id }).toString()}`;
 
   return (
     <>
@@ -162,6 +169,8 @@ function Event({ appt }: { appt: Appt }) {
           <DoodleIcon name="target" size={17} /> Directions
         </a>
       )}
+      {/* Once it has started: done in one tap, then how it landed and the offer link. */}
+      <PhoneViewingComplete appt={appt} email={reach.email} phone={reach.phone} diaryKey={DIARY_KEY} />
 
       {appt.who && (
         <Section title={WITH_LABEL[appt.kind] ?? "With"}>

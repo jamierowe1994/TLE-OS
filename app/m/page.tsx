@@ -153,6 +153,11 @@ export default function PhoneHome() {
                             {a.start <= nowHm ? "Now" : "Next"}
                           </span>
                         )}
+                        {a.kind === "viewing" && a.feedback && (
+                          <span className="rounded-full px-2 py-[1px] text-[11px] font-semibold" style={{ background: "var(--sage)" }}>
+                            {a.feedback.outcome === "No-show" ? "No-show" : "Complete"}
+                          </span>
+                        )}
                       </span>
                       <span className="mt-0.5 block text-[15.5px] font-semibold leading-snug">{busy ? "Busy" : a.where || a.what}</span>
                       {!busy && a.who && <span className="mt-0.5 block truncate text-[13.5px] text-muted">With {a.who}</span>}
