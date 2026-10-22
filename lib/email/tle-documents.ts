@@ -1446,6 +1446,23 @@ export const VIEWING_CANCELLED = {
   branding: { showSignoff: false },
 } as const;
 
+/* "It's been let" to the other enquirers and viewers, from Take It Offline
+   when the agent ticks it (Sean McMahon and Dan Richards, 20 Oct 2026). */
+export const LISTING_LET_NOTICE = {
+  subject: "{{address}} has now been let",
+  preheader: "Thanks for your interest. If you're still looking, reply and we'll keep you in mind.",
+  mode: "blocks",
+  blocks: [
+    H("ln1", "This home has now been let"),
+    T("ln2", "Hi {{firstName}},<br><br>Thanks for your interest in <strong>{{address}}</strong>. It has now been let, so it's no longer available."),
+    T("ln3", "If you're still looking, just reply to this email with what you're after and I'll let you know as soon as something similar comes up."),
+    SP("ln4", 8),
+    T("ln5", "{{agentName}}<br>The Letting Experts"),
+    FOOT("ln6", "You're getting this because you asked about or viewed this home with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 export const VIEWING_MOVED = {
   subject: "New time for your viewing at {{address}}",
   preheader: "Your viewing is now {{whenPretty}}.",

@@ -2873,6 +2873,48 @@ CREATE INDEX IF NOT EXISTS os_certificate_sends_cert ON os_certificate_sends (ce
 -- state: verified (off his list) | queried (something is wrong with it; the
 -- note says what, and it stays on the list until a good one is verified).
 -- One row per subject - a second look replaces the first.
+-- A contractor's own paperwork (20 Oct 2026, the agents' call): public
+-- liability insurance, the signed TLE contractor terms, Gas Safe / NICEIC /
+-- NAPIT cards. Files under documents/contractor-<id>/ in R2.
+CREATE TABLE IF NOT EXISTS os_contractor_docs (
+  id             TEXT PRIMARY KEY,
+  contractor_id  TEXT NOT NULL,
+  kind           TEXT NOT NULL,
+  name           TEXT NOT NULL DEFAULT '',
+  r2_key         TEXT NOT NULL,
+  expires        DATE,
+  number         TEXT NOT NULL DEFAULT '',
+  added_by       TEXT NOT NULL DEFAULT '',
+  added_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  removed_at     TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_contractor_docs_who ON os_contractor_docs (contractor_id);
+
+-- Who has been told a home is let (20 Oct 2026, lib/let-notice): one email per
+-- person per listing, ever, from Take It Offline.
+CREATE TABLE IF NOT EXISTS os_let_notices (
+  listing_id  TEXT NOT NULL,
+  email       TEXT NOT NULL,
+  by_name     TEXT NOT NULL DEFAULT '',
+  at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (listing_id, email)
+);
+
+-- An agent's answer to a compliance query (20 Oct 2026, the agents' call:
+-- "when Josselle writes a note ... can agents write back, so it's logged?").
+-- A back-and-forth on the queried certificate or landlord document; each
+-- reply is emailed to whoever raised the query.
+CREATE TABLE IF NOT EXISTS os_compliance_query_replies (
+  id          TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL,
+  subject_id  TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  by_id       TEXT NOT NULL DEFAULT '',
+  by_name     TEXT NOT NULL DEFAULT '',
+  at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_compliance_query_replies_subject ON os_compliance_query_replies (kind, subject_id, at);
+
 CREATE TABLE IF NOT EXISTS os_compliance_checks (
   kind        TEXT NOT NULL,
   subject_id  TEXT NOT NULL,
@@ -4138,6 +4180,15 @@ CREATE TABLE IF NOT EXISTS os_intro_only (
   by_name        TEXT NOT NULL DEFAULT '',
   set_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Marketing only with the keys (Sean McMahon, 20 Oct 2026): some agents
+-- still hand the keys over at move-in, so a date to be there for. Off by
+-- default; Dan's landlord holds her own keys.
+ALTER TABLE os_intro_only ADD COLUMN IF NOT EXISTS keys_handover BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE os_intro_only ADD COLUMN IF NOT EXISTS keys_at       TIMESTAMPTZ;
+ALTER TABLE os_intro_only ADD COLUMN IF NOT EXISTS keys_note     TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_intro_only ADD COLUMN IF NOT EXISTS keys_done_at  TIMESTAMPTZ;
+ALTER TABLE os_intro_only ADD COLUMN IF NOT EXISTS keys_by       TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS os_let_cancellations (
   ref            TEXT PRIMARY KEY,

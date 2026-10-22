@@ -2,7 +2,7 @@
 
 import { Head, NotConnected, WIDGETS, type WidgetDef } from "@/components/widgets";
 import {
-  FeeForecast, FeesThisMonth, ManagementFees, NextMonth, PaidToYou, Platform, PortfolioGrowth, SetupFees, Target,
+  FeeForecast, FeesThisMonth, ManagementFees, NextMonth, PaidToYou, Platform, PortfolioGrowth, SetupFees, Target, WhatIf,
 } from "@/components/widgets-forecast";
 
 /**
@@ -56,6 +56,14 @@ export const FINANCE_WIDGETS: Record<string, WidgetDef> = {
     defaultW: 4, defaultH: 2,
     sizes: { s: [2, 1], m: [4, 1], l: [4, 2] },
     render: (w, h) => <FeeForecast w={w} h={h} />,
+  },
+  /* The agents' call, 20 Oct 2026: "when I get to 25 units, what would that
+     income look like?" and "if I bring it up to 9%?" */
+  "what-if": {
+    label: "What if", icon: "magic-wand", hint: "more homes or a different fee, against what the book earns today",
+    defaultW: 2, defaultH: 2,
+    sizes: { s: [2, 1], m: [2, 2], l: [4, 2] },
+    render: (w, h) => <WhatIf w={w} h={h} />,
   },
   "portfolio-growth": {
     label: "Portfolio growth", icon: "trend-up", hint: "how the book has grown, live from REX",
@@ -113,11 +121,12 @@ export const FINANCE_DEFAULT_LAYOUT = [
   { id: "f7", type: "portfolio-growth", w: 2, h: 2 },
   { id: "f8", type: "setup-fees", w: 2, h: 1 },
   { id: "f9", type: "target", w: 2, h: 1 },
+  { id: "f10", type: "what-if", w: 2, h: 2 },
 ];
 
 export const FINANCE_TRAY_GROUPS = [
   { key: "money", label: "Your money", icon: "wallet", types: ["fees-month", "paid-to-you", "next-month", "target"] },
-  { key: "engine", label: "The engine", icon: "trend-up", types: ["fee-forecast", "management-fees", "setup-fees", "portfolio-growth"] },
+  { key: "engine", label: "The engine", icon: "trend-up", types: ["fee-forecast", "what-if", "management-fees", "setup-fees", "portfolio-growth"] },
   { key: "platform", label: "Platform", icon: "star", types: ["platform"] },
   { key: "later", label: "Not wired yet", icon: "bank", types: ["arrears", "money-held", "occupancy", "earnings"] },
 ];

@@ -7,7 +7,8 @@ import { heldComplianceBook } from "@/lib/compliance-cache";
 import { fileCertificate, PLAUSIBLE, REAL_DAY, releaseHeldCertificate, shareOnceChecked } from "@/lib/certificate-intake";
 import { pendingKeyFor } from "@/lib/property-match";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
-import { documentQueriedEmail } from "@/lib/email/agent-emails";
+import { documentQueriedEmail, queryReplyEmail } from "@/lib/email/agent-emails";
+import { randomUUID } from "node:crypto";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { londonToday } from "@/lib/london-clock";
 import { ensureTable as ensureSendRecord } from "@/lib/home-send";
@@ -100,8 +101,8 @@ export interface VerifyItem {
   /** Who to take a problem up with. Null when the record does not say. */
   agent: string | null;
   addedAt: string;
-  /** `told`: the agent the query was emailed to, when it was. */
-  queried: { note: string; by: string; at: string; told?: string | null } | null;
+  /** `told`: the agent the query was emailed to, when it was. `replies`: the agent's answers. */
+  queried: { note: string; by: string; at: string; told?: string | null; replies?: QueryReply[] } | null;
   /** A landlord's upload that is a certificate: verified, it is filed as one,
    *  so it needs the expiry date, and the type where the kind covers several. */
   fileAs?: { types: { id: string; label: string }[] } | null;
@@ -186,6 +187,12 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       fileAs: LANDLORD_CERT_TYPES[String(r.kind)] ? { types: LANDLORD_CERT_TYPES[String(r.kind)] } : null,
     })),
   ];
+  /* The agents' answers on what he queried (20 Oct 2026). */
+  const asked = out.filter((v) => v.queried);
+  if (asked.length) {
+    const said = await repliesFor(asked.map((v) => ({ kind: v.kind, id: v.id }))).catch(() => new Map<string, QueryReply[]>());
+    for (const v of asked) v.queried!.replies = said.get(`${v.kind}:${v.id}`) ?? [];
+  }
   /* The engineer's register check on every gas and electrical one. */
   const rawType = new Map<string, string>([
     ...certs.map((r) => [`certificate:${r.id}`, String(r.type_raw ?? "")] as [string, string]),
@@ -412,14 +419,61 @@ async function tellAgent(kind: "certificate" | "landlord_document", id: string, 
     by,
     link: a.link,
   });
+  /* A reply by email goes to whoever raised it (20 Oct 2026): it went to the
+     OS's own sender, where nobody reads it. */
+  const asker = await q<{ email: string }>(`SELECT email FROM os_users WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND email <> '' LIMIT 1`, [by]).catch(() => []);
   try {
-    await sendEmail({ to: a.agent.email, subject: mail.subject, html: mail.html, text: mail.text });
+    await sendEmail({ to: a.agent.email, subject: mail.subject, html: mail.html, text: mail.text, ...(asker[0]?.email ? { replyTo: asker[0].email } : {}) });
   } catch (e) {
     const why = (e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "it failed").replace(/\.+$/, "");
     return `Saved, but the email to ${a.agent.name} did not go: ${why}.`;
   }
   await q(`UPDATE os_compliance_checks SET told = $3, told_at = NOW() WHERE kind = $1 AND subject_id = $2`, [kind, id, a.agent.id]);
   return `Emailed ${a.agent.name}, and it is in their notifications.`;
+}
+
+export type QueryReply = { id: string; body: string; by: string; at: string };
+
+/** The answers on a set of queried things, keyed "kind:id", oldest first. */
+export async function repliesFor(items: { kind: string; id: string }[]): Promise<Map<string, QueryReply[]>> {
+  const out = new Map<string, QueryReply[]>();
+  if (!hasDb() || !items.length) return out;
+  const rows = await q<{ id: string; kind: string; subject_id: string; body: string; by_name: string; at: Date }>(
+    `SELECT id, kind, subject_id, body, by_name, at FROM os_compliance_query_replies
+      WHERE (kind || ':' || subject_id) = ANY($1) ORDER BY at`,
+    [items.map((i) => `${i.kind}:${i.id}`)]
+  );
+  for (const r of rows) {
+    const k = `${r.kind}:${r.subject_id}`;
+    (out.get(k) ?? out.set(k, []).get(k)!).push({ id: r.id, body: r.body, by: r.by_name, at: new Date(r.at).toISOString() });
+  }
+  return out;
+}
+
+/**
+ * An agent answers a query (20 Oct 2026, the agents' call: "it's a
+ * back-and-forth conversation"). Kept on the record and emailed to whoever
+ * raised it. One sentence back for the agent's screen.
+ */
+export async function replyToQuery(p: { kind: "certificate" | "landlord_document"; id: string; body: string; me: { id: string; name: string; email: string } }): Promise<{ reply: QueryReply; said: string }> {
+  const [check] = await q<{ state: string; note: string; by_name: string }>(`SELECT state, note, by_name FROM os_compliance_checks WHERE kind = $1 AND subject_id = $2`, [p.kind, p.id]);
+  if (!check || check.state !== "queried") throw new Error("There's no open query on this to answer.");
+  const body = p.body.trim().slice(0, 2000);
+  if (!body) throw new Error("Write your answer first.");
+  const reply: QueryReply = { id: randomUUID(), body, by: p.me.name || p.me.email, at: new Date().toISOString() };
+  await q(`INSERT INTO os_compliance_query_replies (id, kind, subject_id, body, by_id, by_name, at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [reply.id, p.kind, p.id, body, p.me.id, reply.by, reply.at]);
+  const [asker] = await q<{ name: string; email: string }>(`SELECT name, email FROM os_users WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND email <> '' LIMIT 1`, [check.by_name]).catch(() => []);
+  if (!asker) return { reply, said: `Saved on the file. ${check.by_name || "Compliance"} has no login to email, so they'll see it on the desk.` };
+  const a = await agentFor(p.kind, p.id);
+  const ORIGIN = (process.env.OS_PUBLIC_URL || process.env.OS_ORIGIN || "https://tle-os.co.uk").replace(/\/+$/, "");
+  const mail = queryReplyEmail({ firstName: asker.name.split(/\s+/)[0] || "there", agentName: reply.by, property: a.property, what: a.what, query: check.note, reply: body, link: `${ORIGIN}/compliance-desk/verify` });
+  try {
+    await sendEmail({ to: asker.email, subject: mail.subject, html: mail.html, text: mail.text, ...(p.me.email ? { replyTo: p.me.email } : {}) });
+    return { reply, said: `Saved on the file and emailed to ${asker.name.split(/\s+/)[0]}.` };
+  } catch (e) {
+    const why = (e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "it failed").replace(/\.+$/, "");
+    return { reply, said: `Saved on the file, but the email to ${asker.name} did not go: ${why}.` };
+  }
 }
 
 /** Queries on documents an agent was told about and that are still open: their bell. */

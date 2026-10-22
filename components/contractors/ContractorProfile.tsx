@@ -9,6 +9,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
 import ContractorMark from "@/components/contractors/ContractorMark";
 import { LogInvoice } from "@/components/contractors/InvoiceForm";
+import ContractorDocs from "@/components/contractors/ContractorDocs";
 import { coverWords, credentialsOf, jobHref, liabilityOf, longDay, siteHref, siteLabel } from "@/components/contractors/credentials";
 
 /* Kept here too, so Maintenance's Log work already done still finds it. */
@@ -175,6 +176,9 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
                   onSaved={() => { setLogging(false); setNonce((n) => n + 1); onChanged?.(); }}
                 />
               )}
+
+              {/* The agents' call, 20 Oct 2026: their insurance, our terms, their registration. */}
+              <ContractorDocs contractorId={c.id} trade={c.trade} />
 
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
                 {/* ── their jobs ───────────────────────────────────────── */}

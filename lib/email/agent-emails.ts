@@ -137,7 +137,7 @@ export function documentQueriedEmail(input: {
       button: "Open the home",
       link: input.link,
       hero: "hero-certificates.png",
-      tip: `Questions about it go to ${input.by}, not the landlord's inbox.`,
+      tip: `Reply to this email and it goes to ${input.by.split(/\s+/)[0] || "compliance"}, or answer on the home's file so it's kept with the certificate.`,
       tipQuiet: true,
     }),
     text: [`A document needs putting right, ${input.firstName}`, "", intro, "", `${input.property} - ${input.what}${input.fileName ? ` (${input.fileName})` : ""}`, `What ${input.by} said: ${input.note}`, "", `Open the home: ${input.link}`].join("\n"),
@@ -221,6 +221,39 @@ export function plcFinalApprovalEmail(input: {
       "",
       tip,
     ].join("\n"),
+  };
+}
+
+/** The agent's answer to a query, to whoever raised it (20 Oct 2026). */
+export function queryReplyEmail(input: {
+  firstName: string;
+  agentName: string;
+  property: string;
+  what: string;
+  query: string;
+  reply: string;
+  link: string;
+}): AgentEmail {
+  const subject = `Re: ${input.what} queried - ${input.property}`;
+  const intro = `${input.agentName} has answered your query on the ${input.what} for ${input.property}. It's kept on the home's file with the certificate.`;
+  const rows: ShellRow[] = [
+    { title: "Your query", detail: input.query, tone: "neutral", icon: "mark-doc.png" },
+    { title: `${input.agentName.split(/\s+/)[0] || "The agent"}'s answer`, detail: input.reply, tone: "attention", icon: "mark-doc.png" },
+  ];
+  return {
+    subject,
+    html: skyListShell({
+      heading: `An answer on your query, ${input.firstName}`,
+      intro,
+      rows,
+      rowsLead: input.property,
+      rowStyle: "bare",
+      button: "Open the desk",
+      link: input.link,
+      hero: "hero-certificates.png",
+      tipQuiet: true,
+    }),
+    text: [`An answer on your query, ${input.firstName}`, "", intro, "", `Your query: ${input.query}`, `${input.agentName}'s answer: ${input.reply}`, "", `Open the desk: ${input.link}`].join("\n"),
   };
 }
 

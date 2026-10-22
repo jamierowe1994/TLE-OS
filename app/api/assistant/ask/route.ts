@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assistantNameFor } from "@/lib/assistant-name";
 import { publicError } from "@/lib/public-error";
 import type { OpenSurface } from "@/lib/open-record";
 import { sealPayload, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
@@ -186,7 +187,9 @@ export async function POST(req: NextRequest) {
   let answer;
   try {
     const memory = (await memoryFor(userId).catch(() => ({ notes: [] }))).notes.map((n) => n.text);
+    const assistantName = await assistantNameFor(userId).catch(() => null);
     answer = await ask(history, text + noted, {
+      assistantName,
       scope,
       path,
       openListingId,

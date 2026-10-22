@@ -22,6 +22,7 @@ import Guarantors from "@/components/Guarantors";
 import LetTenants from "@/components/LetTenants";
 import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
 import FileDocuments from "@/components/FileDocuments";
+import IntroKeys from "@/components/listing/IntroKeys";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
 import AdvertOffline from "@/components/listing/AdvertOffline";
 import HandoffPanel from "@/components/HandoffPanel";
@@ -1442,6 +1443,8 @@ export default function ApplicationDrawer({
               </>
             ) : app ? (
               <>
+                {/* Sean McMahon, 20 Oct 2026: the keys, when the agent hands them over. */}
+                {intro && app.listingId && <IntroKeys listingId={String(app.listingId)} address={[app.property, app.locality].filter(Boolean).join(", ")} />}
                 {intro?.done && (
                   <div className="mb-4 flex items-start gap-3 rounded-xl border border-[#56634a]/20 bg-[#f1f4ec] px-4 py-3.5 text-[#3f5a32]">
                     <DoodleIcon name="checklist" size={16} className="mt-0.5 shrink-0" />

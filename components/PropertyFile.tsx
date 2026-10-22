@@ -1,5 +1,6 @@
 "use client";
 
+import QueryThread from "@/components/QueryThread";
 import { CHECKING_LABEL, VERIFIED_LABEL, type CertChecking } from "@/lib/cert-hold";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -540,6 +541,7 @@ export default function PropertyFile({
                     {r.removed.name} was taken off {day(r.removed.at.slice(0, 10))} by {r.removed.by}: {r.removed.reason === "wrong" ? "the wrong document" : "out of date or replaced"}.
                   </p>
                 )}
+                {r.checking?.queried && <QueryThread kind="certificate" id={r.checking.id} />}
                 {/* Uploaded as a document but never read in as the certificate
                     (James, 12 Oct: "they have a gas safety uploaded to this
                     property ... why this hasn't tagged the gas"). */}

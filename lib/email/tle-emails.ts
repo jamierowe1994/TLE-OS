@@ -89,6 +89,7 @@ import {
   LANDLORD_MESSAGE_REPLY,
   LANDLORD_DOCS_NUDGE,
   VIEWING_CANCELLED,
+  LISTING_LET_NOTICE,
   VIEWING_MOVED,
   LANDLORD_VIEWING_BOOKED,
   LANDLORD_VIEWING_MOVED,
@@ -936,6 +937,25 @@ The Letting Experts`
           address: "8 Recreation Terrace, Nottingham NG2 3AB",
           whenPretty: "Thursday 4 September at 5:30pm",
           reasonLine: "The landlord needs the property that afternoon.",
+          agentName: "Sam Whitaker",
+        })
+      )(),
+  },
+  {
+    id: "listing-let-notice",
+    group: "Doorways",
+    name: "It's Been Let",
+    audience: "tenant",
+    trigger: "Take It Offline, when the agent ticks Tell the others it's been let",
+    fires: "Wired 20 Oct 2026. components/listing/AdvertOffline.tsx → POST /api/listings/let-notice → lib/let-notice.ts, from the agent.",
+    to: "Everyone else who enquired about or viewed the home - never anyone on an offer, or with a viewing still booked",
+    summary: "Thanks them, says it's gone, and offers to keep them in mind by reply. Once per person per home.",
+    doc: LISTING_LET_NOTICE,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? LISTING_LET_NOTICE, {
+          firstName: "Sophie",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
           agentName: "Sam Whitaker",
         })
       )(),

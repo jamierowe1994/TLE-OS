@@ -496,6 +496,8 @@ export interface AskContext {
   today?: string[] | null;
   /** An owner viewing the OS as somebody else (lib/view-as). */
   viewingAs?: boolean;
+  /** What this person calls him, when not Steve (lib/assistant-name). */
+  assistantName?: string | null;
 }
 
 /**
@@ -515,6 +517,11 @@ function contextNote(ctx: AskContext): string | null {
   bits.push(
     `Today is ${now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" })} (${now.toLocaleDateString("en-CA", { timeZone: "Europe/London" })}), London time.`
   );
+  /* Their name for him (20 Oct 2026: Hamish in Scotland). Here, not in the
+     cached persona: it changes per person. */
+  if (ctx.assistantName && ctx.assistantName !== "Steve") {
+    bits.push(`This person calls you ${ctx.assistantName}. Answer to that name and use it when you refer to yourself; you are the same assistant.`);
+  }
   if (ctx.path) bits.push(`They are on the ${ctx.path} screen.`);
   if (ctx.openListingId) {
     bits.push(

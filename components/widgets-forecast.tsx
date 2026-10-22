@@ -676,3 +676,65 @@ export function FeeForecast({ h }: { w: number; h: number }) {
     </>
   );
 }
+
+/* ── what if: more homes, a different fee ───────────────────────────────── */
+
+/**
+ * WHAT IF (the agents' call, 20 Oct 2026: "when I get to 25 units, what would
+ * that income look like?" and "our average is 7.5%, if I bring it up to 9,
+ * what would my portfolio look like?"). The book's own average rent, with the
+ * homes and the fee as dials, against what it earns today. Nothing is saved.
+ */
+export function WhatIf({ h }: { w: number; h: number }) {
+  const { data, loading, error } = useForecast();
+  const [homes, setHomes] = useState<string>("");
+  const [pct, setPct] = useState<string>("");
+  if (loading) return <><Head icon="magic-wand" label="What if" /><p className="mt-5 flex items-center gap-2 text-[11.5px] text-muted"><span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Reading the book…</p></>;
+  if (error || !data) return <><Head icon="magic-wand" label="What if" /><p className="mt-5 text-[11.5px] text-accent-dark">{error ?? "No answer"}</p></>;
+  const g = data.growth;
+  const avgRent = g.managedNow > 0 ? g.feeableRentNowPence / g.managedNow : null;
+  const nowPct = data.basis.managementPct;
+  if (avgRent == null || nowPct == null) {
+    return (
+      <>
+        <Head icon="magic-wand" label="What if" />
+        <p className="mt-5 text-[11.5px] text-muted">{avgRent == null ? "No homes on a monthly fee yet, so there's no average rent to work from." : "Waiting on the management fee rate under The year ahead."}</p>
+      </>
+    );
+  }
+  const n = homes.trim() === "" ? g.managedNow : Math.max(0, Math.round(Number(homes)));
+  const p = pct.trim() === "" ? nowPct : Math.max(0, Number(pct));
+  const ok = Number.isFinite(n) && Number.isFinite(p);
+  const monthNow = g.managedNow * avgRent * (nowPct / 100);
+  const month = ok ? n * avgRent * (p / 100) : null;
+  const diffYear = month != null ? (month - monthNow) * 12 : null;
+  const share = data.mine.sharePct;
+  const input = "w-full rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[13px] outline-none focus:border-ink";
+  const lab = "text-[10px] font-bold uppercase tracking-wider text-muted";
+  return (
+    <>
+      <Head icon="magic-wand" label="What if" />
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
+        <label>
+          <span className={lab}>Homes on a fee</span>
+          <input value={homes} onChange={(e) => setHomes(e.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder={String(g.managedNow)} className={`mt-1 ${input}`} />
+        </label>
+        <label>
+          <span className={lab}>Fee %</span>
+          <input value={pct} onChange={(e) => setPct(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" placeholder={String(nowPct)} className={`mt-1 ${input}`} />
+        </label>
+      </div>
+      <div className={h >= 2 ? "mt-4" : "mt-3"}>
+        <span className="figures text-[30px] leading-none">{month != null ? short(Math.round(month)) : "—"}</span>
+        <span className="ml-1.5 text-[12px] text-muted">a month in fees</span>
+        {month != null && (
+          <p className="mt-1.5 text-[11.5px] font-medium text-accent-dark">
+            {short(Math.round(month * 12))} a year{diffYear != null && Math.abs(diffYear) >= 100 ? `, ${diffYear > 0 ? "+" : "-"}${short(Math.round(Math.abs(diffYear)))} on today` : ""}
+            {share != null ? ` · your share ${short(Math.round(month * 12 * (share / 100)))}` : ""}
+          </p>
+        )}
+        <p className="mt-1.5 text-[11px] text-muted">On your average rent of {short(Math.round(avgRent))} a month across {g.managedNow} {g.managedNow === 1 ? "home" : "homes"} today, at {nowPct}%.</p>
+      </div>
+    </>
+  );
+}

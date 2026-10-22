@@ -340,6 +340,26 @@ function Dock() {
   const router = useRouter();
   const [signedIn, setSignedIn] = useState(false);
   const [open, setOpen] = useState(false);
+  /* What this person calls him (20 Oct 2026: Hamish in Scotland). */
+  const [aName, setAName] = useState("Steve");
+  const [naming, setNaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameErr, setNameErr] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/assistant/name", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j?.ok && typeof j.name === "string") setAName(j.name); })
+      .catch(() => null);
+  }, []);
+  async function saveName(next: string) {
+    setNameErr(null);
+    const j = await fetch("/api/assistant/name", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: next }) })
+      .then((r) => r.json())
+      .catch(() => null);
+    if (!j?.ok) return setNameErr(j?.error ?? "That didn't save.");
+    setAName(j.name);
+    setNaming(false);
+  }
   const [tab, setTab] = useState<Tab>("help");
   /* The shelf: every guide, built or written - see /api/knowledge/guides. Read
      when the tab is opened, so the panel costs nothing on screens where nobody
@@ -816,7 +836,7 @@ function Dock() {
 
     if (r && !r.onboarded) {
       setStage("onboarding-name");
-      setLines([...history, { role: "assistant", text: "Hello — I'm Steve. I don't think we've met. What should I call you?" }]);
+      setLines([...history, { role: "assistant", text: `Hello - I'm ${aName}. I don't think we've met. What should I call you?` }]);
     } else {
       setStage("ask");
       setLines(
@@ -1300,8 +1320,8 @@ function Dock() {
       <button
         type="button"
         onClick={toggle}
-        title="Steve — help, guides and news"
-        aria-label="Steve — help, guides and news"
+        title={`${aName} - help, guides and news`}
+        aria-label={`${aName} - help, guides and news`}
         aria-expanded={open}
         data-hide-from-shot
         data-os-steve
@@ -1348,7 +1368,34 @@ function Dock() {
                   than dressed as more of it — those switch what you are looking
                   at, these change something. */}
               <div className="flex items-center gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">Steve</p>
+                {naming ? (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <input
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") void saveName(nameDraft); if (e.key === "Escape") setNaming(false); }}
+                      autoFocus
+                      maxLength={20}
+                      aria-label="What you call him"
+                      className="w-28 rounded-full border border-line/80 bg-white px-2.5 py-0.5 text-[11.5px] outline-none focus:border-ink/40"
+                    />
+                    {nameDraft.trim().toLowerCase() !== "hamish" && (
+                      <button type="button" onClick={() => void saveName("Hamish")} className="rounded-full border border-line/80 px-2 py-0.5 text-[11px] hover:border-ink/40">Hamish</button>
+                    )}
+                    <button type="button" onClick={() => void saveName(nameDraft)} className="rounded-full bg-ink px-2.5 py-0.5 text-[11px] font-semibold text-page">Save</button>
+                    <button type="button" onClick={() => setNaming(false)} className="text-[11px] text-muted hover:text-ink">Cancel</button>
+                    {nameErr && <span className="text-[11px] text-accent-dark">{nameErr}</span>}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setNameDraft(aName === "Steve" ? "" : aName); setNaming(true); setNameErr(null); }}
+                    title="Call him something else"
+                    className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted hover:text-ink"
+                  >
+                    {aName}
+                  </button>
+                )}
                 {tab === "help" && lines.length > 0 && !busy && (
                   <button
                     type="button"
@@ -1722,7 +1769,7 @@ function Dock() {
                           ? "Your name"
                           : stage === "onboarding-help"
                             ? "What you'd like a hand with"
-                            : "Ask Steve anything…"
+                            : `Ask ${aName} anything…`
                       }
                       /* pr-2 so a long question does not run right up under
                          the send button as it scrolls. */

@@ -59,6 +59,8 @@ interface Sent {
 
 export default function PhoneIdCheck() {
   const [step, setStep] = useState<"who" | "doc" | "photos" | "sent">("who");
+  /* Put on the lead for the viewing on now, when it was scanned from the menu. */
+  const [linkedAt, setLinkedAt] = useState<{ lead: string; home: string; at: string } | null>(null);
   const [name, setName] = useState("");
   const [property, setProperty] = useState("");
   const [appt, setAppt] = useState<string | null>(null);
@@ -222,8 +224,9 @@ export default function PhoneIdCheck() {
       if (lead) form.set("lead", lead);
       shots.forEach((f) => f && form.append("pages", f));
       const r = await fetch("/api/m/id-check", { method: "POST", body: form });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; linked?: { lead: string; home: string; at: string } | null };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "The photos did not send. Try again.");
+      if (j.linked) { setLead(j.linked.lead); setLinkedAt(j.linked); }
       setStep("sent");
       loadSent();
     } catch (e) {
@@ -250,6 +253,7 @@ export default function PhoneIdCheck() {
     setStep("who");
     setQuery("");
     setFromCalendar(false);
+    setLinkedAt(null);
     window.history.replaceState(null, "", "/agent/id-check");
   };
 
@@ -550,6 +554,9 @@ export default function PhoneIdCheck() {
           <p className="mt-2 text-[15px] text-muted">
             {name.trim()}&rsquo;s {d?.title.toLowerCase() ?? "ID"} is filed with today&rsquo;s date and your name.
           </p>
+          {linkedAt && (
+            <p className="mt-2 text-[14px] text-muted">Kept on the lead for your {linkedAt.at} viewing{linkedAt.home ? ` at ${linkedAt.home}` : ""}.</p>
+          )}
           <div className="mt-6 grid gap-2">
             <button type="button" onClick={reset} className={primary} style={{ background: "var(--brown)" }}>
               Check Another Person
