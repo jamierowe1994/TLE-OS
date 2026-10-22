@@ -6,7 +6,7 @@ import { hasDb } from "@/lib/db";
 import { publicOrigin } from "@/lib/origin";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { autoSentEmails, getAutoPassport, sendReminderToMe, setAutoPassport } from "@/lib/auto-passport";
-import { renderTleEmailLive } from "@/lib/email/tle-emails";
+import { reminderPreview } from "@/lib/passport-reminder";
 import { isTestId } from "@/lib/test-overlay";
 
 /**
@@ -65,12 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     if (body.preview === true) {
-      const { subject, html } = await renderTleEmailLive("tenant-passport-reminder", {
-        firstName: "Sophie",
-        address: home || "the home",
-        agentName: actor.name || "Your agent",
-        link: `${origin}/tenant/passport/your-own-link`,
-      });
+      const { subject, html } = await reminderPreview({ agentName: actor.name || "Your agent", home, origin, stoppedAt: "not-started" });
       return NextResponse.json({ ok: true, subject, html });
     }
     if (body.test === true) {

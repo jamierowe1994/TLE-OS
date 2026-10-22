@@ -20,8 +20,11 @@ import { forScreen, passportRules } from "@/lib/passport-scotland";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ params }: { params: Promise<{ token: string }> }) {
+export default async function Page({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ at?: string }> }) {
   const { token } = await params;
+  /* The reminder's button (lib/passport-reminder): open on the first page
+     still to answer, not the first page. */
+  const resume = (await searchParams).at === "resume";
   const record = await getPassport(token).catch(() => null);
 
   if (!record) {
@@ -73,6 +76,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
         questions={questions}
         initialAnswers={answers}
         accountExists={Boolean(account?.activatedAt)}
+        resume={resume}
         /* First name only. "A few more from Sam" is a person asking; the full
            name reads like a letter from a solicitor. */
         agentName={(agent?.name ?? "").trim().split(/\s+/)[0] ?? ""}

@@ -253,6 +253,12 @@ export async function submitPassport(token: string): Promise<PassportRecord | nu
       WHERE token = $1 RETURNING ${COLS}`,
     [token]
   );
+  /* Finished: any reminder still waiting is cancelled on the spot
+     (lib/passport-reminder), not left for the runner to catch. */
+  if (rows[0]) {
+    const { cancelPassportReminders } = await import("@/lib/passport-reminder");
+    await cancelPassportReminders(token, rows[0].email);
+  }
   return rows[0] ? toRecord(rows[0]) : null;
 }
 

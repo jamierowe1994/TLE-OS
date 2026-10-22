@@ -226,6 +226,20 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /* The passport reminder (James, 22 Oct 2026, lib/passport-reminder): a
+       tenant who started their passport and stopped hears once, a day later.
+       Its own switch rather than riding on Automatic tenant emails, which is
+       off, so this one can go on by itself once James has passed the words. */
+    key: "passport_reminder",
+    label: "Passport reminder",
+    what: "Emails a tenant who has started their passport and stopped, 24 hours after they last typed in it: one encouraging reminder, from the agent, with a button back to where they stopped (and how to get a share code, if that is where). A second only if they come back and stop again, never more than two. Not if they finish, their enquiry is closed, or their application is over.",
+    who: "TENANTS with a started, unfinished passport, from the agent who sent it. Email to landlords and tenants must be on as well.",
+    confirm: "REMIND TENANTS",
+    /* No old variable: this never existed before. Unset means off. */
+    legacyEnv: "PASSPORT_REMINDER",
+    legacyOn: "on",
+  },
+  {
     /**
      * Creating a PROPERTY in REX — the first time this OS would bring a record
      * into existence in the live system six businesses share, rather than

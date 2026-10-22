@@ -116,6 +116,7 @@ export default function PassportPhone({
   allDone,
   onFinish,
   rules = {},
+  resume = false,
 }: {
   d: PassportData;
   set: Setter;
@@ -135,10 +136,12 @@ export default function PassportPhone({
   onFinish: () => void;
   /** A Scottish passport (lib/passport-scotland): no nationality row, no Right to rent rows. */
   rules?: PassportRules;
+  /** Opened from the reminder: skip the welcome, straight to the first page still to answer. */
+  resume?: boolean;
 }) {
   const noNationality = Boolean(rules.noNationality);
   /* A passport already handed in opens on its list; a new one on the welcome. */
-  const [screen, setScreen] = useState<"intro" | number>(submitted ? 0 : "intro");
+  const [screen, setScreen] = useState<"intro" | "resume" | number>(submitted ? 0 : resume ? "resume" : "intro");
   /* The page on its way out, kept on screen while the new one swipes in. */
   const [leaving, setLeaving] = useState<{ screen: "intro" | number; dir: 1 | -1; n: number } | null>(null);
   const [dir, setDir] = useState<1 | -1>(1);
@@ -332,7 +335,14 @@ export default function PassportPhone({
   const allRows = pages.flatMap((p) => p.rows);
   const open: Row | "photo" | null = openKey === "photo" ? "photo" : openKey ? allRows.find((r) => r.key === openKey) ?? null : null;
   const setOpen = (r: Row | "photo" | null) => setOpenKey(r === null ? null : r === "photo" ? "photo" : r.key);
-  const intro = screen === "intro";
+  /* "resume" becomes the first page still to answer as soon as the pages
+     exist, in this same render, so the welcome is never painted. */
+  if (screen === "resume") {
+    const open = pages.findIndex((p) => !pageDone(p));
+    setScreen(open > 0 ? open : 0);
+  }
+  const shownScreen = screen === "resume" ? "intro" : screen;
+  const intro = shownScreen === "intro";
   const at = typeof screen === "number" ? Math.min(screen, pages.length - 1) : 0;
   const page = pages[at];
   const last = at === pages.length - 1;
@@ -340,7 +350,7 @@ export default function PassportPhone({
   const done = !intro && pageDone(page);
 
   const go = (to: "intro" | number) => {
-    const from = screen;
+    const from = shownScreen;
     const d2: 1 | -1 = to === "intro" ? -1 : from === "intro" ? 1 : to > (from as number) ? 1 : -1;
     setDir(d2);
     setLeaving({ screen: from, dir: d2, n: Date.now() });
@@ -445,7 +455,7 @@ export default function PassportPhone({
           </div>
         )}
         <div key={`in-${String(screen)}`} className="absolute inset-0" style={leaving ? swipe("in", dir) : undefined}>
-          {panel(screen)}
+          {panel(shownScreen)}
         </div>
       </div>
 

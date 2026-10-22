@@ -2,12 +2,13 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { NOT_SALES } from "@/lib/lead-ledger";
-import { findDonePassportByEmail, getPassport } from "@/lib/passport";
+import { findDonePassportByEmail } from "@/lib/passport";
 import { sendPassportInvite } from "@/lib/passport-invite";
-import { renderTleEmailLive } from "@/lib/email/tle-emails";
+import { PASSPORT_REMINDER_KIND, reminderPreview, type ReminderVars } from "@/lib/passport-reminder";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { findUserById, type OsUser } from "@/lib/users";
 import { claim, firstName, logDone, release, validEmail } from "@/lib/tenant-email-send";
+import { renderTleEmailLive } from "@/lib/email/tle-emails";
 
 /**
  * AUTOMATE PASSPORT (Dan Richards and Sean McMahon, 21 Oct 2026).
@@ -20,9 +21,11 @@ import { claim, firstName, logDone, release, validEmail } from "@/lib/tenant-ema
  *
  * A day later, if the passport is not finished, ONE reminder goes
  * (tenant-passport-reminder). Dan wanted it encouraging, not pushy. It waits
- * in os_scheduled_sends like any timed email, and the runner asks this file
- * whether it still stands before it goes: a finished passport, or the switch
- * turned off, cancels it.
+ * in os_scheduled_sends like any timed email, and the runner asks
+ * lib/passport-reminder whether it still stands before it goes: a finished
+ * passport, or the switch turned off, cancels it. The same reminder, on its
+ * own path there, also goes to anybody who started their passport and
+ * stopped, however it was sent.
  *
  * Swept on the five-minute leads scan (app/api/leads/scan), beside the
  * enquiry reply. Only enquiries first seen AFTER the switch went on, and
@@ -33,7 +36,6 @@ import { claim, firstName, logDone, release, validEmail } from "@/lib/tenant-ema
  * alone: they would only be asked to fill it in twice.
  */
 
-export const PASSPORT_REMINDER_KIND = "passport-reminder";
 const REMINDER_EMAIL = "tenant-passport-reminder";
 const REMINDER_AFTER_HOURS = 24;
 
@@ -85,12 +87,6 @@ export async function autoSentEmails(listingId: string): Promise<string[]> {
     [`auto-passport:${listingId}:%`]
   ).catch(() => []);
   return rows.map((r) => r.key.slice(`auto-passport:${listingId}:`.length));
-}
-
-type Vars = { firstName: string; address: string; agentName: string; link: string };
-
-async function renderReminder(vars: Vars) {
-  return renderTleEmailLive(REMINDER_EMAIL, vars);
 }
 
 type SweepResult = { listingId: string; to: string; state: "sent" | "already" | "done" | "waiting" | "failed"; detail: string };
@@ -152,8 +148,8 @@ export async function autoPassportSweep(origin: string): Promise<SweepResult[]> 
       await logDone(key, "tenant-passport-request", email, "sent", r.said, { lead: l.id, token: r.token });
       /* The day-later reminder. Its words are rendered when it goes, from
          the catalogue as it stands then; these are only its blanks. */
-      const vars: Vars = { firstName: firstName(name), address: a.home || "the home", agentName: me.name || "The Letting Experts", link: `${origin}${r.path}` };
-      const { subject } = await renderReminder(vars);
+      const vars: ReminderVars = { firstName: firstName(name), address: a.home || "the home", agentName: me.name || "The Letting Experts", link: `${origin}${r.path}` };
+      const { subject } = await renderTleEmailLive(REMINDER_EMAIL, vars);
       await q(
         `INSERT INTO os_scheduled_sends (id, kind, ref, to_email, subject, body, send_at, queued_by, queued_by_id)
          VALUES ($1, $2, $3, $4, $5, $6, NOW() + make_interval(hours => $7), $8, $9)`,
@@ -166,36 +162,11 @@ export async function autoPassportSweep(origin: string): Promise<SweepResult[]> 
 }
 
 /**
- * Should a queued reminder still go? Null when it should, otherwise the
- * reason it was not sent. `ref` is "<listingId>:<passport token>".
- */
-export async function passportReminderStands(ref: string): Promise<string | null> {
-  const at = ref.indexOf(":");
-  const listingId = ref.slice(0, at);
-  const token = ref.slice(at + 1);
-  if (!(await getAutoPassport(listingId))) return "Automate passport is off on this listing now, so it was not sent.";
-  const rec = await getPassport(token).catch(() => null);
-  if (!rec) return "The passport no longer exists, so it was not sent.";
-  if (rec.submittedAt) return "They finished their passport before this was due, so it was not sent.";
-  return null;
-}
-
-/** The reminder's finished email, from the blanks the sweep stored. */
-export async function reminderMail(body: string): Promise<{ subject: string; html: string }> {
-  return renderReminder(JSON.parse(body) as Vars);
-}
-
-/**
  * The reminder, to the agent themself, so they read it as a tenant will
  * (and James signs the words off before any go to a tenant).
  */
 export async function sendReminderToMe(p: { me: OsUser; home: string; origin: string }): Promise<{ sent: boolean; detail: string; subject: string; html: string }> {
-  const { subject, html } = await renderReminder({
-    firstName: firstName(p.me.name || ""),
-    address: p.home || "the home",
-    agentName: p.me.name || "The Letting Experts",
-    link: `${p.origin}/tenant/passport/your-own-link`,
-  });
+  const { subject, html } = await reminderPreview({ agentName: p.me.name || "The Letting Experts", home: p.home, origin: p.origin, stoppedAt: "not-started" });
   const r = await sendAsAgent({ me: p.me, to: p.me.email, toName: p.me.name || undefined, subject: `[Preview] ${subject}`, html });
   return { sent: r.sent, detail: r.detail, subject, html };
 }

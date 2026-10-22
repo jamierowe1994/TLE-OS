@@ -20,7 +20,8 @@ import { runContractNudges } from "@/lib/contract-nudge";
 import { runInstructionSweep } from "@/lib/rex-instruct";
 import { publicOrigin } from "@/lib/origin";
 import { runDueJobs } from "@/lib/steve-jobs";
-import { PASSPORT_REMINDER_KIND, autoPassportSweep, passportReminderStands, reminderMail } from "@/lib/auto-passport";
+import { autoPassportSweep } from "@/lib/auto-passport";
+import { PASSPORT_REMINDER_KIND, logReminderSent, reminderMail, reminderVerdict, startedReminderSweep } from "@/lib/passport-reminder";
 
 /**
  * Send what's due.
@@ -161,6 +162,12 @@ export async function POST(req: NextRequest) {
   if (req.nextUrl.searchParams.get("only") === "plc-reread") {
     return NextResponse.json({ ok: true, plcReread: await rereadAllWaiting() });
   }
+  /* ?only=passport-reminders&dry=1 lists who the passport reminder would
+     queue, without queuing (lib/passport-reminder). */
+  if (req.nextUrl.searchParams.get("only") === "passport-reminders") {
+    const dry = req.nextUrl.searchParams.get("dry") === "1";
+    return NextResponse.json({ ok: true, dry, passportReminders: await startedReminderSweep(publicOrigin(req), { dry }) });
+  }
   void rereadAllWaiting().catch((e) => console.error("[plc-reread] tick", e instanceof Error ? e.message : e));
   /* Claim and select in ONE statement. Two overlapping cron runs — a slow one
      and its successor — would otherwise both read the same due rows and send
@@ -234,18 +241,24 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    /* ── Automate passport's day-later reminder (lib/auto-passport): checked
-       first, because a tenant who has finished must never be reminded, and
-       rendered now from the catalogue. Then it goes as the agent, below. ── */
+    /* ── The passport reminder (lib/passport-reminder), started or from
+       Automate passport: checked first, because a tenant who has finished
+       must never be reminded, and one who typed since waits a day from then.
+       Rendered now, from where they stopped. Then it goes as the agent. ── */
     if (row.kind === PASSPORT_REMINDER_KIND) {
-      const stands = await passportReminderStands(row.ref).catch(() => null);
-      if (stands) {
-        await q(`UPDATE os_scheduled_sends SET state = 'cancelled', error = $2 WHERE id = $1`, [row.id, stands]).catch(() => []);
+      const verdict = await reminderVerdict(row.ref, row.to_email).catch((): { later: Date } => ({ later: new Date(Date.now() + 15 * 60_000) }));
+      if (verdict && "cancel" in verdict) {
+        await q(`UPDATE os_scheduled_sends SET state = 'cancelled', error = $2 WHERE id = $1`, [row.id, verdict.cancel]).catch(() => []);
+        skipped.push(row.id);
+        continue;
+      }
+      if (verdict && "later" in verdict) {
+        await q(`UPDATE os_scheduled_sends SET state = 'queued', send_at = $2, error = NULL WHERE id = $1`, [row.id, verdict.later]).catch(() => []);
         skipped.push(row.id);
         continue;
       }
       try {
-        const mail = await reminderMail(row.body);
+        const mail = await reminderMail(row);
         row.subject = mail.subject;
         row.html = mail.html;
       } catch (e) {
@@ -286,6 +299,7 @@ export async function POST(req: NextRequest) {
         `UPDATE os_scheduled_sends SET state = 'sent', sent_at = NOW(), error = NULL WHERE id = $1`,
         [row.id]
       );
+      if (row.kind === PASSPORT_REMINDER_KIND) await logReminderSent(row, out.detail);
       sent.push(row.id);
     } catch (e) {
       /* Back to 'queued' when the environment is what stopped it - a switch
@@ -309,6 +323,12 @@ export async function POST(req: NextRequest) {
   const autoPassports = await autoPassportSweep(publicOrigin(req))
     .then((r) => ({ sent: r.filter((x) => x.state === "sent").length, waiting: r.filter((x) => x.state === "waiting").length, failed: r.filter((x) => x.state === "failed").length }))
     .catch((e) => ({ error: publicError(e, "Automate passport failed.") }));
+
+  /* Started passports left part way: each gets its reminder queued for a day
+     after they last typed (lib/passport-reminder). Sent by a later tick. */
+  const passportReminders = await startedReminderSweep(publicOrigin(req))
+    .then((r) => ({ queued: r.filter((x) => x.state === "queued").length, skipped: r.filter((x) => x.state === "skipped").length }))
+    .catch((e) => ({ error: publicError(e, "Passport reminders failed.") }));
 
   /* The agent's own presentation emails: the day-before "not built yet" and
      the on-the-day copy. Swept here rather than queued, so a visit that is
@@ -336,7 +356,7 @@ export async function POST(req: NextRequest) {
   /* Steve's standing jobs (lib/steve-jobs, 2 Oct 2026). Last, because each is
      a model call and the sends above must never wait behind one. */
   const steveJobs = await runDueJobs().catch((e) => ({ ran: 0, failed: [publicError(e, "Steve's jobs failed.")] }));
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, autoPassports, decks, nudges, instructions, newsletters, updates, rentRead, rent, steveJobs });
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, autoPassports, passportReminders, decks, nudges, instructions, newsletters, updates, rentRead, rent, steveJobs });
 }
 
 /** A dry read: what is due, without sending it. Same key as the run: this

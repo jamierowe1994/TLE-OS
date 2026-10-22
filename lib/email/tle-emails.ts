@@ -1654,12 +1654,18 @@ TLE_EMAILS.push(
   tenantEntry(
     "tenant-passport-reminder",
     "Passport Reminder: a Day",
-    "A day after an automatic passport, if it is not finished",
-    "Wired 22 Oct 2026. Only on a listing with Automate passport on (Enquiries tab, lib/auto-passport): the passport goes to each new enquiry on the leads scan, and this is queued in os_scheduled_sends for 24 hours later. The runner checks the passport first and cancels it if it is finished. Once per enquiry, from the agent who turned it on. Needs customer email on.",
-    "The person who enquired",
-    "Dan Richards, 21 Oct 2026: encouraging, never pushy. We'd love to get your viewing booked in; finish the passport and all that's left is picking a date and time; anything typed is saved.",
+    "A day after a tenant stops part way through their passport, and a day after an automatic passport",
+    "Wired 22 Oct 2026 (lib/passport-reminder). Anybody who has typed into their passport and stopped, however it reached them, 24 hours after they last typed: queued in os_scheduled_sends, behind the Passport reminder switch. Also Automate passport's day-later reminder (Enquiries tab, lib/auto-passport), typed into or not. The runner checks first and cancels it if they finished, their enquiry was closed or their application is over; if they typed since, it waits a day from then. At most two per passport, the second only after they come back and stop again. From the agent. Needs customer email on.",
+    "The tenant who started their passport",
+    "Dan Richards, 21 Oct 2026: encouraging, never pushy. Everything they typed is saved; finish it and all that's left is picking a date and time; how to get a share code only when that is where they stopped; the button opens the page they stopped on.",
     TENANT_PASSPORT_REMINDER,
-    { link: `${SITE}/tenant/sign-in` }
+    {
+      link: `${SITE}/tenant/sign-in`,
+      introLine: "Thanks again for asking about 14 Ruskin Place. You've made a great start on your tenant passport, and everything you've filled in so far is saved.",
+      nextLine: "Finish it, and all that's left is to pick a date and time for your viewing that suits you.",
+      whereLine: `You stopped at your share code. If you don't have one yet, you can get it in a few minutes at <a href="https://www.gov.uk/prove-right-to-rent" style="color:inherit;">gov.uk/prove-right-to-rent</a>, then just pop it in.`,
+      buttonLabel: "Pick Up Where I Left Off",
+    }
   ),
   tenantEntry(
     "tenant-matches",

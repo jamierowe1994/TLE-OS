@@ -920,6 +920,7 @@ export default function PassportForm({
   demo = false,
   accountExists = false,
   rules = NO_RULES,
+  resume = false,
 }: {
   token: string;
   initial: PassportData;
@@ -937,6 +938,8 @@ export default function PassportForm({
   /** A Scottish passport (lib/passport-scotland): no nationality and no Right
    *  to rent section - not asked, not required, not on the card. */
   rules?: PassportRules;
+  /** Opened from the reminder: start on the first section still to answer. */
+  resume?: boolean;
 }) {
   const noNationality = Boolean(rules.noNationality);
   const [d, setD] = useState<PassportData>({ ...EMPTY_PASSPORT, ...initial });
@@ -944,7 +947,13 @@ export default function PassportForm({
   const [submitted, setSubmitted] = useState(Boolean(submittedAt));
   /** The end: the questions drop away, the card is made, the account panel rises. */
   const [phase, setPhase] = useState<"form" | "leaving" | FinishPhase>("form");
-  const [step, setStep] = useState(0);
+  /* From the reminder, the first section not yet done; past every standard
+     one, the agent's own questions (always last when there are any). */
+  const [step, setStep] = useState(() => {
+    if (!resume || submittedAt) return 0;
+    const open = sectionsFor(rules).findIndex((sc) => !sc.done({ ...EMPTY_PASSPORT, ...initial }, rules));
+    return open !== -1 ? open : questions.length > 0 ? sectionsFor(rules).length : 0;
+  });
   const [sub, setSub] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
   const answersRef = useRef(answers);
@@ -1950,6 +1959,7 @@ export default function PassportForm({
         pct={bar.pct}
         allDone={allDone}
         rules={rules}
+        resume={resume}
         onFinish={() => void finish()}
       />
     </div>

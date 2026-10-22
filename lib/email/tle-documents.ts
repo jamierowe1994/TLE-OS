@@ -1738,10 +1738,17 @@ export const TENANT_PASSPORT_NUDGE_1 = {
 } as const;
 
 /**
- * A day after an automatic passport, not finished (Dan Richards, 21 Oct 2026).
- * Only for a listing with Automate passport on (lib/auto-passport). Dan: it
- * should encourage, never push - "we'd love to get your viewing booked in",
- * not "you must". One reminder, from the agent, and none once it is done.
+ * A day after they stopped (lib/passport-reminder, James, 22 Oct 2026): a
+ * tenant who started their passport and left it, however it reached them,
+ * and Automate passport's day-later reminder, typed into or not. Dan
+ * Richards, 21 Oct 2026: it should encourage, never push - "we'd love to get
+ * your viewing booked in", not "you must". From the agent, at most two, and
+ * none once it is done.
+ *
+ * The lines that change are filled when it goes: {{introLine}} started or
+ * not, and the home they asked about; {{nextLine}} the viewing, or the
+ * application when they have one; {{whereLine}} how to get a share code,
+ * only when that is where they stopped, otherwise nothing.
  */
 export const TENANT_PASSPORT_REMINDER = {
   subject: "Let's get your viewing booked in",
@@ -1749,11 +1756,11 @@ export const TENANT_PASSPORT_REMINDER = {
   mode: "blocks",
   blocks: [
     H("tpr1", "Nearly There"),
-    T("tpr2", "Hi {{firstName}},<br><br>Thanks again for asking about {{address}}. We'd love to get your viewing booked in."),
-    T("tpr3", "The only thing we need first is your tenant passport. Finish that, and all that's left is to pick a date and time that suits you."),
-    T("tpr4", "If you've already made a start, everything you've filled in is saved, so you can pick up right where you left off."),
+    T("tpr2", "Hi {{firstName}},<br><br>{{introLine}}"),
+    T("tpr3", "{{nextLine}}"),
+    T("tpr4", "{{whereLine}}"),
     SP("tpr5", 8),
-    BTN("tpr6", "Finish my passport", "{{link}}"),
+    BTN("tpr6", "{{buttonLabel}}", "{{link}}"),
     SP("tpr7", 8),
     T("tpr8", "Any questions at all, just reply to this email and it comes straight to me."),
     T("tpr9", "{{agentName}}<br>The Letting Experts"),
