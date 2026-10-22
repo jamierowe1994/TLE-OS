@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { aiCreate } from "@/lib/ai";
 import { realDayOrNull } from "@/lib/real-day";
 import { contentBlock, fetchDocument } from "@/lib/plc-scan";
-import { PLC_CHECKS, type CheckId, type FileRead, type PlcDocument } from "@/lib/plc";
+import { DATED_CHECKS, PLC_CHECKS, type CheckId, type FileRead, type PlcDocument } from "@/lib/plc";
 
 /**
  * One file, read the moment it is dropped on a PLC pack.
@@ -155,12 +155,16 @@ export async function readDroppedFile(
     const i = use.input as Record<string, unknown>;
     const slot = SLOTS.includes(i.slot as CheckId) ? (i.slot as CheckId) : null;
     const confidence = i.confidence === "high" || i.confidence === "medium" ? i.confidence : "low";
+    /* Only a document that runs out has an expiry. A date read off terms of
+       business or a reference report is something else's, and shown as an
+       expiry it reads as a problem (21 Oct 2026, 6 Ruskin Place). */
+    const dated = !slot || DATED_CHECKS.has(slot);
     return {
       checkId: slot,
       what: String(i.what ?? "").slice(0, 80),
       issueDate: date(i.issue_date),
-      expiryDate: date(i.expiry_date),
-      ...(i.expiry_derived === true ? { expiryDerived: true } : {}),
+      expiryDate: dated ? date(i.expiry_date) : null,
+      ...(dated && i.expiry_derived === true ? { expiryDerived: true } : {}),
       names: Array.isArray(i.names) ? i.names.map((n) => String(n).slice(0, 80)).slice(0, 8) : [],
       confidence,
       ...(i.note ? { note: String(i.note).slice(0, 240) } : {}),
