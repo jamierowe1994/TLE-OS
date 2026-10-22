@@ -4,6 +4,9 @@ import { aiCreate, usageOf, type Effort, type Usage } from "@/lib/ai";
 import { aiFailOf, aiWaitingText, AiUnavailable } from "@/lib/ai-outage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
+import { hasDb, q } from "@/lib/db";
+import { parseAddress, sameHome } from "@/lib/address-parse";
+import { isScottish } from "@/lib/property-flags";
 import {
   checkById,
   gateOf,
@@ -16,10 +19,13 @@ import {
 } from "@/lib/plc";
 import {
   judge,
+  NO_PACK,
   reasonsAsFindings,
+  RIGHT_TO_RENT,
   recommend,
   summarise,
   type DocFacts,
+  type PackContext,
   type RuleResult,
   type Verdict,
 } from "@/lib/plc-rules";
@@ -101,12 +107,21 @@ statutory duration and you say explicitly that you derived it.
 Be brief. One sentence per finding, in plain British English, addressed to a
 colleague who has the document open in front of them.`;
 
-function askFor(doc: PlcDocument, c: PlcCase): string {
+function askFor(doc: PlcDocument, c: PlcCase, pack: PackContext = NO_PACK): string {
   const check = checkById(doc.checkId);
   const moveIn = c.moveInDate ?? "unknown";
+  /* Scotland (16 Oct 2026, 44 South Bridge): a Legal for Landlords report
+     prints "Right to Rent: NO" on every Scottish tenant, because the check
+     was never run - it does not apply there. */
+  const scotland = pack.scottish
+    ? `
+This home is in Scotland. Right to Rent does not apply in Scotland: do not report
+anything about right to rent, right to reside or a share code, in findings or in
+outstandingDefects, whatever the document says about it.`
+    : "";
   const common = `This document was filed against the check "${check?.label ?? doc.checkId}".
 The property is ${c.address}. The tenancy is due to start on ${moveIn}.
-The file is named "${doc.name}".`;
+The file is named "${doc.name}".${scotland}`;
 
   /* Terms of business have no expiry and no end date, and saying so read as
      a problem (21 Oct 2026, 6 Ruskin Place). Asked for what matters instead. */
@@ -255,6 +270,12 @@ const REPORT_TOOL: Anthropic.Tool = {
             items: { type: "string" },
             description: "Every person named on the document, for the people-based checks.",
           },
+          referenceRecommendation: {
+            type: "string",
+            enum: ["accept", "accept_with_guarantor", "decline", "other", "not stated"],
+            description:
+              "Referencing reports only: the overall recommendation as printed. \"Accept with guarantor\" is accept_with_guarantor. Leave out for anything that is not a referencing report.",
+          },
         },
         required: ["isExpectedType", "addressMatches", "outcome", "signed"],
       },
@@ -323,10 +344,11 @@ export function contentBlock(f: Fetched): Anthropic.ContentBlockParam {
 export async function readDocument(
   client: Anthropic,
   file: { name: string; media: string; base64: string },
-  context: { checkId: CheckId; address: string; moveInDate: string | null },
+  context: { checkId: CheckId; address: string; moveInDate: string | null; pack?: PackContext },
   /** The bench only: another model or effort, to compare side by side. */
   trial?: { model?: string; effort?: Effort }
 ): Promise<DocRead & { model: string; usage: Usage; stop: string | null }> {
+  const pack = context.pack ?? NO_PACK;
   const asDoc: PlcDocument = {
     checkId: context.checkId,
     name: file.name,
@@ -350,7 +372,7 @@ export async function readDocument(
         role: "user",
         content: [
           contentBlock({ media: file.media, base64: file.base64 }),
-          { type: "text", text: askFor(asDoc, asCase) },
+          { type: "text", text: askFor(asDoc, asCase, pack) },
         ],
       },
     ],
@@ -383,6 +405,8 @@ export async function readDocument(
     if (!f) return [];
     const message = typeof f.message === "string" ? f.message.trim() : "";
     if (!message) return [];
+    /* Told not to, but not relied on: no Right to Rent line on a Scottish home. */
+    if (pack.scottish && RIGHT_TO_RENT.test(message)) return [];
     /* The model's own "blocker" is shown as a query. Only the rules in
        lib/plc-rules hold a pack back (8 Oct 2026: Kirstie's pack was stopped
        twice over for one gas address - once by the rule, once by the model
@@ -402,7 +426,7 @@ export async function readDocument(
   });
 
   const facts = readFacts(input.facts);
-  const result = judge(context.checkId, facts, context.moveInDate);
+  const result = judge(context.checkId, facts, context.moveInDate, pack);
 
   return { facts, result, observations: [...unread, ...observations], documentName: file.name, model: res.model, usage: usageOf(res), stop: res.stop_reason };
 }
@@ -471,13 +495,19 @@ function readFacts(raw: unknown): DocFacts {
     outstandingDefects: list("outstandingDefects"),
     signed: oneOf("signed", ["yes", "no", "unclear"] as const, "unclear"),
     peopleNamed: list("peopleNamed"),
+    referenceRecommendation: oneOf(
+      "referenceRecommendation",
+      ["accept", "accept_with_guarantor", "decline", "other", "not stated"] as const,
+      "not stated"
+    ),
   };
 }
 
 async function scanOne(
   client: Anthropic,
   doc: PlcDocument,
-  c: PlcCase
+  c: PlcCase,
+  pack: PackContext
 ): Promise<{ findings: Finding[]; result: RuleResult }> {
   /* Rule reasons first, then the model's prose. Kirstie should meet the
      decision before the commentary. */
@@ -509,7 +539,7 @@ async function scanOne(
   const read = await readDocument(
     client,
     { name: doc.name, media: fetched.media, base64: fetched.base64 },
-    { checkId: doc.checkId, address: c.address, moveInDate: c.moveInDate }
+    { checkId: doc.checkId, address: c.address, moveInDate: c.moveInDate, pack }
   );
   return {
     findings: [...reasonsAsFindings(doc.checkId, read.result, doc.name), ...read.observations],
@@ -519,7 +549,7 @@ async function scanOne(
 
 /** One document read again on its own (lib/plc-reread), exactly as the scan reads it. */
 export async function scanDocument(doc: PlcDocument, c: PlcCase): Promise<{ findings: Finding[]; result: RuleResult }> {
-  return scanOne(new Anthropic(), doc, c);
+  return scanOne(new Anthropic(), doc, c, await packContext(c));
 }
 
 /**
@@ -663,6 +693,7 @@ export async function scanCase(c: PlcCase, onProgress?: (done: number, total: nu
   }
 
   const client = new Anthropic();
+  const pack = await packContext(c);
   const readable = c.documents.filter((d) => checkById(d.checkId)?.scan !== "none");
 
   /* Three at a time (16 Oct 2026). One by one, a 13-document pack (Lianna's
@@ -685,7 +716,7 @@ export async function scanCase(c: PlcCase, onProgress?: (done: number, total: nu
           reads[at] = { ok: false, error: offline };
         } else {
           try {
-            reads[at] = { ok: true, read: await scanOne(client, readable[at], c) };
+            reads[at] = { ok: true, read: await scanOne(client, readable[at], c, pack) };
           } catch (error) {
             reads[at] = { ok: false, error };
             if (error instanceof AiUnavailable && (error.kind === "credit" || error.kind === "key")) offline = error;
@@ -708,6 +739,35 @@ export async function scanCase(c: PlcCase, onProgress?: (done: number, total: nu
   }
 
   return { findings, recommendation: summariseAll(results) };
+}
+
+/**
+ * What every document's rules should know about the pack it is in.
+ *
+ * Scotland is read from the postcode. A pack's own address is often the bare
+ * street ("South Bridge 44 (3f1)"), so the home's Documents tab folder in the
+ * file keys and the home's record in os_properties are asked too.
+ */
+export async function packContext(c: PlcCase): Promise<PackContext> {
+  const guarantorReport = c.documents.some(
+    (d) => d.checkId === "guarantor-checks" || d.covers?.includes("guarantor-checks")
+  );
+  /* "documents/file-3f1 44 South Bridge Edinburgh EH1 1LL/..." - only this
+     home's folder: the landlord's ID can come from another of their homes. */
+  const folders = [...c.documents.map((d) => d.key), ...(c.fileKeys ?? [])]
+    .map((k) => /^documents\/file-([^/]+)\//.exec(k)?.[1] ?? "")
+    .filter((f) => f && sameHome(f, c.address));
+  let scottish = isScottish(c.address) || folders.some((f) => isScottish(f));
+  if (!scottish && hasDb()) {
+    const street = parseAddress(c.address).street;
+    const rows = street
+      ? await q<{ address: string }>(`SELECT address FROM os_properties WHERE active AND address ILIKE '%' || $1 || '%'`, [
+          street,
+        ]).catch(() => [])
+      : [];
+    scottish = rows.some((r) => sameHome(r.address, c.address) && isScottish(r.address));
+  }
+  return { scottish, guarantorReport };
 }
 
 /** Per-check one-liners plus the pack headline, in one place. */
