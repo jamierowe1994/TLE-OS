@@ -5,6 +5,7 @@ import Link from "next/link";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import { dropJson } from "@/lib/page-cache";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
+import { MoveInPackCard } from "@/components/MoveInPack";
 import CustomerUpdates from "@/components/CustomerUpdates";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -1496,6 +1497,16 @@ export default function ApplicationDrawer({
                     hideWhenEmpty
                   />
                 </div>
+                {/* The move-in pack (lib/propoly-mail, 22 Oct 2026): read from the
+                    agent's Outlook once Propoly sends it, the proof it went. */}
+                {(propoly.state === "in" || Boolean(deal)) && (
+                  <MoveInPackCard
+                    dealId={(journey?.ok ? journey.deal?.id : null) ?? deal?.app.id ?? null}
+                    address={[app.property, app.locality].filter(Boolean).join(", ")}
+                    moveIn={moveIn}
+                    className="mt-4"
+                  />
+                )}
                 {/* The advert (19 Oct 2026, lib/advert-offline): once there's a let,
                     the agent takes it off the portals when they choose. */}
                 {app.listingId && !app.swapKind && (propoly.state === "in" || propoly.state === "push") && (
@@ -1516,6 +1527,14 @@ export default function ApplicationDrawer({
                 <p className="mt-3 text-[12px] leading-relaxed text-muted">
                   Let through Propoly, with no application in the OS. Kirstie moves it through the stages; ask her if something looks stuck.
                 </p>
+                {deal && (
+                  <MoveInPackCard
+                    dealId={deal.app.id}
+                    address={[deal.app.propertyName, deal.app.locality].filter(Boolean).join(", ")}
+                    moveIn={moveIn}
+                    className="mt-4"
+                  />
+                )}
                 <a href={propolyDealUrl(deal?.app.id)} target="_blank" rel="noreferrer" className="press-ring mt-4 inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white">
                   Open in Propoly <span aria-hidden>↗</span>
                 </a>

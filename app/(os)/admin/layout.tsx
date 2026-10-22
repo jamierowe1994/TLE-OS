@@ -159,6 +159,9 @@ const GROUPS: Array<{
       /* What each AI feature costs this month, from every call (lib/ai.ts),
          and which model each one is on. */
       { href: "/admin/ai-costs", label: "AI costs", needs: "see:reports" },
+      /* Propoly's emails read from Outlook (the move-in pack) and a let's
+         certificates pushed into its deal (22 Oct 2026). Owners only. */
+      { href: "/admin/propoly", label: "Propoly", needs: "see:tracking" },
       /* Where Steve's knowledge is written. The same screen Susan, Francesca,
          Michael and Kirstie get as a workspace of their own. */
       { href: "/knowledge", label: "Knowledge", needs: "edit:knowledge" },

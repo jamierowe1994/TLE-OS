@@ -45,6 +45,7 @@ import PastTenantPeople from "@/components/portfolio/PastTenantPeople";
 import SendToTenants from "@/components/portfolio/SendToTenants";
 import SendRecord from "@/components/portfolio/SendRecord";
 import { oneLine, ThreadView, type Thread } from "@/components/MailThreads";
+import { PropolyMailView, type PropolyMail } from "@/components/MoveInPack";
 import RecordFiles from "@/components/portfolio/RecordFiles";
 import FileDocuments from "@/components/FileDocuments";
 import RecordPastVisit from "@/components/inspections/RecordPastVisit";
@@ -244,7 +245,7 @@ export default function PropertyPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || showAll || showLogins || sendOpen || recordOpen || threadOpen || lightbox != null) return;
+      if (action || openJob || showAll || showLogins || sendOpen || recordOpen || threadOpen || mailOpen || lightbox != null) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -383,6 +384,21 @@ export default function PropertyPage() {
     fetch(`/api/mail-threads?listing=${encodeURIComponent(p.listingId)}&listings=${encodeURIComponent(sendListings.join(","))}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (live && j?.ok) setThreads(j.threads ?? []); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [p?.listingId, sendListings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Propoly's emails about this home, the move-in pack above all
+     (lib/propoly-mail, 22 Oct 2026): read from the agents' Outlook, each a
+     line in the latest activity, opening the email and its files. */
+  const [propolyMail, setPropolyMail] = useState<PropolyMail[]>([]);
+  const [mailOpen, setMailOpen] = useState<PropolyMail | null>(null);
+  useEffect(() => {
+    if (!p || p.test) return;
+    let live = true;
+    fetch(`/api/propoly-mail?listing=${encodeURIComponent(p.listingId)}&listings=${encodeURIComponent(sendListings.join(","))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok) setPropolyMail(j.mail ?? []); })
       .catch(() => undefined);
     return () => { live = false; };
   }, [p?.listingId, sendListings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -663,6 +679,15 @@ export default function PropertyPage() {
   for (const x of sends) {
     const went = x.results.filter((r) => r.sent).length;
     activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `Sent to tenants · ${x.documents.join(", ")}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => setRecordOpen(x.id) });
+  }
+  for (const m of propolyMail) {
+    const kept = m.attachments.filter((f) => f.key).length;
+    activity.push({
+      key: `propoly-mail-${m.id}`, at: m.at, icon: "mail",
+      title: m.kind === "move-in" ? "Move-in pack sent" : "Propoly email",
+      sub: `${m.subject || "(no subject)"}${kept ? ` · ${kept} ${kept === 1 ? "file" : "files"}` : ""}`.slice(0, 140),
+      go: () => setMailOpen(m),
+    });
   }
   for (const t of threads) {
     for (const m of t.messages) {
@@ -1299,6 +1324,7 @@ export default function PropertyPage() {
       )}
       {recordOpen && <SendRecord id={recordOpen} onClose={() => setRecordOpen(null)} />}
       {threadOpen && <ThreadView thread={threadOpen} onClose={() => setThreadOpen(null)} />}
+      {mailOpen && <PropolyMailView mail={mailOpen} onClose={() => setMailOpen(null)} />}
       {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
       {action?.kind === "tenant-notice" && propertyId && (
         <Modal onClose={closeAction} title="Tenant gave notice">

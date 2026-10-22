@@ -100,7 +100,7 @@ export function propolyTypeFor(checkId: CheckId, name: string): string | null {
  * both were skipped. A date the reader worked out rather than read
  * (expiryDerived) is still never sent.
  */
-function expiryFor(c: PlcCase, doc: PlcDocument): string | null {
+export function expiryFor(c: PlcCase, doc: PlcDocument): string | null {
   const f = c.findings.find((x) => x.checkId === doc.checkId && x.foundDate);
   if (f?.foundDate) return f.foundDate;
   const read = doc.read;
@@ -134,7 +134,39 @@ export function propolyFileName(name: string, fallback = "document.pdf"): string
   return `${stem || "document"}${ext}`;
 }
 
-async function bytesOf(doc: PlcDocument): Promise<{ bytes: Uint8Array; type: string }> {
+/**
+ * One file into one slot on a deal. Shared by the PLC pack's push and the
+ * owner's push of a let's certificates (lib/deal-documents). Throws
+ * PropolyWriteBlocked when the switch is off; every answer from Propoly comes
+ * back as an outcome.
+ */
+export async function sendToDeal(
+  dealId: string,
+  f: { bytes: Uint8Array; mime: string; type: string; fileName: string; label?: string | null; expiry: string | null }
+): Promise<{ outcome: "uploaded" | "already" | "failed"; note: string }> {
+  const form = new FormData();
+  /* deal_uuid, as Propoly's spec has it. deal_id was sent until 9 Oct
+     2026 and Propoly answers it "Missing required parameter: deal_uuid" -
+     no approved pack had reached here yet, so nothing was lost. */
+  form.set("deal_uuid", dealId);
+  form.set("type", f.type);
+  const fileName = propolyFileName(f.fileName, f.mime === "application/pdf" ? "document.pdf" : "document");
+  form.set("name", f.label ? propolyFileName(f.label, "Document") : fileName);
+  if (f.expiry) form.set("expiration", f.expiry);
+  /* Copied into a plain ArrayBuffer: the S3 client hands back a view over
+     a buffer the Blob constructor will not accept as-is. */
+  const copy = new Uint8Array(f.bytes.byteLength);
+  copy.set(f.bytes);
+  form.set("attached", new Blob([copy.buffer], { type: f.mime }), fileName);
+  const res = await propolyUpload("/api/v1/documents", form);
+  /* Everything Propoly said, field errors included, not just .message. */
+  const msg = propolyErrorText(res.body);
+  if (res.status === 201 || res.status === 200) return { outcome: "uploaded", note: "Uploaded." };
+  if (res.status === 409 || /already exists/i.test(msg)) return { outcome: "already", note: "Propoly already holds a document in this slot." };
+  return { outcome: "failed", note: msg || `Propoly answered ${res.status}.` };
+}
+
+export async function bytesOf(doc: PlcDocument): Promise<{ bytes: Uint8Array; type: string }> {
   if (doc.placeholder) throw new Error("recorded by name only, never stored");
   if (!r2Configured) throw new Error("file storage isn't configured here");
   return withR2(async (client) => {
@@ -203,33 +235,10 @@ export async function pushCaseToPropoly(caseId: string, by: string): Promise<Pro
     }
     try {
       const { bytes, type: mime } = await bytesOf(doc);
-      const form = new FormData();
-      /* deal_uuid, as Propoly's spec has it. deal_id was sent until 9 Oct
-         2026 and Propoly answers it "Missing required parameter: deal_uuid" -
-         no approved pack had reached here yet, so nothing was lost. */
-      form.set("deal_uuid", dealId);
-      form.set("type", type);
       /* The agent's own name for an Anything else file (16 Oct 2026), else the file name. */
-      const fileName = propolyFileName(doc.name, mime === "application/pdf" ? "document.pdf" : "document");
-      form.set("name", doc.label ? propolyFileName(doc.label, "Document") : fileName);
-      if (expiry) form.set("expiration", expiry);
-      /* Copied into a plain ArrayBuffer: the S3 client hands back a view over
-         a buffer the Blob constructor will not accept as-is. */
-      const copy = new Uint8Array(bytes.byteLength);
-      copy.set(bytes);
-      form.set("attached", new Blob([copy.buffer], { type: mime }), fileName);
-      const res = await propolyUpload("/api/v1/documents", form);
-      /* Everything Propoly said, field errors included, not just .message. */
-      const msg = propolyErrorText(res.body);
-      if (res.status === 201 || res.status === 200) {
-        taken.add(type);
-        results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "uploaded", note: "Uploaded." });
-      } else if (res.status === 409 || /already exists/i.test(msg)) {
-        taken.add(type);
-        results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "already", note: "Propoly already holds a document in this slot." });
-      } else {
-        results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "failed", note: msg || `Propoly answered ${res.status}.` });
-      }
+      const sent = await sendToDeal(dealId, { bytes, mime, type, fileName: doc.name, label: doc.label ?? null, expiry });
+      if (sent.outcome !== "failed") taken.add(type);
+      results.push({ checkId: doc.checkId, name: doc.name, type, ...sent });
     } catch (e) {
       if (e instanceof PropolyWriteBlocked) {
         results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: "Pushing documents into Propoly is switched off (Admin, Switches)." });

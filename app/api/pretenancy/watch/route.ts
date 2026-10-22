@@ -8,6 +8,7 @@ import { switchOn } from "@/lib/switches";
 import { refreshPropolyBooks, propolyDealsSavedAt } from "@/lib/business/propoly-deals";
 import { dayUsage } from "@/lib/business/propoly-meter";
 import { pollThreads } from "@/lib/mail-threads";
+import { scanPropolyMail } from "@/lib/propoly-mail";
 
 /**
  * The Propoly watcher.
@@ -59,10 +60,13 @@ export async function POST(req: NextRequest) {
   /* Email replies on PLC packs (lib/mail-threads, 21 Oct 2026) ride this
      five-minute timer, beside Propoly rather than after it; never throws. */
   const mail = pollThreads({ limit: 120, budgetMs: 45_000 }).catch((e) => ({ failed: publicError(e, "failed") }));
+  /* Propoly's own emails (the move-in pack) from each connected Outlook,
+     lib/propoly-mail, 22 Oct 2026: each mailbox at most every fifteen minutes. */
+  const propolyMail = scanPropolyMail({ budgetMs: 45_000 }).catch((e) => ({ failed: publicError(e, "failed") }));
   try {
     const read = await refreshPropolyBooks();
     const result = await watchDeals({ origin: publicOrigin(req) });
-    return NextResponse.json({ ...result, read, mail: await mail }, { status: result.ok ? 200 : 503 });
+    return NextResponse.json({ ...result, read, mail: await mail, propolyMail: await propolyMail }, { status: result.ok ? 200 : 503 });
   } catch (e) {
     return NextResponse.json({ ok: false, reason: publicError(e, "watch failed") }, { status: 500 });
   }
