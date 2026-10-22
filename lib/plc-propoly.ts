@@ -259,7 +259,14 @@ export async function propolyDealForCase(c: PlcCase): Promise<string | null> {
   return hit?.app.id ?? null;
 }
 
-export async function pushCaseToPropoly(caseId: string, by: string): Promise<PropolyPush> {
+/**
+ * `onlyFailed` retries just the files the last push could not place and
+ * keeps every other line of that push as it was (22 Oct 2026: James asked
+ * for the five name-length refusals re-sent and nothing else; a full push
+ * again would knock on every slot that is already filled). It only applies
+ * to a last push against the same deal; otherwise the whole pack goes.
+ */
+export async function pushCaseToPropoly(caseId: string, by: string, opts: { onlyFailed?: boolean } = {}): Promise<PropolyPush> {
   const c = await getCase(caseId);
   if (!c) throw new Error("That pack no longer exists.");
   if (c.state !== "approved") throw new Error("Only an approved pack goes into Propoly.");
@@ -286,7 +293,14 @@ export async function pushCaseToPropoly(caseId: string, by: string): Promise<Pro
 
   const results: PushResult[] = [];
   const taken = new Set<string>();
+  const last = opts.onlyFailed && c.propolyPush?.dealId === dealId ? c.propolyPush.results : null;
+  if (last) for (const r of last) if (r.type && (r.outcome === "uploaded" || r.outcome === "already")) taken.add(r.type);
   for (const doc of c.documents) {
+    const before = last?.find((r) => r.checkId === doc.checkId && r.name === doc.name);
+    if (last && before?.outcome !== "failed") {
+      if (before) results.push(before);
+      continue;
+    }
     const type = propolyTypeFor(doc.checkId, doc.name);
     const label = checkById(doc.checkId)?.label ?? doc.checkId;
     if (!type) {

@@ -943,9 +943,16 @@ export function ComplianceSide({
                   : "Not pushed yet. Each file goes into the deal's matching document slot."}
               </p>
             </div>
-            <Btn onClick={() => act("push-propoly")} busy={busy === "push-propoly" || Boolean(pushing?.propoly)}>
-              {c.propolyPush ? "Push again" : "Push documents to Propoly"}
-            </Btn>
+            {(() => {
+              /* After a push with refusals, the button retries only those
+                 (22 Oct 2026); a clean push can still be sent again whole. */
+              const failed = c.propolyPush?.results.filter((r) => r.outcome === "failed").length ?? 0;
+              return (
+                <Btn onClick={() => act("push-propoly", failed ? { onlyFailed: true } : {})} busy={busy === "push-propoly" || Boolean(pushing?.propoly)}>
+                  {!c.propolyPush ? "Push documents to Propoly" : failed ? `Retry ${failed === 1 ? "the one that" : `the ${failed} that`} failed` : "Push again"}
+                </Btn>
+              );
+            })()}
           </div>
           {c.propolyPush && c.propolyPush.results.length > 0 && (
             <ul className="mt-3 divide-y divide-line">

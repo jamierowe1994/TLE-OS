@@ -283,6 +283,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     async?: boolean;
     /** Send anyway: the agent's reason for sending past what the reader flagged. */
     anyway?: string;
+    /** push-propoly: retry only the files the last push could not place. */
+    onlyFailed?: boolean;
   };
   try {
     body = await req.json();
@@ -491,7 +493,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            on, or a retry after a slot failed. */
         const by = await actorName(req, "Compliance");
         try {
-          await pushCaseToPropoly(id, by);
+          await pushCaseToPropoly(id, by, { onlyFailed: body.onlyFailed === true });
         } catch (e) {
           return NextResponse.json({ ok: false, error: publicError(e, "push failed") }, { status: 409 });
         }
