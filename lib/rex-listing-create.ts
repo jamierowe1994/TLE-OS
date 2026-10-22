@@ -4,6 +4,8 @@ import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/r
 import { rexTokenFor } from "@/lib/rex-user";
 import { fillPropertySource, wantsSource } from "@/lib/rex-property-source";
 import { refusalInWords } from "@/lib/rex-refusal";
+import { noteFailure } from "@/lib/auto-bugs";
+import { rexIsDown } from "@/lib/rex-outage";
 import { hasDb, q } from "@/lib/db";
 import { isTestFile, TEST_REFUSAL, TEST_STREET } from "@/lib/test-guard";
 
@@ -207,7 +209,12 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
     };
   }
 
-  let res = await rexCall("Listings", "create", { data: payload, return_id: true }, token);
+  /* Quiet: a refusal for want of a Source is expected and answered just
+     below. It filed a ticket every time regardless (2261b2cd, ten on 20-22
+     Oct, among them the creates that went through on the second ask). A
+     create that still fails is reported by the second ask, or by the Source
+     write that could not be made. */
+  let res = await rexCall("Listings", "create", { data: payload, return_id: true }, token, { quiet: true });
   /* "Please select a Source before saving this property" (bug 9ad8cc4f, 9 Oct
      2026): the Source is on the property, not the listing. Filled in behind
      its own switch, then asked once more - a refused create made nothing, so
@@ -216,6 +223,10 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
     const source = await fillPropertySource(l.propertyId, token, await leadSourceFor(l));
     if (!source.ok) return { ok: false, reason: source.reason, detail: source.detail, ownerDetail: source.ownerDetail, payload };
     res = await rexCall("Listings", "create", { data: payload, return_id: true }, token);
+  } else if (!res.ok && !isExpiredToken(res) && !(await rexIsDown())) {
+    /* Refused for anything else: the first ask was the only one. (Turned
+       away because REX is down is the band's news, not a ticket.) */
+    noteFailure({ source: "REX", what: "Listings/create", status: res.status, message: res.error ?? `answered ${res.status}` });
   }
   if (isExpiredToken(res)) {
     return { ok: false, reason: "rex_session_expired", detail: "Your REX sign-in has run out. Sign in again to carry on." };

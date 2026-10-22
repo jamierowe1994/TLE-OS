@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
+import { rexNotAnswering } from "@/lib/rex-outage";
 
 /**
  * BUGS THAT REPORT THEMSELVES.
@@ -53,6 +54,8 @@ export interface Failure {
    * so `status` cannot say it and the caller has to.
    */
   timedOut?: boolean;
+  /** Set by logFailure: a screen that failed while REX was not answering. */
+  duringRexOutage?: boolean;
 }
 
 /**
@@ -112,6 +115,29 @@ function wasBusy(f: Failure): boolean {
   if (f.source === "REX" && /dbexception|database error|try again/i.test(f.message)) return true;
   return f.timedOut === true || (f.status != null && TRANSIENT.has(f.status));
 }
+/**
+ * NOBODY THERE AT ALL (21 Oct 2026). REX's PHP upgrade took its API off the
+ * network from 13:52 UTC until the next morning: every call died on the
+ * connection itself ("fetch failed", a ConnectTimeoutError after 10s), with no
+ * status and no timeout of ours to say so. That fingerprinted per endpoint, so
+ * one outage was 25 REX tickets (TenancyApplications/search alone counted
+ * 3,292) beside 30 screen tickets. A connection that never opened is the same
+ * fault whichever question was asked, so it is one ticket per system.
+ */
+const NO_CONNECTION = /fetch failed|connect ?timeout|und_err_connect|econnrefused|econnreset|enotfound|eai_again|etimedout|socket hang up|other side closed/i;
+function unreachable(f: Failure): boolean {
+  return f.source !== "Screen" && f.status == null && !f.timedOut && NO_CONNECTION.test(f.message);
+}
+
+/**
+ * A screen's gateway error while REX is not answering is REX's outage seen
+ * from the screen: our routes answer 502 when REX throws. One ticket for all
+ * of them, not one per board (the rest of the 21 Oct list).
+ */
+function screenDuringRexOutage(f: Failure): boolean {
+  return f.source === "Screen" && f.duringRexOutage === true;
+}
+
 /** Occurrences held back by the throttle, added to the count when the minute is up. */
 const pending = new Map<string, { n: number; at: number; flush: ReturnType<typeof setTimeout> | null }>();
 
@@ -145,6 +171,8 @@ export function fingerprintOf(f: Failure): string {
      the useful half - that it is the deals list that struggles - while a
      timeout, a 429 and a 502 on the same call stop being three tickets about
      one bad afternoon. */
+  if (unreachable(f)) return [f.source, "unreachable"].join("|");
+  if (screenDuringRexOutage(f)) return ["Screen", "rex-outage"].join("|");
   if (wasBusy(f)) return [f.source, f.what, "busy"].join("|");
   return [f.source, f.what, f.status ?? "", normalise(f.message)].join("|");
 }
@@ -153,6 +181,8 @@ function sentence(f: Failure): string {
   /* Worded without the status, because this one row will be counted against
      every kind of busy; the latest is in the context. And never "refused the
      read" for a timeout - the caller's message is written for the one case. */
+  if (unreachable(f)) return `${f.source} could not be reached at all - its servers did not answer (an outage on their side). Every call that failed this way is counted here, whichever it was; the latest is in the context.`;
+  if (screenDuringRexOutage(f)) return `Screens could not load while REX was not answering - our routes answer 502 when REX does not. One ticket for every screen it hit; the latest is in the context. Close it with REX's outage.`;
   if (wasBusy(f)) return `${f.source} ${f.what} was slow or busy - it timed out or turned us away`.slice(0, 900);
   const verb = f.source === "Screen" ? "went wrong on the screen" : "failed";
   return `${f.source} ${f.what} ${verb}${f.status ? ` (${f.status})` : ""}: ${f.message}`.slice(0, 900);
@@ -162,6 +192,9 @@ export async function logFailure(f: Failure): Promise<void> {
   try {
     if (!hasDb()) return;
     if (duringADeploy(f)) return;
+    if (f.source === "Screen" && TRANSIENT.has(f.status ?? 0) && (await rexNotAnswering(180_000).catch(() => false))) {
+      f = { ...f, duringRexOutage: true };
+    }
     const fp = fingerprintOf(f);
     const now = Date.now();
     const held = pending.get(fp);
@@ -175,7 +208,7 @@ export async function logFailure(f: Failure): Promise<void> {
     pending.set(fp, { n: 0, at: now, flush: null });
     if (pending.size > 5_000) pending.clear();
 
-    const last = JSON.stringify({ lastMessage: f.message.slice(0, 500), lastPath: f.path ?? null, lastWho: f.who ?? null });
+    const last = JSON.stringify({ lastWhat: f.what, lastMessage: f.message.slice(0, 500), lastPath: f.path ?? null, lastWho: f.who ?? null });
     const counted = await q<{ id: string }>(
       `UPDATE os_bugs
           SET occurrences = occurrences + $2, last_seen_at = NOW(),

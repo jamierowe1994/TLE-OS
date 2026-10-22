@@ -303,6 +303,28 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
+     * The Source written by the office account when REX will not take it from
+     * the agent (22 Oct 2026, ticket 2261b2cd - awaiting James's yes).
+     *
+     * Sean McMahon tried five times on 21-22 Oct to list 68 Main Street,
+     * Blantyre (REX property 26749958). Each time REX refused the listing for
+     * want of a Source, the OS read the property's Source (empty) and wrote it
+     * as Sean, and that write was refused in a fraction of a second, so he was
+     * told to ask the office. The same write as Richard Callow and James
+     * Crumpton went through. On, a refused write is asked once more as the
+     * office API user - REX then shows the office, not the agent, as having
+     * set the Source. The listing itself is still made as the agent.
+     */
+    key: "rex_property_source_office",
+    label: "Source written by the office when the agent can't",
+    what: "When REX refuses the agent's own write of a home's Source (so their new listing can't be made), the OS writes the same Source as the office account and asks for the listing again.",
+    who: "Nobody is emailed. One field on a REX property, set by the office API user instead of the agent. Needs \"Fill in the Source on REX properties\" on as well.",
+    confirm: "WRITE TO REX",
+    legacyEnv: "REX_PROPERTY_SOURCE_OFFICE",
+    legacyOn: "on",
+  },
+  {
+    /**
      * The offer-accepted handover, for real.
      *
      * Off (the default) is SHADOW: every accepted application is worked

@@ -1,7 +1,7 @@
 import "server-only";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
-import { rexCall } from "@/lib/rex";
+import { rexCall, rexRows } from "@/lib/rex";
 import { propertyIdForListing } from "@/lib/rex-landlord";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { sameHome } from "@/lib/address-parse";
@@ -166,9 +166,22 @@ export async function planDealDocuments(dealId: string): Promise<DealDocsPlan> {
   const rexIds = propertyIds.filter((id) => /^\d+$/.test(id));
   let rexNote: string | null = rexIds.length ? null : "No REX property found for this home, so REX's compliance register wasn't checked.";
   if (rexIds.length) {
-    const res = await rexCall("ComplianceEntries", "search", { criteria: [{ name: "parent_object_id", type: "in", value: rexIds }], limit: 200 }).catch(() => null);
-    if (!res?.ok) rexNote = "REX didn't answer, so its compliance register wasn't checked. Check again in a few minutes.";
-    const rows = (res?.ok ? ((res.result as { rows?: unknown[] })?.rows ?? []) : []) as Record<string, unknown>[];
+    /* A page at a time: REX refuses any limit over 100 outright ("Search
+       limit for the 'default' result format ... cannot exceed '100'
+       records", 7 times on 22 Oct 2026 - this asked for 200), so the
+       register was never checked at all. */
+    const rows: Record<string, unknown>[] = [];
+    for (let offset = 0; offset < 500; offset += 100) {
+      const res = await rexCall("ComplianceEntries", "search", { criteria: [{ name: "parent_object_id", type: "in", value: rexIds }], limit: 100, offset }).catch(() => null);
+      if (!res?.ok) {
+        rexNote = "REX didn't answer, so its compliance register wasn't checked. Check again in a few minutes.";
+        rows.length = 0;
+        break;
+      }
+      const page = rexRows(res.result);
+      rows.push(...page);
+      if (page.length < 100) break;
+    }
     for (const r of rows) {
       const type = String(r.type_id ?? "");
       const k = KINDS.find((x) => x.rex === type);

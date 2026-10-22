@@ -184,6 +184,18 @@ export async function rexIsDown(): Promise<boolean> {
   return rexDownNow(await readRexSetting());
 }
 
+/**
+ * Down, or not answering at all just now: the last call failed the way an
+ * outage fails, within `ms`, and nothing has answered since. For the bug list
+ * (lib/auto-bugs), which must know before the switch trips - on 21 Oct 2026
+ * the first minutes of the outage filed a ticket per screen.
+ */
+export async function rexNotAnswering(ms: number): Promise<boolean> {
+  if (await rexIsDown()) return true;
+  const s = st();
+  return s.lastFailAt != null && Date.now() - s.lastFailAt < ms && (s.lastOkAt == null || s.lastOkAt < s.lastFailAt);
+}
+
 /** Why it counts as down, in words for the Admin card. */
 export type DownReason = "forced" | "planned" | "detected" | null;
 export async function rexDownReason(): Promise<DownReason> {

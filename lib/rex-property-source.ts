@@ -1,6 +1,7 @@
 import "server-only";
 import { rexCall, rexWritesLocked } from "@/lib/rex";
 import { switchOn } from "@/lib/switches";
+import { noteFailure } from "@/lib/auto-bugs";
 
 /**
  * THE PROPERTY'S SOURCE, which REX wants before it will make a listing
@@ -132,14 +133,27 @@ export async function fillPropertySource(propertyId: string, token: string | nul
   if (held !== "") {
     return { ok: false, reason: "refused", detail: words, ownerDetail: `REX asked for a Source on property ${propertyId}, but it reads as ${held === null ? "unreadable" : `"${held}"`}, so nothing was written.` };
   }
-  const res = await rexCall(
-    "CustomFields",
-    "setFieldValues",
-    { service_name: "Properties", service_object_id: Number(propertyId), value_map: { [SOURCE_FIELD]: source } },
-    token
-  ).catch((e: Error) => ({ ok: false, error: e.message, status: 0, result: null }));
-  if (!res.ok) {
-    return { ok: false, reason: "refused", detail: words, ownerDetail: `Setting the property's Source was refused: ${res.error ?? res.status}` };
+  const write = (asToken: string | null) =>
+    rexCall(
+      "CustomFields",
+      "setFieldValues",
+      { service_name: "Properties", service_object_id: Number(propertyId), value_map: { [SOURCE_FIELD]: source } },
+      asToken
+    ).catch((e: Error) => ({ ok: false, error: e.message, status: 0, result: null }));
+  const res = await write(token);
+  if (res.ok) return { ok: true, source, wrote: true };
+  /* REX's reason, said somewhere (22 Oct 2026). This refusal reached nobody:
+     the agent was told to ask the office, nothing was logged, and no ticket
+     was filed - most likely because REX's words mention a token or being
+     authenticated, which rexCall reads as a lapsed sign-in and keeps quiet
+     about. Now it is in the logs and on the bug list, in REX's words. */
+  const why = `${res.error ?? `answered ${res.status}`}`;
+  console.warn(`[rex-property-source] setting the Source on property ${propertyId} as the agent was refused: ${why}`);
+  if (token && (await switchOn("rex_property_source_office").catch(() => false))) {
+    const office = await write(null);
+    if (office.ok) return { ok: true, source, wrote: true };
+    console.warn(`[rex-property-source] ...and as the office: ${office.error ?? office.status}`);
   }
-  return { ok: true, source, wrote: true };
+  noteFailure({ source: "REX", what: "CustomFields/setFieldValues (Source)", status: res.status || null, message: why });
+  return { ok: false, reason: "refused", detail: words, ownerDetail: `Setting the property's Source was refused: ${why}` };
 }

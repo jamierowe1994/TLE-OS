@@ -473,6 +473,18 @@ const APPS_TTL_MS = 60_000;
    route modules - share one pull rather than one each (2 Oct 2026). */
 const appsCache: Map<string, { at: number; apps: Application[] }> = ((globalThis as unknown as { __appsCache?: Map<string, { at: number; apps: Application[] }> }).__appsCache ??= new Map());
 
+/**
+ * Pulls already asked for and not yet answered, shared by whoever asks next
+ * (22 Oct 2026). A pull of 300 is nine REX searches side by side, and the
+ * board, the dashboard, the search palette, the listing's applications and
+ * the PLC prefill each asked for their own at once - so while REX was off the
+ * network on 21 Oct every screen opened waited ten seconds on nine more
+ * connections that were never going to open: 3,292 failed
+ * TenancyApplications searches in an afternoon and evening. Now the second
+ * caller waits on the first one's answer, good or bad.
+ */
+const appsInFlight: Map<string, Promise<Application[]>> = ((globalThis as unknown as { __appsInFlight?: Map<string, Promise<Application[]>> }).__appsInFlight ??= new Map());
+
 export async function getApplications(limit = 100, rexUserId?: string | null): Promise<Application[]> {
   const key = `${limit}:${rexUserId ?? ""}`;
   const hit = appsCache.get(key);
@@ -490,6 +502,21 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
     }
   }
 
+  const running = appsInFlight.get(key);
+  if (running) return running;
+  /* A bigger pull on its way answers a smaller one, as the cache does. */
+  for (const [k, p] of appsInFlight) {
+    const [n, who] = k.split(":");
+    if (who === (rexUserId ?? "") && Number(n) >= limit) return p.then((apps) => (limit >= 100 ? apps : apps.slice(0, limit)));
+  }
+  const pull: Promise<Application[]> = pullApplications(limit, rexUserId, key).finally(() => {
+    if (appsInFlight.get(key) === pull) appsInFlight.delete(key);
+  });
+  appsInFlight.set(key, pull);
+  return pull;
+}
+
+async function pullApplications(limit: number, rexUserId: string | null | undefined, key: string): Promise<Application[]> {
   /* The pages SIDE BY SIDE (19 Sep 2026). They were asked for one after the
      other - three REX calls end to end for the 300 the dashboard wants, which
      is most of what a cold load cost. The offsets are known before anything
@@ -771,6 +798,8 @@ async function osAcceptedApplications(rexUserId: string | null, rexApps: Applica
  *  held pull is out of date, so the next read is fresh. */
 export function forgetApplications(): void {
   appsCache.clear();
+  /* A pull asked before the change is not handed to anyone after it. */
+  appsInFlight.clear();
 }
 
 /** An application made in the OS - an offer accepted here, or a tenant swap. */
