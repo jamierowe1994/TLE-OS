@@ -711,6 +711,13 @@ export type PlcCase = {
    * cover: the referencing has to qualify, which is compliance's call.
    */
   rlpWanted?: boolean | null;
+  /**
+   * Any additional clauses for the tenancy agreement (21 Oct 2026, Susan and
+   * Kirstie): they sit inside the Propoly contract, which the OS cannot read,
+   * so the agent says them here and Kirstie copies them into the deal. Null
+   * until the agent answers, and the pack cannot be sent until they do.
+   */
+  clauses?: PlcClauses | null;
   /** The last request sent to Legal for Landlords' RLP team. */
   rlpRequest?: RlpRequest | null;
   /** The final decision, the words, and the name against it. */
@@ -770,6 +777,48 @@ export const DEFAULT_PLC_APPROVERS = [
      have finished it. Susan signs off as well. */
   "susan@thelettingexperts.co.uk",
 ];
+
+export type PlcClauses = { any: boolean; text: string; by: string; at: string };
+
+/** Has the agent said whether there are additional clauses, and written them if there are? */
+export const clausesAnswered = (c: Pick<PlcCase, "clauses">) =>
+  c.clauses?.any === false || (c.clauses?.any === true && c.clauses.text.trim().length > 0);
+
+/**
+ * The checks whose document runs out. Only these are ever measured against
+ * the move-in date (Lianna, 21 Oct 2026: 6 Ruskin Place's terms of business
+ * was flagged for having no expiry, and terms of business never have one).
+ * A tenant's visa and the landlord's passport do expire, so both are here.
+ */
+export const DATED_CHECKS = new Set<CheckId>([
+  "gas-safety",
+  "eicr",
+  "epc",
+  "licensing",
+  "pat",
+  "fire-safety",
+  "emergency-lighting",
+  "alarms",
+  "legionella",
+  "landlord-id-aml",
+  "right-to-rent",
+]);
+
+/**
+ * The last reading still describes this pack: nothing filed or waived since,
+ * and every flagged document still on it. Send anyway then sends on that
+ * reading, and a plain Send would only read the same files to the same answer
+ * (21 Oct 2026: 6 Ruskin Place was read three times over, each one held for
+ * the same guarantor ID).
+ */
+export function readingStillFresh(c: Pick<PlcCase, "scannedAt" | "findings" | "documents" | "waivers">): boolean {
+  if (!c.scannedAt || !c.findings.some((f) => f.level === "blocker")) return false;
+  const at = Date.parse(c.scannedAt);
+  const changed = [...c.documents.map((d) => d.addedAt), ...(c.waivers ?? []).map((w) => w.at)].some((t) => t && Date.parse(t) > at);
+  if (changed) return false;
+  const names = new Set(c.documents.map((d) => d.name));
+  return c.findings.every((f) => !f.documentName || names.has(f.documentName));
+}
 
 /** Has the agent said yes or no to Rent and Legal Protection? */
 export const rlpAnswered = (c: Pick<PlcCase, "rlpWanted">) => c.rlpWanted === true || c.rlpWanted === false;
