@@ -38,6 +38,8 @@ interface Answer {
   rows: Row[];
   /** The latest send of each file to tenants, by R2 key (lib/home-send stampsFor). */
   sent?: Record<string, { sendId: string; at: string; by: string; to: string[] }>;
+  /** Where compliance's check stands on each file, by R2 key (lib/cert-check-state). No entry: none needed. */
+  checks?: Record<string, { state: "waiting" | "queried" | "verified"; certificateId: string; by?: string; at?: string }>;
   outstanding: number;
   checking?: number;
   error?: string;
@@ -136,6 +138,7 @@ export default function PropertyFile({
   onLink,
   required,
   loose = [],
+  emailTenant,
 }: {
   /** The REX property. Give this when you have it. */
   propertyId?: string | null;
@@ -156,6 +159,11 @@ export default function PropertyFile({
   required?: string[];
   /** Documents uploaded as a certificate type; offered on that row to read in. */
   loose?: LooseDoc[];
+  /** Email Tenant on each certificate (James, 22 Oct 2026), where the home has
+   *  tenants: `open` sends from here (the home's page), `href` goes to the
+   *  home's page to send, `none` says why nobody can be sent it. Without it,
+   *  no button: an appraisal or a listing has no tenant to send to. */
+  emailTenant?: { open?: (start: string) => void; href?: (start: string) => string; none?: string | null };
 }) {
   const [data, setData] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +205,11 @@ export default function PropertyFile({
   useEffect(() => {
     setData(null);
     load();
+  }, [load]);
+  /* A send from Email Tenant or Email Certificates: the Sent lines change, nothing else does. */
+  useEffect(() => {
+    window.addEventListener("os:home-sent", load);
+    return () => window.removeEventListener("os:home-sent", load);
   }, [load]);
 
   /* Moving what was held against the address onto the property. Both callers
@@ -559,6 +572,9 @@ export default function PropertyFile({
                 {/* The newest file IS the certificate; a new one attached
                     on top replaces it here, the older ones fold away. Click
                     opens it in the sheet from the bottom of the page. */}
+                {emailTenant && !r.files.length && r.fileInRex && !r.fromHouse && effectiveId && VAULT_KEY[r.type] && (r.state === "valid" || r.state === "expiring") && (
+                  <EmailTenant start={`rex:${effectiveId}:${VAULT_KEY[r.type]}`} blocked={emailTenant.none ?? null} sent={null} via={emailTenant} onRecord={setRecord} />
+                )}
                 {r.files.length > 0 && (
                   <ul className="mt-2 space-y-1.5">
                     {(open[r.type] ? r.files : r.files.slice(0, 1)).map((f, i) => (
@@ -605,7 +621,15 @@ export default function PropertyFile({
                           </div>
                         )}
                         {/* Who it went to (Email Certificates, 20 Oct 2026): the stamp, and the record behind it. */}
-                        {data.sent?.[f.key] && (() => {
+                        {i === 0 && emailTenant ? (
+                          <EmailTenant
+                            start={`vault:${f.key}`}
+                            blocked={r.state === "expired" ? "Expired, so it isn't sent" : waitReason(data.checks?.[f.key]) ?? emailTenant.none ?? null}
+                            sent={data.sent?.[f.key] ?? null}
+                            via={emailTenant}
+                            onRecord={setRecord}
+                          />
+                        ) : data.sent?.[f.key] && (() => {
                           const st = data.sent[f.key];
                           const names = st.to.length > 2 ? `${st.to.slice(0, 2).join(", ")} and ${st.to.length - 2} more` : st.to.join(" and ");
                           return (
@@ -646,5 +670,65 @@ export default function PropertyFile({
       </div>
       {record && <SendRecord id={record} onClose={() => setRecord(null)} />}
     </section>
+  );
+}
+
+/** REX's type → the key Email Certificates uses for a certificate only REX holds (lib/home-send). */
+const VAULT_KEY: Record<string, string> = {
+  gas_safety: "gas", eicr: "eicr", epc: "epc", mandatory_hmo_license: "licence", additional_hmo_license: "licence", selective_hmo_license: "licence",
+  legionella_risk_assessment: "legionella", portable_appliance_testing: "pat", smoke_alarms: "alarms", co_alarms: "alarms", emergency_lighting_fire_exit: "fire",
+};
+
+const waitReason = (c: NonNullable<Answer["checks"]>[string] | undefined) =>
+  c?.state === "waiting" ? "Verify first" : c?.state === "queried" ? "Queried, verify a good one first" : null;
+
+/**
+ * EMAIL TENANT (James, 22 Oct 2026, after Jo's feedback): on every certificate,
+ * "blocked out until it's verified, and then we should be able to click it.
+ * When we click it ... it'll come up with a pre-drafted email." The email is
+ * Email Certificates (lib/home-send) with this certificate ticked and the
+ * home's tenants, so the record and the once-a-minute guard are the same.
+ * Sent, it says when and to whom, with the record, and offers Send Again.
+ */
+function EmailTenant({
+  start,
+  blocked,
+  sent,
+  via,
+  onRecord,
+}: {
+  start: string;
+  blocked: string | null;
+  sent: { sendId: string; at: string; by: string; to: string[] } | null;
+  via: { open?: (start: string) => void; href?: (start: string) => string };
+  onRecord: (id: string) => void;
+}) {
+  const cls = "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-semibold transition";
+  const label = sent ? "Send Again" : "Email Tenant";
+  const button = blocked ? (
+    <span aria-disabled="true" title={blocked} className={`${cls} cursor-not-allowed border border-line/70 bg-box text-muted`}>
+      <DoodleIcon name="mail" size={12} className="shrink-0 opacity-60" />{label}
+    </span>
+  ) : via.open ? (
+    <button type="button" onClick={() => via.open?.(start)} className={`${cls} ${sent ? "border border-line/80 hover:border-ink/40" : "bg-accent-dark text-page hover:opacity-90"}`}>
+      <DoodleIcon name="mail" size={12} className="shrink-0" />{label}
+    </button>
+  ) : via.href ? (
+    <a href={via.href(start)} className={`${cls} ${sent ? "border border-line/80 hover:border-ink/40" : "bg-accent-dark text-page hover:opacity-90"}`}>
+      <DoodleIcon name="mail" size={12} className="shrink-0" />{label}
+    </a>
+  ) : null;
+  const names = sent ? (sent.to.length > 2 ? `${sent.to.slice(0, 2).join(", ")} and ${sent.to.length - 2} more` : sent.to.join(" and ")) : "";
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-2">
+      {sent && (
+        <button type="button" onClick={() => onRecord(sent.sendId)} className="flex min-w-0 items-start gap-1.5 rounded-md py-0.5 text-left text-[11.5px] text-[#3f5a2c] hover:bg-box">
+          <DoodleIcon name="mail" size={12} className="mt-[2px] shrink-0" />
+          <span>Sent {stamp(sent.at)} to {names}, by {sent.by} <span className="text-muted underline underline-offset-2">View Record</span></span>
+        </button>
+      )}
+      {button}
+      {blocked && <span className="text-[11px] text-muted">{blocked}</span>}
+    </div>
   );
 }

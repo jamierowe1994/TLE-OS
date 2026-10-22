@@ -194,7 +194,11 @@ export default function PropertyPage() {
       const t = sp.get("tab");
       if (t && TABS.some((x) => x.id === t)) setTab(t as Tab);
       /* ?email=certificates (the compliance drawer's Email Certificates) opens it straight away. */
-      if (sp.get("email") === "certificates") setSendOpen({ start: null, heading: "Email Certificates" });
+      if (sp.get("email") === "certificates") {
+        /* &start=<document>: one certificate's Email Tenant, from the compliance drawer or the desk. */
+        const start = sp.get("start");
+        setSendOpen(start ? { start, heading: "Email Tenant" } : { start: null, heading: "Email Certificates" });
+      }
       const o = JSON.parse(sessionStorage.getItem(ORDER_KEY) ?? "[]");
       if (Array.isArray(o)) setOrder(o.map(String));
     } catch { /* fine */ }
@@ -1111,7 +1115,16 @@ export default function PropertyPage() {
                   <p className="mb-2 text-[11.5px] text-muted">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
                 )}
                 {propertyId ? (
-                  <PropertyFile key={propertyId} propertyId={propertyId} propertyName={house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name} screen="the property page" />
+                  <PropertyFile
+                    key={propertyId}
+                    propertyId={propertyId}
+                    propertyName={house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name}
+                    screen="the property page"
+                    emailTenant={{
+                      open: (start) => setSendOpen({ start, heading: "Email Tenant" }),
+                      none: p.test ? "This is a test home" : loginListings.length ? null : "Nobody is living here",
+                    }}
+                  />
                 ) : (
                   <p className={`${card} p-5 text-[12.5px] text-muted`}>There is no property record behind this home yet, so there are no certificates to check.</p>
                 )}

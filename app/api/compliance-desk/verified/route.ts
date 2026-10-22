@@ -8,7 +8,7 @@ import { sendTargetFor, verifiedToSend } from "@/lib/compliance-desk";
  * The desk's Verified list (Jo, 21 Oct 2026; lib/compliance-desk verifiedToSend).
  *
  * GET               → certificates verified and not yet with the tenants,
- *                     oldest first, then the ones sent in the last fortnight.
+ *                     oldest first, then the sent ones, newest first.
  * GET ?target=<id>  → where Email Certificates opens for that certificate: the
  *                     home's let, every let at the house with a tenant, and
  *                     the certificate ticked. The send itself is

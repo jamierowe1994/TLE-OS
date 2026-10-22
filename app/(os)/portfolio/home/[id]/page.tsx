@@ -26,7 +26,7 @@ export default function FindHome() {
     const name = sp.get("name") ?? "";
     const tab = sp.get("tab") ?? "";
     /* Email Certificates from the compliance drawer opens the send on arrival. */
-    const email = sp.get("email") === "certificates" ? "&email=certificates" : "";
+    const email = sp.get("email") === "certificates" ? `&email=certificates${sp.get("start") ? `&start=${encodeURIComponent(sp.get("start") as string)}` : ""}` : "";
     setName(name);
     fetch(`/api/portfolio/find?id=${encodeURIComponent(id)}${name ? `&name=${encodeURIComponent(name)}` : ""}`, { cache: "no-store" })
       .then((r) => r.json())

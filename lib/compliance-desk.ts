@@ -11,6 +11,7 @@ import { documentQueriedEmail, queryReplyEmail } from "@/lib/email/agent-emails"
 import { randomUUID } from "node:crypto";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { londonToday } from "@/lib/london-clock";
+import { CHECKS_BEGAN } from "@/lib/cert-check-state";
 import { ensureTable as ensureSendRecord } from "@/lib/home-send";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { housesIn, MANAGED_READERS } from "@/lib/houses";
@@ -59,7 +60,8 @@ import { sittingLets } from "@/lib/tenant-logins";
  * tick each of them would bury the six that arrive this week. This is a
  * cut-over date, not a month scope: it never moves.
  */
-export const CHECKS_BEGAN = "2026-09-20";
+/* Kept in lib/cert-check-state, where the property file and Email Certificates read it too. */
+export { CHECKS_BEGAN };
 
 export type CheckKind = "certificate" | "landlord_document" | "works_order";
 export type CheckState = "verified" | "queried";
@@ -575,8 +577,8 @@ export async function answer(p: {
  */
 export const TENANT_DAYS = 28;
 
-/* A sent one stays on the list, saying so, for this long; then it drops off. */
-const SENT_SHOWN_DAYS = 14;
+/* The Sent view shows the latest this many; every one stays on its home's file. */
+const SENT_SHOWN = 200;
 
 export interface VerifiedItem {
   id: string;
@@ -621,9 +623,8 @@ export async function verifiedToSend(): Promise<VerifiedItem[]> {
            FROM os_certificate_sends s
           WHERE s.certificate_id = c.id AND s.role = 'tenant' AND s.sent
        ) a ON TRUE
-      WHERE c.added_at >= $1::date AND c.expiry >= $2::date
-        AND (coalesce(h.at, a.at) IS NULL OR coalesce(h.at, a.at) > NOW() - make_interval(days => $3))`,
-    [CHECKS_BEGAN, today, SENT_SHOWN_DAYS]
+      WHERE c.added_at >= $1::date AND (c.expiry >= $2::date OR coalesce(h.at, a.at) IS NOT NULL)`,
+    [CHECKS_BEGAN, today]
   );
   const out = rows.map((r): VerifiedItem => {
     const issue = r.issue ? String(r.issue) : null;
@@ -653,10 +654,12 @@ export async function verifiedToSend(): Promise<VerifiedItem[]> {
       sent,
     };
   });
-  /* Waiting first, oldest work first; the sent ones underneath, newest first. */
-  return out.sort((a, b) =>
-    a.sent && b.sent ? (a.sent.at < b.sent.at ? 1 : -1) : a.sent ? 1 : b.sent ? -1 : a.from === b.from ? (a.verifiedAt < b.verifiedAt ? -1 : 1) : a.from < b.from ? -1 : 1
-  );
+  /* Waiting, oldest work first; then the sent ones, newest first (James, 22
+     Oct 2026: done ones move straight to Sent, out of the way). An expired
+     one is only here once sent: unsent, it can't be. */
+  const waiting = out.filter((r) => !r.sent).sort((a, b) => (a.from === b.from ? (a.verifiedAt < b.verifiedAt ? -1 : 1) : a.from < b.from ? -1 : 1));
+  const sent = out.filter((r) => r.sent).sort((a, b) => (a.sent!.at < b.sent!.at ? 1 : -1)).slice(0, SENT_SHOWN);
+  return [...waiting, ...sent];
 }
 
 /**

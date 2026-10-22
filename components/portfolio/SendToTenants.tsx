@@ -150,6 +150,8 @@ export default function SendToTenants({
     setResults(j.results ?? []);
     setRecordId(typeof j.record === "string" ? j.record : null);
     onSent?.();
+    /* The property file under it reads its Sent lines again (Email Tenant, 22 Oct 2026). */
+    window.dispatchEvent(new Event("os:home-sent"));
   }
 
   const toggle = (set: Set<string>, id: string) => { const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); return n; };

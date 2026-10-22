@@ -17,10 +17,14 @@ import type { VerifiedItem } from "@/lib/compliance-desk";
  * sent to the tenants. Under the Renters' Rights Act they must have it within
  * 28 days of the work, with a record that they did.
  *
- * Send to Tenants is Email Certificates, the same screens as on the home's
+ * Email Tenant is Email Certificates, the same screens as on the home's
  * page, opened with this certificate ticked: editable, sent from the OS, and
- * kept as the legal record on the home's file. Sent, a row says so for a
- * fortnight and then drops off.
+ * kept as the legal record on the home's file.
+ *
+ * James, 22 Oct 2026, after Jo's first morning: done ones get out of the way.
+ * Sent goes straight to the Sent view beside To Send, with the record, rather
+ * than sitting under the waiting ones for a fortnight. The button is Email
+ * Tenant, as it is on every certificate on the property file.
  */
 const AMBER = "bg-amber-50 text-amber-700";
 const day = (ymd: string) => new Date(`${ymd.slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -41,6 +45,18 @@ export default function Verified() {
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [target, setTarget] = useState<Target | null>(null);
   const [record, setRecord] = useState<string | null>(null);
+  const [view, setView] = useState<"send" | "sent">("send");
+  useEffect(() => {
+    try { if (new URLSearchParams(window.location.search).get("view") === "sent") setView("sent"); } catch { /* fine */ }
+  }, []);
+  const pick = (v: "send" | "sent") => {
+    setView(v);
+    try {
+      const u = new URL(window.location.href);
+      if (v === "sent") u.searchParams.set("view", "sent"); else u.searchParams.delete("view");
+      window.history.replaceState(null, "", u.toString());
+    } catch { /* fine */ }
+  };
 
   const load = useCallback(() => {
     fetch("/api/compliance-desk/verified", { cache: "no-store" })
@@ -78,20 +94,37 @@ export default function Verified() {
     <>
       <PageHeader
         title="Verified"
-        blurb="Certificates you have verified, waiting to go to the tenants. They must have the renewed certificate within 28 days of the work, counted from the date on it (or the day it came in, if no date was filed). Send to Tenants opens the email with the certificate attached: check it, change the words if you need to, and send. Every email is kept on the home's file as the record."
+        blurb="Certificates you have verified, waiting to go to the tenants. They must have the renewed certificate within 28 days of the work, counted from the date on it (or the day it came in, if no date was filed). Email Tenant opens the email with the certificate attached: check it, change the words if you need to, and send. Sent ones move to Sent, and every email is kept on the home's file as the record."
         search={false}
       />
       {error && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{error}</p>}
       {!stored && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-muted">No database on this environment.</p>}
 
-      {items && stored && waiting.length === 0 && (
+      {items && stored && (
+        <div role="tablist" className="fade-up mt-5 inline-flex rounded-full border border-line/70 bg-card p-1">
+          {([["send", "To Send", waiting.length], ["sent", "Sent", sent.length]] as const).map(([v, l, n]) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => pick(v)}
+              className={`rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition ${view === v ? "bg-ink text-page" : "text-muted hover:text-ink"}`}
+            >
+              {l} <span className={view === v ? "opacity-70" : ""}>{n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "send" && items && stored && waiting.length === 0 && (
         <div className="fade-up mt-5 flex items-center gap-3 rounded-[22px] border border-line/70 bg-card p-5">
           <span className={`flex h-9 w-9 items-center justify-center rounded-full ${GREEN}`}><span className="h-2.5 w-2.5 rounded-full bg-[#56634a]" /></span>
           <p className="text-[13.5px]">Nothing waiting. Every verified certificate has gone to the tenants.</p>
         </div>
       )}
 
-      {waiting.length > 0 && (
+      {view === "send" && waiting.length > 0 && (
         <>
           <p className="fade-up mt-4 text-[12.5px] text-muted">
             {waiting.length} to send{over ? `, ${over} of them past the 28 days` : ""}. Oldest first.
@@ -143,7 +176,7 @@ export default function Verified() {
                       className="flex items-center gap-1.5 rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
                     >
                       <DoodleIcon name="mail" size={13} />
-                      {opening === r.id ? "Opening..." : "Send to Tenants"}
+                      {opening === r.id ? "Opening..." : "Email Tenant"}
                     </button>
                   </div>
                 </li>
@@ -153,9 +186,12 @@ export default function Verified() {
         </>
       )}
 
-      {sent.length > 0 && (
+      {view === "sent" && sent.length === 0 && items && stored && (
+        <p className="fade-up mt-5 rounded-[22px] border border-line/70 bg-card p-5 text-[13.5px] text-muted">Nothing sent from here yet.</p>
+      )}
+      {view === "sent" && sent.length > 0 && (
         <>
-          <h2 className="fade-up mt-8 text-[15px] font-normal">Sent in the Last Fortnight</h2>
+          <p className="fade-up mt-4 text-[12.5px] text-muted">Newest first. Each one is also on its home&apos;s file.</p>
           <ul className="fade-up mt-3 space-y-2">
             {sent.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-line/70 bg-card px-4 py-3">
@@ -172,7 +208,11 @@ export default function Verified() {
                       View Record
                     </button>
                   )}
+                  <button type="button" disabled={opening === r.id} onClick={() => void open(r)} className="rounded-full border border-line/80 px-3 py-1.5 text-[12px] font-semibold transition hover:border-ink/40 disabled:opacity-40">
+                    {opening === r.id ? "Opening..." : "Send Again"}
+                  </button>
                 </div>
+                {rowError[r.id] && <p className={`w-full rounded-xl px-3.5 py-2.5 text-[12.5px] leading-snug ${RED}`}>{rowError[r.id]}</p>}
               </li>
             ))}
           </ul>

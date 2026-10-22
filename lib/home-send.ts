@@ -18,6 +18,7 @@ import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { footerFor, withFooter } from "@/lib/email-footer";
 import { londonToday } from "@/lib/london-clock";
+import { checkStatesFor, notYetSendable, type CertCheckState } from "@/lib/cert-check-state";
 import { normaliseEmail, type OsUser } from "@/lib/users";
 import { payPropTenantRows, personKey, ukPhone } from "@/lib/business/payprop-tenant-contacts";
 import { rentKey } from "@/lib/business/payprop-portfolio";
@@ -254,13 +255,15 @@ export async function sendableDocs(ctx: HomeContext): Promise<SendDoc[]> {
       ).catch(() => [])
     : [];
   const byKey = new Map(certRows.map((c) => [c.r2_key, c]));
+  /* Not checked yet, or queried (James, 22 Oct 2026: Email Tenant is "blocked out until it's verified"). */
+  const checks = vault.length ? await checkStatesFor(vault.map((v) => v.key)).catch(() => ({} as Record<string, CertCheckState>)) : {};
   const vaultKinds = new Set<string>();
   for (const v of vault) {
     const row = byKey.get(v.key);
     const expiry = ymd(row?.expiry ?? null);
     const blocked = row?.awaiting_check
       ? "With the compliance team for checking, so it can't be sent yet."
-      : expiry && expiry < today ? `Expired on ${prettyDay(expiry)}, so it isn't sent.` : null;
+      : expiry && expiry < today ? `Expired on ${prettyDay(expiry)}, so it isn't sent.` : notYetSendable(checks[v.key]);
     if (!blocked) vaultKinds.add(v.certKey);
     out.push({
       id: `vault:${v.key}`, group: "Certificates", label: v.label, name: v.name, expiry, sizeBytes: v.size, room: null, where: null,

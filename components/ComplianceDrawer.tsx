@@ -406,6 +406,10 @@ export default function ComplianceDrawer({
               propertyId={p.id}
               propertyName={house ? `${house.name}${room ? ` · ${tabLabel(house, room, R)}` : ""}` : p.name}
               screen="compliance"
+              emailTenant={{
+                /* On the home's page, where its tenants are (James, 22 Oct 2026: Email Tenant on every certificate). */
+                href: (start) => `/portfolio/home/${encodeURIComponent(p.id)}?name=${encodeURIComponent([p.name, p.locality].filter(Boolean).join(", "))}&tab=compliance&email=certificates&start=${encodeURIComponent(start)}`,
+              }}
             />
           </div>
         </div>
