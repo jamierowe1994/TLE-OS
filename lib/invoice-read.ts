@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { aiFailure } from "@/lib/ai-outage";
 
 /**
  * READ A CONTRACTOR'S INVOICE (the agents' call, 20 Oct 2026: "can I not see
@@ -58,6 +59,7 @@ export async function readInvoice(bytes: Buffer, type: string): Promise<InvoiceR
   const media = isPdf ? null : /png/.test(type) ? "image/png" : /jpe?g/.test(type) ? "image/jpeg" : /webp/.test(type) ? "image/webp" : null;
   if (!isPdf && !media) throw new Error("Only a PDF or a photo of the invoice can be read.");
 
+  /* Not through lib/ai yet, so the API's refusal is turned into a sentence here (lib/ai-outage). */
   const out = await new Anthropic().beta.messages.create({
     model: MODEL,
     max_tokens: 2000,
@@ -76,6 +78,8 @@ export async function readInvoice(bytes: Buffer, type: string): Promise<InvoiceR
         ],
       },
     ],
+  }).catch((e: unknown) => {
+    throw aiFailure("invoice-reader", "reader", e);
   });
   if (out.stop_reason === "refusal" || out.stop_reason === "max_tokens") return EMPTY;
   const text = out.content.find((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")?.text ?? "";

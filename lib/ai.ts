@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { hasDb, q } from "@/lib/db";
+import { aiFailure, noteAnswered, type AiVoice } from "@/lib/ai-outage";
 
 /**
  * Every call the OS makes to Claude goes through here.
@@ -35,6 +36,13 @@ import { hasDb, q } from "@/lib/db";
  *     false positive is answered by another model rather than not at all.
  *     Haiku 5.5 has no server-side fallback; its refusals reach the caller,
  *     which already treats "no answer" as "a person reads it".
+ *
+ * ── When the API refuses (22 Oct 2026) ────────────────────────────────────
+ *
+ *   Out of credit, a bad key, overloaded: the call throws AiUnavailable,
+ *   whose message is one plain sentence for the screen (lib/ai-outage). The
+ *   API's own words go to the log. Every caller that showed e.message showed
+ *   the raw JSON until then.
  */
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -63,6 +71,8 @@ type Spec = {
   effort: Effort;
   /** An env var that named this feature's model before 20 Oct 2026, still honoured. */
   legacy?: string;
+  /** Who the sentence names when the API refuses (lib/ai-outage). Readers by default. */
+  voice?: AiVoice;
 };
 
 /**
@@ -71,20 +81,20 @@ type Spec = {
  * the env var instead.
  */
 export const AI_FEATURES: Record<AiFeature, Spec> = {
-  steve: { label: "Steve (chat)", key: "STEVE", model: "claude-opus-5-5", effort: "medium" },
-  "steve-brief": { label: "Steve's morning brief", key: "STEVE_BRIEF", model: "claude-haiku-5-5", effort: "low" },
-  "knowledge-links": { label: "Steve reading links", key: "KNOWLEDGE_LINKS", model: "claude-haiku-5-5", effort: "low" },
-  "library-reader": { label: "Marketing library reader", key: "LIBRARY_READER", model: "claude-sonnet-5-5", effort: "high" },
+  steve: { label: "Steve (chat)", key: "STEVE", model: "claude-opus-5-5", effort: "medium", voice: "steve" },
+  "steve-brief": { label: "Steve's morning brief", key: "STEVE_BRIEF", model: "claude-haiku-5-5", effort: "low", voice: "steve" },
+  "knowledge-links": { label: "Steve reading links", key: "KNOWLEDGE_LINKS", model: "claude-haiku-5-5", effort: "low", voice: "steve" },
+  "library-reader": { label: "Marketing library reader", key: "LIBRARY_READER", model: "claude-sonnet-5-5", effort: "high", voice: "steve" },
   "plc-scan": { label: "PLC document check", key: "PLC_SCAN", model: "claude-sonnet-5-5", effort: "medium" },
   "plc-sorter": { label: "PLC file sorter", key: "PLC_SORTER", model: "claude-sonnet-5-5", effort: "low", legacy: "PLC_SORTER_MODEL" },
   "cert-reader": { label: "Certificate reader", key: "CERT_READER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },
   "cert-register": { label: "Engineer register reader", key: "CERT_REGISTER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },
   "epc-reader": { label: "EPC reader", key: "EPC_READER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },
-  advert: { label: "Advert writer", key: "ADVERT", model: "claude-opus-5-5", effort: "medium", legacy: "ADVERT_WRITER_MODEL" },
-  "listing-autofill": { label: "Listing auto-fill", key: "LISTING_AUTOFILL", model: "claude-opus-5-5", effort: "medium", legacy: "ADVERT_WRITER_MODEL" },
-  "bond-ask": { label: "Ask Bond", key: "BOND_ASK", model: "claude-opus-5-5", effort: "medium" },
+  advert: { label: "Advert writer", key: "ADVERT", model: "claude-opus-5-5", effort: "medium", legacy: "ADVERT_WRITER_MODEL", voice: "writer" },
+  "listing-autofill": { label: "Listing auto-fill", key: "LISTING_AUTOFILL", model: "claude-opus-5-5", effort: "medium", legacy: "ADVERT_WRITER_MODEL", voice: "writer" },
+  "bond-ask": { label: "Ask Bond", key: "BOND_ASK", model: "claude-opus-5-5", effort: "medium", voice: "bond" },
   "planning-reader": { label: "Planning reader", key: "PLANNING_READER", model: "claude-sonnet-5-5", effort: "low" },
-  translate: { label: "Translation", key: "TRANSLATE", model: "claude-opus-5-5", effort: "low", legacy: "TRANSLATE_MODEL" },
+  translate: { label: "Translation", key: "TRANSLATE", model: "claude-opus-5-5", effort: "low", legacy: "TRANSLATE_MODEL", voice: "writer" },
 };
 
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -161,7 +171,13 @@ export async function aiCreate(
   params: AiParams,
   opts: { client?: Anthropic; model?: string; effort?: Effort } = {}
 ): Promise<Anthropic.Message> {
-  const client = opts.client ?? defaultClient();
+  let client: Anthropic;
+  try {
+    client = opts.client ?? defaultClient();
+  } catch (e) {
+    /* No key: the SDK will not build a client. Said as "offline", like a refused key. */
+    throw aiFailure(feature, AI_FEATURES[feature].voice ?? "reader", e);
+  }
   const model = opts.model ?? aiModel(feature);
   const legacy = LEGACY.test(model);
   const body: Anthropic.MessageCreateParamsNonStreaming = { ...params, model };
@@ -201,15 +217,20 @@ export async function aiCreate(
 
 async function send(client: Anthropic, body: Anthropic.MessageCreateParamsNonStreaming, feature: AiFeature): Promise<Anthropic.Message> {
   let res: Anthropic.Message;
-  if (HAS_FALLBACK.test(body.model)) {
-    res = (await client.beta.messages.create({
-      ...(body as unknown as Anthropic.Beta.Messages.MessageCreateParamsNonStreaming),
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-    })) as unknown as Anthropic.Message;
-  } else {
-    res = await client.messages.create(body);
+  try {
+    if (HAS_FALLBACK.test(body.model)) {
+      res = (await client.beta.messages.create({
+        ...(body as unknown as Anthropic.Beta.Messages.MessageCreateParamsNonStreaming),
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+      })) as unknown as Anthropic.Message;
+    } else {
+      res = await client.messages.create(body);
+    }
+  } catch (e) {
+    throw aiFailure(feature, AI_FEATURES[feature].voice ?? "reader", e);
   }
+  void noteAnswered();
   void logUsage(feature, res);
   for (const fn of listeners) fn(feature, res);
   return res;

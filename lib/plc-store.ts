@@ -653,6 +653,96 @@ export async function releaseFinalAsk(id: string): Promise<void> {
   fileAskLocks.delete(id);
 }
 
+/* ─────────────────────────── waiting to read ──────────────────────────── */
+
+/** The file backend's stand-in for reread_at. */
+const fileRereadLocks = new Map<string, number>();
+
+/**
+ * Claim the right to read this pack's waiting files again (lib/plc-reread),
+ * or be told no. One UPDATE, as claimFinalAsk: two people opening the pack at
+ * once, or the cron landing beside them, cannot both read the same file. The
+ * claim lapses on its own after `holdSeconds` in case a run dies mid-read.
+ */
+export async function claimReread(id: string, holdSeconds: number): Promise<boolean> {
+  if (hasDb()) {
+    const rows = await q<{ id: string }>(
+      `UPDATE os_plc_cases SET reread_at = NOW()
+        WHERE id = $1 AND (reread_at IS NULL OR reread_at < NOW() - make_interval(secs => $2))
+        RETURNING id`,
+      [id, holdSeconds]
+    );
+    return rows.length > 0;
+  }
+  const now = Date.now();
+  if (now - (fileRereadLocks.get(id) ?? 0) < holdSeconds * 1000) return false;
+  fileRereadLocks.set(id, now);
+  return true;
+}
+
+/** Still reading: the claim is renewed before each file, so it only lapses on a run that died. */
+export async function touchReread(id: string): Promise<void> {
+  if (hasDb()) {
+    await q(`UPDATE os_plc_cases SET reread_at = NOW() WHERE id = $1`, [id]);
+    return;
+  }
+  fileRereadLocks.set(id, Date.now());
+}
+
+export async function releaseReread(id: string): Promise<void> {
+  if (hasDb()) {
+    await q(`UPDATE os_plc_cases SET reread_at = NULL WHERE id = $1`, [id]).catch(() => null);
+    return;
+  }
+  fileRereadLocks.delete(id);
+}
+
+/** Packs with a dropped file (in `fileStates`) or a scan line (in `lineStates`) waiting to be read, oldest change first. */
+export async function packsWaitingToRead(fileStates: PlcState[], lineStates: PlcState[], limit: number): Promise<string[]> {
+  if (hasDb()) {
+    const rows = await q<{ id: string }>(
+      `SELECT id FROM os_plc_cases
+        WHERE (state = ANY($1::text[]) AND documents @> '[{"read": {"waiting": true}}]'::jsonb)
+           OR (state = ANY($2::text[]) AND findings @> '[{"waiting": true}]'::jsonb)
+        ORDER BY updated_at ASC
+        LIMIT $3`,
+      [fileStates, lineStates, limit]
+    );
+    return rows.map((r) => r.id);
+  }
+  return (await readFile())
+    .filter(
+      (c) =>
+        (fileStates.includes(c.state) && c.documents.some((d) => d.read?.waiting)) ||
+        (lineStates.includes(c.state) && c.findings.some((f) => f.waiting))
+    )
+    .slice(0, limit)
+    .map((c) => c.id);
+}
+
+/**
+ * A waiting file's lines, replaced by what the reader now says. Only lines
+ * still marked waiting are touched, so a pack scanned or reopened in the
+ * meantime keeps whatever it has now.
+ */
+export async function putRereadFindings(id: string, documentName: string, findings: Finding[]): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    const at = c.findings.findIndex((f) => f.waiting && f.documentName === documentName);
+    if (at < 0) return c;
+    const rest = c.findings.filter((f, i) => i < at || !(f.waiting && f.documentName === documentName));
+    /* The pack now says when it was last read, which is now. */
+    return { ...c, findings: [...rest.slice(0, at), ...findings, ...rest.slice(at)], scannedAt: new Date().toISOString() };
+  });
+}
+
+/** A dropped file's own read, once it is no longer waiting. The file stays where it is filed. */
+export async function putRereadFile(id: string, key: string, read: FileRead): Promise<PlcCase> {
+  return mutate(id, (c) => ({
+    ...c,
+    documents: c.documents.map((d) => (d.key === key && d.read?.waiting ? { ...d, read } : d)),
+  }));
+}
+
 /** One press, on the record. Appended in SQL so it can never be lost to a save running beside it. */
 export async function recordFinalAsk(id: string, ask: FinalAsk): Promise<PlcCase> {
   if (hasDb()) {

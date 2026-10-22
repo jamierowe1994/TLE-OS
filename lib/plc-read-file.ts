@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { aiCreate } from "@/lib/ai";
+import { aiFailOf, aiWaitingText } from "@/lib/ai-outage";
 import { realDayOrNull } from "@/lib/real-day";
 import { contentBlock, fetchDocument } from "@/lib/plc-scan";
 import { DATED_CHECKS, PLC_CHECKS, type CheckId, type FileRead, type PlcDocument } from "@/lib/plc";
@@ -97,7 +98,7 @@ const date = (v: unknown): string | null => {
 export const sorterConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
 /** Said under a file the reader could not open, whatever the reason. */
-const UNREAD = "Not read automatically, so sorted by its file name. Check it is in the right place.";
+export const UNREAD = "Not read automatically, so sorted by its file name. Check it is in the right place.";
 
 /**
  * Read one stored file. Never throws: a file the reader cannot open comes
@@ -105,7 +106,9 @@ const UNREAD = "Not read automatically, so sorted by its file name. Check it is 
  */
 export async function readDroppedFile(
   doc: Pick<PlcDocument, "key" | "name" | "placeholder">,
-  context: { address: string; landlordName?: string | null; tenantNames?: string[]; label?: string | null }
+  context: { address: string; landlordName?: string | null; tenantNames?: string[]; label?: string | null },
+  /** A waiting file read again (lib/plc-reread): how many tries it has had. */
+  tries = 0
 ): Promise<FileRead> {
   const at = new Date().toISOString();
   const blank = (note: string): FileRead => ({
@@ -174,7 +177,13 @@ export async function readDroppedFile(
   } catch (e) {
     /* The agent gets a sentence they can act on; the API's own words go to
        the log, where whoever fixes it will look (6 Oct 2026: a spent credit
-       balance put a raw JSON error under every file). */
+       balance put a raw JSON error under every file). Offline or busy, the
+       file waits and is read again once the API answers (lib/plc-reread). */
+    const kind = aiFailOf(e);
+    if (kind === "credit" || kind === "key" || kind === "busy") {
+      /* Only a busy reader counts as a try: a spent balance can last a day. */
+      return { ...blank(aiWaitingText(kind)), waiting: true, tries: kind === "busy" ? tries + 1 : tries };
+    }
     console.error("[plc-read-file]", e instanceof Error ? e.message : e);
     return blank(UNREAD);
   }

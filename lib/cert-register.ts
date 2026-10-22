@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { aiCreate } from "@/lib/ai";
+import { AiUnavailable } from "@/lib/ai-outage";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -263,8 +264,7 @@ export async function readRegisterFile(file: { bytes: Buffer; type: string }, fi
       note,
     };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "read failed";
-    return failed(/credit balance/i.test(msg) ? "The reader's Anthropic account has run out of credit." : "Could not read it this time.");
+    return failed(e instanceof AiUnavailable ? e.message : "Could not read it this time.");
   }
 }
 

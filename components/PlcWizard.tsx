@@ -81,6 +81,9 @@ const ORDER: Step[] = ["gathering", "details", "landlord", "tenant", "review", "
 /** How long the opening panel stays up even when REX is quick. */
 const THEATRE_MS = 2200;
 
+/** How often a pack with files waiting to read asks whether they are in. */
+const WAITING_POLL_MS = 30_000;
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -251,6 +254,32 @@ export default function PlcWizard({
      2026), so the tester walks the let on without a document or a checker.
      The server decides; this only stops the button refusing first. */
   const testLet = !demo && /^-\d+$/.test(String(kase?.applicationRef ?? "").trim());
+
+  /* Files dropped while the reader was offline (22 Oct 2026) read themselves
+     once it is back (lib/plc-reread). The pack is asked again quietly until
+     they are in, and only those reads are taken from the answer, so nothing
+     the agent is doing on the screen meanwhile is overwritten. */
+  const kaseId = kase?.id ?? null;
+  const readsWaiting = !isDemo && Boolean(kase?.documents.some((d) => d.read?.waiting));
+  useEffect(() => {
+    if (!readsWaiting || !kaseId) return;
+    const t = window.setInterval(async () => {
+      const fresh = await api<{ case: PlcCase }>(`/api/plc/${kaseId}`).catch(() => null);
+      if (!fresh) return;
+      setKase((k) =>
+        k && k.id === kaseId
+          ? {
+              ...k,
+              documents: k.documents.map((d) => {
+                const f = fresh.case.documents.find((x) => x.key === d.key);
+                return d.read?.waiting && f?.read && !f.read.waiting ? { ...d, read: f.read } : d;
+              }),
+            }
+          : k
+      );
+    }, WAITING_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [readsWaiting, kaseId]);
 
   /* Advance with the panel sliding out before the next one slides in, so the
      two are never on screen together. */

@@ -18,7 +18,7 @@ import {
   updateDetails,
   waiveCheck,
 } from "@/lib/plc-store";
-import { clausesAnswered, gateFor, missingDocuments, PLC_CHECKS, readingStillFresh, rlpAnswered, scanSummary, sortFindings, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
+import { clausesAnswered, gateFor, missingDocuments, PLC_CHECKS, readingStillFresh, rlpAnswered, scanSummary, softenWaived, sortFindings, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName, currentUser } from "@/lib/plc-actor";
 import { isPlcApprover, plcApproverNames } from "@/lib/plc-approvers";
@@ -34,6 +34,7 @@ import { isTestCase } from "@/lib/test-guard";
 import { isTestId } from "@/lib/test-overlay";
 import { moveInToRex } from "@/lib/plc-move-in-rex";
 import { askFinalApproval, finalAskOffer } from "@/lib/plc-final-ask";
+import { hasWaiting, rereadWaiting } from "@/lib/plc-reread";
 
 /**
  * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
@@ -101,6 +102,12 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   if (!found) {
     return NextResponse.json({ ok: false, error: "No handover with that reference." }, { status: 404 });
   }
+  /* Files the reader was offline for are read again when the pack is opened
+     (lib/plc-reread), in the background: the page shows them as waiting and
+     asks again until they are in. */
+  if (hasWaiting(found)) {
+    void rereadWaiting(id).catch((e) => console.error("[plc-reread]", id, e instanceof Error ? e.message : e));
+  }
   return NextResponse.json({ ok: true, ...(await payload(found, req)) });
 }
 
@@ -134,27 +141,6 @@ type SendJob = { at: number; done: boolean; status: number; error: string | null
 const KEEP_MS = 30 * 60_000;
 const g = globalThis as unknown as { __plcSendJobs?: Map<string, SendJob> };
 const sendJobs: Map<string, SendJob> = (g.__plcSendJobs ??= new Map());
-
-/* ── "Not needed" lets it through (James, 16 Oct 2026) ─────────────────────
-   44 South Bridge: Smoke and CO alarms marked not needed by Lianna, then the
-   gas record's "CO alarm in attic space out of date 2025 (still fitted)"
-   stopped the send as a blocker. When the agent has said a check is not
-   needed, a reader blocker about that same thing goes to compliance as a
-   question with the agent's reason beside it, rather than holding the pack. */
-const WAIVED_TOPICS: Partial<Record<CheckId, RegExp>> = {
-  alarms: /\b(co|carbon monoxide|smoke|heat)\b[^.]*\balarms?\b|\balarms?\b/i,
-};
-function softenWaived(c: PlcCase, findings: ScanOutcome["findings"]): ScanOutcome["findings"] {
-  const waived = (c.waivers ?? []).filter((w) => WAIVED_TOPICS[w.checkId as CheckId]);
-  if (!waived.length) return findings;
-  return findings.map((f) => {
-    if (f.level !== "blocker") return f;
-    const w = waived.find((x) => WAIVED_TOPICS[x.checkId as CheckId]!.test(f.message));
-    if (!w) return f;
-    const label = PLC_CHECKS.find((k) => k.id === w.checkId)?.label ?? w.checkId;
-    return { ...f, level: "query" as const, message: `${f.message} - ${label} marked not needed by ${w.by}: "${w.reason}"` };
-  });
-}
 
 /* ── Send anyway (James, 16 Oct 2026) ──────────────────────────────────────
    44 South Bridge again: the reader flagged "Accept with Guarantor" on the
@@ -233,7 +219,9 @@ async function finishSend(
 
   await markScanning(id);
   const scanned = await recordScan(id, outcome.findings);
-  if (outcome.recommendation && !testCase) {
+  /* Not while a file is waiting to read: a recommendation made without
+     it would be measured against a decision made with it. */
+  if (outcome.recommendation && !testCase && !outcome.findings.some((f) => f.waiting)) {
     await recordRecommendation({
       caseId: id,
       address: scanned.address,
@@ -569,7 +557,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
               {
                 checkId: "tenancy-agreement" as const,
                 level: "query" as const,
-                message: `The scan didn't finish — ${publicError(e, "unknown error")}. Nothing below has been read automatically.`,
+                message: `The scan didn't finish. ${publicError(e, "Something went wrong reading it.")} Nothing below has been read automatically.`,
                 foundDate: null,
               },
             ],
@@ -582,8 +570,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            prediction recorded after the decision is not a prediction.
 
            A scan that threw records nothing rather than recording a guess -
-           there was no recommendation to be right or wrong about. */
-        if (outcome.recommendation && !testCase) {
+           there was no recommendation to be right or wrong about. Nor
+           while a file is waiting to read: a recommendation made without it
+           would be measured against a decision made with it. */
+        if (outcome.recommendation && !testCase && !outcome.findings.some((f) => f.waiting)) {
           await recordRecommendation({
             caseId: id,
             address: scanned.address,

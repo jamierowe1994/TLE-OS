@@ -46,8 +46,7 @@ export async function POST(req: NextRequest) {
     /* Not 502: Cloudflare swaps an origin 502 for its own error page, and
        the reason (the backlog run, 6 Sep: "Your credit balance is too low")
        never reaches the caller. */
-    const msg = publicError(e, "read failed");
-    const plain = /credit balance/i.test(msg) ? "The reader's Anthropic account has run out of credit - top it up at console.anthropic.com." : msg;
-    return NextResponse.json({ ok: false, error: plain }, { status: 500 });
+    /* Out of credit or busy is already one plain sentence (lib/ai-outage). */
+    return NextResponse.json({ ok: false, error: publicError(e, "The reader couldn't read this one. Type the dates in below.") }, { status: 500 });
   }
 }

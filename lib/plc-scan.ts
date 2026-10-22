@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { aiCreate, usageOf, type Effort, type Usage } from "@/lib/ai";
+import { aiFailOf, aiWaitingText, AiUnavailable } from "@/lib/ai-outage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import {
@@ -488,13 +489,15 @@ async function scanOne(
        rather than a blocker: the file may be perfectly good and the fault
        ours. Silently dropping it would leave a check looking unexamined with
        no explanation. */
-    const because = `it could not be opened — ${e instanceof Error ? e.message : "it would not read"}.`;
+    /* The storage error's own words go to the log, not the screen. */
+    console.error("[plc-scan] could not open", doc.name, e instanceof Error ? e.message : e);
+    const because = "it could not be opened.";
     return {
       findings: [
         {
           checkId: doc.checkId,
           level: "query",
-          message: `Couldn't read ${doc.name} — ${e instanceof Error ? e.message : "it wouldn't open"}. Worth opening by hand.`,
+          message: `Couldn't open ${doc.name} to read it. Worth opening by hand.`,
           documentName: doc.name,
           foundDate: null,
         },
@@ -511,6 +514,50 @@ async function scanOne(
   return {
     findings: [...reasonsAsFindings(doc.checkId, read.result, doc.name), ...read.observations],
     result: read.result,
+  };
+}
+
+/** One document read again on its own (lib/plc-reread), exactly as the scan reads it. */
+export async function scanDocument(doc: PlcDocument, c: PlcCase): Promise<{ findings: Finding[]; result: RuleResult }> {
+  return scanOne(new Anthropic(), doc, c);
+}
+
+/**
+ * What a read that threw leaves on the pack.
+ *
+ * The API refusing (out of credit, a bad key, busy) is not the document's
+ * fault, so the file is marked waiting rather than failed and read again on
+ * its own once the API answers (lib/plc-reread). Anything else is a plain
+ * "check it by hand". Either way it is a review, never a pass: dropping it
+ * would let a document nobody managed to open vanish from the recommendation.
+ * The error's own words went to the log in lib/ai-outage.
+ */
+export function failedRead(doc: PlcDocument, e: unknown, tries = 0): { findings: Finding[]; result: RuleResult } {
+  const kind = aiFailOf(e);
+  const waiting = kind === "credit" || kind === "key" || kind === "busy";
+  if (!kind) console.error("[plc-scan] read failed", doc.name, e instanceof Error ? e.message : e);
+  return {
+    findings: [
+      {
+        checkId: doc.checkId,
+        level: "query",
+        message: waiting ? aiWaitingText(kind) : `The reader couldn't read ${doc.name}. Check it by hand.`,
+        documentName: doc.name,
+        foundDate: null,
+        /* Only a busy reader counts as a try: a spent balance can last a day. */
+        ...(waiting ? { waiting: true, tries: kind === "busy" ? tries + 1 : tries } : {}),
+      },
+    ],
+    result: {
+      verdict: "review",
+      reasons: [
+        {
+          verdict: "review",
+          rule: waiting ? "Waiting to read" : "Could not be read",
+          because: waiting ? `the reader was offline when ${doc.name} was read.` : `the reader failed on ${doc.name}.`,
+        },
+      ],
+    },
   };
 }
 
@@ -626,15 +673,23 @@ export async function scanCase(c: PlcCase, onProgress?: (done: number, total: nu
   const reads: Array<{ ok: true; read: Read } | { ok: false; error: unknown }> = new Array(readable.length);
   let next = 0;
   let finished = 0;
+  /* Once the account has said no (credit, key), the rest of the pack is not
+     sent to be told the same thing: each file is marked waiting as it is. */
+  let offline: AiUnavailable | null = null;
   onProgress?.(0, readable.length);
   await Promise.all(
     Array.from({ length: Math.min(3, readable.length) }, async () => {
       while (next < readable.length) {
         const at = next++;
-        try {
-          reads[at] = { ok: true, read: await scanOne(client, readable[at], c) };
-        } catch (error) {
-          reads[at] = { ok: false, error };
+        if (offline) {
+          reads[at] = { ok: false, error: offline };
+        } else {
+          try {
+            reads[at] = { ok: true, read: await scanOne(client, readable[at], c) };
+          } catch (error) {
+            reads[at] = { ok: false, error };
+            if (error instanceof AiUnavailable && (error.kind === "credit" || error.kind === "key")) offline = error;
+          }
         }
         onProgress?.(++finished, readable.length);
       }
@@ -646,25 +701,9 @@ export async function scanCase(c: PlcCase, onProgress?: (done: number, total: nu
       findings.push(...got.read.findings);
       results.push({ checkId: doc.checkId, result: got.read.result });
     } else {
-      const e = got.error;
-      findings.push({
-        checkId: doc.checkId,
-        level: "query",
-        message: `The reader failed on ${doc.name} — ${e instanceof Error ? e.message : "unknown error"}. Check it by hand.`,
-        documentName: doc.name,
-        foundDate: null,
-      });
-      /* A read that threw is a review, never a pass. Dropping it would let a
-         document nobody managed to open vanish from the recommendation. */
-      results.push({
-        checkId: doc.checkId,
-        result: {
-          verdict: "review",
-          reasons: [
-            { verdict: "review", rule: "Could not be read", because: `the reader failed on ${doc.name}.` },
-          ],
-        },
-      });
+      const failed = failedRead(doc, got.error);
+      findings.push(...failed.findings);
+      results.push({ checkId: doc.checkId, result: failed.result });
     }
   }
 

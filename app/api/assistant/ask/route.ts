@@ -15,6 +15,7 @@ import {
   type LogKind,
 } from "@/lib/assistant-log";
 import { ask, budget, assistantConfigured } from "@/lib/assistant-brain";
+import { aiFailOf } from "@/lib/ai-outage";
 import { AGENT_NAV } from "@/lib/nav";
 import { keyIsOurs } from "@/lib/r2";
 import type { ScreenControl, ScreenSnapshot } from "@/lib/steve-never";
@@ -203,8 +204,13 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,
        and it is still a guide somebody needed. */
+    const off = aiFailOf(e);
     const msg =
-      "Something went wrong reaching me just then. Your question is saved and has gone to James.";
+      off === "credit" || off === "key"
+        ? "I'm offline just now. Your question is saved and has gone to James."
+        : off === "busy"
+          ? "I'm busy just now. Your question is saved; try me again in a minute."
+          : "Something went wrong reaching me just then. Your question is saved and has gone to James.";
     await logLine({ ...common, role: "assistant", text: msg, kind });
     return NextResponse.json({
       reply: msg,

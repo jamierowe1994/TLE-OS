@@ -4,6 +4,7 @@ import { runDailyRentRead } from "@/lib/rent-status";
 import { runUpdateNudges } from "@/lib/customer-updates";
 import { runNewsletters } from "@/lib/newsletters";
 import { NextRequest, NextResponse } from "next/server";
+import { rereadAllWaiting } from "@/lib/plc-reread";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { timingSafeEqual } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
@@ -154,6 +155,13 @@ export async function POST(req: NextRequest) {
   if (req.nextUrl.searchParams.get("only") === "steve") {
     return NextResponse.json({ ok: true, steveJobs: await runDueJobs() });
   }
+  /* PLC files the reader was offline for, read again once it answers
+     (lib/plc-reread, 22 Oct 2026). Riding this five-minute tick rather than a
+     cron of its own; in the background, so the sends below never wait on it. */
+  if (req.nextUrl.searchParams.get("only") === "plc-reread") {
+    return NextResponse.json({ ok: true, plcReread: await rereadAllWaiting() });
+  }
+  void rereadAllWaiting().catch((e) => console.error("[plc-reread] tick", e instanceof Error ? e.message : e));
   /* Claim and select in ONE statement. Two overlapping cron runs — a slow one
      and its successor — would otherwise both read the same due rows and send
      the landlord two copies. */

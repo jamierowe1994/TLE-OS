@@ -2800,6 +2800,10 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS sent_anyway JSONB NOT NULL DEF
 -- (lib/plc-store claimFinalAsk) and never written by the store's general save.
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS final_asks JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS final_ask_lock TIMESTAMPTZ;
+-- Waiting to read (22 Oct 2026): files the reader could not get to while Claude was
+-- offline are read again later (lib/plc-reread). One re-read per pack at a time,
+-- claimed in one UPDATE (lib/plc-store claimReread) so a file is never paid for twice.
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS reread_at TIMESTAMPTZ;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
 -- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the

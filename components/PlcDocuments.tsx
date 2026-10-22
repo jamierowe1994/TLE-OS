@@ -122,6 +122,8 @@ function readLine(d: PlcDocument, moveIn: string | null): { text: string; warn: 
      business or a reference; only a document that runs out shows one. */
   const r = d.read && !DATED_CHECKS.has(d.checkId) ? { ...d.read, expiryDate: null, expiryDerived: undefined } : d.read;
   if (!r) return null;
+  /* Dropped while the reader was offline: it reads itself once it is back (lib/plc-reread). */
+  if (r.waiting) return { text: `Waiting to read · ${r.note ?? ""}`.trim(), warn: false };
   const bits: string[] = [];
   if (r.what) bits.push(r.what);
   if (r.expiryDate) bits.push(`valid until ${pretty(r.expiryDate)}${r.expiryDerived ? " (worked out)" : ""}`);

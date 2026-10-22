@@ -1,6 +1,7 @@
 import "server-only";
 import { ukDaysFromToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
+import { aiOutage } from "@/lib/ai-outage";
 import { can } from "@/lib/roles";
 import type { OsUser } from "@/lib/users";
 import { listDealEvents } from "@/lib/business/deal-watch";
@@ -338,6 +339,35 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       href: p.actor_id ? `/admin/people/${p.actor_id}` : "/admin/activity",
       tone: "warn",
     });
+  }
+  /* Claude refused for credit or the key (lib/ai-outage, 22 Oct 2026):
+     owners, one line per outage however many files it stopped, for three
+     days. It says when it came back, so the line answers itself. */
+  if (me.role === "owner") {
+    const offline = await q<{ id: string; detail: string; at: Date }>(
+      `SELECT id, detail, at FROM os_audit
+        WHERE kind = 'ai_offline' AND at > NOW() - INTERVAL '3 days'
+        ORDER BY at DESC LIMIT 5`
+    ).catch(() => []);
+    const now = offline.length ? await aiOutage().catch(() => null) : null;
+    for (const [i, o] of offline.entries()) {
+      const at = new Date(o.at).toISOString();
+      /* Only the newest outage can still be open. */
+      const open = i === 0 && Boolean(now?.since);
+      const back = !open && i === 0 && now?.backAt && now.backAt > at ? now.backAt : null;
+      const credit = /credit|spend limit/i.test(o.detail);
+      out.push({
+        id: `ai-offline:${o.id}`,
+        kind: "compliance",
+        at,
+        title: open ? "The document reader is offline" : "The document reader was offline",
+        body: open
+          ? `${credit ? "The Anthropic account is out of credit or over its spend limit" : "The Anthropic key was refused"}. PLC files are waiting to read and will read themselves once it's back. ${credit ? "Top up at console.anthropic.com." : "Check ANTHROPIC_API_KEY on Railway."}`
+          : `${credit ? "The Anthropic account ran out of credit" : "The Anthropic key was refused"}${back ? `, back since ${new Date(back).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}` : ""}. Waiting PLC files read themselves once it answered.`,
+        href: "/admin/ai-costs",
+        tone: open ? "warn" : "none",
+      });
+    }
   }
   for (const t of tasks) {
     const overdue = t.due_at && new Date(t.due_at).getTime() < Date.now();

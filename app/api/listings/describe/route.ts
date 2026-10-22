@@ -3,6 +3,7 @@ import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { aiCreate } from "@/lib/ai";
+import { aiFailOf } from "@/lib/ai-outage";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { whoIs } from "@/lib/admin";
 import { forAgent, isOwner } from "@/lib/agent-words";
@@ -117,7 +118,8 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const msg = publicError(e, "The writer could not be reached.");
     const { actor: who } = await whoIs(req).catch(() => ({ actor: null }));
-    const plain = /credit balance/i.test(msg)
+    const off = aiFailOf(e);
+    const plain = off === "credit" || off === "key"
       ? isOwner(who)
         ? "The writer's Anthropic account has run out of credit - top it up at console.anthropic.com."
         : "The advert writer is not available just now. Write it by hand, or try again later."

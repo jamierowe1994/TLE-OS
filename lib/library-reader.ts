@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { aiCreate } from "@/lib/ai";
+import { AiUnavailable } from "@/lib/ai-outage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
@@ -201,7 +202,7 @@ export async function readLibraryFile(key: string, by = "Steve read it on upload
   } catch (e) {
     console.error("library read failed", key, e);
     const msg = e instanceof Error ? e.message : String(e);
-    return done("failed", /page|too large|exceed/i.test(msg) ? "Too long for Steve to read in one go." : "Steve couldn't read it. Try Read now.");
+    return done("failed", e instanceof AiUnavailable ? e.message : /page|too large|exceed/i.test(msg) ? "Too long for Steve to read in one go." : "Steve couldn't read it. Try Read now.");
   }
 }
 

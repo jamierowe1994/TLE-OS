@@ -459,6 +459,14 @@ export type Finding = {
   documentName?: string;
   /** The date it found, where the check is a date check. ISO. */
   foundDate?: string | null;
+  /**
+   * The reader was offline or busy when this file came up (22 Oct 2026), so
+   * this line stands in for a read that has not happened yet. lib/plc-reread
+   * reads the file again once the API answers and replaces it.
+   */
+  waiting?: boolean;
+  /** How many times a waiting file met a busy reader (an offline one is not counted). */
+  tries?: number;
 };
 
 /**
@@ -538,6 +546,10 @@ export type FileRead = {
   note?: string;
   /** Other checks the reader saw this document answer (a reference report's Right to Rent). */
   alsoCovers?: CheckId[];
+  /** Not read yet: the reader was offline or busy when it was dropped (lib/plc-reread reads it later). */
+  waiting?: boolean;
+  /** How many times a waiting file met a busy reader (an offline one is not counted). */
+  tries?: number;
   at: string;
 };
 
@@ -813,11 +825,36 @@ export const DATED_CHECKS = new Set<CheckId>([
  */
 export function readingStillFresh(c: Pick<PlcCase, "scannedAt" | "findings" | "documents" | "waivers">): boolean {
   if (!c.scannedAt || !c.findings.some((f) => f.level === "blocker")) return false;
+  /* A file the reader never got to is not a reading (22 Oct 2026). */
+  if (c.findings.some((f) => f.waiting)) return false;
   const at = Date.parse(c.scannedAt);
   const changed = [...c.documents.map((d) => d.addedAt), ...(c.waivers ?? []).map((w) => w.at)].some((t) => t && Date.parse(t) > at);
   if (changed) return false;
   const names = new Set(c.documents.map((d) => d.name));
   return c.findings.every((f) => !f.documentName || names.has(f.documentName));
+}
+
+/* ── "Not needed" lets it through (James, 16 Oct 2026) ─────────────────────
+   44 South Bridge: Smoke and CO alarms marked not needed by Lianna, then the
+   gas record's "CO alarm in attic space out of date 2025 (still fitted)"
+   stopped the send as a blocker. When the agent has said a check is not
+   needed, a reader blocker about that same thing goes to compliance as a
+   question with the agent's reason beside it, rather than holding the pack.
+   Here rather than in the route since 22 Oct 2026, so a file read again
+   later (lib/plc-reread) is softened the same way. */
+const WAIVED_TOPICS: Partial<Record<CheckId, RegExp>> = {
+  alarms: /\b(co|carbon monoxide|smoke|heat)\b[^.]*\balarms?\b|\balarms?\b/i,
+};
+export function softenWaived(c: Pick<PlcCase, "waivers">, findings: Finding[]): Finding[] {
+  const waived = (c.waivers ?? []).filter((w) => WAIVED_TOPICS[w.checkId as CheckId]);
+  if (!waived.length) return findings;
+  return findings.map((f) => {
+    if (f.level !== "blocker") return f;
+    const w = waived.find((x) => WAIVED_TOPICS[x.checkId as CheckId]!.test(f.message));
+    if (!w) return f;
+    const label = PLC_CHECKS.find((k) => k.id === w.checkId)?.label ?? w.checkId;
+    return { ...f, level: "query" as const, message: `${f.message} - ${label} marked not needed by ${w.by}: "${w.reason}"` };
+  });
 }
 
 /** Has the agent said yes or no to Rent and Legal Protection? */

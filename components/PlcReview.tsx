@@ -297,21 +297,29 @@ function FinalAskCard({
   );
 }
 
+/** How often an open pack with files waiting to read asks whether they are in. */
+const WAITING_POLL_MS = 30_000;
+
 /** Renders its own <li>, so the caller keys it and does NOT wrap it — an li
  *  inside an li is a hydration error, not just untidy markup. */
 function FindingRow({ f, checks }: { f: Finding; checks: Check[] }) {
   const label = checks.find((c) => c.id === f.checkId)?.label ?? f.checkId;
-  const dot = {
-    blocker: "bg-[#c0504a]",
-    query: "bg-amber-500",
-    ok: "bg-[#56634a]",
-  }[f.level];
+  /* Waiting to read (22 Oct 2026): not a finding about the file, so not
+     amber - a quiet dot and the words, until it reads itself. */
+  const dot = f.waiting
+    ? "bg-muted/50"
+    : {
+        blocker: "bg-[#c0504a]",
+        query: "bg-amber-500",
+        ok: "bg-[#56634a]",
+      }[f.level];
   return (
-    <li className="flex gap-3 border-b border-line/60 px-5 py-3 last:border-0">
+    <li className="flex gap-3 border-b border-line/60 px-5 py-3 last:border-0" data-plc-waiting={f.waiting ? "" : undefined}>
       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />
       <div className="min-w-0">
         <p className="text-[13.5px] text-ink">{f.message}</p>
         <p className="mt-0.5 text-[12px] text-muted">
+          {f.waiting && <span className="mr-1.5 inline-block rounded-full bg-box px-2 py-px text-[11px] font-semibold text-ink/70">Waiting to read</span>}
           {label}
           {f.documentName ? ` · ${f.documentName}` : ""}
           {f.foundDate ? ` · ${prettyDate(f.foundDate)}` : ""}
@@ -512,6 +520,18 @@ export function ComplianceSide({
      rendered, so a fast double-click got two requests out first; the server
      refuses the second Send to Susan, but the refusal read as an error. */
   const inFlight = useRef(false);
+
+  /* Files the reader was offline for read themselves once it is back (lib/
+     plc-reread, started by opening the pack). Asked again quietly until they
+     are in, so the lines change on screen without anybody pressing reload. */
+  const waiting = c.findings.some((f) => f.waiting) || c.documents.some((d) => d.read?.waiting);
+  useEffect(() => {
+    if (!waiting || perform) return;
+    const t = setInterval(() => {
+      if (!inFlight.current) void reload().catch(() => {});
+    }, WAITING_POLL_MS);
+    return () => clearInterval(t);
+  }, [waiting, perform, reload]);
 
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
     if (inFlight.current) return;
