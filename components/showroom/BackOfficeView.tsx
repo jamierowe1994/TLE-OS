@@ -256,6 +256,8 @@ export function srcFor(s: DemoScene, j: BackOfficeJourney, way: WayId, token: st
     /* Pre-tenancy: each scene starts clean at its moment too. */
     case "office-pretenancy": q.set("fresh", "1"); if (s.screen.open) q.set("deal", SOPHIE_DEAL); return `${pre}/pre-tenancy?${q}`;
     case "office-plc": q.set("fresh", "1"); if (s.screen.section) q.set("case", s.screen.section); return `${pre}/pre-tenancy/plc?${q}`;
+    /* The agent's Flatfair hand-off for Sophie's let (lib/showroom/demo-flatfair). */
+    case "office-flatfair": q.set("fresh", "1"); q.set("deal", SOPHIE_DEAL); return `${pre}/flatfair?${q}`;
     case "email": return null;
   }
 }

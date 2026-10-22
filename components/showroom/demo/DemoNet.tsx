@@ -34,6 +34,7 @@ const DEMO_SCREENS: Record<string, string> = {
   "/pre-tenancy": "pre-tenancy",
   "/pre-tenancy/plc": "pre-tenancy/plc",
   "/compliance-desk/plc": "pre-tenancy/plc",
+  "/applications/flatfair": "flatfair",
 };
 /* Screens with pages under them, by prefix: /market-appraisals/<id> opens the
    demo's appraisals/<id> (the valuation, lib/showroom/demo-appraisals). */
@@ -70,7 +71,7 @@ const parentOrigin = (): string | null => {
 /* The valuation and pre-tenancy are stories you walk through, so their book is
    kept for the tab (a booked appraisal is still there on the file you open
    next; a pack checked in the queue is still checked on the board). ?fresh=1 starts again. */
-const KEPT = { appraisal: "appraisals", pretenancy: "pretenancy" } as const;
+const KEPT = { appraisal: "appraisals", pretenancy: "pretenancy", flatfair: "pretenancy" } as const;
 const keyFor = (story: string) => `tle-demo-book:${story}`;
 
 let world: DemoWorld | null = null;
@@ -86,7 +87,7 @@ function seed(): DemoWorld {
   const story = sp.get("story");
   const way = sp.get("way");
   const w = worldFor(isStory(story) ? story : "repair", Number(sp.get("at") ?? 0) || 0, isWay(way) ? way : "portal");
-  if (w.story === "appraisal" || w.story === "pretenancy") {
+  if (w.story === "appraisal" || w.story === "pretenancy" || w.story === "flatfair") {
     const field = KEPT[w.story];
     try {
       if (sp.get("fresh") === "1") sessionStorage.removeItem(keyFor(w.story));
@@ -97,7 +98,7 @@ function seed(): DemoWorld {
   return w;
 }
 function keep(w: DemoWorld) {
-  if (w.story !== "appraisal" && w.story !== "pretenancy") return;
+  if (w.story !== "appraisal" && w.story !== "pretenancy" && w.story !== "flatfair") return;
   const book = (w as unknown as Record<string, unknown>)[KEPT[w.story]];
   if (!book) return;
   try { sessionStorage.setItem(keyFor(w.story), JSON.stringify({ at: w.at, book })); } catch { /* storage refused */ }

@@ -18,6 +18,7 @@
 
 import { answerAppraisals, appraisalBook } from "@/lib/showroom/demo-appraisals";
 import { answerPretenancy, pretenancyBook } from "@/lib/showroom/demo-pretenancy";
+import { answerFlatfair, flatfairBook } from "@/lib/showroom/demo-flatfair";
 import type { Move, WorksOrder, WorksEvent } from "@/lib/works-orders";
 import type { Finding, Inspection } from "@/lib/inspections";
 import { STEPS, stepOf, isSkippable, skippedLine } from "@/lib/works-steps";
@@ -637,6 +638,11 @@ export function answer(w: DemoWorld, method: string, url: URL, body: Body): Demo
     /* ── Pre-tenancy: the board and the PLC queue (lib/showroom/demo-pretenancy) ── */
     if (w.story === "pretenancy") {
       const r = answerPretenancy((w.pretenancy ??= pretenancyBook(w.at)), method, url, body);
+      if (r) return r;
+    }
+    /* ── Flatfair: the same board, and the agent's hand-off screen (lib/showroom/demo-flatfair) ── */
+    if (w.story === "flatfair") {
+      const r = answerFlatfair((w.pretenancy ??= flatfairBook(w.at)), method, url, body);
       if (r) return r;
     }
 
