@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb } from "@/lib/db";
-import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, tenantsOf, getOrder, type WorksOrder } from "@/lib/works-orders";
+import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, tenantsOf, getOrder, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
+import { askByToken } from "@/lib/works-quotes";
 import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { agentFor } from "@/lib/works-agent";
@@ -58,16 +59,98 @@ function publicView(o: WorksOrder) {
   };
 }
 
+/**
+ * One contractor's quote request (Sean McMahon, 21 Oct 2026): a quote can go
+ * to several firms at once, and each gets a link of their own. It opens the
+ * job priced only - no tenants, no way in, no works order - and their answer
+ * lands against their name. Taken, theirs walks on to the job's own link with
+ * the works order; turned down, the page says so and does nothing else.
+ */
+async function askedJob(token: string): Promise<{ order: WorksOrder; ask: QuoteAsk } | null> {
+  const a = await askByToken(token);
+  if (!a) return null;
+  const found = await getOrder(a.orderId);
+  const ask = found?.order.quoteAsks.find((x) => x.id === a.id);
+  return found && ask ? { order: found.order, ask } : null;
+}
+
+function askView(o: WorksOrder, a: QuoteAsk) {
+  const closed = o.status === "cancelled" || a.state === "closed";
+  return {
+    ref: o.ref, kind: o.kind, title: o.title, category: o.category, description: o.description, status: o.status, step: "quote",
+    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: null, contractorName: a.contractorName,
+    quoteStage: closed ? "closed" : a.state === "accepted" ? (o.status === "approval" ? "with_landlord" : "accepted") : a.state,
+    quotePence: a.quotePence, tenant: "", scheduledAt: null, completedAt: null, invoicePence: null, invoiceRef: "", files: [],
+  };
+}
+
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
   const o = await orderByToken("contractor", token);
-  if (!o || !o.contractorId) return NextResponse.json({ ok: false, error: "That link isn't one of ours." }, { status: 404 });
-  return NextResponse.json({ ok: true, job: publicView(o) });
+  if (o && o.contractorId) return NextResponse.json({ ok: true, job: publicView(o) });
+  const asked = await askedJob(token);
+  if (asked) return NextResponse.json({ ok: true, job: askView(asked.order, asked.ask) });
+  return NextResponse.json({ ok: false, error: "That link isn't one of ours." }, { status: 404 });
+}
+
+/** A quote or a "can't do it" on one contractor's own link. */
+async function answerAsk(req: NextRequest, order: WorksOrder, ask: QuoteAsk): Promise<NextResponse> {
+  if (order.status === "cancelled" || order.status === "paid") return NextResponse.json({ ok: false, error: "This job is closed." }, { status: 400 });
+  if (ask.state !== "asked" && ask.state !== "quoted") {
+    return NextResponse.json({ ok: false, error: ask.state === "declined" ? "You told us you can't do this one. Ring us if that's changed." : "This one is decided. Ring us if you need to talk about it." }, { status: 400 });
+  }
+  const by = ask.contractorName || "The contractor";
+  const me = await agentFor(order);
+  const out: MoveOut = {};
+  const ctype = req.headers.get("content-type") ?? "";
+  let next: WorksOrder;
+  let action: "ask_quote_in" | "ask_declined";
+  if (ctype.includes("multipart/form-data")) {
+    const form = await req.formData();
+    const file = form.get("file");
+    const amount = Number(String(form.get("amount") ?? "").replace(/[£,\s]/g, ""));
+    if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, error: "Put the total in first." }, { status: 400 });
+    if (!(file instanceof File) || file.size === 0) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
+    if (file.size > 50 * 1024 * 1024) return NextResponse.json({ ok: false, error: "Files up to 50 MB, please." }, { status: 400 });
+    if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't connected on this environment." }, { status: 503 });
+    const key = `documents/works-${order.ref}/${Date.now()}-${safeName(file.name) || "quote"}`;
+    const body = Buffer.from(await file.arrayBuffer());
+    await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
+    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "quote", contractor: by } }, by);
+    action = "ask_quote_in";
+    next = await moveOrder(order.id, { action, askId: ask.id, quotePence: Math.round(amount * 100), note: `From their page.${String(form.get("note") ?? "").trim() ? ` ${String(form.get("note")).trim()}` : ""}` }, by, out);
+  } else {
+    const b = (await req.json().catch(() => ({}))) as { action?: string; amount?: unknown; note?: string };
+    if (b.action === "quote") {
+      const amount = Number(String(b.amount ?? "").replace(/[£,\s]/g, ""));
+      if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, error: "Put the total in first." }, { status: 400 });
+      action = "ask_quote_in";
+      next = await moveOrder(order.id, { action, askId: ask.id, quotePence: Math.round(amount * 100), note: `From their page.${(b.note ?? "").trim() ? ` ${(b.note ?? "").trim()}` : ""}` }, by, out);
+    } else if (b.action === "decline") {
+      action = "ask_declined";
+      next = await moveOrder(order.id, { action, askId: ask.id, note: (b.note ?? "").trim() || "Said so from their page." }, by, out);
+    } else {
+      return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
+    }
+  }
+  if (me) for (const e of await emailsForMove(next, action, me, out).catch(() => [])) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
+  const mine = next.quoteAsks.find((x) => x.id === ask.id) ?? ask;
+  return NextResponse.json({ ok: true, job: askView(next, mine) });
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
   const o = await orderByToken("contractor", token);
+  if ((!o || !o.contractorId) && hasDb()) {
+    const asked = await askedJob(token);
+    if (asked) {
+      try {
+        return await answerAsk(req, asked.order, asked.ask);
+      } catch (e) {
+        return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
+      }
+    }
+  }
   if (!o || !o.contractorId || !hasDb()) return NextResponse.json({ ok: false, error: "That link isn't one of ours." }, { status: 404 });
   if (o.status === "cancelled" || o.status === "paid") return NextResponse.json({ ok: false, error: "This job is closed." }, { status: 400 });
   const by = o.contractorName || "The contractor";

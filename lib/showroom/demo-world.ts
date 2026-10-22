@@ -94,6 +94,9 @@ function blankOrder(over: Partial<WorksOrder> & Pick<WorksOrder, "id" | "ref" | 
   return {
     status: "reported",
     quoteRequestedAt: null,
+    quoteAsks: [],
+    orderSentTo: null,
+    orderSentToName: "",
     landlordInvoiceToken: null,
     landlordInvoiceAskedAt: null,
     landlordInvoiceAnswer: null,

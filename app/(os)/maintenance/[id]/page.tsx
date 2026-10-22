@@ -263,16 +263,29 @@ export default function WorksOrderPage() {
   const stageShown: StepId | null = picked ?? here;
   const payrunAt = (o as WorksOrder & { payrunAt?: string | null }).payrunAt ?? null;
 
+  /* Out for quotes, a different contractor is asked for a price, never sent
+     the works order (Sean McMahon, 21 Oct 2026). */
+  const quoting = step === "quote";
+  const pickContractor = () => openPop(quoting ? { kind: "form", form: "request_quote" } : { kind: "stage", stage: "pick_contractor" });
+  /* The works order again, to whoever is on the job: after a change, or when
+     theirs went astray. Once it has gone, and while the job is open. */
+  const canResend = open && !quoting && !!o.contractorId && !!(o.contractorConfirmedAt || o.contractorContactedAt || o.scheduledAt);
+  /* The contractor was changed after the works order went: the new one hasn't had it. */
+  const unsent = canResend && !!o.orderSentTo && o.orderSentTo !== o.contractorId;
+  const resendOrder = () => void move({ action: "resend_order" }, "Works order");
+  const live = o.quoteAsks.filter((a) => a.state === "asked" || a.state === "quoted").length;
+
   /* ── the actions, beside the photos ─────────────────────────────────── */
   type Tile = { key: string; label: string; what: string; icon: string; off?: string; done?: boolean; run: () => void };
   const isClosed = closed ? "The job is closed" : undefined;
   const tiles: Tile[] = [
     { key: "quote", label: "Log a Quote", what: o.quotePence != null ? `Now ${pounds(o.quotePence)}` : "Their price, and the file", icon: "coin", off: isClosed, done: o.quotePence != null, run: () => openPop({ kind: "form", form: "quote" }) },
     { key: "approve", label: o.status === "approval" ? "Landlord Approved" : "Approve the Quote", what: o.status === "approval" ? "Waiting on their yes" : o.approvedAt ? `${o.approvedBy || "Approved"} · ${day(o.approvedAt)}` : "Their go-ahead, by phone or email", icon: "checklist", off: isClosed, done: !!o.approvedAt && o.status !== "approval", run: () => openPop({ kind: "form", form: "approve" }) },
-    { key: "request_quote", label: "Ask for a Quote", what: o.quoteRequestedAt ? `Asked ${day(o.quoteRequestedAt)}` : "Emails the contractor for a price", icon: "mail", off: isClosed ?? (o.contractorConfirmedAt ? "The works order has gone" : undefined), run: () => openPop({ kind: "form", form: "request_quote" }) },
+    { key: "request_quote", label: "Ask for Quotes", what: o.quoteAsks.length ? `${o.quoteAsks.length} asked${live && live !== o.quoteAsks.length ? `, ${live} in the running` : ""}` : o.quoteRequestedAt ? `Asked ${day(o.quoteRequestedAt)}` : "One contractor or several", icon: "mail", off: isClosed ?? (o.contractorConfirmedAt ? "The works order has gone" : undefined), run: () => openPop({ kind: "form", form: "request_quote" }) },
     { key: "tell", label: "Tell the Landlord", what: o.landlordToldAt ? `Told ${day(o.landlordToldAt)}` : "Ring them, or email the report", icon: "call", off: o.landlordSkipped ? "Not involved in this one" : isClosed, done: !!o.landlordToldAt, run: () => openPop({ kind: "stage", stage: "tell_landlord" }) },
     { key: "arranging", label: "Who's Arranging It", what: o.arranging === "us" ? "Us" : o.arranging === "landlord" ? `The landlord${o.landlordFollowUpAt ? ` · follow up ${day(o.landlordFollowUpAt)}` : ""}` : "The landlord, or us", icon: "user", off: isClosed, done: !!o.arranging, run: () => openPop({ kind: "stage", stage: o.arranging === "landlord" ? "landlord_follow_up" : "arranging" }) },
-    { key: "pick", label: o.contractorId ? "Change the Contractor" : "Pick a Contractor", what: o.contractorName || "Nearest first, by trade", icon: "setting", off: !open ? "Only on an open job" : undefined, done: !!o.contractorId, run: () => openPop({ kind: "stage", stage: "pick_contractor" }) },
+    { key: "pick", label: quoting ? "Ask Another Contractor" : o.contractorId ? "Change the Contractor" : "Pick a Contractor", what: quoting ? "For a quote, on their own link" : o.contractorName || "Nearest first, by trade", icon: "setting", off: !open ? "Only on an open job" : undefined, done: !quoting && !!o.contractorId, run: pickContractor },
+    { key: "resend", label: unsent ? "Send the Works Order" : "Send the Works Order Again", what: canResend ? (unsent ? `To ${o.contractorName}, not sent yet` : `To ${o.contractorName}`) : quoting ? "Once a quote is approved" : "Once it has gone", icon: "mail", off: canResend ? undefined : !open ? "Only on an open job" : quoting ? "The job is out for quotes" : "It hasn't gone yet", run: resendOrder },
     { key: "confirm", label: "Confirm the Contractor", what: o.contractorConfirmedAt ? `Confirmed ${day(o.contractorConfirmedAt)}` : "Sends the works order", icon: "file-contract", off: !o.contractorId ? "Pick a contractor first" : !open ? "Only on an open job" : undefined, done: !!o.contractorConfirmedAt, run: () => openPop({ kind: "stage", stage: "contractor_confirm" }) },
     { key: "date", label: o.scheduledAt ? "Move the Date" : "Set the Date", what: o.scheduledAt ? stamp(o.scheduledAt) : "The date and time agreed", icon: "calendar", off: isClosed ?? (o.completedAt ? "The work is done" : undefined), done: !!o.scheduledAt, run: () => openPop({ kind: "form", form: "schedule" }) },
     { key: "done", label: "Mark It Done", what: o.completedAt ? `Done ${day(o.completedAt)}` : "What was done, and when", icon: "checklist", off: isClosed ?? (o.completedAt ? "Already done" : undefined), done: !!o.completedAt, run: () => openPop({ kind: "form", form: "done" }) },
@@ -515,7 +528,7 @@ export default function WorksOrderPage() {
           </div>
 
           <div className="min-w-0 space-y-5">
-            <Engineer o={o} c={contractor} reading={trades === null} onPick={() => openPop({ kind: "stage", stage: "pick_contractor" })} canPick={open} />
+            <Engineer o={o} c={contractor} reading={trades === null} onPick={pickContractor} canPick={open} onResend={canResend ? resendOrder : undefined} unsent={unsent} busy={busy} />
 
             <Person tone="sage" icon="user" role={tenants.length > 1 ? `Tenants (${tenants.length})` : "Tenant"}>
               {tenants.length === 0 ? (
@@ -724,7 +737,7 @@ function CallEmail({ phone, email, name, role, address }: { phone: string; email
 }
 
 /** The engineer going out: their firm, how to reach them, what they're registered for, and their record. */
-function Engineer({ o, c, reading, onPick, canPick }: { o: WorksOrder; c: Contractor | null; reading: boolean; onPick: () => void; canPick: boolean }) {
+function Engineer({ o, c, reading, onPick, canPick, onResend, unsent, busy }: { o: WorksOrder; c: Contractor | null; reading: boolean; onPick: () => void; canPick: boolean; onResend?: () => void; unsent: boolean; busy: boolean }) {
   const [copied, setCopied] = useState(false);
   const regs = c
     ? [
@@ -736,11 +749,21 @@ function Engineer({ o, c, reading, onPick, canPick }: { o: WorksOrder; c: Contra
     : [];
   if (c && !regs.length && c.registration) regs.push(c.registration);
   const insured = c?.publicLiabilityInsurer ? `${c.publicLiabilityInsurer}${c.publicLiabilityExpiry ? ` · to ${day(c.publicLiabilityExpiry)}` : ""}` : "";
-  const link = o.contractorToken ? `${typeof window === "undefined" ? "" : window.location.origin}/contractor/${o.contractorToken}` : null;
+  const quoting = stepOf(o) === "quote";
+  /* Out for quotes, each firm has its own link; the job's one is for the works order. */
+  const link = o.contractorToken && !quoting ? `${typeof window === "undefined" ? "" : window.location.origin}/contractor/${o.contractorToken}` : null;
+  const out = o.quoteAsks.filter((a) => a.state === "asked" || a.state === "quoted");
   return (
-    <Person tone="brown" icon="setting" role="The Engineer" action={canPick ? <button type="button" onClick={onPick} className={quiet}>{o.contractorId ? "Change" : "Pick"}</button> : null}>
+    <Person tone="brown" icon="setting" role="The Engineer" action={
+      canPick || onResend ? (
+        <span className="flex flex-wrap justify-end gap-1.5">
+          {onResend && !unsent && <button type="button" disabled={busy} onClick={onResend} className={quiet} title={`Emails ${o.contractorName} the works order again, with their page link`}>Send again</button>}
+          {canPick && <button type="button" onClick={onPick} className={quiet}>{quoting ? "Ask another" : o.contractorId ? "Change" : "Pick"}</button>}
+        </span>
+      ) : null
+    }>
       {!o.contractorId && !o.contractorName ? (
-        <p className="text-[12.5px] text-muted">Nobody on the job yet.</p>
+        <p className="text-[12.5px] text-muted">{quoting && out.length ? `Out for quotes with ${out.length} contractors: ${out.map((a) => a.contractorName).join(", ")}. Whoever's quote is taken goes on the job.` : "Nobody on the job yet."}</p>
       ) : (
         <>
           <div className="flex items-center gap-3">
@@ -760,6 +783,12 @@ function Engineer({ o, c, reading, onPick, canPick }: { o: WorksOrder; c: Contra
             </div>
           </div>
           {c ? <Reach phone={c.phone} email={c.email} name={c.contact || c.name} address={o.propertyName} /> : !reading && o.contractorId ? <p className="mt-2 text-[11.5px] text-muted">Their details are in another agent&apos;s book.</p> : null}
+          {unsent && onResend && (
+            <div className="mt-3 rounded-xl border border-accent-dark/40 bg-accent-soft/40 px-3 py-2.5">
+              <p className="text-[12.5px]">{o.contractorName} hasn&apos;t been sent the works order. It went to {o.orderSentToName || "the last contractor"}.</p>
+              <button type="button" disabled={busy} onClick={onResend} className="mt-2 rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50">{busy ? "Sending…" : `Send it to ${o.contractorName}`}</button>
+            </div>
+          )}
           {(regs.length > 0 || insured) && (
             <dl className="mt-3 grid gap-2 text-[12px]">
               {regs.length > 0 && <Fact k="Registered" v={regs.join(" · ")} />}
@@ -767,7 +796,7 @@ function Engineer({ o, c, reading, onPick, canPick }: { o: WorksOrder; c: Contra
             </dl>
           )}
           <p className="mt-3 flex flex-wrap gap-1.5">
-            <Pill tone={o.contractorConfirmedAt ? "sage" : "warm"}>{o.contractorConfirmedAt ? `Confirmed ${day(o.contractorConfirmedAt)}` : o.contractorContactedAt ? `Contacted ${day(o.contractorContactedAt)}` : "Not contacted"}</Pill>
+            <Pill tone={o.contractorConfirmedAt ? "sage" : "warm"}>{o.contractorConfirmedAt ? `Confirmed ${day(o.contractorConfirmedAt)}` : o.contractorContactedAt ? `Contacted ${day(o.contractorContactedAt)}` : quoting ? "Asked for a quote" : "Not contacted"}</Pill>
             {o.scheduledAt && <Pill tone="plain">Booked {stamp(o.scheduledAt)}</Pill>}
           </p>
           {link && (

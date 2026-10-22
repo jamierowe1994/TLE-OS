@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
-import { dueFor, getContractor, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
+import { dueFor, getContractor, getOrder, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
 import { previewJobEmail } from "@/lib/works-emails";
 
 /**
@@ -17,6 +17,8 @@ type Draft = {
   kind?: string; urgency?: string | null;
   title?: string; description?: string; category?: string; dueAt?: string | null; scheduledAt?: string | null; access?: string;
   propertyName?: string; locality?: string; contractorId?: string | null; tenants?: JobTenant[];
+  /** A job already on the board: its quote request as this contractor will get it (Ask for quotes, 21 Oct 2026). */
+  orderId?: string; template?: "quote";
 };
 
 export async function POST(req: NextRequest) {
@@ -26,6 +28,16 @@ export async function POST(req: NextRequest) {
   if (!b.contractorId) return NextResponse.json({ ok: false, error: "Pick a contractor first." }, { status: 400 });
   const c = await getContractor(b.contractorId).catch(() => null);
   if (!c) return NextResponse.json({ ok: false, error: "That contractor is not in the book." }, { status: 404 });
+  if (b.orderId) {
+    const found = await getOrder(b.orderId).catch(() => null);
+    if (!found) return NextResponse.json({ ok: false, error: "No such job." }, { status: 404 });
+    try {
+      const mail = await previewJobEmail({ ...found.order, contractorId: c.id, contractorName: c.name, contractorToken: "…" }, "works-contractor-quote-request", subject ?? actor);
+      return NextResponse.json({ ok: true, ...mail });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: publicError(e, "The preview could not be written.") }, { status: 400 });
+    }
+  }
   /* The number the job will most likely get. Only a preview, so a race with
      somebody else raising a job at the same moment costs nothing. */
   const [seq] = hasDb() ? await q<{ n: string }>(`SELECT (last_value + CASE WHEN is_called THEN 1 ELSE 0 END)::text AS n FROM os_works_orders_ref`).catch(() => []) : [];

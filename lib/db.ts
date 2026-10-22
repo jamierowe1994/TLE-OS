@@ -775,6 +775,36 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_by        
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payrun_at                    TIMESTAMPTZ;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payrun_by                    TEXT NOT NULL DEFAULT '';
 CREATE UNIQUE INDEX IF NOT EXISTS os_works_orders_ll_invoice_token ON os_works_orders (landlord_invoice_token) WHERE landlord_invoice_token IS NOT NULL;
+-- A quote asked of several contractors at once (Sean McMahon, 21 Oct 2026:
+-- Forth said too far, and the job could not be sent on to All Trade). One row
+-- per contractor asked, each with its own link, so every price, every "can't
+-- do it" and every resend is theirs. lib/works-quotes.
+--   outcome  null while it is open | accepted | closed (another was taken)
+CREATE TABLE IF NOT EXISTS os_works_quote_asks (
+  id               TEXT PRIMARY KEY,
+  order_id         TEXT NOT NULL,
+  contractor_id    TEXT NOT NULL,
+  contractor_name  TEXT NOT NULL DEFAULT '',
+  token            TEXT NOT NULL,
+  asked_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  asked_by         TEXT NOT NULL DEFAULT '',
+  sends            INTEGER NOT NULL DEFAULT 1,
+  last_sent_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  quote_pence      BIGINT,
+  quote_note       TEXT NOT NULL DEFAULT '',
+  quoted_at        TIMESTAMPTZ,
+  quoted_by        TEXT NOT NULL DEFAULT '',
+  declined_at      TIMESTAMPTZ,
+  decline_note     TEXT NOT NULL DEFAULT '',
+  outcome          TEXT,
+  outcome_at       TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS os_works_quote_asks_token ON os_works_quote_asks (token);
+CREATE UNIQUE INDEX IF NOT EXISTS os_works_quote_asks_one ON os_works_quote_asks (order_id, contractor_id);
+-- Who the works order last went to (21 Oct 2026), so a job whose contractor
+-- was changed after it went says the new one hasn't had it, with a button.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS order_sent_to      TEXT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS order_sent_to_name TEXT NOT NULL DEFAULT '';
 
 -- REX PM's own task lists, read off its screens (1 Oct 2026). REX refused API
 -- access, so this is the stopgap: inspections (and next tenancy reviews) are
