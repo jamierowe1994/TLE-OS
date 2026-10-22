@@ -23,6 +23,7 @@ import { closedReasons, getApplications } from "@/lib/applications";
 import { feeOf, otherOpenOffers } from "@/lib/offer-hold";
 import { advertFor, stageReached } from "@/lib/advert-offline";
 import { introOnlyIds, isIntroOnly } from "@/lib/intro-only";
+import { optOutFor } from "@/lib/zero-deposit-optout";
 
 /**
  * One application's journey, start to keys - the agent's view of Kirstie's
@@ -708,7 +709,12 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       actions.push({ id: "plc-declined", label: "The PLC pack was declined", detail: plcCase.decisionNote || "See Kirstie's note on the pack.", href: `/plc/start?application=${encodeURIComponent(app.id)}`, who: "you" });
     } else if (plcCase.state === "submitted" || plcCase.state === "scanning" || plcCase.state === "reviewing" || plcCase.state === "checked") {
       actions.push({ id: "plc-wait", label: "PLC pack is with compliance", detail: `${st?.label ?? plcCase.state} - nothing for you until compliance answer.`, href: null, who: "kirstie" });
-    } else if (plcCase.state === "approved" && deal?.app.propoly?.depositReplacement) {
+    } else if (
+      plcCase.state === "approved" &&
+      deal?.app.propoly?.depositReplacement &&
+      /* A landlord who opted out of zero deposit: a cash deposit, nothing to key into Flatfair. */
+      !(await optOutFor({ email: deal.app.propoly.landlord?.email ?? null }).catch(() => null))
+    ) {
       /* PLC passed, and the deal is on Flatfair rather than a cash deposit.
          Kirstie (4 Sep): the agent keys it into Flatfair by hand and she
          cannot generate the agreement until it is done. The tick is the

@@ -1,6 +1,7 @@
 import { rexCall } from "@/lib/rex";
 import type { Handoff } from "@/lib/deal-handoff";
 import { isHmoType, isScottish } from "@/lib/property-flags";
+import { optOutFor, refOfContact, type OptOut } from "@/lib/zero-deposit-optout";
 
 /**
  * THE DEAL, PUSHED (9 Oct 2026).
@@ -47,6 +48,12 @@ import { isHmoType, isScottish } from "@/lib/property-flags";
  * in the OS records the opt-in yet, so it is the agent's tick.
  * PROPOLY_DEAL_DEPOSIT_SCHEME on Railway picks custodial or insured as the
  * starting value.
+ *
+ * 21 Oct 2026: every landlord is opted in under the terms of business and
+ * the TENANT chooses, so the tick is now "the tenant is using zero deposit".
+ * A landlord the agent has recorded as opted out (lib/zero-deposit-optout)
+ * gets a deposit whatever the tick says: `landlordOptOut` is read here, the
+ * tick is locked off on the card, and withChanges will not turn it back on.
  */
 
 type Row = Record<string, unknown>;
@@ -115,8 +122,10 @@ export interface DealTerms {
   paymentSchedule: PaymentSchedule;
   tenancyType: TenancyType;
   depositScheme: DepositScheme | null;
-  /** The landlord opted into Flatfair's zero deposit: the clause stays and the figure is the cover. */
+  /** The tenant is using Flatfair's zero deposit: the clause stays and the figure is the cover. */
   zeroDeposit: boolean;
+  /** The landlord opted out of zero deposit, as recorded on their file: a deposit is always taken. */
+  landlordOptOut?: OptOut | null;
   depositPounds: number | null;
   /** None in Scotland; otherwise one week's rent, rounded down to the penny. */
   holdingFeePounds: number | null;
@@ -195,6 +204,8 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
   if (out.scotland) out.depositScheme = SCOTTISH_SCHEME;
   else if (typeof change.depositScheme === "string" && change.depositScheme in ENGLISH_SCHEMES) out.depositScheme = change.depositScheme;
   if (typeof change.zeroDeposit === "boolean") out.zeroDeposit = change.zeroDeposit;
+  /* Never zero deposit for a landlord who opted out, whatever was sent. */
+  if (out.landlordOptOut) out.zeroDeposit = false;
   const dep = money(change.depositPounds);
   if (dep !== undefined) out.depositPounds = dep;
   /* The holding fee follows the rent; it is never typed. */
@@ -272,6 +283,18 @@ export async function dealDraftFor(packet: Handoff): Promise<{ terms: DealTerms;
   } else if (packet.swap) {
     listing = swapStandIn(packet);
   } else return null;
-  const terms = dealDefaults(packet, listing);
+  const terms = await withLandlordOptOut(dealDefaults(packet, listing), packet);
   return { terms, problems: dealProblems(terms) };
+}
+
+/**
+ * The landlord's zero deposit opt-out laid over the terms, from their email
+ * or REX contact. A read that fails leaves the terms as they were: the agent
+ * still sees and sets the tick, and pre-tenancy still sees the opt-out.
+ */
+export async function withLandlordOptOut(terms: DealTerms, packet: Pick<Handoff, "landlord">): Promise<DealTerms> {
+  const l = packet.landlord;
+  if (!l) return terms;
+  const optOut = await optOutFor({ email: l.email, ref: refOfContact(l.contactId) }).catch(() => null);
+  return optOut ? { ...terms, landlordOptOut: optOut, zeroDeposit: false } : terms;
 }

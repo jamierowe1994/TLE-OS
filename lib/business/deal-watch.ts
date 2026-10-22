@@ -5,6 +5,7 @@ import { getPropolyDeal, propolyConfigured } from "@/lib/business/propoly";
 import { logSystemEvent } from "@/lib/business/deal-store";
 import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
 import { dealMoneyFor, loadMoneySources, matchDealMoney, MONEY_RANK, saveDealMoney, type MoneyFact } from "@/lib/business/deposit-match";
+import { allOptOuts, optOutIn } from "@/lib/zero-deposit-optout";
 import { getApplications } from "@/lib/applications";
 import { createCase, getCase } from "@/lib/plc-store";
 import { sendEmail } from "@/lib/resend";
@@ -316,10 +317,11 @@ async function watchDeposits(deals: BusinessDeal[], known: Map<string, StateRow>
   /* The first pass over an empty table is history, not news: every holding
      fee already paid on the book would otherwise land on the feed at once. */
   const seeding = (await q<{ n: string }>(`SELECT COUNT(*) AS n FROM os_deal_money`))[0]?.n === "0";
+  const optOuts = await allOptOuts();
   for (const d of live) {
     const row = known.get(d.app.id);
     const firstLook = !row || row.money_checked_at == null;
-    const { holding, deposit } = matchDealMoney(d, src);
+    const { holding, deposit } = matchDealMoney(d, src, Boolean(optOutIn(optOuts, { email: d.app.propoly?.landlord?.email ?? null })));
     const have = current.get(d.app.id) ?? { holding: null, deposit: null };
     const who = { agentEmail: d.managerEmail ?? row?.agent_email ?? null, agentName: d.managerName ?? row?.agent_name ?? null };
     for (const f of [holding, deposit]) {

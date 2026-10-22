@@ -6,6 +6,7 @@ import { flatfairConfigured, flatfairEnv } from "@/lib/flatfair";
 import { draftFor, sendDraft, type DraftFacts } from "@/lib/flatfair-draft";
 import { switchOn } from "@/lib/switches";
 import { can } from "@/lib/roles";
+import { optOutFor, type OptOut } from "@/lib/zero-deposit-optout";
 
 /**
  * The Flatfair hand-off, until Flatfair gives us an API.
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest) {
   const p = app.propoly;
   const meta = await getMeta(id).catch(() => null);
   const tick = meta?.checklist?.[ITEM] ?? null;
+  const landlordOptOut = await landlordOptOutOf(app);
   return NextResponse.json({
     ok: true,
     url: flatfairUrl(),
@@ -55,6 +57,8 @@ export async function GET(req: NextRequest) {
       service: p?.service ?? null,
       standingOrderRef: p?.standingOrderRef ?? null,
       flatfairClause: Boolean(p?.depositReplacement),
+      /* Recorded on the landlord's file (21 Oct 2026): a cash deposit, never zero deposit. */
+      landlordOptOut,
       tenants: app.tenants.map((t) => ({ name: t.name, email: t.email, phone: t.phone })),
       guarantors: p?.guarantors ?? [],
       landlord: p?.landlord ?? null,
@@ -71,7 +75,12 @@ export async function GET(req: NextRequest) {
   });
 }
 
-function factsOf(dealId: string, app: import("@/lib/business/rex-stats").AgentApplication): DraftFacts {
+/** The deal's landlord, by the email Propoly holds, opted out of zero deposit? */
+async function landlordOptOutOf(app: import("@/lib/business/rex-stats").AgentApplication): Promise<OptOut | null> {
+  return optOutFor({ email: app.propoly?.landlord?.email ?? null }).catch(() => null);
+}
+
+function factsOf(dealId: string, app: import("@/lib/business/rex-stats").AgentApplication, landlordOptOut: OptOut | null): DraftFacts {
   const p = app.propoly;
   return {
     dealId,
@@ -81,7 +90,9 @@ function factsOf(dealId: string, app: import("@/lib/business/rex-stats").AgentAp
     deposit: p?.deposit ?? null,
     startDate: app.startDate,
     service: p?.service ?? null,
-    depositReplacement: Boolean(p?.depositReplacement),
+    /* Propoly puts its Flatfair clause on every deal; a landlord who opted
+       out still gets a traditional deposit, never a zero deposit plan. */
+    depositReplacement: Boolean(p?.depositReplacement) && !landlordOptOut,
     tenants: app.tenants.map((t) => ({ name: t.name ?? null, email: t.email ?? null, phone: t.phone ?? null })),
     guarantors: p?.guarantors ?? [],
     landlord: p?.landlord ?? null,
@@ -105,7 +116,7 @@ export async function POST(req: NextRequest) {
     if (flatfairEnv() !== "live" && !can(access.user.role, "see:wiring")) {
       return NextResponse.json({ ok: false, error: "Flatfair is on its test system; only the owners can try this for now." }, { status: 403 });
     }
-    const out = await sendDraft(factsOf(id, access.deal.app), { id: access.user.id, name: access.user.name ?? "", email: access.user.email });
+    const out = await sendDraft(factsOf(id, access.deal.app, await landlordOptOutOf(access.deal.app)), { id: access.user.id, name: access.user.name ?? "", email: access.user.email });
     if (out.ok) {
       await logSystemEvent(
         id,

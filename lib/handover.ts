@@ -13,7 +13,7 @@ import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { userByName } from "@/lib/tenant-email-send";
 import { isScottish } from "@/lib/property-flags";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
-import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, swapStandIn, withChanges, type DealTerms } from "@/lib/handover-deal";
+import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, swapStandIn, withChanges, withLandlordOptOut, type DealTerms } from "@/lib/handover-deal";
 import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 
 /**
@@ -689,7 +689,7 @@ function termWords(t: DealTerms): string {
     t.serviceLevel ? t.serviceLevel.replace(/_/g, " ") : "no service level",
     TENANCY_TYPES[t.tenancyType],
     t.depositScheme ? DEPOSIT_SCHEMES[t.depositScheme] : "no deposit scheme",
-    t.zeroDeposit ? "zero deposit through Flatfair" : "deposit taken",
+    t.zeroDeposit ? "zero deposit through Flatfair" : t.landlordOptOut ? "deposit taken (landlord opted out of zero deposit)" : "deposit taken",
     `holding fee ${pounds(t.holdingFeePounds)}`,
     `${t.zeroDeposit ? "Flatfair cover" : "deposit"} ${pounds(t.depositPounds)}`,
   ].join(", ");
@@ -733,7 +733,7 @@ async function pushDeal(
   }
 ): Promise<"ok" | "would" | "blocked" | "failed"> {
   const label = "The deal in Propoly";
-  const terms = withChanges(dealDefaults(o.packet, o.listing), o.change);
+  const terms = withChanges(await withLandlordOptOut(dealDefaults(o.packet, o.listing), o.packet), o.change);
   const realProperty = o.propertyUuid && !o.propertyUuid.startsWith("(") ? o.propertyUuid : null;
 
   /* 1. A deal an earlier push of this application started. */
@@ -883,10 +883,12 @@ async function pushDeal(
     if (o.packet.swap && p(tm.holding_fee_pence)) differs.push(`Propoly put a holding fee of ${pounds(p(tm.holding_fee_pence))} on it - a change of tenants has none, so set it to not required in Propoly and the deal moves to referencing`);
     const tenants = ((after.tenants ?? []) as Row[]).length;
     /* Propoly puts its Flatfair clause on every deal made from here. Right
-       when the landlord opted into zero deposit; otherwise it comes off. */
+       when the tenant is using zero deposit; otherwise it comes off. A
+       landlord who opted out is said in so many words, deal found or not. */
     const flatfair = ((after.extra_clauses ?? []) as unknown[]).some((c) => /deposit replacement|flatfair/i.test(String(c ?? "")));
-    if (!found && flatfair && !terms.zeroDeposit) differs.push("Propoly added its Flatfair deposit replacement clause, but the landlord hasn't opted into zero deposit - take it off in Propoly");
-    if (!found && !flatfair && terms.zeroDeposit) differs.push("the landlord opted into zero deposit but the deal has no Flatfair clause - add it in Propoly");
+    if (flatfair && terms.landlordOptOut) differs.push("Propoly added its Flatfair deposit replacement clause, but the landlord opted out of zero deposit - take it off in Propoly");
+    else if (!found && flatfair && !terms.zeroDeposit) differs.push("Propoly added its Flatfair deposit replacement clause, but the tenant isn't using zero deposit - take it off in Propoly");
+    if (!found && !flatfair && terms.zeroDeposit) differs.push("the tenant is using zero deposit but the deal has no Flatfair clause - add it in Propoly");
     const landlordsOn = ((after.landlords ?? []) as Row[]).length;
     if (!landlordsOn) differs.push("no landlord is on the deal");
     await rec.add({
