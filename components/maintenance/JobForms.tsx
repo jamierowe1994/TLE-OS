@@ -6,6 +6,7 @@ import { URGENCIES } from "@/lib/works-catalogue";
 import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
 import { ContractorPick, PAID_HOW, pounds, toPence } from "@/components/maintenance/works-ui";
+import { AskForQuotes } from "@/components/maintenance/QuoteAsks";
 
 /**
  * The job's small forms, one per thing you can do to it: the quote, the
@@ -23,7 +24,7 @@ export type FormId = "quote" | "request_quote" | "approve" | "assign" | "schedul
 
 export const FORM_TITLE: Record<FormId, (o: WorksOrder) => string> = {
   quote: (o) => (o.quotePence != null ? "Change the Quote" : "Log a Quote"),
-  request_quote: (o) => `Ask ${o.contractorName || "the Contractor"} for a Quote`,
+  request_quote: () => "Ask for Quotes",
   approve: () => "Approve the Quote",
   assign: (o) => (o.contractorId ? "Change the Contractor" : "Set a Contractor"),
   schedule: (o) => (o.scheduledAt ? "Move the Date" : "Set the Date"),
@@ -66,7 +67,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
       form === "quote" ? (f.amount ? { action: "quote", quotePence: toPence(f.amount), note: f.note } : null)
       : form === "request_quote" ? (f.contractorId || o.contractorId ? { action: "request_quote", contractorId: f.contractorId || undefined, note: f.note } : null)
       : form === "approve" ? { action: "approve", approvedBy: f.approvedBy ?? (o.landlord || "The landlord"), note: f.note }
-      : form === "assign" ? (f.contractorId || o.contractorId ? { action: "assign", contractorId: f.contractorId || o.contractorId!, scheduledAt: iso(f.scheduledAt), note: f.note } : null)
+      : form === "assign" ? (f.contractorId || o.contractorId ? { action: "assign", contractorId: f.contractorId || o.contractorId!, scheduledAt: iso(f.scheduledAt), note: f.note, quiet: true } : null)
       : form === "schedule" ? (f.scheduledAt ? { action: "schedule", scheduledAt: iso(f.scheduledAt)!, note: f.note } : null)
       : form === "done" || form === "already_done" ? { action: "done", note: f.note ?? "", completedAt: iso(f.completedAt), ...(form === "already_done" ? { alreadyDone: true } : {}) }
       : form === "invoice" ? (f.amount ? { action: "invoice", invoicePence: toPence(f.amount), invoiceRef: f.ref ?? (o.invoicePence != null ? o.invoiceRef : "") } : null)
@@ -121,14 +122,8 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
         </div>
       )}
       {form === "request_quote" && (
-        <div className="grid gap-3">
-          <div>
-            <span className={label}>Who to ask</span>
-            <ContractorPick contractors={contractors} value={f.contractorId ?? o.contractorId ?? ""} onChange={(v) => set("contractorId", v)} className={field} styled />
-          </div>
-          <input value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder="Anything they need to know (optional)" className={field} />
-          <p className="text-[11.5px] text-muted">They&apos;re emailed the job and asked for a price, with a button to send it. No works order goes until the quote is approved.</p>
-        </div>
+        /* One contractor or several, each on their own link (Sean, 21 Oct 2026). It sends itself. */
+        <AskForQuotes o={o} busy={busy} send={(m) => move(m, "Ask for Quotes")} onBack={onBack} />
       )}
       {form === "approve" && (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -156,7 +151,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
             <FieldDate className="mt-1" withTime clearable value={f.scheduledAt ?? ""} onChange={(v) => set("scheduledAt", v)} placeholder="Not yet" />
           </div>
           <input value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder="A line for the timeline (optional)" className={`${field} sm:col-span-2`} />
-          <p className="text-[11.5px] text-muted sm:col-span-2">This sets them on the job without emailing them. To send them the report, use Pick a Contractor and press Contacted.</p>
+          <p className="text-[11.5px] text-muted sm:col-span-2">This sets them on the job without emailing them. Send them the works order with Send it on the Engineer card when you&apos;re ready, or use Pick a Contractor and press Contacted to ask them first.</p>
         </div>
       )}
       {form === "schedule" && (
@@ -234,10 +229,10 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
         </div>
       )}
       {(mine || err) && <p className="mt-3 text-[12px] text-accent-dark">{mine ?? err}</p>}
-      <div className="mt-4 flex justify-end gap-2">
+      {form !== "request_quote" && <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onBack} className={btn}>Back</button>
         <button type="button" disabled={busy} onClick={() => void save()} className={primary}>{busy ? "Saving…" : form === "cancel" ? "Cancel the job" : "Save"}</button>
-      </div>
+      </div>}
     </div>
   );
 }

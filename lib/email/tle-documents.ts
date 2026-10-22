@@ -990,6 +990,25 @@ export const WORKS_CONTRACTOR_QUOTE_REQUEST = {
   branding: { showSignoff: false },
 } as const;
 
+/* Another firm's quote was taken (Sean McMahon, 21 Oct 2026: a quote can go
+   to several contractors, and accepting one closes the others politely). Only
+   to those still in the running - a firm that said it can't do it is not
+   written to again. */
+export const WORKS_CONTRACTOR_QUOTE_CLOSED = {
+  subject: "Thanks for quoting: {{title}} at {{address}}",
+  preheader: "We've gone with another quote this time. Nothing more needed from you.",
+  mode: "blocks",
+  blocks: [
+    H("wqc1", "Thanks for looking at this one"),
+    T("wqc2", "Hi {{contractorGreeting}},<br><br>Thank you for your time on <strong>{{title}}</strong> at <strong>{{address}}</strong>. We've gone with another quote on this occasion, so there's nothing more you need to do and the link in our request is now closed."),
+    T("wqc3", "We'll be back in touch with the next job that suits you."),
+    SP("wqc4", 8),
+    T("wqc5", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}} · {{agentEmail}}"),
+    FOOT("wqc6", "You're getting this because we asked you to quote for a job for The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /* The contractor's invoice to the landlord, to authorise (Kirstie Mulholland,
    20 Oct 2026): pay it from the rent, pay the contractor direct, or a query.
    Each button opens the landlord's page with that answer picked. */

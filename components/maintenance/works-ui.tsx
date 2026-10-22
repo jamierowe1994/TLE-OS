@@ -54,7 +54,7 @@ export function nextFor(o: WorksOrder, ringForApproval = false): { text: string;
   switch (stepOf(o)) {
     case "quote": return o.status === "approval"
       ? { text: `Quote ${pounds(o.quotePence)} - waiting on the landlord's yes`, hot: false }
-      : { text: `Waiting on ${o.contractorName || "the contractor"}'s quote`, hot: late };
+      : { text: o.contractorName ? `Waiting on ${o.contractorName}'s quote` : "Out for quotes", hot: late };
     case "tell_landlord": return { text: `Tell the landlord${clock}`, hot: late || o.urgency === "emergency" };
     case "arranging": return { text: "Who's arranging it?", hot: late || o.urgency === "emergency" };
     case "landlord_follow_up": return { text: `Landlord organising · follow up ${day(o.landlordFollowUpAt)}`, hot: !!o.landlordFollowUpAt && new Date(o.landlordFollowUpAt).getTime() < Date.now() };

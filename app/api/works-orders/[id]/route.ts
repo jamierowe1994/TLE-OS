@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
-import { getOrder, moveOrder, logEvent, markAccountsTold, type Move } from "@/lib/works-orders";
+import { getOrder, moveOrder, logEvent, markAccountsTold, type Move, type MoveOut } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, tellAccounts, tellInvoiceAnswer } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { invoiceSettings } from "@/lib/invoices";
@@ -59,10 +59,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         if (home?.landlord?.email?.includes("@")) move.email = home.landlord.email;
       }
     }
-    const order = await moveOrder(id, move, by);
+    const out: MoveOut = {};
+    const order = await moveOrder(id, move, by, out);
     /* Work already done before the OS: nobody is told it is done (Rhiannon, 19 Oct 2026). */
     const quietDone = move.action === "done" && move.alreadyDone === true;
-    const emails = quietDone ? [] : await emailsForMove(order, move.action, subject ?? actor, { how: "how" in move ? move.how : undefined }).catch(() => []);
+    const emails = quietDone ? [] : await emailsForMove(order, move.action, subject ?? actor, { how: "how" in move ? move.how : undefined, quiet: move.action === "assign" && move.quiet === true, ...out }).catch(() => []);
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
     if (move.action === "invoice") {
       const told = await tellAccounts(order, (await invoiceSettings()).accountsEmail ?? "");
@@ -73,7 +74,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (move.action === "landlord_invoice") await logEvent(order.id, "TLE OS", "email", outcomeLine(await tellInvoiceAnswer(order)));
     await pingCompliance(order, move.action);
     const found = await getOrder(id);
-    return NextResponse.json({ ok: true, order, events: found?.events ?? [], emails, canPayrun: canPayrun(actor.role) });
+    /* Read again: an email can stamp the job as it goes (who the works order went to). */
+    return NextResponse.json({ ok: true, order: found?.order ?? order, events: found?.events ?? [], emails, canPayrun: canPayrun(actor.role) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
   }
