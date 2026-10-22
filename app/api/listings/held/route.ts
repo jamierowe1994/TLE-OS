@@ -61,6 +61,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, held: out });
   } catch (e) {
     console.error("held listings failed", e);
-    return NextResponse.json({ ok: false, error: "Couldn't read the held homes.", held: {} }, { status: 500 });
+    /* Nobody answered (REX's maintenance, 21 Oct 2026) is theirs and passes;
+       anything else is ours and stays a 500. */
+    const unreachable = e instanceof TypeError && /fetch failed/i.test(e.message);
+    return NextResponse.json(
+      { ok: false, error: unreachable ? "The listings system isn't answering just now." : "Couldn't read the held homes.", held: {} },
+      { status: unreachable ? 503 : 500 }
+    );
   }
 }

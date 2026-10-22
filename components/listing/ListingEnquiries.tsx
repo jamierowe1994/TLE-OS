@@ -552,10 +552,15 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
 
       <PassportAnswers email={viewing?.email ?? null} name={viewing?.name} home={home} onClose={() => setViewing(null)} />
 
-      {/* Over the listing's own panels (z-130), in a layer of its own. */}
+      {/* Over the listing's own panels (z-130), in a layer of its own - and
+          UNDER every pop-up the lead's file opens (z-140 and up: WhatsApp,
+          the passport answers, the viewing booker). Those are portalled to
+          the page, so at z-160 this layer hid them: WhatsApp and Passport
+          "did nothing", the sheet sat behind the file and went when it
+          closed (Sean McMahon, Dan Richards, 21-22 Oct 2026). */}
       {typeof document !== "undefined" &&
         createPortal(
-          <div className="relative z-[160]">
+          <div className="relative z-[135]">
             <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onStep={stepEnquirer} />
           </div>,
           document.body

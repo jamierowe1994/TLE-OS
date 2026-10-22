@@ -40,7 +40,19 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const answer = await landlordForListing(id);
+  /* A listings system that doesn't answer at all (REX's maintenance, 21 Oct
+     2026: "fetch failed" all afternoon) threw out of here as a bare 500 page.
+     Say it plainly instead; the listing shows the sentence. */
+  const answer = await landlordForListing(id).catch((e) => {
+    console.error("[landlord] lookup failed", { listingId: id, error: String(e) });
+    return null;
+  });
+  if (!answer) {
+    return NextResponse.json(
+      { ok: false, problem: "The listings system isn't answering just now, so the landlord can't be looked up. Try again in a few minutes." },
+      { status: 503 }
+    );
+  }
   if (!answer.ok) return NextResponse.json({ ok: false, problem: answer.problem });
   return NextResponse.json({ ok: true, landlord: answer.landlord });
 }
