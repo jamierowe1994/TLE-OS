@@ -9,7 +9,7 @@ import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
 import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
-import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked, type RexResponse } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 import { forAgent, isOwner } from "@/lib/agent-words";
 import { ensureRexLink, findUserByEmail, findUserByRexId, type OsUser } from "@/lib/users";
@@ -43,6 +43,18 @@ const TERMS_UNCHECKED_SENTENCE =
  * portal, no website feed and no applicant match. "on" puts all four back.
  * Withdrawing (Listings/changeState) is for a property that has gone, not a
  * pause, and is deliberately not offered here.
+ *
+ * ── The channel is a flag; the portals have to be TOLD (22 Oct 2026) ─────
+ *
+ * 6 Ruskin Place: Lianna took the advert offline, REX showed the portals
+ * channel off, and Rightmove, Zoopla and OnTheMarket kept it for days with
+ * enquiries still coming. setActivePublicationChannels sends nothing to the
+ * feeds - each portal keeps the last upload, which said "current". Seven
+ * listings were the same. So "off" first queues a "withdrawn" upload
+ * (ListingPortalUploads/queue) and only then drops the channel, and "on"
+ * queues a fresh "current" one after putting the channels back. A listing
+ * counts as on the portals while any feed's last upload said "current",
+ * whatever the channel says, so Take it offline can finish one of the seven.
  *
  * ── Three locks, all of which have to be open ────────────────────────────
  *
@@ -78,11 +90,28 @@ const PORTAL_WARNING = "One of the portal checks has a warning.";
 
 type Where = { status: string | null; channels: string[]; onPortals: boolean };
 
-function whereFrom(result: unknown): Where {
+/**
+ * `feeds` is ListingPortalUploads/getStatuses: still on a portal when a feed
+ * is running there and the last upload sent was "current" (see the header).
+ */
+function whereFrom(result: unknown, feeds?: unknown): Where {
   const r = (result ?? {}) as { status?: unknown; active_targets?: unknown };
   const status = typeof r.status === "string" ? r.status : null;
   const channels = Array.isArray(r.active_targets) ? r.active_targets.filter((c): c is string => typeof c === "string") : [];
-  return { status, channels, onPortals: status === "published" && channels.includes("portals") };
+  return { status, channels, onPortals: status === "published" && (channels.includes("portals") || stillFeeding(feeds)) };
+}
+
+function stillFeeding(feeds: unknown): boolean {
+  const f = (feeds ?? {}) as { portals?: unknown; most_recent_queue?: { listing_status_to_send?: unknown } | null };
+  const running = Array.isArray(f.portals) && f.portals.some((p) => (p as { feed_status?: unknown }).feed_status === "feeding" && Boolean((p as { remote_id_on_portal?: unknown }).remote_id_on_portal));
+  return running && f.most_recent_queue?.listing_status_to_send === "current";
+}
+
+/** Tell the portal feeds what to show: "withdrawn" for off, the listing's own status for on. */
+async function queueUpload(id: number, action: "off" | "on", token: string | null) {
+  const res = await rexCall("ListingPortalUploads", "queue", { listing_id: id, ...(action === "off" ? { portal_listing_status: "withdrawn" } : {}) }, token);
+  const r = (res.result ?? {}) as { queued?: unknown; detail?: unknown };
+  return { ok: res.ok && r.queued === true, res, detail: res.ok ? String(r.detail ?? "") : String(res.error ?? `HTTP ${res.status}`) };
 }
 
 /** getErrorsPreventingUpload answers a list, or messages keyed by portal. */
@@ -134,10 +163,11 @@ export async function GET(req: NextRequest) {
        and the Marketing tab open together, and the portal check is the same
        call the details read makes - now asked once and shared. Showing only;
        the POST below reads REX fresh before it does anything. */
-    const [status, issues, upload] = await Promise.all([
+    const [status, issues, upload, feeds] = await Promise.all([
       listingRead(id, "ListingPublication", "getPublicationStatus", { listing_id: id }),
       listingRead(id, "ListingPublication", "getPublicationIssues", { listing_id: id }),
       listingRead(id, "ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
+      listingRead(id, "ListingPortalUploads", "getStatuses", { listing_id: id, include_last_sent: false }),
     ]);
     if (!status.ok) {
       const plain = "The listings system did not say where the listing is. Try again in a minute.";
@@ -148,7 +178,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       id,
-      ...whereFrom(status.result),
+      ...whereFrom(status.result, feeds.ok ? feeds.result : undefined),
       blockers: [...new Set([...list(iss.errors), ...(upload.ok ? portalMessages(upload.result) : [])].map((m) => forAgent(actor, m, PORTAL_CHECK)))],
       warnings: [...new Set(list(iss.warnings).map((m) => forAgent(actor, m, PORTAL_WARNING)))],
     });
@@ -292,15 +322,25 @@ export async function POST(req: NextRequest) {
          account, the same as the write-up. */
       token = await rexTokenFor(actor.id);
     }
-    const res =
-      action === "publish"
-        ? await rexCall("ListingPublication", "publish", { listing_id: id }, token)
-        : await rexCall(
-            "ListingPublication",
-            "setActivePublicationChannels",
-            { listing_id: id, channels: action === "off" ? OFF_CHANNELS : ALL_CHANNELS },
-            token
-          );
+    /* Off: the portals are told "withdrawn" BEFORE the channel goes, so a
+       refusal leaves the listing exactly as it was rather than off in REX and
+       still on Rightmove (the header, 22 Oct 2026). On: told after. */
+    const told = action === "off" ? await queueUpload(id, "off", token) : null;
+    let res: RexResponse =
+      told && !told.ok
+        ? { status: told.res.status, ok: false, result: told.res.result, error: `The portals were not told to withdraw it: ${told.detail}` }
+        : action === "publish"
+          ? await rexCall("ListingPublication", "publish", { listing_id: id }, token)
+          : await rexCall(
+              "ListingPublication",
+              "setActivePublicationChannels",
+              { listing_id: id, channels: action === "off" ? OFF_CHANNELS : ALL_CHANNELS },
+              token
+            );
+    if (res.ok && action === "on") {
+      const back = await queueUpload(id, "on", token);
+      if (!back.ok) res = { status: back.res.status, ok: false, result: back.res.result, error: `The channels are back on but the portals were not sent it again: ${back.detail}` };
+    }
     if (!res.ok) {
       if (token && isExpiredToken(res)) {
         const whose = as.asActor ? "Your REX sign-in has run out. Sign in again" : `${as.name}'s REX sign-in has run out. They sign in again on their Profile (Connect to REX)`;
@@ -332,8 +372,11 @@ export async function POST(req: NextRequest) {
     }
 
     /* Read it back rather than trusting the answer. */
-    const after = await rexCall("ListingPublication", "getPublicationStatus", { listing_id: id });
-    const now = whereFrom(after.ok ? after.result : res.result);
+    const [after, feeds] = await Promise.all([
+      rexCall("ListingPublication", "getPublicationStatus", { listing_id: id }),
+      rexCall("ListingPortalUploads", "getStatuses", { listing_id: id, include_last_sent: false }),
+    ]);
+    const now = whereFrom(after.ok ? after.result : res.result, feeds.ok ? feeds.result : undefined);
 
     await invalidateListingBook();
     forgetListing(id);
@@ -347,7 +390,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, id, action, ...now });
   } catch (e) {
     if (e instanceof RexWriteBlocked) {
-      const method = action === "publish" ? "ListingPublication/publish" : "ListingPublication/setActivePublicationChannels";
+      const method = e.message.match(/Refusing to call (\S+)/)?.[1] ?? (action === "publish" ? "ListingPublication/publish" : "ListingPublication/setActivePublicationChannels");
       return NextResponse.json(
         {
           ok: false,
