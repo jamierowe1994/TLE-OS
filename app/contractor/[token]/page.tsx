@@ -22,8 +22,10 @@ import { JOB_CERT_TYPES } from "@/lib/works-catalogue";
 type Job = {
   ref: number; kind?: string; title: string; category: string; description: string; status: string; step: string; address: string; access: string; tenant: string;
   contractorName: string; scheduledAt: string | null; completedAt: string | null; invoicePence: number | null; invoiceRef: string; files: { name: string; at: string }[];
-  /** Asked for a price only (Sean, 20 Oct 2026): "asked" for their quote, or it is "with_landlord". */
-  quoteStage?: "asked" | "with_landlord" | null; quotePence?: number | null;
+  /** Asked for a price only (Sean, 20 Oct 2026): "asked" for their quote, or it is "with_landlord".
+   *  On a firm's own quote link (21 Oct 2026) also: "quoted" (theirs is in, others may be quoting),
+   *  "accepted", "declined" (they said they can't), "closed" (another quote was taken). */
+  quoteStage?: "asked" | "with_landlord" | "quoted" | "accepted" | "declined" | "closed" | null; quotePence?: number | null;
 };
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "");
@@ -45,6 +47,8 @@ export default function ContractorPage() {
   const [quoteNote, setQuoteNote] = useState("");
   const [quoteFile, setQuoteFile] = useState<File | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [declining, setDeclining] = useState(false);
+  const [why, setWhy] = useState("");
 
   useEffect(() => {
     fetch(`/api/contractor/${token}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) setJob(j.job); else setErr(j.error ?? "That link isn't one of ours."); }).catch(() => setErr("Could not load the job."));
@@ -101,7 +105,23 @@ export default function ContractorPage() {
     if (!r?.ok || !r.job) return setErr(r?.error ?? "Your quote didn't send. Try again, or reply to the email with it.");
     setJob(r.job);
     setQuoteFile(null);
-    setFlash(r.job.quoteStage === "with_landlord" ? "Thanks - your quote is with the landlord. We'll send the works order once they've approved it." : "Thanks - your quote is in. We'll send you the works order shortly.");
+    setFlash(
+      r.job.quoteStage === "with_landlord" ? "Thanks - your quote is with the landlord. We'll send the works order once they've approved it."
+      : r.job.quoteStage === "quoted" ? "Thanks - your quote is in. We'll let you know either way."
+      : "Thanks - your quote is in. We'll send you the works order shortly."
+    );
+  }
+
+  /* Can't do this one (Forth, 21 Oct 2026: too far). Said here, it lands against their name. */
+  async function decline() {
+    setBusy("decline");
+    setErr(null);
+    const r = await fetch(`/api/contractor/${token}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "decline", note: why }) }).then((x) => x.json()).catch(() => null);
+    setBusy(null);
+    if (!r?.ok || !r.job) return setErr(r?.error ?? "That didn't send. Reply to the email instead.");
+    setJob(r.job);
+    setDeclining(false);
+    setFlash("Thanks for letting us know.");
   }
 
   const box: React.CSSProperties = { background: "#fff", border: "1px solid #cdc9c0", borderRadius: 16, padding: 20, marginTop: 16 };
@@ -122,7 +142,7 @@ export default function ContractorPage() {
             <div style={box}>
               <span style={label}>The job</span>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{job.description || job.category}</p>
-              <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.quoteStage ? "we'll arrange it if you need a look" : job.access || "none recorded"}<br /><strong>{job.tenant.includes(";") ? "Tenants" : "Tenant"}:</strong> {job.tenant ? job.tenant.split("; ").map((t, i) => <span key={i}>{i ? <br /> : null}{t}</span>) : job.quoteStage ? "on the works order, once the quote is approved" : "on the works order"}</p>
+              {job.quoteStage !== "closed" && job.quoteStage !== "declined" && <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.quoteStage ? "we'll arrange it if you need a look" : job.access || "none recorded"}<br /><strong>{job.tenant.includes(";") ? "Tenants" : "Tenant"}:</strong> {job.tenant ? job.tenant.split("; ").map((t, i) => <span key={i}>{i ? <br /> : null}{t}</span>) : job.quoteStage ? "on the works order, once the quote is approved" : "on the works order"}</p>}
             </div>
             {flash && <p style={{ ...box, borderColor: "#3f8f5f", color: "#3f8f5f", fontSize: 14 }}>{flash}</p>}
             {err && job && <p style={{ color: "#a85a51", marginTop: 12, fontSize: 13 }}>{err}</p>}
@@ -139,6 +159,36 @@ export default function ContractorPage() {
                   <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { setQuoteFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
                 </label>
                 <button type="button" disabled={!quote || busy === "quote"} onClick={() => void sendQuote()} style={{ ...btn, marginTop: 10, opacity: quote ? 1 : 0.5 }}>{busy === "quote" ? "Sending…" : "Send the quote"}</button>
+              </div>
+            )}
+            {job.quoteStage === "asked" && (
+              <div style={box}>
+                <span style={label}>Can&apos;t do this one?</span>
+                {!declining ? (
+                  <>
+                    <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>No problem. Tell us and we&apos;ll ask someone else.</p>
+                    <button type="button" onClick={() => setDeclining(true)} style={{ ...btn, background: "#fff", color: "#101014", border: "1px solid #101014" }}>We can&apos;t do it</button>
+                  </>
+                ) : (
+                  <>
+                    <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Why, if you like (too far, too busy)" style={field} />
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      <button type="button" disabled={busy === "decline"} onClick={() => void decline()} style={btn}>{busy === "decline" ? "Sending…" : "Tell them we can't"}</button>
+                      <button type="button" onClick={() => setDeclining(false)} style={{ ...btn, background: "#fff", color: "#101014", border: "1px solid #cdc9c0" }}>Back</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {(job.quoteStage === "quoted" || job.quoteStage === "accepted" || job.quoteStage === "declined" || job.quoteStage === "closed") && (
+              <div style={box}>
+                <span style={label}>Your quote</span>
+                <p style={{ margin: 0, fontSize: 14 }}>
+                  {job.quoteStage === "quoted" ? `We have your quote of £${((job.quotePence ?? 0) / 100).toFixed(2)}. We'll let you know either way.`
+                    : job.quoteStage === "accepted" ? `Your quote of £${((job.quotePence ?? 0) / 100).toFixed(2)} has been accepted. The works order follows by email, with the tenants' details.`
+                    : job.quoteStage === "declined" ? "You told us you can't do this one. Ring us if that changes."
+                    : "Thanks for your time on this one. We've gone with another quote, so there's nothing more you need to do."}
+                </p>
               </div>
             )}
             {job.quoteStage === "with_landlord" && (

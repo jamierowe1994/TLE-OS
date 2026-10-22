@@ -5,6 +5,8 @@ import { uid } from "@/lib/auth";
 import { addFileDoc } from "@/lib/file-documents";
 import { OTHER as OTHER_DOC } from "@/lib/doc-types";
 import { TEST_STREET } from "@/lib/test-guard";
+import { asksFor, askById, upsertAsks, resendAsk, recordAskQuote, declineAsk, acceptAsk, isLive, type QuoteAsk } from "@/lib/works-quotes";
+export type { QuoteAsk };
 
 /**
  * Works orders: every job done on a managed home, from the phone call to
@@ -162,6 +164,11 @@ export interface WorksOrder {
   skippedSteps: string[];
   /** The contractor was asked for a quote first, before any works order (Sean, 20 Oct 2026). */
   quoteRequestedAt: string | null;
+  /** Every contractor asked for that quote, each with their own answer (Sean, 21 Oct 2026). Read by getOrder only; empty on a list. */
+  quoteAsks: QuoteAsk[];
+  /** The contractor the works order last went to, and their name then. Null before 21 Oct 2026, or before it goes. */
+  orderSentTo: string | null;
+  orderSentToName: string;
   /** Planned jobs: when the tenants were sent the booking, by hand. */
   tenantsToldBookedAt: string | null;
   /** Planned jobs: the tenants are told who will be in touch to arrange access (a tick, off by default). */
@@ -228,7 +235,7 @@ export interface WorksOrder {
   paidHow: PaidHow | null;
   cancelledReason: string;
   /** Files on the job: photos of the fault, the invoice, the certificate. R2 keys. */
-  files: { key: string; name: string; type: string; at: string; by: string; kind?: "invoice" | "quote" }[];
+  files: { key: string; name: string; type: string; at: string; by: string; kind?: "invoice" | "quote"; contractor?: string }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -283,6 +290,9 @@ function toOrder(r: Row): WorksOrder {
     skippedSteps: Array.isArray(r.skipped_steps) ? (r.skipped_steps as unknown[]).filter((x): x is string => typeof x === "string") : [],
     tenantsToldBookedAt: iso(r.tenants_told_booked_at),
     quoteRequestedAt: iso(r.quote_requested_at),
+    quoteAsks: [],
+    orderSentTo: r.order_sent_to ? s(r.order_sent_to) : null,
+    orderSentToName: s(r.order_sent_to_name),
     accessNotice: r.tenants_access_notice === true,
     landlordToldAt: iso(r.landlord_told_at),
     arranging: r.arranging === "landlord" || r.arranging === "us" ? r.arranging : null,
@@ -347,7 +357,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
   cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, skipped_steps, quote_requested_at,
-  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, created_at, updated_at`;
+  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, order_sent_to, order_sent_to_name, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -562,7 +572,7 @@ export async function getOrder(id: string): Promise<{ order: WorksOrder; events:
   const events = (await q<Row>(`SELECT id, order_id, at, by_name, kind, text FROM os_works_order_events WHERE order_id = $1 ORDER BY at DESC`, [id])).map((e) => ({
     id: s(e.id), orderId: s(e.order_id), at: iso(e.at)!, by: s(e.by_name), kind: s(e.kind), text: s(e.text),
   }));
-  return { order: toOrder(r), events };
+  return { order: { ...toOrder(r), quoteAsks: await asksFor(id) }, events };
 }
 
 export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; tenantEmail?: string | null; limit?: number; rehearsal?: boolean } = {}): Promise<WorksOrder[]> {
@@ -643,7 +653,8 @@ export type Move =
   /* ── the sheet ── */
   | { action: "quote"; quotePence: number; note?: string }
   | { action: "approve"; approvedBy: string; note?: string }
-  | { action: "assign"; contractorId: string; scheduledAt?: string | null; note?: string }
+  /** quiet: set them on the job and send nothing (the job page's Change the Contractor says so); Send again sends it. */
+  | { action: "assign"; contractorId: string; scheduledAt?: string | null; note?: string; quiet?: boolean }
   | { action: "schedule"; scheduledAt: string; note?: string }
   /** alreadyDone: work finished before it was on the OS - nobody is emailed and the tenant is not asked (Rhiannon, 19 Oct 2026). */
   | { action: "done"; note: string; completedAt?: string | null; alreadyDone?: boolean }
@@ -653,9 +664,21 @@ export type Move =
   | { action: "reopen"; note?: string }
   | { action: "note"; note: string }
   | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantPhone" | "tenantEmail" | "landlord" | "landlordEmail" | "landlordMobile" | "access" | "authorityPence" | "reportedBy">> }
-  | { action: "file"; file: { key: string; name: string; type: string; kind?: "invoice" | "quote" } }
-  /** Ask the contractor for a quote before any works order goes (Sean, 20 Oct 2026). */
-  | { action: "request_quote"; contractorId?: string; note?: string }
+  /** contractor: whose quote it is, when several were asked (it isn't always the job's contractor). */
+  | { action: "file"; file: { key: string; name: string; type: string; kind?: "invoice" | "quote"; contractor?: string } }
+  /** Ask for a quote before any works order goes (Sean, 20 Oct 2026). Several
+   *  contractors at once, each with their own link (Sean, 21 Oct 2026). */
+  | { action: "request_quote"; contractorId?: string; contractorIds?: string[]; note?: string }
+  /** The same request to the same contractor again, on their own link. */
+  | { action: "resend_quote"; askId: string; note?: string }
+  /** One contractor's price, from their link or keyed in off their reply. */
+  | { action: "ask_quote_in"; askId: string; quotePence: number; note?: string }
+  /** They can't do it (Forth, 21 Oct 2026: too far). */
+  | { action: "ask_declined"; askId: string; note?: string }
+  /** Take this one: they go on the job, the others are told politely. */
+  | { action: "accept_quote"; askId: string; note?: string }
+  /** The works order again, to whoever is on the job now. */
+  | { action: "resend_order"; note?: string }
   /** Send the invoice to the landlord to authorise (Kirstie Mulholland, 20 Oct 2026). */
   | { action: "ask_landlord_invoice"; email?: string; note?: string }
   /** The landlord's answer: from their link, or recorded by the agent after a call. */
@@ -683,7 +706,20 @@ export async function markAccountsTold(id: string): Promise<void> {
   await q(`UPDATE os_works_orders SET accounts_told_at = NOW() WHERE id = $1`, [id]).catch(() => {});
 }
 
-export async function moveOrder(id: string, move: Move, by: string): Promise<WorksOrder> {
+/** What a move did to the quote requests, for the emails that follow it. */
+export interface MoveOut {
+  /** Each contractor to be sent the quote request now. */
+  asks?: QuoteAsk[];
+  /** Asked, still in the running, and now told another was taken. */
+  closed?: QuoteAsk[];
+  /** A quote became the job's quote, so the landlord may need to approve it. */
+  quoted?: boolean;
+}
+
+const freshToken = () => randomBytes(16).toString("base64url");
+const listNames = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
+export async function moveOrder(id: string, move: Move, by: string, out: MoveOut = {}): Promise<WorksOrder> {
   const cur = await getOrder(id);
   if (!cur) throw new Error("No such job.");
   const o = cur.order;
@@ -692,6 +728,30 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
   const set = (col: string, v: unknown) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
   let eventKind: string = move.action;
   let text = "";
+  /* The job's quote. Over the landlord's authority it waits on them; under
+     it, it is approved on the spot, and the job says so. */
+  const applyQuote = (pence: number) => {
+    set("quote_pence", Math.round(pence));
+    const over = pence > o.authorityPence;
+    if (["reported", "approval", "approved"].includes(o.status)) {
+      set("status", over ? "approval" : "approved");
+      if (!over) { set("approved_by", "Within the landlord's authority"); set("approved_at", new Date()); }
+    }
+    out.quoted = true;
+    return `${pounds(pence)}${over ? `, over the landlord's authority of ${pounds(o.authorityPence)} - waiting on them` : `, within the landlord's authority of ${pounds(o.authorityPence)}`}`;
+  };
+  /* One contractor's quote taken: they go on the job (with a fresh link if
+     they weren't on it), and everyone else still in the running is closed. */
+  const take = async (a: QuoteAsk) => {
+    if (a.contractorId !== o.contractorId) {
+      set("contractor_id", a.contractorId);
+      set("contractor_name", a.contractorName);
+      set("contractor_token", freshToken());
+    }
+    const said = applyQuote(a.quotePence ?? 0);
+    out.closed = await acceptAsk(a.id, o.id);
+    return `It's the job's quote: ${said}.${out.closed.length ? ` ${listNames(out.closed.map((c) => c.contractorName))} ${out.closed.length === 1 ? "is" : "are"} thanked and told it's gone elsewhere.` : ""}`;
+  };
 
   switch (move.action) {
     case "tell_landlord": {
@@ -731,6 +791,8 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       if (!c) throw new Error("No such contractor.");
       set("contractor_id", move.contractorId);
       set("contractor_name", s(c.name));
+      /* A new firm gets a new link: the old one's works order no longer opens the job. */
+      if (o.contractorId && o.contractorId !== move.contractorId) set("contractor_token", freshToken());
       set("contractor_contacted_at", new Date());
       set("contractor_confirmed_at", null);
       eventKind = "contacted";
@@ -765,33 +827,113 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       break;
     }
     case "request_quote": {
-      const cid = move.contractorId || o.contractorId;
-      if (!cid) throw new Error("Pick a contractor to ask.");
-      if (move.contractorId && move.contractorId !== o.contractorId) {
-        const [c] = await q<Row>(`SELECT name FROM os_contractors WHERE id = $1`, [move.contractorId]);
-        if (!c) throw new Error("No such contractor.");
-        set("contractor_id", move.contractorId);
-        set("contractor_name", s(c.name));
+      const ids = [...new Set(move.contractorIds?.length ? move.contractorIds : [move.contractorId || o.contractorId || ""])].filter(Boolean);
+      if (!ids.length) throw new Error("Pick a contractor to ask.");
+      if (ids.length > 8) throw new Error("Up to eight contractors at a time.");
+      const rows = await q<Row>(`SELECT id, name FROM os_contractors WHERE id = ANY($1)`, [ids]);
+      if (rows.length !== ids.length) throw new Error("No such contractor.");
+      const named = ids.map((cid) => ({ id: cid, name: s(rows.find((r) => s(r.id) === cid)?.name) }));
+      /* More quotes after one was taken, and before any works order went:
+         the comparison opens again. The one taken goes back to quoted, so it
+         sits beside the new ones rather than being lost. */
+      const reopening = o.quotePence != null && !o.contractorConfirmedAt && ["reported", "approval", "approved"].includes(o.status);
+      if (reopening) {
+        set("quote_pence", null);
+        set("approved_by", "");
+        set("approved_at", null);
+        set("status", "reported");
+        await q(`UPDATE os_works_quote_asks SET outcome = NULL, outcome_at = NULL WHERE order_id = $1 AND outcome = 'accepted'`, [o.id]);
       }
+      const before = new Map(o.quoteAsks.map((a) => [a.contractorId, a]));
+      const asks = await upsertAsks(o.id, named, by);
+      out.asks = asks;
+      /* The job's contractor while it is out for quotes: the one firm asked,
+         or nobody until a quote is taken. */
+      const live = (await asksFor(o.id)).filter(isLive);
+      const onJob = live.length === 1 ? live[0] : null;
+      if ((onJob?.contractorId ?? null) !== o.contractorId) {
+        set("contractor_id", onJob?.contractorId ?? null);
+        set("contractor_name", onJob?.contractorName ?? "");
+      }
+      /* The job's own link is for the works order. Asked before 21 Oct, the
+         quote went out on it; from here each firm answers on theirs. */
+      if ((onJob?.contractorId ?? null) !== o.contractorId || !o.quoteAsks.length) set("contractor_token", freshToken());
       set("quote_requested_at", new Date());
       /* Asking our contractor for a price is us arranging it. */
       if (!o.arranging) set("arranging", "us");
       eventKind = "quote_requested";
-      const name = move.contractorId && move.contractorId !== o.contractorId ? "the contractor" : o.contractorName || "the contractor";
-      text = `${o.quoteRequestedAt ? "Asked again" : "Asked"} ${name} for a quote. No works order goes until it is approved.${move.note ? ` ${move.note}` : ""}`;
+      const fresh = asks.filter((a) => !before.has(a.contractorId)).map((a) => a.contractorName);
+      const again = asks.filter((a) => before.has(a.contractorId)).map((a) => a.contractorName);
+      const legacy = !o.quoteAsks.length && o.quoteRequestedAt && fresh.length === 1 && fresh[0] === o.contractorName;
+      text = [
+        fresh.length ? `Asked ${listNames(fresh)} for a quote${legacy ? " again" : ""}.` : "",
+        again.length ? `Asked ${listNames(again)} again.` : "",
+        reopening ? "The quote that was taken goes back beside the new ones." : "",
+        "No works order goes until a quote is approved.",
+      ].filter(Boolean).join(" ") + (move.note ? ` ${move.note}` : "");
+      break;
+    }
+    case "resend_quote": {
+      const a = await askById(move.askId);
+      if (!a || a.orderId !== o.id) throw new Error("No such quote request.");
+      if (!isLive(a)) throw new Error(a.state === "declined" ? `${a.contractorName} said they can't do it. Ask them again from Ask for quotes if that's changed.` : "That one is decided.");
+      out.asks = [await resendAsk(a.id)];
+      set("quote_requested_at", new Date());
+      eventKind = "quote_requested";
+      text = `Sent the quote request to ${a.contractorName} again.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "ask_quote_in": {
+      const a = await askById(move.askId);
+      if (!a || a.orderId !== o.id) throw new Error("No such quote request.");
+      if (a.outcome) throw new Error(a.outcome === "accepted" ? "Their quote has already been taken. Change it on the job instead." : "Another quote has been taken for this job.");
+      if (!Number.isFinite(move.quotePence) || move.quotePence <= 0) throw new Error("A quote needs a figure.");
+      const got = await recordAskQuote(a.id, move.quotePence, move.note ?? "", by);
+      eventKind = "quote";
+      text = `${a.contractorName} quoted ${pounds(got.quotePence)}.${move.note ? ` ${move.note}` : ""}`;
+      /* The only one still in the running: no comparison to make, so it is
+         taken as the single request always was (Forth said no, All Trade
+         quoted - All Trade's is the quote). */
+      const others = o.quoteAsks.filter((x) => x.id !== a.id && isLive(x));
+      if (!others.length) text += ` ${await take(got)}`;
+      else text += ` ${others.length === 1 ? `${others[0].contractorName} is` : `${others.length} others are`} still in the running.`;
+      break;
+    }
+    case "ask_declined": {
+      const a = await askById(move.askId);
+      if (!a || a.orderId !== o.id) throw new Error("No such quote request.");
+      if (a.outcome) throw new Error("That one is decided.");
+      await declineAsk(a.id, move.note ?? "");
+      const live = o.quoteAsks.filter((x) => x.id !== a.id && isLive(x));
+      if (o.contractorId === a.contractorId) {
+        set("contractor_id", live.length === 1 ? live[0].contractorId : null);
+        set("contractor_name", live.length === 1 ? live[0].contractorName : "");
+        set("contractor_token", freshToken());
+      }
+      eventKind = "quote";
+      text = `${a.contractorName} can't do it${move.note?.trim() ? `: ${move.note.trim().replace(/\.+$/, "")}` : ""}.${live.length ? "" : " Nobody else is asked yet."}`;
+      break;
+    }
+    case "accept_quote": {
+      const a = await askById(move.askId);
+      if (!a || a.orderId !== o.id) throw new Error("No such quote request.");
+      if (a.quotePence == null) throw new Error(`There's no price from ${a.contractorName} yet.`);
+      if (!isLive(a)) throw new Error("That one is decided.");
+      eventKind = "quote";
+      text = `Took the quote from ${a.contractorName}. ${await take(a)}${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "resend_order": {
+      if (!o.contractorId) throw new Error("There's no contractor on the job to send it to.");
+      if (stepOfOrder(o) === "quote") throw new Error("The job is out for quotes. Send the quote request again instead.");
+      if (!OPEN_STATUSES.includes(o.status)) throw new Error("The job is closed.");
+      eventKind = "contacted";
+      text = `Works order sent to ${o.contractorName}${o.orderSentTo && o.orderSentTo !== o.contractorId ? `, in place of ${o.orderSentToName || "the last contractor"}` : " again"}.${move.note ? ` ${move.note}` : ""}`;
       break;
     }
     case "quote": {
       if (!Number.isFinite(move.quotePence) || move.quotePence < 0) throw new Error("A quote needs a figure.");
-      set("quote_pence", Math.round(move.quotePence));
-      /* Over the landlord's authority it waits on them; under it, it is
-         approved on the spot, and the job says so. */
-      const over = move.quotePence > o.authorityPence;
-      if (["reported", "approval", "approved"].includes(o.status)) {
-        set("status", over ? "approval" : "approved");
-        if (!over) { set("approved_by", "Within the landlord's authority"); set("approved_at", new Date()); }
-      }
-      text = `Quote ${pounds(move.quotePence)}${over ? `, over the landlord's authority of ${pounds(o.authorityPence)} - waiting on them` : `, within the landlord's authority of ${pounds(o.authorityPence)}`}.${move.note ? ` ${move.note}` : ""}`;
+      text = `Quote ${applyQuote(move.quotePence)}.${move.note ? ` ${move.note}` : ""}`;
       break;
     }
     case "approve": {
@@ -809,10 +951,12 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       if (!c) throw new Error("No such contractor.");
       set("contractor_id", move.contractorId);
       set("contractor_name", s(c.name));
+      if (o.contractorId && o.contractorId !== move.contractorId) set("contractor_token", freshToken());
       if (move.scheduledAt) set("scheduled_at", new Date(move.scheduledAt));
       if (o.status !== "approval" && OPEN_STATUSES.includes(o.status)) set("status", move.scheduledAt || o.scheduledAt ? "scheduled" : "approved");
       eventKind = move.scheduledAt ? "scheduled" : "assigned";
       text = move.scheduledAt ? `Booked with ${s(c.name)} for ${when(move.scheduledAt)}.` : `Assigned to ${s(c.name)}.`;
+      if (move.quiet && o.orderSentTo && o.orderSentTo !== move.contractorId) text += ` Not emailed: the works order went to ${o.orderSentToName || "the last contractor"}, so send it to ${s(c.name)} when you're ready.`;
       if (move.note) text += ` ${move.note}`;
       break;
     }
@@ -974,7 +1118,7 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       name: invoice
         ? `Invoice${o.contractorName ? ` - ${o.contractorName}` : ""} (job #${o.ref})`
         : quote
-          ? `Quote${o.contractorName ? ` - ${o.contractorName}` : ""} (job #${o.ref})`
+          ? `Quote${move.file.contractor || o.contractorName ? ` - ${move.file.contractor || o.contractorName}` : ""} (job #${o.ref})`
           : `Job #${o.ref} - ${move.file.name}`,
       fileName: move.file.name,
       r2Key: move.file.key,
@@ -1075,6 +1219,12 @@ export async function contractorsFor(order: WorksOrder, forUserId: string): Prom
       };
     })
     .sort((a, b) => Number(b.fits) - Number(a.fits) || (a.miles ?? 9999) - (b.miles ?? 9999) || a.name.localeCompare(b.name));
+}
+
+/** The works order went to this contractor: stamped by the email itself, so a failed send leaves it unstamped. */
+export async function markOrderSent(id: string, contractorId: string, name: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`UPDATE os_works_orders SET order_sent_to = $2, order_sent_to_name = $3 WHERE id = $1`, [id, contractorId, name]).catch(() => {});
 }
 
 /** Place a contractor from their address, so distance can be read. */

@@ -8,7 +8,7 @@ import { accountsInvoiceEmail, complianceJobEmail, landlordInvoiceAnswerEmail } 
 import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
 import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
-import { pounds, tenantsOf, URGENCIES, type Move, type WorksOrder } from "@/lib/works-orders";
+import { markOrderSent, pounds, tenantsOf, URGENCIES, type Move, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
 import type { OsUser } from "@/lib/users";
 import { getLandlordPref, landlordHold } from "@/lib/landlord-prefs";
 import { propertyAgentFor } from "@/lib/works-property-agent";
@@ -23,6 +23,8 @@ import { withR2, R2_BUCKET, r2Configured } from "@/lib/r2";
  *   contractor   works-contractor-order      put on the job
  *                works-contractor-booked     a date is set
  *                works-contractor-cancelled  cancelled with them on it
+ *                works-contractor-quote-request  asked for a price, on their own link
+ *                works-contractor-quote-closed   another firm's quote was taken
  *   tenant       works-tenant-received       a repair is reported
  *                works-tenant-booked         a date is set
  *                works-tenant-done           marked done
@@ -50,6 +52,8 @@ export interface SendOutcome {
   via?: string;
   /** Who was copied in: the home's agent on a contractor email. */
   cc?: string;
+  /** The firm, when several contractors are written to on one move. */
+  name?: string;
 }
 
 /**
@@ -304,8 +308,25 @@ export function complianceTrigger(o: WorksOrder, action: Move["action"] | "raise
   return null;
 }
 
+/**
+ * One contractor's own quote request, or the polite no (Sean, 21 Oct 2026).
+ * Each goes to that firm on its own link, so their answer is theirs and the
+ * job's works-order link is never in it.
+ */
+async function toAsked(o: WorksOrder, a: QuoteAsk, id: string, base: Record<string, string>, me: OsUser): Promise<SendOutcome> {
+  const c = await contractorOf(a.contractorId);
+  const vars = {
+    ...base,
+    contractorName: c?.name || a.contractorName,
+    contractorGreeting: c?.contact ? first(c.contact) : c?.name || a.contractorName,
+    contractorPhone: c?.phone ?? "",
+    contractorLink: `${ORIGIN}/contractor/${a.token}`,
+  };
+  return { ...(await send(o, id, c?.email ?? "", vars, me, "contractor")), name: c?.name || a.contractorName };
+}
+
 /** Which emails a move sets off. Returns every outcome, for the timeline. */
-export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request", me: OsUser, detail: { how?: string } = {}): Promise<SendOutcome[]> {
+export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request", me: OsUser, detail: { how?: string; quiet?: boolean } & MoveOut = {}): Promise<SendOutcome[]> {
   const out: SendOutcome[] = [];
   const vars = await varsFor(o, me);
   const contractor = await contractorOf(o.contractorId);
@@ -315,7 +336,12 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
      own - the agent sends the booking when they choose (tell_tenants_booked) -
      and a skipped landlord hears nothing at all. */
   const planned = o.kind === "planned";
-  const contractorOrder = async () => { if (contractor) out.push(await send(o, planned ? "works-contractor-planned" : "works-contractor-order", contractor.email, vars, me, "contractor")); };
+  const contractorOrder = async () => {
+    if (!contractor) return;
+    const sent = await send(o, planned ? "works-contractor-planned" : "works-contractor-order", contractor.email, vars, me, "contractor");
+    if (sent.sent && o.contractorId) await markOrderSent(o.id, o.contractorId, contractor.name);
+    out.push(sent);
+  };
   const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor")); };
   /* A discreet repair (Let the tenants know unticked, Lianna 9 Oct 2026):
      nothing automatic goes to any tenant on it. */
@@ -387,6 +413,11 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       }
       break;
     case "assign":
+      /* The job page's Change the Contractor sends nothing, as it says. */
+      if (detail.quiet) break;
+      /* Out for quotes, a change of contractor is not a works order: the
+         price comes first (Sean, 20 Oct 2026). Ask them from Ask for quotes. */
+      if (o.quoteRequestedAt && o.quotePence == null) break;
       await contractorOrder();
       await accessNotice();
       if (o.scheduledAt) await tenantBooked();
@@ -402,7 +433,20 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       out.push(await send(o, "works-landlord-invoice", o.landlordEmail, vars, me, "landlord"));
       break;
     case "request_quote":
-      if (contractor) out.push(await send(o, "works-contractor-quote-request", contractor.email, vars, me, "contractor"));
+    case "resend_quote":
+      for (const a of detail.asks ?? []) out.push(await toAsked(o, a, "works-contractor-quote-request", vars, me));
+      break;
+    case "ask_quote_in":
+    case "accept_quote":
+      /* A quote that became the job's: over the authority, the landlord is
+         asked, exactly as a quote keyed in always did. Then the others hear
+         it has gone elsewhere, so nobody prices a job that's taken. */
+      if (detail.quoted && o.status === "approval") await landlord("works-landlord-approval", "approval");
+      for (const a of detail.closed ?? []) out.push(await toAsked(o, a, "works-contractor-quote-closed", vars, me));
+      break;
+    case "resend_order":
+      await contractorOrder();
+      if (!planned && o.scheduledAt) await contractorBooked();
       break;
     case "done_request":
       if (contractor) out.push(await send(o, "works-contractor-done-request", contractor.email, vars, me, "contractor"));
@@ -441,9 +485,9 @@ export function outcomeLine(s: SendOutcome): string {
   /* "Accounts" is an office, not a person: "the accounts was not emailed"
      is the sort of line that ends up on a screen in front of a client. */
   const office = s.to === "accounts" || s.to === "compliance";
-  const who = s.to === "accounts" ? "Accounts" : s.to === "compliance" ? "Compliance" : `the ${s.to}`;
+  const who = s.to === "accounts" ? "Accounts" : s.to === "compliance" ? "Compliance" : s.name || `the ${s.to}`;
   const Who = s.to === "accounts" ? "Accounts'" : s.to === "compliance" ? "Compliance'" : `The ${s.to}'s`;
   if (s.via === "the rehearsal") return `Emailed ${who} at ${s.address} - written and kept here, not sent.`;
   if (s.sent) return `Emailed ${who} at ${s.address}${s.via === "own mailbox" ? ", from your own mailbox" : ""}${s.cc ? `, copying ${s.cc} in` : ""}.`;
-  return `${office ? `${who} were` : `The ${s.to} was`} not emailed: ${(s.reason ?? "").replace(/\.+$/, "")}.`;
+  return `${office ? `${who} were` : s.name ? `${s.name} was` : `The ${s.to} was`} not emailed: ${(s.reason ?? "").replace(/\.+$/, "")}.`;
 }
