@@ -46,6 +46,8 @@ interface Payload {
     available: boolean;
     env: string;
     sent: { draftId: number; by: string; at: string; test: boolean } | null;
+    /** Flatfair already holds the tenancy, keyed in there by hand. */
+    held?: { id: number; words: string } | null;
   };
 }
 
@@ -225,7 +227,15 @@ export default function FlatfairHandoff({ dealId }: { dealId: string }) {
           Copy everything
         </button>
 
-        {data.draftSend?.available && (
+        {data.draftSend?.held && !data.draftSend.sent ? (
+          <div className="rounded-2xl border border-line bg-card p-4">
+            <p className="text-[13px] font-semibold">Already in Flatfair</p>
+            <p className="mt-1 text-[12px] text-muted">
+              Flatbond {data.draftSend.held.id}. {data.draftSend.held.words} It was submitted in Flatfair, so it is
+              under the tenancies there, not Drafts.
+            </p>
+          </div>
+        ) : data.draftSend?.available && (
           <div className="rounded-2xl border border-line bg-card p-4">
             {data.draftSend.sent ? (
               <>

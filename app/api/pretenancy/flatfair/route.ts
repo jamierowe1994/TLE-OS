@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveDealAccess } from "@/lib/business/deal-access";
 import { getMeta, logSystemEvent, setChecklistItem } from "@/lib/business/deal-store";
 import { PLATFORMS } from "@/lib/business/platforms";
+import { flatbondForDeal, loadFlatbonds, type DealFlatbond } from "@/lib/business/flatfair-deal";
+import { flatbondWords } from "@/lib/business/stage-evidence";
 import { flatfairConfigured, flatfairEnv } from "@/lib/flatfair";
 import { draftFor, sendDraft, type DraftFacts } from "@/lib/flatfair-draft";
 import { switchOn } from "@/lib/switches";
@@ -45,6 +47,7 @@ export async function GET(req: NextRequest) {
   const meta = await getMeta(id).catch(() => null);
   const tick = meta?.checklist?.[ITEM] ?? null;
   const landlordOptOut = await landlordOptOutOf(app);
+  const held = await heldInFlatfair(access.deal);
   return NextResponse.json({
     ok: true,
     url: flatfairUrl(),
@@ -71,8 +74,16 @@ export async function GET(req: NextRequest) {
       available: flatfairConfigured() && (flatfairEnv() === "live" ? await switchOn("flatfair_drafts") : can(access.user.role, "see:wiring")),
       env: flatfairEnv(),
       sent: await draftFor(id),
+      /* Flatfair already holds the tenancy, keyed in there by hand (22 Oct 2026:
+         7 Caernarvon Close was in Flatfair, submitted, so never under Drafts). */
+      held: held ? { id: held.id, words: flatbondWords(held) } : null,
     },
   });
+}
+
+/** The deal's flatbond in our copy of Flatfair, matched as the board matches it. */
+async function heldInFlatfair(deal: Parameters<typeof flatbondForDeal>[0]): Promise<DealFlatbond | null> {
+  return flatbondForDeal(deal, await loadFlatbonds().catch(() => []));
 }
 
 /** The deal's landlord, by the email Propoly holds, opted out of zero deposit? */
@@ -115,6 +126,14 @@ export async function POST(req: NextRequest) {
   if (body.action === "draft") {
     if (flatfairEnv() !== "live" && !can(access.user.role, "see:wiring")) {
       return NextResponse.json({ ok: false, error: "Flatfair is on its test system; only the owners can try this for now." }, { status: 403 });
+    }
+    /* A second copy would email the tenants twice. */
+    const held = flatfairEnv() === "live" ? await heldInFlatfair(access.deal) : null;
+    if (held) {
+      return NextResponse.json(
+        { ok: false, error: `Flatfair already holds this tenancy (flatbond ${held.id}). ${flatbondWords(held)}` },
+        { status: 409 }
+      );
     }
     const out = await sendDraft(factsOf(id, access.deal.app, await landlordOptOutOf(access.deal.app)), { id: access.user.id, name: access.user.name ?? "", email: access.user.email });
     if (out.ok) {

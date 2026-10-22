@@ -43,7 +43,7 @@ import type {
 } from "@/lib/business/types";
 import type { AgentApplication } from "@/lib/business/rex-stats";
 import { rexListingUrl } from "@/lib/business/rex-links";
-import { stageEvidence, type DealFlatbond } from "@/lib/business/stage-evidence";
+import { flatbondWords, stageEvidence, type DealFlatbond } from "@/lib/business/stage-evidence";
 import { dealAlerts, type DealAlert } from "@/lib/business/deal-alerts";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import PreTenancyHero from "@/components/pretenancy/Hero";
@@ -1654,6 +1654,29 @@ function DealWorkspace({
                     ))}
                   </select>
                 </label>
+                {/* Whether Flatfair holds the tenancy (22 Oct 2026). Kirstie
+                    picked TDS Custodial for 7 Caernarvon Close and looked for
+                    it under Flatfair's Drafts: the box above only records, and
+                    nothing said so. Our copy of Flatfair is read every half
+                    hour, so a flatbond keyed in there shows within 30 minutes. */}
+                {!cancelled ? (
+                  deal.flatbond ? (
+                    <p className="mt-1 text-[11px] leading-snug text-muted" data-steve="pretenancy.flatfair-held">
+                      Flatbond {deal.flatbond.id}. {flatbondWords(deal.flatbond)} Submitted, so it sits with the
+                      tenancies in Flatfair, not Drafts.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[11px] leading-snug text-muted" data-steve="pretenancy.flatfair-send">
+                      Not in Flatfair yet. Picking a scheme only records it here.{" "}
+                      <Link
+                        href={`/applications/flatfair?deal=${encodeURIComponent(deal.app.id)}`}
+                        className="font-semibold text-ink underline decoration-dotted underline-offset-2 transition hover:text-accent"
+                      >
+                        Set up in Flatfair
+                      </Link>
+                    </p>
+                  )
+                ) : null}
                 {/* Recorded on the landlord's file by the agent (21 Oct 2026):
                     here so it is in front of Kirstie as she sets the scheme. */}
                 {deal.landlordOptOut ? (
