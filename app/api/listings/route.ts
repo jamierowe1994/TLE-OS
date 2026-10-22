@@ -6,7 +6,7 @@ import type { ListingBook, OsListing } from "@/lib/rex-listings";
 import { cacheKeyFor, heldFor, refresh, FRESH_MS, STALE_MS } from "@/lib/listings-cache";
 import { withArchiveState } from "@/lib/listings-archive-view";
 import { withTakenState } from "@/lib/listings-taken";
-import { offlineListings } from "@/lib/advert-offline";
+import { offlineButStillShowing, offlineListings } from "@/lib/advert-offline";
 import { introOnlyIds } from "@/lib/intro-only";
 import { rexConfigured } from "@/lib/rex";
 import { whoIs } from "@/lib/admin";
@@ -97,6 +97,10 @@ export async function GET(req: NextRequest) {
       introOnlyIds().catch(() => new Set<string>()),
       offlineListings().catch(() => new Map<string, unknown>()),
     ]);
+    /* Marked Offline is what the agent pressed, not where the advert is
+       (22 Oct 2026, lib/advert-offline): 6 Ruskin Place read Offline here
+       while Rightmove still had it. The feeds of those few are asked. */
+    const showing = off.size ? await offlineButStillShowing([...off.keys()]).catch(() => new Set<string>()) : new Set<string>();
     /* Intro only (lib/intro-only), stamped at serve time too: kept in the OS,
        so the book never carries it. */
     /* Offline (19 Oct 2026, lib/advert-offline): the agent took the advert
@@ -105,7 +109,7 @@ export async function GET(req: NextRequest) {
       intro.size || off.size
         ? ls.map((l) => {
             const id = String(l.id ?? l.listingId);
-            return intro.has(id) || off.has(id) ? { ...l, ...(intro.has(id) ? { introOnly: true } : {}), ...(off.has(id) ? { offline: true } : {}) } : l;
+            return intro.has(id) || off.has(id) ? { ...l, ...(intro.has(id) ? { introOnly: true } : {}), ...(off.has(id) ? { offline: true, ...(showing.has(id) ? { stillOnPortals: true } : {}) } : {}) } : l;
           })
         : ls;
     return withTests({ ...archived, listings: withIntro(archived.listings) }, withIntro(mine));

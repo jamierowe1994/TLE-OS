@@ -132,6 +132,26 @@ export default function AdvertOffline({
 
   const offline = Boolean(advert?.offlineAt);
   const onPortals = pub?.onPortals ?? null;
+  /* Marked offline in the OS, still on Rightmove (22 Oct 2026, 6 Ruskin
+     Place): the marker is what was pressed, the feeds are where the advert
+     is. Taking it off again tells the portals "withdrawn" this time. */
+  const stuck = offline && onPortals === true;
+  const [offBusy, setOffBusy] = useState(false);
+  async function takeOffAgain() {
+    setOffBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch("/api/listings/publish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: Number(listingId), action: "off" }) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; onPortals?: boolean };
+      if (!j.ok) setErr(j.error ?? "It didn't come off the portals. Try again.");
+      else if (j.onPortals) setErr("The portals were told, but they still show it. Give it a few minutes, then look again.");
+      setTick((n) => n + 1);
+    } catch {
+      setErr("That didn't go through - the connection dropped. Try again.");
+    } finally {
+      setOffBusy(false);
+    }
+  }
 
   /* A let that fell through: back on the portals, then the marker comes off. */
   const [backBusy, setBackBusy] = useState(false);
@@ -170,6 +190,13 @@ export default function AdvertOffline({
               <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
               Checking the portals…
             </p>
+          ) : stuck ? (
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+              <span className="rounded-full bg-accent-dark px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-white">Still on the portals</span>
+              <span className="text-accent-dark">
+                Marked offline on {day(advert!.offlineAt!)}, but Rightmove, OnTheMarket and Zoopla still show it
+              </span>
+            </p>
           ) : offline ? (
             <p className="mt-1 flex items-center gap-2 text-[13px]">
               <span className="rounded-full bg-ink px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-page">Offline</span>
@@ -192,7 +219,12 @@ export default function AdvertOffline({
             <DoodleIcon name="lock" size={13} /> Take Offline
           </button>
         )}
-        {loaded && offline && (
+        {loaded && stuck && (
+          <button type="button" disabled={offBusy} onClick={() => void takeOffAgain()} className={primary}>
+            <DoodleIcon name="lock" size={13} /> {offBusy ? "Taking it off…" : "Take Off the Portals"}
+          </button>
+        )}
+        {loaded && offline && !stuck && (
           backAsk ? (
             <span className="inline-flex flex-wrap items-center gap-1.5">
               <span className="text-[12px] text-muted">Back on the portals?</span>

@@ -80,6 +80,8 @@ type SampleListing = {
   taken?: { why: string; at: string | null } | null;
   /** Taken offline by the agent (lib/advert-offline). */
   offline?: boolean;
+  /** Marked offline, but a portal feed still shows it (22 Oct 2026). */
+  stillOnPortals?: boolean;
   fellThrough?: { why: string; at: string | null } | null;
   /** The tester's own test listing - never in the counts. */
   test?: boolean;
@@ -1112,7 +1114,7 @@ export default function Listings() {
                         {l.archived ? archiveLabel(l.archiveReason ?? null) : st.label}
                       </Tag>
                       {l.introOnly && <Tag tone="neutral">Marketing only</Tag>}
-                      {!l.archived && l.offline && <Tag tone="neutral">Offline</Tag>}
+                      {!l.archived && l.offline && (l.stillOnPortals ? <Tag tone="accent">Still on the portals</Tag> : <Tag tone="neutral">Offline</Tag>)}
                       {!l.archived && !l.letAgreed && !l.offline && l.taken && <Tag tone="accent">Still advertised</Tag>}
                       {!l.archived && !l.letAgreed && !l.taken && l.fellThrough && <Tag tone="accent">Fell through</Tag>}
                       {l.tenant && <Tag tone="neutral">Tenanted</Tag>}
@@ -1129,6 +1131,12 @@ export default function Listings() {
                       <DoodleIcon name="home-1" size={12} className="shrink-0" />
                       <span className="truncate">{l.locality}</span>
                     </span>
+                    {/* Taken offline in the OS, still showing on Rightmove (22 Oct 2026). */}
+                    {!l.archived && l.offline && l.stillOnPortals && (
+                      <span className="mt-1 block text-[11px] leading-snug text-accent-dark">
+                        Marked offline, but Rightmove, OnTheMarket and Zoopla still show it - open it and take it off the portals
+                      </span>
+                    )}
                     {/* Why it is let agreed though the advert is still up. */}
                     {!l.archived && !l.letAgreed && !l.offline && (l.taken ?? l.fellThrough) && (
                       <span className="mt-1 block text-[11px] leading-snug text-accent-dark">

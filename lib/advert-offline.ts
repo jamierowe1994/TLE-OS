@@ -1,5 +1,6 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
+import { listingRead } from "@/lib/listing-details";
 
 /**
  * TAKE THE ADVERT OFFLINE (James, 19 Oct 2026).
@@ -129,6 +130,47 @@ export async function markOffline(listingId: string, applicationId: string | nul
 export async function markOnline(listingId: string): Promise<AdvertState | null> {
   await aq(`UPDATE os_advert_offline SET offline_at = NULL, online_again_at = NOW(), updated_at = NOW() WHERE listing_id = $1`, [listingId]);
   return advertFor(listingId);
+}
+
+/**
+ * STILL ON THE PORTALS, WHATEVER THE MARKER SAYS (22 Oct 2026).
+ *
+ * Lianna, 6 Ruskin Place: she pressed Take Offline on 20 Oct, the OS said
+ * Offline everywhere, and Rightmove, Zoopla and OnTheMarket kept showing it
+ * as available - six more enquiries in two days, and marking it let agreed in
+ * REX changed nothing, because with the portals channel off REX sends the
+ * feeds nothing at all. Seven listings were the same. The marker records what
+ * the agent pressed; only the feeds say where the advert is.
+ *
+ * `feeds` is ListingPortalUploads/getStatuses. On a portal while a feed is
+ * running there with the home on it and the last upload sent said "current".
+ */
+export function stillOnPortalFeeds(feeds: unknown): boolean {
+  const f = (feeds ?? {}) as { portals?: unknown; most_recent_queue?: { listing_status_to_send?: unknown } | null };
+  const running = Array.isArray(f.portals) && f.portals.some((p) => (p as { feed_status?: unknown }).feed_status === "feeding" && Boolean((p as { remote_id_on_portal?: unknown }).remote_id_on_portal));
+  return running && f.most_recent_queue?.listing_status_to_send === "current";
+}
+
+/**
+ * Of the listings marked Offline, the ones the portals still show, for the
+ * Listings board. A feed that can't be read in time adds nothing: the board
+ * never waits on it, and the listing's own page reads it again.
+ */
+export async function offlineButStillShowing(ids: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  const numeric = ids.filter((id) => /^\d+$/.test(id));
+  if (!numeric.length) return out;
+  const timeout = new Promise<null>((r) => setTimeout(() => r(null), 2500));
+  await Promise.all(
+    numeric.map((id) =>
+      Promise.race([listingRead(id, "ListingPortalUploads", "getStatuses", { listing_id: Number(id), include_last_sent: false }), timeout])
+        .then((res) => {
+          if (res?.ok && stillOnPortalFeeds(res.result)) out.add(id);
+        })
+        .catch(() => {})
+    )
+  );
+  return out;
 }
 
 /**

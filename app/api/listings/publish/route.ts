@@ -8,6 +8,7 @@ import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
+import { stillOnPortalFeeds } from "@/lib/advert-offline";
 import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked, type RexResponse } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -98,13 +99,7 @@ function whereFrom(result: unknown, feeds?: unknown): Where {
   const r = (result ?? {}) as { status?: unknown; active_targets?: unknown };
   const status = typeof r.status === "string" ? r.status : null;
   const channels = Array.isArray(r.active_targets) ? r.active_targets.filter((c): c is string => typeof c === "string") : [];
-  return { status, channels, onPortals: status === "published" && (channels.includes("portals") || stillFeeding(feeds)) };
-}
-
-function stillFeeding(feeds: unknown): boolean {
-  const f = (feeds ?? {}) as { portals?: unknown; most_recent_queue?: { listing_status_to_send?: unknown } | null };
-  const running = Array.isArray(f.portals) && f.portals.some((p) => (p as { feed_status?: unknown }).feed_status === "feeding" && Boolean((p as { remote_id_on_portal?: unknown }).remote_id_on_portal));
-  return running && f.most_recent_queue?.listing_status_to_send === "current";
+  return { status, channels, onPortals: status === "published" && (channels.includes("portals") || stillOnPortalFeeds(feeds)) };
 }
 
 /** Tell the portal feeds what to show: "withdrawn" for off, the listing's own status for on. */
