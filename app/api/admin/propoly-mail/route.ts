@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     if (action === "settings") {
       const senders = Array.isArray(b?.senders) ? b.senders.map(String) : String(b?.senders ?? "").split(/[\s,;]+/);
       const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : String(v ?? "").split(/[\s,;]+/));
-      return NextResponse.json({ ok: true, settings: await saveMailSettings({ senders, moveInWords: typeof b?.moveInWords === "string" ? b.moveInWords : undefined, alwaysWatch: list(b?.alwaysWatch) }, by) });
+      return NextResponse.json({ ok: true, settings: await saveMailSettings({ senders, moveInWords: typeof b?.moveInWords === "string" ? b.moveInWords : undefined, alwaysWatch: list(b?.alwaysWatch), fileOnHomes: typeof b?.fileOnHomes === "boolean" ? b.fileOnHomes : undefined }, by) });
     }
     if (action === "discover") return NextResponse.json({ ok: true, ...(await discoverSenders({ budgetMs: 240_000 })) });
     if (action === "scan") {

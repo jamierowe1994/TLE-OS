@@ -64,6 +64,12 @@ export interface PropolyMailSettings {
    * the log never rests on one agent's Outlook alone.
    */
   alwaysWatch: string[];
+  /**
+   * File each move-in pack's files on its home's Documents (fileMoveInPacks).
+   * Off until James says so for the live run (22 Oct 2026): agents see the
+   * files the moment they land.
+   */
+  fileOnHomes: boolean;
   updatedBy?: string;
   updatedAt?: string;
 }
@@ -124,7 +130,7 @@ function ensureTables(): Promise<void> {
 /* ── the setting ───────────────────────────────────────────────────────── */
 
 export async function mailSettings(): Promise<PropolyMailSettings> {
-  const blank: PropolyMailSettings = { senders: DEFAULT_SENDERS, moveInWords: DEFAULT_MOVE_IN_WORDS, alwaysWatch: [] };
+  const blank: PropolyMailSettings = { senders: DEFAULT_SENDERS, moveInWords: DEFAULT_MOVE_IN_WORDS, alwaysWatch: [], fileOnHomes: false };
   if (!hasDb()) return blank;
   const [row] = await q<{ value: Partial<PropolyMailSettings> }>(`SELECT value FROM os_settings WHERE key = $1`, [SETTINGS_KEY]).catch(() => []);
   const v = row?.value ?? {};
@@ -132,6 +138,7 @@ export async function mailSettings(): Promise<PropolyMailSettings> {
     senders: Array.isArray(v.senders) ? v.senders.map((s) => String(s).trim().toLowerCase()).filter(Boolean) : DEFAULT_SENDERS,
     moveInWords: typeof v.moveInWords === "string" && v.moveInWords.trim() ? v.moveInWords : DEFAULT_MOVE_IN_WORDS,
     alwaysWatch: Array.isArray(v.alwaysWatch) ? v.alwaysWatch.map((s) => String(s).trim().toLowerCase()).filter(Boolean) : [],
+    fileOnHomes: v.fileOnHomes === true,
     updatedBy: v.updatedBy,
     updatedAt: v.updatedAt,
   };
@@ -139,7 +146,7 @@ export async function mailSettings(): Promise<PropolyMailSettings> {
 
 export class SettingRefused extends Error {}
 
-export async function saveMailSettings(p: { senders: string[]; moveInWords?: string; alwaysWatch?: string[] }, by: string): Promise<PropolyMailSettings> {
+export async function saveMailSettings(p: { senders: string[]; moveInWords?: string; alwaysWatch?: string[]; fileOnHomes?: boolean }, by: string): Promise<PropolyMailSettings> {
   const senders = [...new Set(p.senders.map((s) => s.trim().toLowerCase()).filter(Boolean))];
   for (const s of senders) {
     if (!/^[^@\s]*@[a-z0-9.-]+\.[a-z]{2,}$/.test(s)) throw new SettingRefused(`"${s}" isn't an email address or a domain like @propoly.com.`);
@@ -154,7 +161,8 @@ export async function saveMailSettings(p: { senders: string[]; moveInWords?: str
   for (const s of alwaysWatch) {
     if (!/^[^@\s]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(s)) throw new SettingRefused(`"${s}" isn't a mailbox address.`);
   }
-  const value: PropolyMailSettings = { senders, moveInWords: words, alwaysWatch, updatedBy: by, updatedAt: new Date().toISOString() };
+  const fileOnHomes = p.fileOnHomes ?? (await mailSettings()).fileOnHomes;
+  const value: PropolyMailSettings = { senders, moveInWords: words, alwaysWatch, fileOnHomes, updatedBy: by, updatedAt: new Date().toISOString() };
   await q(
     `INSERT INTO os_settings (key, value, updated_at, updated_by) VALUES ($1, $2::jsonb, NOW(), $3)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
@@ -736,7 +744,7 @@ const DOC_TYPE_FOR: Partial<Record<string, string>> = { gas: "gas_safety", epc: 
  * compliance desk.
  */
 export async function fileMoveInPacks(): Promise<number> {
-  if (!hasDb()) return 0;
+  if (!hasDb() || !(await mailSettings()).fileOnHomes) return 0;
   await ensureTables();
   const rows = await q<Row & { filed_at: Date | null }>(
     `SELECT * FROM os_propoly_mail WHERE kind = 'move-in' AND deal_id IS NOT NULL AND address <> '' AND filed_at IS NULL ORDER BY at LIMIT 50`

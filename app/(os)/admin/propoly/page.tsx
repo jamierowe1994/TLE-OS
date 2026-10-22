@@ -21,7 +21,7 @@ import { ExpectedPackEmail, PropolyMailView, type PropolyMail } from "@/componen
  */
 
 type Box = { email: string; readTo: string | null; lastRunAt: string | null; found: number; note: string | null; kept: number };
-type Settings = { senders: string[]; moveInWords: string; alwaysWatch: string[]; updatedBy?: string; updatedAt?: string };
+type Settings = { senders: string[]; moveInWords: string; alwaysWatch: string[]; fileOnHomes: boolean; updatedBy?: string; updatedAt?: string };
 type Gap = { name: string; email: string; role: string; why: string; alwaysWatch: boolean };
 type DocPlan = { kind: string; label: string; slot: string; found: { where: string; name: string; expiry: string; expired: boolean } | null; note: string; outcome?: string };
 type Plan = { dealId: string; address: string; status: string; moveIn: string | null; propertyIds: string[]; rexNote: string | null; docs: DocPlan[] };
@@ -161,6 +161,19 @@ export default function PropolyAdmin() {
             <input id="words" value={words} onChange={(e) => setWords(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 font-mono text-xs" />
             <label className="mt-3 block text-xs text-muted" htmlFor="watch">Always watch these mailboxes (read every run, and named first if they disconnect)</label>
             <input id="watch" value={watch ?? ""} onChange={(e) => setWatch(e.target.value)} placeholder="e.g. kirstie.mulholland@thelettingexperts.co.uk" className="mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-sm" />
+            <label className="mt-4 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={data.settings.fileOnHomes}
+                disabled={busy !== null}
+                onChange={(e) => act("filing", { action: "settings", senders, moveInWords: words, alwaysWatch: watch ?? "", fileOnHomes: e.target.checked }, () => { void load(); return e.target.checked ? "Packs' files will go on their homes' Documents at the next read." : "Packs' files stay in this log only."; })}
+              />
+              <span>
+                Put each move-in pack&apos;s files on its home&apos;s Documents
+                <span className="block text-xs text-muted">They then show on the home, the let and the deal for everyone who can see the home.</span>
+              </span>
+            </label>
             <div className="mt-4 flex flex-wrap gap-2">
               <button type="button" disabled={busy !== null} onClick={() => act("save", { action: "settings", senders, moveInWords: words, alwaysWatch: watch ?? "" }, () => { void load(); return "Saved."; })} className="rounded-full bg-ink px-4 py-2 text-sm text-page disabled:opacity-50">
                 {busy === "save" ? "Saving…" : "Save"}
