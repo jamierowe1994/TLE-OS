@@ -563,6 +563,25 @@ export function ComplianceSide({
             {c.agentNote}
           </p>
         )}
+        {/* Additional clauses (21 Oct 2026): copied into the Propoly deal by
+            pre-tenancy, so laid out to copy as written. */}
+        {c.clauses?.any === true && c.clauses.text.trim() ? (
+          <div className="mt-4 rounded-xl bg-page px-4 py-3">
+            <div className="flex items-center gap-3">
+              <p className="text-[13px] font-medium text-ink">Additional clauses</p>
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(c.clauses?.text ?? "")}
+                className="ml-auto text-xs underline underline-offset-2 hover:text-ink"
+              >
+                Copy
+              </button>
+            </div>
+            <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-ink/80">{c.clauses.text}</p>
+          </div>
+        ) : c.clauses?.any === false ? (
+          <p className="mt-3 text-xs text-muted">No additional clauses.</p>
+        ) : null}
       </section>
 
       {(c.state === "submitted" || c.state === "scanning") && (

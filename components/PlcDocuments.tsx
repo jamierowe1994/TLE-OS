@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import {
   CHECK_GROUPS,
   COVERABLE,
+  DATED_CHECKS,
   gateOf,
   groupOf,
   guessCheck,
@@ -117,7 +118,9 @@ const pretty = (ymd: string | null | undefined) =>
 
 /** The one line under a filed document: what the reader saw, and the date that matters. */
 function readLine(d: PlcDocument, moveIn: string | null): { text: string; warn: boolean } | null {
-  const r = d.read;
+  /* A read from before 22 Oct 2026 may carry an "expiry" off terms of
+     business or a reference; only a document that runs out shows one. */
+  const r = d.read && !DATED_CHECKS.has(d.checkId) ? { ...d.read, expiryDate: null, expiryDerived: undefined } : d.read;
   if (!r) return null;
   const bits: string[] = [];
   if (r.what) bits.push(r.what);

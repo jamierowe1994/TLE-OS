@@ -23,6 +23,7 @@ import {
   type PlcState,
   type PropolyPush,
   type RexPush,
+  type PlcClauses,
   type RlpRequest,
   type SentAnyway,
   type Waiver,
@@ -73,6 +74,7 @@ interface Row extends Record<string, unknown> {
   check_note: string | null;
   rlp_wanted: boolean | null;
   rlp_request: RlpRequest | null;
+  clauses: PlcClauses | null;
   let_type: string | null;
   file_keys: string[] | null;
   sent_anyway: SentAnyway[] | null;
@@ -126,6 +128,7 @@ function rowTo(r: Row): PlcCase {
     checkNote: r.check_note ?? "",
     rlpWanted: r.rlp_wanted ?? null,
     rlpRequest: r.rlp_request ?? null,
+    clauses: r.clauses ?? null,
     submittedAt: iso(r.submitted_at),
     scannedAt: iso(r.scanned_at),
     decidedAt: iso(r.decided_at),
@@ -138,7 +141,7 @@ function rowTo(r: Row): PlcCase {
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at,
-              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks`;
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks, clauses`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -178,7 +181,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
               waivers = $12::jsonb, propoly_push = $13::jsonb, rex_push = $14::jsonb,
               checked_at = $15, checked_by = $16, checked_by_email = $17, check_note = $18,
               rlp_wanted = $19, rlp_request = $20::jsonb, let_type = $21,
-              file_keys = $22::jsonb, sent_anyway = $23::jsonb,
+              file_keys = $22::jsonb, sent_anyway = $23::jsonb, clauses = $24::jsonb,
               updated_at = NOW()
         WHERE id = $1
         RETURNING ${COLS}`,
@@ -206,6 +209,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
         next.letType ?? null,
         JSON.stringify(next.fileKeys ?? []),
         JSON.stringify(next.sentAnyway ?? []),
+        next.clauses ? JSON.stringify(next.clauses) : null,
       ]
     );
     return rowTo(saved[0]);
@@ -351,13 +355,19 @@ export async function updateDetails(
         "This pack is with compliance, so it can't be changed here. Ask them to defer it back to you."
       );
     }
+    const moveInDate = patch.moveInDate === undefined ? c.moveInDate : patch.moveInDate?.slice(0, 10) || null;
+    const letType =
+      patch.letType === undefined ? c.letType ?? null : patch.letType === "hmo" || patch.letType === "home" ? patch.letType : null;
+    /* Every date was judged against the old move-in, and the checks asked
+       against the old let type, so the last reading no longer stands and the
+       next Send reads again (lib/plc readingStillFresh). */
+    const reread = moveInDate !== c.moveInDate || letType !== (c.letType ?? null);
     return {
       ...c,
-      moveInDate:
-        patch.moveInDate === undefined ? c.moveInDate : patch.moveInDate?.slice(0, 10) || null,
+      moveInDate,
       agentNote: patch.agentNote === undefined ? c.agentNote : patch.agentNote,
-      letType:
-        patch.letType === undefined ? c.letType ?? null : patch.letType === "hmo" || patch.letType === "home" ? patch.letType : null,
+      letType,
+      ...(reread ? { scannedAt: null } : {}),
     };
   });
 }
@@ -812,6 +822,16 @@ export async function setRlpWanted(id: string, wanted: boolean): Promise<PlcCase
       throw new PlcRefused("This pack is with compliance, so it can't be changed here.");
     }
     return { ...c, rlpWanted: wanted };
+  });
+}
+
+/** The agent's answer on additional clauses, while the pack is theirs. */
+export async function setClauses(id: string, any: boolean, text: string, by: string): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") {
+      throw new PlcRefused("This pack is with compliance, so it can't be changed here.");
+    }
+    return { ...c, clauses: { any, text: any ? text.trim().slice(0, 8000) : "", by, at: new Date().toISOString() } };
   });
 }
 
