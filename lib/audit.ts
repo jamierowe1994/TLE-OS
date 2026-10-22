@@ -118,7 +118,11 @@ export type AuditKind =
   | "rex_status_changed"
   | "rex_snapshot_taken"
   | "rex_queue_sent"
-  | "rex_queue_stopped";
+  | "rex_queue_stopped"
+  /* A let's guarantors and an owner's Repush, to its Propoly deal (22 Oct
+     2026, lib/deal-guarantors, lib/propoly-repush): practice or live, what went. */
+  | "propoly_guarantors_sent"
+  | "propoly_repush";
 
 export interface AuditRow {
   id: string;

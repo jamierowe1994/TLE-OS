@@ -491,6 +491,31 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "PROPOLY_PEOPLE_LIVE",
     legacyOn: "on",
   },
+  {
+    /* Kirstie, 22 Oct 2026: deals arrive in Propoly without their
+       guarantors (lib/deal-guarantors). Propoly's API has no guarantor route
+       (probed 22 Oct), so the details go as a document on the deal, and
+       tenants who have one are marked guarantor_required when added. */
+    key: "propoly_guarantors",
+    label: "Guarantors go to the Propoly deal",
+    what: "Push to Propoly and Send guarantors put a 'Guarantor details' document on the deal (General Documents): each guarantor's name, email, mobile, address, whose guarantor they are and the rent. A tenant with a guarantor is added to the deal marked guarantor required. Propoly has no way to take guarantors themselves, so Kirstie keys them in from the document. Practice with it off: the document is built and shown, nothing sent.",
+    who: "Propoly is WRITTEN TO: one document per change of guarantor details, and the guarantor-required tick on new tenants. What Propoly does with that tick (whether it asks the tenant for a guarantor) is not proven. The Propoly documents switch must be on too.",
+    confirm: "GUARANTORS TO PROPOLY",
+    legacyEnv: "PROPOLY_GUARANTORS",
+    legacyOn: "on",
+  },
+  {
+    /* The Ruskin Place call, 20 Oct 2026: lets pushed before the Propoly
+       connection was finished are missing documents and people
+       (lib/propoly-repush). Owners only, and each press shows what goes. */
+    key: "propoly_repush_live",
+    label: "Repush to Propoly (owners)",
+    what: "An owner's Repush to Propoly on a let sends what its deal is missing: the home's gas, EICR and EPC, the approved PLC pack's files, the guarantor details, and any tenant or landlord not on the deal. It shows exactly what will go before anything is sent. Practice with it off: the same list is worked out and nothing is sent.",
+    who: "Propoly is WRITTEN TO: documents onto the deal, tenants onto the deal, landlords linked to the home. Each part also needs its own switch (Propoly documents, People added on a let, Guarantors) and Handover.",
+    confirm: "REPUSH TO PROPOLY",
+    legacyEnv: "PROPOLY_REPUSH_LIVE",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

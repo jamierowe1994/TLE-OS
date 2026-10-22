@@ -41,10 +41,13 @@ export default function Guarantors({
   source,
   title = "Guarantors",
   className = "",
+  onChange,
 }: {
   source: Source;
   title?: string;
   className?: string;
+  /** Told the guarantors as they now stand, so what goes to Propoly can follow (components/LetPropoly). */
+  onChange?: (signature: string) => void;
 }) {
   const [rows, setRows] = useState<GuarantorRow[] | null>(null);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
@@ -67,6 +70,8 @@ export default function Guarantors({
     return () => { live = false; };
   }, [key]);
   useEffect(() => load(), [load]);
+  const signature = rows ? rows.map((g) => `${g.id}:${g.name}:${g.email}:${g.phone}`).join("|") : null;
+  useEffect(() => { if (signature !== null) onChange?.(signature); }, [signature, onChange]);
 
   async function remove(g: GuarantorRow) {
     if (!window.confirm(`Take ${g.name} off as a guarantor?`)) return;

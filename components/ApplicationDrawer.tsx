@@ -19,6 +19,7 @@ import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-ev
 import ContactBlock from "@/components/ContactBlock";
 import RightToRentField, { type RtrShown } from "@/components/RightToRentField";
 import Guarantors from "@/components/Guarantors";
+import { GuarantorsToPropoly } from "@/components/LetPropoly";
 import LetTenants from "@/components/LetTenants";
 import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
 import FileDocuments from "@/components/FileDocuments";
@@ -738,6 +739,8 @@ export default function ApplicationDrawer({
   const [cancelled, setCancelled] = useState<Cancellation | null>(null);
   /* Each person against the let's Propoly deal (lib/let-propoly-sync, 20 Oct 2026). */
   const [picture, setPicture] = useState<Picture | null>(null);
+  /* The guarantors as the Guarantors card last read them: the Propoly box follows. */
+  const [guarantorSig, setGuarantorSig] = useState("");
   /* A change to the people answers with the let as it now stands. */
   const takePeople = useCallback((j: PeopleAnswer) => {
     if (!j?.ok || !j.let) return;
@@ -1383,7 +1386,9 @@ export default function ApplicationDrawer({
             )}
             {/* Guarantors (Lorna Fieldson, 15 Oct 2026): carried over from the
                 lead by the applicant's email, added here too (lib/guarantors). */}
-            {letId && people.length > 0 && <Guarantors source={{ let: letId }} className="mt-4" />}
+            {letId && people.length > 0 && <Guarantors source={{ let: letId }} className="mt-4" onChange={setGuarantorSig} />}
+            {/* The guarantors into the Propoly deal, and the owners' Repush (22 Oct 2026, lib/deal-guarantors, lib/propoly-repush). */}
+            {letId && <GuarantorsToPropoly letId={letId} tick={`${guarantorSig}:${picture ? "p" : ""}`} className="mt-3" />}
             {/* A tenant added on the let, the same way (Kirstie 6a2dc73c, 19 Oct 2026, lib/let-tenants). */}
             {letId && <LetTenants letId={letId} className="mt-3" onChange={reloadPeople} picture={picture} people={info?.people ?? null} />}
             {/* Every landlord, each changeable, and Add landlord always (James, 20 Oct 2026). */}

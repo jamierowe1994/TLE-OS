@@ -58,7 +58,8 @@ async function placeOf(req: NextRequest, p: { lead?: string | null; let?: string
   if (p.let) {
     const a = await letPeople(p.let, actor);
     if (!a.ok) return fail(a.error, a.status);
-    return { place: { people: a.let.tenants.map((t) => ({ name: t.name, email: t.email })), leadId: null, letRef: p.let }, by: actor.email };
+    /* Every tenant on the let, a tenant added on it included (22 Oct 2026). */
+    return { place: { people: a.let.people.filter((t) => t.role === "tenant").map((t) => ({ name: t.name, email: t.email })), leadId: null, letRef: p.let }, by: actor.email };
   }
 
   if (p.listing) {
