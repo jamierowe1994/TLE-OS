@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import BentoDash from "@/components/BentoDash";
@@ -40,6 +41,14 @@ export default function Finances() {
         lineBreak="none"
         illustrationNudge={-34}
         actions={
+          <div className="flex items-center gap-2">
+          {/* The agents' call, 19 Oct 2026: a statement for any period, when they want it. */}
+          <Link
+            href="/finances/statement"
+            className="flex items-center gap-1.5 rounded-full border border-line/80 bg-page px-4 py-2 text-[12px] font-medium text-muted transition-colors hover:border-ink hover:text-ink"
+          >
+            <DoodleIcon name="file-contract" size={13} />Statement
+          </Link>
           <button
             type="button"
             onClick={() => setCustomising((c) => !c)}
@@ -54,6 +63,7 @@ export default function Finances() {
               <span className="inline-flex items-center gap-1.5"><DoodleIcon name="magic-wand" size={13} />Customise</span>
             )}
           </button>
+          </div>
         }
       />
 

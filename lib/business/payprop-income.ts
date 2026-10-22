@@ -685,14 +685,20 @@ export function getYtdIncome(month: string): Promise<AgencyIncome | null> {
  * figure agreeing with the sheet, and the range cache is persisted so it is
  * paid once an hour rather than once a request.
  */
-async function paymentsSettledInRange(from: string, to: string): Promise<AccountRows> {
+/** The wire range behind a settled range: a month either side (see below). */
+function widened(from: string, to: string): { from: string; to: string } {
   const shift = (iso: string, months: number, endOfMonth: boolean) => {
     const [y, m] = iso.split("-").map(Number);
     const d = new Date(Date.UTC(y, m - 1 + months, 1));
     if (endOfMonth) d.setUTCMonth(d.getUTCMonth() + 1, 0);
     return d.toISOString().slice(0, 10);
   };
-  const wide = await paymentsForRange(shift(from, -1, false), shift(to, 1, true));
+  return { from: shift(from, -1, false), to: shift(to, 1, true) };
+}
+
+async function paymentsSettledInRange(from: string, to: string): Promise<AccountRows> {
+  const w = widened(from, to);
+  const wide = await paymentsForRange(w.from, w.to);
   // Per account, not flattened: the Income tab splits E&W from Glasgow, and a
   // split computed on a different basis from the total it sits under is worse
   // than no split at all.
@@ -1761,6 +1767,162 @@ export async function getAgentFeeLines(
   }
   // Biggest first: the line someone is looking for is usually the big one.
   return out.sort((a, b) => b.gross - a.gross);
+}
+
+/* --------------------------- commission statement ------------------------- */
+
+export interface StatementLine {
+  /** The batch transfer date: the day it left PayProp, and the month the
+   *  business counts it in. */
+  paidOn: string;
+  property: string;
+  propertyId: string;
+  category: string;
+  /** As PayProp paid it (VAT-inclusive, as everywhere else here). */
+  amount: number;
+  /** The same net of VAT, on the accounts sheet's basis (see exVat). */
+  net: number;
+}
+
+export type AgentStatement =
+  | {
+      ok: true;
+      /** Commission: the fee categories, exactly as the earnings figures count them. */
+      lines: StatementLine[];
+      /** Paid to them through PayProp but not commission (contractor work,
+       *  catch-all "Other"), listed apart so the statement still squares with
+       *  what reached their bank. */
+      other: StatementLine[];
+      total: number;
+      totalNet: number;
+      otherTotal: number;
+      matchedBy: "email" | "name" | "payments";
+      /** When PayProp's rows behind this were read. */
+      readAt: string;
+    }
+  | { ok: false; kind: "not-connected" | "unreachable" | "unmatched"; problem: string };
+
+const ACCOUNT_WORDS: Record<string, string> = { uk: "England and Wales", scotland: "Glasgow" };
+
+/**
+ * One partner's commission between two days, line by line, for the statement
+ * on Finances (agents' call, 19 Oct 2026).
+ *
+ * The SAME rows and rules as getAgentEarningsForMonths, which is what Company
+ * figures shows Susan for each partner: payments to their PayProp payee, fee
+ * categories only, counted on the batch transfer date. That basis matched
+ * Susan's sheet to the penny on Rhiannon Dodge's May and June. A statement
+ * that disagreed with the partner's earnings would be the worst bug here.
+ *
+ * Never half a statement. Any agency PayProp cannot answer for, or a walk that
+ * fails, comes back as a problem rather than lines, because the missing
+ * agency's money would otherwise read as money not earned.
+ *
+ * The walk is chosen to share what is already warm: a single month reads the
+ * month's walk, anything inside this year reads the year-to-date walk the
+ * admin home keeps, and only a range across years walks on its own.
+ */
+export async function getAgentStatement(
+  email: string,
+  displayName: string,
+  from: string,
+  to: string
+): Promise<AgentStatement> {
+  const accounts = payPropAccounts();
+  if (accounts.length === 0) {
+    return { ok: false, kind: "not-connected", problem: "PayProp is not connected, so there is nothing to read a statement from." };
+  }
+  const reach = await Promise.all(accounts.map(async (a) => ({ a, ok: await payPropCanAuth(a).catch(() => false) })));
+  const down = reach.filter((r) => !r.ok).map((r) => ACCOUNT_WORDS[r.a] ?? r.a);
+  if (down.length) {
+    return {
+      ok: false,
+      kind: "unreachable",
+      problem: `PayProp ${down.join(" and ")} is not answering, so this statement would be missing money. Try again later, or ask the office.`,
+    };
+  }
+
+  const now = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
+  let walk: { from: string; to: string };
+  if (from.slice(0, 7) === to.slice(0, 7)) walk = monthRange(from.slice(0, 7));
+  else if (from.slice(0, 4) === now.slice(0, 4) && to.slice(0, 4) === now.slice(0, 4)) {
+    walk = { from: `${now.slice(0, 4)}-01-01`, to: monthRange(now).to };
+  } else walk = { from: monthRange(from.slice(0, 7)).from, to: monthRange(to.slice(0, 7)).to };
+
+  let rows: Payment[];
+  try {
+    rows = (await paymentsSettledInRange(walk.from, walk.to)).flatMap((p) => p.rows);
+  } catch {
+    return { ok: false, kind: "unreachable", problem: "PayProp did not answer just now, so the statement can't be drawn. Try again in a few minutes." };
+  }
+  const w = widened(walk.from, walk.to);
+  const readAt = new Date(rangeCache.get(`${w.from}|${w.to}`)?.at ?? Date.now()).toISOString();
+
+  /* Whose payee records. The directory first (email, then name), exactly as
+     the earnings figures do; when the directory itself cannot be read, the
+     payee names on the payments are the same people, so they stand in rather
+     than the statement failing. */
+  let { ids, matchedBy }: { ids: string[]; matchedBy: "email" | "name" | "payments" | null } =
+    await agentBeneficiaryIds(email, displayName).catch(() => ({ ids: [] as string[], matchedBy: null }));
+  if (!ids.length && displayName) {
+    const want = normaliseAgentName(displayName);
+    const found = new Set<string>();
+    for (const r of rows) {
+      if (r.b && (r.t === "beneficiary" || r.t === "global_beneficiary") && r.n && normaliseAgentName(r.n) === want) found.add(r.b);
+    }
+    if (found.size) {
+      ids = [...found];
+      matchedBy = "payments";
+    }
+  }
+  if (!ids.length || !matchedBy) {
+    return {
+      ok: false,
+      kind: "unmatched",
+      problem: `PayProp holds no payee under ${displayName || email}, so there are no payments to put on a statement. The office can check how PayProp spells the name.`,
+    };
+  }
+  const idSet = new Set(ids);
+
+  /* Addresses from the portfolio book, which already walks the properties
+     hourly. Only where an agent's names and ids line up one to one: the book
+     skips a nameless home in one list and not the other. */
+  const book = await getPortfolioBook().catch(() => null);
+  const names = new Map<string, string>();
+  for (const agent of Object.values(book?.byAgent ?? {})) {
+    if (agent.propertyIds.length !== agent.propertyNames.length) continue;
+    agent.propertyIds.forEach((id, i) => names.set(id, agent.propertyNames[i]));
+  }
+  const nameOf = (r: Payment) =>
+    names.get(r.p) ??
+    (r.pk ? r.pk.split("|").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : "No property on this payment");
+
+  const lines: StatementLine[] = [];
+  const other: StatementLine[] = [];
+  for (const r of rows) {
+    if (!r.b || !idSet.has(r.b) || !r.td || r.td < from || r.td > to) continue;
+    const category = r.c || "Other";
+    const line = { paidOn: r.td, property: nameOf(r), propertyId: r.p, category, amount: r.a, net: exVat(r.a) };
+    (FEE_CATEGORIES.has(category) ? lines : other).push(line);
+  }
+  const byDate = (a: StatementLine, b: StatementLine) =>
+    a.paidOn.localeCompare(b.paidOn) || a.property.localeCompare(b.property) || a.category.localeCompare(b.category);
+  lines.sort(byDate);
+  other.sort(byDate);
+  const sum = (l: StatementLine[]) => Math.round(l.reduce((n, x) => n + x.amount, 0) * 100) / 100;
+  const total = sum(lines);
+  return {
+    ok: true,
+    lines,
+    other,
+    total,
+    /* Net of the total, not a sum of nets, so it is the same figure the
+       earnings card shows for the same months. */
+    totalNet: exVat(total),
+    otherTotal: sum(other),
+    matchedBy,
+    readAt,
+  };
 }
 
 /* ------------------------- Margo's portfolio (12 Oct 2026) ------------------ */
