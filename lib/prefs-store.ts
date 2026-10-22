@@ -45,10 +45,14 @@ function loadOnce(): Promise<void> {
 function push(key: string, value: unknown): void {
   if (!signedIn) return;
   if (serverPrefs) serverPrefs[key] = value;
+  const body = JSON.stringify({ key, value });
   void fetch("/api/prefs", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key, value }),
+    body,
+    /* Survives the tab closing, for a save made on the way out (the profile
+       page, 22 Oct 2026). The browser refuses keepalive past 64 KB. */
+    keepalive: body.length < 60_000,
   }).catch(() => {
     /* a setting that didn't sync is not worth interrupting anyone over */
   });

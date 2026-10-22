@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import EmailFooterSetup from "@/components/EmailFooterSetup";
 import PersonalCalendar from "@/components/PersonalCalendar";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -293,6 +293,11 @@ export default function ProfilePage() {
      round-trip would mean a flash of the wrong colour on every load. */
   const [storedProfile, storeProfile] = usePref<Profile | null>(PROFILE_KEY, null);
   const prefsHome = usePrefsHome();
+  /* What typing has changed but not yet saved - see save() below. */
+  const pending = useRef<Profile | null>(null);
+  const pendingTimer = useRef<number | null>(null);
+  /** The name and photo the account last heard, so a bio edit doesn't resend them. */
+  const accountHas = useRef<{ name: string; photo: string | null } | null>(null);
 
   /* Who is actually signed in. The page used to never ask, which is how a
      hardcoded name came to stand in for everybody who had saved nothing yet.
@@ -304,6 +309,7 @@ export default function ProfilePage() {
       .then((j) => {
         if (!alive || !j?.user) return;
         setEmail(j.user.email ?? null);
+        accountHas.current ??= { name: j.user.name ?? "", photo: j.user.photo ?? null };
         setProfile((p) => ({
           ...p,
           name: p.name || j.user!.name || "",
@@ -326,24 +332,82 @@ export default function ProfilePage() {
     setDarkBox(readDarkStep(DARK_BOX_KEY, DARK_BOX_DEFAULT));
   }, []);
 
-  function save(next: Profile) {
-    setProfile(next);
+  /* Typing used to be a save per keystroke (21 Oct 2026): Erleta wrote her
+     bio and the page sent 776 PATCHes to /api/profile in thirteen minutes,
+     every one carrying her name and whole headshot, and the same again to
+     /api/prefs. That fills the read log and walks towards the pace pause.
+     The screen still changes at once; the account is written once typing
+     stops, and /api/profile only when the name or the photo changed. */
+
+  const flush = useCallback(() => {
+    if (pendingTimer.current != null) {
+      window.clearTimeout(pendingTimer.current);
+      pendingTimer.current = null;
+    }
+    const next = pending.current;
+    if (!next) return;
+    pending.current = null;
     storeProfile(next);
     /* Name and photo go to the DATABASE as well as to this browser. The
        sidebar, decks and emails all read os_users — a headshot saved only
        locally is invisible everywhere but this page, and gone on a second
        machine. Fire and forget: a failed sync must not block the form. */
-    void fetch("/api/profile", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: next.name, photo: next.photo ?? null }),
-    }).catch(() => {});
-    /* The only thing on this machine that changes who /api/auth/me says you
-       are without a page load, so it is the only thing that has to say so —
-       otherwise the sidebar keeps yesterday's headshot for half a minute. */
-    invalidateMe();
+    const name = next.name;
+    const photo = next.photo ?? null;
+    const had = accountHas.current;
+    if (!had || had.name !== name || had.photo !== photo) {
+      accountHas.current = { name, photo };
+      /* Only what changed: a renamed agent sends a few bytes, not their
+         headshot again. Small enough to survive the tab closing (keepalive
+         is capped at 64 KB, which a photo can pass). */
+      const body = JSON.stringify({
+        ...(!had || had.name !== name ? { name } : {}),
+        ...(!had || had.photo !== photo ? { photo } : {}),
+      });
+      void fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body,
+        keepalive: body.length < 60_000,
+      })
+        .then((r) => {
+          if (!r.ok) accountHas.current = null; // try again on the next change
+        })
+        .catch(() => {
+          accountHas.current = null;
+        });
+      /* The only thing on this machine that changes who /api/auth/me says you
+         are without a page load, so it is the only thing that has to say so —
+         otherwise the sidebar keeps yesterday's headshot for half a minute. */
+      invalidateMe();
+    }
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
+  }, [storeProfile]);
+
+  /* Leaving the page or closing the tab mid-word still saves the word.
+     Hidden as well as pagehide: a phone switching apps often never sends
+     pagehide before the page is thrown away. */
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onHidden);
+      flush();
+    };
+  }, [flush]);
+
+  /** `now` for a deliberate act (a photo, a picked address); typing waits for a pause. */
+  function save(next: Profile, now = false) {
+    setProfile(next);
+    pending.current = next;
+    if (pendingTimer.current != null) window.clearTimeout(pendingTimer.current);
+    pendingTimer.current = now ? null : window.setTimeout(flush, 800);
+    if (now) flush();
   }
 
   function pickTheme(t: ThemeChoice) {
@@ -451,7 +515,7 @@ export default function ProfilePage() {
                         if (photo.length <= PHOTO_MAX_CHARS) break;
                         photo = c.toDataURL("image/jpeg", quality);
                       }
-                      save({ ...profile, photo });
+                      save({ ...profile, photo }, true);
                       URL.revokeObjectURL(img.src);
                     };
                     img.src = URL.createObjectURL(file);
@@ -537,7 +601,7 @@ export default function ProfilePage() {
                 value={profile.base ?? ""}
                 onChange={(v) => save({ ...profile, base: v, baseLat: null, baseLng: null })}
                 onResolved={(a) =>
-                  save({ ...profile, base: a.address, baseLat: a.lat, baseLng: a.lng })
+                  save({ ...profile, base: a.address, baseLat: a.lat, baseLng: a.lng }, true)
                 }
               />
               <span className="mt-1 block text-[10px] leading-relaxed text-muted">
@@ -575,9 +639,9 @@ export default function ProfilePage() {
                           base: j.address ?? hubHome,
                           baseLat: j.lat ?? null,
                           baseLng: j.lng ?? null,
-                        });
+                        }, true);
                       } catch {
-                        save({ ...profile, base: hubHome, baseLat: null, baseLng: null });
+                        save({ ...profile, base: hubHome, baseLat: null, baseLng: null }, true);
                       } finally {
                         setPlacing(false);
                       }
