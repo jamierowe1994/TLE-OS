@@ -66,7 +66,7 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
   /** "feature": the job sheet's own (9 Oct 2026, James: "very overwhelming:
    *  where to look, what to click on") - a coloured band with the step by
    *  name and a labelled track. "card": the plain one the property page uses. */
-  variant?: "card" | "feature";
+  variant?: "card" | "feature" | "bare";
   move: (m: Move) => Promise<void>;
   busy: boolean;
   err: string | null;
@@ -117,6 +117,16 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
       )}
     </>
   );
+
+  /* "bare": the job page draws the step's name and the progress itself (22 Oct 2026). */
+  if (variant === "bare") {
+    return (
+      <>
+        {body}
+        {err && <p className="mt-3 text-[12px] text-accent-dark">{err}</p>}
+      </>
+    );
+  }
 
   if (variant === "feature") {
     const n = line.findIndex(isHere) + 1;

@@ -89,7 +89,7 @@ export function StageTracker({ o, picked, onPick }: { o: WorksOrder; picked: Ste
         const sel = s.id === picked;
         return (
           <li key={s.id} className="relative min-w-[92px] flex-1">
-            {i > 0 && <span aria-hidden className={`absolute right-1/2 top-[15px] h-[2px] w-full ${s.done || on ? "bg-sage" : "bg-line/70"}`} />}
+            {i > 0 && <span aria-hidden className={`absolute right-1/2 top-[15px] h-[2px] w-full ${s.done || on ? "bg-ink/70" : "bg-line/70"}`} />}
             <button
               type="button"
               onClick={() => onPick(s.id)}
@@ -100,7 +100,7 @@ export function StageTracker({ o, picked, onPick }: { o: WorksOrder; picked: Ste
             >
               <span
                 className={`relative z-[1] flex h-[22px] w-[22px] items-center justify-center rounded-full text-[10.5px] font-bold ${
-                  on ? "bg-accent-dark text-white ring-4 ring-accent-soft" : s.done ? "bg-sage text-white" : s.skipped ? "border-2 border-dashed border-sage bg-white text-sage" : "border-2 border-line bg-white text-muted"
+                  on ? "bg-accent-dark text-white ring-4 ring-accent-soft" : s.done ? "bg-ink/80 text-white" : s.skipped ? "border-2 border-dashed border-ink/40 bg-white text-ink/50" : "border-2 border-line bg-white text-muted"
                 }`}
               >
                 {s.done && !on ? "✓" : s.skipped ? "-" : i + 1}
@@ -120,8 +120,10 @@ export function StageTracker({ o, picked, onPick }: { o: WorksOrder; picked: Ste
  * other gets that stage's form, with a line saying it isn't the step the job
  * is on.
  */
-export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun, onInvoiceLandlord, onCertificate, onForm }: {
+export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun, onInvoiceLandlord, onCertificate, onForm, bare = false }: {
   o: WorksOrder;
+  /** The caller draws the stage's name and blurb (the job page's Current Stage card). */
+  bare?: boolean;
   stage: StepId;
   move: (m: Move) => Promise<unknown>;
   busy: boolean;
@@ -137,7 +139,7 @@ export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun,
   const mv = async (m: Move) => { await move(m); };
   const meta = STEPS.find((s) => s.id === stage);
   if (stage === here && o.status !== "cancelled") {
-    return <WorksNow o={o} move={mv} busy={busy} err={err} canCorporate={canCorporate} canPayrun={canPayrun} onInvoiceLandlord={onInvoiceLandlord} onCertificate={onCertificate} />;
+    return <WorksNow o={o} move={mv} busy={busy} err={err} canCorporate={canCorporate} canPayrun={canPayrun} onInvoiceLandlord={onInvoiceLandlord} onCertificate={onCertificate} variant={bare ? "bare" : "card"} />;
   }
   const btn = "rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
   const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
@@ -214,6 +216,15 @@ export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun,
         )
         : <button type="button" onClick={() => onForm("paid")} className={primary}>Mark it paid</button>;
       break;
+  }
+  if (bare) {
+    return (
+      <div>
+        {o.status === "cancelled" && <p className="mb-3 text-[12.5px] text-accent-dark">The job is cancelled. Reopen it from the actions before moving it on.</p>}
+        {body}
+        {err && <p className="mt-3 text-[12px] text-accent-dark">{err}</p>}
+      </div>
+    );
   }
   return (
     <div className="rounded-2xl border border-line/60 bg-white p-4 sm:p-5">

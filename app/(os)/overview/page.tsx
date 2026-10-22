@@ -69,11 +69,6 @@ export default function Overview() {
       <PageHeader
         title="Overview"
         blurb="Your homes at a glance: what is late, what is coming up, and where to go next. Every figure is live from the screen it opens."
-        illustration="/illustrations/street.webp"
-        hideArtOnPhone
-        illustrationHeight={150}
-        illustrationAspect={3.11}
-        lineBreak="none"
       />
 
       {error && <p className="mt-6 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{error}</p>}

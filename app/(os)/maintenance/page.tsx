@@ -153,19 +153,6 @@ export default function Maintenance() {
             ? "The people who do the work. Your own book of trades beside the company's, each with a profile, their jobs and what they are owed."
             : "Every job on the managed book, reported through paid. Repairs run on an urgency; planned jobs like a gas safety run on a date. Nothing here is a note-to-self: a job carries its contractor, its quote, its invoice and who said yes."
         }
-        /* James's own artwork, trimmed to its ink so the drawing's ground
-           line IS the bottom edge of the file - which is what lands it ON the
-           rule rather than near it. Wide, so the aspect is passed and the
-           blurb reserves the real width. */
-        illustration="/illustrations/maintenance-selfie.webp"
-        /* Measured at 390px on 14 Sep 2026: the artwork landed on the "+ Plan a job" button.
-           The masthead's phone reserve is one measured guess and it does not
-           hold here, so on a phone the drawing goes and the words keep the
-           width. Nine other pages were checked and keep theirs. */
-        hideArtOnPhone
-        illustrationHeight={250}
-        illustrationAspect={1.7963}
-        lineBreak="none"
         searchValue={q}
         onSearch={setQ}
         searchPlaceholder="Search jobs, addresses, contractors…"

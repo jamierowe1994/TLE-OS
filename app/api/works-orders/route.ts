@@ -108,7 +108,10 @@ export async function POST(req: NextRequest) {
        and no works order goes until it is approved. */
     if ((b as { askQuote?: unknown }).askQuote === true && order.contractorId && b.send !== true) {
       const out: MoveOut = {};
-      const asked = await moveOrder(order.id, { action: "request_quote" }, by, out);
+      /* Several asked at once from the raise screen (James, 22 Oct 2026); the picked one always among them. */
+      const from = (b as { quoteFrom?: unknown }).quoteFrom;
+      const ids = Array.isArray(from) ? [...new Set([order.contractorId, ...from.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length < 64)])].slice(0, 8) : [];
+      const asked = await moveOrder(order.id, ids.length > 1 ? { action: "request_quote", contractorIds: ids } : { action: "request_quote" }, by, out);
       const sent = await emailsForMove(asked, "request_quote", subject ?? actor, out).catch(() => []);
       for (const e of sent) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
       return NextResponse.json({ ok: true, order: asked, emails: [...emails, ...sent] });

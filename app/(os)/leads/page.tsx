@@ -807,33 +807,6 @@ export default function Leads() {
                 }.`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
-        /* James's row of houses with the To Let board (10 Sep 2026), in place
-           of the seated scene.
-
-           SIZED BY WIDTH, like the street on Portfolio, and for the same
-           reason: at 2.66 wide, standing it at the seated scenes' 330 would
-           run it 878px across and leave the blurb a column. What sets the
-           number here is the footprint rather than the height - the text
-           block reserves the artwork's width as padding, and this page's
-           blurb is generated live from the REX counts, so it is the longest
-           on the OS and the first to wrap when that padding grows.
-
-           160 puts it at 426px, within three pixels of the 423 the seated
-           scene occupied. The masthead therefore measures exactly what it did
-           before the swap and nothing else on the page moves. 200, to match
-           the street, took it to 532 and pushed the rule down 59px - which on
-           the one week we have spent getting every masthead to the same depth
-           would have been the wrong trade for a slightly bigger drawing.
-
-           Pushed down 4% so the pavement runs into the line and is erased by
-           it, the same as every other scene. */
-        illustration="/illustrations/to-let-row.webp"
-        illustrationHeight={240}
-        illustrationNudge={26}
-        illustrationAspect={2.6615}
-        seat={0.96}
-        illustrationCrop
-        lineBreak="none"
         /* The bar under the header is the list's search - one search per
            page (James, 6 Sep 2026). */
         /* The board's search is the icon on the filter row (components/

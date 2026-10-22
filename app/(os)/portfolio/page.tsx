@@ -412,28 +412,6 @@ export default function Portfolio() {
       <PageHeader
         title="Properties"
         blurb={blurb}
-        /* A street, so it is short and wide rather than tall - 3.11 against
-           the roughly 1.2 of the scene pages. Sized by WIDTH rather than the
-           shared 250 height: at 250 it would run 777px across and squeeze the
-           blurb into a column. 200 puts it at 622, which leaves the text its
-           full measure.
-
-           Pushed down 4% so the pavement runs into the line and is erased by
-           it, the same as the other scenes. */
-        illustration="/illustrations/street.webp"
-        /* Pinned to the corner and a little smaller (1 Oct 2026). `seat`
-           (which sinks the pavement into the line) also gives a seated
-           figure's 166px inset - room for dangling feet to clear the search
-           row's button - and the header reserved that as well as the street.
-           With the sidebar open on a laptop that left the blurb a 60px
-           column, one word a line. A street has no feet and this row has no
-           button, so it sits in the corner, and at 180 tall it leaves the
-           blurb room on a 1280 screen as well as a big one. */
-        illustrationHeight={180}
-        flushRight
-        illustrationAspect={3.11}
-        seat={0.96}
-        illustrationCrop
         /* The book's search is the icon at the end of the row over the list
            (components/ListSearch, 11 Oct 2026); finding anything is ⌘K. */
         search={false}

@@ -110,6 +110,11 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const contractor = book.find((c) => c.id === contractorId) ?? null;
+  /* Others asked for a price at the same time (James, 22 Oct 2026: "they can
+     send out to multiple contractors"). Quotes only: one firm gets the works
+     order, so the rest are asked to price it and the one taken goes on the job. */
+  const [alsoAsk, setAlsoAsk] = useState<string[]>([]);
+  const askIds = contractorId ? [contractorId, ...alsoAsk.filter((x) => x !== contractorId)] : [];
 
   /* The managed book, for the address. Read once; the same list Compliance
      shows, so a home the tracker knows is a home a job can be raised on. */
@@ -260,7 +265,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         propertyLat: place.lat, propertyLng: place.lng,
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: planned ? new Date(dueAt).toISOString() : null,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-        tenants: onJob, landlordSkipped, send, askQuote,
+        tenants: onJob, landlordSkipped, send, askQuote, quoteFrom: askQuote ? askIds : undefined,
         tellTenants,
         skipped: steps.filter((x) => skipped.has(x.id)).map((x) => x.title),
       }),
@@ -268,7 +273,8 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "Could not raise the job.");
     /* The "message sent" moment James asked for, then the job itself. */
-    setSent({ order: r.order, to: send || askQuote ? contractor?.name ?? "the contractor" : null, quote: askQuote });
+    const askedNames = askIds.map((x) => book.find((c) => c.id === x)?.name).filter(Boolean) as string[];
+    setSent({ order: r.order, to: askQuote && askedNames.length > 1 ? `${askedNames.length} contractors` : send || askQuote ? contractor?.name ?? "the contractor" : null, quote: askQuote });
     setTimeout(() => onRaised(r.order), 1300);
   }
 
@@ -590,6 +596,19 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                 <label className={label}>Contractor<span className="font-normal normal-case tracking-normal"> - optional</span></label>
                 <ContractorPick contractors={book} value={contractorId} onChange={setContractorId} className={`mt-1 ${field}`} styled onAdd={() => setAddingContractor(true)} />
                 <p className={hint}>{contractor ? `${contractor.trade}${contractor.email ? ` · ${contractor.email}` : " · no email on file"}` : "From your book or the company's. Not on there? Add them."}</p>
+                {!planned && contractor && (
+                  <div className="mt-3">
+                    <label className={label}>Ask others for a quote too<span className="font-normal normal-case tracking-normal"> - optional</span></label>
+                    <FieldMultiSelect
+                      className="mt-1"
+                      values={alsoAsk.filter((x) => x !== contractorId)}
+                      onChange={setAlsoAsk}
+                      placeholder="Just them"
+                      options={book.filter((c) => c.active && c.id !== contractorId && c.email?.includes("@")).map((c) => ({ value: c.id, label: `${c.name} · ${c.trade}` }))}
+                    />
+                    <p className={hint}>Each gets their own link to price it. Whoever's quote is taken goes on the job.</p>
+                  </div>
+                )}
               </div>
               <div>
                 <label className={label}>Already booked?<span className="font-normal normal-case tracking-normal"> - optional</span></label>
@@ -846,7 +865,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                   {planned ? "Plan it without sending" : "Report it without sending"}
                 </button>
                 {!planned && <button type="button" disabled={busy} onClick={() => void raise(false, true)} className="rounded-full border border-ink/70 bg-white px-4 py-2 text-[12.5px] font-semibold hover:bg-panel disabled:opacity-50" title="They're emailed for a price. No works order goes until the landlord has approved it">
-                  Ask {contractor!.name} for a quote
+                  {askIds.length > 1 ? `Ask ${askIds.length} contractors for a quote` : `Ask ${contractor!.name} for a quote`}
                 </button>}
                 <PressButton onClick={() => void raise(true)} className={`flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></svg>

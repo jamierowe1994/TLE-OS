@@ -210,21 +210,6 @@ export default function Compliance() {
                 ? "The certificates didn't load just now, so nothing on this page has been checked. Try again in a minute."
                 : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
         }
-        /* James's own artwork, trimmed to its ink so the drawing's own
-           ground line IS the bottom edge of the file - that is what lands it
-           ON the rule rather than near it. A wide scene, so the aspect is
-           passed and the text block reserves the real width instead of the
-           measured steps for a tall figure. */
-        illustration="/illustrations/compliance-selfie.webp"
-        /* Measured at 390px on 14 Sep 2026: the artwork landed on the blurb, 34px across it.
-           The masthead's phone reserve is one measured guess and it does not
-           hold here, so on a phone the drawing goes and the words keep the
-           width. Nine other pages were checked and keep theirs. */
-        hideArtOnPhone
-        illustrationHeight={250}
-        illustrationAspect={1.7998}
-        illustrationNudge={-10}
-        lineBreak="none"
         actions={<WalkthroughLink step="compliance" />}
       />
 

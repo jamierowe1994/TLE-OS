@@ -819,12 +819,6 @@ export default function Listings() {
                 }.`
               : (book.reason ?? "Manage your properties and their marketing.")
         }
-        /* The stone crescent from the phone app's paintings (James, 5 Oct
-           2026). It replaced the lady reading, which sat apart from the rest;
-           the app's street was tried first and read oddly this small. */
-        illustration="/illustrations/app/crescent.webp"
-        illustrationAspect={1.3471}
-        lineBreak="none"
         /* The board's search is the icon on the filter row (components/
            ListSearch, 11 Oct 2026); finding anything is the sidebar's ⌘K. */
         search={false}

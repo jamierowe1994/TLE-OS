@@ -323,17 +323,6 @@ export default function Applications() {
             ? `${scope.label}'s lets in progress. An offer comes here once it is accepted; until then it is on its listing.`
             : "Every let in progress. An offer comes here once it is accepted; until then it is on its listing, still taking viewings."
         }
-        /* The line runs THROUGH her, at the waist. She is drawn full length
-           and set at twice the shared height, so 250 still shows above the
-           rule - the same as every other screen - and the rest is cut off
-           rather than hanging below it. No dip and no shadow: the line is not
-           bearing her weight, it is crossing her. */
-        illustration="/illustrations/applicant.webp"
-        illustrationHeight={500}
-        illustrationAspect={0.34}
-        seat={0.5}
-        illustrationCrop
-        lineBreak="none"
         actions={
           <span className="flex flex-wrap items-center gap-2">
             {/* Who should hear what, across every let (2 Oct 2026). */}

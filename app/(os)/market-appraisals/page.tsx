@@ -203,44 +203,6 @@ export default function MarketAppraisals() {
         guide="appraisals"
         title="Market Appraisals"
         blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
-        /* His hair starts near the very top of the artwork, so this one
-           cannot bleed off the top the way the dashboard does without taking
-           his head with it. 330 matches the height the other two scenes
-           stand at.
-
-           Pushed down 4% so the shadows under his feet run into the line and
-           are erased by it, rather than the whole scene stopping politely
-           above the rule. */
-        /* Named for the artwork, not the page. The first appraisals scene was
-           overwritten in place at this same path, so every browser that had
-           loaded the page kept serving the old one for the four hours the
-           cache-control allows - James saw the wrong man long after it went
-           live. A new drawing gets a new name from here on, and the old file
-           is deleted, so a swap can never be masked by a cache. */
-        illustration="/illustrations/appraisals-desk.webp"
-        /**
-         * Sunk to the middle of the desk legs.
-         *
-         * He stood at 330 with 0.96 above the rule - 317px of artwork over the
-         * line and 13 under it, which is a man behind a shelf rather than one
-         * at a desk that carries on below. 620 x 0.5 buried half of him but
-         * put the cut at the TOP of the legs and made him too big with it;
-         * James, 10 Sep 2026: "make him a touch smaller and then bring him up
-         * slightly... where the line cuts it off, it should be going about
-         * halfway through the legs of the desk."
-         *
-         * Smaller (620 → 520) and the seat lifted (0.5 → 0.58), which is both
-         * halves of that: less of him overall, and the line crossing further
-         * down the legs rather than at their top. 302px above the rule.
-         */
-        /* Smaller, and tucked further behind the desk (James, 11 Sep): his
-           head sits a touch above the title and never reaches the search
-           bar. 380 x 0.6 puts 228px of him above the rule. */
-        illustrationHeight={380}
-        seat={0.6}
-        illustrationAspect={0.9704}
-        illustrationCrop
-        lineBreak="none"
         /* The board's search is the icon at the list's top right
            (components/ListSearch, 11 Oct 2026); finding anything is ⌘K. */
         search={false}
