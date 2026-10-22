@@ -70,8 +70,14 @@ export interface ManagedProperty {
   rexLet?: boolean;
   /** REX PM's reference (PRP00341), where the home came from there. */
   ref?: string;
-  /** "payprop" when REX holds no rent and this one is PayProp's, collected now (2 Oct 2026). */
+  /** "payprop" when the rent is PayProp's rent invoice billed today - it wins over REX's (22 Oct 2026). */
   rentSource?: "payprop";
+  /** REX's agreed rent, where PayProp bills a different one today. For the record only. */
+  rentRex?: number | null;
+  /** No rent billed today, but PayProp has the next tenancy's rent set up from this day. Not counted until then. */
+  rentStarts?: { monthly: number; from: string } | null;
+  /** PayProp couldn't be read for this home, so "no rent" is not known. */
+  rentUnread?: boolean;
   /** A tester's own live-tenancy home (lib/test-overlay): shown to them alone, never counted. */
   test?: boolean;
   /**
@@ -123,8 +129,10 @@ export interface ManagedCounts {
   homesOccupied?: number;
   homesVacant?: number;
   upcomingVacancies?: number;
-  /** Homes whose rent is PayProp's because REX holds none (lib/managed-book). */
+  /** Homes whose rent is PayProp's rent invoice (lib/managed-book). */
   rentsFromPayProp?: number;
+  /** PayProp's rents couldn't be read at the last check (too old, or an agency unreachable). */
+  rentsUnread?: boolean;
 }
 
 export interface ManagedBook {

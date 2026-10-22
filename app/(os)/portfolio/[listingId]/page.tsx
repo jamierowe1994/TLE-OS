@@ -630,6 +630,9 @@ export default function PropertyPage() {
   const mayRelet = noticeIn || movedOut;
 
   const rentLine = p.rent == null ? null : `${money(p.rent)} ${p.rentPeriod === "week" ? "pw" : "pcm"}`;
+  /* No rent is said, never left as a dash (Lianna Denholm, 22 Oct 2026): the
+     next tenancy's rent where PayProp has one set up, or why there is none. */
+  const noRent = p.rentStarts ? `${money(p.rentStarts.monthly)} pcm from ${day(p.rentStarts.from)}` : p.rentUnread ? "Rent not read - PayProp couldn't be reached" : "No rent found";
 
   /* ── the latest activity: every board's newest, one list ─────────────── */
   const reading = [works, visits, ending, notices, certs, drafts].some((x) => x.state === "loading");
@@ -820,9 +823,11 @@ export default function PropertyPage() {
                   {!p.test && <ServiceTag listingId={String(p.listingId)} />}
                 </div>
               </div>
-              {(houseView && house && !lets ? houseLine : rentLine) && (
+              {(houseView && house && !lets ? houseLine : rentLine) ? (
                 <p className="figures mt-1.5 text-[20px] font-semibold">{houseView && house && !lets ? houseLine : rentLine}</p>
-              )}
+              ) : !(houseView && house && !lets) && !p.test ? (
+                <p className="mt-1.5 text-[14px] text-muted">{noRent}</p>
+              ) : null}
               <p className="mt-1 text-[13px] text-muted">{sub}</p>
               {!/^pm-/i.test(String(propertyId ?? "")) && <OsAddressLine propertyId={propertyId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />}
               {house && (
@@ -1135,7 +1140,7 @@ export default function PropertyPage() {
                   {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px]">
                       <Fact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"} />
-                      <Fact label="Rent" value={rentLine ?? "Not set"} />
+                      <Fact label="Rent" value={rentLine ?? noRent} />
                       <Fact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : day(p.letSince)} />
                       <Fact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : "Rolling, no end date") : "—"} />
                       <Fact label="Deposit" value={tenancy.data.tenancy?.depositId ? `Registered · ${tenancy.data.tenancy.depositId}` : "—"} />

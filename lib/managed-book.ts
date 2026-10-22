@@ -3,8 +3,7 @@ import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
-import { matchHome, rentBook } from "@/lib/rent-status";
-import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
+import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
 import { attach, payPropPeople, personKey } from "@/lib/business/payprop-tenant-contacts";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty } from "@/lib/rex-tenants";
@@ -380,14 +379,18 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   const owned = rexUserId ? await propertiesOwnedBy(rexUserId) : null;
   /* PayProp, read here: its responsible agent counts towards an agent's book
      below, and its rent and agent fill the book at the end. */
-  const [pp, reg] = await Promise.all([getPortfolioBook().catch(() => null), getTenancyRegister().catch(() => null)]);
-  const ppBook = pp?.agentById ? await rentBook().catch(() => null) : null;
+  const pp = await getPortfolioBook().catch(() => null);
+  /* The 10am/4pm read: the rent invoices and PayProp's addresses. Its
+     responsible agents are used whatever its age; its rents only while it is
+     fresh enough to show (the rent box's rule). */
+  const agentBook = await rentBook().catch(() => null);
+  const ppBook = agentBook && isFresh(agentBook) ? agentBook : null;
   const plain = (n: string) => { const w = n.replace(/\(.*?\)/g, " ").toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/); return `${w[0] ?? ""} ${w[w.length - 1] ?? ""}`; };
   /* PayProp's responsible agent on a home, on a sure address match; its
      office buckets ("TLE", "Admin property") are not people. */
   const payPropAgent = (home: { name: string; address?: string | null; postcode: string | null }): string | null => {
-    if (!ppBook || !pp?.agentById) return null;
-    const hit = matchHome(ppBook, home);
+    if (!agentBook || !pp?.agentById) return null;
+    const hit = matchHome(agentBook, home);
     if (typeof hit !== "object") return null;
     const who = pp.agentById[hit.id]?.agent?.trim();
     return who && !/^(tle|admin property|fully managed|howard|\(none\))$/i.test(who) ? who : null;
@@ -624,28 +627,37 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       }
     }
   }
-  /* PayProp's rent where REX holds none (2 Oct 2026). 234 of the 527 homes
-     had no rent in REX, so the rent roll was short by a third. PayProp's is
-     the rent being collected now, read live; an account the OS cannot reach
-     (E&W while its connection is down) adds nothing rather than an old figure.
-     Never overrides a rent REX does hold - where the two disagree is the
-     Rent Check's business, not the book's. */
-  /* The Rent invoice first (9 Oct 2026): what the tenant is billed. The
-     property's monthly_payment_required setting is the fallback only, as it
-     goes stale - 6 Ruskin Place showed £1,000 against a £1,200 invoice. A
-     register over a day old is not used for this. */
-  const invoiced = reg?.rentByRentKey && Date.now() - Date.parse(reg.computedAt) < 26 * 3_600_000 ? reg.rentByRentKey : null;
-  if (pp?.rentByKey || invoiced) {
-    for (const p of properties) {
-      if (p.rentMonthly) continue;
-      const key = rentKey(p.address || p.name, p.postcode);
-      const rent = invoiced?.[key] ?? pp?.rentByKey?.[key];
-      if (!rent) continue;
-      p.rent = rent;
+  /* THE RENT (rewritten 22 Oct 2026, Lianna Denholm's missing rents).
+     PayProp's rent invoice billed today is the rent: what the tenant is
+     charged now. REX's figure is the rent agreed when the home was let, and
+     24 homes had moved on since (11 Upper Craigour: REX £1,450, billed
+     £1,600), so PayProp's wins where it bills one and REX stands in where it
+     doesn't (Let Only homes, mostly). Never PayProp's monthly_payment_required:
+     it is a setting, £1,000 on nearly every Edinburgh home, and the old
+     fallback put it on homes as their rent. Where nothing is billed today but
+     a new tenancy is set up, the home carries that rent and its first day,
+     not counted until then. Where there is no rent at all the screens say
+     "No rent found"; where PayProp couldn't be read, they say that. */
+  const ppDown = !ppBook || ppBook.unreachable.length > 0;
+  for (const p of properties) {
+    if (p.test) continue;
+    const hit = ppBook ? matchHome(ppBook, p) : "none";
+    const billed = typeof hit === "object" ? payPropRent(ppBook!, hit) : null;
+    if (billed?.now) {
+      if (p.rentMonthly != null && Math.abs(p.rentMonthly - billed.now.monthly) >= 0.5) p.rentRex = p.rentMonthly;
+      p.rent = billed.now.monthly;
       p.rentPeriod = "month";
-      p.rentMonthly = rent;
+      p.rentMonthly = billed.now.monthly;
       p.rentSource = "payprop";
+      continue;
     }
+    if (p.rentMonthly) continue;
+    p.rent = null;
+    p.rentPeriod = null;
+    p.rentMonthly = null;
+    if (billed?.next) p.rentStarts = billed.next;
+    /* No answer from PayProp for this home's agency is not "no rent". */
+    else if (ppDown && typeof hit !== "object") p.rentUnread = true;
   }
   /* PAYPROP'S AGENT WHERE NOTHING ELSE NAMES ONE (James, 12 Oct 2026). 23
      homes had no agent in REX or REX PM; PayProp's responsible agent named
@@ -654,7 +666,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      PayProp's office buckets ("TLE", "Admin property") are not people and
      leave it blank. The REX user id is the one that agent's REX homes carry,
      so the filter by agent finds both. */
-  if (ppBook) {
+  if (agentBook) {
     const known = new Map<string, { id: string; name: string }>();
     for (const p of properties) if (p.agent && !p.agent.id.startsWith("name:")) known.set(plain(p.agent.name), p.agent);
     for (const p of properties) {
@@ -668,6 +680,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   const landlords = landlordsOf(currentLets(properties));
   const counts = countsOf(properties, landlords);
   counts.rentsFromPayProp = currentLets(properties).filter((p) => p.rentSource === "payprop").length;
+  if (ppDown) counts.rentsUnread = true;
   if (pm) Object.assign(counts, pmCounts(pm, rexUserId ? new Set(properties.map((p) => String(p.propertyId ?? ""))) : null));
   return {
     properties,

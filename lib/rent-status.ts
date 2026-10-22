@@ -4,7 +4,8 @@ import { payPropAccounts, payPropCanAuth, payPropGet, payPropGetAll, type PayPro
 import { readCache, writeCache } from "@/lib/business/integration-cache";
 import { hasDb, q } from "@/lib/db";
 import { getRentReceived } from "@/lib/business/payprop-income";
-import { rentKey } from "@/lib/business/payprop-portfolio";
+import { homeRents, payPropInvoices, type HomeRents } from "@/lib/business/payprop-rent-invoices";
+import { matchPayPropHome } from "@/lib/payprop-home-match";
 import { isMargoHome, MARGO_PORTFOLIO } from "@/lib/business/margo-portfolio";
 
 /**
@@ -18,13 +19,15 @@ import { isMargoHome, MARGO_PORTFOLIO } from "@/lib/business/margo-portfolio";
  *                            last payment, the rent invoice and its day
  *   export/properties        PayProp's own property ids and addresses, to
  *                            find THIS home among them
+ *   export/invoices          the recurring rent invoices: the rent itself,
+ *                            per home and per tenant (22 Oct 2026)
  *   report/all-payments      via getRentReceived: when rent landed, and
  *                            whether the landlord has been paid on
  *
  * Matching is the dangerous part - a wrong match tells an agent a tenant owes
  * who does not. So a home is joined to a PayProp property only when exactly
- * one has its address and postcode (rentKey), with the full first line to
- * tell flats on one street apart. Anything less certain says "not matched",
+ * one is the same door (lib/payprop-home-match: street, building, flat and
+ * postcode, 22 Oct 2026). Anything less certain says "not matched",
  * never a figure. An agency PayProp cannot be reached says so too, and no
  * number is shown from before (the live-figures rule).
  *
@@ -59,6 +62,7 @@ export type TenantBalance = {
   /** What PayProp's balance says, including any invoice raised ahead. */
   balanceOwed: number;
   lastPayment: string | null;
+  /** The tenant's own rent invoice today, a month's worth (22 Oct 2026). Null when PayProp bills them no recurring rent. */
   rent: number | null;
   lastInvoice: string | null;
   /** Day of the month the rent falls due, from the rent invoice. */
@@ -78,7 +82,7 @@ type PpProperty = {
    *  Scotland a percentage (measured 12 Oct 2026). Absent on a copy read
    *  before the fee was carried. */
   commission?: { amount: number; percentage: number } | null;
-  /** monthly_payment_required - stale on some homes, so only a fallback. */
+  /** monthly_payment_required: a setting, not a rent (£1,000 on nearly every Edinburgh home). Never shown as the rent. */
   mpr?: number | null;
   /** PayProp's responsible agent, as spelt there (Margo's portfolio). */
   agent?: string;
@@ -98,9 +102,15 @@ type Book = {
   /** Agencies whose tags PayProp would not show us. E&W's connection lacks
    *  read:entity:tags (403, measured 12 Oct 2026). */
   tagsUnread?: PayPropAccountId[];
+  /** The rent invoices, keyed "account|PayProp property id" (and "|tenant id" for byTenant). See lib/business/payprop-rent-invoices homeRents. */
+  rentNow: HomeRents["now"];
+  rentByTenant: HomeRents["byTenant"];
+  rentNext: HomeRents["next"];
 };
 
-const KEY = "rent-status:v4";
+/* v5 (22 Oct 2026): carries the rent invoices. A v4 copy has none, so it is
+   not read - the next cron tick reads PayProp afresh. */
+const KEY = "rent-status:v5";
 /** The reads, London time: 10am and 4pm. */
 const READ_HOURS = [10, 16];
 /** Older than this and the copy is not shown. The longest gap between reads
@@ -141,19 +151,33 @@ async function compute(): Promise<Book | null> {
   const unreachable: PayPropAccountId[] = [];
   const tags: Record<string, string[]> = {};
   const tagsUnread: PayPropAccountId[] = [];
+  const rentNow: Book["rentNow"] = {};
+  const rentByTenant: Book["rentByTenant"] = {};
+  const rentNext: Book["rentNext"] = {};
   for (const account of accounts) {
     if (!(await payPropCanAuth(account).catch(() => false))) {
       unreachable.push(account);
       continue;
     }
-    const [b, p] = await Promise.all([
+    const [b, p, inv] = await Promise.all([
       payPropGetAll<BalanceRow>(account, "report/tenant/balances").catch(() => null),
       payPropGetAll<PropertyRow>(account, "export/properties", { include_commission: true }).catch(() => null),
+      payPropInvoices(account).catch(() => null),
     ]);
-    if (!b || !p) {
+    if (!b || !p || !inv) {
       unreachable.push(account);
       continue;
     }
+    /* THE RENT IS THE RENT INVOICE (22 Oct 2026). The balance report's
+       "invoice" is whatever PayProp last set up for the tenant: a let-only
+       home's one-off first month, a student's termly £1,712.30, a quarterly
+       £1,755, the landlord's £81 management fee, an "Admin Tenant" £27,600.
+       The rent box showed those as the rent. Now each tenant's rent is their
+       recurring rent invoice in force today, or nothing. */
+    const rents = homeRents(inv);
+    for (const [id, r] of Object.entries(rents.now)) rentNow[`${account}|${id}`] = r;
+    for (const [k, r] of Object.entries(rents.byTenant)) rentByTenant[`${account}|${k}`] = r;
+    for (const [id, r] of Object.entries(rents.next)) rentNext[`${account}|${id}`] = r;
     for (const r of b) {
       const propertyId = text(r.property?.id);
       if (!propertyId || r.tenant?.is_active === false) continue;
@@ -173,7 +197,7 @@ async function compute(): Promise<Book | null> {
         owed: Math.max(0, Math.round((balanceOwed - ahead) * 100) / 100),
         balanceOwed,
         lastPayment: text(r.last_payment?.date) || null,
-        rent: money(r.invoice?.amount) || money(r.last_invoice?.amount) || null,
+        rent: rentByTenant[`${account}|${propertyId}|${text(r.tenant?.id)}`] ?? null,
         lastInvoice: text(r.last_invoice?.date) || null,
         paymentDay: Number.isFinite(day) && day >= 1 && day <= 31 ? day : null,
         tenancyStart: text(r.invoice?.start_date) || null,
@@ -219,7 +243,7 @@ async function compute(): Promise<Book | null> {
     }
     rents.push({ month, byProperty });
   }
-  return { at: Date.now(), balances, properties, unreachable, rents, tags, tagsUnread };
+  return { at: Date.now(), balances, properties, unreachable, rents, tags, tagsUnread, rentNow, rentByTenant, rentNext };
 }
 
 /**
@@ -337,20 +361,26 @@ export async function runDailyRentRead(now = new Date()): Promise<{ skipped?: st
   return { started: slot };
 }
 
-/** The one PayProp property that is this home, or why there isn't one. */
+/** The one PayProp property that is this home, or why there isn't one (lib/payprop-home-match). */
 export function matchHome(book: Book, home: { name: string; address?: string | null; postcode: string | null }): { id: string; account: PayPropAccountId } | "none" | "unsure" {
-  const want = rentKey(home.address || home.name, home.postcode);
-  if (!want) return "none";
-  const same = book.properties.filter((p) => rentKey(p.name || p.firstLine, p.postcode) === want || rentKey(p.firstLine || p.name, p.postcode) === want);
-  const ids = [...new Map(same.map((p) => [`${p.account}|${p.id}`, p])).values()];
-  if (ids.length === 1) return { id: ids[0].id, account: ids[0].account };
-  if (ids.length > 1) {
-    /* Flats on one street: the whole first line has to agree. */
-    const line = norm(home.name);
-    const exact = ids.filter((p) => norm(p.name) === line || norm(p.firstLine) === line);
-    return exact.length === 1 ? { id: exact[0].id, account: exact[0].account } : "unsure";
-  }
-  return "none";
+  const hit = matchPayPropHome(home, book.properties, (p) => Boolean(book.rentNow?.[`${p.account}|${p.id}`]));
+  return typeof hit === "object" ? { id: hit.id, account: hit.account as PayPropAccountId } : hit;
+}
+
+/**
+ * What PayProp bills this home today: its rent invoices, a month's worth.
+ * Null when it bills no rent - never PayProp's monthly_payment_required,
+ * which is a setting (£1,000 on nearly every Edinburgh home, 22 Oct 2026),
+ * not a rent. `next` is the coming tenancy's rent where none is billed today.
+ */
+export function payPropRent(book: Book, hit: { id: string; account: PayPropAccountId }): { now: { monthly: number; filedAs: string | null } | null; next: { monthly: number; from: string } | null } {
+  const key = `${hit.account}|${hit.id}`;
+  return { now: book.rentNow?.[key] ?? null, next: book.rentNext?.[key] ?? null };
+}
+
+/** Young enough to show figures from (the same rule as the rent box). */
+export function isFresh(book: Book): boolean {
+  return Date.now() - book.at <= TOO_OLD_MS;
 }
 
 /** The day rent last fell due on or before `now`, for a monthly payment day. */
@@ -497,10 +527,9 @@ export async function serviceFor(home: { name: string; address?: string | null; 
   const tags = unread ? null : book.tags?.[`${hit.account}|${hit.id}`] ?? [];
   const tagged = tags?.map((t) => ({ kind: serviceKind(t), tag: t })).find((t) => t.kind) ?? null;
 
-  /* The fee against the rent PayProp bills now: the current tenants' rent
-     invoices, else the property's monthly figure. */
-  const rentNow = book.balances.filter((b) => b.account === hit.account && b.propertyId === hit.id && current(b)).reduce((a, b) => a + (b.rent ?? 0), 0);
-  const rent = rentNow > 0 ? Math.round(rentNow * 100) / 100 : pp?.mpr ?? null;
+  /* The fee against the rent PayProp bills now: the home's rent invoices.
+     Not the property's monthly_payment_required - a setting, not a rent. */
+  const rent = payPropRent(book, hit).now?.monthly ?? null;
   const c = pp?.commission;
   const fee = !c
     ? null

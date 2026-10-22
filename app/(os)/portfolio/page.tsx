@@ -466,8 +466,10 @@ export default function Portfolio() {
             <StatCard
               icon="coin"
               label="Rent roll"
-              value={book ? <>{money(book.counts.rentRoll)}<span className="text-[13px] text-muted"> pcm</span></> : <FindingData label="" />}
-              hint={book && `${money(book.counts.managedRentRoll)} on homes we manage or collect rent for. REX's agreed rent on each home's current let${book.counts.rentsFromPayProp ? `, or PayProp's where REX has none (${book.counts.rentsFromPayProp} homes)` : ""}. Average ${money(book.counts.avgRent)} pcm.`}
+              value={!book ? <FindingData label="" /> : book.counts.rentsUnread ? <span className="text-[15px] text-muted">Not read</span> : <>{money(book.counts.rentRoll)}<span className="text-[13px] text-muted"> pcm</span></>}
+              hint={book && (book.counts.rentsUnread
+                ? "PayProp's rents couldn't be read at the last check, so the rent roll isn't shown rather than a short one."
+                : `${money(book.counts.managedRentRoll)} on homes we manage or collect rent for. The rent PayProp bills today${book.counts.rentsFromPayProp ? ` (${book.counts.rentsFromPayProp} homes)` : ""}, or REX's agreed rent where PayProp bills none. Average ${money(book.counts.avgRent)} pcm.`)}
             />
             <StatCard
               icon="user"
@@ -548,7 +550,7 @@ export default function Portfolio() {
 
           {book && filtering && (
             <p className="mt-2 text-[11.5px] text-muted">
-              {filteredHomes.length} of {book.counts.properties} properties · {money(rentRoll)} pcm ·{" "}
+              {filteredHomes.length} of {book.counts.properties} properties · {book.counts.rentsUnread ? "rents not read" : `${money(rentRoll)} pcm`} ·{" "}
               <button type="button" onClick={() => { setQ(""); setService(null); setAgent(null); setTown(null); setLookOnly(false); setNotOnRexOnly(false); setReletOnly(false); }} className="underline hover:text-ink">
                 clear
               </button>
@@ -594,7 +596,16 @@ export default function Portfolio() {
                             </span>
                           </span>
                           <span className="figures text-[13px] md:text-[13px]">
-                            {money(rent)}<span className="text-[10.5px] text-muted"> pcm</span>
+                            {rent ? (
+                              <>{money(rent)}<span className="text-[10.5px] text-muted"> pcm</span></>
+                            ) : !house && p.rentStarts ? (
+                              <>
+                                <span className="block">{money(p.rentStarts.monthly)}<span className="text-[10.5px] text-muted"> pcm</span></span>
+                                <span className="block text-[10.5px] text-muted">from {shortDay(p.rentStarts.from)}</span>
+                              </>
+                            ) : (
+                              <span className="font-sans text-[11.5px] text-muted">{!house && p.rentUnread ? "Not read" : "No rent found"}</span>
+                            )}
                           </span>
                           <span className="hidden md:block">
                             {p.service ? <Pill tone={p.service === "Managed" ? "good" : "neutral"}>{p.service}</Pill> : <span className="text-[11px] text-muted">Not set</span>}
