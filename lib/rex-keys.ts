@@ -19,6 +19,8 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 export interface KeySet {
   id: string;
   label: string;
+  /** What the set is, as REX has it: "FRONT DOOR KEY", "2 x Yale 1 x UAP". */
+  description: string | null;
   /** Where it lives when nobody has it — "Office", a safe, a keybox. */
   location: string | null;
   /** Currently signed out to whom, if anyone. */
@@ -31,6 +33,7 @@ export interface KeySet {
 interface RexKey extends Record<string, unknown> {
   id?: string | number;
   label?: string | null;
+  description?: string | null;
   location?: { name?: string } | null;
   property?: { id?: string | number } | number | null;
   latest_history?: {
@@ -81,6 +84,7 @@ export async function fetchKeys(propertyIds: string[]): Promise<Record<string, K
       (out[pid] ??= []).push({
         id: String(k.id ?? ""),
         label: k.label ?? "Key set",
+        description: k.description?.trim() || null,
         location: k.location?.name ?? null,
         heldBy: held.who,
         reason: held.reason,

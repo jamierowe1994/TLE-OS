@@ -5,16 +5,21 @@ import DoodleIcon from "@/components/DoodleIcon";
 
 /**
  * The Keys line on a home's page (Sean McMahon, 20 Oct 2026: "Where do we
- * find key numbers?"). The number on each tag, where the set is kept and who
+ * find key numbers?"), and on a listing's page (James, 22 Oct 2026), with
+ * what each set is - "front door", "2 x Yale 1 x UAP" - as REX describes it. The number on each tag, where the set is kept and who
  * has it out, from REX's key register, plus any number recorded in the OS.
  * Add a key number records one in the OS only (/api/property/keys).
  */
 
-type Key = { id: string; label: string; location: string | null; heldBy: string | null; since: string | null; source: "rex" | "os" };
+type Key = { id: string; label: string; description?: string | null; location: string | null; heldBy: string | null; since: string | null; source: "rex" | "os" };
+
+/* REX's descriptions are often typed in capitals ("FRONT DOOR KEY"):
+   shown in ordinary case, so a line of them doesn't shout. */
+const plain = (s: string) => (s === s.toUpperCase() ? s.charAt(0) + s.slice(1).toLowerCase() : s);
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-export default function HomeKeys({ propertyId }: { propertyId: string | null }) {
+export default function HomeKeys({ propertyId, listingId = null }: { propertyId: string | null; listingId?: string | number | null }) {
   const [state, setState] = useState<{ status: "loading" } | { status: "ready"; keys: Key[]; rexFailed: boolean } | { status: "error"; message: string }>({ status: "loading" });
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
@@ -26,7 +31,7 @@ export default function HomeKeys({ propertyId }: { propertyId: string | null }) 
     if (!propertyId) return;
     let live = true;
     setState({ status: "loading" });
-    fetch(`/api/property/keys?property=${encodeURIComponent(propertyId)}`, { cache: "no-store" })
+    fetch(`/api/property/keys?property=${encodeURIComponent(propertyId)}${listingId != null ? `&listing=${encodeURIComponent(String(listingId))}` : ""}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (!live) return;
@@ -34,14 +39,14 @@ export default function HomeKeys({ propertyId }: { propertyId: string | null }) 
       })
       .catch(() => live && setState({ status: "error", message: "The keys couldn't be read." }));
     return () => { live = false; };
-  }, [propertyId]);
+  }, [propertyId, listingId]);
 
   async function send(body: Record<string, unknown>) {
     if (!propertyId) return;
     setBusy(true);
     setNote(null);
     try {
-      const j = await fetch("/api/property/keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ property: propertyId, ...body }) }).then((r) => r.json());
+      const j = await fetch("/api/property/keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ property: propertyId, ...(listingId != null ? { listing: String(listingId) } : {}), ...body }) }).then((r) => r.json());
       if (!j?.ok) { setNote(j?.error ?? "That didn't save. Try again in a minute."); return; }
       setState({ status: "ready", keys: j.keys as Key[], rexFailed: Boolean(j.rexFailed) });
       setAdding(false);
@@ -77,13 +82,16 @@ export default function HomeKeys({ propertyId }: { propertyId: string | null }) 
             {keys.length === 0 ? (
               <span className="block text-[13px] text-muted">{state.rexFailed ? "The key register couldn't be read" : "None recorded"}</span>
             ) : (
-              <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-[13px]">
+              <span className="block space-y-0.5 text-[13px] leading-snug">
+                {/* One line of text per set, so a long description wraps
+                    like a sentence on a phone rather than into a column. */}
                 {keys.map((k) => (
-                  <span key={k.id} className="inline-flex items-center gap-1">
+                  <span key={k.id} className="block">
                     <b className="font-semibold">{k.label}</b>
-                    {k.location && <span className="text-muted">· {k.location}</span>}
+                    {k.description && <> · {plain(k.description)}</>}
+                    {k.location && <span className="text-muted"> · {k.location}</span>}
                     {k.source === "os" && (
-                      <button type="button" disabled={busy} onClick={() => void send({ remove: k.id })} className="text-[11px] text-muted hover:text-accent-dark disabled:opacity-50" aria-label={`Take key ${k.label} off`}>
+                      <button type="button" disabled={busy} onClick={() => void send({ remove: k.id })} className="ml-1.5 text-[11px] text-muted hover:text-accent-dark disabled:opacity-50" aria-label={`Take key ${k.label} off`}>
                         Remove
                       </button>
                     )}
