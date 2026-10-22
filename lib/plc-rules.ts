@@ -387,6 +387,22 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
     },
   ],
 
+  /* Terms of business never expire and have no end date (Lianna, 21 Oct
+     2026, 6 Ruskin Place). Signed by the landlord for this home is the whole
+     question; the right document and the address are asked above. */
+  "terms-of-business": (f) => {
+    if (f.signed === "yes") {
+      return [{ verdict: "pass", rule: "Signed", because: "The landlord has signed the terms of business." }];
+    }
+    return [
+      {
+        verdict: "review",
+        rule: f.signed === "no" ? "Not signed" : "Signature not confirmed",
+        because: f.signed === "no" ? "the landlord has not signed these terms." : "I could not see the landlord's signature on these terms.",
+      },
+    ];
+  },
+
   "tenancy-agreement": (f) => {
     const out: RuleResult["reasons"] = [];
     if (f.signed === "yes") {

@@ -107,6 +107,22 @@ function askFor(doc: PlcDocument, c: PlcCase): string {
 The property is ${c.address}. The tenancy is due to start on ${moveIn}.
 The file is named "${doc.name}".`;
 
+  /* Terms of business have no expiry and no end date, and saying so read as
+     a problem (21 Oct 2026, 6 Ruskin Place). Asked for what matters instead. */
+  if (doc.checkId === "terms-of-business") {
+    return `${common}
+
+These are the letting agent's terms of business. They never expire and have no
+end date, so do not mention an expiry, an end date or how long they last. Any
+other dates printed in them (a landlord registration, a licence) belong to
+something else: leave them out of the expiry. Report:
+- what the document actually is
+- whether the landlord has signed it, and the date
+- the property address printed on it, and whether it matches ${c.address}
+- the service level and fees it sets out
+- anything left blank that compliance would need`;
+  }
+
   switch (check?.scan) {
     case "dates":
       return `${common}

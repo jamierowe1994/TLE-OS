@@ -11,13 +11,14 @@ import {
   recordScan,
   recordSentAnyway,
   reopenCase,
+  setClauses,
   setRlpWanted,
   submitCase,
   unwaiveCheck,
   updateDetails,
   waiveCheck,
 } from "@/lib/plc-store";
-import { gateFor, missingDocuments, PLC_CHECKS, rlpAnswered, scanSummary, sortFindings, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
+import { clausesAnswered, gateFor, missingDocuments, PLC_CHECKS, readingStillFresh, rlpAnswered, scanSummary, sortFindings, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName, currentUser } from "@/lib/plc-actor";
 import { isPlcApprover, plcApproverNames } from "@/lib/plc-approvers";
@@ -169,16 +170,6 @@ function sentAnyway(findings: ScanOutcome["findings"], anyway: { by: string; rea
   );
 }
 
-/** The last reading still describes this pack: nothing filed or waived since, and every flagged document still on it. */
-function preflightStillFresh(c: PlcCase): boolean {
-  if (!c.scannedAt || !c.findings.some((f) => f.level === "blocker")) return false;
-  const at = Date.parse(c.scannedAt);
-  const changed = [...c.documents.map((d) => d.addedAt), ...(c.waivers ?? []).map((w) => w.at)].some((t) => t && Date.parse(t) > at);
-  if (changed) return false;
-  const names = new Set(c.documents.map((d) => d.name));
-  return c.findings.every((f) => !f.documentName || names.has(f.documentName));
-}
-
 async function finishSend(
   id: string,
   current: PlcCase,
@@ -192,7 +183,7 @@ async function finishSend(
   let wentPast: SentAnyway["warnings"] = [];
   const pastOf = (f: ScanOutcome["findings"]) =>
     f.filter((x) => x.level === "blocker").map((x) => ({ checkId: x.checkId, message: x.message, ...(x.documentName ? { documentName: x.documentName } : {}) }));
-  if (anyway && preflightStillFresh(current)) {
+  if (anyway && readingStillFresh(current)) {
     /* Sent anyway on the reading just done: no second read of the pack. */
     const softened = softenWaived(current, current.findings);
     wentPast = pastOf(softened);
@@ -365,6 +356,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             { status: 409 }
           );
         }
+        if (!testCase && !clausesAnswered(current)) {
+          return NextResponse.json(
+            { ok: false, error: "Say whether there are any additional clauses first.", ...(await payload(current, req)) },
+            { status: 409 }
+          );
+        }
         const gate = gateFor(current);
         if (!gate.ready) {
           return NextResponse.json(
@@ -394,8 +391,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const anyway = anywayReason
           ? { by: await actorName(req, "Agent"), email: (await currentUser(req))?.email?.toLowerCase() ?? null, reason: anywayReason }
           : null;
+        /* Send again on the reading just done (21 Oct 2026, 6 Ruskin Place:
+           three Sends, three full reads, the same guarantor ID each time).
+           Nothing has changed, so the answer can't either: say so at once,
+           and point at Send anyway, rather than read every file again. */
+        if (!anyway && !testCase && current.state === "assembling" && readingStillFresh(current)) {
+          const n = current.findings.filter((f) => f.level === "blocker").length;
+          return NextResponse.json(
+            {
+              ok: false,
+              error: `Nothing has changed since the last reading, so the same ${n === 1 ? "thing" : `${n} things`} would stop it again. Replace the document, or say why it's fine and use Send anyway.`,
+              ...(await payload(current, req)),
+            },
+            { status: 409 }
+          );
+        }
         /* On the reading just done, Send anyway is quick: answered here, not in the background. */
-        if (body.async && scanConfigured() && current.state === "assembling" && current.moveInDate && !(anyway && preflightStillFresh(current))) {
+        if (body.async && scanConfigured() && current.state === "assembling" && current.moveInDate && !(anyway && readingStillFresh(current))) {
           const running = sendJobs.get(id);
           if (!running || running.done) {
             for (const [k, j] of sendJobs) if (j.done && Date.now() - j.at > KEEP_MS) sendJobs.delete(k);
@@ -492,6 +504,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           return NextResponse.json({ ok: false, error: "Yes or no." }, { status: 400 });
         }
         const set = await setRlpWanted(id, body.wanted);
+        return NextResponse.json({ ok: true, ...(await payload(set, req)) });
+      }
+
+      case "clauses": {
+        /* Additional clauses for the tenancy agreement (21 Oct 2026): yes with
+           the wording, or no. Kirstie copies them into the Propoly deal. */
+        if (typeof body.wanted !== "boolean") {
+          return NextResponse.json({ ok: false, error: "Yes or no." }, { status: 400 });
+        }
+        const text = typeof body.note === "string" ? body.note : "";
+        const set = await setClauses(id, body.wanted, text, await actorName(req, "Agent"));
         return NextResponse.json({ ok: true, ...(await payload(set, req)) });
       }
 

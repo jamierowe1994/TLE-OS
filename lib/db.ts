@@ -2754,6 +2754,7 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_wanted BOOLEAN;
 -- Ordinary home or HMO, which decides whether the HMO documents are needed (6 Oct 2026).
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS let_type TEXT;
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_request JSONB;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS clauses JSONB;
 -- The home's Documents-tab files already offered to this pack (8 Oct 2026, Kirstie:
 -- uploaded on the board, then had to upload them all again on the PLC). Kept so a
 -- file the agent took off the pack is not brought back in the next time it opens.
