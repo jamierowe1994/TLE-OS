@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { PROPOLY_NAME_MAX, propolyExtension, propolyFileName, propolyTypeFor } from "@/lib/propoly-names";
 import {
   CHECK_GROUPS,
   COVERABLE,
@@ -552,6 +553,7 @@ export default function PlcDocuments({
             })}
           </div>
         )}
+        <PropolyNameNote doc={d} />
         {d.checkId === "other" && (
           <OtherLabel
             key={`${d.key}:${d.label ?? ""}`}
@@ -829,6 +831,45 @@ export default function PlcDocuments({
   );
 }
 
+/**
+ * The red box under a file Propoly would turn away or cut short (22 Oct 2026,
+ * James: "say, in a little red box underneath, that it only takes 40
+ * characters as a maximum"). Five packs on 21-22 Oct had a file refused for a
+ * long name, and two for being Word files. The push now shortens a long name
+ * itself; this says so while the agent can still rename the file. Only for
+ * files that go to Propoly, and not under Anything else once it has its own
+ * name (that name is what goes, and its box warns as it is typed).
+ */
+const RED_BOX = "rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800";
+
+function PropolyNameNote({ doc }: { doc: PlcDocument }) {
+  if (doc.placeholder || !propolyTypeFor(doc.checkId, doc.name)) return null;
+  if (doc.checkId === "other" && doc.label) return null;
+  const name = doc.name.split(/[\\/]/).pop() ?? doc.name;
+  const ext = name.match(/\.([A-Za-z0-9]{1,5})$/)?.[1];
+  if (ext && !propolyExtension(name, "")) {
+    return (
+      <div className="order-last w-full pl-[3.25rem]">
+        <p className={RED_BOX}>
+          Propoly only takes PDF, JPG or PNG files, so this .{ext.toLowerCase()} won&apos;t go into Propoly. Save it as a PDF and add it again.
+        </p>
+      </div>
+    );
+  }
+  if (name.length <= PROPOLY_NAME_MAX) return null;
+  return <LongNameBox length={name.length} sent={propolyFileName(name)} what="file name" fix="Rename the file and add it again" />;
+}
+
+function LongNameBox({ length, sent, what, fix, inset = true }: { length: number; sent: string; what: string; fix: string; inset?: boolean }) {
+  return (
+    <div className={`order-last w-full ${inset ? "pl-[3.25rem]" : ""}`}>
+      <p className={RED_BOX}>
+        Propoly only takes {PROPOLY_NAME_MAX} characters as a maximum. This {what} is {length}, so it will go in as &ldquo;{sent}&rdquo;. {fix} if you&apos;d like it to say something else.
+      </p>
+    </div>
+  );
+}
+
 /** "What is it?" on a file under Anything else: typed by the agent, carried to compliance. */
 function OtherLabel({ doc, busy, onSave }: { doc: PlcDocument; busy: boolean; onSave: (label: string) => void }) {
   const [draft, setDraft] = useState(doc.label ?? "");
@@ -855,6 +896,9 @@ function OtherLabel({ doc, busy, onSave }: { doc: PlcDocument; busy: boolean; on
         className="min-w-0 flex-1 basis-48 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs text-ink outline-none focus:border-amber-500 disabled:opacity-60"
       />
       {doc.label && draft.trim() === doc.label && <span className="text-xs text-emerald-700">Saved</span>}
+      {draft.trim().length > PROPOLY_NAME_MAX && (
+        <LongNameBox length={draft.trim().length} sent={propolyFileName(draft.trim(), "Document")} what="name" fix="Shorten it" inset={false} />
+      )}
     </label>
   );
 }
