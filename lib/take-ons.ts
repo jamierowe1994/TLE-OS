@@ -25,10 +25,11 @@ import type { ManagedBook, ManagedProperty } from "@/lib/portfolio-types";
  *   - for a home already on Portfolio, marks it as a transfer and lays the
  *     landlord and tenants over it where nothing else names them.
  *
- * NOTHING HERE WRITES TO REX, PROPOLY OR PAYPROP, OR EMAILS ANYBODY. The push
- * to Propoly it would need (landlord, property, a deal with the sitting
- * tenants on it, references only where ticked) is listed on the take-on's
- * page and waits on James (tenant_changes_live, and his answers).
+ * NOTHING HERE WRITES TO REX, PROPOLY OR PAYPROP, OR EMAILS ANYBODY. The two
+ * pushes (landlord, home and sitting tenants into Propoly, and mirrored into
+ * REX) are lib/take-on-push, each behind its own switch (take_on_propoly,
+ * take_on_rex) and rehearsed while that is off. Their last run is kept on
+ * the take-on (propoly_push, rex_push) and shown on its page.
  */
 
 export type TakeOnService = "managed" | "rent_collect";
@@ -72,6 +73,40 @@ export interface TakeOn {
   by: string;
   byEmail: string | null;
   at: string;
+  /** The last push of this take-on into Propoly, rehearsed or for real (lib/take-on-push). */
+  propolyPush: TakeOnPush | null;
+  /** The last push into REX ("the listing system" on agent screens). */
+  rexPush: TakeOnPush | null;
+}
+
+export type TakeOnPushSystem = "propoly" | "rex";
+
+/** One step of a push: Done, Would do (rehearsal), Failed, Stopped (waits on someone) or Skipped. */
+export interface TakeOnPushStep {
+  id: string;
+  label: string;
+  state: "done" | "would" | "failed" | "blocked" | "skipped";
+  detail: string;
+  /** Propoly's or REX's own words, when it refused. */
+  reason?: string | null;
+  request?: unknown;
+  at: string;
+}
+
+export interface TakeOnPush {
+  system: TakeOnPushSystem;
+  mode: "rehearsal" | "live";
+  status: "running" | "done" | "would" | "failed" | "blocked";
+  steps: TakeOnPushStep[];
+  /**
+   * What each system now holds for this take-on, carried from run to run so a
+   * second push reuses them and never makes a second landlord, home or deal.
+   * Only live runs put real ids here.
+   */
+  ids: Record<string, string>;
+  by: string;
+  at: string;
+  finishedAt: string | null;
 }
 
 /**
@@ -127,6 +162,7 @@ type Row = {
   id: string; home_ref: string; os_property_id: string | null; line1: string; town: string; postcode: string; bedrooms: number | null; let_type: string;
   landlord: TakeOn["landlord"]; service: string; fee_pct: string | null; takeover_on: Date | string; previous_agent: string; tenancy: TakeOn["tenancy"];
   tenants: TakeOnTenant[]; comms: TakeOnComm[]; note: string; agent_rex_id: string | null; by_name: string; by_email: string | null; created_at: Date;
+  propoly_push?: TakeOnPush | null; rex_push?: TakeOnPush | null;
 };
 /* A DATE comes back as local midnight: read its local parts, or a BST
    server reads 19 Oct as 18 Oct. */
@@ -155,9 +191,11 @@ const shape = (r: Row): TakeOn => ({
   by: r.by_name,
   byEmail: r.by_email,
   at: new Date(r.created_at).toISOString(),
+  propolyPush: r.propoly_push ?? null,
+  rexPush: r.rex_push ?? null,
 });
 
-export type TakeOnInput = Omit<TakeOn, "id" | "osPropertyId" | "comms" | "at" | "homeRef"> & { homeRef: string | null };
+export type TakeOnInput = Omit<TakeOn, "id" | "osPropertyId" | "comms" | "at" | "homeRef" | "propolyPush" | "rexPush"> & { homeRef: string | null };
 
 const newId = () => randomBytes(9).toString("base64url").replace(/[-_]/g, "x");
 
@@ -243,6 +281,29 @@ export async function markComm(id: string, key: string, done: boolean, by: strin
   const comms = t.comms.map((c) => (c.key === key ? { key, doneAt: done ? new Date().toISOString() : null, by: done ? by : null, note: note.slice(0, 300) } : c));
   const rows = await tq<Row>(`UPDATE os_take_ons SET comms = $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING *`, [id, JSON.stringify(comms)]);
   return rows[0] ? shape(rows[0]) : null;
+}
+
+/**
+ * Start a push: claimed on the row, so two presses (or two people) never run
+ * the same push side by side. A run left "running" for ten minutes is taken
+ * as dead (a deploy mid-run) and may be claimed again. Null = already running.
+ */
+export async function claimPush(id: string, system: TakeOnPushSystem, push: TakeOnPush): Promise<boolean> {
+  const col = system === "propoly" ? "propoly_push" : "rex_push";
+  const rows = await tq<{ id: string }>(
+    `UPDATE os_take_ons SET ${col} = $2::jsonb, updated_at = NOW()
+      WHERE id = $1 AND cancelled_at IS NULL
+        AND NOT (COALESCE(${col}->>'status', '') = 'running' AND COALESCE((${col}->>'at')::timestamptz, 'epoch') > NOW() - INTERVAL '10 minutes')
+      RETURNING id`,
+    [id, JSON.stringify(push)]
+  );
+  return rows.length > 0;
+}
+
+/** Save a push's progress, step by step, so a run cut short still says how far it got. */
+export async function savePush(id: string, system: TakeOnPushSystem, push: TakeOnPush): Promise<void> {
+  const col = system === "propoly" ? "propoly_push" : "rex_push";
+  await tq(`UPDATE os_take_ons SET ${col} = $2::jsonb, updated_at = NOW() WHERE id = $1`, [id, JSON.stringify(push)]);
 }
 
 export async function cancelTakeOn(id: string): Promise<boolean> {

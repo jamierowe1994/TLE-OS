@@ -4735,6 +4735,40 @@ CREATE TABLE IF NOT EXISTS os_ai_usage (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_ai_usage_created ON os_ai_usage (created_at);
+-- Management transfers, take-ons (lib/take-ons, 19 Oct 2026). Made lazily in
+-- lib/take-ons too; declared here so the push columns below have a table to
+-- go on whichever runs first. Same definition, so either is harmless.
+CREATE TABLE IF NOT EXISTS os_take_ons (
+  id              TEXT PRIMARY KEY,
+  home_ref        TEXT NOT NULL,
+  os_property_id  TEXT,
+  line1           TEXT NOT NULL,
+  town            TEXT NOT NULL DEFAULT '',
+  postcode        TEXT NOT NULL DEFAULT '',
+  bedrooms        INTEGER,
+  let_type        TEXT NOT NULL DEFAULT 'residential',
+  landlord        JSONB NOT NULL,
+  service         TEXT NOT NULL DEFAULT 'managed',
+  fee_pct         NUMERIC,
+  takeover_on     DATE NOT NULL,
+  previous_agent  TEXT NOT NULL DEFAULT '',
+  tenancy         JSONB NOT NULL DEFAULT '{}',
+  tenants         JSONB NOT NULL DEFAULT '[]',
+  comms           JSONB NOT NULL DEFAULT '[]',
+  note            TEXT NOT NULL DEFAULT '',
+  agent_rex_id    TEXT,
+  by_name         TEXT NOT NULL,
+  by_email        TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  cancelled_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_take_ons_home ON os_take_ons (home_ref);
+-- The last push of a take-on into Propoly and into REX (lib/take-on-push):
+-- rehearsed or live, every step with its outcome and the other system's own
+-- reason, and the ids it made so a second push reuses them.
+ALTER TABLE os_take_ons ADD COLUMN IF NOT EXISTS propoly_push JSONB;
+ALTER TABLE os_take_ons ADD COLUMN IF NOT EXISTS rex_push JSONB;
 
 `;
 
