@@ -7,6 +7,7 @@ import { fetchLeadBook } from "@/lib/rex-leads";
 import { ledgerStats, readNewValuations, recordLeads } from "@/lib/lead-ledger";
 import { rexConfigured } from "@/lib/rex";
 import { requireCapability } from "@/lib/admin";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * POST /api/leads/scan   (x-cron-key: CRON_SECRET; or an owner signed in)
@@ -72,6 +73,13 @@ export async function POST(req: NextRequest) {
     .then((m) => m.enquiryReplies())
     .then((r) => ({ sent: r.filter((x) => x.state === "sent").length, would: r.filter((x) => x.state === "would").length, skipped: r.filter((x) => x.state === "skipped").length }))
     .catch((e) => ({ error: publicError(e) }));
+  /* Automate passport (lib/auto-passport): the passport to each new enquiry
+     on a listing that has it on, within five minutes, and the day-later
+     reminder queued. Its own failure is reported, never the scan's. */
+  const autoPassports = await import("@/lib/auto-passport")
+    .then((m) => m.autoPassportSweep(publicOrigin(req)))
+    .then((r) => ({ sent: r.filter((x) => x.state === "sent").length, waiting: r.filter((x) => x.state === "waiting").length, failed: r.filter((x) => x.state === "failed").length }))
+    .catch((e) => ({ error: publicError(e) }));
   /* Viewings put in the diary in the last two hours, so "Viewing booked"
      reaches the bell and the phone within five minutes (lib/rex-viewings
      sweepNewBookings). Its own failure is reported, never the scan's. */
@@ -83,7 +91,7 @@ export async function POST(req: NextRequest) {
   const marketing = await import("@/lib/marketing-webhook")
     .then((m) => m.sendNewLeadWebhooks())
     .catch((e) => ({ error: publicError(e) }));
-  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, bookings, marketing, signInsKept, ms: Date.now() - started });
+  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, autoPassports, bookings, marketing, signInsKept, ms: Date.now() - started });
 }
 
 export const GET = POST;

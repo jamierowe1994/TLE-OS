@@ -100,6 +100,7 @@ import {
   TENANT_DOCUMENTS,
   TENANT_PASSPORT_NUDGE_1,
   TENANT_PASSPORT_NUDGE_2,
+  TENANT_PASSPORT_REMINDER,
   TENANT_MATCHES,
   TENANT_MATCHES_AGAIN,
   TENANT_HOME_ALERT,
@@ -1626,6 +1627,16 @@ TLE_EMAILS.push(
     "The tenant who was invited",
     "Not a louder reminder but the reason: the same details every time, and ready applications go first. Ends with a way out if they have found somewhere.",
     TENANT_PASSPORT_NUDGE_2,
+    { link: `${SITE}/tenant/sign-in` }
+  ),
+  tenantEntry(
+    "tenant-passport-reminder",
+    "Passport Reminder: a Day",
+    "A day after an automatic passport, if it is not finished",
+    "Wired 22 Oct 2026. Only on a listing with Automate passport on (Enquiries tab, lib/auto-passport): the passport goes to each new enquiry on the leads scan, and this is queued in os_scheduled_sends for 24 hours later. The runner checks the passport first and cancels it if it is finished. Once per enquiry, from the agent who turned it on. Needs customer email on.",
+    "The person who enquired",
+    "Dan Richards, 21 Oct 2026: encouraging, never pushy. We'd love to get your viewing booked in; finish the passport and all that's left is picking a date and time; anything typed is saved.",
+    TENANT_PASSPORT_REMINDER,
     { link: `${SITE}/tenant/sign-in` }
   ),
   tenantEntry(

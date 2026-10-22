@@ -1701,6 +1701,31 @@ export const TENANT_PASSPORT_NUDGE_1 = {
   branding: { showSignoff: false },
 } as const;
 
+/**
+ * A day after an automatic passport, not finished (Dan Richards, 21 Oct 2026).
+ * Only for a listing with Automate passport on (lib/auto-passport). Dan: it
+ * should encourage, never push - "we'd love to get your viewing booked in",
+ * not "you must". One reminder, from the agent, and none once it is done.
+ */
+export const TENANT_PASSPORT_REMINDER = {
+  subject: "Let's get your viewing booked in",
+  preheader: "Finish your tenant passport and all that's left is picking a day and time.",
+  mode: "blocks",
+  blocks: [
+    H("tpr1", "Nearly There"),
+    T("tpr2", "Hi {{firstName}},<br><br>Thanks again for asking about {{address}}. We'd love to get your viewing booked in."),
+    T("tpr3", "The only thing we need first is your tenant passport. Finish that, and all that's left is to pick a date and time that suits you."),
+    T("tpr4", "If you've already made a start, everything you've filled in is saved, so you can pick up right where you left off."),
+    SP("tpr5", 8),
+    BTN("tpr6", "Finish my passport", "{{link}}"),
+    SP("tpr7", 8),
+    T("tpr8", "Any questions at all, just reply to this email and it comes straight to me."),
+    T("tpr9", "{{agentName}}<br>The Letting Experts"),
+    FOOT("tpr10", "You're getting this because you asked about a home with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /** A week after the invite, still nothing. The why, not a louder reminder. */
 export const TENANT_PASSPORT_NUDGE_2 = {
   subject: "One form for every home you apply for",

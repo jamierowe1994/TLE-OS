@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
-import { waLink, waWebLink } from "@/lib/whatsapp-link";
+import { openWhatsAppApp, waAppLink, waLink, waWebLink } from "@/lib/whatsapp-link";
 
 /**
  * WhatsApp from a desk (Susan, 19 Sep 2026).
@@ -15,6 +15,14 @@ import { waLink, waWebLink } from "@/lib/whatsapp-link";
  * a desktop the button draws a code: point the phone's camera at it and the
  * chat opens on that person, with whatever was typed here already in the box.
  * On a phone there is nothing to scan - the button is the link.
+ *
+ * ONE WHATSAPP, NOT A TAB A PRESS (22 Oct 2026). Both ways now open the chat
+ * in the WhatsApp app (lib/whatsapp-link waAppLink): on a phone straight
+ * away, on a desk from "Open in WhatsApp on this computer". A wa.me or
+ * WhatsApp Web link opened a fresh tab every time, and in the iPhone app a
+ * Safari sheet. WhatsApp Web stays as the fallback for a desk without the
+ * app, and still opens its own tab - WhatsApp's headers leave no way to
+ * reuse one.
  *
  * The OS cannot see what was sent from the phone. Where the record keeps a
  * log, `onSent` lets the sheet ask and write it down, so a WhatsApp still
@@ -51,7 +59,10 @@ export function WhatsAppButton({
         onClick={() => {
           /* A phone is already the thing the code would be scanned with. */
           if (window.matchMedia("(pointer: coarse) and (max-width: 820px)").matches) {
-            window.location.href = waLink(phone, text) as string;
+            /* The app, not wa.me's web page; wa.me only if WhatsApp didn't open. */
+            openWhatsAppApp(waAppLink(phone, text) as string, () => {
+              window.location.href = waLink(phone, text) as string;
+            });
             return;
           }
           setOpen(true);
@@ -82,6 +93,8 @@ function WhatsAppSheet({
   const [src, setSrc] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Pressed Open in WhatsApp and nothing came to the front. */
+  const [noApp, setNoApp] = useState(false);
 
   const link = waLink(phone, message) ?? "";
   useEffect(() => {
@@ -148,15 +161,32 @@ function WhatsAppSheet({
           </div>
         </div>
 
-        <a
-          href={waWebLink(phone, message) ?? "#"}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark hover:underline"
-        >
-          <DoodleIcon name="message-2" size={12} />
-          No phone to hand? Open WhatsApp Web instead
-        </a>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+          <button
+            type="button"
+            onClick={() => {
+              setNoApp(false);
+              openWhatsAppApp(waAppLink(phone, message) as string, () => setNoApp(true));
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-4 py-2 text-[12px] font-semibold text-ink transition-colors hover:border-ink/40"
+          >
+            <DoodleIcon name="message-2" size={12} />
+            Open in WhatsApp on this computer
+          </button>
+          <a
+            href={waWebLink(phone, message) ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark hover:underline"
+          >
+            Or WhatsApp Web
+          </a>
+        </div>
+        {noApp && (
+          <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+            Nothing opened? WhatsApp may not be on this computer. Use WhatsApp Web instead, or get the app from whatsapp.com/download so it opens in the same window every time.
+          </p>
+        )}
 
         {error && <p className="mt-3 text-[12px] text-red-700">{error}</p>}
 

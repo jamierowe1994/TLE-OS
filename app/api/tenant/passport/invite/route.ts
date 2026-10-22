@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { publicOrigin } from "@/lib/origin";
-import { createPassport, findDonePassportByEmail, findPassportByEmail, getPassport, markInvited, markScottishHome } from "@/lib/passport";
-import { isScottish } from "@/lib/property-flags";
+import { findDonePassportByEmail, findPassportByEmail, getPassport } from "@/lib/passport";
+import { sendPassportInvite } from "@/lib/passport-invite";
 import { forScreen, passportRules } from "@/lib/passport-scotland";
 import { can } from "@/lib/roles";
 import { householdIncome } from "@/lib/passport-shape";
 import { renderTleEmail } from "@/lib/email/tle-emails";
-import { sendAsAgent } from "@/lib/send-as-agent";
-import { switchOn } from "@/lib/switches";
-import { isInternalAddress } from "@/lib/email-policy";
 
 /**
  * POST /api/tenant/passport/invite
@@ -129,59 +126,19 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, preview: true, subject, html });
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ ok: false, error: "The viewing has no usable email for the tenant." }, { status: 400 });
-  }
-  /* Our own address is a test (Admin → Testing): lib/resend lets it through
-     the customer switch, so this early answer must not refuse it first. */
-  if (!isInternalAddress(email) && !(await switchOn("customer_email"))) {
-    return NextResponse.json(
-      { ok: false, error: "Email to customers is off. Admin, Switches, then try again." },
-      { status: 409 }
-    );
-  }
-
-  const existing = await findPassportByEmail(email, me.id);
-  /* Sent for a Scottish home: no nationality on it from now on, even when the
-     invite itself has already gone (lib/passport-scotland). */
-  const scottishHome = isScottish(body.home, body.address);
-  if (existing && scottishHome) await markScottishHome(existing.token).catch(() => null);
-  if (existing?.invitedAt && !body.again) {
-    return NextResponse.json({
-      ok: true,
-      alreadySent: true,
-      invitedAt: existing.invitedAt,
-      path: `/tenant/passport/${existing.token}`,
-    });
-  }
-
-  const token = existing?.token ?? (await createPassport({ name, email, agentId: me.id })).token;
-  if (scottishHome) await markScottishHome(token).catch(() => null);
-  const link = `${publicOrigin(req)}/tenant/passport/${token}`;
-  const firstName = name.split(/\s+/)[0] || "there";
-  const whenPretty = (body.whenPretty ?? "").trim();
-  const { subject, html } = whenPretty
-    ? renderTleEmail("tenant-passport-invite", {
-        firstName,
-        address: (body.address ?? "").trim() || "the property",
-        whenPretty,
-        agentName: me.name || "Your agent",
-        meetLine: `${me.name || "Your agent"} will meet you there.`,
-        link,
-      })
-    : renderTleEmail("tenant-passport-request", {
-        firstName,
-        agentName: me.name || "your agent",
-        link,
-      });
-
-  /* From their own Outlook where that is armed, so the tenant's reply comes
-     back to the agent who invited them rather than to a shared inbox. */
-  const sent = await sendAsAgent({ me, to: email, toName: name || undefined, subject, html });
-  if (!sent.sent) return NextResponse.json({ ok: false, error: sent.detail }, { status: 502 });
-  await markInvited(token, me.name || me.email);
-  return NextResponse.json({
-    ok: true, alreadySent: false, invitedAt: new Date().toISOString(),
-    path: `/tenant/passport/${token}`, said: sent.detail,
+  /* The send itself lives in lib/passport-invite, shared with a listing's
+     Automate passport (lib/auto-passport) so both send the same email. */
+  const r = await sendPassportInvite({
+    me,
+    origin: publicOrigin(req),
+    name,
+    email,
+    address: body.address,
+    home: body.home,
+    whenPretty: body.whenPretty,
+    again: body.again,
   });
+  if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: r.status });
+  if (r.alreadySent) return NextResponse.json({ ok: true, alreadySent: true, invitedAt: r.invitedAt, path: r.path });
+  return NextResponse.json({ ok: true, alreadySent: false, invitedAt: r.invitedAt, path: r.path, said: r.said });
 }

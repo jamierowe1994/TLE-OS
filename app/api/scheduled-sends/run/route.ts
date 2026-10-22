@@ -19,6 +19,7 @@ import { runContractNudges } from "@/lib/contract-nudge";
 import { runInstructionSweep } from "@/lib/rex-instruct";
 import { publicOrigin } from "@/lib/origin";
 import { runDueJobs } from "@/lib/steve-jobs";
+import { PASSPORT_REMINDER_KIND, autoPassportSweep, passportReminderStands, reminderMail } from "@/lib/auto-passport";
 
 /**
  * Send what's due.
@@ -225,6 +226,28 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    /* ── Automate passport's day-later reminder (lib/auto-passport): checked
+       first, because a tenant who has finished must never be reminded, and
+       rendered now from the catalogue. Then it goes as the agent, below. ── */
+    if (row.kind === PASSPORT_REMINDER_KIND) {
+      const stands = await passportReminderStands(row.ref).catch(() => null);
+      if (stands) {
+        await q(`UPDATE os_scheduled_sends SET state = 'cancelled', error = $2 WHERE id = $1`, [row.id, stands]).catch(() => []);
+        skipped.push(row.id);
+        continue;
+      }
+      try {
+        const mail = await reminderMail(row.body);
+        row.subject = mail.subject;
+        row.html = mail.html;
+      } catch (e) {
+        const message = publicError(e, "The reminder did not render.");
+        await q(`UPDATE os_scheduled_sends SET state = 'failed', error = $2 WHERE id = $1`, [row.id, message]).catch(() => []);
+        failed.push({ id: row.id, error: message });
+        continue;
+      }
+    }
+
     try {
       /* Queued by a person, sent by a timer: it goes out as THEM, which is the
          point of queuing rather than sending. Whoever queued it must still be
@@ -272,6 +295,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  /* Automate passport's sends (lib/auto-passport), here as well as on the
+     leads scan: the scan steps aside while REX is down, and this run does
+     not. Claimed per enquirer, so the two never both send. */
+  const autoPassports = await autoPassportSweep(publicOrigin(req))
+    .then((r) => ({ sent: r.filter((x) => x.state === "sent").length, waiting: r.filter((x) => x.state === "waiting").length, failed: r.filter((x) => x.state === "failed").length }))
+    .catch((e) => ({ error: publicError(e, "Automate passport failed.") }));
+
   /* The agent's own presentation emails: the day-before "not built yet" and
      the on-the-day copy. Swept here rather than queued, so a visit that is
      booked late, moved, or built at midnight is still judged on the day. */
@@ -298,7 +328,7 @@ export async function POST(req: NextRequest) {
   /* Steve's standing jobs (lib/steve-jobs, 2 Oct 2026). Last, because each is
      a model call and the sends above must never wait behind one. */
   const steveJobs = await runDueJobs().catch((e) => ({ ran: 0, failed: [publicError(e, "Steve's jobs failed.")] }));
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters, updates, rentRead, rent, steveJobs });
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, autoPassports, decks, nudges, instructions, newsletters, updates, rentRead, rent, steveJobs });
 }
 
 /** A dry read: what is due, without sending it. Same key as the run: this

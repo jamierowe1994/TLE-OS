@@ -144,10 +144,10 @@ export default function AfterViewing({
     }
   }
 
-  const wa = phone && link?.url && link.onMarket ? whatsappHref(phone) : null;
   const waText = link?.url
     ? `Hi ${first}, thanks for coming to see ${address}. If you'd like to make an offer, you can do it here: ${link.url}`
     : "";
+  const wa = phone && link?.url && link.onMarket ? whatsappHref(phone, waText) : null;
   const outcome = feedback ? plain(feedbackLabel(feedback)) : null;
 
   return (
@@ -218,7 +218,7 @@ export default function AfterViewing({
                   <DoodleIcon name="mail" size={17} /> Email It
                 </button>
                 {wa && (
-                  <a href={`${wa}?text=${encodeURIComponent(waText)}`} target="_blank" rel="noreferrer" className="m-btn m-press flex-1 !text-[14.5px]">
+                  <a href={wa} className="m-btn m-press flex-1 !text-[14.5px]">
                     <WhatsAppIcon size={17} /> WhatsApp It
                   </a>
                 )}

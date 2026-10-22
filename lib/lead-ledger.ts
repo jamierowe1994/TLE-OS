@@ -75,7 +75,7 @@ export async function recordLeads(leads: Lead[]): Promise<number> {
  * opened for the first time drops off the board if it turns out to be a sale.
  * The same pattern as the scan's, in Postgres's words.
  */
-const NOT_SALES = `NOT (
+export const NOT_SALES = `NOT (
   COALESCE(source, '') ILIKE '%getagent%'
   OR (COALESCE(enquiry, '') = 'Valuation'
       AND concat_ws(' ', payload->>'subject', payload->>'enquiryMessage', payload->>'enquiryFull', payload->>'enquiryFields')

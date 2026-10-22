@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { waAppLink } from "@/lib/whatsapp-link";
 import { useFrame } from "@/components/app/AppFrame";
 import { useSwipeToClose } from "@/components/app/swipe";
 import { useSheetExit } from "@/components/app/motion";
@@ -120,12 +121,12 @@ export const dialable = (phone: string) => phone.replace(/[^\d+]/g, "");
  * number with no plus or leading zero, so a UK 07 becomes 447. Null when the
  * record has no usable number.
  */
-export function whatsappHref(phone: string): string | null {
-  let d = phone.replace(/[^\d+]/g, "");
-  if (d.startsWith("+")) d = d.slice(1);
-  else if (d.startsWith("00")) d = d.slice(2);
-  else if (d.startsWith("0")) d = `44${d.slice(1)}`;
-  return d.length >= 10 ? `https://wa.me/${d}` : null;
+export function whatsappHref(phone: string, text?: string): string | null {
+  /* The WhatsApp app's own address, not wa.me (22 Oct 2026): in the iPhone
+     app wa.me is a web page, so every press opened a Safari sheet on
+     WhatsApp's "continue to chat" page instead of the chat
+     (lib/whatsapp-link waAppLink). */
+  return waAppLink(phone, text);
 }
 
 /** Call, text and email, as three plain buttons. Missing ones are left out, not greyed. */

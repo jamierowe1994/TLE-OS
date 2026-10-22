@@ -2080,6 +2080,19 @@ CREATE INDEX IF NOT EXISTS os_scheduled_sends_ref ON os_scheduled_sends (ref);
 -- The finished HTML for sends that do not go through REX (the agent's video
 -- nudge goes by Resend). NULL means render the plain body at send time.
 ALTER TABLE os_scheduled_sends ADD COLUMN IF NOT EXISTS html TEXT;
+-- Automate passport on a listing's Enquiries tab (22 Oct 2026, lib/auto-passport).
+-- One row a listing while it is on: every enquiry first seen after on_since
+-- gets the passport from user_id, and a reminder a day later if unfinished.
+-- rex_user_id is the switcher's own lead scope (null = sees every lead), so
+-- an agent's switch only ever writes to the enquirers they can see.
+CREATE TABLE IF NOT EXISTS os_listing_auto_passport (
+  listing_id     TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL,
+  user_name      TEXT NOT NULL DEFAULT '',
+  rex_user_id    TEXT,
+  home           TEXT NOT NULL DEFAULT '',
+  on_since       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.

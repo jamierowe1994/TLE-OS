@@ -36,6 +36,12 @@ const LeadDrawer = dynamic(() => import("@/components/LeadDrawer"), { ssr: false
  * (lib/page-cache), or a search on file for one older than the newest 500;
  * if neither finds it, the row goes to Leads as before. Cmd/Ctrl-click still
  * opens Leads in a new tab.
+ *
+ * AUTOMATE PASSPORT (Dan Richards and Sean McMahon, 21 Oct 2026). A switch
+ * beside Send passports: on, every new enquiry gets the passport within five
+ * minutes, from whoever turned it on, and one encouraging reminder a day
+ * later if it is not finished (lib/auto-passport). Turning it on shows the
+ * reminder first, with a button to send it to yourself.
  */
 
 export type Enquiry = { id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; message?: string };
@@ -45,9 +51,9 @@ type Result = { email: string; name: string; ok: boolean; said: string };
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 const short = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 
-function StatusPill({ s, onOpen }: { s: Status | undefined; onOpen: () => void }) {
+function StatusPill({ s, auto, onOpen }: { s: Status | undefined; auto?: boolean; onOpen: () => void }) {
   if (!s || s.state === "none") return <Tag tone="neutral">Not sent</Tag>;
-  if (s.state === "sent") return <Tag tone="accent">{`Sent${s.invitedAt ? ` ${short(s.invitedAt)}` : ""}`}</Tag>;
+  if (s.state === "sent") return <Tag tone="accent">{`${auto ? "Auto sent" : "Sent"}${s.invitedAt ? ` ${short(s.invitedAt)}` : ""}`}</Tag>;
   if (s.state === "started")
     return (
       <button type="button" onClick={onOpen} className="rounded-full border border-accent-dark/60 bg-white px-2.5 py-1 text-[11px] font-semibold text-accent-dark hover:bg-accent-soft">
@@ -61,8 +67,12 @@ function StatusPill({ s, onOpen }: { s: Status | undefined; onOpen: () => void }
   );
 }
 
-export default function ListingEnquiries({ enquiries, home }: {
+type Auto = { on: boolean; by: string | null; mine: boolean; since: string | null };
+
+export default function ListingEnquiries({ enquiries, home, listingId }: {
   enquiries: Enquiry[];
+  /** The listing, for its Automate passport switch. Without it the switch is not shown. */
+  listingId?: string | number;
   /** The listing's address with its postcode: a Scottish home's passports carry no nationality (lib/passport-scotland). */
   home?: string;
 }) {
@@ -77,6 +87,15 @@ export default function ListingEnquiries({ enquiries, home }: {
   /* The enquirer whose lead file is open over the listing, and which row is fetching it. */
   const [openLead, setOpenLead] = useState<Lead | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
+  /* Automate passport: the switch as stored, who has had one automatically,
+     and the turn-on sheet with the reminder in it. */
+  const [auto, setAuto] = useState<Auto | null>(null);
+  const [autoSent, setAutoSent] = useState<Set<string>>(new Set());
+  const [autoAsk, setAutoAsk] = useState(false);
+  const [reminder, setReminder] = useState<{ subject: string; html: string } | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoNote, setAutoNote] = useState<string | null>(null);
+  const autoUrl = listingId != null ? `/api/listings/${encodeURIComponent(String(listingId))}/auto-passport` : null;
 
   const emails = useMemo(() => [...new Set(enquiries.map((e) => e.email.trim().toLowerCase()).filter(emailOk))], [enquiries]);
   const readStatuses = useCallback(() => {
@@ -90,6 +109,52 @@ export default function ListingEnquiries({ enquiries, home }: {
     setStatuses(null);
     readStatuses();
   }, [readStatuses]);
+
+  useEffect(() => {
+    if (!autoUrl) return;
+    let live = true;
+    fetch(autoUrl, { cache: "no-store" })
+      .then((r) => r.json() as Promise<Auto & { ok?: boolean; autoSent?: string[] }>)
+      .then((j) => {
+        if (!live || !j.ok) return;
+        setAuto({ on: j.on, by: j.by, mine: j.mine, since: j.since });
+        setAutoSent(new Set(j.autoSent ?? []));
+      })
+      .catch(() => null);
+    return () => { live = false; };
+  }, [autoUrl]);
+
+  async function postAuto(body: Record<string, unknown>) {
+    if (!autoUrl) return null;
+    return fetch(autoUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ home, ...body }) })
+      .then((r) => r.json() as Promise<Auto & { ok?: boolean; error?: string; said?: string; to?: string; subject?: string; html?: string }>)
+      .catch(() => null);
+  }
+  async function askAuto() {
+    setAutoNote(null);
+    setReminder(null);
+    setAutoAsk(true);
+    const j = await postAuto({ preview: true });
+    if (j?.ok && j.html) setReminder({ subject: j.subject ?? "", html: j.html });
+  }
+  async function turnAuto(on: boolean) {
+    if (autoBusy) return;
+    setAutoBusy(true);
+    setAutoNote(null);
+    const j = await postAuto({ on });
+    setAutoBusy(false);
+    if (!j?.ok) return setAutoNote(j?.error ?? "That didn't save - the connection dropped.");
+    setAuto({ on: j.on, by: j.by, mine: j.mine, since: j.since });
+    setAutoAsk(false);
+  }
+  async function reminderToMe() {
+    if (autoBusy) return;
+    setAutoBusy(true);
+    setAutoNote(null);
+    const j = await postAuto({ test: true });
+    setAutoBusy(false);
+    setAutoNote(j?.ok ? `Sent to ${j.to}. Have a look in your inbox.` : (j?.said ?? j?.error ?? "It didn't send - the connection dropped."));
+  }
 
   const statusOf = (e: Enquiry) => statuses?.[e.email.trim().toLowerCase()];
   /* One row a person: the same tenant can enquire twice. */
@@ -203,6 +268,24 @@ export default function ListingEnquiries({ enquiries, home }: {
           Enquiries · {people.length}
           {enquiries.length > people.length && <span className="text-[11.5px] font-normal text-muted">({enquiries.length} enquiries from {people.length} people)</span>}
         </h3>
+        <span className="flex flex-wrap items-center gap-3">
+        {auto && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={auto.on}
+            disabled={autoBusy}
+            onClick={() => (auto.on ? void turnAuto(false) : void askAuto())}
+            title={auto.on ? "Every new enquiry gets the passport automatically. Press to stop." : "Send every new enquiry the passport automatically"}
+            className="flex items-center gap-2 rounded-full px-1 py-1 text-[11.5px] font-semibold"
+            data-steve="listing.enquiries.auto"
+          >
+            <span className={`relative block h-5 w-9 shrink-0 rounded-full transition-colors ${auto.on ? "bg-accent-dark" : "bg-line"}`}>
+              <span className={`absolute left-0 top-0.5 block h-4 w-4 rounded-full bg-white shadow transition-transform ${auto.on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+            </span>
+            Automate passport
+          </button>
+        )}
         {people.length > 0 &&
           (picking ? (
             <button type="button" onClick={() => setPicking(false)} className="rounded-full px-3 py-2 text-[11.5px] font-semibold text-muted hover:text-ink">
@@ -217,7 +300,19 @@ export default function ListingEnquiries({ enquiries, home }: {
               Send passports
             </PressButton>
           ))}
+        </span>
       </div>
+
+      {auto?.on && (
+        <p className="mb-2 flex items-center gap-2 rounded-xl bg-accent-soft/60 px-3 py-2 text-[11.5px] text-ink">
+          <DoodleIcon name="user" size={12} className="shrink-0 text-accent-dark" />
+          <span>
+            New enquiries get the passport automatically{auto.mine ? ", from you" : auto.by ? `, from ${auto.by}` : ""}
+            {auto.since ? `, since ${short(auto.since)}` : ""}. One friendly reminder a day later if it isn&apos;t finished.
+          </span>
+        </p>
+      )}
+      {autoNote && !autoAsk && <p className="mb-2 text-[11.5px] text-accent-dark">{autoNote}</p>}
 
       {/* Where the passports are, at a glance. */}
       {people.length > 0 && (
@@ -291,7 +386,7 @@ export default function ListingEnquiries({ enquiries, home }: {
                   ) : statuses === null ? (
                     <span className="text-[11px] text-muted">…</span>
                   ) : (
-                    <StatusPill s={statusOf(e)} onOpen={() => setViewing({ email: e.email.trim(), name: e.name })} />
+                    <StatusPill s={statusOf(e)} auto={autoSent.has(k)} onOpen={() => setViewing({ email: e.email.trim(), name: e.name })} />
                   )}
                 </span>
               </li>
@@ -371,6 +466,60 @@ export default function ListingEnquiries({ enquiries, home }: {
                 >
                   {sending ? `Sending ${results?.length ?? 0} of ${recipients.length}…` : `Send to ${recipients.length}`}
                 </PressButton>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Turning it on: what happens, and the reminder as a tenant will get it. */}
+      {autoAsk &&
+        createPortal(
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" data-steve-never>
+            <button aria-label="Close" onClick={() => !autoBusy && setAutoAsk(false)} className="absolute inset-0 cursor-default bg-ink/45" />
+            <div className="fade-up relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+              <div className="shrink-0 border-b border-line/70 px-6 py-4">
+                <h2 className="text-[19px] leading-tight">Automate Passport</h2>
+                <p className="mt-0.5 text-[12px] text-muted">For this home only. Turn it off here any time.</p>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <ul className="space-y-2 text-[12.5px] leading-relaxed">
+                  <li className="flex gap-2.5">
+                    <DoodleIcon name="user" size={14} className="mt-0.5 shrink-0 text-accent-dark" />
+                    <span>Every <strong>new</strong> enquiry from now on gets the passport within five minutes, from you. The same email as Send passports. Nobody who has already enquired is sent one.</span>
+                  </li>
+                  <li className="flex gap-2.5">
+                    <DoodleIcon name="clock" size={14} className="mt-0.5 shrink-0 text-accent-dark" />
+                    <span>If they haven&apos;t finished it a day later, <strong>one</strong> reminder goes, also from you. If they finish first, it doesn&apos;t.</span>
+                  </li>
+                </ul>
+                <p className="mt-5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">The reminder</p>
+                {reminder ? (
+                  <>
+                    <p className="mt-2 text-[12.5px]"><span className="text-muted">Subject:</span> <span className="font-semibold">{reminder.subject}</span></p>
+                    <iframe title="The passport reminder" srcDoc={reminder.html} sandbox="" className="mt-2 h-[380px] w-full rounded-2xl border border-line/60 bg-white" />
+                  </>
+                ) : (
+                  <p className="mt-2 text-[12px] text-muted">Getting the email ready…</p>
+                )}
+                {autoNote && <p className="mt-3 text-[12px] text-accent-dark">{autoNote}</p>}
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
+                <button type="button" disabled={autoBusy} onClick={() => setAutoAsk(false)} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-50">
+                  Back
+                </button>
+                <span className="flex flex-wrap items-center gap-3">
+                  <button type="button" disabled={autoBusy} onClick={() => void reminderToMe()} className="text-[12.5px] font-semibold text-accent-dark hover:underline disabled:opacity-50">
+                    Send the reminder to me
+                  </button>
+                  <PressButton
+                    onClick={() => void turnAuto(true)}
+                    disabled={autoBusy}
+                    className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${!autoBusy ? "bg-accent-dark text-white" : "cursor-not-allowed bg-ink/30 text-page/60"}`}
+                  >
+                    {autoBusy ? "One moment…" : "Turn on"}
+                  </PressButton>
+                </span>
               </div>
             </div>
           </div>,
