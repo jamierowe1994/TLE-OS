@@ -27,13 +27,18 @@ export async function offerListingIds(req: NextRequest, who: Who | null): Promis
   if (isOffice(who)) return null;
   const scope = await scopeForWho(req, who);
   if (scope.everything) return null;
-  const [book, tests] = await Promise.all([
+  const [book, tests, apps] = await Promise.all([
     scope.unlinked ? Promise.resolve(null) : bookFor(scope.rexUserId).catch(() => null),
     testListingsFor(who.actor.email).catch(() => []),
+    /* And the homes their own applications are on (22 Oct 2026): a let home
+       leaves the Listings book, so 12b Cliff Road's Offers were refused to
+       Rhiannon the morning her tenant moved in, and read as none. */
+    scope.unlinked ? Promise.resolve([]) : assembled(scope.rexUserId).then(({ held }) => held.value.applications).catch(() => []),
   ]);
   const ids = new Set<string>();
   for (const l of book?.listings ?? []) ids.add(String(l.id));
   for (const l of tests) ids.add(String(l.id));
+  for (const a of apps) if (a.listingId != null) ids.add(String(a.listingId));
   return ids;
 }
 

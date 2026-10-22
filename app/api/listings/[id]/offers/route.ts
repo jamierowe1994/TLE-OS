@@ -163,7 +163,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ ok: true, offers: (await withSends(offers)).sort(newestFirst) });
     }
 
-    const [osRows, decided, rex] = await Promise.all([
+    const [osRows, decided, rexRead] = await Promise.all([
       q<OsRow>(
         `SELECT id, name, email, payload, created_at FROM os_tenant_viewing_responses
           WHERE listing_id = $1 AND kind = 'offer' ORDER BY created_at DESC LIMIT 50`,
@@ -179,8 +179,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         return applications
           .filter((a) => String(a.listingId ?? "") === listingId)
           .map((a) => ({ ...a, closed: closed.get(a.id) ?? null }));
-      })().catch(() => []),
+      })().catch(() => null),
     ]);
+    /* REX not answering is said, not shown as no offers (22 Oct 2026): during
+       the REX outage the tab looked empty and Lorna's applicants seemed lost. */
+    const rex = rexRead ?? [];
 
     /* Every other adult's part, for the offers made in the OS. */
     const partsBy = await offerPeople(osRows.map((r) => r.id)).catch(() => new Map<string, OfferPerson[]>());
@@ -235,12 +238,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
 
-    /* REX's own decision first; the OS's where REX has none yet. */
+    /* REX's own decision first; the OS's where REX has none yet. An offer
+       accepted here stays accepted once the home is let or moved into (22 Oct
+       2026): 12b Cliff Road's accepted tenant read "declined - Home let". */
     const rexDecided = await decisionsFor(rex.map((a) => `rex:${a.id}`));
     for (const a of rex) {
       const d = rexDecided.get(`rex:${a.id}`) ?? null;
+      const hereAccepted = a.status !== "unsuccessful" && d?.decision === "accepted";
       const status: ListingOffer["status"] =
-        a.status === "accepted" ? "accepted" : a.status === "unsuccessful" || a.closed ? "declined" : d ? d.decision : "open";
+        a.status === "accepted" || hereAccepted ? "accepted" : a.status === "unsuccessful" || a.closed ? "declined" : d ? d.decision : "open";
       offers.push({
         ref: `rex:${a.id}`,
         kind: "rex",
@@ -256,7 +262,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             ? `Accepted in REX${a.dateAccepted ? ` ${day(a.dateAccepted)}` : ""}`
             : a.status === "unsuccessful"
               ? "Unsuccessful in REX"
-              : a.closed
+              : hereAccepted && d
+                ? `Accepted by ${d.by} ${day(d.at)} - ${a.closed ? a.closed.toLowerCase() : "REX not updated yet"}`
+                : a.closed
                 ? a.closed
                 : d
                   ? `${d.decision === "accepted" ? "Accepted" : "Declined"} by ${d.by} ${day(d.at)} - REX not updated yet`
@@ -281,7 +289,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
 
-    return NextResponse.json({ ok: true, offers: (await withSends(offers)).sort(newestFirst) });
+    return NextResponse.json({ ok: true, offers: (await withSends(offers)).sort(newestFirst), ...(rexRead === null ? { rexUnread: true } : {}) });
   } catch (e) {
     console.error("listing offers failed", e);
     return NextResponse.json({ ok: false, error: "Couldn't read the offers.", offers: [] }, { status: 500 });

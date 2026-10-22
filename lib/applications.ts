@@ -6,6 +6,7 @@ import { hasDb, q } from "@/lib/db";
 import { isScottish } from "@/lib/property-flags";
 import { introOnlyIds } from "@/lib/intro-only";
 import { applyLead, leadOverrides } from "@/lib/lead-tenant";
+import { decisionsFor } from "@/lib/offer-decisions";
 
 /**
  * Tenancy applications — the real ones, out of REX.
@@ -158,8 +159,9 @@ export interface Application {
   closed?: string | null;
   /**
    * The agent's Accept or Decline in the OS (lib/offer-decisions), which REX
-   * does not know about yet - it is still updated by hand. Filled by the
-   * list routes; absent when nobody has decided in the OS.
+   * does not know about yet - it is still updated by hand. Filled by
+   * getApplications (null: nobody has decided here); absent on a record
+   * read any other way.
    */
   osDecision?: OfferDecision | null;
   listingId: number | null;
@@ -572,8 +574,25 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
   const leads = await leadOverrides().catch(() => new Map<string, string>());
   if (leads.size) for (const a of out) applyLead(a, leads);
   await applyAgreedRent(out).catch(() => null);
+  await applyDecisions(out).catch(() => null);
   appsCache.set(key, { at: Date.now(), apps: out });
   return out;
+}
+
+/**
+ * The agent's Accept or Decline in the OS, on the REX applications themselves
+ * (22 Oct 2026). It was only laid on by the list routes, AFTER the board had
+ * worked out each one's stage and whether it was closed - so a let accepted
+ * here and never marked in REX read "Landlord decision", and once REX had the
+ * home as let it went to Closed as "Home let", as if somebody else had it.
+ * Rhiannon's 12b Cliff Road moved in on 22 Oct and still asked her to accept
+ * the offer. Null means nobody has decided here.
+ */
+async function applyDecisions(apps: Application[]): Promise<void> {
+  const rex = apps.filter((a) => !isOsApplication(a.id));
+  if (!rex.length || !hasDb()) return;
+  const decided = await decisionsFor(rex.map((a) => `rex:${a.id}`));
+  for (const a of rex) a.osDecision = decided.get(`rex:${a.id}`) ?? null;
 }
 
 /**
@@ -1183,14 +1202,21 @@ export async function closedReasons(apps: Application[]): Promise<Map<string, st
       out.set(a.id, "Marketing only - done");
       continue;
     }
-    if (a.status === "accepted") {
+    /* Accepted here and not yet in REX (22 Oct 2026): REX having the home as
+       let is THIS tenant's let, not "Home let" to someone else - 12b Cliff
+       Road and 7 Caernarvon Close were both in Closed that way. Moved in
+       once the home is let and the move-in has come; until REX has it let,
+       a start date gone by is only the date the tenant first asked for. */
+    const hereOnly = a.status !== "accepted" && a.osDecision?.decision === "accepted";
+    if (a.status === "accepted" || (hereOnly && s === "leased")) {
       /* Not while its PLC check is still going (6 Oct 2026): REX's start
          date passing does not move anybody in, and Rhiannon's Room 2 vanished
          from the board on the 5th with the pack still being put together. */
       const start = a.startDate?.slice(0, 10) ?? null;
       const checking = packOpen.has(String(a.id)) && start != null && start >= monthAgo;
       if (start && start <= today && !checking) out.set(a.id, "Moved in");
-    } else if (s === "leased") out.set(a.id, "Home let");
+    } else if (hereOnly) continue;
+    else if (s === "leased") out.set(a.id, "Home let");
     else if (s === "withdrawn") out.set(a.id, "Listing withdrawn");
   }
   return out;

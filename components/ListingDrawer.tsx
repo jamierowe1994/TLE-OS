@@ -606,13 +606,13 @@ function ListingDrawerBody({
       .catch(() => { if (!gone) setViewings({ upcoming: [], past: [] }); });
     fetch(`/api/listings/${encodeURIComponent(id)}/applications`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; status?: string; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null; osDecision?: { decision?: string } | null }[] }) => {
+      .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; stageLabel?: string; status?: string; closed?: string | null; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null; osDecision?: { decision?: string } | null }[] }) => {
         if (gone) return;
         const mine = (j.applications ?? []).filter((a) => String(a.listingId ?? "") === id);
         /* Accepted here counts as accepted (Sean, 15 Oct 2026): REX still had
            it as received, so the Handover step never found the let. */
         const acceptedHere = (a: (typeof mine)[number]) => a.status !== "unsuccessful" && a.osDecision?.decision === "accepted";
-        setLiveApps(mine.map((a) => ({ id: String(a.id), statusLabel: acceptedHere(a) ? "Accepted" : a.statusLabel ?? a.status ?? "", applicants: (a.applicants ?? []).map((x) => x.name).filter(Boolean).join(" & "), offerAmount: a.offerAmount ?? null, dateReceived: a.dateReceived ?? null })));
+        setLiveApps(mine.map((a) => ({ id: String(a.id), statusLabel: acceptedHere(a) ? "Accepted" : a.statusLabel ?? a.status ?? "", movedIn: a.closed === "Moved in" || a.stageLabel === "Moved in", applicants: (a.applicants ?? []).map((x) => x.name).filter(Boolean).join(" & "), offerAmount: a.offerAmount ?? null, dateReceived: a.dateReceived ?? null })));
       })
       .catch(() => { if (!gone) setLiveApps([]); });
     return () => { gone = true; };
@@ -659,7 +659,7 @@ function ListingDrawerBody({
   type LiveViewing = { id: string; startsAt: string; endsAt: string | null; mins: number; kind: string; title: string; type: string | null; status: string | null; cancelled: boolean; agent: string | null; contacts: { id: string; name: string; email: string | null; phone: string | null; leadId?: string | null }[]; feedbackId: string | null; description: string | null };
   const [viewings, setViewings] = useState<{ upcoming: LiveViewing[]; past: LiveViewing[] } | null>(null);
   const [openViewing, setOpenViewing] = useState<string | null>(null);
-  const [liveApps, setLiveApps] = useState<{ id: string; statusLabel: string; applicants: string; offerAmount: number | null; dateReceived: number | null }[] | null>(null);
+  const [liveApps, setLiveApps] = useState<{ id: string; statusLabel: string; movedIn?: boolean; applicants: string; offerAmount: number | null; dateReceived: number | null }[] | null>(null);
   const [topPick, setTopPick] = useState<number | null>(null);
   /* The landlord–property–tenant link, made the moment an offer is accepted
      and stored per listing in os_case_state. Null until someone accepts, at
@@ -679,6 +679,7 @@ function ListingDrawerBody({
   /* Book a slot (8 Oct 2026): held time at the home, tenants booked within it. */
   const [slotting, setSlotting] = useState(false);
   const [savedOffers, setSavedOffers] = useState<ListingOffer[] | null>(null);
+  const [offersRexUnread, setOffersRexUnread] = useState(false);
   /* Bumped after an Accept, Decline or Undo, so the list reads again. */
   const [offersTick, setOffersTick] = useState(0);
   const offersFor = useRef<string | null>(null);
@@ -691,10 +692,12 @@ function ListingDrawerBody({
     offersFor.current = String(id);
     fetch(`/api/listings/${encodeURIComponent(String(id))}/offers`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; offers?: ListingOffer[] }) => {
-        if (!gone) setSavedOffers(j.ok ? (j.offers ?? []) : []);
+      .then((j: { ok?: boolean; offers?: ListingOffer[]; rexUnread?: boolean }) => {
+        if (gone) return;
+        setSavedOffers(j.ok ? (j.offers ?? []) : []);
+        setOffersRexUnread(!j.ok || j.rexUnread === true);
       })
-      .catch(() => { if (!gone) setSavedOffers([]); });
+      .catch(() => { if (!gone) { setSavedOffers([]); setOffersRexUnread(true); } });
     return () => {
       gone = true;
     };
@@ -1031,7 +1034,12 @@ function ListingDrawerBody({
   /* Never behind what the book already knows: a published listing is at
      viewings at least, a let agreed one at offer accepted, whatever was saved
      before either happened. */
-  const floor = listingStartingStep(listing);
+  /* An offer accepted on the home - here or in REX - puts it on Handover
+     (22 Oct 2026). It stopped at Offer accepted until somebody pressed
+     "Accepted: confirm", so Rhiannon's 12b Cliff Road still said it after the
+     tenant had moved in, with no sign of the handover. */
+  const offerTaken = Boolean(liveApps?.some((a) => /accept/i.test(a.statusLabel)) || savedOffers?.some((o) => o.status === "accepted"));
+  const floor = Math.max(listingStartingStep(listing), offerTaken ? LISTING_TRACK.findIndex((s) => s.id === "handover") : 0);
   const savedAt = LISTING_TRACK.findIndex((s) => s.id === savedStep.at);
   const step = Math.max(floor, savedAt);
   const setStep = (i: number) => {
@@ -1743,7 +1751,11 @@ function ListingDrawerBody({
               ],
               offers: [{ label: "Sent to the landlord", done: at > 2 }],
               accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
-              handover: [{ label: "On Applications as a let", done: accepted }],
+              handover: [
+                { label: "On Applications as a let", done: accepted },
+                /* The let's own end, once it comes (22 Oct 2026). */
+                ...(offerTaken ? [{ label: "Moved in", done: Boolean(liveApps?.some((a) => a.movedIn)) }] : []),
+              ],
             };
             const cols = { gridTemplateColumns: `repeat(${LISTING_TRACK.length}, minmax(0, 1fr))` };
             /* One short line under each step: done, how far, or what is next. */
@@ -1775,7 +1787,7 @@ function ListingDrawerBody({
                           type="button"
                           onClick={() => setStep(i)}
                           disabled={i < floor}
-                          title={i < floor ? `${listing.letAgreed ? "Already let agreed" : "Already on the portals"}, so it cannot go back to ${st.label}` : `Move the record to ${st.label}`}
+                          title={i < floor ? `${offerTaken ? "An offer is already accepted" : listing.letAgreed ? "Already let agreed" : "Already on the portals"}, so it cannot go back to ${st.label}` : `Move the record to ${st.label}`}
                           className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform enabled:hover:scale-110 disabled:cursor-default ${
                             done ? "text-white" : cur ? "bg-accent-dark text-white" : "border-[1.5px] border-line/80 bg-white text-muted"
                           }`}
@@ -2039,7 +2051,7 @@ function ListingDrawerBody({
                 {/* Every offer on this listing, with Accept and Decline (7 Oct 2026). */}
                 <Card title="Offers" icon="coin">
                   {!LISTING_OFFERS_LIVE ? (
-                    <ListingOffers offers={savedOffers} canOffer={canOffer} onChanged={() => setOffersTick((n) => n + 1)} asking={per === "pcm" ? listing.rent ?? null : null} home={listing.name} listingId={String(listing.id)} initialOpen={initialOffer ?? null} />
+                    <ListingOffers offers={savedOffers} canOffer={canOffer} onChanged={() => setOffersTick((n) => n + 1)} asking={per === "pcm" ? listing.rent ?? null : null} home={listing.name} listingId={String(listing.id)} initialOpen={initialOffer ?? null} rexUnread={offersRexUnread} />
                   ) : offers.length ? (
                     <ul className="space-y-3">
                       {offers.map((o, i) => (

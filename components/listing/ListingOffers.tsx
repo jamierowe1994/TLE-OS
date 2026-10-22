@@ -82,6 +82,7 @@ export default function ListingOffers({
   home = "This home",
   listingId = null,
   initialOpen = null,
+  rexUnread = false,
 }: {
   offers: ListingOffer[] | null;
   canOffer: boolean;
@@ -94,6 +95,8 @@ export default function ListingOffers({
   listingId?: string | null;
   /** An offer to open on arrival (?offer=, from Listings > Offers in, 15 Oct 2026). */
   initialOpen?: string | null;
+  /** The applications from REX couldn't be read just now (22 Oct 2026). */
+  rexUnread?: boolean;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -167,11 +170,23 @@ export default function ListingOffers({
       </p>
     );
   }
+  /* Said rather than shown as none (22 Oct 2026): through the REX outage an
+     applicant's form looked lost when it was only not readable yet. */
+  const unread = rexUnread ? (
+    <p role="status" className="mb-3 rounded-xl bg-accent-soft px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-dark">
+      The application forms couldn&apos;t be read just now, so some offers may be missing. Try again in a minute.
+    </p>
+  ) : null;
   if (!offers.length) {
     return (
-      <p className="py-6 text-center text-[12px] leading-relaxed text-muted">
-        No offers on this home yet.{canOffer ? " Press Make New Offer to put one forward, or share the offer link below." : ""}
-      </p>
+      <>
+        {unread}
+        {!rexUnread && (
+          <p className="py-6 text-center text-[12px] leading-relaxed text-muted">
+            No offers on this home yet.{canOffer ? " Press Make New Offer to put one forward, or share the offer link below." : ""}
+          </p>
+        )}
+      </>
     );
   }
 
@@ -267,6 +282,7 @@ export default function ListingOffers({
 
   return (
     <>
+      {unread}
       {/* The list and one offer side by side, sliding (12 Oct 2026). */}
       <div className="overflow-hidden">
         <div className={`flex w-[200%] items-start transition-transform duration-300 ease-out motion-reduce:transition-none ${open ? "-translate-x-1/2" : "translate-x-0"}`}>
