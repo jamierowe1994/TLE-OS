@@ -36,7 +36,7 @@ const district = (s: string | null | undefined): string | null => {
   return /^[A-Z]{1,2}\d[A-Z\d]?$/.test(n) ? n : null;
 };
 const stripPostcode = (s: string) => s.replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/gi, " ").replace(/[\s,]+$/, "").trim();
-const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const words = (s: string) => s.toLowerCase().replace(/['’‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
 /** 1 = same postcode, 2 = same district (one side short or a letter out), 3 = the home has no usable postcode. */
 function postcodeTier(home: HomeAddress, p: PayPropPlace): 0 | 1 | 2 | 3 {

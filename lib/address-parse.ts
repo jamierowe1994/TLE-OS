@@ -21,6 +21,10 @@ export function norm(s: string): string {
     .toLowerCase()
     .replace(new RegExp(POSTCODE.source, "gi"), " ")
     .replace(/\b(\d+[a-z]?)\s*\/\s*(\d+[a-z]?)\b/g, "$1f$2") // Glasgow "1/2" → one token
+    /* An apostrophe joins, never splits (Lianna Denholm, 22 Oct 2026): PayProp's
+       "12 Queen's Gardens" read as street "s" and never met REX PM's "Queens
+       Gardens 12", so the home showed no rent while PayProp billed £4,300. */
+    .replace(/['’‘`]/g, "")
     .replace(/[^a-z0-9 ]+/g, " ")
     .replace(/\b(flat|room|apartment|apt|unit|studio)(\d+[a-z]?)\b/g, "$1 $2") // "Room5" → "room 5" (5c Newton Road, 6 Oct 2026)
     .replace(/\b(flat|apartment|apt|unit)\s+([a-z])\b[ ]+(\d+)\b/g, "$1 $3$2") // "flat b 17" → "flat 17b"

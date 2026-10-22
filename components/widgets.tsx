@@ -322,23 +322,21 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
         Number(Boolean(b.allDay)) - Number(Boolean(a.allDay)) ||
         minutesOf(a.start) - minutesOf(b.start)
     );
-  /* WORK ONLY on the tile. The REX diary carries whatever a colleague put in
-     it, and "Boat Trip to Lindos" was on the dashboard beside the viewings
-     (James, 6 Sep 2026). Anything the title does not identify as a viewing,
-     appraisal, take-on, inspection or move-in is left to the full calendar,
-     which still shows everything. */
-  const work = appts.filter((a) => a.kind !== "other");
-  const today = inOrder(work.filter((a) => a.day === 0));
-  /* Said, not hidden (Howard, 23 Sep 2026): his REX diary was full and the
-     tile said "Nothing in the diary today", because none of it was a viewing
-     or an appraisal. The rest of the day is counted, and the full calendar
-     shows it. */
-  const otherToday = appts.filter((a) => a.day === 0 && a.kind === "other" && !a.fromPersonal).length;
-  const emptyLine =
-    otherToday > 0
-      ? `Nothing booked in today - ${otherToday} other ${otherToday === 1 ? "entry" : "entries"} in your diary.`
-      : "Nothing in the diary today.";
-  const tomorrow = inOrder(work.filter((a) => a.day === 1));
+  /* YOUR OWN DAY, ALL OF IT (Rhiannon Dodge, 20 Oct 2026). The tile used to
+     keep only what its title named as a viewing, appraisal, take-on,
+     inspection or move-in, because on 6 Sep the dashboard read the whole
+     team's REX diary and a colleague's "Boat Trip to Lindos" sat beside the
+     viewings. Since 24 Sep the diary here is only the signed-in person's own,
+     so the filter was hiding their own work: Rhiannon's tile said "Nothing
+     booked in today - 7 other entries" beside a Tuesday holding "HMO Fire
+     alarm", a section notice and five more. Now everything in their own
+     diary shows, in time order. Personal stays off: busy times from a
+     personal calendar, and entries marked private (which arrive as "Busy"). */
+  const personal = (a: Appt) => Boolean(a.fromPersonal) || (a.kind === "other" && a.what === "Busy");
+  const mine = appts.filter((a) => !personal(a));
+  const today = inOrder(mine.filter((a) => a.day === 0));
+  const emptyLine = "Nothing in the diary today.";
+  const tomorrow = inOrder(mine.filter((a) => a.day === 1));
   const showTomorrow = w >= 2 || h >= 3;
   /** The next thing with an actual time on it. */
   const nextUp = today.find((a) => !a.allDay)?.start ?? "—";
