@@ -40,7 +40,8 @@ Slots:
 - tenant-checks: a tenant referencing report or outcome (Goodlord, Homelet, Let Alliance, Propoly
   referencing, Legal for Landlords, credit check)
 - holding-deposit: a holding deposit form or agreement signed by the tenant
-- guarantor-checks: a guarantor's referencing report, or a signed deed of guarantee
+- guarantor-checks: anything about a GUARANTOR: their referencing report, AML or KYC check, photo
+  ID, proof of address, or a signed deed of guarantee
 - right-to-rent: a TENANT's passport, visa, BRP, share code result, or Right to Rent check
 - gas-safety: Gas Safety Record / CP12 (12 months)
 - epc: Energy Performance Certificate (10 years)
@@ -53,6 +54,10 @@ Slots:
 - legionella: legionella risk assessment (usually 2 years)
 - tenancy-agreement: a tenancy agreement (AST, room let agreement, occupation contract)
 - other: anything else (inventory, floor plan, photos, invoices)
+
+An AML check, ID or proof of address belongs to whoever it names: the landlord's goes under
+landlord-id-aml or landlord-aml, a guarantor's under guarantor-checks. If the document says guarantor,
+or the label you were given does and nothing on the document says otherwise, it is guarantor-checks.
 
 A passport or driving licence is the landlord's ID if the name matches the landlord; if the
 name matches a tenant, or you cannot tell and it looks like a tenant's, it is right-to-rent.

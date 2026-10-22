@@ -160,7 +160,7 @@ export const PLC_CHECKS: Check[] = [
   {
     id: "guarantor-checks",
     label: "Guarantor checks",
-    needs: "Referencing outcome and signed guarantee, where one is required",
+    needs: "Referencing outcome, AML check and signed guarantee, where one is required",
     scan: "reading",
     why: "A guarantor who was never referenced is a guarantee nobody can enforce.",
     gate: "conditional",
@@ -341,6 +341,9 @@ export const groupOf = (id: CheckId): "landlord" | "tenant" =>
 const FILENAME_HINTS: [RegExp, CheckId][] = [
   /* Before "agreement" and "landlord": "TLE_TOB_ENGLAND.pdf", "Landlord terms of business.pdf". */
   [/terms.?of.?business|(^|[^a-z])tob([^a-z]|$)|docuseal/i, "terms-of-business"],
+  /* Before AML, reference and ID (Kirstie, 21 Oct 2026): "Gtor AML.pdf" and
+     "Guarantor reference.pdf" are the guarantor's, not the landlord's or the tenant's. */
+  [/guarantor|\bgtor\b|guarantee/i, "guarantor-checks"],
   [/\bpat\b|portable.?appliance/i, "pat"],
   [/legionella/i, "legionella"],
   [/emergency.?light/i, "emergency-lighting"],
@@ -359,7 +362,6 @@ const FILENAME_HINTS: [RegExp, CheckId][] = [
   /* The landlord's own passport is ID, not Right to Rent: checked before the
      passport pattern below catches it. */
   [/landlord|\bll\b|owner/i, "landlord-id-aml"],
-  [/guarantor|guarantee/i, "guarantor-checks"],
   [/right.?to.?rent|share.?code|passport|visa|brp/i, "right-to-rent"],
   [/ast|tenancy.?agree|agreement/i, "tenancy-agreement"],
   [/referenc|goodlord|rightmove|van.?mildert|credit/i, "tenant-checks"],

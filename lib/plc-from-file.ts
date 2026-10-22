@@ -6,7 +6,7 @@ import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { addFileDoc, storedDocsForHome } from "@/lib/file-documents";
 import { hasDb, q } from "@/lib/db";
 import { parseAddress, sameHome } from "@/lib/address-parse";
-import { docTypeLabel, OTHER } from "@/lib/doc-types";
+import { docTypeLabel, guarantorTypeFor, OTHER } from "@/lib/doc-types";
 import { attachDocument, getCase, noteFileKeys, PlcRefused } from "@/lib/plc-store";
 import { checkById, CHECK_GROUPS, COVERABLE, guessCheck, type CheckId, type PlcCase } from "@/lib/plc";
 import { readDroppedFile } from "@/lib/plc-read-file";
@@ -48,6 +48,11 @@ const CHECK_FOR_TYPE: Record<string, CheckId> = {
   /* Kirstie, 19 Oct 2026: the terms were the one thing that never came
      through. They were set aside here on purpose (8 Oct) and now belong. */
   terms_of_business: "terms-of-business",
+  /* Kirstie, 21 Oct 2026: the guarantor's AML, ID, reference and agreement. */
+  guarantor_aml: "guarantor-checks",
+  guarantor_id: "guarantor-checks",
+  guarantor_reference: "guarantor-checks",
+  guarantor_agreement: "guarantor-checks",
 };
 
 /** The other way: the Documents-tab label for a file filed on a pack. */
@@ -55,6 +60,8 @@ const TYPE_FOR_CHECK: Partial<Record<CheckId, string>> = Object.fromEntries(
   Object.entries(CHECK_FOR_TYPE).map(([type, check]) => [check, type])
 );
 TYPE_FOR_CHECK["landlord-id-aml"] = "landlord_id";
+/* Four types answer it, so a mirrored file is typed by its name (mirrorToFile). */
+delete TYPE_FOR_CHECK["guarantor-checks"];
 
 /** Never part of a pre-let check: left on the Documents tab. */
 const NOT_FOR_A_PACK = new Set(["tenant_proof_of_address"]);
@@ -218,11 +225,18 @@ async function file(run: Run, source: PullSource, d: { key: string; name: string
   }
 }
 
+const PERSON_SLOTS: CheckId[] = ["landlord-id-aml", "landlord-aml", "tenant-checks", "right-to-rent"];
+
 /** The reader's slot if it is sure, the label's if it is not; whose passport it is, the label knows. */
 function slotFor(read: Read, label: CheckId | null): { checkId: CheckId | null; read: Read } {
   let sure = read.checkId && read.confidence !== "low" ? read.checkId : null;
   const idSlots: CheckId[] = ["landlord-id-aml", "right-to-rent"];
   if (sure && label && sure !== label && idSlots.includes(sure) && idSlots.includes(label)) {
+    return { checkId: label, read: { ...read, checkId: label, note: undefined } };
+  }
+  /* A guarantor's AML, ID or reference looks just like the landlord's or the
+     tenant's: labelled as the guarantor's, it is the guarantor's. */
+  if (sure && label === "guarantor-checks" && PERSON_SLOTS.includes(sure)) {
     return { checkId: label, read: { ...read, checkId: label, note: undefined } };
   }
   /* The reader is sure it is none of the pack's documents (an agency
@@ -561,7 +575,8 @@ export async function mirrorToFile(
   by: { id: string; name: string }
 ): Promise<void> {
   try {
-    const type = TYPE_FOR_CHECK[doc.checkId] ?? OTHER;
+    const type =
+      (doc.checkId === "guarantor-checks" ? guarantorTypeFor(doc.name) : TYPE_FOR_CHECK[doc.checkId]) ?? OTHER;
     const ext = doc.name.split(".").pop()?.toLowerCase() ?? "";
     await addFileDoc({
       home: { address: c.address },

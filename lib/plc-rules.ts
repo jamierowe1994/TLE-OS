@@ -1,4 +1,5 @@
 import type { CheckId, Finding } from "@/lib/plc";
+import { AML_WORDS } from "@/lib/doc-types";
 
 /**
  * What makes a document pass, fail, or need a person.
@@ -95,6 +96,8 @@ export type PackContext = {
   scottish: boolean;
   /** A guarantor's report or guarantee is filed on the pack. */
   guarantorReport: boolean;
+  /** A guarantor's AML check is filed on the pack. Unset when not known (the bench). */
+  guarantorAml?: boolean;
 };
 
 export const NO_PACK: PackContext = { scottish: false, guarantorReport: false };
@@ -448,8 +451,20 @@ const CHECK_RULES: Partial<
     },
   ],
 
-  "guarantor-checks": (f) => [
+  "guarantor-checks": (f, _moveIn, pack) => [
     ...outcomeRules(f, "guarantee"),
+    /* Kirstie, 21 Oct 2026: guarantor AML checks belong in the pack. A
+       question rather than a stop (James, 22 Oct): the guarantor may have
+       been checked another way, and the checker can say so. */
+    ...(pack.guarantorAml === false && !AML_WORDS.test(f.documentType ?? "")
+      ? [
+          {
+            verdict: "review" as const,
+            rule: "No guarantor AML",
+            because: "there is no AML check for the guarantor in the pack - add one, or say how they were checked.",
+          },
+        ]
+      : []),
     {
       verdict: "review",
       rule: "Enforceability is a judgement",

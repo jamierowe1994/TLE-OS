@@ -13,6 +13,8 @@ export interface DocType {
   key: string;
   label: string;
   side: DocSide;
+  /** Only asked for when the let has a guarantor (see hasGuarantorPapers). */
+  guarantor?: boolean;
 }
 
 export const DOC_TYPES: DocType[] = [
@@ -20,6 +22,14 @@ export const DOC_TYPES: DocType[] = [
   { key: "reference", label: "Reference", side: "tenant" },
   { key: "tenant_right_to_rent", label: "Tenant Right to Rent", side: "tenant" },
   { key: "tenant_proof_of_address", label: "Tenant Proof of Address", side: "tenant" },
+  /* Kirstie Mulholland, 21 Oct 2026: "Please can you add Guarantor AML checks
+     to documents." She and Lianna had been filing them as Other ("Gtor AML",
+     "Guarantor AML 1"), with the guarantor's ID, reference and agreement
+     beside them. Each goes into the PLC pack's Guarantor checks. */
+  { key: "guarantor_aml", label: "Guarantor AML Check", side: "tenant", guarantor: true },
+  { key: "guarantor_id", label: "Guarantor ID", side: "tenant", guarantor: true },
+  { key: "guarantor_reference", label: "Guarantor Reference", side: "tenant", guarantor: true },
+  { key: "guarantor_agreement", label: "Guarantor Agreement", side: "tenant", guarantor: true },
   { key: "terms_of_business", label: "Terms of Business", side: "landlord" },
   { key: "landlord_id", label: "Landlord ID", side: "landlord" },
   { key: "landlord_proof_of_ownership", label: "Landlord Proof of Ownership", side: "landlord" },
@@ -54,6 +64,30 @@ export function docTypeLabel(key: string): string {
 /** An inventory, by its type or by the name somebody gave an Other before Inventory was a type. */
 export const isInventory = (d: { type: string; name?: string | null }): boolean =>
   d.type === "inventory" || (d.type === OTHER && /inventor/i.test(String(d.name ?? "")));
+
+/** An AML, KYC or sanctions check, by its name or what the reader called it. */
+export const AML_WORDS = /\baml\b|anti.?money|money.?laund|\bkyc\b|sanction/i;
+
+/**
+ * Which guarantor type a guarantor's file is, from its name: a PLC upload
+ * mirrored onto the Documents tab has only its check (Guarantor checks) and
+ * the file name to go on. Null when the name says nothing.
+ */
+export function guarantorTypeFor(name: string): string | null {
+  if (AML_WORDS.test(name)) return "guarantor_aml";
+  if (/agreement|guarantee|deed|contract/i.test(name)) return "guarantor_agreement";
+  if (/referenc/i.test(name)) return "guarantor_reference";
+  if (/passport|licen[cs]e|\bid\b/i.test(name)) return "guarantor_id";
+  return null;
+}
+
+/**
+ * The "Not on file yet" list leaves the guarantor's papers out until one of
+ * them is on the file: most lets have no guarantor, and four empty boxes on
+ * every one of them would read as four things missing.
+ */
+export const hasGuarantorPapers = (held: Set<string>): boolean =>
+  DOC_TYPES.some((t) => t.guarantor && held.has(t.key));
 
 export const isDocType = (key: string): boolean => key === OTHER || DOC_TYPES.some((t) => t.key === key);
 

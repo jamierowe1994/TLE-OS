@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { DOC_ACCEPT, DOC_TYPES, OTHER, SIDE_LABEL, docTypeLabel, isInventory, type DocSide } from "@/lib/doc-types";
+import { DOC_ACCEPT, DOC_TYPES, OTHER, SIDE_LABEL, docTypeLabel, hasGuarantorPapers, isInventory, type DocSide } from "@/lib/doc-types";
 
 /**
  * DOCUMENTS ON ANY FILE (James, 5 Oct 2026).
@@ -157,7 +157,8 @@ export default function FileDocuments({
   }
 
   const held = new Set((docs ?? []).map((d) => d.type));
-  const missing = DOC_TYPES.filter((t) => sides.includes(t.side) && !held.has(t.key));
+  const guarantor = hasGuarantorPapers(held);
+  const missing = DOC_TYPES.filter((t) => sides.includes(t.side) && !held.has(t.key) && (!t.guarantor || guarantor));
 
   return (
     <div>

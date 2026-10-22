@@ -7,6 +7,7 @@ import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { hasDb, q } from "@/lib/db";
 import { parseAddress, sameHome } from "@/lib/address-parse";
 import { isScottish } from "@/lib/property-flags";
+import { AML_WORDS } from "@/lib/doc-types";
 import {
   checkById,
   gateOf,
@@ -752,6 +753,10 @@ export async function packContext(c: PlcCase): Promise<PackContext> {
   const guarantorReport = c.documents.some(
     (d) => d.checkId === "guarantor-checks" || d.covers?.includes("guarantor-checks")
   );
+  /* By the agent's name for it, the file name, or what the reader called it. */
+  const guarantorAml = c.documents.some(
+    (d) => d.checkId === "guarantor-checks" && [d.label, d.name, d.read?.what].some((t) => AML_WORDS.test(t ?? ""))
+  );
   /* "documents/file-3f1 44 South Bridge Edinburgh EH1 1LL/..." - only this
      home's folder: the landlord's ID can come from another of their homes. */
   const folders = [...c.documents.map((d) => d.key), ...(c.fileKeys ?? [])]
@@ -767,7 +772,7 @@ export async function packContext(c: PlcCase): Promise<PackContext> {
       : [];
     scottish = rows.some((r) => sameHome(r.address, c.address) && isScottish(r.address));
   }
-  return { scottish, guarantorReport };
+  return { scottish, guarantorReport, guarantorAml };
 }
 
 /** Per-check one-liners plus the pack headline, in one place. */
