@@ -85,8 +85,14 @@ interface RexEntry extends Record<string, unknown> {
   file?: { url?: string } | null;
 }
 
-/** Months a certificate usually runs, used only when REX holds an issue date and no expiry. */
-const LIFE_MONTHS: Record<string, number> = { portable_appliance_testing: 12, gas_safety: 12, eicr: 60, epc: 120, legionella_risk_assessment: 24 };
+/** Months a certificate usually runs, used only when REX holds an issue date and no expiry.
+ *  Fire safety has no expiry field in REX at all (getSchemaForType, 8 Oct 2026),
+ *  only the checked date, so without its year here every fire certificate
+ *  filed in REX read as No record on an HMO (22 Oct 2026). Same year as
+ *  lib/plc-rex and lib/works-carried. */
+const LIFE_MONTHS: Record<string, number> = { portable_appliance_testing: 12, gas_safety: 12, eicr: 60, epc: 120, legionella_risk_assessment: 24, emergency_lighting_fire_exit: 12 };
+/** REX types that hold only a checked date: one with a file and no date is on file, not missing. */
+const CHECKED_DATE_ONLY = new Set(["portable_appliance_testing", "emergency_lighting_fire_exit"]);
 /** Four more years on a Scottish PAT that is not an HMO's: five in all. */
 const PAT_SCOTLAND_EXTRA_DAYS = 4 * 365 + 1;
 /** A Scottish postcode in the address, or one of the two cities by name. Same areas as the clean sweep. */
@@ -98,6 +104,31 @@ function plusMonths(iso: string | null | undefined, months: number | undefined):
   if (!Number.isFinite(d.getTime())) return null;
   d.setMonth(d.getMonth() + months);
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * One REX compliance entry as the book holds it, or null for a type the OS
+ * does not track.
+ *
+ * A PAT entry holds only the tested date (REX's own schema, 6 Sep 2026), and
+ * fire safety only the checked date: the next is a year on. Any type with an
+ * issue date and no expiry gets the certificate's usual life, so it is not
+ * counted as no record.
+ */
+export function entryCert(e: Pick<RexEntry, "type_id" | "details" | "file">): { key: CertKey; cert: Cert } | null {
+  const key = TYPE_MAP[e.type_id ?? ""];
+  if (!key) return null;
+  const detail = e.details?.[e.type_id!];
+  const expires = daysUntil(detail?.expiry_date) ?? daysUntil(plusMonths(detail?.issue_date, LIFE_MONTHS[e.type_id ?? ""]));
+  const attached = Boolean(e.file?.url);
+  const notRequired = Boolean(detail?.not_required);
+  /* The certificate is there and nobody typed its checked date: on file,
+     the date still wanted (the tracker's "On file, no date"). */
+  const undated = expires == null && attached && !notRequired && CHECKED_DATE_ONLY.has(e.type_id ?? "");
+  return {
+    key,
+    cert: { expires, attached, fileUrl: e.file?.url ?? null, ...(notRequired ? { notRequired: true } : {}), ...(undated ? { undated: true } : {}) },
+  };
 }
 
 const MIN_DATE = new Date("2000-01-01T00:00:00").getTime();
@@ -430,21 +461,20 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     const certs: CompProperty["certs"] = {};
 
     for (const e of mine) {
-      const key = TYPE_MAP[e.type_id ?? ""];
-      if (!key) continue;
+      const read = entryCert(e);
+      if (!read) continue;
+      const { key, cert } = read;
+      if (cert.attached) withCertificate++;
       const detail = e.details?.[e.type_id!];
-      /* A PAT entry holds only the tested date (REX's own schema, 6 Sep 2026):
-         its next test is a year on. Any type with an issue date and no expiry
-         gets the certificate's usual life, so it is not counted as no record. */
-      const expires = daysUntil(detail?.expiry_date) ?? daysUntil(plusMonths(detail?.issue_date, LIFE_MONTHS[e.type_id ?? ""]));
-      const attached = Boolean(e.file?.url);
-      if (attached) withCertificate++;
       if (key === "pat" && !detail?.expiry_date && detail?.issue_date) patFromTest.add(String(l.propertyId));
       const held = certs[key];
-      const notRequired = Boolean(detail?.not_required);
       // Latest expiry wins; a record with no date never displaces one with.
-      if (!held || (expires != null && (held.expires == null || expires > held.expires))) {
-        certs[key] = { expires, attached, fileUrl: e.file?.url ?? null, ...(notRequired ? { notRequired: true } : {}) };
+      if (
+        !held ||
+        (cert.expires != null && (held.expires == null || cert.expires > held.expires)) ||
+        (cert.undated && held.expires == null && !held.attached)
+      ) {
+        certs[key] = cert;
       }
     }
 

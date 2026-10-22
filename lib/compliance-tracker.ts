@@ -182,7 +182,9 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
       : ra
         ? `The renewal applied for on ${prettyDay(ra.appliedOn)} has had six months and no new licence has been filed. Chase the council.`
         : undated
-      ? "On file from the clean sweep, but nobody has recorded its expiry date. Upload it again with the date to finish it."
+      ? cert?.fromSweep
+        ? "On file from the clean sweep, but nobody has recorded its expiry date. Upload it again with the date to finish it."
+        : "The certificate is on file, but nobody has recorded the date it was checked. Upload it again with the date to finish it."
       : cert?.viaGas && status !== "missing"
         ? status === "expired"
           ? `Checked at the gas safety inspection, and that record ran out ${Math.abs(daysLeft ?? 0)} days ago.`
