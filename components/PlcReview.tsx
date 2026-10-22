@@ -43,6 +43,8 @@ export type Loaded = {
    *  preview's invented pack). Otherwise the panel reads it from
    *  /api/plc/<id>/answers itself. */
   tenantAnswers?: TenantAnswers | null;
+  /** The approval's uploads still going into Propoly and REX (22 Oct 2026). */
+  pushing?: { propoly: boolean; rex: boolean } | null;
 };
 
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -299,6 +301,8 @@ function FinalAskCard({
 
 /** How often an open pack with files waiting to read asks whether they are in. */
 const WAITING_POLL_MS = 30_000;
+/** How often an approved pack whose files are still going in asks whether they are done. */
+const PUSH_POLL_MS = 4_000;
 
 /** Renders its own <li>, so the caller keys it and does NOT wrap it — an li
  *  inside an li is a hydration error, not just untidy markup. */
@@ -532,6 +536,17 @@ export function ComplianceSide({
     }, WAITING_POLL_MS);
     return () => clearInterval(t);
   }, [waiting, perform, reload]);
+
+  /* An approval's uploads run after it answers (22 Oct 2026, 10 Richmond
+     Avenue took 43s with them in the way). Asked again until they are in. */
+  const pushing = data.pushing ?? null;
+  useEffect(() => {
+    if (!pushing || perform) return;
+    const t = setInterval(() => {
+      if (!inFlight.current) void reload().catch(() => {});
+    }, PUSH_POLL_MS);
+    return () => clearInterval(t);
+  }, [pushing, perform, reload]);
 
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
     if (inFlight.current) return;
@@ -921,12 +936,14 @@ export function ComplianceSide({
             <div>
               <Head icon="upload" title="Into Propoly" />
               <p className="mt-1.5 text-[12px] text-muted">
-                {c.propolyPush
+                {pushing?.propoly
+                  ? "Putting the files into the deal now. This updates itself."
+                  : c.propolyPush
                   ? `Last pushed by ${c.propolyPush.by} on ${prettyWhen(c.propolyPush.at)}${c.propolyPush.dealId ? "" : " - no deal matched"}.`
                   : "Not pushed yet. Each file goes into the deal's matching document slot."}
               </p>
             </div>
-            <Btn onClick={() => act("push-propoly")} busy={busy === "push-propoly"}>
+            <Btn onClick={() => act("push-propoly")} busy={busy === "push-propoly" || Boolean(pushing?.propoly)}>
               {c.propolyPush ? "Push again" : "Push documents to Propoly"}
             </Btn>
           </div>
@@ -968,12 +985,14 @@ export function ComplianceSide({
             <div>
               <Head icon="upload" title="Into REX" />
               <p className="mt-1.5 text-[12px] text-muted">
-                {c.rexPush
+                {pushing?.rex
+                  ? "Writing the certificates now. This updates itself."
+                  : c.rexPush
                   ? `Last written by ${c.rexPush.by} on ${prettyWhen(c.rexPush.at)}${c.rexPush.propertyId ? "" : " - no property matched"}.`
                   : "Not written yet. Gas, EICR, EPC and licence go onto the property as compliance entries, with the expiry."}
               </p>
             </div>
-            <Btn onClick={() => act("push-rex")} busy={busy === "push-rex"}>
+            <Btn onClick={() => act("push-rex")} busy={busy === "push-rex" || Boolean(pushing)}>
               {c.rexPush ? "Write again" : "Write certificates to REX"}
             </Btn>
           </div>

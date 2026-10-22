@@ -60,6 +60,39 @@ export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
+/* ── The uploads after an approval, in the background (22 Oct 2026) ────────
+   Susan's Approve on 10 Richmond Avenue (plc-38325, 21 Oct) took 43 seconds:
+   the answer waited for every file to go into Propoly one by one, then into
+   REX, and the screen sat on "Working…" until the watchdog called it stuck.
+   The decision is hers and lands at once; the uploads are a courtesy that
+   was never allowed to undo it, so they carry on here and the pack shows
+   them going in. Same single-instance memory as the send jobs below. */
+type PushJob = { at: number; done: boolean; propoly: boolean; rex: boolean };
+/** A push still "going" after this long died with a restart. */
+const PUSH_STALE_MS = 10 * 60_000;
+const gp = globalThis as unknown as { __plcPushJobs?: Map<string, PushJob> };
+const pushJobs: Map<string, PushJob> = (gp.__plcPushJobs ??= new Map());
+
+function pushingNow(id: string): { propoly: boolean; rex: boolean } | null {
+  const job = pushJobs.get(id);
+  if (!job || job.done || Date.now() - job.at > PUSH_STALE_MS) return null;
+  return { propoly: job.propoly, rex: job.rex };
+}
+
+function startPushes(id: string, by: string, which: { propoly: boolean; rex: boolean }) {
+  if (pushingNow(id)) return;
+  for (const [k, j] of pushJobs) if (j.done || Date.now() - j.at > PUSH_STALE_MS) pushJobs.delete(k);
+  const job: PushJob = { at: Date.now(), done: false, ...which };
+  pushJobs.set(id, job);
+  void (async () => {
+    /* One after the other, as before: each records its own result on the case. */
+    if (which.propoly) await pushCaseToPropoly(id, by).catch((e) => console.error("[plc approve] Propoly push", id, e));
+    if (which.rex) await pushCaseToRex(id, by).catch((e) => console.error("[plc approve] REX push", id, e));
+  })().finally(() => {
+    job.done = true;
+  });
+}
+
 async function payload(c: PlcCase | null, req: NextRequest) {
   if (!c) return null;
   /* What the person looking may do, so the panel offers the right step
@@ -93,6 +126,8 @@ async function payload(c: PlcCase | null, req: NextRequest) {
     rlp: c.rlpWanted
       ? { preview: rlpEmail(c), teamSet: Boolean(rlpTeamEmail()), switchOn: rlpOn }
       : null,
+    /* The approval's uploads still going in (above), so the pack says so. */
+    pushing: pushingNow(c.id),
   };
 }
 
@@ -433,6 +468,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       }
 
       case "push-rex": {
+        if (pushingNow(id)) {
+          return NextResponse.json({ ok: false, error: "The files are still going in from the approval. Give it a minute.", ...(await payload(found, req)) }, { status: 409 });
+        }
         /* By hand, on an approved pack: the supervised first write, or a
            retry after REX refused one. */
         const by = await actorName(req, "Compliance");
@@ -446,6 +484,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       }
 
       case "push-propoly": {
+        if (pushingNow(id)) {
+          return NextResponse.json({ ok: false, error: "The files are still going in from the approval. Give it a minute.", ...(await payload(found, req)) }, { status: 409 });
+        }
         /* By hand, on an approved pack: the first push after the switch goes
            on, or a retry after a slot failed. */
         const by = await actorName(req, "Compliance");
@@ -617,8 +658,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           from: before?.state ?? "checked",
           to: decision,
         });
-        /* The landlord hears it from the agent, never from here (2 Oct 2026). */
-        await putPlcWithAgent(decided, decision).catch(() => null);
+        /* The landlord hears it from the agent, never from here (2 Oct 2026).
+           Not awaited (22 Oct 2026): the agent's draft reads the let from the
+           applications book, and on 21 Oct that read alone held Susan's
+           Approve for about 18 seconds before any upload began. */
+        void putPlcWithAgent(decided, decision).catch(() => null);
         /* Approved, and the switch is on: the pack goes into Propoly's slots
            now, so she can generate the agreement without uploading anything.
            A push that fails is recorded on the case and never undoes the
@@ -628,24 +672,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            generate the agreement; REX so the certificates count on the
            tracker and in REX PM (5 Sep). */
         const [propoly, rex] = await Promise.all([switchOn("propoly_documents"), switchOn("rex_compliance_write")]);
-        if (decision === "approved" && (propoly || rex) && !testCase) {
-          if (propoly) {
-            try {
-              await pushCaseToPropoly(id, by);
-            } catch {
-              /* recorded on the case where it could be; the approval stands */
-            }
-          }
-          if (rex) {
-            try {
-              await pushCaseToRex(id, by);
-            } catch {
-              /* as above */
-            }
-          }
-          const after = await getCase(id);
-          return NextResponse.json({ ok: true, ...(await payload(after ?? decided, req)) });
-        }
+        /* In the background, so Approve answers at once (startPushes, above). */
+        if (decision === "approved" && (propoly || rex) && !testCase) startPushes(id, by, { propoly, rex });
         return NextResponse.json({ ok: true, ...(await payload(decided, req)) });
       }
 

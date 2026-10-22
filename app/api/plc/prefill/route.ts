@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { publicError } from "@/lib/public-error";
 import { prefillFor } from "@/lib/plc-prefill";
 import { rexConfigured } from "@/lib/rex";
 
@@ -48,8 +47,13 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, prefill });
   } catch (e) {
+    /* The book behind every application is read live, so when it does not
+       answer (21 Oct 2026, 13:52-13:54, "fetch failed" on every call) this
+       says so plainly instead of passing "fetch failed" to an agent. The
+       wizard offers Try again under it. */
+    console.error("[plc prefill]", e);
     return NextResponse.json(
-      { ok: false, error: publicError(e, "Couldn't read the application.") },
+      { ok: false, error: "The application couldn't be read just now. Nothing has been lost - try again in a minute." },
       { status: 502 }
     );
   }

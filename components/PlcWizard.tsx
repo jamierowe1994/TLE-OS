@@ -221,6 +221,8 @@ export default function PlcWizard({
     };
   }, []);
   const [step, setStep] = useState<Step>("gathering");
+  /* Try again on a failed opening read (22 Oct 2026): bumped to run it again. */
+  const [attempt, setAttempt] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [kase, setKase] = useState<PlcCase | null>(null);
@@ -344,7 +346,7 @@ export default function PlcWizard({
     return () => {
       alive = false;
     };
-  }, [applicationId, listingId, go, isDemo]);
+  }, [applicationId, listingId, go, isDemo, attempt]);
 
   /* The note box starts from what is on the pack, whenever a different pack
      or a different state of it arrives (opened, reopened). */
@@ -673,15 +675,42 @@ export default function PlcWizard({
         {step === "details" && (
           <div>
             <h1 className="text-2xl tracking-normal text-ink">
-              Check These Over
+              {prefill ? "Check These Over" : "The Application Didn't Come Through"}
             </h1>
-            <p className="mt-2 text-sm text-muted">
-              Pulled through from the application. Change the move-in date here if it has moved.
-            </p>
+            {prefill && (
+              <p className="mt-2 text-sm text-muted">
+                Pulled through from the application. Change the move-in date here if it has moved.
+              </p>
+            )}
             {error && (
               <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
                 {error}
               </p>
+            )}
+            {/* The opening read failed (Lianna, 21 Oct 2026, 44 South Bridge:
+                a 502 while the book was out for two minutes). The screen used
+                to stop at the red line with nothing to press, which reads as
+                frozen. Nothing is written before Continue, so asking again is
+                always safe. */}
+            {!prefill && (
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setStep("gathering");
+                    setAttempt((n) => n + 1);
+                  }}
+                  className={PRIMARY}
+                >
+                  Try again
+                </button>
+                {applicationId && !demo && (
+                  <a href={`/applications/${encodeURIComponent(applicationId)}`} className={SECONDARY}>
+                    Back to the application
+                  </a>
+                )}
+              </div>
             )}
             {prefill && (
               <>
@@ -869,6 +898,19 @@ export default function PlcWizard({
         {step === "review" && kase && (() => {
           const gate = gateFor(kase);
           const blockers = kase.findings.filter((f) => f.level === "blocker");
+          /* Why Send is grey, in words: the tooltip and the line under the button. */
+          const names = (ks: { label: string }[]) => ks.map((k) => k.label).join(", ");
+          const sendHeld = testLet
+            ? null
+            : gate.blocked.length
+              ? `${names(gate.blocked)} - attach ${gate.blocked.length === 1 ? "it" : "them"} first`
+              : gate.askWhy.length
+                ? `${names(gate.askWhy)} - attach ${gate.askWhy.length === 1 ? "it" : "them"}, or say why ${gate.askWhy.length === 1 ? "it is" : "they are"} not needed and press Not needed`
+                : !rlpAnswered(kase)
+                  ? "say whether the landlord wants Rent and Legal Protection"
+                  : !clausesReady
+                    ? "say whether there are any additional clauses"
+                    : null;
           /* What the gate asks for on this let, plus anything optional the
              agent has filed anyway, so the list is the whole pack. */
           const gated = PLC_CHECKS.filter((c) => {
@@ -1211,18 +1253,8 @@ export default function PlcWizard({
               <button
                 type="button"
                 onClick={() => (!testLet && !demo && blockers.length > 0 && readingStillFresh(kase) ? askForAnyway("same") : submit())}
-                disabled={!testLet && (!gate.ready || !rlpAnswered(kase) || !clausesReady)}
-                title={
-                  testLet
-                    ? undefined
-                    : !gate.ready
-                    ? "Attach what is needed, or say why it is not, first"
-                    : !rlpAnswered(kase)
-                      ? "Say whether the landlord wants Rent and Legal Protection first"
-                      : !clausesReady
-                        ? "Say whether there are any additional clauses first"
-                        : undefined
-                }
+                disabled={Boolean(sendHeld)}
+                title={sendHeld ?? undefined}
                 className={PRIMARY}
               >
                 Send to the compliance team
@@ -1251,6 +1283,12 @@ export default function PlcWizard({
                 </button>
               )}
             </div>
+            {/* Said on the screen, not only on hover (Lianna, 21 Oct 2026, 6
+                Ruskin Place: Send stayed grey for the unanswered holding deposit
+                line and the only reason was a tooltip, so it read as frozen). */}
+            {sendHeld && (
+              <p className="mt-3 text-sm text-amber-800">Send is waiting on: {sendHeld}.</p>
+            )}
           </div>
           );
         })()}
