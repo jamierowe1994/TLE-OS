@@ -338,7 +338,7 @@ async function fileLandlordCertificate(p: { id: string; type: string; expiry: st
   });
   await q(`UPDATE os_landlord_documents SET certificate_id = $2 WHERE id = $1`, [p.id, filed.row.id]);
   const where = propertyId.startsWith("pending-") ? "Filed against the address until the home is set up." : "Filed on the home.";
-  return [where, filed.share?.line].filter(Boolean).join(" ");
+  return [where, "Moved to Verified, ready to email the tenant.", filed.share?.armed ? filed.share.line : ""].filter(Boolean).join(" ");
 }
 
 /**
@@ -546,10 +546,13 @@ export async function answer(p: {
         .then(() => shareOnceChecked(p.id).catch(() => null)),
       new Promise<"slow">((r) => setTimeout(() => r("slow"), 8000)),
     ]);
-    if (share === "slow") return "Verified. Who it goes to is still being worked out; the result shows on the home's file in a minute or two.";
-    /* Unless the tenants already have it, it waits on Verified (Jo, 21 Oct 2026). */
+    if (share === "slow") return "Moved to Verified, ready to email the tenant.";
+    /* Unless the tenants already have it, it waits on the Verified tab (Jo, 21
+       Oct 2026). The automatic send's own line only when it is armed: in
+       shadow it is a sentence about what did not happen. */
     const tenantsHaveIt = Boolean(share?.armed && share.outcomes.some((o) => o.role === "tenant" && o.sent));
-    return [share?.line, tenantsHaveIt ? "" : "It's on Verified, ready to send to the tenants."].filter(Boolean).join(" ");
+    if (tenantsHaveIt) return share?.line ?? "";
+    return ["Moved to Verified, ready to email the tenant.", share?.armed ? share.line : ""].filter(Boolean).join(" ");
   }
   if (p.state === "queried" && p.kind !== "works_order") {
     return tellAgent(p.kind, p.id, (p.note ?? "").trim(), p.by).catch((e) => `Saved, but the agent was not told: ${e instanceof Error ? e.message : "it failed"}.`);

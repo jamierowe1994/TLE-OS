@@ -16,8 +16,9 @@ import type { RailGroup } from "@/components/WorkspaceRail";
  *   Agents        "all of the agents are compliant"
  *   Works orders  "the last thing that he does is check on works orders"
  *
- * Verified (Jo, 21 Oct 2026) sits beside it: what has been checked and is
- * waiting to go to the tenants, inside the 28 days.
+ * Verified and Sent (Jo, 21-22 Oct 2026) are tabs on To verify, not rail
+ * entries: what has been checked and is waiting to go to the tenants, inside
+ * the 28 days, and what has gone.
  *
  * Sections (7 Oct 2026) sits under To verify: the agents' Section 13 and
  * Section 8 checklists, waiting for his approval before he serves them.
@@ -33,8 +34,7 @@ const RAIL: RailGroup[] = [
     items: [
       { href: "/compliance-desk", label: "Dashboard", exact: true, icon: "home" },
       { href: "/compliance-desk/properties", label: "Properties", icon: "shield" },
-      { href: "/compliance-desk/verify", label: "To verify", icon: "checklist" },
-      { href: "/compliance-desk/verified", label: "Verified", icon: "mail" },
+      { href: "/compliance-desk/verify", label: "To verify", icon: "checklist", also: ["/compliance-desk/verified"] },
       { href: "/compliance-desk/sections", label: "Sections", icon: "file-contract" },
       { href: "/compliance-desk/plc", label: "PLC queue", icon: "list" },
       { href: "/compliance-desk/id-checks", label: "ID checks", icon: "user" },

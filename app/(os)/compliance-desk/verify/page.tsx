@@ -5,7 +5,8 @@ import WorkspaceLoading from "@/components/WorkspaceLoading";
 import CheckRow, { GREEN } from "@/components/compliance-desk/CheckRow";
 import { useDesk } from "@/components/compliance-desk/useDesk";
 import RegisterCheck from "@/components/compliance-desk/RegisterCheck";
-import { useState } from "react";
+import VerifiedList, { useVerified } from "@/components/compliance-desk/VerifiedList";
+import { useCallback, useEffect, useState } from "react";
 import type { VerifyItem } from "@/lib/compliance-desk";
 
 /**
@@ -19,34 +20,112 @@ import type { VerifyItem } from "@/lib/compliance-desk";
  * Oldest first. A renewed gas certificate has to reach the landlord and the
  * tenant inside 30 days, so the one that has waited longest is the one nearest
  * being a problem; a week waiting goes red.
+ *
+ * THREE TABS ON ONE PAGE (James, 22 Oct 2026, after Jo's first morning): "it
+ * lands, it moves over into the next section, she clicks the tab, and then
+ * sends it off straight away without having to click in the sidebar."
+ *
+ *   To Verify   waiting for the check
+ *   Verified    checked, waiting to go to the tenants (Email Tenant)
+ *   Sent        gone, with the record
+ *
+ * /compliance-desk/verified opens this page on Verified.
  */
 const LATE_AFTER_DAYS = 7;
 
+type Tab = "verify" | "verified" | "sent";
+const TAB_IDS: Tab[] = ["verify", "verified", "sent"];
+
+const BLURB: Record<Tab, string> = {
+  verify: "Every certificate an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. Verified, it moves to the Verified tab, ready to email the tenant; queried, the agent is emailed what you wrote. Gas and electrical ones come with the engineer's register number read off for you. Oldest first.",
+  verified: "Certificates you have verified, waiting to go to the tenants. They must have the renewed certificate within 28 days of the work, counted from the date on it (or the day it came in, if no date was filed). Email Tenant opens the email with the certificate attached: check it, change the words if you need to, and send.",
+  sent: "Every verified certificate that has gone to the tenants, newest first. Each email is kept on the home's file as the record: View Record shows it exactly as it went.",
+};
+
 export default function ToVerify() {
   const { desk, error, busy, said, check, readRegister } = useDesk();
+  const verified = useVerified();
+  const [tab, setTab] = useState<Tab>("verify");
+  /* What the last Verified press did, with the way to the tab it went to. */
+  const [moved, setMoved] = useState(false);
+  useEffect(() => {
+    try {
+      const t = new URLSearchParams(window.location.search).get("tab");
+      if (TAB_IDS.includes(t as Tab)) setTab(t as Tab);
+    } catch { /* fine */ }
+  }, []);
+  const pick = useCallback((t: Tab) => {
+    setTab(t);
+    setMoved(false);
+    try {
+      const u = new URL(window.location.href);
+      if (t === "verify") u.searchParams.delete("tab"); else u.searchParams.set("tab", t);
+      window.history.replaceState(null, "", u.toString());
+    } catch { /* fine */ }
+  }, []);
+  /* Verified, it leaves this list there and then and the Verified tab counts it. */
+  const checkAndMove: typeof check = useCallback(async (...args) => {
+    const ok = await check(...args);
+    if (ok && args[2] === "verified") {
+      verified.reload();
+      setMoved(args[0] !== "works_order");
+    } else setMoved(false);
+    return ok;
+  }, [check, verified.reload]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!desk && !error) return <WorkspaceLoading />;
   const rows = desk?.verify ?? [];
   const queried = rows.filter((r) => r.queried).length;
+  const counts: Record<Tab, number | null> = {
+    verify: rows.length,
+    verified: verified.items ? verified.waiting.length : null,
+    sent: verified.items ? verified.sent.length : null,
+  };
 
   return (
     <>
-      <PageHeader
-        title="To Verify"
-        blurb="Every certificate an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. Verified, a certificate moves to Verified, where you send it to the tenants; queried, the agent is emailed what you wrote. Gas and electrical ones come with the engineer's register number read off for you. Oldest first."
-        search={false}
-      />
+      <PageHeader title="To Verify" blurb={BLURB[tab]} search={false} />
+
+      <div role="tablist" aria-label="Certificates" className="fade-up mt-5 flex max-w-full gap-1 overflow-x-auto rounded-full border border-line/70 bg-card p-1 sm:inline-flex">
+        {([["verify", "To Verify"], ["verified", "Verified"], ["sent", "Sent"]] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => pick(id)}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition ${tab === id ? "bg-ink text-page" : "text-muted hover:text-ink"}`}
+          >
+            {label}
+            {counts[id] != null && (
+              <span className={`rounded-full px-1.5 text-[11px] ${tab === id ? "bg-page/20" : id === "verified" && (counts[id] ?? 0) > 0 ? "bg-accent-soft text-accent-dark" : "bg-page"}`}>{counts[id]}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {error && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{error}</p>}
-      {said && !error && <p className={`mt-4 rounded-2xl p-4 text-[12.5px] ${GREEN}`}>{said}</p>}
+      {tab === "verify" && said && !error && (
+        <div className={`mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl p-4 text-[12.5px] ${GREEN}`}>
+          <span className="min-w-0 flex-1">{said}</span>
+          {moved && (
+            <button type="button" onClick={() => pick("verified")} className="shrink-0 rounded-full bg-[#56634a] px-3.5 py-1.5 text-[12px] font-semibold text-white">
+              Open Verified
+            </button>
+          )}
+        </div>
+      )}
+      {(tab !== "verify" && verified.error) && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{verified.error}</p>}
       {desk && !desk.stored && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-muted">{desk.reason}</p>}
 
-      {desk?.stored && rows.length === 0 && (
+      {tab === "verify" && desk?.stored && rows.length === 0 && (
         <div className="fade-up mt-5 flex items-center gap-3 rounded-[22px] border border-line/70 bg-card p-5">
           <span className={`flex h-9 w-9 items-center justify-center rounded-full ${GREEN}`}><span className="h-2.5 w-2.5 rounded-full bg-[#56634a]" /></span>
           <p className="text-[13.5px]">Nothing waiting. Every document that has come in has been checked.</p>
         </div>
       )}
 
-      {rows.length > 0 && (
+      {tab === "verify" && rows.length > 0 && (
         <>
           <p className="fade-up mt-4 text-[12.5px] text-muted">
             {rows.length} waiting{queried ? `, ${queried} of them queried and not yet put right` : ""}.
@@ -56,10 +135,15 @@ export default function ToVerify() {
           </p>
           <ul className="fade-up mt-3 space-y-3">
             {rows.map((r, i) => (
-              <VerifyRow key={`${r.kind}-${r.id}`} r={r} index={i} busy={busy === r.id} check={check} readRegister={readRegister} />
+              <VerifyRow key={`${r.kind}-${r.id}`} r={r} index={i} busy={busy === r.id} check={checkAndMove} readRegister={readRegister} />
             ))}
           </ul>
         </>
+      )}
+
+      {tab !== "verify" && !verified.items && !verified.error && <p className="mt-5 text-[12.5px] text-muted">Reading the verified certificates…</p>}
+      {tab !== "verify" && (
+        <VerifiedList view={tab} waiting={verified.waiting} sent={verified.sent} ready={Boolean(verified.items) && verified.stored} reload={verified.reload} />
       )}
     </>
   );
