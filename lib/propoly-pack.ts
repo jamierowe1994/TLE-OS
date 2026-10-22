@@ -38,6 +38,7 @@ export interface PackFile {
 export const PACK_FILES: PackFile[] = [
   { key: "agreement", label: "Tenancy agreement", re: /tenancy agreement|\blease\b|\bprt\b|\bast\b/i },
   { key: "deposit", label: "Deposit scheme leaflet", re: /leaflet|deposit|prescribed/i, notScotland: true },
+  /* Not expected where the home's record says it has no gas (os_properties.no_gas). */
   { key: "gas", label: "Gas safety certificate", re: /\bgas\b|\bgsc\b|\bcp12\b/i },
   { key: "epc", label: "Energy performance certificate (EPC)", re: /energy performance|\bepc\b/i },
   { key: "eicr", label: "Electrical report (EICR)", re: /electrical|\beicr\b/i },
@@ -46,11 +47,11 @@ export const PACK_FILES: PackFile[] = [
 ];
 
 /** The files expected on this home's pack. */
-export function expectedFiles(home: { hmo?: boolean; scotland?: boolean }): PackFile[] {
-  return PACK_FILES.filter((f) => (!f.hmoOnly || home.hmo) && (!f.notScotland || !home.scotland));
+export function expectedFiles(home: { hmo?: boolean; scotland?: boolean; noGas?: boolean }): PackFile[] {
+  return PACK_FILES.filter((f) => (!f.hmoOnly || home.hmo) && (!f.notScotland || !home.scotland) && !(f.key === "gas" && home.noGas));
 }
 
 /** Which expected files a pack came without, by label. */
-export function missingFiles(names: string[], home: { hmo?: boolean; scotland?: boolean }): string[] {
+export function missingFiles(names: string[], home: { hmo?: boolean; scotland?: boolean; noGas?: boolean }): string[] {
   return expectedFiles(home).filter((f) => !names.some((n) => f.re.test(n))).map((f) => f.label);
 }

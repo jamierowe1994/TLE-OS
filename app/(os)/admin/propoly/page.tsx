@@ -28,7 +28,7 @@ type Plan = { dealId: string; address: string; status: string; moveIn: string | 
 type Push = { id: string; dealId: string; address: string; by: string; at: string; results: DocPlan[] };
 type Sender = { address: string; name: string; count: number; mailboxes: number; subjects: string[] };
 type Answer = {
-  ok: boolean; error?: string; owner: boolean; goLive: string; settings: Settings; recent: PropolyMail[]; unfiled: PropolyMail[]; boxes: Box[];
+  ok: boolean; error?: string; owner: boolean; goLive: string; backfillFrom: string; settings: Settings; recent: PropolyMail[]; unfiled: PropolyMail[]; boxes: Box[];
   gaps: Gap[]; total: number; onlyOneBox: number; pushes: Push[];
 };
 
@@ -153,7 +153,7 @@ export default function PropolyAdmin() {
           <section className="mt-6 rounded-xl border border-line p-5">
             <h2 className="text-lg font-normal text-ink">Move-in Pack Emails</h2>
             <p className="mt-1 text-sm text-muted">
-              Only mail from these addresses is read, from {day(data.goLive)} onwards. A whole domain can be written as @propoly.com.
+              Only mail from these addresses is read: every Propoly email from {day(data.goLive)}, and move-in packs from {day(data.backfillFrom)}. A pack&apos;s files go on its home&apos;s Documents. A whole domain can be written as @propoly.com.
             </p>
             <label className="mt-4 block text-xs text-muted" htmlFor="senders">Propoly&apos;s sender address</label>
             <input id="senders" value={senders} onChange={(e) => setSenders(e.target.value)} placeholder="Not set yet" className="mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-sm" />
@@ -171,8 +171,8 @@ export default function PropolyAdmin() {
               <button type="button" disabled={busy !== null || !data.settings.senders.length} onClick={() => act("scan", { action: "scan" }, (j) => { void load(); const r = j.run as Record<string, unknown>; return r.skipped ? String(r.skipped) : `Read ${r.mailboxes} mailboxes: ${r.read} emails, ${r.logged} new kept.`; })} className="rounded-full border border-line px-4 py-2 text-sm disabled:opacity-50">
                 {busy === "scan" ? "Reading…" : "Read Now"}
               </button>
-              <button type="button" disabled={busy !== null || !data.settings.senders.length} onClick={() => act("backfill", { action: "scan", backfill: true }, (j) => { void load(); const r = j.run as Record<string, unknown>; return r.skipped ? String(r.skipped) : `Read again from ${day(data.goLive)}: ${r.read} emails, ${r.logged} new kept.`; })} className="rounded-full border border-line px-4 py-2 text-sm disabled:opacity-50">
-                {busy === "backfill" ? "Reading…" : "Read Again From Go-live"}
+              <button type="button" disabled={busy !== null || !data.settings.senders.length} onClick={() => act("backfill", { action: "scan", backfill: true }, (j) => { void load(); const r = j.run as Record<string, unknown>; return r.skipped ? String(r.skipped) : `Read again from ${day(data.backfillFrom)}: ${r.read} emails, ${r.logged} new kept, ${r.filed ?? 0} files put on their homes.`; })} className="rounded-full border border-line px-4 py-2 text-sm disabled:opacity-50">
+                {busy === "backfill" ? "Reading…" : `Read Move-in Packs From ${day(data.backfillFrom)}`}
               </button>
             </div>
             {found && (

@@ -7,7 +7,8 @@ import { isInternalAddress } from "@/lib/email-policy";
 import { postcodeOf, sameHome } from "@/lib/address-parse";
 import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
 import { isScottishHome } from "@/lib/compliance";
-import { missingFiles } from "@/lib/propoly-pack";
+import { missingFiles, PACK_FILES } from "@/lib/propoly-pack";
+import { addFileDoc } from "@/lib/file-documents";
 import { getAllPropolyDeals, getPropolyCompletes } from "@/lib/business/propoly-deals";
 
 /**
@@ -40,6 +41,12 @@ import { getAllPropolyDeals, getPropolyCompletes } from "@/lib/business/propoly-
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 export const GO_LIVE = "2026-10-14T00:00:00Z";
+/**
+ * How far back "Read Again" goes for MOVE-IN PACKS (22 Oct 2026): lets that
+ * moved in before go-live need their evidence too (5b Newton Road's pack went
+ * on 9 Oct). Before go-live only packs are kept, never Propoly's other notices.
+ */
+export const BACKFILL_FROM = "2026-09-01T00:00:00Z";
 const SETTINGS_KEY = "propoly_mail";
 /** Each mailbox at most this often; the watcher's timer is every five minutes. */
 const EVERY_MS = 15 * 60_000;
@@ -98,6 +105,8 @@ function ensureTables(): Promise<void> {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS os_propoly_mail_once ON os_propoly_mail (internet_message_id);
     CREATE INDEX IF NOT EXISTS os_propoly_mail_deal ON os_propoly_mail (deal_id);
+    ALTER TABLE os_propoly_mail ADD COLUMN IF NOT EXISTS filed_at TIMESTAMPTZ;
+    ALTER TABLE os_propoly_mail ADD COLUMN IF NOT EXISTS filed_count INT NOT NULL DEFAULT 0;
     CREATE TABLE IF NOT EXISTS os_propoly_mail_boxes (
       user_id TEXT PRIMARY KEY,
       mailbox_email TEXT NOT NULL DEFAULT '',
@@ -330,21 +339,35 @@ export function matchDeal(deals: DealLite[], m: { to: string[]; text: string; at
     if (score < 2 || (score === 2 && !text.includes(` ${line1} `))) continue;
     if (!best || score > best.score || (score === best.score && near(d) < near(best.d))) best = { d, score };
   }
-  return best ? { dealId: best.d.id, address: dealAddress(best.d), on: "address" } : null;
+  if (best) return { dealId: best.d.id, address: dealAddress(best.d), on: "address" };
+  /* A postcode alone (an attachment's name, "Tenancy Agreement TQ4 6DG.pdf")
+     is enough only when one home in the books has it: a block of flats or a
+     house of rooms shares one, and then it decides nothing. */
+  const byPostcode = new Map<string, DealLite>();
+  for (const d of deals) {
+    if (d.statusKey === "cancelled") continue;
+    const pc = postcodeOf(dealAddress(d))?.replace(/\s+/g, "").toUpperCase();
+    if (pc && textPostcode.has(pc)) byPostcode.set(norm(d.propertyName), d);
+  }
+  if (byPostcode.size === 1) {
+    const d = [...byPostcode.values()][0];
+    return { dealId: d.id, address: dealAddress(d), on: "address" };
+  }
+  return null;
 }
 
 /* ── reading the mailboxes ─────────────────────────────────────────────── */
 
 export const newId = () => randomBytes(12).toString("hex");
 
-export interface ScanResult { mailboxes: number; read: number; logged: number; seenAgain: number; problems: number; rematched?: number; skipped?: string }
+export interface ScanResult { mailboxes: number; read: number; logged: number; seenAgain: number; problems: number; rematched?: number; filed?: number; skipped?: string }
 
 /**
  * Every connected mailbox, each at most every fifteen minutes unless `force`.
  * `from` re-reads from that date (the backfill); otherwise each mailbox
  * carries on from where it last read, starting at go-live.
  */
-export async function scanPropolyMail(opts: { force?: boolean; from?: string; userId?: string; budgetMs?: number } = {}): Promise<ScanResult> {
+export async function scanPropolyMail(opts: { force?: boolean; from?: string; userId?: string; budgetMs?: number; file?: boolean } = {}): Promise<ScanResult> {
   const result: ScanResult = { mailboxes: 0, read: 0, logged: 0, seenAgain: 0, problems: 0 };
   if (!hasDb()) return { ...result, skipped: "No database here." };
   const settings = await mailSettings();
@@ -383,10 +406,13 @@ export async function scanPropolyMail(opts: { force?: boolean; from?: string; us
           );
           if (again.length) { result.seenAgain += 1; continue; }
 
+          /* Before go-live only the move-in pack is wanted, and its subject
+             says so: anything else is passed over before its files are asked for. */
+          const beforeLive = (m.receivedDateTime ?? "") < GO_LIVE;
+          if (beforeLive && !moveIn.test(m.subject ?? "")) continue;
           const to = addrs(m.toRecipients), cc = addrs(m.ccRecipients);
           const body = (m.body?.content ?? m.bodyPreview ?? "").slice(0, MAX_TEXT);
           deals ??= (await dealBook()) ?? [];
-          const match = matchDeal(deals, { to: [...to, ...cc].map((a) => a.email), text: `${m.subject ?? ""}\n${body}`, at: m.receivedDateTime! });
           let listed: GraphAttachment[] = [];
           let note: string | null = null;
           if (m.hasAttachments) {
@@ -397,6 +423,8 @@ export async function scanPropolyMail(opts: { force?: boolean; from?: string; us
             }
           }
           const isMoveIn = moveIn.test(`${m.subject ?? ""} ${listed.map((a) => a.name ?? "").join(" ")}`);
+          /* The file names count as words: "Tenancy Agreement TQ4 6DG.pdf" carries the postcode. */
+          const match = matchDeal(deals, { to: [...to, ...cc].map((a) => a.email), text: `${m.subject ?? ""}\n${body}\n${listed.map((a) => a.name ?? "").join("\n")}`, at: m.receivedDateTime! });
           /* Propoly mail about no deal at all (an account email, a newsletter)
              is not kept, unless it looks like a pack and needs a file by hand. */
           if (!match && !isMoveIn) continue;
@@ -445,6 +473,7 @@ export async function scanPropolyMail(opts: { force?: boolean; from?: string; us
      executed has left the live book and isn't in the completed one until its
      hourly read (12b Cliff Road, 22 Oct 2026, unplaced for that reason). */
   result.rematched = await rematchUnfiled(deals).catch(() => 0);
+  if (opts.file !== false) result.filed = await fileMoveInPacks().catch(() => 0);
   await noteGaps().catch(() => undefined);
   return result;
 }
@@ -458,7 +487,7 @@ export async function rematchUnfiled(held?: DealLite[] | null): Promise<number> 
   const deals = held ?? (await dealBook()) ?? [];
   let placed = 0;
   for (const r of rows) {
-    const m = matchDeal(deals, { to: [...(r.to_list ?? []), ...(r.cc_list ?? [])].map((a) => a.email), text: `${r.subject}\n${r.body_text}`, at: new Date(r.at).toISOString() });
+    const m = matchDeal(deals, { to: [...(r.to_list ?? []), ...(r.cc_list ?? [])].map((a) => a.email), text: `${r.subject}\n${r.body_text}\n${(r.attachments ?? []).map((f) => f.name).join("\n")}`, at: new Date(r.at).toISOString() });
     if (!m) continue;
     placed += (await q(`UPDATE os_propoly_mail SET deal_id = $2, address = $3, matched_on = $4 WHERE id = $1 AND deal_id IS NULL RETURNING id`, [r.id, m.dealId, m.address, m.on])).length;
   }
@@ -607,16 +636,20 @@ const shape = (r: Row): PropolyMail => ({
 /**
  * Each move-in pack checked against what it should carry. An HMO's pack
  * should also hold the PAT and legionella; a Scottish let has no deposit
- * leaflet from Propoly. HMO is the home's own record (os_properties).
+ * leaflet from Propoly; a home recorded as having no gas needs no gas
+ * certificate. HMO and no-gas are the home's own record (os_properties).
  */
 async function withMissing(mail: PropolyMail[]): Promise<PropolyMail[]> {
   const packs = mail.filter((m) => m.kind === "move-in");
   if (!packs.length) return mail;
-  const homes = await q<{ address: string; hmo: boolean }>(`SELECT address, hmo FROM os_properties WHERE active AND hmo`).catch(() => []);
+  const homes = await q<{ address: string; hmo: boolean; no_gas: boolean }>(`SELECT address, hmo, no_gas FROM os_properties WHERE active AND (hmo OR no_gas)`).catch(() => []);
   for (const m of packs) {
-    const hmo = Boolean(m.address) && homes.some((h) => sameHome(h.address, m.address));
+    /* A room is in a house of rooms, which is an HMO whatever the home's record says. */
+    const mine = m.address ? homes.filter((h) => sameHome(h.address, m.address)) : [];
+    const hmo = /^\s*room\b/i.test(m.address) || mine.some((h) => h.hmo);
+    const noGas = mine.some((h) => h.no_gas);
     const scotland = Boolean(m.address) && isScottishHome({ name: m.address, locality: "" });
-    m.missing = missingFiles(m.attachments.map((f) => f.name), { hmo, scotland });
+    m.missing = missingFiles(m.attachments.map((f) => f.name), { hmo, scotland, noGas });
   }
   return mail;
 }
@@ -684,5 +717,58 @@ export async function fileMail(id: string, dealId: string, by: string): Promise<
     [id, dealId, dealAddress(d), by]
   );
   if (!r) throw new SettingRefused("That email isn't here any more.");
+  await fileMoveInPacks().catch(() => 0);
   return shape(r);
+}
+
+/* ── the pack's files, on the home's file ──────────────────────────────── */
+
+const DOC_TYPE_FOR: Partial<Record<string, string>> = { gas: "gas_safety", epc: "epc", eicr: "eicr" };
+
+/**
+ * Each move-in pack's files, filed on its home's Documents (lib/file-
+ * documents), so they show on the home, the let and the deal with everything
+ * else, not only in this log (James, 22 Oct 2026: "bring across the
+ * attachments ... and then attach that to the log and file"). Gas, EPC and
+ * EICR go in as their own types, the rest as Other, each named for the pack
+ * and its date. Once per email; only the office can take one off. The
+ * certificates are not dated into the compliance book: that stays with the
+ * compliance desk.
+ */
+export async function fileMoveInPacks(): Promise<number> {
+  if (!hasDb()) return 0;
+  await ensureTables();
+  const rows = await q<Row & { filed_at: Date | null }>(
+    `SELECT * FROM os_propoly_mail WHERE kind = 'move-in' AND deal_id IS NOT NULL AND address <> '' AND filed_at IS NULL ORDER BY at LIMIT 50`
+  );
+  let filed = 0;
+  for (const r of rows) {
+    /* Claimed first, so two runs can't file the same pack twice. */
+    const claimed = await q(`UPDATE os_propoly_mail SET filed_at = NOW() WHERE id = $1 AND filed_at IS NULL RETURNING id`, [r.id]);
+    if (!claimed.length) continue;
+    const sent = new Date(r.at).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
+    let n = 0;
+    for (const f of r.attachments ?? []) {
+      if (!f.key) continue;
+      const kind = PACK_FILES.find((x) => x.re.test(f.name))?.key ?? null;
+      const type = (kind && DOC_TYPE_FOR[kind]) || "other";
+      const label = kind ? PACK_FILES.find((x) => x.key === kind)!.label : f.name.replace(/\.+(pdf|docx?|jpe?g|png)$/i, "");
+      await addFileDoc({
+        home: { address: r.address },
+        from: { kind: "propoly", id: r.id },
+        type,
+        name: `${type === "other" ? `Move-in pack: ${label}` : label} (sent to the tenant ${sent})`,
+        fileName: f.name,
+        r2Key: f.key,
+        mime: f.type,
+        sizeBytes: f.size,
+        by: { id: "", name: "Propoly move-in pack" },
+        isTest: false,
+      });
+      n += 1;
+    }
+    await q(`UPDATE os_propoly_mail SET filed_count = $2 WHERE id = $1`, [r.id, n]);
+    filed += n;
+  }
+  return filed;
 }

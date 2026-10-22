@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { publicError } from "@/lib/public-error";
-import { discoverSenders, fileMail, GO_LIVE, mailSettings, recentMail, rematchUnfiled, saveMailSettings, scanPropolyMail, SettingRefused } from "@/lib/propoly-mail";
+import { BACKFILL_FROM, discoverSenders, fileMail, fileMoveInPacks, GO_LIVE, mailSettings, recentMail, rematchUnfiled, saveMailSettings, scanPropolyMail, SettingRefused } from "@/lib/propoly-mail";
 import { DealDocsRefused, planDealDocuments, resolveDeal, publicPlan, pushDealDocuments, recentPushes, type DocKind } from "@/lib/deal-documents";
 
 /**
@@ -15,7 +15,7 @@ import { DealDocsRefused, planDealDocuments, resolveDeal, publicPlan, pushDealDo
  *   POST { action: "settings", senders, moveInWords, alwaysWatch }
  *        { action: "rematch" }            try every unplaced email against today's deal books
  *        { action: "discover" }           who Propoly's mail comes from, across the mailboxes (nothing kept)
- *        { action: "scan", backfill? }    read every mailbox now; backfill re-reads from go-live
+ *        { action: "scan", backfill? }    read every mailbox now; backfill re-reads move-in packs from 1 Sep 2026
  *        { action: "file", id, deal }     put an unplaced email on a deal
  *        { action: "docs-check", deal }   what would go into the deal (writes nothing); deal = a deal or property link, or the address
  *        { action: "docs-push", deal, kinds?, includeExpired? }   send it
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   if (!w.office) return NextResponse.json({ ok: false, error: "This page is for owners and the office." }, { status: 403 });
   try {
     const [settings, mail, pushes] = await Promise.all([mailSettings(), recentMail(), w.owner ? recentPushes() : Promise.resolve([])]);
-    return NextResponse.json({ ok: true, owner: w.owner, goLive: GO_LIVE, settings, ...mail, pushes });
+    return NextResponse.json({ ok: true, owner: w.owner, goLive: GO_LIVE, backfillFrom: BACKFILL_FROM, settings, ...mail, pushes });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That couldn't be read just now.") }, { status: 500 });
   }
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
   try {
     if (action === "rematch") {
       const placed = await rematchUnfiled();
+      await fileMoveInPacks();
       return NextResponse.json({ ok: true, placed, ...(await recentMail()) });
     }
     if (action === "settings") {
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
     }
     if (action === "discover") return NextResponse.json({ ok: true, ...(await discoverSenders({ budgetMs: 240_000 })) });
     if (action === "scan") {
-      const run = await scanPropolyMail({ force: true, from: b?.backfill ? GO_LIVE : undefined, budgetMs: 270_000 });
+      const run = await scanPropolyMail({ force: true, from: b?.backfill ? BACKFILL_FROM : undefined, budgetMs: 270_000 });
       return NextResponse.json({ ok: true, run, ...(await recentMail()) });
     }
     if (action === "file") {

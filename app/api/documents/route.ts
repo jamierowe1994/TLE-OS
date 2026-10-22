@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
   if (!isDocType(type)) return NextResponse.json({ ok: false, error: "Pick what the document is first." }, { status: 400 });
   if (type === OTHER && !ownName) return NextResponse.json({ ok: false, error: "Give the document a name." }, { status: 400 });
-  if (!isFromKind(fromKind) || !fromId) return NextResponse.json({ ok: false, error: "Which file is this for?" }, { status: 400 });
+  /* "propoly" is the move-in pack's own filing (lib/propoly-mail), never an upload. */
+  if (!isFromKind(fromKind) || fromKind === "propoly" || !fromId) return NextResponse.json({ ok: false, error: "Which file is this for?" }, { status: 400 });
   if (!address && !propertyId) return NextResponse.json({ ok: false, error: "This file has no address, so there is nowhere to keep it." }, { status: 400 });
   if (file.size === 0) return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
   /* The document scope's own cap (50MB); next.config lets middleware pass a
