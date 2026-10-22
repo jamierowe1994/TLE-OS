@@ -5,6 +5,7 @@ import { switchOn } from "@/lib/switches";
 import { propolyGet, propolyPatch, propolyPost } from "@/lib/business/propoly";
 import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 import { firstMatch, landlordPayload, refusal, tenantAttributes } from "@/lib/handover";
+import { guaranteedEmails, guarantorLines, propolyGuarantorsLive } from "@/lib/deal-guarantors";
 import type { LetDeal } from "@/lib/let-deal";
 import type { LetParty } from "@/lib/let-people";
 
@@ -156,8 +157,12 @@ export async function syncPerson(letRef: string, person: LetParty, deal: LetDeal
     await keepRun({ letRef, dealId: deal.id, key: person.key, action, mode: live ? "live" : "rehearsal", state: "failed", detail: `Not sent: ${problem}`, by });
     return { state: "failed", detail: `Not sent: ${problem}` };
   }
+  /* A tenant with a guarantor in the OS goes marked guarantor_required (lib/deal-guarantors). */
+  const guaranteed = person.role === "tenant" && (await propolyGuarantorsLive())
+    ? guaranteedEmails(await guarantorLines(letRef, [{ name: person.name, email: person.email }]).catch(() => [])).has(low(person.email))
+    : false;
   const tenantPayload = person.role === "tenant"
-    ? { deal_id: deal.id, deal_uuid: deal.id, tenant: { user_attributes: tenantAttributes({}, { name: person.name, email: person.email, phone: person.phone }), reference_required: person.reference !== false } }
+    ? { deal_id: deal.id, deal_uuid: deal.id, tenant: { user_attributes: tenantAttributes({}, { name: person.name, email: person.email, phone: person.phone }), reference_required: person.reference !== false, ...(guaranteed ? { guarantor_required: true } : {}) } }
     : null;
   /* Their own home, from where every landlord's is kept (lib/landlord-home). */
   const home = person.role === "landlord"

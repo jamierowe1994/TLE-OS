@@ -15,6 +15,7 @@ import { isScottish } from "@/lib/property-flags";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
 import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, swapStandIn, withChanges, withLandlordOptOut, type DealTerms } from "@/lib/handover-deal";
 import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
+import { guaranteedEmails, guarantorLines, planGuarantors, propolyGuarantorsLive, sendGuarantors } from "@/lib/deal-guarantors";
 
 /**
  * The offer-accepted handover, run by the OS.
@@ -806,6 +807,7 @@ async function pushDeal(
           request: { tenant: { reference_required: referenced, ...(t.rentSharePcm ? { rent_share_pcm_pence: Math.round(t.rentSharePcm * 100) } : {}) } },
         });
       }
+      await guarantorStep(rec, o, null);
       return "would";
     }
     const made = await propolyPost("/api/v1/deals", payload);
@@ -825,8 +827,13 @@ async function pushDeal(
     await rec.add({ id: "deal", label, state: "ok", detail: found, response: { uuid: dealUuid } });
   }
 
-  /* 4. The tenants, the ones the deal hasn't got. */
+  /* 4. The tenants, the ones the deal hasn't got. A tenant with a guarantor
+     in the OS goes marked guarantor_required, behind propoly_guarantors
+     (lib/deal-guarantors, Kirstie 22 Oct 2026). */
   let result: "ok" | "failed" = "ok";
+  const guaranteed = (await propolyGuarantorsLive())
+    ? guaranteedEmails(await guarantorLines(o.applicationId, o.packet.tenants.map((t) => ({ name: t.name, email: t.email ?? null }))).catch(() => []))
+    : new Set<string>();
   const before = await readDeal(dealUuid);
   const have = dealEmails(before);
   for (const t of o.packet.tenants) {
@@ -860,8 +867,15 @@ async function pushDeal(
         user_attributes: tenantAttributes(cc, t),
         reference_required: t.reference !== false,
         ...(t.rentSharePcm ? { rent_share_pcm_pence: Math.round(t.rentSharePcm * 100) } : {}),
+        ...(guaranteed.has(norm(t.email)) ? { guarantor_required: true } : {}),
       },
     };
+    /* A practice run that found the home's deal stops at saying so: shadow
+       never writes (22 Oct 2026 - this posted for real while Handover was on). */
+    if (!o.live) {
+      await rec.add({ id: sid, label: tlabel, state: "would", detail: `Would add them to the deal, ${t.reference !== false ? "sent for referencing" : "with no references"}${guaranteed.has(norm(t.email)) ? ", guarantor required" : ""}.`, request: payload });
+      continue;
+    }
     const res = await propolyPost("/api/v1/tenants", payload);
     if (res.status >= 200 && res.status < 300) {
       await rec.add({ id: sid, label: tlabel, state: "ok", detail: "Added to the deal.", request: payload, response: res.body });
@@ -901,9 +915,41 @@ async function pushDeal(
       response: { uuid: dealUuid },
     });
   }
+  /* 6. The guarantors, as a document on the deal (lib/deal-guarantors). */
+  await guarantorStep(rec, o, dealUuid);
+
   /* The screens read Propoly's deals from a stored copy; the next walk picks the new deal up. */
   void refreshPropolyDealsNow().catch(() => null);
   return result;
+}
+
+/**
+ * The let's guarantors onto its deal (Kirstie, 22 Oct 2026). Never fails the
+ * push: a deal without its guarantor document is still a deal, and the let
+ * has Send guarantors to try again. No guarantor held = no step at all.
+ */
+async function guarantorStep(rec: Recorder, o: { live: boolean; applicationId: string; packet: Handoff }, dealUuid: string | null): Promise<void> {
+  const tenants = o.packet.tenants.map((t) => ({ name: t.name, email: t.email ?? null }));
+  const plan = await planGuarantors({
+    letRef: o.applicationId,
+    dealId: dealUuid ?? "(the new deal)",
+    address: [o.packet.property, o.packet.locality].filter(Boolean).join(", "),
+    rentPcm: o.packet.rentPcm,
+    tenants,
+  }).catch(() => null);
+  if (!plan || !plan.guarantors.length) return;
+  const label = "Guarantors on the deal";
+  const names = plan.guarantors.map((g) => `${g.name} (for ${g.forName.split(/\s+/)[0]})`).join(", ");
+  if (!o.live || !dealUuid) {
+    await rec.add({ id: "deal-guarantors", label, state: "would", detail: `Would put "Guarantor details" on the deal: ${names}.${plan.live ? "" : " (Guarantors to Propoly is switched off, so a live push would leave this out.)"}` });
+    return;
+  }
+  if (!plan.live) {
+    await rec.add({ id: "deal-guarantors", label, state: "skipped", detail: `Not sent: Guarantors to Propoly is switched off. ${names} - add them in Propoly by hand.` });
+    return;
+  }
+  const sent = await sendGuarantors(plan, o.applicationId, "Push to Propoly");
+  await rec.add({ id: "deal-guarantors", label, state: sent.outcome === "uploaded" || sent.outcome === "already" ? "ok" : sent.outcome === "failed" ? "failed" : "skipped", detail: sent.detail });
 }
 
 /**

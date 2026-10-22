@@ -121,7 +121,11 @@ export type AuditKind =
   | "rex_queue_stopped"
   /* Claude refused for credit or the key (22 Oct 2026, lib/ai-outage): one
      line per outage, which the owners' bell reads. */
-  | "ai_offline";
+  | "ai_offline"
+  /* A let's guarantors and an owner's Repush, to its Propoly deal (22 Oct
+     2026, lib/deal-guarantors, lib/propoly-repush): practice or live, what went. */
+  | "propoly_guarantors_sent"
+  | "propoly_repush";
 
 export interface AuditRow {
   id: string;
