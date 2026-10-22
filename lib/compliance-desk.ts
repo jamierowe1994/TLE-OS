@@ -9,6 +9,11 @@ import { pendingKeyFor } from "@/lib/property-match";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { documentQueriedEmail } from "@/lib/email/agent-emails";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
+import { londonToday } from "@/lib/london-clock";
+import { ensureTable as ensureSendRecord } from "@/lib/home-send";
+import { managedBookFor } from "@/lib/managed-book-cache";
+import { housesIn, MANAGED_READERS } from "@/lib/houses";
+import { sittingLets } from "@/lib/tenant-logins";
 
 /**
  * MICHAEL'S DESK. The three lists that are his and nobody else's.
@@ -486,12 +491,145 @@ export async function answer(p: {
       new Promise<"slow">((r) => setTimeout(() => r("slow"), 8000)),
     ]);
     if (share === "slow") return "Verified. Who it goes to is still being worked out; the result shows on the home's file in a minute or two.";
-    return share?.line ?? "";
+    /* Unless the tenants already have it, it waits on Verified (Jo, 21 Oct 2026). */
+    const tenantsHaveIt = Boolean(share?.armed && share.outcomes.some((o) => o.role === "tenant" && o.sent));
+    return [share?.line, tenantsHaveIt ? "" : "It's on Verified, ready to send to the tenants."].filter(Boolean).join(" ");
   }
   if (p.state === "queried" && p.kind !== "works_order") {
     return tellAgent(p.kind, p.id, (p.note ?? "").trim(), p.by).catch((e) => `Saved, but the agent was not told: ${e instanceof Error ? e.message : "it failed"}.`);
   }
   return "";
+}
+
+/* ── Verified, waiting to go to the tenants ─────────────────────────────── */
+
+/**
+ * VERIFIED (Jo, 21 Oct 2026, "PLC Checks and OS Updates"): once a renewed
+ * certificate is verified it leaves To verify and waits here until the tenants
+ * have it. Under the Renters' Rights Act the tenant must have the updated
+ * certificate within 28 days of the work, with a record that they did.
+ *
+ * Nothing here sends and nothing here records. The send is Email Certificates
+ * (lib/home-send), opened on the home with this certificate ticked; the record
+ * is that send's own (os_home_send_emails, each file carrying its
+ * certificateId). The automatic fan-out (lib/certificate-share, behind
+ * certificate_share) counts too: a tenant row sent there is a tenant who has it.
+ *
+ * The 28 days run from the work: the issue date where it was filed, otherwise
+ * the day it came in. Oldest first, so the one nearest its 28 days is on top.
+ * A certificate that has run out is not here, because one can't be sent.
+ */
+export const TENANT_DAYS = 28;
+
+/* A sent one stays on the list, saying so, for this long; then it drops off. */
+const SENT_SHOWN_DAYS = 14;
+
+export interface VerifiedItem {
+  id: string;
+  propertyId: string;
+  property: string;
+  what: string;
+  /** YYYY-MM-DD. */
+  expiry: string;
+  fileName: string;
+  fileKey: string;
+  /** YYYY-MM-DD the 28 days run from, and which date it is. */
+  from: string;
+  fromIssue: boolean;
+  /** Days left of the 28; negative once over. */
+  daysLeft: number;
+  verifiedBy: string;
+  verifiedAt: string;
+  /** Null until the tenants have it. */
+  sent: { at: string; by: string; to: string[]; record: string | null } | null;
+}
+
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 864e5);
+
+export async function verifiedToSend(): Promise<VerifiedItem[]> {
+  if (!hasDb()) return [];
+  await ensureSendRecord();
+  const today = londonToday();
+  const rows = await q<Record<string, unknown>>(
+    `SELECT c.id, c.property_id, c.property_name, c.type_id, c.expiry::text AS expiry, c.issue::text AS issue, c.name, c.r2_key,
+            (c.added_at AT TIME ZONE 'Europe/London')::date::text AS came_in, k.by_name, k.at AS verified_at,
+            h.at AS home_at, h.by AS home_by, h.send_id, h.names, a.at AS auto_at, a.names AS auto_names
+       FROM os_certificates c
+       JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id AND k.state = 'verified'
+       LEFT JOIN LATERAL (
+         SELECT max(e.at) AS at, (array_agg(e.sent_by_name ORDER BY e.at DESC))[1] AS by, (array_agg(e.send_id ORDER BY e.at DESC))[1] AS send_id,
+                array_agg(DISTINCT coalesce(nullif(e.to_name, ''), e.to_email)) AS names
+           FROM os_home_send_emails e
+          WHERE e.sent AND e.attachments @> jsonb_build_array(jsonb_build_object('certificateId', c.id))
+       ) h ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT max(s.at) AS at, array_agg(DISTINCT coalesce(nullif(s.name, ''), s.address)) AS names
+           FROM os_certificate_sends s
+          WHERE s.certificate_id = c.id AND s.role = 'tenant' AND s.sent
+       ) a ON TRUE
+      WHERE c.added_at >= $1::date AND c.expiry >= $2::date
+        AND (coalesce(h.at, a.at) IS NULL OR coalesce(h.at, a.at) > NOW() - make_interval(days => $3))`,
+    [CHECKS_BEGAN, today, SENT_SHOWN_DAYS]
+  );
+  const out = rows.map((r): VerifiedItem => {
+    const issue = r.issue ? String(r.issue) : null;
+    /* An issue date after the day it came in, or in the future, is a typo: use the day it came in. */
+    const fromIssue = Boolean(issue && issue <= today && issue <= String(r.came_in));
+    const from = fromIssue ? (issue as string) : String(r.came_in);
+    const homeAt = r.home_at ? isoOf(r.home_at) : null;
+    const autoAt = r.auto_at ? isoOf(r.auto_at) : null;
+    const sent = homeAt
+      ? { at: homeAt, by: String(r.home_by ?? ""), to: (r.names as string[] | null) ?? [], record: r.send_id ? String(r.send_id) : null }
+      : autoAt
+        ? { at: autoAt, by: "Sent automatically", to: (r.auto_names as string[] | null) ?? [], record: null }
+        : null;
+    return {
+      id: String(r.id),
+      propertyId: String(r.property_id ?? ""),
+      property: String(r.property_name ?? "") || "A property with no name on the record",
+      what: TYPE_WORDS[String(r.type_id)] ?? String(r.type_id),
+      expiry: String(r.expiry),
+      fileName: String(r.name ?? ""),
+      fileKey: String(r.r2_key ?? ""),
+      from,
+      fromIssue,
+      daysLeft: TENANT_DAYS - daysBetween(from, today),
+      verifiedBy: String(r.by_name ?? ""),
+      verifiedAt: isoOf(r.verified_at),
+      sent,
+    };
+  });
+  /* Waiting first, oldest work first; the sent ones underneath, newest first. */
+  return out.sort((a, b) =>
+    a.sent && b.sent ? (a.sent.at < b.sent.at ? 1 : -1) : a.sent ? 1 : b.sent ? -1 : a.from === b.from ? (a.verifiedAt < b.verifiedAt ? -1 : 1) : a.from < b.from ? -1 : 1
+  );
+}
+
+/**
+ * Where Email Certificates opens for this certificate: the home's let, every
+ * let at the house with somebody living in it (a shared house's gas record is
+ * every room's), and the certificate ticked. The whole book, because the desk
+ * is the office's. Null with a reason when there is nobody to send it to.
+ */
+export async function sendTargetFor(certificateId: string): Promise<{ listing: string; listings: string[]; title: string; start: string } | { error: string }> {
+  const rows = await q<{ property_id: string; r2_key: string }>(`SELECT property_id, r2_key FROM os_certificates WHERE id = $1`, [certificateId]);
+  const c = rows[0];
+  if (!c) return { error: "That certificate is not there any more." };
+  if (/^(pending-|pm-)/i.test(c.property_id)) return { error: "This home isn't set up on the book yet, so there are no tenants to send it to. It can go once the home is on Portfolio." };
+  const { book } = await managedBookFor(null);
+  const atDoor = book.properties.filter((p) => p.propertyId === c.property_id);
+  /* Every room's current let on a shared house, not one per property. */
+  const living = sittingLets(atDoor).filter((p) => p.tenants.length > 0);
+  if (!living.length) return { error: "Nobody is living there on the book, so there is no tenant to send it to." };
+  const house = [...housesIn(atDoor, MANAGED_READERS).values()].find((h) => h.members.some((m) => living.includes(m))) ?? null;
+  const listings = (house ? house.members.filter((m) => m.tenants.length > 0) : living).map((p) => String(p.listingId));
+  const first = living[0];
+  return {
+    listing: listings.includes(String(first.listingId)) ? String(first.listingId) : listings[0],
+    listings,
+    title: house && listings.length > 1 ? house.name : first.name,
+    start: `vault:${c.r2_key}`,
+  };
 }
 
 /** His tick, or his query. A second look replaces the first. */

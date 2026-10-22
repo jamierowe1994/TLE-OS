@@ -32,7 +32,7 @@ export default function ToVerify() {
     <>
       <PageHeader
         title="To Verify"
-        blurb="Every certificate an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. Verified, a certificate goes on to the landlord and tenants; queried, the agent is emailed what you wrote. Gas and electrical ones come with the engineer's register number read off for you. Oldest first."
+        blurb="Every certificate an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. Verified, a certificate moves to Verified, where you send it to the tenants; queried, the agent is emailed what you wrote. Gas and electrical ones come with the engineer's register number read off for you. Oldest first."
         search={false}
       />
       {error && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{error}</p>}
