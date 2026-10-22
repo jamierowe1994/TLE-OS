@@ -56,6 +56,8 @@ const TERMS_UNCHECKED_SENTENCE =
  * queues a fresh "current" one after putting the channels back. A listing
  * counts as on the portals while any feed's last upload said "current",
  * whatever the channel says, so Take it offline can finish one of the seven.
+ * For those, REX will only queue while the portals channel is on, so "off"
+ * opens it for that one call and closes it again (see the POST).
  *
  * ── Three locks, all of which have to be open ────────────────────────────
  *
@@ -320,7 +322,23 @@ export async function POST(req: NextRequest) {
     /* Off: the portals are told "withdrawn" BEFORE the channel goes, so a
        refusal leaves the listing exactly as it was rather than off in REX and
        still on Rightmove (the header, 22 Oct 2026). On: told after. */
+    /* Already off the portals channel but a feed still shows it (the seven
+       of 20-21 Oct): REX refuses the queue with "Not published to portals"
+       while the channel is off. So the channel comes back for the moment the
+       withdrawn upload is queued, and goes again just below - proven on 6
+       Ruskin Place, 22 Oct 2026, with James's yes. A refusal puts the
+       channels back as they were. */
+    const reopen = action === "off" && !was.channels.includes("portals");
+    if (reopen) {
+      const opened = await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: [...was.channels, "portals"] }, token);
+      if (!opened.ok) {
+        return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not open to send the withdrawal: ${opened.error ?? "REX did not say."}` : "The portals did not take that change. Try again in a minute." }, { status: 502 });
+      }
+    }
     const told = action === "off" ? await queueUpload(id, "off", token) : null;
+    if (reopen && told && !told.ok) {
+      await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: was.channels }, token).catch(() => null);
+    }
     let res: RexResponse =
       told && !told.ok
         ? { status: told.res.status, ok: false, result: told.res.result, error: `The portals were not told to withdraw it: ${told.detail}` }
