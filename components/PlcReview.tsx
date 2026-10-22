@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { CopyButton } from "@/components/Bits";
+import type { AnswerGroup, TenantAnswers } from "@/lib/plc-tenant-answers";
 import { finalAskNow, finalAskSent, gateOf, sentAnywayNow, type Check, type CheckId, type Finding, type PlcCase, type SentAnyway } from "@/lib/plc";
 
 /**
@@ -37,6 +39,10 @@ export type Loaded = {
   };
   /** The RLP request as it would go, when the agent asked for cover. */
   rlp?: { preview: { subject: string; html: string; files: string[] }; teamSet: boolean; switchOn: boolean } | null;
+  /** What the tenants said, when the screen already has it (the public
+   *  preview's invented pack). Otherwise the panel reads it from
+   *  /api/plc/<id>/answers itself. */
+  tenantAnswers?: TenantAnswers | null;
 };
 
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -312,6 +318,165 @@ function FindingRow({ f, checks }: { f: Finding; checks: Check[] }) {
         </p>
       </div>
     </li>
+  );
+}
+
+/* ───────────────────────────── tenant answers ──────────────────────────── */
+
+/** One group of answers, each line with its own copy button and the group with Copy All. */
+function AnswerBlock({ g }: { g: AnswerGroup }) {
+  const all = g.rows.map((r) => `${r.label}: ${r.value}`).join("\n");
+  return (
+    <div className="mt-3 first:mt-0">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted">{g.title}</p>
+        <CopyAll value={all} />
+      </div>
+      <ul className="mt-1 divide-y divide-line/60 rounded-xl border border-line/60 bg-white">
+        {g.rows.map((r, i) => (
+          <li key={`${r.label}-${i}`} className="flex items-start gap-2 py-1.5 pl-3.5 pr-1.5 text-[13px] sm:items-center">
+            <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-3">
+              <span className="shrink-0 text-[12px] text-muted sm:w-44">{r.label}</span>
+              <span className="min-w-0 whitespace-pre-wrap break-words font-medium text-ink">{r.value}</span>
+            </span>
+            <CopyButton value={r.copy ?? r.value} label={r.label.toLowerCase()} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CopyAll({ value }: { value: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setDone(true);
+          window.setTimeout(() => setDone(false), 1400);
+        } catch {
+          /* clipboard blocked: every line is on screen to select by hand */
+        }
+      }}
+      className="shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-semibold text-accent-dark transition hover:bg-accent-soft"
+    >
+      {done ? "Copied" : "Copy All"}
+    </button>
+  );
+}
+
+/**
+ * Tenant Answers (Kirstie, 21 Oct 2026). After the check she fills in the
+ * Propoly deal, and what the tenants said - pets, smokers, who is moving in,
+ * what they asked for - was in the passport, the offer and the application.
+ * Here it is on the pack, in Propoly's order, each line ready to paste.
+ *
+ * Read from /api/plc/<id>/answers when the panel opens (lib/plc-tenant-answers),
+ * so the pack itself never waits on it. Open by default once the check is
+ * done, when the deal is what comes next; a click away before that.
+ */
+function TenantAnswersCard({ c, given, live }: { c: PlcCase; given?: TenantAnswers | null; live: boolean }) {
+  const [state, setState] = useState<{ answers: TenantAnswers | null; error: string | null; loading: boolean }>({
+    answers: given ?? null,
+    error: null,
+    loading: live && !given,
+  });
+  const [open, setOpen] = useState(c.state === "checked" || c.state === "approved");
+
+  useEffect(() => {
+    if (!live || given) return;
+    let on = true;
+    setState((s) => ({ ...s, loading: true, error: null }));
+    api<{ answers: TenantAnswers }>(`/api/plc/${encodeURIComponent(c.id)}/answers`)
+      .then((r) => on && setState({ answers: r.answers, error: null, loading: false }))
+      .catch((e: Error) => on && setState({ answers: null, error: e.message, loading: false }));
+    return () => {
+      on = false;
+    };
+  }, [c.id, live, given]);
+
+  if (!live && !given) return null;
+  const a = state.answers;
+  const tenants = a?.people.filter((p) => p.role !== "Guarantor").length ?? 0;
+  const guarantors = a?.people.filter((p) => p.role === "Guarantor").length ?? 0;
+  const count = [
+    tenants ? `${tenants} tenant${tenants === 1 ? "" : "s"}` : "",
+    guarantors ? `${guarantors} guarantor${guarantors === 1 ? "" : "s"}` : "",
+  ].filter(Boolean).join(", ");
+
+  return (
+    <section className="rounded-[18px] border border-line/70 bg-card" data-plc="tenant-answers">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+      >
+        <span className="min-w-0">
+          <Head icon="user" title="Tenant Answers" />
+          <span className="mt-1.5 block text-[12px] text-muted">
+            {state.loading
+              ? "Reading their answers…"
+              : a
+                ? `What the tenants told us, in the order the Propoly deal asks for it${count ? ` · ${count}` : ""}`
+                : "Their answers didn't load."}
+          </span>
+        </span>
+        <span className="shrink-0 rounded-full border border-line/80 px-3 py-1 text-[12px] font-semibold text-ink">{open ? "Hide" : "Show"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-line/60 px-5 py-4">
+          {state.loading ? (
+            <div className="flex items-center gap-3 py-2 text-[13px] text-muted" role="status">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
+              Reading the passport, the offer and the application…
+            </div>
+          ) : state.error ? (
+            <Note>{state.error}</Note>
+          ) : !a || (!a.let.length && !a.people.some((p) => p.groups.length)) ? (
+            <p className="text-[13px] text-muted">
+              Nothing from the tenants on file yet: no passport, offer or application answers for the people on this let.
+            </p>
+          ) : (
+            <div className="space-y-5">
+              {a.let.length > 0 && (
+                <div>
+                  <p className="text-[14px] font-semibold text-ink">The Let</p>
+                  {a.from.length > 0 && <p className="text-[12px] text-muted">From {a.from.join(" · ")}</p>}
+                  <div className="mt-2">
+                    {a.let.map((g) => (
+                      <AnswerBlock key={g.title} g={g} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {a.people.map((p) => (
+                <div key={p.key} className="rounded-2xl bg-page p-4">
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <p className="text-[14px] font-semibold text-ink">{p.name}</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${p.role === "Guarantor" ? "bg-amber-50 text-amber-700" : "bg-accent-soft text-accent-dark"}`}>
+                      {p.role}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[12px] text-muted">{p.from.length ? `From ${p.from.join(" · ")}` : "Nothing from them on file yet."}</p>
+                  {p.groups.length > 0 && (
+                    <div className="mt-3">
+                      {p.groups.map((g) => (
+                        <AnswerBlock key={g.title} g={g} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -701,6 +866,10 @@ export function ComplianceSide({
           )}
         </section>
       )}
+
+      {/* What the tenants said, for filling in the Propoly deal (21 Oct 2026).
+          The public preview passes its own; anywhere else it is read live. */}
+      <TenantAnswersCard c={c} given={data.tenantAnswers} live={!perform} />
 
       {/* ── Into Propoly ──
           The approved pack's files, placed in the deal's document slots so
