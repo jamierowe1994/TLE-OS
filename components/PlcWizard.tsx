@@ -8,10 +8,13 @@ import { DoneTick } from "@/components/Bits";
 import {
   agentOwnNote,
   caseIdFor,
+  clausesAnswered,
+  DATED_CHECKS,
   PLC_CHECKS,
   gateFor,
   gateOf,
   groupOf,
+  readingStillFresh,
   rlpAnswered,
   waiverFor,
   whyPlaceholder,
@@ -136,6 +139,11 @@ function WizardStyles() {
 const PRIMARY =
   "rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:border-accent hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-ink disabled:hover:bg-ink";
 const SECONDARY = "rounded-lg border border-line px-4 py-2.5 text-sm transition hover:bg-box";
+/* Send anyway (22 Oct 2026). It was drawn as SECONDARY, which has no switched-off
+   look, so on 6 Ruskin Place it sat there pressable-looking and did nothing until
+   a reason was typed ("that button's not working, the yellow one"). */
+const ANYWAY =
+  "rounded-lg border border-amber-700 bg-amber-600 px-4 py-2.5 text-sm text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-amber-600";
 
 /* ──────────────────────────────── the wizard ───────────────────────────── */
 
@@ -190,6 +198,19 @@ export default function PlcWizard({
   const here = useRef(true);
   /* Send anyway (16 Oct 2026): why the agent is sending past the reader's flags. */
   const [anywayWhy, setAnywayWhy] = useState("");
+  /* Pressed with no reason, or Send pressed on a reading that can't change:
+     the box is pointed at rather than nothing happening. */
+  const [anywayAsk, setAnywayAsk] = useState<null | "reason" | "same">(null);
+  const anywayBox = useRef<HTMLTextAreaElement | null>(null);
+  const askForAnyway = (why: "reason" | "same") => {
+    setAnywayAsk(why);
+    anywayBox.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    anywayBox.current?.focus();
+  };
+  /* Additional clauses (21 Oct 2026): the answer on screen, saved to the pack
+     when it is picked, when the box is left, and again on Send. */
+  const [clausesYes, setClausesYes] = useState<boolean | null>(null);
+  const [clausesText, setClausesText] = useState("");
   useEffect(() => {
     here.current = true;
     return () => {
@@ -385,6 +406,31 @@ export default function PlcWizard({
     }
   };
 
+  /* The pack's saved answer, whenever a different pack is opened. */
+  useEffect(() => {
+    setClausesYes(kase?.clauses?.any ?? null);
+    setClausesText(kase?.clauses?.text ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kase?.id]);
+  const clausesReady = clausesYes === false || (clausesYes === true && clausesText.trim().length > 0);
+
+  /** Save the clauses answer if it differs from the pack's. Throws on a refusal. */
+  const saveClauses = async (base: PlcCase, any: boolean | null = clausesYes, text = clausesText): Promise<PlcCase> => {
+    if (any === null || (any && !text.trim())) return base;
+    if (base.clauses && base.clauses.any === any && (!any || base.clauses.text === text.trim())) return base;
+    if (demo) {
+      const next = { ...base, clauses: { any, text: any ? text.trim() : "", by: "", at: new Date().toISOString() } };
+      setKase(next);
+      return next;
+    }
+    const res = await api<{ case: PlcCase }>(`/api/plc/${base.id}`, {
+      method: "POST",
+      body: JSON.stringify({ action: "clauses", wanted: any, note: any ? text : "" }),
+    });
+    setKase(res.case);
+    return res.case;
+  };
+
   /** Save the note if it has changed. Throws on a refusal. */
   const saveNote = async (): Promise<PlcCase | null> => {
     if (!kase || note.trim() === agentOwnNote(kase.agentNote)) return kase;
@@ -410,6 +456,7 @@ export default function PlcWizard({
     let current: PlcCase | null;
     try {
       current = await saveNote();
+      if (current) current = await saveClauses(current);
     } catch (e) {
       setError((e as Error).message);
       return;
@@ -807,12 +854,12 @@ export default function PlcWizard({
           /* Read when it was dropped: anything that runs out before the move-in
              date, said here rather than by the scan after Send. */
           const runsOut = documents.filter(
-            (d) => d.read?.expiryDate && kase.moveInDate && d.read.expiryDate < kase.moveInDate
+            (d) => DATED_CHECKS.has(d.checkId) && d.read?.expiryDate && kase.moveInDate && d.read.expiryDate < kase.moveInDate
           );
           return (
           <div>
             <h1 className="text-2xl tracking-normal text-ink">
-              {testLet || (gate.ready && blockers.length === 0 && rlpAnswered(kase)) ? "Ready to Send" : "Not Ready to Send Yet"}
+              {testLet || (gate.ready && blockers.length === 0 && rlpAnswered(kase) && clausesReady) ? "Ready to Send" : "Not Ready to Send Yet"}
             </h1>
             {testLet && (
               <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
@@ -905,22 +952,43 @@ export default function PlcWizard({
                     </label>
                     <textarea
                       id="plc-anyway"
+                      ref={anywayBox}
                       rows={2}
                       value={anywayWhy}
-                      onChange={(e) => setAnywayWhy(e.target.value)}
+                      onChange={(e) => {
+                        setAnywayWhy(e.target.value);
+                        if (e.target.value.trim().length >= 3) setAnywayAsk(null);
+                      }}
                       placeholder="e.g. Guarantor is in place and referenced. The mortgage letter names the landlord at this address."
                       className="mt-1.5 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-amber-500"
                     />
                     <div className="mt-2 flex flex-wrap items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => submit(anywayWhy.trim())}
-                        disabled={anywayWhy.trim().length < 3 || (!testLet && (!gate.ready || !rlpAnswered(kase)))}
-                        className={SECONDARY}
+                        onClick={() => (anywayWhy.trim().length < 3 ? askForAnyway("reason") : submit(anywayWhy.trim()))}
+                        disabled={!testLet && (!gate.ready || !rlpAnswered(kase) || !clausesReady)}
+                        title={
+                          !testLet && !gate.ready
+                            ? "Attach what is needed, or say why it is not, first"
+                            : !testLet && !rlpAnswered(kase)
+                              ? "Say whether the landlord wants Rent and Legal Protection first"
+                              : !testLet && !clausesReady
+                                ? "Say whether there are any additional clauses first"
+                                : undefined
+                        }
+                        className={ANYWAY}
                       >
                         Send anyway
                       </button>
-                      <span className="text-xs text-amber-800">Compliance sees each of these, with your reason.</span>
+                      {anywayAsk ? (
+                        <span className="text-xs font-medium text-amber-900">
+                          {anywayAsk === "same"
+                            ? "Nothing has changed since the last reading, so Send would stop on the same things. Replace the document, or say why it's fine above and press Send anyway."
+                            : "Say in a few words why it's fine, in the box above, then press Send anyway."}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-800">Compliance sees each of these, with your reason.</span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1042,6 +1110,52 @@ export default function PlcWizard({
               </span>
             </fieldset>
 
+            {/* ── Additional clauses (Susan and Kirstie, 21 Oct 2026) ──
+                They live inside the tenancy agreement, which the OS can't read,
+                so they are asked here rather than chased after the check. */}
+            <fieldset className="mt-6">
+              <legend className="text-sm text-ink">Are there any additional clauses for the tenancy agreement?</legend>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {([true, false] as const).map((v) => (
+                  <button
+                    key={String(v)}
+                    type="button"
+                    onClick={() => {
+                      setClausesYes(v);
+                      if (kase) void saveClauses(kase, v).catch((e: Error) => setError(e.message));
+                    }}
+                    aria-pressed={clausesYes === v}
+                    className={`rounded-lg border px-4 py-2 text-sm transition ${
+                      clausesYes === v ? "border-ink bg-ink text-white" : "border-line hover:bg-box"
+                    }`}
+                  >
+                    {v ? "Yes" : "No"}
+                  </button>
+                ))}
+              </div>
+              {clausesYes === true && (
+                <textarea
+                  rows={4}
+                  value={clausesText}
+                  onChange={(e) => setClausesText(e.target.value)}
+                  onBlur={() => {
+                    if (kase) void saveClauses(kase).catch((e: Error) => setError(e.message));
+                  }}
+                  placeholder="One clause per line, worded as they should appear. e.g. The tenant may keep one small dog at the property."
+                  className="mt-2 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
+                />
+              )}
+              <span className="mt-1 block text-xs text-muted">
+                {clausesYes === true
+                  ? clausesText.trim()
+                    ? "Pre-tenancy add these to the tenancy agreement, word for word."
+                    : "Write the clauses before the pack can go."
+                  : clausesYes === false
+                    ? "The standard agreement, with nothing added."
+                    : "Needed before the pack can go."}
+              </span>
+            </fieldset>
+
             {/* ── The note ──
                 Optional, and the one place to tell compliance what the files
                 cannot: a landlord abroad, a certificate booked for Tuesday.
@@ -1067,8 +1181,8 @@ export default function PlcWizard({
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={() => submit()}
-                disabled={!testLet && (!gate.ready || !rlpAnswered(kase))}
+                onClick={() => (!testLet && !demo && blockers.length > 0 && readingStillFresh(kase) ? askForAnyway("same") : submit())}
+                disabled={!testLet && (!gate.ready || !rlpAnswered(kase) || !clausesReady)}
                 title={
                   testLet
                     ? undefined
@@ -1076,7 +1190,9 @@ export default function PlcWizard({
                     ? "Attach what is needed, or say why it is not, first"
                     : !rlpAnswered(kase)
                       ? "Say whether the landlord wants Rent and Legal Protection first"
-                      : undefined
+                      : !clausesReady
+                        ? "Say whether there are any additional clauses first"
+                        : undefined
                 }
                 className={PRIMARY}
               >
