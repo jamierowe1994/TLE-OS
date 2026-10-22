@@ -7,6 +7,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import CustomAttributes from "@/components/CustomAttributes";
 import PersonalCompliance from "@/components/PersonalCompliance";
+import Automations from "@/components/automations/Automations";
 import AddressField from "@/components/AddressField";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
@@ -33,7 +34,7 @@ import { fetchMe, invalidateMe } from "@/lib/me";
 /** In the doodle set; the pack has none. */
 const LOCK_ICON = "lock";
 
-type TabKey = "info" | "appearance" | "custom" | "compliance" | "connections" | "ads";
+type TabKey = "info" | "appearance" | "custom" | "automations" | "compliance" | "connections" | "ads";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "info", label: "Profile information" },
@@ -43,6 +44,8 @@ const TABS: { key: TabKey; label: string }[] = [
      that was all it held; it is now two different kinds of custom thing, and
      the shorter word covers both without promising either. */
   { key: "custom", label: "Custom" },
+  /* Their own automations, and Steve building them (lib/automations, 22 Oct 2026). */
+  { key: "automations", label: "Automations" },
   { key: "compliance", label: "Personal compliance" },
   { key: "connections", label: "Connections" },
   /* "Portals" USED to be here - the customer-facing fronts. James, 9 Sep:
@@ -818,6 +821,9 @@ export default function ProfilePage() {
 
         {/* ══ THE WIRING — what's genuinely connected, live-checked. ══ */}
         {tab === "custom" && <CustomAttributes />}
+
+        {/* ══ AUTOMATIONS ══ */}
+        {tab === "automations" && <Automations />}
 
         {/* ══ ADS — the one page that sells something. Layout after the
             reference: a small mark, a big centred line with the accent

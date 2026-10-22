@@ -61,7 +61,8 @@ export type AiFeature =
   | "listing-autofill"
   | "bond-ask"
   | "planning-reader"
-  | "translate";
+  | "translate"
+  | "automation-builder";
 
 type Spec = {
   label: string;
@@ -95,6 +96,11 @@ export const AI_FEATURES: Record<AiFeature, Spec> = {
   "bond-ask": { label: "Ask Bond", key: "BOND_ASK", model: "claude-opus-5-5", effort: "medium", voice: "bond" },
   "planning-reader": { label: "Planning reader", key: "PLANNING_READER", model: "claude-sonnet-5-5", effort: "low" },
   translate: { label: "Translation", key: "TRANSLATE", model: "claude-opus-5-5", effort: "low", legacy: "TRANSLATE_MODEL", voice: "writer" },
+  /* Settings > Automations' chat builder (22 Oct 2026): a sentence into a
+     draft automation. Steve's model, at low effort - it fills a fixed form
+     from a short menu, and the agent checks every part before it runs. No
+     head-to-head yet; AI_MODEL_AUTOMATION_BUILDER switches it. */
+  "automation-builder": { label: "Automation builder (Steve)", key: "AUTOMATION_BUILDER", model: "claude-opus-5-5", effort: "low", voice: "steve" },
 };
 
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];

@@ -556,6 +556,19 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "TAKE_ON_REX",
     legacyOn: "on",
   },
+  {
+    /* Agents' own automations (lib/automations, 22 Oct 2026), built on
+       Settings > Automations or by asking Steve. Off, they can still build
+       them, test them on themselves and see what each would have done; every
+       run is held, except to ALWAYS_SEND_TO. No new variable: unset is off. */
+    key: "agent_automations",
+    label: "Agent automations",
+    what: "Runs the automations agents set up on Settings > Automations: when something happens on their own book (an enquiry, a viewing, a passport, a let, a certificate, a date), after any wait and if its conditions still hold, it emails or texts the customer, sends their passport, makes a task, or posts in the bell or a Huddle. The first send of each new automation is shown to the agent to approve before it goes. Capped per automation, per agent and per customer each day. Never writes to REX, PayProp or Propoly.",
+    who: "LANDLORDS AND TENANTS on each agent's own book, from the agent's own Outlook where that is armed, otherwise the Letting Experts sender. Email to landlords and tenants must be on as well. Texts cost about 4p each.",
+    confirm: "RUN AUTOMATIONS",
+    legacyEnv: "AGENT_AUTOMATIONS",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

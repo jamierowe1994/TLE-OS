@@ -22,6 +22,7 @@ import { publicOrigin } from "@/lib/origin";
 import { runDueJobs } from "@/lib/steve-jobs";
 import { autoPassportSweep } from "@/lib/auto-passport";
 import { PASSPORT_REMINDER_KIND, logReminderSent, reminderMail, reminderVerdict, startedReminderSweep } from "@/lib/passport-reminder";
+import { AUTOMATION_SEND_KIND, automationSendStands } from "@/lib/automations/stands";
 
 /**
  * Send what's due.
@@ -156,6 +157,12 @@ export async function POST(req: NextRequest) {
   if (req.nextUrl.searchParams.get("only") === "steve") {
     return NextResponse.json({ ok: true, steveJobs: await runDueJobs() });
   }
+  /* ?only=automations runs the agents' automations' look-and-do and nothing
+     else (lib/automations/runner). */
+  if (req.nextUrl.searchParams.get("only") === "automations") {
+    const { runAutomations } = await import("@/lib/automations/runner");
+    return NextResponse.json({ ok: true, automations: await runAutomations(publicOrigin(req)) });
+  }
   /* PLC files the reader was offline for, read again once it answers
      (lib/plc-reread, 22 Oct 2026). Riding this five-minute tick rather than a
      cron of its own; in the background, so the sends below never wait on it. */
@@ -239,6 +246,18 @@ export async function POST(req: NextRequest) {
         failed.push({ id: row.id, error: message });
       }
       continue;
+    }
+
+    /* ── An agent automation's email (lib/automations): still on, and still
+       allowed, at the moment it goes - an owner switching it off, or the
+       Agent automations switch going off, stops what is already queued. ── */
+    if (row.kind === AUTOMATION_SEND_KIND) {
+      const stands = await automationSendStands(row.ref, row.to_email).catch(() => "The automation could not be checked, so it was not sent.");
+      if (stands) {
+        await q(`UPDATE os_scheduled_sends SET state = 'cancelled', error = $2 WHERE id = $1`, [row.id, stands]).catch(() => []);
+        skipped.push(row.id);
+        continue;
+      }
     }
 
     /* ── The passport reminder (lib/passport-reminder), started or from
@@ -353,10 +372,16 @@ export async function POST(req: NextRequest) {
      moves on - the screens read what it stores. */
   const rentRead = await runDailyRentRead().catch((e) => ({ error: publicError(e, "Rent read failed.") }));
   const rent = await runRentNudges(publicOrigin(req)).catch((e) => ({ error: publicError(e, "Rent nudges failed.") }));
+  /* Agents' own automations (lib/automations, 22 Oct 2026): look for what
+     happened on each agent's book and do what is due. Their emails are queued
+     on this table, so they go on the next tick through the loop above. */
+  const automations = await import("@/lib/automations/runner")
+    .then((m) => m.runAutomations(publicOrigin(req)))
+    .catch((e) => ({ error: publicError(e, "Automations failed.") }));
   /* Steve's standing jobs (lib/steve-jobs, 2 Oct 2026). Last, because each is
      a model call and the sends above must never wait behind one. */
   const steveJobs = await runDueJobs().catch((e) => ({ ran: 0, failed: [publicError(e, "Steve's jobs failed.")] }));
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, autoPassports, passportReminders, decks, nudges, instructions, newsletters, updates, rentRead, rent, steveJobs });
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, autoPassports, passportReminders, decks, nudges, instructions, newsletters, updates, rentRead, rent, automations, steveJobs });
 }
 
 /** A dry read: what is due, without sending it. Same key as the run: this

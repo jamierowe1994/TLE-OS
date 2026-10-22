@@ -151,6 +151,10 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   const { runsFor } = await import("@/lib/steve-jobs");
   const jobRuns = await runsFor(me.id, 3).catch(() => []);
 
+  /* Their automations (lib/automations, 22 Oct 2026): a first send waiting
+     for them to check, and "tell me in the bell" lines, the last three days. */
+  const automationLines = await import("@/lib/automations/bell").then((m) => m.automationNotices(me.id)).catch(() => []);
+
   /* A document compliance queried, on a home of yours (4 Oct 2026). */
   const queried = await queriesFor(me.id).catch(() => []);
 
@@ -332,6 +336,7 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       tone: "warn",
     });
   }
+  out.push(...automationLines);
   for (const r of jobRuns) {
     out.push({
       id: `steve-job:${r.id}`,
