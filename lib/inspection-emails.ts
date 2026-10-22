@@ -9,11 +9,12 @@ import { asChecks, checkLines } from "@/lib/inspection-checks";
 import type { OsUser } from "@/lib/users";
 
 /**
- * The three emails an inspection sends.
+ * The four emails an inspection sends.
  *
  *   tenant   inspection-tenant-access   we are asking to come, here are dates
  *            inspection-tenant-booked   the date, in writing, which is notice
- *   landlord inspection-landlord-report what we found
+ *   landlord inspection-landlord-booked the date, when the agent asks for it
+ *            inspection-landlord-report what we found
  *
  * Best effort, after the move is saved, exactly as maintenance does it: a
  * missing address or a refused send comes back as a sentence for the
@@ -28,11 +29,19 @@ export interface SendOutcome {
   address?: string;
   reason?: string;
   via?: string;
+  /** What it said, kept on the inspection so the agent can read it back
+   *  (Rhiannon, 21 Oct 2026, ticket cf2d722c). Never sent to the browser
+   *  with the move; read one at a time from the timeline. */
+  subject?: string;
+  html?: string;
 }
 
 const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
 
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
+/* A landlord is often a company: "Hi Bespoke" reads as a mistake. */
+const COMPANY = /\b(ltd|limited|llp|plc|properties|property|homes|estates?|lettings|investments|holdings|group|trust)\b/i;
+const greet = (name: string) => (COMPANY.test(name ?? "") ? name.trim() : first(name));
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a time to be agreed";
 
@@ -59,7 +68,7 @@ function varsFor(i: Inspection, me: OsUser, findings: Finding[] = []): Record<st
     address,
     kind: kindLabel(i.kind),
     tenantName: first(i.tenant),
-    landlordName: first(i.landlord),
+    landlordName: greet(i.landlord),
     inspector: i.inspector || me.name || "One of the team",
     howLong: HOW_LONG[i.kind] ?? "20 minutes",
     noticeHours: String(i.noticeHours),
@@ -93,6 +102,7 @@ async function send(id: string, to: string, vars: Record<string, string>, me: Os
   } catch (e) {
     return { to: who, sent: false, address, reason: e instanceof Error ? e.message : "the email could not be written" };
   }
+  const said = { subject, html };
   try {
     const conn = await msConnectionFor(me.id).catch(() => null);
     /* The customer switch as well (18 Sep 2026). This road checked only the
@@ -102,7 +112,7 @@ async function send(id: string, to: string, vars: Record<string, string>, me: Os
     const mayWrite = isInternalAddress(address) || (await switchOn("customer_email"));
     if (mayWrite && conn?.connected && (await switchOn("assistant_email"))) {
       await msSendMail(me.id, { to: { email: address }, subject, body: html, rexUserId: me.rexUserId });
-      return { to: who, sent: true, address, via: "own mailbox" };
+      return { to: who, sent: true, address, via: "own mailbox", ...said };
     }
   } catch (e) {
     if (!(e instanceof MailboxNotConnected)) {
@@ -112,9 +122,9 @@ async function send(id: string, to: string, vars: Record<string, string>, me: Os
   }
   try {
     await sendEmail({ to: address, subject, html, audience: "customer", replyTo: me.email });
-    return { to: who, sent: true, address, via: "public sender" };
+    return { to: who, sent: true, address, via: "public sender", ...said };
   } catch (e) {
-    return { to: who, sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
+    return { to: who, sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send", ...said };
   }
 }
 
@@ -133,13 +143,37 @@ export async function emailsForMove(
   const out: SendOutcome[] = [];
   if (action === "ask_access" && i.accessToken) out.push(await send("inspection-tenant-access", i.tenantEmail, vars, me, "tenant"));
   if (action === "confirm" && i.bookedAt) out.push(await send("inspection-tenant-booked", i.tenantEmail, vars, me, "tenant"));
+  if (action === "tell_landlord" && i.bookedAt) out.push(await send("inspection-landlord-booked", i.landlordEmail, vars, me, "landlord"));
   if (action === "report_sent" && i.reportedAt) out.push(await send("inspection-landlord-report", i.landlordEmail, vars, me, "landlord"));
   return out;
 }
 
+/**
+ * The email as it would go, before it goes (ticket cf2d722c): the booking
+ * form's "See the email". The time and the inspector are the form's, not yet
+ * saved. Nothing is sent and nothing is written.
+ */
+export const PREVIEWS = { "tenant-booked": ["inspection-tenant-booked", "tenant"], "landlord-booked": ["inspection-landlord-booked", "landlord"] } as const;
+export async function previewEmail(
+  i: Inspection,
+  which: keyof typeof PREVIEWS,
+  me: OsUser,
+  form: { at?: string | null; inspector?: string | null }
+): Promise<{ to: string; subject: string; html: string }> {
+  const [id, who] = PREVIEWS[which];
+  const at = form.at && !Number.isNaN(Date.parse(form.at)) ? new Date(form.at).toISOString() : i.bookedAt;
+  const vars = varsFor({ ...i, bookedAt: at, inspector: form.inspector?.trim() || i.inspector }, me);
+  const { subject, html } = await renderTleEmailLive(id, vars);
+  return { to: (who === "tenant" ? i.tenantEmail : i.landlordEmail).trim(), subject, html };
+}
+
+/** "own mailbox" / "public sender" in words: it read "from the own mailbox". */
+export const viaWords = (via: string | null | undefined): string =>
+  via === "own mailbox" ? "from the agent's own mailbox" : via === "public sender" ? "from the Letting Experts address" : via ? `from the ${via}` : "";
+
 export const outcomeLine = (o: SendOutcome): string =>
   o.sent
-    ? `The ${o.to} was emailed at ${o.address}${o.via ? ` from the ${o.via}` : ""}.`
+    ? `The ${o.to} was emailed at ${o.address}${o.via ? ` ${viaWords(o.via)}` : ""}.`
     /* The reason is a sentence in its own right and often ends in a full
        stop already - "...Turn it on there to send this." - so trim before
        adding one, or the timeline reads "send this..". */

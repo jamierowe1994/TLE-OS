@@ -79,6 +79,12 @@ export type Appt = {
   /** The messages the booking flow sends, and whether they went. */
   comms: { label: string; done: boolean }[];
   /**
+   * A viewing booked in the OS whose confirmation to the applicant has not
+   * gone yet: who it would go to (22 Oct 2026, ticket dd84271b). Unset when
+   * it has gone, or when the booking was not made here.
+   */
+  confirmPending?: string;
+  /**
    * An all-day entry — a holiday, a course, a "on leave" block.
    *
    * These arrive from REX with a midnight start, which is not a time anybody

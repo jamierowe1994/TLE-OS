@@ -743,7 +743,9 @@ function ViewingDrawerBody({
                 title="Confirmations"
                 icon="mail"
                 action={
-                  appt.fromRex && !appt.comms.length ? (
+                  appt.confirmPending ? (
+                    <Pill tone="accent">Not sent</Pill>
+                  ) : appt.fromRex && !appt.comms.length ? (
                     <Pill tone="neutral">Not known</Pill>
                   ) : allSent ? (
                     <Pill tone="good">All sent</Pill>
@@ -754,6 +756,17 @@ function ViewingDrawerBody({
                   )
                 }
               >
+                {appt.confirmPending && (
+                  <p className="mb-2.5 text-[12.5px] text-accent-dark">
+                    Booked in the OS. The confirmation to {appt.confirmPending} hasn&apos;t been sent yet
+                    {appt.leadId ? (
+                      <>
+                        {" - "}
+                        <a href={`/leads?open=${encodeURIComponent(appt.leadId)}`} className="font-semibold underline">send it from their lead</a>.
+                      </>
+                    ) : "."}
+                  </p>
+                )}
                 <ul className="space-y-2.5">
                   {appt.comms.map((c) => {
                     const done = c.done || sentExtra.has(`${appt.id}:${c.label}`);

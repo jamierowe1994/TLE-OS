@@ -71,6 +71,9 @@ export function ApptRow({
     );
   } else if (a.kind === "viewing" && a.tenant) {
     pill = <Pill className="bg-accent-soft text-accent-dark">Tenanted</Pill>;
+  } else if (a.confirmPending) {
+    /* Booked here, and the confirmation hasn't gone (ticket dd84271b). */
+    pill = <Pill className="border border-accent-dark/60 text-accent-dark">Not confirmed</Pill>;
   } else if (a.comms.length && missing > 0) {
     pill = <Pill className="bg-accent-soft text-accent-dark">{missing} to send</Pill>;
   } else if (a.comms.length && missing === 0) {

@@ -14,6 +14,7 @@ import { STEPS, stepOf, type StepId } from "@/lib/inspection-steps";
 import type { DueVisit, Finding, Inspection, InspectionEvent, InspectionRules } from "@/lib/inspections";
 import ReportSheet from "@/components/inspections/ReportSheet";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
+import SentEmails, { emailWent } from "@/components/inspections/SentEmails";
 import RecordVisit from "@/components/inspections/RecordVisit";
 import { asChecks, checkLines, checksDone, CHECKS } from "@/lib/inspection-checks";
 import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
@@ -626,6 +627,12 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
               </div>
             </section>
 
+            {/* ── What went, to whom, and what it said (ticket cf2d722c). ── */}
+            <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
+              <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Emails</p>
+              <SentEmails inspectionId={i.id} events={held.events} />
+            </section>
+
             {/* ── The permission, kept in full. ── */}
             <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
               <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Access</p>
@@ -640,7 +647,10 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
                         : !i.tenantConfirmedAt
                           ? "not sent yet"
                           : i.tenantEmail
-                            ? `emailed ${stamp(i.tenantConfirmedAt)}, not answered yet`
+                            ? emailWent(held.events, "tenant")
+                              ? `emailed ${stamp(i.tenantConfirmedAt)}, not answered yet`
+                              /* Marked, but the email was refused (ticket cf2d722c): say so rather than "emailed". */
+                              : `marked ${stamp(i.tenantConfirmedAt)}, but the email didn't go - see Emails`
                             : `told by phone, marked ${stamp(i.tenantConfirmedAt)}`
                     }
                   />
@@ -655,6 +665,18 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
                       v={i.accessReply === "yes" ? `yes, ${stamp(i.accessRepliedAt)}` : i.accessReply === "other_time" ? `asked for another time, ${stamp(i.accessRepliedAt)}` : i.accessReply === "no" ? `no, ${stamp(i.accessRepliedAt)}` : "nothing yet"}
                     />
                   </>
+                )}
+                {i.bookedAt && (
+                  <Row
+                    k="Landlord"
+                    v={
+                      !i.landlordToldAt
+                        ? "not told"
+                        : !i.landlordEmail || emailWent(held.events, "landlord")
+                          ? `told ${stamp(i.landlordToldAt)}`
+                          : `marked ${stamp(i.landlordToldAt)}, but the email didn't go - see Emails`
+                    }
+                  />
                 )}
                 {i.appointmentId && <Row k="Diary" v="In the inspector's diary" />}
                 {i.accessNote && <Row k="In their words" v={`"${i.accessNote}"`} />}
@@ -949,7 +971,12 @@ function Now({
             <PressButton disabled={busy} onClick={() => onMove({ action: "confirm" }, "Confirmation")} className={btn}>
               {inspection.tenantEmail ? `Email ${first} the confirmation` : "Mark it confirmed"}
             </PressButton>
-            {!inspection.landlordToldAt && <PressButton disabled={busy} onClick={() => onMove({ action: "tell_landlord" })} className={ghost}>Tell the landlord too</PressButton>}
+            {/* It only stamped the day before (ticket cf2d722c): now it emails them the date when there is an address. */}
+            {!inspection.landlordToldAt && (
+              <PressButton disabled={busy} onClick={() => onMove({ action: "tell_landlord" }, "Landlord")} className={ghost}>
+                {inspection.landlordEmail ? "Email the landlord the date" : "Mark the landlord told"}
+              </PressButton>
+            )}
             <button type="button" onClick={() => setMoving(true)} className="text-[12px] text-muted underline">Change the time</button>
           </div>
           {alreadyBeen}
@@ -986,6 +1013,11 @@ function Now({
             {inspection.tenantEmail && !acked && (
               <button type="button" disabled={busy} onClick={() => void onMove({ action: "confirm" }, "Confirmation")} className="text-[11.5px] text-muted underline">
                 Send {first} the confirmation again
+              </button>
+            )}
+            {inspection.landlordEmail && !inspection.landlordToldAt && (
+              <button type="button" disabled={busy} onClick={() => void onMove({ action: "tell_landlord" }, "Landlord")} className="text-[11.5px] text-muted underline">
+                Email the landlord the date
               </button>
             )}
           </div>

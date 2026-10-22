@@ -128,11 +128,14 @@ export default function LeadGroups({
   activeId,
   onOpen,
   config = DEFAULT_GROUPS,
+  badge,
 }: {
   leads: Lead[];
   activeId: string | null;
   onOpen: (l: Lead) => void;
   config?: GroupsConfig;
+  /** Drawn before the source mark - the booked viewing on Leads (22 Oct 2026). */
+  badge?: (l: Lead) => React.ReactNode;
 }) {
   const PREVIEW = Math.max(1, config.preview);
   const groups = config.show.map((id) => GROUPS.find((g) => g.id === id)).filter((g): g is (typeof GROUPS)[number] => Boolean(g));
@@ -203,6 +206,7 @@ export default function LeadGroups({
         <span className="min-w-0 truncate text-[12px] text-muted">{l.area}</span>
 
         <span className="ml-auto flex shrink-0 items-center gap-3 md:ml-0">
+          {badge?.(l)}
           <SourceMark source={l.source} />
           <span className="whitespace-nowrap text-[11px] text-muted">{when ?? l.received}</span>
           {l.spineLabel ? (

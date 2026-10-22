@@ -924,6 +924,10 @@ CREATE TABLE IF NOT EXISTS os_inspection_events (
   text           TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS os_inspection_events_insp ON os_inspection_events (inspection_id, at DESC);
+-- An email line keeps what the email said and who it went to (22 Oct 2026,
+-- Rhiannon's ticket cf2d722c: "I didn't see if an email was sent to the
+-- tenant and what it says"). { to, address, sent, via, reason, subject, html }.
+ALTER TABLE os_inspection_events ADD COLUMN IF NOT EXISTS detail JSONB;
 
 -- Company-wide settings, one JSON document per key: "invoicing" holds who
 -- an invoice is from, the bank details, the prefix and the terms.

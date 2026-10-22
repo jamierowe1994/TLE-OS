@@ -80,6 +80,7 @@ import {
   WORKS_TENANT_HAPPY,
   INSPECTION_TENANT_ACCESS,
   INSPECTION_TENANT_BOOKED,
+  INSPECTION_LANDLORD_BOOKED,
   INSPECTION_LANDLORD_REPORT,
   INVOICE_SENT,
   LANDLORD_CONTRACT_PACK,
@@ -1333,6 +1334,7 @@ const inspectionEntry = (id: string, name: string, audience: CatalogEntry["audie
 TLE_EMAILS.push(
   inspectionEntry("inspection-tenant-access", "Can We Visit? to the Tenant", "tenant", "When an agent asks the tenant for access on an inspection", "The tenant", "The ask, not the telling: why we come, how long it takes, the dates on offer and a link to choose one or say none of them work. Their answer is what the OS keeps as the permission.", INSPECTION_TENANT_ACCESS as unknown as EmailDoc),
   inspectionEntry("inspection-tenant-booked", "Visit Confirmed to the Tenant", "tenant", "When a date is agreed and confirmed", "The tenant", "The date in writing, which is the notice, plus an invitation to raise anything bothering them before we arrive.", INSPECTION_TENANT_BOOKED as unknown as EmailDoc),
+  inspectionEntry("inspection-landlord-booked", "Visit Booked to the Landlord", "landlord", "When the agent ticks Email the landlord on a booked visit", "The landlord", "The date and who is going, and that a short report follows the visit. Only when the agent asks for it.", INSPECTION_LANDLORD_BOOKED as unknown as EmailDoc),
   inspectionEntry("inspection-landlord-report", "Visit Report to the Landlord", "landlord", "When the report is sent from the inspection sheet", "The landlord", "How their property is being kept, what we found room by room, and what happens next about each of it.", INSPECTION_LANDLORD_REPORT as unknown as EmailDoc),
 );
 

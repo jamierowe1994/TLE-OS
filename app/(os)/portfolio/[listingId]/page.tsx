@@ -18,6 +18,7 @@ import { PressButton } from "@/components/Bits";
 import RaiseJob, { type RaiseDraft } from "@/components/maintenance/RaiseJob";
 import { OPEN, day as shortDay, nextFor, statusLabel } from "@/components/maintenance/works-ui";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
+import SentEmails from "@/components/inspections/SentEmails";
 import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
 import HomeAgent from "@/components/portfolio/HomeAgent";
@@ -37,7 +38,7 @@ import { housesIn, houseByListing, roomLabel, tenantsInOrder, pickerOption, MANA
 import type { ManagedProperty, Party } from "@/lib/portfolio-types";
 import type { Contractor, WorksOrder } from "@/lib/works-orders";
 import type { CarriedJob } from "@/lib/works-carried";
-import type { DueVisit, Inspection } from "@/lib/inspections";
+import type { DueVisit, Inspection, InspectionEvent } from "@/lib/inspections";
 import type { DueReview, Review } from "@/lib/tenancy-reviews";
 import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
 import PastTenancies from "@/components/portfolio/PastTenancies";
@@ -1570,6 +1571,8 @@ function EndingList({ data }: { data: Ending }) {
 function BookVisit({ inspection, team, me, onBooked }: { inspection: Inspection; team: Person[]; me: Person | null; onBooked: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /* Booked: what went and to whom, before the pop-up closes (ticket cf2d722c). */
+  const [booked, setBooked] = useState<{ inspection: Inspection; events: InspectionEvent[] } | null>(null);
   const reporter = useSaveReporter();
   const move = async (body: unknown, label = "Inspection") => {
     setBusy(true);
@@ -1585,9 +1588,26 @@ function BookVisit({ inspection, team, me, onBooked }: { inspection: Inspection;
       return false;
     }
     settle({ ok: true });
-    onBooked();
+    if (r.inspection && Array.isArray(r.events)) setBooked({ inspection: r.inspection, events: r.events });
+    else onBooked();
     return true;
   };
+  if (booked) {
+    const at = booked.inspection.bookedAt;
+    return (
+      <div>
+        <p className="text-[13px] font-semibold">
+          Booked{at ? ` for ${new Date(at).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}` : ""}
+          {booked.inspection.inspector ? ` with ${booked.inspection.inspector}` : ""}.
+        </p>
+        <p className="mt-3 text-[10.5px] font-bold uppercase tracking-wider text-muted">Emails</p>
+        <SentEmails inspectionId={booked.inspection.id} events={booked.events} />
+        <button type="button" onClick={onBooked} className="mt-5 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
+          Done
+        </button>
+      </div>
+    );
+  }
   return (
     <div>
       <p className="mb-3 text-[12px] text-muted">{VISIT_KIND[inspection.kind] ?? "Visit"} · {inspection.propertyName}</p>

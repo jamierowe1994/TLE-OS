@@ -362,12 +362,25 @@ export default function AppointmentDrawer({
           {/* ── Confirmations: did the messages actually go? ── */}
           {appt.kind !== "other" && appt.kind !== "travel" && appt.kind !== "slot" && (
             <Section icon="mail" title="Confirmations">
+              {appt.confirmPending && (
+                <p className={`text-accent-dark ${appt.comms.length ? "mb-2" : ""}`}>
+                  Booked in the OS. The confirmation to {appt.confirmPending} hasn&apos;t been sent yet
+                  {appt.leadId ? (
+                    <>
+                      {" - "}
+                      <a href={`/leads?open=${encodeURIComponent(appt.leadId)}`} className="font-semibold underline">send it from their lead</a>.
+                    </>
+                  ) : "."}
+                </p>
+              )}
               {appt.comms.length === 0 ? (
+                appt.confirmPending ? null : (
                 <p className="text-muted">
                   {appt.fromRex
                     ? "No record of what was sent for this appointment."
                     : "Nothing to send for this one."}
                 </p>
+                )
               ) : (
                 <ul className="space-y-2">
                   {appt.comms.map((c) => {

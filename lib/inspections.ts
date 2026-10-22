@@ -258,6 +258,19 @@ export interface InspectionEvent {
   by: string;
   kind: string;
   text: string;
+  /** On an email line: who it went to, and whether a copy of it is kept to read back. */
+  email?: { to: "tenant" | "landlord"; address: string; sent: boolean; via: string | null; reason: string | null; subject: string | null; hasCopy: boolean };
+}
+
+/** What an email line keeps (os_inspection_events.detail). */
+export interface EmailDetail {
+  to: "tenant" | "landlord";
+  address?: string;
+  sent: boolean;
+  via?: string;
+  reason?: string;
+  subject?: string;
+  html?: string;
 }
 
 type Row = Record<string, unknown>;
@@ -391,7 +404,15 @@ export async function getInspection(id: string): Promise<{ inspection: Inspectio
   return {
     inspection: withStep(toInspection(r), open),
     findings,
-    events: eRows.map((e) => ({ id: s(e.id), inspectionId: s(e.inspection_id), at: iso(e.at) ?? "", by: s(e.by_name), kind: s(e.kind), text: s(e.text) })),
+    events: eRows.map((e) => {
+      const d = e.detail as EmailDetail | null | undefined;
+      return {
+        id: s(e.id), inspectionId: s(e.inspection_id), at: iso(e.at) ?? "", by: s(e.by_name), kind: s(e.kind), text: s(e.text),
+        ...(d && (d.to === "tenant" || d.to === "landlord")
+          ? { email: { to: d.to, address: d.address ?? "", sent: Boolean(d.sent), via: d.via ?? null, reason: d.reason ?? null, subject: d.subject ?? null, hasCopy: Boolean(d.html) } }
+          : {}),
+      };
+    }),
   };
 }
 
@@ -403,9 +424,23 @@ export async function inspectionByToken(token: string): Promise<Inspection | nul
   return r ? toInspection(r) : null;
 }
 
-export async function logEvent(inspectionId: string, by: string, kind: string, text: string): Promise<void> {
+export async function logEvent(inspectionId: string, by: string, kind: string, text: string, detail?: EmailDetail): Promise<void> {
   if (!hasDb()) return;
-  await q(`INSERT INTO os_inspection_events (id, inspection_id, by_name, kind, text) VALUES ($1, $2, $3, $4, $5)`, [uid(), inspectionId, by, kind, text]).catch(() => {});
+  await q(
+    `INSERT INTO os_inspection_events (id, inspection_id, by_name, kind, text, detail) VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [uid(), inspectionId, by, kind, text, detail ? JSON.stringify(detail) : null]
+  ).catch(() => {});
+}
+
+/** One email line's kept copy, to read back on the visit. */
+export async function emailCopy(inspectionId: string, eventId: string): Promise<{ subject: string; html: string; address: string } | null> {
+  if (!hasDb()) return null;
+  const [r] = await q<{ detail: EmailDetail | null }>(
+    `SELECT detail FROM os_inspection_events WHERE id = $1 AND inspection_id = $2`,
+    [eventId, inspectionId]
+  ).catch(() => []);
+  const d = r?.detail;
+  return d?.html ? { subject: d.subject ?? "", html: d.html, address: d.address ?? "" } : null;
 }
 
 /* ── raising one ─────────────────────────────────────────────────────────── */
@@ -462,7 +497,7 @@ export type Move =
   | { action: "book"; at: string; inspectorId?: string | null; inspector?: string }
   /* Book a time straight away (3 Oct 2026), without asking the tenant to pick
      one first: the written confirmation that follows is their notice. */
-  | { action: "schedule"; at: string; mins?: number; inspectorId?: string | null; inspector?: string; accessMethod?: AccessMethod; notify?: boolean }
+  | { action: "schedule"; at: string; mins?: number; inspectorId?: string | null; inspector?: string; accessMethod?: AccessMethod; notify?: boolean; notifyLandlord?: boolean }
   /* The tenant, from their own link: the booked time works for them. */
   | { action: "tenant_ack"; note?: string; by?: string }
   /* The safety and general checks made on the day. */
@@ -575,7 +610,8 @@ export async function moveInspection(id: string, move: Move, by: string): Promis
     case "tell_landlord":
       sql = `UPDATE os_inspections SET landlord_told_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`;
       args = [id];
-      line = "The landlord was told the visit is happening.";
+      /* "Marked as", as on confirm: the email line that follows says whether it went. */
+      line = "Marked as told the landlord about the visit.";
       break;
     case "visited": {
       /* The day it was really done. Not in the future - a visit is recorded

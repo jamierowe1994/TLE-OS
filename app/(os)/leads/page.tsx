@@ -35,6 +35,8 @@ import PassportsDoneList from "@/components/PassportsDoneList";
 import ArchivedLeads from "@/components/ArchivedLeads";
 import { doneAgo, type DonePassport } from "@/lib/passports-done-shape";
 import { PASSPORT_LABEL, type PassportState, type PassportStateRow } from "@/lib/passport-states-shape";
+import type { LeadViewingRow } from "@/lib/lead-viewings-shape";
+import { SAGE_INK, SAGE_WASH } from "@/components/ListingTags";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -123,6 +125,43 @@ function PassportChip({ state, at }: { state: PassportState | "none"; at: string
       {state === "done" && <span aria-hidden>✓</span>}
       {PASSPORT_LABEL[state]}
       {when && <span className="font-normal opacity-80">· {when}</span>}
+    </span>
+  );
+}
+
+/**
+ * Who is booked in to view (Lorna, 21 Oct 2026, ticket d44f5ea3): the next
+ * viewing on the lead's row, so a lead that stays on the list after booking
+ * says so without opening it. Sage while it is coming up; once it has been,
+ * a quieter "Viewed". Nothing at all when there is no viewing.
+ */
+const LONDON = "Europe/London";
+function ViewingChip({ list }: { list: LeadViewingRow[] }) {
+  if (!list.length) return null;
+  const now = Date.now();
+  const ahead = list.filter((v) => new Date(v.startsAt).getTime() >= now - 30 * 60_000).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const been = list.filter((v) => !ahead.includes(v)).sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+  const v = ahead[0] ?? been[0];
+  const at = new Date(v.startsAt);
+  const day = at.toLocaleDateString("en-GB", { timeZone: LONDON, weekday: "short", day: "numeric", month: "short" });
+  const time = at.toLocaleTimeString("en-GB", { timeZone: LONDON, hour: "2-digit", minute: "2-digit" });
+  const more = ahead.length > 1 ? ahead.length - 1 : 0;
+  const title = [
+    `${ahead[0] ? "Booked to view" : "Viewed"} ${v.address || "the property"} on ${day} at ${time}${v.agent ? ` with ${v.agent}` : ""}.`,
+    ...ahead.slice(1).map((x) => {
+      const d = new Date(x.startsAt);
+      return `Also ${x.address || "a viewing"} on ${d.toLocaleDateString("en-GB", { timeZone: LONDON, weekday: "short", day: "numeric", month: "short" })} at ${d.toLocaleTimeString("en-GB", { timeZone: LONDON, hour: "2-digit", minute: "2-digit" })}.`;
+    }),
+  ].join(" ");
+  return ahead[0] ? (
+    <span title={title} className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+      <DoodleIcon name="calendar" size={11} />
+      {day}, {time}
+      {more > 0 && <span className="font-normal opacity-80">+{more}</span>}
+    </span>
+  ) : (
+    <span title={title} className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line/80 px-2 py-0.5 text-[10.5px] font-semibold text-muted">
+      Viewed {day}
     </span>
   );
 }
@@ -307,6 +346,44 @@ export default function Leads() {
       return hit ? { state: hit.state, at: hit.at } : { state: "none", at: null };
     };
   }, [passportRows]);
+  /* ── Who is booked in to view (Lorna, 21 Oct 2026, ticket d44f5ea3) ────
+     One read for the board, like the passports, and re-read when a drawer
+     closes so a viewing booked from the drawer shows at once. Matched by the
+     lead it was booked from, the REX contact, or the email. */
+  const [viewingRows, setViewingRows] = useState<LeadViewingRow[] | null>(null);
+  const [viewingRowsFailed, setViewingRowsFailed] = useState(false);
+  useEffect(() => {
+    if (!passportsWanted || !drawerShut) return;
+    let gone = false;
+    fetch("/api/leads/viewings", { cache: "no-store" })
+      .then((r) => r.json().catch(() => null))
+      .then((j: { ok?: boolean; viewings?: LeadViewingRow[] } | null) => {
+        if (gone) return;
+        if (j?.ok && Array.isArray(j.viewings)) {
+          setViewingRows(j.viewings);
+          setViewingRowsFailed(false);
+        } else setViewingRowsFailed(true);
+      })
+      .catch(() => { if (!gone) setViewingRowsFailed(true); });
+    return () => { gone = true; };
+  }, [passportsWanted, drawerShut]);
+  const viewingsOf = useMemo(() => {
+    const by = new Map<string, LeadViewingRow[]>();
+    const add = (k: string, v: LeadViewingRow) => { const l = by.get(k); if (l) { if (!l.includes(v)) l.push(v); } else by.set(k, [v]); };
+    for (const v of viewingRows ?? []) {
+      if (v.leadId) add(`lead:${v.leadId}`, v);
+      if (v.contactId) add(`contact:${v.contactId}`, v);
+      if (v.email) add(`email:${v.email}`, v);
+    }
+    return (l: Lead): LeadViewingRow[] => {
+      const hits = [
+        ...(by.get(`lead:${l.id}`) ?? []),
+        ...(l.contactId ? by.get(`contact:${l.contactId}`) ?? [] : []),
+        ...(l.email ? by.get(`email:${l.email.trim().toLowerCase()}`) ?? [] : []),
+      ];
+      return [...new Map(hits.map((v) => [v.id, v])).values()];
+    };
+  }, [viewingRows]);
   const [fPassport, setFPassport] = useState<PassportState | "none" | null>(null);
   /* Off the landlord side the filter has nothing to filter. */
   useEffect(() => { if (!passportsWanted) setFPassport(null); }, [passportsWanted]);
@@ -604,6 +681,21 @@ export default function Leads() {
             },
           } satisfies ColumnDef<Lead>]
         : []),
+      /* Who is booked in to view, beside the passport (ticket d44f5ea3). */
+      ...(passportsWanted
+        ? [{
+            key: "viewing", label: "Viewing", cell: "whitespace-nowrap",
+            render: (l: Lead) => {
+              if (leadSide(l) !== "tenant") return null;
+              if (!viewingRows) {
+                return viewingRowsFailed
+                  ? <span className="text-[11px] text-muted" title="The viewings didn't load. Try again in a minute.">Didn&apos;t load</span>
+                  : <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" aria-label="Loading" />;
+              }
+              return <ViewingChip list={viewingsOf(l)} />;
+            },
+          } satisfies ColumnDef<Lead>]
+        : []),
       /* The home itself, not "Letting" (James, 9 Oct 2026: it is a lettings
          platform, the word says nothing). The listing they asked about; a
          landlord's own address; the town when neither is known. */
@@ -642,7 +734,7 @@ export default function Leads() {
           ),
       },
     ],
-    [manyAgents, passportsWanted, passportStateOf, passportRows, passportRowsFailed]
+    [manyAgents, passportsWanted, passportStateOf, passportRows, passportRowsFailed, viewingsOf, viewingRows, viewingRowsFailed]
   );
   /* v2 (9 Oct 2026): Passport and Property arrived and Enquiry/Area went
      optional. Saved layouts from before would have put the new columns at
@@ -875,6 +967,7 @@ export default function Leads() {
                 activeId={openId}
                 onOpen={(l) => setOpenId(l.id === openId ? null : l.id)}
                 config={groupsConfig}
+                badge={passportsWanted && viewingRows ? (l) => (leadSide(l) === "tenant" ? <ViewingChip list={viewingsOf(l)} /> : null) : undefined}
               />
             </div>
           </>

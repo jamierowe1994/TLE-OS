@@ -56,8 +56,16 @@ export function useColumns<T>(tableKey: string, defs: ColumnDef<T>[]) {
       // saved must still appear, and a removed one must not linger.
       const known = new Set(defs.map((d) => d.key));
       const kept = saved.order.filter((k) => known.has(k));
-      const added = defs.map((d) => d.key).filter((k) => !kept.includes(k));
-      setOrder([...kept, ...added]);
+      /* A new column goes in after the one it follows in the defs, not at the
+         far end (22 Oct 2026): Leads' Viewing column belongs beside Passport,
+         and on a laptop the far end is off the screen. */
+      const next = [...kept];
+      defs.forEach((d, n) => {
+        if (next.includes(d.key)) return;
+        const before = defs.slice(0, n).reverse().find((x) => next.includes(x.key));
+        next.splice(before ? next.indexOf(before.key) + 1 : 0, 0, d.key);
+      });
+      setOrder(next);
       setHidden(saved.hidden.filter((k) => known.has(k)));
     }
     setReady(true);

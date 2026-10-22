@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import type { Inspection } from "@/lib/inspections";
 import FieldSelect from "@/components/FieldSelect";
+import { EmailPreview } from "@/components/inspections/SentEmails";
 
 /**
  * BOOK THE VISIT (James, 3 Oct 2026: "we need to be able to book inspections,
@@ -75,6 +76,12 @@ export default function BookForm({
   const [access, setAccess] = useState<string>(inspection.accessMethod || "tenant_present");
   const hasEmail = Boolean(inspection.tenantEmail);
   const [notify, setNotify] = useState(hasEmail);
+  /* The landlord too, when the agent asks (Rhiannon, 21 Oct 2026, ticket
+     cf2d722c). Off until ticked: nothing goes to a customer unasked. */
+  const landlordEmail = (inspection.landlordEmail ?? "").trim();
+  const [notifyLandlord, setNotifyLandlord] = useState(false);
+  /* Which email is open to read before it goes. */
+  const [seeing, setSeeing] = useState<null | "tenant-booked" | "landlord-booked">(null);
   const [shortNotice, setShortNotice] = useState(false);
 
   const at = useMemo(() => new Date(`${date}T${time}:00`), [date, time]);
@@ -82,9 +89,24 @@ export default function BookForm({
   const inPast = hoursAway < 0;
   const tooSoon = !inPast && hoursAway < (inspection.noticeHours || 24);
   const first = (inspection.tenant || "the tenant").split(/\s+/)[0];
+  const landlordWho = /\b(ltd|limited|llp|plc|properties|property|homes|estates?|lettings|investments|holdings|group|trust)\b/i.test(inspection.landlord ?? "")
+    ? inspection.landlord.trim()
+    : (inspection.landlord || "the landlord").split(/\s+/)[0];
   const people = team.length ? team : me ? [me] : [];
   const inspectorId = [picked, inspection.inspectorId ?? "", me?.id ?? "", people[0]?.id ?? ""].find((x) => x && people.some((p) => p.id === x)) ?? "";
   const who = people.find((p) => p.id === inspectorId);
+  const previewUrl = (which: "tenant-booked" | "landlord-booked") =>
+    `/api/inspections/${encodeURIComponent(inspection.id)}?preview=${which}&at=${encodeURIComponent(Number.isNaN(at.getTime()) ? "" : at.toISOString())}&inspector=${encodeURIComponent(who?.name ?? me?.name ?? "")}`;
+  const seeLink = (which: "tenant-booked" | "landlord-booked") => (
+    <button
+      type="button"
+      onClick={(e) => { e.preventDefault(); setSeeing(seeing === which ? null : which); }}
+      className="ml-1 text-[11.5px] font-semibold text-accent-dark underline"
+    >
+      {seeing === which ? "Hide the email" : "See the email"}
+    </button>
+  );
+  const sendsTo = [notify && hasEmail ? first : null, notifyLandlord && landlordEmail ? landlordWho : null].filter(Boolean) as string[];
 
   const field = styled ? "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink" : "w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]";
   const lab = "mb-1 block text-[10.5px] font-bold uppercase tracking-wider text-muted";
@@ -161,13 +183,35 @@ export default function BookForm({
         <span>
           {hasEmail ? (
             <>
-              Email {first} the confirmation now, with a button to say the time works or ask for another. <span className="text-muted">It&apos;s their written notice.</span>
+              Email {first} the confirmation now, with a button to say the time works or ask for another. <span className="text-muted">It&apos;s their written notice. Goes to {inspection.tenantEmail}.</span>
+              {seeLink("tenant-booked")}
             </>
           ) : (
             <>No email address for {first}. Ring them, then press Confirm it once they know.</>
           )}
         </span>
       </label>
+      {seeing === "tenant-booked" && hasEmail && <EmailPreview url={previewUrl("tenant-booked")} />}
+
+      <label className={`flex items-start gap-2.5 rounded-xl border border-line/80 p-3 text-[12.5px] ${landlordEmail ? "cursor-pointer" : "opacity-60"}`}>
+        <input type="checkbox" checked={notifyLandlord && Boolean(landlordEmail)} disabled={!landlordEmail} onChange={(e) => setNotifyLandlord(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--accent-dark)]" />
+        <span>
+          {landlordEmail ? (
+            <>
+              Email {landlordWho} the date as well. <span className="text-muted">Goes to {landlordEmail}.</span>
+              {seeLink("landlord-booked")}
+            </>
+          ) : (
+            <>No email address for the landlord, so they can&apos;t be emailed from here.</>
+          )}
+        </span>
+      </label>
+      {seeing === "landlord-booked" && landlordEmail && <EmailPreview url={previewUrl("landlord-booked")} />}
+
+      <p className="text-[11.5px] text-muted">
+        {sendsTo.length ? `Booking it emails ${sendsTo.join(" and ")}. ` : "Booking it emails nobody. "}
+        What went, and what it said, stays on the visit under Emails.
+      </p>
 
       {inPast && <p className="rounded-xl bg-accent-soft/50 px-3 py-2 text-[12px] text-accent-dark">That time has already gone.</p>}
       {tooSoon && (
@@ -183,14 +227,14 @@ export default function BookForm({
         disabled={busy || inPast || (tooSoon && !shortNotice) || !inspectorId}
         onClick={async () => {
           const ok = await onMove(
-            { action: "schedule", at: at.toISOString(), mins, inspectorId, inspector: who?.name ?? me?.name ?? "", accessMethod: access, notify: notify && hasEmail },
+            { action: "schedule", at: at.toISOString(), mins, inspectorId, inspector: who?.name ?? me?.name ?? "", accessMethod: access, notify: notify && hasEmail, notifyLandlord: notifyLandlord && Boolean(landlordEmail) },
             "Booking"
           );
           if (ok) onDone?.();
         }}
         className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40"
       >
-        {busy ? "Booking…" : submitLabel ?? (notify && hasEmail ? `Book it and email ${first}` : "Book it")}
+        {busy ? "Booking…" : submitLabel ?? (sendsTo.length ? `Book it and email ${sendsTo.join(" and ")}` : "Book it")}
       </PressButton>
     </div>
   );

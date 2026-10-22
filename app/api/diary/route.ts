@@ -186,6 +186,76 @@ function withAppraisalIds<B extends { appts: Appt[] }>(book: B, links: Appraisal
   return hit ? { ...book, appts } : book;
 }
 
+/**
+ * DID THE CONFIRMATION GO (Lorna, 21 Oct 2026, ticket dd84271b: "If I book a
+ * viewing in from OS, it doesn't show as confirmed in my diary").
+ *
+ * A viewing booked here reaches the diary as the REX entry the booking made
+ * (or our own row, or the Outlook entry when REX is not used), and REX's copy
+ * carries no trail - so it read "No record of what was sent" even after the
+ * agent pressed Send. The sends are recorded (lib/confirmations, one row per
+ * viewing slot); this lays them back onto the entry, by the REX event the
+ * booking became, our own row, or the Outlook entry it made.
+ *
+ * Only what really went becomes a ticked line. One not sent yet says so on
+ * its own (confirmPending) rather than as an unticked line, because the
+ * drawers' "Send it now" on a line only ticks it on screen.
+ */
+type ConfirmLinks = Map<string, { applicant: string; leadId: string | null; sent: boolean; landlord: boolean }>;
+
+async function viewingConfirmations(): Promise<ConfirmLinks> {
+  const out: ConfirmLinks = new Map();
+  if (!hasDb()) return out;
+  const rows = await q<{ id: string; starts_at: Date; rex_event_id: string | null; booking: { leadId?: string; listingId?: string | number | null; applicantName?: string } | null }>(
+    `SELECT id, starts_at, rex_event_id, booking FROM os_appointments
+      WHERE kind = 'viewing' AND booking IS NOT NULL AND cancelled_at IS NULL
+        AND starts_at > NOW() - INTERVAL '21 days' AND starts_at < NOW() + INTERVAL '60 days'`
+  ).catch(() => []);
+  if (!rows.length) return out;
+  const keyOf = (r: (typeof rows)[number]) =>
+    `${r.booking?.leadId ?? ""}|${r.booking?.listingId != null ? String(r.booking.listingId) : "-"}|${new Date(r.starts_at).toISOString()}`;
+  const keys = rows.map(keyOf);
+  const [sent, outlook] = await Promise.all([
+    q<{ record_id: string }>(
+      `SELECT record_id FROM os_case_state WHERE kind = 'confirmation-sent' AND record_id = ANY($1::text[])`,
+      [[...keys.map((k) => `viewing|${k}`), ...keys.map((k) => `viewing-landlord|${k}`)]]
+    ).catch(() => []),
+    q<{ record_id: string; event_id: string | null }>(
+      `SELECT record_id, payload->>'eventId' AS event_id FROM os_case_state WHERE kind = 'outlook-event' AND record_id = ANY($1::text[])`,
+      [keys.map((k) => `viewing|${k}`)]
+    ).catch(() => []),
+  ]);
+  const went = new Set(sent.map((r) => r.record_id));
+  const msByKey = new Map(outlook.filter((o) => o.event_id).map((o) => [o.record_id.slice("viewing|".length), `ms-${createHash("sha1").update(o.event_id!).digest("hex").slice(0, 16)}`]));
+  rows.forEach((r, n) => {
+    const k = keys[n];
+    const link = { applicant: (r.booking?.applicantName ?? "").trim(), leadId: r.booking?.leadId ?? null, sent: went.has(`viewing|${k}`), landlord: went.has(`viewing-landlord|${k}`) };
+    out.set(`os-${r.id}`, link);
+    if (r.rex_event_id) out.set(`rex-${r.rex_event_id}`, link);
+    const ms = msByKey.get(k);
+    if (ms) out.set(ms, link);
+  });
+  return out;
+}
+
+function withConfirmations<B extends { appts: Appt[] }>(book: B, links: ConfirmLinks): B {
+  if (!links.size) return book;
+  let hit = false;
+  const appts = book.appts.map((a) => {
+    /* Only our own viewing bookings are in `links`, so an id that matches is a viewing. */
+    const link = a.kind === "slot" ? undefined : links.get(a.id);
+    if (!link) return a;
+    hit = true;
+    const who = link.applicant || "the applicant";
+    const comms = [
+      ...(link.sent ? [{ label: `Confirmation to ${who}`, done: true }] : []),
+      ...(link.landlord ? [{ label: "Landlord told", done: true }] : []),
+    ];
+    return { ...a, kind: "viewing" as const, comms, leadId: a.leadId ?? link.leadId, ...(link.sent ? {} : { confirmPending: who }) };
+  });
+  return hit ? { ...book, appts } : book;
+}
+
 /** The REX book with our own entries merged in, sorted as one day reads. */
 /**
  * Feedback written in the OS drawer, laid onto the viewing (15 Sep 2026).
@@ -379,7 +449,7 @@ export async function GET(req: NextRequest) {
      for the slow REX pull; applying it to our own table would mean saving a
      travel buffer and watching the diary insist it isn't there for another
      minute and a half. */
-  const [scope, rexLogin, mine, found, gone, appraisals] = await Promise.all([
+  const [scope, rexLogin, mine, found, gone, appraisals, confirmations] = await Promise.all([
     scopeForWho(req, who0),
     hasDb()
       ? q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
@@ -390,6 +460,7 @@ export async function GET(req: NextRequest) {
        but a held copy (or the agent's Outlook twin of it) still has it. */
     cancelledViewings(),
     appraisalLinks(),
+    viewingConfirmations(),
   ]);
   const who = mineOnly
     ? { email: (person.email ?? "").toLowerCase() || null, name: (scope.everything ? person.name : scope.label) || null, rexEmail: rexLogin[0]?.rex_email ?? null }
@@ -419,7 +490,7 @@ export async function GET(req: NextRequest) {
       const theirs = mineOnly ? marked.appts : marked.appts.filter((a) => a.own);
       after(() => noteRexOutlookSync(actor.id, theirs, outlook.appts).catch(() => undefined));
     }
-    const withBoth = withAppraisalIds(withoutCancelled(withOutlook(marked, outlook, mineOnly), gone), appraisals);
+    const withBoth = withConfirmations(withAppraisalIds(withoutCancelled(withOutlook(marked, outlook, mineOnly), gone), appraisals), confirmations);
     const personal = await personalP;
     return { ...withPersonal(withBoth, personal), whose, outlook: outlookSaid(outlook), personal: personalSaid(personal) };
   };
@@ -433,7 +504,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       live: false,
-      mine: [...mine, ...withAppraisalIds(withoutCancelled({ appts: outlook?.appts ?? [] }, gone), appraisals).appts, ...personal.appts],
+      mine: [...withConfirmations({ appts: [...mine, ...withAppraisalIds(withoutCancelled({ appts: outlook?.appts ?? [] }, gone), appraisals).appts] }, confirmations).appts, ...personal.appts],
       whose,
       outlook: outlookSaid(outlook),
       personal: personalSaid(personal),

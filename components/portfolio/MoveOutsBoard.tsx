@@ -162,7 +162,7 @@ export default function MoveOutsBoard({ embedded = false, onInnerOpen }: BoardPr
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-[22px] border border-[var(--brown)]/30 bg-accent-soft/40 p-4">
               <span className="min-w-0 flex-1 text-[12.5px]">
                 <span className="font-semibold">PayProp shows {gone.length === 1 ? "1 of these tenants has" : `${gone.length} of these tenants have`} already moved out.</span>{" "}
-                <span className="text-muted">Closing them takes them off this list. Nobody is emailed, and the tenants on each home stay as they are.</span>
+                <span className="text-muted">Closing them only takes them off this list. No email goes to the landlord or the tenants, and the tenants on each home stay as they are.</span>
               </span>
               <PressButton onClick={() => setClosingGone(true)} className="rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white">
                 Close {gone.length === 1 ? "this one" : `these ${gone.length}`}
@@ -319,7 +319,7 @@ function CloseSheet({ item, onClose, onSaved }: { item: OpenMoveOut; onClose: ()
 
           <p className="text-[11.5px] text-muted">
             {item.payprop?.gone ? (item.payprop.leftOn ? `PayProp has them moved out on ${day(item.payprop.leftOn)}. ` : "PayProp has them as no longer a tenant here. ") : ""}
-            Closing this only takes it off the list. Nobody is emailed, and the tenants on the home stay as they are.
+            Closing this only takes it off the list. No email goes to the landlord or the tenants, and the tenants on the home stay as they are.
           </p>
 
           <fieldset>
@@ -467,7 +467,7 @@ function CloseGoneSheet({ items, onClose, onSaved }: { items: OpenMoveOut[]; onC
             ))}
           </ul>
           <p className="text-[11.5px] text-muted">
-            Each is closed as Moved out on the day PayProp has, or with a note where PayProp has no date. Nobody is emailed, and the tenants on each home stay as they are. Anything still to sort, like a deposit, carries on as normal.
+            Each is closed as Moved out on the day PayProp has, or with a note where PayProp has no date. No email goes to any landlord or tenant, and the tenants on each home stay as they are. Anything still to sort, like a deposit, carries on as normal.
           </p>
           {msg && <p className="rounded-lg bg-accent-soft/60 px-3 py-2 text-[11.5px] text-accent-dark">{msg}</p>}
         </div>

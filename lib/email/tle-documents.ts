@@ -1212,6 +1212,25 @@ export const INSPECTION_TENANT_BOOKED = {
   branding: { showSignoff: false },
 } as const;
 
+/* To the landlord once a time is booked (Rhiannon, 21 Oct 2026, ticket
+   cf2d722c: she wanted the landlord told as well). Only when the agent ticks
+   it on the booking, or presses Email the landlord on the visit. */
+export const INSPECTION_LANDLORD_BOOKED = {
+  subject: "Property visit booked at {{address}}: {{whenPretty}}",
+  preheader: "A routine visit to your property is in the diary.",
+  mode: "blocks",
+  blocks: [
+    H("ilb1", "A visit is booked"),
+    T("ilb2", "Hi {{landlordName}},<br><br>Just to let you know, <strong>{{inspector}}</strong> will be calling at {{address}} on <strong>{{whenPretty}}</strong> for a routine property visit, to check the property is being looked after and to pick up anything that needs putting right."),
+    T("ilb3", "Once we have been round we will send you a short report of how the property is and anything that needs doing."),
+    T("ilb4", "If there is anything you would like us to look at while we are there, just reply to this email."),
+    SP("ilb5", 8),
+    T("ilb6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("ilb7", "You're getting this because The Letting Experts manage this property for you."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /* To the landlord after the visit: how their property is. */
 export const INSPECTION_LANDLORD_REPORT = {
   subject: "Property visit at {{address}}: {{conditionWord}}",

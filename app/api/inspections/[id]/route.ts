@@ -3,9 +3,9 @@ import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import {
-  deleteFinding, getInspection, logEvent, moveInspection, saveFinding, type Finding, type Move,
+  deleteFinding, emailCopy, getInspection, logEvent, moveInspection, saveFinding, type Finding, type Move,
 } from "@/lib/inspections";
-import { emailsForMove, outcomeLine } from "@/lib/inspection-emails";
+import { PREVIEWS, emailsForMove, outcomeLine, previewEmail } from "@/lib/inspection-emails";
 import { putVisitInDiary, takeVisitOutOfDiary } from "@/lib/inspection-diary";
 import { createOrder } from "@/lib/works-orders";
 import type { Urgency as NewOrderUrgency } from "@/lib/works-catalogue";
@@ -22,12 +22,32 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor } = await whoIs(req);
+  const { actor, subject } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   const { id } = await ctx.params;
   const found = await getInspection(id);
   if (!found) return NextResponse.json({ ok: false, error: "No such inspection." }, { status: 404 });
+  const sp = req.nextUrl.searchParams;
+  /* An email that went, read back as it was sent (ticket cf2d722c). */
+  const copy = sp.get("copy");
+  if (copy) {
+    const said = await emailCopy(id, copy);
+    return said
+      ? NextResponse.json({ ok: true, ...said })
+      : NextResponse.json({ ok: false, error: "No copy of that email was kept." }, { status: 404 });
+  }
+  /* An email as it would go, for the booking form's "See the email". */
+  const preview = sp.get("preview");
+  if (preview) {
+    if (!(preview in PREVIEWS)) return NextResponse.json({ ok: false, error: "No such email." }, { status: 400 });
+    try {
+      const said = await previewEmail(found.inspection, preview as keyof typeof PREVIEWS, subject ?? actor, { at: sp.get("at"), inspector: sp.get("inspector") });
+      return NextResponse.json({ ok: true, ...said });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: publicError(e, "The email couldn't be shown.") }, { status: 500 });
+    }
+  }
   return NextResponse.json({ ok: true, ...found });
 }
 
@@ -129,15 +149,26 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         inspection = await moveInspection(id, { action: "confirm" }, by);
         emails = [...emails, ...(await emailsForMove(inspection, "confirm", me).catch(() => []))];
       }
+      /* The landlord too, when the agent ticked it (ticket cf2d722c). */
+      if (move.notifyLandlord && inspection.landlordEmail) {
+        inspection = await moveInspection(id, { action: "tell_landlord" }, by);
+        emails = [...emails, ...(await emailsForMove(inspection, "tell_landlord", me).catch(() => []))];
+      }
     }
     /* Not happening, or not getting in: out of the diary. */
     if ((move.action === "cancel" || move.action === "no_access") && before?.inspection.appointmentId) {
       await takeVisitOutOfDiary(before.inspection, before.inspection.inspectorId || me.id).catch(() => null);
     }
 
-    for (const e of emails) await logEvent(id, "TLE OS", "email", outcomeLine(e));
+    /* Each email line keeps who it went to and what it said, so the visit can
+       show it afterwards (ticket cf2d722c). The copy stays on the server. */
+    for (const e of emails) {
+      await logEvent(id, "TLE OS", "email", outcomeLine(e), {
+        to: e.to, address: e.address, sent: e.sent, via: e.via, reason: e.reason, subject: e.subject, html: e.sent ? e.html : undefined,
+      });
+    }
     const after = await getInspection(id);
-    return NextResponse.json({ ok: true, ...after, emails });
+    return NextResponse.json({ ok: true, ...after, emails: emails.map(({ html: _html, ...rest }) => rest) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
   }
