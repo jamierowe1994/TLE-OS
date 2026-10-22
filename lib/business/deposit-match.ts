@@ -257,11 +257,12 @@ function tenantsOnDeal(deal: BusinessDeal, src: Sources): Array<{ t: PpTenant; b
   return out;
 }
 
-export function matchDealMoney(deal: BusinessDeal, src: Sources): { holding: MoneyFact | null; deposit: MoneyFact | null } {
+/** `landlordOptedOut`: the landlord opted out of zero deposit (lib/zero-deposit-optout), so Propoly's Flatfair clause doesn't mean no cash deposit. */
+export function matchDealMoney(deal: BusinessDeal, src: Sources, landlordOptedOut = false): { holding: MoneyFact | null; deposit: MoneyFact | null } {
   const people = tenantsOnDeal(deal, src);
   if (!people.length) return { holding: null, deposit: null };
   const holdingTarget = deal.app.propoly?.holdingFee ?? 0;
-  const depositTarget = deal.app.propoly?.depositReplacement ? 0 : (deal.app.propoly?.deposit ?? 0);
+  const depositTarget = deal.app.propoly?.depositReplacement && !landlordOptedOut ? 0 : (deal.app.propoly?.deposit ?? 0);
   const ref = deal.app.propoly?.standingOrderRef?.trim().toLowerCase() ?? "";
 
   let holding: MoneyFact | null = null;

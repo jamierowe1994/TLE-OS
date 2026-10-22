@@ -54,6 +54,7 @@ import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-re
 import { useListingTerms } from "@/lib/use-listing-terms";
 import { fetchMe } from "@/lib/me";
 import RexWaitingChip from "@/components/RexWaitingChip";
+import HomeKeys from "@/components/portfolio/HomeKeys";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import ListingOwner from "@/components/listing/ListingOwner";
 import ListingCompliance, { useListingHome } from "@/components/listing/ListingCompliance";
@@ -1407,6 +1408,12 @@ function ListingDrawerBody({
               {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
             </p>
             <OsAddressLine propertyId={listing.propertyId} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} />
+            {/* The key numbers, from REX's key register (James, 22 Oct 2026). */}
+            {Number(listing.id) > 0 && listing.propertyId && (
+              <div className="mt-3">
+                <HomeKeys propertyId={String(listing.propertyId)} listingId={listing.id} />
+              </div>
+            )}
             {/* Whose it is and the terms on the left; getting INTO the
                 property and getting it OUT to the database on the right, as
                 wide as their words. */}

@@ -13,6 +13,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
 import PropertyAnswers from "@/components/PropertyAnswers";
+import ZeroDepositOptOut from "@/components/ZeroDepositOptOut";
 import { Pill } from "@/components/Wire";
 import { housesIn, houseByListing, MANAGED_READERS as R, type House } from "@/lib/houses";
 import { headlineCerts, isOurs, statusOf, type CertStatus, type CompProperty } from "@/lib/compliance";
@@ -696,6 +697,14 @@ export default function Portfolio() {
                             about the person - how to reach them, how far we can
                             go on a repair without ringing - and those are the
                             same answer on all of their properties. */}
+                        {isOpen && (
+                          <ZeroDepositOptOut
+                            email={l.email}
+                            personRef={/^\d+$/.test(l.contactId) ? `rex:${l.contactId}` : null}
+                            name={l.name}
+                            className="mt-2 border-t border-line/40"
+                          />
+                        )}
                         {isOpen && (
                           <div className="mt-3">
                             <PropertyAnswers

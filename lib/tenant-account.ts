@@ -11,6 +11,7 @@ import { stagesFor } from "@/lib/business/propoly-stages";
 import { isScottish } from "@/lib/property-flags";
 import { findPassportByEmail, getPassport, type PassportRecord } from "@/lib/passport";
 import { STAGE_UPDATE } from "@/lib/tenant-journey";
+import { optOutFor } from "@/lib/zero-deposit-optout";
 
 /**
  * The tenant's account: who they are, and which deals are theirs.
@@ -271,7 +272,8 @@ export async function tenantDealViews(account: TenantAccount): Promise<TenantDea
       next: words.next,
       agent: { name: d.managerName, email: d.managerEmail },
       otherTenants: d.app.tenants.filter((t) => !(t.email && normaliseEmail(t.email) === account.email)).map((t) => t.name),
-      flatfair: Boolean(d.app.propoly?.depositReplacement),
+      /* Not for a landlord who opted out of zero deposit: Propoly's clause is on every deal. */
+      flatfair: Boolean(d.app.propoly?.depositReplacement) && !(await optOutFor({ email: d.app.propoly?.landlord?.email ?? null }).catch(() => null)),
     });
   }
   /* A test file's deal (lib/test-overlay), for the tester signed in as their

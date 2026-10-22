@@ -26,6 +26,7 @@ import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
 import { PORTAL_STAGES, portalStageOf } from "@/lib/business/propoly-stages";
 import type { DealPortalOverlay } from "@/lib/business/types";
 import { testDealsForBoard } from "@/lib/test-overlay";
+import { allOptOuts, optOutIn, type OptOut } from "@/lib/zero-deposit-optout";
 
 // GET /api/pretenancy/deals — every Propoly deal across all TLE agents with
 // the portal overlay (notes, stage moves, checklist) merged in, plus the
@@ -103,6 +104,9 @@ export interface PreTenancyDeal {
   schemeSuggestion: { scheme: string; evidence: string } | null;
   /** A "Holding deposit" invoice PayProp holds for this property. */
   holdingInvoice: { amount: number; fromDate: string | null } | null;
+  /** The landlord opted out of zero deposit, recorded on their file by the
+   *  agent (21 Oct 2026, lib/zero-deposit-optout): a cash deposit, never Flatfair. */
+  landlordOptOut: OptOut | null;
   flatbond: import("@/lib/business/stage-evidence").DealFlatbond | null;
   /**
    * Rent that actually ARRIVED, from PayProp's Owner rows.
@@ -201,6 +205,7 @@ function toBoardDeal(t: Awaited<ReturnType<typeof testDealsForBoard>>[number]): 
     flags: [],
     schemeSuggestion: null,
     holdingInvoice: null,
+    landlordOptOut: null,
     flatbond: null,
     rentReceived: null,
     rentSchedule: null,
@@ -280,7 +285,7 @@ export async function GET(req: NextRequest) {
     /* Cancelling a duplicate is Kirstie's job, in Propoly. */
     duplicates = [];
   }
-  const overlays = await getOverlays(deals.map((d) => d.app.id));
+  const [overlays, optOuts] = await Promise.all([getOverlays(deals.map((d) => d.app.id)), allOptOuts()]);
   /* The records seven of the eight stages are read from. See deal-stage. */
   const stageSources = await loadStageSources(deals.map((d) => d.app.id));
   /* Works the landlord agreed with the offer and has not ticked off yet
@@ -389,9 +394,12 @@ export async function GET(req: NextRequest) {
     const agreementStageIdx = PORTAL_STAGES.findIndex(
       (s) => s.key === "tenancy_agreement"
     );
+    /* Propoly's Flatfair clause is on every deal it makes, so for a landlord
+       who opted out it says nothing: only Kirstie's own register can. */
+    const landlordOptOut = optOutIn(optOuts, { email: d.app.propoly?.landlord?.email ?? null });
     const isFlatfair =
       meta?.depositScheme?.startsWith("Flatfair") === true ||
-      d.app.propoly?.depositReplacement === true;
+      (d.app.propoly?.depositReplacement === true && !landlordOptOut);
     const live = d.statusKey !== "cancelled" && d.statusKey !== "complete";
 
     if (live && register) {
@@ -437,6 +445,18 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // 0b. The landlord opted out of zero deposit, but the deal still reads as
+    // Flatfair - Propoly's clause, or Flatfair picked on the register. Before
+    // the tenancy is issued, so the clause comes off and a scheme goes on.
+    if (live && landlordOptOut && (d.app.propoly?.depositReplacement === true || meta?.depositScheme?.startsWith("Flatfair"))) {
+      flags.push({
+        kind: "zero-deposit-optout",
+        label: meta?.depositScheme?.startsWith("Flatfair")
+          ? `The landlord opted out of zero deposit (recorded by ${landlordOptOut.by}), but Flatfair is picked as the deposit scheme. Pick the scheme the cash deposit is held with.`
+          : `The landlord opted out of zero deposit (recorded by ${landlordOptOut.by}), but the Propoly deal still has the Flatfair clause. Take it off before the tenancy is issued.`,
+      });
+    }
+
     // 3. Deep in the pipeline with no deposit scheme recorded. The portal is
     // the only register of the scheme, so an empty entry here is a real gap,
     // not a sync problem. Needs no PayProp data, so no register gate.
@@ -468,6 +488,7 @@ export async function GET(req: NextRequest) {
       // "no deposit to register" note was a contradiction on screen (review).
       schemeSuggestion: isFlatfair ? null : (m?.schemeSuggestion ?? null),
       holdingInvoice: m?.holdingInvoice ?? null,
+      landlordOptOut,
       /* The deal's flatbond in our copy of Flatfair - the Deposit stop's record. */
       flatbond: flatbondForDeal(d, stageSources.flatbonds),
       rentReceived: m?.rentReceived ?? null,

@@ -625,6 +625,7 @@ function ViewingDrawerBody({
                         keys.map((k) => (
                           <span key={k.id} className="block text-muted">
                             {k.label}
+                            {k.description ? `, ${k.description === k.description.toUpperCase() ? k.description.charAt(0) + k.description.slice(1).toLowerCase() : k.description}` : ""}
                             {k.heldBy ? (
                               <span className="text-accent-dark">
                                 {" "}— out with {k.heldBy}

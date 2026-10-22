@@ -465,7 +465,8 @@ async function bytesOf(d: SendDoc): Promise<Attachment | null> {
  * tab sends once.
  */
 let ready: Promise<void> | null = null;
-function ensureTable(): Promise<void> {
+/** Exported for readers of the record elsewhere (the compliance desk's Verified list). */
+export function ensureTable(): Promise<void> {
   ready ??= q(`CREATE TABLE IF NOT EXISTS os_home_sends (
       id TEXT PRIMARY KEY,
       listing_id TEXT NOT NULL,
