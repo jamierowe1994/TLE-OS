@@ -34,6 +34,31 @@ export type StatementAnswer =
       statement: AgentStatement | null;
     };
 
+/**
+ * How long one request waits on PayProp before answering "still reading".
+ *
+ * Cloudflare in front of tle-os.co.uk gives up on a request at 100 seconds
+ * (a 524), and a cold read - the payee directory plus a three-month walk -
+ * took about two and a half minutes on production on 22 Oct 2026. So the
+ * request answers well inside that, the read carries on in this process
+ * (paymentsForRange shares the walk in flight), and the screen asks again.
+ */
+const WAIT_MS = 45_000;
+
+function withinWait(read: Promise<AgentStatement>): Promise<AgentStatement> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const still = new Promise<AgentStatement>((resolve) => {
+    timer = setTimeout(
+      () => resolve({ ok: false, kind: "reading", problem: "Still reading your payments from PayProp. The first read of a period can take a minute or two." }),
+      WAIT_MS,
+    );
+  });
+  /* The read is never abandoned: it finishes in the background and warms
+     the caches the next ask lands on. */
+  read.catch(() => {});
+  return Promise.race([read, still]).finally(() => clearTimeout(timer));
+}
+
 export async function statementFor(req: NextRequest, opts: { read: boolean }): Promise<StatementAnswer> {
   const { actor, subject } = await whoIs(req);
   if (!actor) return { ok: false, status: 401, error: "Sign in first." };
@@ -66,7 +91,7 @@ export async function statementFor(req: NextRequest, opts: { read: boolean }): P
     : null;
 
   const statement = person && opts.read
-    ? await getAgentStatement(person.email, person.name, resolved.period.from, resolved.period.to)
+    ? await withinWait(getAgentStatement(person.email, person.name, resolved.period.from, resolved.period.to))
     : null;
 
   return {

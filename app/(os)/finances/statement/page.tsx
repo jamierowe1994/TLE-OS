@@ -61,24 +61,71 @@ export default function CommissionStatement() {
   useEffect(() => {
     if (!customReady) return;
     let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setLoading(true);
     setError(null);
-    fetch(`/api/finances/statement?${qs}`, { cache: "no-store" })
-      .then(async (r) => {
-        const j = (await r.json().catch(() => null)) as Answer | null;
-        if (!live) return;
-        if (!j?.ok) {
-          setError(j?.error ?? "The statement would not load.");
-          return;
-        }
-        setAnswer(j);
-      })
-      .catch(() => live && setError("The statement would not load. Check your connection and try again."))
-      .finally(() => live && setLoading(false));
+    /* A first read of a period can outlast one request (the server answers
+       "reading" after 45 seconds, and the front door gives up at 100), so
+       the screen asks again until the figures are in - about ten minutes,
+       then it says so. */
+    const ask = (tries: number) => {
+      fetch(`/api/finances/statement?${qs}`, { cache: "no-store" })
+        .then(async (r) => {
+          const j = (await r.json().catch(() => null)) as Answer | null;
+          if (!live) return;
+          const reading = j?.statement && !j.statement.ok && j.statement.kind === "reading";
+          const gateway = !j && r.status >= 502 && r.status <= 524;
+          if ((reading || gateway) && tries < 40) {
+            timer = setTimeout(() => ask(tries + 1), 5_000);
+            return;
+          }
+          if (!j?.ok) setError(j?.error ?? "The statement would not load.");
+          else setAnswer(j);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (!live) return;
+          setError("The statement would not load. Check your connection and try again.");
+          setLoading(false);
+        });
+    };
+    ask(0);
     return () => {
       live = false;
+      if (timer) clearTimeout(timer);
     };
   }, [qs, customReady]);
+
+  /* Fetched rather than linked, so a refusal reads as a sentence on the
+     page and never as raw text in a new tab. */
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const download = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const r = await fetch(`/api/finances/statement/pdf?${qs}`, { cache: "no-store" });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => null)) as { error?: string } | null;
+        setSaveError(j?.error ?? "The PDF would not download. Try again in a minute.");
+        return;
+      }
+      const blob = await r.blob();
+      const name = /filename="([^"]+)"/.exec(r.headers.get("content-disposition") ?? "")?.[1] ?? "TLE Commission Statement.pdf";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch {
+      setSaveError("The PDF would not download. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const choose = (k: PeriodKind) => {
     setKind(k);
@@ -188,14 +235,22 @@ export default function CommissionStatement() {
                   {answer.agent?.name} · {dayWords(answer.period.from)} to {dayWords(answer.period.to)}{answer.period.toDate ? ", so far" : ""}
                 </p>
               </div>
-              <a
-                href={`/api/finances/statement/pdf?${qs}`}
-                className="flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page transition-opacity hover:opacity-90"
+              <button
+                type="button"
+                onClick={download}
+                disabled={saving}
+                className="flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page transition-opacity hover:opacity-90 disabled:opacity-60"
               >
-                <DoodleIcon name="doc" size={14} />
-                Download PDF
-              </a>
+                {saving ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-page/40 border-t-page" aria-hidden />
+                ) : (
+                  <DoodleIcon name="doc" size={14} />
+                )}
+                {saving ? "Preparing PDF" : "Download PDF"}
+              </button>
             </div>
+
+            {saveError && <div className="mt-3"><Problem text={saveError} /></div>}
 
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Tile label="Commission paid" value={money(ok.total)} tint />

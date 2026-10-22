@@ -1800,7 +1800,7 @@ export type AgentStatement =
       /** When PayProp's rows behind this were read. */
       readAt: string;
     }
-  | { ok: false; kind: "not-connected" | "unreachable" | "unmatched"; problem: string };
+  | { ok: false; kind: "not-connected" | "unreachable" | "unmatched" | "reading"; problem: string };
 
 const ACCOUNT_WORDS: Record<string, string> = { uk: "England and Wales", scotland: "Glasgow" };
 
