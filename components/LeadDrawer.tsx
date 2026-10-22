@@ -33,6 +33,7 @@ import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
 import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
 import LandlordHomeAddress from "@/components/LandlordHomeAddress";
+import ZeroDepositOptOut from "@/components/ZeroDepositOptOut";
 import { InlineField } from "@/components/Bits";
 import { UploadForm } from "@/components/FileDocuments";
 import { DOC_TYPES, OTHER, docTypeLabel } from "@/lib/doc-types";
@@ -3520,6 +3521,11 @@ function LeadDrawerBody({
                         personRef={ours ? `os:${osContactIdFrom(lead.id)}` : lead.contactId ? `rex:${lead.contactId}` : null}
                         name={lead.name}
                         propertyAddress={propAddress || null}
+                      />
+                      <ZeroDepositOptOut
+                        email={contact.email || lead.email}
+                        personRef={ours ? `os:${osContactIdFrom(lead.id)}` : lead.contactId ? `rex:${lead.contactId}` : null}
+                        name={lead.name}
                       />
                     </div>
                     {saveLine}

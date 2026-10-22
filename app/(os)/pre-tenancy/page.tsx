@@ -96,6 +96,8 @@ interface BoardDeal {
   schemeSuggestion?: { scheme: string; evidence: string } | null;
   /** "Holding deposit" invoice in PayProp for this property. */
   holdingInvoice?: { amount: number; fromDate: string | null } | null;
+  /** The landlord opted out of zero deposit, recorded on their file by the agent. */
+  landlordOptOut?: { reason: string | null; by: string; at: string } | null;
   flatbond?: DealFlatbond | null;
   /** Rent that actually arrived, from PayProp's Owner rows. Evidence beside a
    *  stage, never a trigger for one — the address join is loose. */
@@ -238,6 +240,9 @@ function MovementDot({ kind, className = "" }: { kind: "red" | "green" | null; c
     />
   );
 }
+
+/** The server's checks shown as banners on the deal; the rest live in the Progression column. */
+const BANNER_FLAGS = new Set(["scheme-missing", "prep-open", "zero-deposit-optout"]);
 
 function fmtDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -1362,7 +1367,7 @@ function DealWorkspace({
       ? p?.deposit != null
         ? formatGBP(p.deposit)
         : "—"
-      : p?.depositReplacement
+      : p?.depositReplacement && !deal.landlordOptOut
         ? "Flatfair"
         : p?.deposit != null
           ? formatGBP(p.deposit)
@@ -1464,7 +1469,7 @@ function DealWorkspace({
         actionError ||
         cancelled ||
         deal.archived ||
-        (deal.flags ?? []).some((f) => f.kind === "scheme-missing" || f.kind === "prep-open") ? (
+        (deal.flags ?? []).some((f) => BANNER_FLAGS.has(f.kind)) ? (
           <div className="mt-4 space-y-2">
             {cancelled ? (
               <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12px] text-red-700">
@@ -1518,7 +1523,10 @@ function DealWorkspace({
             {/* And the landlord's agreed works (4 Oct 2026): nothing upstream
                 knows about those either - they are the landlord's promise on
                 our portal. */}
-            {(deal.flags ?? []).filter((f) => f.kind === "scheme-missing" || f.kind === "prep-open").map((f) => (
+            {/* And a landlord who opted out of zero deposit while the deal
+                still reads as Flatfair (21 Oct 2026): the clause comes off
+                before the tenancy is issued, and only the OS knows to say so. */}
+            {(deal.flags ?? []).filter((f) => BANNER_FLAGS.has(f.kind)).map((f) => (
               <p
                 key={f.kind}
                 className="rounded-xl border border-transparent bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"
@@ -1638,14 +1646,29 @@ function DealWorkspace({
                     className="min-w-0 flex-1 border-0 border-b-[1.5px] border-ink/25 bg-transparent px-1 py-1 text-[12.5px] text-ink outline-none transition focus:border-ink/70 disabled:opacity-50"
                   >
                     <option value="">Not recorded</option>
-                    {DEPOSIT_SCHEMES.map((sch) => (
+                    {/* No Flatfair for a landlord who opted out, unless it is already picked. */}
+                    {DEPOSIT_SCHEMES.filter((sch) => !deal.landlordOptOut || !sch.startsWith("Flatfair") || sch === meta?.depositScheme).map((sch) => (
                       <option key={sch} value={sch}>
                         {sch}
                       </option>
                     ))}
                   </select>
                 </label>
-                {p?.depositReplacement && !meta?.depositScheme ? (
+                {/* Recorded on the landlord's file by the agent (21 Oct 2026):
+                    here so it is in front of Kirstie as she sets the scheme. */}
+                {deal.landlordOptOut ? (
+                  <p className="mt-1 flex items-start gap-1.5 text-[11px] leading-snug text-amber-800" data-steve="pretenancy.zero-deposit-optout">
+                    <span aria-hidden className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                    <span>
+                      Landlord opted out of zero deposit (Flatfair). The tenant pays a cash deposit
+                      {p?.depositReplacement ? " - take Propoly's Flatfair clause off" : ""}.
+                      <span className="block text-muted">
+                        Recorded by {deal.landlordOptOut.by}, {fmtDate(deal.landlordOptOut.at)}
+                        {deal.landlordOptOut.reason ? `  •  ${deal.landlordOptOut.reason}` : ""}
+                      </span>
+                    </span>
+                  </p>
+                ) : p?.depositReplacement && !meta?.depositScheme ? (
                   <p className="mt-1 text-[11px] text-muted">
                     Propoly&apos;s clauses say Flatfair — no cash deposit to register.
                   </p>
@@ -1763,7 +1786,7 @@ function DealWorkspace({
                                   ? [deal.money.deposit.status !== "paid", `Deposit ${deal.money.deposit.status} in PayProp`]
                                   : meta?.checklist?.deposit_registered?.done || meta?.depositScheme
                                     ? [true, "Deposit recorded on the file"]
-                                    : deal.app.propoly?.depositReplacement
+                                    : deal.app.propoly?.depositReplacement && !deal.landlordOptOut
                                       ? [false, "Flatfair deal - not ticked done"]
                                       : [false, "No deposit seen"],
                                 deal.rentReceived ? [true, "First rent received in PayProp"] : [false, "No rent seen in PayProp yet"],

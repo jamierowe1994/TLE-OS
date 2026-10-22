@@ -27,6 +27,8 @@ interface Facts {
   service: string | null;
   standingOrderRef: string | null;
   flatfairClause: boolean;
+  /** The landlord opted out of zero deposit, recorded on their file by the agent. */
+  landlordOptOut?: { reason: string | null; by: string; at: string } | null;
   tenants: Party[];
   guarantors: Party[];
   landlord: Party | null;
@@ -180,7 +182,13 @@ export default function FlatfairHandoff({ dealId }: { dealId: string }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
       <div className="rounded-2xl border border-line bg-card px-5 py-3">
-        {!d.flatfairClause && (
+        {d.landlordOptOut ? (
+          <p className="mb-3 mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
+            The landlord opted out of zero deposit (recorded on their file by {d.landlordOptOut.by}
+            {d.landlordOptOut.reason ? `: ${d.landlordOptOut.reason}` : ""}). The tenant pays a cash deposit, so this goes to
+            Flatfair as a traditional deposit, never a zero deposit plan.
+          </p>
+        ) : !d.flatfairClause && (
           <p className="mb-3 mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
             This deal has no Flatfair clause in Propoly. If the tenant is paying a cash deposit, Kirstie
             registers it with the scheme instead and this screen is not needed.

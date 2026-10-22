@@ -3000,6 +3000,25 @@ CREATE TABLE IF NOT EXISTS os_landlord_addresses (
 );
 CREATE INDEX IF NOT EXISTS os_landlord_addresses_email ON os_landlord_addresses (email);
 CREATE INDEX IF NOT EXISTS os_landlord_addresses_ref ON os_landlord_addresses (person_ref);
+-- A landlord who opted out of Flatfair's zero deposit (21 Oct 2026, the "PLC
+-- Checks and OS Updates" call). Every landlord is opted in under the terms of
+-- business and the tenant chooses; the few who say no are recorded here by the
+-- agent, never by the landlord. One row a person, found like
+-- os_landlord_addresses by email or contact ref. opted_out = false is an
+-- opt-out taken back: the row stays, so who unticked it is kept too.
+CREATE TABLE IF NOT EXISTS os_zero_deposit_optouts (
+  id          TEXT PRIMARY KEY,
+  email       TEXT NOT NULL DEFAULT '',
+  person_ref  TEXT NOT NULL DEFAULT '',
+  name        TEXT NOT NULL DEFAULT '',
+  opted_out   BOOLEAN NOT NULL DEFAULT true,
+  reason      TEXT NOT NULL DEFAULT '',
+  set_by      TEXT NOT NULL DEFAULT '',
+  set_by_name TEXT NOT NULL DEFAULT '',
+  set_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_zero_deposit_optouts_email ON os_zero_deposit_optouts (email);
+CREATE INDEX IF NOT EXISTS os_zero_deposit_optouts_ref ON os_zero_deposit_optouts (person_ref);
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
 -- The tenants in residence, from the same sheet (24 Sep 2026), where REX CRM holds none.

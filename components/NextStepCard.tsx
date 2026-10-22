@@ -48,6 +48,8 @@ type DealTerms = {
   tenancyType: string;
   depositScheme: string | null;
   zeroDeposit: boolean;
+  /** Recorded on the landlord's file (21 Oct 2026): a deposit is always taken. */
+  landlordOptOut?: { reason: string | null; by: string; at: string } | null;
   depositPounds: number | null;
   holdingFeePounds: number | null;
   scotland: boolean;
@@ -264,15 +266,30 @@ export default function NextStepCard({
                             ))}
                           </select>
                         </label>
-                        <label className="col-span-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-line/70 bg-white px-2.5 py-2">
-                          <input type="checkbox" className="mt-0.5" checked={terms.zeroDeposit} onChange={(e) => set("zeroDeposit", e.target.checked)} />
-                          <span>
-                            Landlord opted into zero deposit
-                            <span className="block text-[11px] text-muted">
-                              {terms.zeroDeposit ? "Flatfair instead of a deposit. Propoly's Flatfair clause stays on the deal." : `A deposit held with ${terms.scotland ? "MyDeposits Scotland" : "TDS"}. Propoly adds its Flatfair clause to every deal - you'll be told to take it off.`}
+                        {/* Every landlord is opted in under the terms of business and the
+                            tenant chooses (21 Oct 2026). One the agent recorded as opted out
+                            on their file gets a deposit, and the tick is locked. */}
+                        {terms.landlordOptOut ? (
+                          <div className="col-span-2 flex items-start gap-2.5 rounded-lg border border-line/70 bg-white px-2.5 py-2">
+                            <input type="checkbox" className="mt-0.5" checked={false} disabled aria-label="Tenant is using zero deposit" />
+                            <span>
+                              Landlord opted out of zero deposit
+                              <span className="block text-[11px] text-muted">
+                                {`A deposit held with ${terms.scotland ? "MyDeposits Scotland" : "TDS"}. Recorded on the landlord's file by ${terms.landlordOptOut.by}. Propoly adds its Flatfair clause to every deal - you'll be told to take it off.`}
+                              </span>
                             </span>
-                          </span>
-                        </label>
+                          </div>
+                        ) : (
+                          <label className="col-span-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-line/70 bg-white px-2.5 py-2">
+                            <input type="checkbox" className="mt-0.5" checked={terms.zeroDeposit} onChange={(e) => set("zeroDeposit", e.target.checked)} />
+                            <span>
+                              Tenant is using zero deposit (Flatfair)
+                              <span className="block text-[11px] text-muted">
+                                {terms.zeroDeposit ? "Flatfair instead of a deposit. Propoly's Flatfair clause stays on the deal." : `A deposit held with ${terms.scotland ? "MyDeposits Scotland" : "TDS"}. Propoly adds its Flatfair clause to every deal - you'll be told to take it off.`}
+                              </span>
+                            </span>
+                          </label>
+                        )}
                         <label className="flex flex-col gap-1">
                           <span className="text-muted">Tenancy</span>
                           <select value={terms.tenancyType} onChange={(e) => set("tenancyType", e.target.value)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">

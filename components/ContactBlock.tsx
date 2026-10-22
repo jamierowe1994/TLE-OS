@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { CopyButton, InlineField } from "@/components/Bits";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import LandlordHomeAddress from "@/components/LandlordHomeAddress";
+import ZeroDepositOptOut from "@/components/ZeroDepositOptOut";
 import EmailPerson from "@/components/EmailPerson";
 
 /**
@@ -179,6 +180,8 @@ export default function ContactBlock({
         {home && (
           <LandlordHomeAddress email={p.email} personRef={personRef} name={p.name} propertyAddress={home.propertyAddress ?? null} />
         )}
+        {/* The landlord's zero deposit opt-out (21 Oct 2026): agent-recorded, quiet. */}
+        {home && <ZeroDepositOptOut email={p.email} personRef={personRef} name={p.name} />}
       </div>
       {note && (
         <p className={`mt-1.5 text-[11.5px] leading-snug ${note.tone === "bad" ? "text-accent-dark" : "text-muted"}`}>
