@@ -44,6 +44,9 @@ export default function HomesBrowser({
   sample = false,
   alert,
   askedAbout,
+  start = null,
+  guest = null,
+  intro = null,
 }: {
   homes: MarketHome[] | null;
   error: string | null;
@@ -54,20 +57,27 @@ export default function HomesBrowser({
   sample?: boolean;
   alert: SavedAlert;
   askedAbout: string | null;
+  /** Where to search from when there is no house to start at (Show Me Other Homes: the home they were told is let). */
+  start?: Origin | null;
+  /** Show Me Other Homes, with no account (lib/let-notice): their signed link, which places a typed postcode. No alerts. */
+  guest?: string | null;
+  /** A line under the heading, said to them. */
+  intro?: string | null;
 }) {
-  const [from, setFrom] = useState<Origin | null>(home);
+  const [from, setFrom] = useState<Origin | null>(home ?? start);
   /* The first radius: the tightest that still shows a handful of homes, so
      nobody opens the page onto "nothing near you" when there is plenty a
      little further out. */
   const [radius, setRadius] = useState<number | null>(() => {
-    if (!home || !homes) return null;
-    const dist = homes.filter((h) => h.lat != null && h.lng != null).map((h) => milesBetween(home, { lat: h.lat!, lng: h.lng! }));
+    const at = home ?? start;
+    if (!at || !homes) return null;
+    const dist = homes.filter((h) => h.lat != null && h.lng != null).map((h) => milesBetween(at, { lat: h.lat!, lng: h.lng! }));
     return RADII.find((r) => dist.filter((m) => m <= r).length >= 6) ?? null;
   });
   const [minBeds, setMinBeds] = useState<number | null>(null);
   const [maxRent, setMaxRent] = useState<number | null>(null);
   const [type, setType] = useState<"house" | "flat" | null>(null);
-  const [sort, setSort] = useState<"near" | "new" | "cheap">(home ? "near" : "new");
+  const [sort, setSort] = useState<"near" | "new" | "cheap">(home ?? start ? "near" : "new");
   /* A phone shows one or the other; from a laptop up, both side by side. */
   const [view, setView] = useState<"list" | "map">("list");
   const [hovered, setHovered] = useState<string | null>(null);
@@ -110,6 +120,7 @@ export default function HomesBrowser({
       <div>
         <p className={eyebrow}>Find a home</p>
         <h1 className="mt-1 text-[32px] leading-[1.05]">Homes to Rent</h1>
+        {intro && <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{intro}</p>}
       </div>
       <button
         type="button"
@@ -165,7 +176,7 @@ export default function HomesBrowser({
     >
       <h2 className="text-[20px] font-bold leading-tight">Search for Your New Home</h2>
       <div className="mt-4 space-y-5">
-        <Where from={from} home={home} sample={sample} onPlace={onPlace} />
+        <Where from={from} home={home} sample={sample} guest={guest} onPlace={onPlace} />
         <Row label="Within">
           {RADII.map((r) => (
             <Chip key={r} on={radius === r} disabled={!from} onClick={() => setRadius(r)}>{r} {r === 1 ? "mile" : "miles"}</Chip>
@@ -189,7 +200,7 @@ export default function HomesBrowser({
             <option value="flat">Flats</option>
           </Pick>
         </div>
-        <Alerts filter={filter} place={place} saved={alert} sample={sample} />
+        {!guest && <Alerts filter={filter} place={place} saved={alert} sample={sample} />}
       </div>
     </Sheet>
 
@@ -233,14 +244,14 @@ export default function HomesBrowser({
         <p className={eyebrow}>Find a home</p>
         <h1 className="mt-2 text-[44px] leading-[1.05]">Homes to Rent</h1>
         <p className="mt-3 max-w-xl text-[14.5px] text-muted">
-          {homes ? `Every home we have on the market, ${homes.length} right now. ` : ""}
+          {intro ? `${intro} ` : homes ? `Every home we have on the market, ${homes.length} right now. ` : ""}
           {home ? "Search out from your house, or from anywhere else." : "Search by area, bedrooms and rent."}
         </p>
       </div>
 
       {/* ── the search ── */}
       <div className={`${card} space-y-5 p-5 sm:p-6`}>
-        <Where from={from} home={home} sample={sample} onPlace={onPlace} />
+        <Where from={from} home={home} sample={sample} guest={guest} onPlace={onPlace} />
         <div className="flex flex-wrap items-end gap-x-10 gap-y-5">
           <Row label="Within">
             {RADII.map((r) => (
@@ -291,7 +302,7 @@ export default function HomesBrowser({
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         {/* ── the homes ── */}
         <section className={`space-y-5 ${view === "map" ? "hidden lg:block" : ""}`}>
-          <Alerts filter={filter} place={place} saved={alert} sample={sample} />
+          {!guest && <Alerts filter={filter} place={place} saved={alert} sample={sample} />}
           {error ? (
             <div className={`${card} flex items-start gap-4 p-6`}>
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-panel text-muted"><DoodleIcon name="info" size={17} /></span>
@@ -369,7 +380,7 @@ function useIsPhone(): boolean | null {
 
 /* ── Where they search from ─────────────────────────────────────────────── */
 
-function Where({ from, home, sample, onPlace }: { from: Origin | null; home: Origin | null; sample: boolean; onPlace: (o: Origin | null) => void }) {
+function Where({ from, home, sample, guest, onPlace }: { from: Origin | null; home: Origin | null; sample: boolean; guest?: string | null; onPlace: (o: Origin | null) => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -381,7 +392,7 @@ function Where({ from, home, sample, onPlace }: { from: Origin | null; home: Ori
     if (sample) return setErr("In the sample, distances are from Sophie's home.");
     setBusy(true);
     setErr("");
-    const r = await fetch(`/api/tenant/homes/place?q=${encodeURIComponent(text.trim())}`).then((x) => x.json()).catch(() => null);
+    const r = await fetch(`/api/tenant/homes/place?q=${encodeURIComponent(text.trim())}${guest ? `&guest=${encodeURIComponent(guest)}` : ""}`).then((x) => x.json()).catch(() => null);
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "We couldn't find that place. Try a postcode.");
     onPlace(r.at as Origin);

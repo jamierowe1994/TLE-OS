@@ -2902,6 +2902,15 @@ CREATE TABLE IF NOT EXISTS os_let_notices (
   at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (listing_id, email)
 );
+-- Notify Enquiries (22 Oct 2026): who sent it, the lead it went to, and
+-- when they pressed Show Me Other Homes - a lead touch and a bell line for
+-- that agent, once (lib/let-notice recordAsked).
+ALTER TABLE os_let_notices ADD COLUMN IF NOT EXISTS by_email TEXT;
+ALTER TABLE os_let_notices ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE os_let_notices ADD COLUMN IF NOT EXISTS lead_id TEXT;
+ALTER TABLE os_let_notices ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE os_let_notices ADD COLUMN IF NOT EXISTS asked_at TIMESTAMPTZ;
+ALTER TABLE os_let_notices ADD COLUMN IF NOT EXISTS asked_n INTEGER NOT NULL DEFAULT 0;
 
 -- An agent's answer to a compliance query (20 Oct 2026, the agents' call:
 -- "when Josselle writes a note ... can agents write back, so it's logged?").

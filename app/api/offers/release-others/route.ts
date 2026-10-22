@@ -20,6 +20,10 @@ import { advertFor } from "@/lib/advert-offline";
  * the advert offline, so the others can go before the holding fee is in -
  * that is the agent's call, made on the Take offline screen.
  *
+ * reason "early" (22 Oct 2026, Decline Other Offers on the listing's Offers
+ * tab): the agent was told the others are held until the fee is in, and
+ * pressed Decline Anyway. Their call too, said on the decision.
+ *
  * Only once the accepted tenant's holding fee is settled in Propoly (9 Oct
  * 2026, James: hold the others until the deposit is paid). Nothing reaches
  * the tenants by itself; the agent sends each one from the update. See
@@ -75,7 +79,8 @@ export async function POST(req: NextRequest) {
   const r = await load(req, id);
   if ("error" in r) return r.error;
   const offline = b.reason === "offline" && Boolean((await advertFor(r.listingId).catch(() => null))?.offlineAt);
-  if (!r.fee.settled && !offline) {
+  const early = b.reason === "early";
+  if (!r.fee.settled && !offline && !early) {
     return NextResponse.json({ ok: false, error: "The holding fee isn't paid yet, so the other offers are still held." }, { status: 409 });
   }
   const picked = Array.isArray(b.refs) ? new Set(b.refs.filter(isDecisionRef)) : null;
@@ -89,6 +94,7 @@ export async function POST(req: NextRequest) {
       by: { name: r.me.name || r.me.email, email: r.me.email },
       paidAt: r.fee.paidAt,
       offline: offline && !r.fee.settled,
+      early: early && !offline && !r.fee.settled,
     });
     return NextResponse.json({ ok: true, declined: done.declined, updateId: done.update?.id ?? null });
   } catch (e) {

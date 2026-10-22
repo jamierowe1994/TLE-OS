@@ -946,10 +946,10 @@ The Letting Experts`
     group: "Doorways",
     name: "It's Been Let",
     audience: "tenant",
-    trigger: "Take It Offline, when the agent ticks Tell the others it's been let",
-    fires: "Wired 20 Oct 2026. components/listing/AdvertOffline.tsx → POST /api/listings/let-notice → lib/let-notice.ts, from the agent.",
+    trigger: "Notify Enquiries on the listing's Enquiries tab once it's let, or Take It Offline when the agent ticks Tell the others it's been let",
+    fires: "Wired 20 Oct 2026, Notify Enquiries 22 Oct. components/listing/NotifyEnquiries.tsx and AdvertOffline.tsx → POST /api/listings/let-notice → lib/let-notice.ts, from the agent.",
     to: "Everyone else who enquired about or viewed the home - never anyone on an offer, or with a viewing still booked",
-    summary: "Thanks them, says it's gone, and offers to keep them in mind by reply. Once per person per home.",
+    summary: "Thanks them, says it's gone, and Show Me Other Homes opens the homes near them with no sign-up; pressing it tells the agent. Once per person per home.",
     doc: LISTING_LET_NOTICE,
     render: (o) =>
       blocksAs("tenant")(
@@ -957,6 +957,7 @@ The Letting Experts`
           firstName: "Sophie",
           address: "8 Recreation Terrace, Nottingham NG2 3AB",
           agentName: "Sam Whitaker",
+          homesUrl: "https://tle-os.co.uk/tenant/demo/homes",
         })
       )(),
   },

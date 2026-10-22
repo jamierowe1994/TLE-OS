@@ -2042,7 +2042,13 @@ function ListingDrawerBody({
                   Reading the enquiries&hellip;
                 </p>
               ) : (
-                <ListingEnquiries enquiries={enquiries} listingId={listing.id} home={[listing.name, listing.locality].filter(Boolean).join(", ")} />
+                <ListingEnquiries
+                  enquiries={enquiries}
+                  listingId={listing.id}
+                  propertyId={listing.propertyId ? String(listing.propertyId) : null}
+                  home={[listing.name, listing.locality].filter(Boolean).join(", ")}
+                  letDone={!listing.archived && (listing.letAgreed || offerTaken)}
+                />
               ))}
             {tab === "applications" && (
               /* One column that may shrink: a long name or link inside a card

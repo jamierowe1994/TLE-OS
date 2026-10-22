@@ -575,7 +575,7 @@ function TakeOfflineSheet({
                       <div className="mt-2.5 rounded-xl border border-dashed border-line/80 bg-white px-3.5 py-3 text-[12px] leading-relaxed text-muted">
                         <p className="text-[10.5px] font-semibold uppercase tracking-wide">What they&apos;ll read</p>
                         <p className="mt-1">
-                          Hi {firstName((others ?? [])[0]?.name ?? "")}, thanks for your interest in {address}. It has now been let, so it&apos;s no longer available. If you&apos;re still looking, just reply to this email with what you&apos;re after and I&apos;ll let you know as soon as something similar comes up.
+                          Hi {firstName((others ?? [])[0]?.name ?? "")}, thanks for your interest in {address}. It has now been let, so it&apos;s no longer available. If you&apos;re still looking, we have other homes on now. Then a Show Me Other Homes button, which opens the homes near them with no sign-up, and tells you if they press it.
                         </p>
                       </div>
                     </>

@@ -53,6 +53,9 @@ import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
  *                            not their own, never a test file's. The last
  *                            week, read from the offer itself (Howard, ticket
  *                            0268fdcc, 15 Oct 2026)
+ *   still looking            the agent who sent "it's been let", when that
+ *                            person pressed Show Me Other Homes (lib/let-
+ *                            notice, 22 Oct 2026), for a week
  *   viewings booked          the agent whose diary it is in, when somebody
  *                            else booked it; owners, every new one (lib/rex-
  *                            viewings newBookingsFor, 5 Oct 2026)
@@ -190,7 +193,29 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     [me.email]
   ).catch(() => []);
 
+  /* Still looking (22 Oct 2026): somebody told a home was let pressed Show
+     Me Other Homes in the agent's email (lib/let-notice recordAsked). The
+     agent who sent it, for a week. */
+  const stillLooking = await q<{ listing_id: string; email: string; name: string | null; address: string | null; lead_id: string | null; asked_at: Date }>(
+    `SELECT listing_id, email, name, address, lead_id, asked_at FROM os_let_notices
+      WHERE asked_at > NOW() - INTERVAL '7 days' AND LOWER(by_email) = LOWER($1)
+      ORDER BY asked_at DESC LIMIT 20`,
+    [me.email]
+  ).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const s of stillLooking) {
+    const who = s.name || s.email;
+    out.push({
+      id: `still-looking:${s.listing_id}:${s.email}`,
+      kind: "lead",
+      at: new Date(s.asked_at).toISOString(),
+      title: `Still looking: ${who}`,
+      body: `Told ${s.address || "a home"} is let, they pressed Show Me Other Homes. Worth a call.`,
+      href: s.lead_id ? `/leads?open=${encodeURIComponent(s.lead_id)}` : `/listings/${encodeURIComponent(s.listing_id)}?tab=enquiries`,
+      tone: "warn",
+    });
+  }
   for (const o of offersIn) {
     const amount = Number(o.amount);
     out.push({

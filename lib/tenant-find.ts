@@ -92,6 +92,8 @@ export async function makeEnquiry(p: {
   message: string;
   home: MarketHome;
   passportAgentId: string | null;
+  /** From Show Me Other Homes (lib/let-notice), not the tenant area: the home they were told is let. */
+  afterLet?: string | null;
 }): Promise<{ ok: true; sentTo: string | null } | { ok: false; error: string }> {
   if (!hasDb()) return { ok: false, error: "Enquiries can't be saved on this environment." };
 
@@ -102,13 +104,17 @@ export async function makeEnquiry(p: {
   let outcome = "not_sent";
   if (to) {
     const body = [
-      `${p.name} has asked about ${address} (${rent}) from their tenant area.`,
+      p.afterLet
+        ? `${p.name} has asked about ${address} (${rent}). They were told ${p.afterLet} is let and pressed Show Me Other Homes.`
+        : `${p.name} has asked about ${address} (${rent}) from their tenant area.`,
       p.message.trim() ? `What they said:\n${p.message.trim()}` : "They didn't add a message.",
       [`Email: ${p.email}`, p.phone.trim() ? `Phone: ${p.phone.trim()}` : null].filter(Boolean).join("\n"),
-      "Their tenant passport is complete, so they can apply in one tap once they have viewed. Reply to this email to answer them.",
+      p.afterLet
+        ? "Reply to this email to answer them."
+        : "Their tenant passport is complete, so they can apply in one tap once they have viewed. Reply to this email to answer them.",
     ].join("\n\n");
     try {
-      await sendEmail({ to, subject: `Enquiry from the tenant area: ${address}`, html: proseEmail(body), replyTo: p.email, audience: "internal" });
+      await sendEmail({ to, subject: `${p.afterLet ? "Enquiry from Show Me Other Homes" : "Enquiry from the tenant area"}: ${address}`, html: proseEmail(body), replyTo: p.email, audience: "internal" });
       outcome = "sent";
     } catch (e) {
       outcome = `failed: ${e instanceof Error ? e.message : "send failed"}`.slice(0, 300);

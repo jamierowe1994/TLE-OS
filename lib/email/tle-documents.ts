@@ -1450,12 +1450,15 @@ export const VIEWING_CANCELLED = {
    when the agent ticks it (Sean McMahon and Dan Richards, 20 Oct 2026). */
 export const LISTING_LET_NOTICE = {
   subject: "{{address}} has now been let",
-  preheader: "Thanks for your interest. If you're still looking, reply and we'll keep you in mind.",
+  preheader: "Thanks for your interest. If you're still looking, we have other homes near you.",
   mode: "blocks",
   blocks: [
     H("ln1", "This home has now been let"),
     T("ln2", "Hi {{firstName}},<br><br>Thanks for your interest in <strong>{{address}}</strong>. It has now been let, so it's no longer available."),
-    T("ln3", "If you're still looking, just reply to this email with what you're after and I'll let you know as soon as something similar comes up."),
+    T("ln3", "If you're still looking, we have other homes on now. Press the button to see what's near you, or just reply to this email with what you're after and I'll let you know as soon as something similar comes up."),
+    /* Show Me Other Homes (James, 22 Oct 2026): their own link, so the agent
+       hears that they asked (lib/let-notice moreHomesLink). */
+    BTN("ln3b", "Show Me Other Homes", "{{homesUrl}}", "center"),
     SP("ln4", 8),
     T("ln5", "{{agentName}}<br>The Letting Experts"),
     FOOT("ln6", "You're getting this because you asked about or viewed this home with The Letting Experts."),

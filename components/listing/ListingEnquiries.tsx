@@ -6,6 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import { Tag } from "@/components/ListingTags";
 import PassportAnswers from "@/components/passport/PassportAnswers";
+import NotifyEnquiries from "@/components/listing/NotifyEnquiries";
 import dynamic from "next/dynamic";
 import { readJson } from "@/lib/page-cache";
 import type { Lead } from "@/lib/leads-sample";
@@ -42,6 +43,10 @@ const LeadDrawer = dynamic(() => import("@/components/LeadDrawer"), { ssr: false
  * minutes, from whoever turned it on, and one encouraging reminder a day
  * later if it is not finished (lib/auto-passport). Turning it on shows the
  * reminder first, with a button to send it to yourself.
+ *
+ * NOTIFY ENQUIRIES (James, 22 Oct 2026). Once the home is let or let agreed,
+ * a button to tell everyone else who asked that it's gone, with Show Me
+ * Other Homes in the email (components/listing/NotifyEnquiries).
  */
 
 export type Enquiry = { id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; message?: string };
@@ -69,8 +74,12 @@ function StatusPill({ s, auto, onOpen }: { s: Status | undefined; auto?: boolean
 
 type Auto = { on: boolean; by: string | null; mine: boolean; since: string | null };
 
-export default function ListingEnquiries({ enquiries, home, listingId }: {
+export default function ListingEnquiries({ enquiries, home, listingId, propertyId = null, letDone = false }: {
   enquiries: Enquiry[];
+  /** The listing's property, for its viewings (who has already viewed). */
+  propertyId?: string | null;
+  /** Let or let agreed: Notify Enquiries shows (22 Oct 2026). */
+  letDone?: boolean;
   /** The listing, for its Automate passport switch. Without it the switch is not shown. */
   listingId?: string | number;
   /** The listing's address with its postcode: a Scottish home's passports carry no nationality (lib/passport-scotland). */
@@ -95,6 +104,7 @@ export default function ListingEnquiries({ enquiries, home, listingId }: {
   const [reminder, setReminder] = useState<{ subject: string; html: string } | null>(null);
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoNote, setAutoNote] = useState<string | null>(null);
+  const [notifying, setNotifying] = useState(false);
   const autoUrl = listingId != null ? `/api/listings/${encodeURIComponent(String(listingId))}/auto-passport` : null;
 
   const emails = useMemo(() => [...new Set(enquiries.map((e) => e.email.trim().toLowerCase()).filter(emailOk))], [enquiries]);
@@ -285,6 +295,16 @@ export default function ListingEnquiries({ enquiries, home, listingId }: {
             </span>
             Automate passport
           </button>
+        )}
+        {letDone && listingId != null && /^\d+$/.test(String(listingId)) && !picking && (
+          <PressButton
+            onClick={() => setNotifying(true)}
+            className="press-ring flex items-center gap-2 rounded-full border border-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-accent-dark hover:bg-accent-soft"
+            data-steve="listing.enquiries.notify"
+          >
+            <DoodleIcon name="mail" size={13} />
+            Notify Enquiries
+          </PressButton>
         )}
         {people.length > 0 &&
           (picking ? (
@@ -525,6 +545,10 @@ export default function ListingEnquiries({ enquiries, home, listingId }: {
           </div>,
           document.body
         )}
+
+      {notifying && listingId != null && (
+        <NotifyEnquiries listingId={String(listingId)} propertyId={propertyId} address={home ?? "This home"} onClose={() => setNotifying(false)} />
+      )}
 
       <PassportAnswers email={viewing?.email ?? null} name={viewing?.name} home={home} onClose={() => setViewing(null)} />
 

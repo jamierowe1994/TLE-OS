@@ -29,6 +29,8 @@ export default function HomeDetail({
   asked,
   first,
   phone,
+  guest = null,
+  fromLabel = "From your home",
 }: {
   h: MarketHomeDetail;
   home: Origin | null;
@@ -39,6 +41,10 @@ export default function HomeDetail({
   asked: string | null;
   first: string;
   phone: string;
+  /** Show Me Other Homes, with no account: their signed link sends the enquiry (lib/let-notice). */
+  guest?: string | null;
+  /** What the distance is measured from, when it is not their house. */
+  fromLabel?: string;
 }) {
   const [open, setOpen] = useState<number | null>(null);
   const [asking, setAsking] = useState(false);
@@ -86,7 +92,7 @@ export default function HomeDetail({
             <Fact icon="bed.png" label="Bedrooms" value={h.beds == null ? "Ask us" : h.beds === 0 ? "Studio" : String(h.beds)} />
             <Fact icon="sofa.png" label="Type" value={h.propertyType ?? "Ask us"} />
             <Fact icon="calendar" label="Available" value={available} />
-            <Fact icon="target" label="From your home" value={miles == null ? "-" : milesWords(miles).replace(" away", "")} />
+            <Fact icon="target" label={fromLabel} value={miles == null ? "-" : milesWords(miles).replace(" away", "")} />
           </div>
           {h.lat != null && h.lng != null && (
             <section className="h-[300px]">
@@ -104,7 +110,7 @@ export default function HomeDetail({
 
         {/* ── enquire ── */}
         <aside className="hidden sm:block lg:sticky lg:top-6">
-          <Enquire h={h} sample={sample} asked={asked} first={first} phone={phone} />
+          <Enquire h={h} sample={sample} asked={asked} first={first} phone={phone} guest={guest} />
         </aside>
       </div>
 
@@ -125,7 +131,7 @@ export default function HomeDetail({
         </div>
       </div>
       <Sheet open={asking} onClose={() => setAsking(false)} label="Enquire about this home">
-        <Enquire h={h} sample={sample} asked={asked} first={first} phone={phone} />
+        <Enquire h={h} sample={sample} asked={asked} first={first} phone={phone} guest={guest} />
       </Sheet>
 
       {open != null && <Viewer photos={photos} at={open} onMove={setOpen} onClose={() => setOpen(null)} />}
@@ -142,7 +148,7 @@ function Fact({ icon, label, value }: { icon: string; label: string; value: stri
   );
 }
 
-function Enquire({ h, sample, asked, first, phone: givenPhone }: { h: MarketHomeDetail; sample: boolean; asked: string | null; first: string; phone: string }) {
+function Enquire({ h, sample, asked, first, phone: givenPhone, guest }: { h: MarketHomeDetail; sample: boolean; asked: string | null; first: string; phone: string; guest?: string | null }) {
   const [message, setMessage] = useState(`Hi, I'd love to come and see ${h.name}. I'm free most evenings and weekends.`);
   const [phone, setPhone] = useState(givenPhone);
   const [state, setState] = useState<"idle" | "busy" | "sent" | "kept">("idle");
@@ -156,7 +162,7 @@ function Enquire({ h, sample, asked, first, phone: givenPhone }: { h: MarketHome
     const r = await fetch("/api/tenant/homes/enquire", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ listingId: h.id, message, phone }),
+      body: JSON.stringify({ listingId: h.id, message, phone, ...(guest ? { guest } : {}) }),
     }).then((x) => x.json()).catch(() => null);
     if (!r?.ok) {
       setState("idle");
@@ -174,7 +180,7 @@ function Enquire({ h, sample, asked, first, phone: givenPhone }: { h: MarketHome
         <h2 className="mt-4 text-[21px] font-bold leading-tight">{state === "sent" ? "Your enquiry is in" : "We have your enquiry"}</h2>
         <p className="mt-2 text-[13.5px] leading-relaxed text-ink/70">
           {state === "sent"
-            ? "The agent for this home has it now and will come back to you with times to view. It is on your home page too."
+            ? `The agent for this home has it now and will come back to you with times to view.${guest ? "" : " It is on your home page too."}`
             : "It is saved, and the team will pick it up and come back to you with times to view."}
         </p>
         {sample && <p className="mt-3 text-[12px] text-muted">This is the sample, so nothing was sent.</p>}
@@ -189,7 +195,9 @@ function Enquire({ h, sample, asked, first, phone: givenPhone }: { h: MarketHome
       <p className="mt-2 text-[13px] leading-relaxed text-ink/70">
         {asked
           ? `You enquired on ${asked}. Add anything else here, or ask for a viewing time.`
-          : `Your passport is ready, ${first}, so if it is the one you can apply in a tap after you have seen it.`}
+          : guest
+            ? `Say when suits, ${first}, and the agent for this home will come back to you with times to view.`
+            : `Your passport is ready, ${first}, so if it is the one you can apply in a tap after you have seen it.`}
       </p>
       <label className="mt-4 block">
         <span className="text-[12.5px] font-semibold">Your message</span>

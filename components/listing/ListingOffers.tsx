@@ -9,6 +9,7 @@ import OfferPartsList from "@/components/offers/OfferPartsList";
 import SendOfferToLandlord from "@/components/offers/SendOfferToLandlord";
 import { CounterForm, NegotiationHistory } from "@/components/offers/OfferNegotiation";
 import type { OfferCounter } from "@/lib/offer-counters";
+import DeclineOtherOffers from "@/components/offers/DeclineOtherOffers";
 
 /**
  * THE OFFERS ON ONE HOME (7 Oct 2026).
@@ -37,6 +38,11 @@ import type { OfferCounter } from "@/lib/offer-counters";
  * forth, each round keyed in for the side that made it
  * (components/offers/OfferNegotiation). The newest figure is on the table,
  * and Accept agrees it.
+ *
+ * DECLINE OTHER OFFERS (James, 22 Oct 2026): once one is accepted, a button
+ * over the list lets the held ones go - the hold rule said first, then a
+ * "not this one" drafted for each to read and send
+ * (components/offers/DeclineOtherOffers).
  */
 
 export type ListingOffer = {
@@ -106,6 +112,7 @@ export default function ListingOffers({
   const [toLandlord, setToLandlord] = useState<ListingOffer | null>(null);
   /* The offer whose counter form is open (16 Oct 2026). */
   const [countering, setCountering] = useState<string | null>(null);
+  const [declining, setDeclining] = useState(false);
 
   /* Opened straight from the Offers in list: once, when the offers arrive. */
   const [asked, setAsked] = useState(initialOpen);
@@ -280,9 +287,28 @@ export default function ListingOffers({
     </>
   );
 
+  /* Held offers on a home with one accepted: let them go from here (22 Oct 2026). */
+  const heldOnes = taken && taken.kind !== "test" ? sorted.filter((o) => o.status === "open" && o.kind !== "test") : [];
+
   return (
     <>
       {unread}
+      {heldOnes.length > 0 && listingId && !open && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line/50 bg-page px-3.5 py-3">
+          <span className="min-w-0 flex-1 basis-[220px] text-[12px] leading-snug text-muted">
+            <span className="font-semibold text-ink">{taken!.name}&apos;s offer is accepted.</span>{" "}
+            {heldOnes.length} other {heldOnes.length === 1 ? "offer is" : "offers are"} still open on this home.
+          </span>
+          <button
+            type="button"
+            onClick={() => setDeclining(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3.5 py-2 text-[12px] font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+          >
+            <DoodleIcon name="mail" size={14} />
+            Decline Other Offers
+          </button>
+        </div>
+      )}
       {/* The list and one offer side by side, sliding (12 Oct 2026). */}
       <div className="overflow-hidden">
         <div className={`flex w-[200%] items-start transition-transform duration-300 ease-out motion-reduce:transition-none ${open ? "-translate-x-1/2" : "translate-x-0"}`}>
@@ -361,6 +387,10 @@ export default function ListingOffers({
           onClose={() => setToLandlord(null)}
           onSent={onChanged}
         />
+      )}
+
+      {declining && listingId && taken && (
+        <DeclineOtherOffers listingId={listingId} home={home} acceptedName={taken.name} onClose={() => setDeclining(false)} onDone={onChanged} />
       )}
 
       {won && (
