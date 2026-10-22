@@ -430,11 +430,10 @@ CREATE TABLE IF NOT EXISTS os_user_prefs (
 
 -- Seen and typing in Huddles (12 Oct 2026). seen_at is when the customer
 -- had an agent's message in front of them: the landlord's Messages page, the
--- tenant's messages (their read_at is set on sending, so cannot say). Typing
--- is a ping every few seconds while someone writes in a team chat; a row
--- older than a few seconds means they have stopped.
-ALTER TABLE os_landlord_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ;
-ALTER TABLE os_tenant_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ;
+-- tenant's messages (their read_at is set on sending, so cannot say). Those
+-- two ALTERs sit beside their CREATE TABLEs further down - here they broke a
+-- fresh database (15 Oct). Typing is a ping every few seconds while someone
+-- writes in a team chat; a row older than a few seconds means they have stopped.
 CREATE TABLE IF NOT EXISTS os_chat_typing (
   chat_key       TEXT NOT NULL,
   user_id        TEXT NOT NULL,
@@ -4047,6 +4046,9 @@ CREATE INDEX IF NOT EXISTS os_landlord_messages_account
 ALTER TABLE os_landlord_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS os_landlord_messages_appraisal
   ON os_landlord_messages (appraisal_id, sent_at);
+-- Seen in Huddles (12 Oct 2026): when the landlord had an agent's message in
+-- front of them on their Messages page.
+ALTER TABLE os_landlord_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ;
 
 -- What a person typed on an application. REX holds the application; the OS
 -- holds the conversation about it, keyed on the REX id, because writing notes
@@ -4392,6 +4394,8 @@ CREATE INDEX IF NOT EXISTS os_tenant_messages_account
   ON os_tenant_messages (account_id, sent_at);
 CREATE INDEX IF NOT EXISTS os_tenant_messages_agent
   ON os_tenant_messages (lower(agent_email), sent_at DESC);
+-- Seen in Huddles (12 Oct 2026): see os_landlord_messages.seen_at.
+ALTER TABLE os_tenant_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ;
 
 -- The team's own chat on the phone (3 Oct 2026, Chats > Play): one open
 -- General room for everybody, and huddles a person starts and invites
