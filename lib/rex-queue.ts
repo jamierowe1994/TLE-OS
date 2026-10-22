@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import type { RexResponse } from "@/lib/rex";
-import { noteQueued, onRexBack, rexIsDown } from "@/lib/rex-outage";
+import { noteQueued, onRexBack, readRexSetting, rexDownReason, rexIsDown } from "@/lib/rex-outage";
 
 /* ==========================================================================
    CHANGES FOR REX, KEPT WHILE IT IS DOWN (21 Oct 2026).
@@ -46,7 +46,24 @@ export function keptForLater(service: string, method: string): boolean {
   return KEEP_FOR_LATER.has(`${service}/${method}`);
 }
 
-const DOWN_REFUSAL = "REX is down for maintenance until about 8am. This needs REX to answer, so try it again once it is back.";
+const DOWN_REFUSAL = "REX is down for maintenance. This needs REX to answer, so try it again once it is back.";
+
+/* Said the way REX is down (22 Oct 2026). "Until about 8am" was written into
+   the words, so at 9.45am the next morning a two-minute blip told James
+   Crumpton REX was still down for the night's maintenance. */
+async function downRefusal(): Promise<string> {
+  const reason = await rexDownReason().catch(() => null);
+  if (reason === "detected") return "REX isn't answering just now. Nothing was saved there - try again in a minute or two.";
+  if (reason === "planned") {
+    const until = (await readRexSetting().catch(() => null))?.plannedUntil;
+    const at = until ? new Date(until) : null;
+    if (at && Number.isFinite(at.getTime())) {
+      const time = at.toLocaleString("en-GB", { weekday: "long", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Europe/London" });
+      return `REX is down for maintenance until about ${time}. This needs REX to answer, so try it again once it is back.`;
+    }
+  }
+  return DOWN_REFUSAL;
+}
 
 /** Which record a write is about, so the record can say "Waiting for REX". */
 function recordOf(service: string, body: unknown): { kind: string; id: string } | null {
@@ -98,7 +115,7 @@ export async function queueRexWrite(
   body: unknown,
   actorToken: string | null
 ): Promise<RexResponse> {
-  if (!hasDb()) return { status: 503, ok: false, result: undefined, error: DOWN_REFUSAL };
+  if (!hasDb()) return { status: 503, ok: false, result: undefined, error: await downRefusal() };
   const keep = keptForLater(service, method);
   try {
     const who = await whoIsAsking();
@@ -114,7 +131,7 @@ export async function queueRexWrite(
          VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, 'turned_away')`,
         [service, method, JSON.stringify(body ?? {}), who.id, who.name, Boolean(actorToken), rec?.kind ?? null, rec?.id ?? null, summaryOf(service, method)]
       );
-      return { status: 503, ok: false, result: undefined, error: DOWN_REFUSAL };
+      return { status: 503, ok: false, result: undefined, error: await downRefusal() };
     }
     const rows = await q<{ id: string }>(
       `INSERT INTO os_rex_write_queue (service, method, body, actor_user_id, actor_name, as_person, record_kind, record_id, summary)
@@ -128,7 +145,7 @@ export async function queueRexWrite(
     return { status: 202, ok: true, result: null, error: null, queuedId: Number(rows[0]?.id) };
   } catch (e) {
     console.error("[rex-queue] could not keep a write", `${service}/${method}`, e);
-    return { status: 503, ok: false, result: undefined, error: DOWN_REFUSAL };
+    return { status: 503, ok: false, result: undefined, error: await downRefusal() };
   }
 }
 

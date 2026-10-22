@@ -56,6 +56,12 @@ const SETTING_TTL_MS = 15_000;
  *  wrong, so it takes six of those, with no good answer between, to trip. */
 const TRIP_FAILS = 3;
 const TRIP_WINDOW_MS = 120_000;
+/** The same question failing again inside this counts once, not again
+ *  (22 Oct 2026). The compliance book asks REX six searches at a time; on a
+ *  slow morning all six ran out of time together, weighed three, and the
+ *  switch tripped at 9.45am with REX up - turning away James Crumpton's new
+ *  listing three times in two minutes as "down for maintenance". */
+const BURST_MS = 15_000;
 /** While tripped, one call a minute is let through to see if REX is back. */
 const PROBE_EVERY_MS = 60_000;
 /** A screen's read is kept again at most this often (a run keeps everything). */
@@ -68,7 +74,7 @@ const RECORD_MAX_BYTES = 4_000_000;
 interface OutageState {
   setting: RexStatusSetting | null;
   settingReadAt: number;
-  fails: number[];
+  fails: Array<{ at: number; what: string; weight: number }>;
   trippedAt: number | null;
   lastProbeAt: number;
   probing: boolean;
@@ -218,7 +224,11 @@ export async function mayAskRex(opts: { write?: boolean } = {}): Promise<{ live:
 }
 
 /** A REX answer came back, or did not. Trips and un-trips the switch. */
-export function noteRexOutcome(ok: boolean, what: string, opts: { probe?: boolean; outage?: boolean; timeout?: boolean } = {}): void {
+export function noteRexOutcome(
+  ok: boolean,
+  what: string,
+  opts: { probe?: boolean; outage?: boolean; timeout?: boolean; startedAt?: number } = {}
+): void {
   const s = st();
   const now = Date.now();
   if (opts.probe) s.probing = false;
@@ -235,10 +245,14 @@ export function noteRexOutcome(ok: boolean, what: string, opts: { probe?: boolea
   if (!opts.outage) return;
   s.lastFailAt = now;
   s.lastFailWhat = what;
-  s.fails = s.fails.filter((t) => now - Math.abs(t) < TRIP_WINDOW_MS);
-  /* A timeout is kept as a negative time: same window, half the weight. */
-  s.fails.push(opts.timeout ? -now : now);
-  const weight = s.fails.reduce((n, t) => n + (t < 0 ? 0.5 : 1), 0);
+  /* REX has answered something since this call was asked: it is slow on
+     this question, not gone. */
+  if (opts.startedAt != null && s.lastOkAt != null && opts.startedAt < s.lastOkAt) return;
+  s.fails = s.fails.filter((f) => now - f.at < TRIP_WINDOW_MS);
+  if (s.fails.some((f) => f.what === what && now - f.at < BURST_MS)) return;
+  /* A timeout weighs half: same window. */
+  s.fails.push({ at: now, what, weight: opts.timeout ? 0.5 : 1 });
+  const weight = s.fails.reduce((n, f) => n + f.weight, 0);
   if (s.trippedAt == null && weight >= TRIP_FAILS) {
     s.trippedAt = now;
     s.lastProbeAt = now;

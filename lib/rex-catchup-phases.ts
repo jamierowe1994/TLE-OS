@@ -283,11 +283,15 @@ const certificates: Phase = {
   covers: ["ComplianceEntries/create"],
   label: "Certificates",
   what: "Certificates filed while REX was down, onto the home's REX compliance tab (Michael's checked ones only).",
+  /* Filed before REX went but checked while it was down counts too (22 Oct
+     2026): 10 Richmond Avenue's gas and EICR were added in the morning,
+     verified at 3.37pm and 4.05pm, and REX's "fetch failed" left them out
+     of a search by added_at alone. rex_at is when the OS last tried REX. */
   async find(since) {
     const rows = await q<{ id: string; property_name: string; type_id: string; added_by: string; added_at: Date; rex_note: string }>(
       `SELECT id, property_name, type_id, added_by, added_at, rex_note FROM os_certificates
         WHERE (rex_entry_id IS NULL OR rex_entry_id = '') AND NOT awaiting_check
-          AND property_id ~ '^[0-9]+$' AND added_at > $1
+          AND property_id ~ '^[0-9]+$' AND GREATEST(added_at, rex_at) > $1
         ORDER BY added_at`,
       [since.toISOString()]
     );

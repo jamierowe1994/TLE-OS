@@ -362,6 +362,7 @@ async function rexCallOnce(
     return queueRexWrite(service, method, body, actorToken ?? null);
   }
 
+  const startedAt = Date.now();
   let res: RexResponse;
   try {
     if (actorToken) {
@@ -390,7 +391,7 @@ async function rexCallOnce(
   } catch (e) {
     const name = (e as Error)?.name ?? "";
     const gaveUpWaiting = name === "AbortError";
-    noteRexOutcome(false, path, { probe: gate.probe, outage: true, timeout: gaveUpWaiting });
+    noteRexOutcome(false, path, { probe: gate.probe, outage: true, timeout: gaveUpWaiting, startedAt });
     /* The copy only once REX counts as down - so only ever under the band,
        never as a quiet stand-in for one slow answer on a normal day. */
     if (readOnly && (await rexIsDown())) {
@@ -411,7 +412,7 @@ async function rexCallOnce(
     throw e;
   }
   const outage = !res.ok && outageShaped(res);
-  noteRexOutcome(!outage, path, { probe: gate.probe, outage });
+  noteRexOutcome(!outage, path, { probe: gate.probe, outage, startedAt });
   if (res.ok && readOnly) recordRead(service, method, body, res.result);
   if (!outage) kickReplay();
   const down = outage && (await rexIsDown());

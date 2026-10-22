@@ -171,6 +171,7 @@ export async function rexCall(
      answer here is kept for it too. */
   const gate = await mayAskRex();
   if (!gate.live) return fromCopy(service, method, body);
+  const startedAt = Date.now();
   let res: RexResponse;
   try {
     let token = await getToken(accountId);
@@ -183,7 +184,7 @@ export async function rexCall(
     /* An 8s fuse on a slow REX is not an outage by itself - only a refusal
        to connect counts towards the switch. */
     const aborted = (e as Error)?.name === "AbortError";
-    noteRexOutcome(false, path, { probe: gate.probe, outage: !aborted });
+    noteRexOutcome(false, path, { probe: gate.probe, outage: !aborted, startedAt });
     if (await rexIsDown()) {
       const copy = await fromCopy(service, method, body);
       if (copy.ok) return copy;
@@ -191,7 +192,7 @@ export async function rexCall(
     throw e;
   }
   const outage = !res.ok && (res.status === 502 || res.status === 503 || res.status === 504 || (res.status >= 500 && res.result === undefined));
-  noteRexOutcome(!outage, path, { probe: gate.probe, outage });
+  noteRexOutcome(!outage, path, { probe: gate.probe, outage, startedAt });
   if (res.ok) recordRead(service, method, body, res.result);
   else if (outage && (await rexIsDown())) {
     const copy = await fromCopy(service, method, body);
