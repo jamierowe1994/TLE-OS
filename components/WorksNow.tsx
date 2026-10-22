@@ -8,6 +8,7 @@ import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
 /* Render-time use only, so the circle with works-ui (which draws ContractorForm) is harmless. */
 import { PAYRUN_LABEL, PAYRUN_LINE, PayrunTrack, awaitingPay } from "@/components/maintenance/works-ui";
+import { AskForQuotes, QuoteBoard } from "@/components/maintenance/QuoteAsks";
 
 /**
  * The Now card on a job: one thing at a time, in the order James and
@@ -419,7 +420,15 @@ function Booking({ o, f, setF, move, busy }: StepProps) {
   const planned = o.kind === "planned";
   return (
     <div>
-      <p className="text-[13px]">{o.contractorName} has the works order{planned ? " and arranges a time with the tenants" : ""}. They can set the date from their page, or type it in when they tell you.</p>
+      {o.orderSentTo && o.orderSentTo !== o.contractorId ? (
+        /* Changed after the works order went (21 Oct 2026): the new one hasn't had it. */
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[13px]">{o.contractorName} hasn&apos;t been sent the works order yet. It went to {o.orderSentToName || "the last contractor"}.</p>
+          <button type="button" disabled={busy} onClick={() => void move({ action: "resend_order" })} className={primary}>Send it to {o.contractorName}</button>
+        </div>
+      ) : (
+        <p className="text-[13px]">{o.contractorName} has the works order{planned ? " and arranges a time with the tenants" : ""}. They can set the date from their page, or type it in when they tell you.</p>
+      )}
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <div className="w-full sm:w-72">
           <label className="block text-[10px] font-bold uppercase tracking-wider text-muted">Booked for</label>
@@ -556,6 +565,9 @@ export function CertificateUpload({ o, busy, onCertificate, title = "Add a certi
  */
 function Quote({ o, f, setF, move, busy }: StepProps) {
   const who = o.contractorName || "The contractor";
+  /* Ask somebody else, or several (Sean, 21 Oct 2026): the send screen in place of the step. */
+  const [asking, setAsking] = useState(false);
+  if (asking) return <AskForQuotes o={o} busy={busy} send={async (m) => { await move(m); setAsking(false); }} onBack={() => setAsking(false)} />;
   if (o.status === "approval") {
     return (
       <div className="space-y-3">
@@ -563,11 +575,15 @@ function Quote({ o, f, setF, move, busy }: StepProps) {
         <input value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="How they said yes - phone, email (optional)" className={field} />
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={busy} onClick={() => void move({ action: "approve", approvedBy: o.landlord || "The landlord", note: f.note })} className={primary}>The landlord approved it</button>
+          {!o.contractorConfirmedAt && <button type="button" disabled={busy} onClick={() => setAsking(true)} className={btn}>Get more quotes</button>}
         </div>
         <p className="text-[11.5px] text-muted">A different price? Change the quote on Money below and the landlord is asked again.</p>
       </div>
     );
   }
+  /* Asked through the per-contractor requests: each one's answer, side by side. */
+  if (o.quoteAsks?.length) return <QuoteBoard o={o} move={move} busy={busy} onAskMore={() => setAsking(true)} />;
+  /* A job asked before 21 Oct 2026, on the job's one link. */
   return (
     <div className="space-y-3">
       <p className="text-[13px]">Asked {who} for a quote {stamp(o.quoteRequestedAt)}. They can send it from their link, or type it in here when they reply.</p>
@@ -576,7 +592,10 @@ function Quote({ o, f, setF, move, busy }: StepProps) {
         <button type="button" disabled={busy || !f.amount} onClick={() => void move({ action: "quote", quotePence: toPence(f.amount ?? ""), note: "Keyed in off their reply." })} className={primary}>Add the quote</button>
       </div>
       <p className="text-[11.5px] text-muted">Within the landlord&apos;s {pounds(o.authorityPence)} it&apos;s approved straight away. Over it, the landlord is sent the quote to approve.</p>
-      <button type="button" disabled={busy} onClick={() => void move({ action: "request_quote" })} className={btn}>Ask them again</button>
+      <div className="flex flex-wrap gap-2">
+        {o.contractorId && <button type="button" disabled={busy} onClick={() => void move({ action: "request_quote" })} className={btn}>Send it to {who} again</button>}
+        <button type="button" disabled={busy} onClick={() => setAsking(true)} className={btn}>Ask another contractor</button>
+      </div>
     </div>
   );
 }
