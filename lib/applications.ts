@@ -712,6 +712,23 @@ async function osAcceptedApplications(rexUserId: string | null, rexApps: Applica
   /* Every other adult's own part (lib/offer-people, 14 Oct 2026). */
   const { offerPeople } = await import("@/lib/offer-people");
   const parts = await offerPeople(rows.map((r) => r.id)).catch(() => new Map());
+  /* The lead's mobile where the offer itself has none (23 Oct 2026). An
+     offer an agent keys in keeps the passport's offer answers, which leave
+     the mobile out, so 6 Tenbury Crescent reached Propoly with no number and
+     its tenant was refused. Their passport, then their enquiry, hold it. */
+  const emails = [...new Set(rows.map((r) => (r.email ?? "").trim().toLowerCase()).filter(Boolean))];
+  const phones = new Map<string, string>();
+  if (emails.length) {
+    const found = await q<{ email: string; phone: string | null }>(
+      `SELECT email, phone FROM (
+         SELECT LOWER(email) AS email, NULLIF(TRIM(data->>'mobile'), '') AS phone, 1 AS pick, updated_at AS at FROM os_tenant_passports WHERE LOWER(email) = ANY($1)
+         UNION ALL
+         SELECT LOWER(email), NULLIF(TRIM(phone), ''), 2, received_at FROM os_leads WHERE LOWER(email) = ANY($1)
+       ) x WHERE phone IS NOT NULL ORDER BY pick, at DESC NULLS LAST`,
+      [emails]
+    ).catch(() => []);
+    for (const f of found) if (!phones.has(f.email) && f.phone) phones.set(f.email, f.phone);
+  }
   for (const r of rows) {
     const email = (r.email ?? "").trim().toLowerCase();
     /* Somebody made the REX application by hand: that one is the file. */
@@ -753,7 +770,7 @@ async function osAcceptedApplications(rexUserId: string | null, rexApps: Applica
     const formOthers = (p.applicants ?? []).filter((a) => !a.isPrimary && a.name);
     const income = Number(String(pp.annualIncome ?? "").replace(/[£,\s]/g, "")) || null;
     const lead: Applicant = {
-      id: null, contactId: null, name: r.name || r.email || "Tenant", email: r.email, phone: formLead?.phone || (typeof pp.mobile === "string" ? pp.mobile : null) || null, isPrimary: true,
+      id: null, contactId: null, name: r.name || r.email || "Tenant", email: r.email, phone: formLead?.phone || (typeof pp.mobile === "string" ? pp.mobile : null) || phones.get(email) || null, isPrimary: true,
       dob: formLead?.dob || null, incomePerYear: formLead?.income || income, employmentRex: null, guarantorCount: 0,
       keyInfo: formLead
         ? { employment: formLead.employment || null, job: formLead.job || null, company: formLead.company || null, position: formLead.position || null, zeroHours: b(formLead.zeroHours), inProbation: b(formLead.inProbation), salary: formLead.income || null, rightToRent: b(formLead.rightToRent), landlordRef: b(formLead.landlordRef), guarantor: b(formLead.guarantor), adverseCredit: b(formLead.adverseCredit), adverseCreditNote: formLead.adverseCreditNote || null }
