@@ -75,6 +75,8 @@ export default function AccessNow({
       accessLoading={status === "loading"}
       tenant={tenant}
       landlord={landlord}
+      propertyId={propertyId ?? null}
+      listingId={listingId ?? null}
       onClose={onClose}
     />
   );

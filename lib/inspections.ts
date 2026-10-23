@@ -951,10 +951,32 @@ export function dueFromTasks(
     return p && otherDoor(t, p) ? null : t.rexPropertyId;
   };
 
+  /* A visit recorded in the OS for the same home, with no task tied to it
+     (Kayleigh Wright, 16 Oct 2026: 38 Golders Green was recorded as done and
+     stayed on Due). A visit done in the 90 days before the task falls due,
+     or since, answers it - REX PM is never written to, so its task stays open
+     there until the next import, but the OS does not ask for it again. */
+  const doneHere = existing.filter((i) => i.status !== "cancelled" && i.visitedAt);
+  const answeredHere = (t: RexpmTask, p: ManagedProperty | null): boolean => {
+    const homes = new Set([t.osPropertyId, rexOf(t), p?.propertyId, p?.listingId].filter((x): x is string => Boolean(x)));
+    if (!homes.size) return false;
+    const due = t.dueOn ? new Date(`${t.dueOn}T23:59:59Z`).getTime() : now.getTime();
+    const from = due - 90 * 86_400_000;
+    const entry = /entry|ingoing|check.?in/i.test(t.taskType);
+    const exit = /exit|outgoing|check.?out/i.test(t.taskType);
+    return doneHere.some((i) => {
+      if (![i.propertyId, i.osPropertyId, i.listingId].some((h) => h && homes.has(h))) return false;
+      /* A check-in never answers a routine visit, nor the other way round. */
+      if (entry !== (i.kind === "check_in") || exit !== (i.kind === "check_out")) return false;
+      return new Date(i.visitedAt!).getTime() >= from;
+    });
+  };
+
   const out: DueVisit[] = [];
   for (const t of tasks) {
     if (taken.has(t.id)) continue;
     const p = homeOf(t);
+    if (answeredHere(t, p)) continue;
     /* The end of the due day on the London clock: a task due today is not
        late until tomorrow, which is how REX PM's Overdue tab reads. */
     const [y, m, d] = (t.dueOn ?? new Date(now).toISOString().slice(0, 10)).split("-").map(Number);

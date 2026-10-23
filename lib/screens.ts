@@ -100,7 +100,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
     wiring: "live",
     caveats: [
-      "Nothing here emails the contractor, the tenant or the landlord yet. Ring them, and put the line on the timeline.",
+      "Maintenance emails contractors itself: a quote request (to one firm or up to three at once from Raise a job), the works order, the booking and a cancellation, each with the tenants' names, numbers and the access notes. Tenants and landlords get their own emails at each step when the customer email switch is on.",
       "PayProp is read-only to the OS, so marking a job as charged through PayProp records the fact here; the charge is raised in PayProp by hand.",
       "A certificate that comes back from a planned job is filed on the job. Attaching it to the property's compliance file is still done from Compliance.",
     ],

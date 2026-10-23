@@ -970,17 +970,20 @@ export const WORKS_LANDLORD_REPORT = {
 
 /* A price first, before any works order (Sean McMahon, 20 Oct 2026: "ideally
    I want a quotation first, in order to get it approved by the landlord").
-   No tenants' details: nothing is booked yet, and access is ours to arrange
-   if they need a look. */
+   With the tenants and the access since 22 Oct 2026 (Sean: contractors
+   "can't arrange to quote and question why they've been asked") - a firm
+   that needs a look arranges it with the tenants, the same as a works order. */
 export const WORKS_CONTRACTOR_QUOTE_REQUEST = {
   subject: "Quote please: {{title}} at {{address}}",
-  preheader: "Could you price this job for us? Nothing is booked yet.",
+  preheader: "Could you price this job for us? The tenants and access are below if you need a look.",
   mode: "blocks",
   blocks: [
     H("wqr1", "Could you quote for this?"),
     T("wqr2", "Hi {{contractorGreeting}},<br><br>Could you give us a price for the job below at <strong>{{address}}</strong>? Nothing is booked yet: the landlord approves the quote first, then we send you the works order."),
     T("wqr3", "<strong>{{title}}</strong><br>{{category}} · {{urgency}}<br><br>{{description}}"),
-    T("wqr4", "If you need to see it before you can price it, reply to this email and we'll arrange access with the tenant."),
+    T("wqr3a", "<strong>Tenants to arrange a look with</strong><br>{{tenantsList}}"),
+    T("wqr3b", "<strong>Access notes:</strong> {{access}}"),
+    T("wqr4", "If you need to see it before you can price it, arrange a time with the tenants above. If you can't reach them, reply to this email and we'll arrange it."),
     SP("wqr5", 8),
     BTN("wqr6", "Send us your quote", "{{contractorLink}}"),
     SP("wqr7", 8),

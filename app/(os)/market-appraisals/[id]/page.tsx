@@ -15,6 +15,7 @@ import TakeOnWizard from "@/components/appraisal/TakeOnWizard";
 import ConfirmLine from "@/components/appraisal/ConfirmLine";
 import AppraisalChange from "@/components/AppraisalChange";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
+import AppraisalTidy from "@/components/AppraisalTidy";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import NextUp, { SAGE_INK, SAGE_WASH, type SentDeck } from "@/components/appraisal/NextUp";
 import ChangeFees from "@/components/appraisal/ChangeFees";
@@ -370,7 +371,18 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             </p>
             {ma.stageWhy && <p className="mt-4 text-[13px] leading-relaxed">{ma.stageWhy}</p>}
             {/* The stage is read from the record; these are the two hand moves. */}
-            <AppraisalOutcome id={ma.id} stage={live} why={null} size="large" />
+            {!ma.archivedAt && <AppraisalOutcome id={ma.id} stage={live} why={null} size="large" />}
+            {/* Off the board without losing it, or a test file gone (23 Oct 2026). */}
+            <AppraisalTidy
+              id={ma.id}
+              archivedAt={ma.archivedAt}
+              archivedBy={ma.archivedBy}
+              archivedWhy={ma.archivedWhy}
+              onLost={async () => {
+                await fetch("/api/appraisals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ma.id, outcome: "lost" }) }).catch(() => null);
+                window.location.reload();
+              }}
+            />
           </div>
 
           {/* The house, from xl up. */}

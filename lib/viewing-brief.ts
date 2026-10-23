@@ -42,7 +42,7 @@ export function viewingBrief(b: BriefInput): string {
     .join("\n");
 }
 
-type AccessPayload = { kind?: string | null; name?: string; phone?: string; email?: string; keysCollected?: boolean };
+type AccessPayload = { kind?: string | null; name?: string; phone?: string; email?: string; keysCollected?: boolean; lockboxCode?: string; lockboxWhere?: string };
 
 /** The home's access arrangement in one line, or null when none is set. */
 export async function accessLineFor(listingId: string | null, propertyId: string | null): Promise<string | null> {
@@ -59,6 +59,14 @@ export async function accessLineFor(listingId: string | null, propertyId: string
   if (a.kind === "vacant") return `Vacant - keys in the office${a.keysCollected ? " (collected)" : ""}.`;
   if (a.kind === "tenant") return `Through the tenant${who ? ` - ${who}` : ""}.`;
   if (a.kind === "landlord") return `Through the landlord${who ? ` - ${who}` : ""}.`;
+  /* The code goes in the diary entry for whoever attends (Sean McMahon,
+     22 Oct 2026: "the code should then appear on the viewing's access
+     details and in the confirmations to whoever is attending"). */
+  if (a.kind === "lockbox") {
+    const code = String(a.lockboxCode ?? "").trim();
+    const where = String(a.lockboxWhere ?? "").trim();
+    return `Lockbox${code ? ` - code ${code}` : " - no code recorded"}${where ? ` (${where})` : ""}.`;
+  }
   return null;
 }
 

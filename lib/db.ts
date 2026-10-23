@@ -1259,6 +1259,26 @@ ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS cancelled_at    TIMEST
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS cancelled_was   TIMESTAMPTZ;
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS cancelled_by    TEXT;
 
+-- TIDIED AWAY (James, 23 Oct 2026: "people need a button to be able to remove
+-- something from market appraisals to keep it clean and tidy"). Archived is
+-- off the board and finished everywhere (stage 'lost', so every reminder and
+-- chase that skips a lost file skips it too) but kept, with who, why and the
+-- stage it was at, so Bring back puts it where it was.
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS archived_at     TIMESTAMPTZ;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS archived_by     TEXT;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS archived_why    TEXT;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS archived_from   TEXT;
+
+-- A test appraisal deleted by hand is gone from the book but its last row is
+-- kept here, so a slip ("that was a real one") can be put back by James.
+CREATE TABLE IF NOT EXISTS os_deleted_appraisals (
+  id          TEXT NOT NULL,
+  row         JSONB NOT NULL,
+  deleted_by  TEXT,
+  why         TEXT,
+  deleted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- WHAT KIRSTIE HAS ALREADY BEEN TOLD.
 --
 -- One row per (deal, stage) alert that has actually been sent. Without it the

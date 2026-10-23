@@ -9,14 +9,24 @@
  *  - the control, or anything around it, carries data-steve-never (the push
  *    to the portals, the portal switch, the pilot phases, team invites);
  *  - its words say it goes live, publishes or invites;
+ *  - its words delete or remove something that is not a test file;
  *  - it is anywhere in Admin, where every button is James's.
  */
 
 export const NEVER_WORDS =
   /\b(publish(ed|ing)?|go(es)? live|push(ed|ing)? (it )?(to the portals|live)|put (it )?live|make (it )?live|put back on the portals|take off the portals|send (it )?to (rightmove|zoopla|onthemarket|the portals)|invite|reissue|phase \d|start phase|switch (it )?on for everyone)\b/i;
 
+/* EDIT, NEVER DELETE (James, 23 Oct 2026): "we're never allowed to let Steve
+   delete something, but to edit something, he should be able to ... The only
+   time he can delete something is if it's a test file." A control whose words
+   delete, remove or erase is never his, unless its own words say it is a test
+   file (the server still checks the file really is one before it goes). */
+export const DELETE_WORDS = /\b(delet(e|es|ed|ing)|remov(e|es|ed|ing)|eras(e|es|ed|ing)|wipe|discard|bin (it|this)|throw (it )?away|destroy)\b/i;
+const TEST_FILE_WORDS = /\btest (file|appraisal|lead|record)\b/i;
+
 export function neverPress(label: string, path: string | null | undefined): boolean {
   if ((path ?? "").startsWith("/admin")) return true;
+  if (DELETE_WORDS.test(label) && !TEST_FILE_WORDS.test(label)) return true;
   return NEVER_WORDS.test(label);
 }
 

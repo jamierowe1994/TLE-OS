@@ -142,7 +142,7 @@ export default function ContractorPage() {
             <div style={box}>
               <span style={label}>The job</span>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{job.description || job.category}</p>
-              {job.quoteStage !== "closed" && job.quoteStage !== "declined" && <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.quoteStage ? "we'll arrange it if you need a look" : job.access || "none recorded"}<br /><strong>{job.tenant.includes(";") ? "Tenants" : "Tenant"}:</strong> {job.tenant ? job.tenant.split("; ").map((t, i) => <span key={i}>{i ? <br /> : null}{t}</span>) : job.quoteStage ? "on the works order, once the quote is approved" : "on the works order"}</p>}
+              {job.quoteStage !== "closed" && job.quoteStage !== "declined" && <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.access || (job.quoteStage ? "reply to our email and we'll arrange a look" : "none recorded")}<br /><strong>{job.tenant.includes(";") ? "Tenants" : "Tenant"}:</strong> {job.tenant ? job.tenant.split("; ").map((t, i) => <span key={i}>{i ? <br /> : null}{t}</span>) : job.quoteStage ? "none on the job yet - reply and we'll arrange access" : "on the works order"}</p>}
             </div>
             {flash && <p style={{ ...box, borderColor: "#3f8f5f", color: "#3f8f5f", fontSize: 14 }}>{flash}</p>}
             {err && job && <p style={{ color: "#a85a51", marginTop: 12, fontSize: 13 }}>{err}</p>}

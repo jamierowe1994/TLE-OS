@@ -53,3 +53,21 @@ export async function tenantContacts(): Promise<Map<string, Map<string, TenantCo
   }
   return out;
 }
+
+/**
+ * Changed by hand on the home's page (Sean McMahon, 21 Oct 2026: "change a
+ * tenant's email address from the Portfolio home page", 3 Oak Place). A REX
+ * PM tenant has no REX contact, so the OS's own row is the record. Both
+ * values are written, as the card holds them, so a number that came from
+ * PayProp is not lost when only the email is changed.
+ */
+export async function saveTenantContact(osPropertyId: string, name: string, c: TenantContact, by: string): Promise<void> {
+  await ensureTenantContacts();
+  await q(
+    `INSERT INTO os_tenant_contacts (os_property_id, name, name_key, email, phone, source, source_ref, imported_at)
+     VALUES ($1, $2, $3, $4, $5, 'os-edit', $6, NOW())
+     ON CONFLICT (os_property_id, name_key) DO UPDATE
+       SET email = EXCLUDED.email, phone = EXCLUDED.phone, source = 'os-edit', source_ref = EXCLUDED.source_ref, imported_at = NOW()`,
+    [osPropertyId, name, nameKey(name), c.email, c.phone, by]
+  );
+}

@@ -76,10 +76,14 @@ export default function ContactBlock({
   const [note, setNote] = useState<{ tone: "ok" | "bad" | "busy"; text: string } | null>(null);
   useEffect(() => setP(person), [person.name, person.email, person.phone]); // eslint-disable-line react-hooks/exhaustive-deps
   const editable = Boolean(personRef || saver);
+  /* REX refused for want of a name (needsName): the name box shows even on a
+     card that hides it, and the change that was refused goes with the name
+     (Kayleigh, let 39522, 22 Oct 2026: "no name field opens"). */
+  const [askName, setAskName] = useState<{ field: "email" | "phone"; value: string } | null>(null);
 
   async function save(field: "name" | "email" | "phone", value: string) {
     const v = value.trim();
-    if ((p[field] ?? "") === v) return;
+    if ((p[field] ?? "") === v && !(field === "name" && askName)) return;
     if (field === "name" && !v) return;
     const before = p;
     setP((cur) => ({ ...cur, [field]: v || null }));
@@ -102,15 +106,22 @@ export default function ContactBlock({
       const r = await fetch("/api/people/contact", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ref: personRef, [field]: v }),
+        body: JSON.stringify({ ref: personRef, [field]: v, ...(field === "name" && askName ? { [askName.field]: askName.value } : {}) }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; person?: Person; sync?: { ok: boolean; detail: string } };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; needsName?: boolean; person?: Person; sync?: { ok: boolean; detail: string } };
       if (!j.ok) {
         setP(before);
+        if (j.needsName && field !== "name") {
+          setAskName({ field, value: v });
+          setNote({ tone: "bad", text: `Their record has no name, so REX won't take the ${field === "email" ? "email" : "number"} on its own. Put their name in above and it saves with it.` });
+          return;
+        }
         setNote({ tone: "bad", text: j.error ?? "That didn't save." });
         return;
       }
-      const next = { ...before, ...(j.person ?? {}), [field]: v || null };
+      const sentWith = field === "name" && askName ? { [askName.field]: askName.value } : {};
+      if (field === "name") setAskName(null);
+      const next = { ...before, ...(j.person ?? {}), ...sentWith, [field]: v || null };
       setP(next);
       onSaved?.(next);
       setNote({ tone: j.sync?.ok === false ? "bad" : "ok", text: j.sync?.detail ?? "Saved." });
@@ -142,9 +153,9 @@ export default function ContactBlock({
 
   return (
     <div className={className}>
-      {showName && (
+      {(showName || askName) && (
         <p className={`leading-snug ${nameClassName}`}>
-          {editable ? <InlineField value={p.name} placeholder={`Name the ${role ?? "person"}`} onChange={(v) => void save("name", v)} className={nameClassName} /> : p.name}
+          {editable ? <InlineField value={askName && /not recorded/i.test(p.name) ? "" : p.name} placeholder={`Name the ${role ?? "person"}`} onChange={(v) => void save("name", v)} className={nameClassName} /> : p.name}
         </p>
       )}
       <div className="mt-1 divide-y divide-line/40">

@@ -7,6 +7,8 @@ import { pushContactUpdateToRex } from "@/lib/rex-contacts";
 import { record } from "@/lib/audit";
 import { recordLandlordFor, recordRowsFor, saveRecordLandlord } from "@/lib/record-landlords";
 import { publicError } from "@/lib/public-error";
+import { nameKey, saveTenantContact, tenantContacts } from "@/lib/tenant-contacts";
+import { forgetBooks } from "@/lib/managed-book-cache";
 
 /**
  * PATCH /api/people/contact - change a landlord's or tenant's name, email or
@@ -90,14 +92,54 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ ok: true, person: next, sync: { ok: true, detail: "Saved on the home's record." } });
     }
 
+    /* A tenant REX PM names, with no REX contact behind them (Sean McMahon,
+       21 Oct 2026: Megan at 3 Oak Place). Their email and number are the
+       OS's own row (lib/tenant-contacts); never written to REX or REX PM.
+       The card sends both, as it holds them, with the name it shows. */
+    const pm = /^rexpm:([^:]+):\d+$/.exec(ref);
+    if (pm) {
+      if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here." }, { status: 503 });
+      if (name !== undefined) return NextResponse.json({ ok: false, error: "Their name comes from the tenancy record, so it can't be changed here. The email and number can." }, { status: 400 });
+      const tenantName = clean(body?.tenantName, 200);
+      if (!tenantName) return NextResponse.json({ ok: false, error: "Which tenant?" }, { status: 400 });
+      const keep = (body?.keep ?? {}) as { email?: unknown; phone?: unknown };
+      const next = {
+        email: (email !== undefined ? email : clean(keep.email, 200)?.toLowerCase()) || null,
+        phone: (phone !== undefined ? phone : clean(keep.phone, 40)) || null,
+      };
+      const before = (await tenantContacts().catch(() => new Map())).get(pm[1])?.get(nameKey(tenantName)) ?? null;
+      await saveTenantContact(pm[1], tenantName, next, actor.email);
+      await forgetBooks();
+      await record({
+        kind: "tenant_contact_saved",
+        actorId: actor.id,
+        actorEmail: actor.email,
+        detail: `Home ${pm[1]}, tenant "${tenantName}": ${before?.email ?? ""} ${before?.phone ?? ""} -> ${next.email ?? ""} ${next.phone ?? ""}. OS only, not REX.`,
+      }).catch(() => undefined);
+      return NextResponse.json({ ok: true, person: { name: tenantName, email: next.email, phone: next.phone }, sync: { ok: true, detail: "Saved on the home's record." } });
+    }
+
     /* A person who only exists in REX. */
     if (ref.startsWith("rex:") && /^\d+$/.test(ref.slice(4))) {
       if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected here." }, { status: 503 });
       const rexId = ref.slice(4);
-      const now = await rexCall("Contacts", "read", { id: Number(rexId) });
+      /* With the name, email and phone sub-records: a plain read leaves the
+         top-level name blank for many people (Stephanie McAuliffe, let 39522,
+         22 Oct 2026 - "Their record has no name yet" for a person whose name
+         is right there in REX), and the email and phone with it. */
+      const now = await rexCall("Contacts", "read", { id: Number(rexId), extra_fields: ["related.contact_names", "related.contact_emails", "related.contact_phones"] });
       if (!now.ok) return NextResponse.json({ ok: false, error: "That person couldn't be read from the book just now. Try again in a minute." }, { status: 502 });
       const c = (now.result ?? {}) as Row;
-      const was = { name: str(c.name) || [str(c.name_first), str(c.name_last)].filter(Boolean).join(" "), email: str(c.email_address), mobile: str(c.phone_number) };
+      const rel = (c.related ?? {}) as { contact_names?: Row[]; contact_emails?: Row[]; contact_phones?: Row[] };
+      const nameRow = rel.contact_names?.[0] ?? {};
+      const primary = (rows: Row[] | undefined, flag: string) => rows?.find((r) => r[flag] === true || r[flag] === "1") ?? rows?.[0] ?? {};
+      const wasFirst = str(nameRow.name_first) || str(c.name_first);
+      const wasLast = str(nameRow.name_last) || str(c.name_last);
+      const was = {
+        name: [wasFirst, wasLast].filter(Boolean).join(" ") || str(c.name) || str(c.system_search_key),
+        email: str(primary(rel.contact_emails, "email_primary").email_address) || str(c.email_address),
+        mobile: str(primary(rel.contact_phones, "phone_primary").phone_number) || str(c.phone_number),
+      };
       const next = { name: name ?? was.name, email: email ?? was.email, mobile: phone ?? was.mobile };
       /* REX refuses a person with no name (auto ticket 4c7e51e3, 15 Oct 2026:
          an email changed on a lead whose REX record had none). Say so here,
@@ -108,8 +150,8 @@ export async function PATCH(req: NextRequest) {
       const [first, ...rest] = next.name.split(/\s+/);
       const contact = {
         id: `rex:${rexId}`, kind: "landlord", name: next.name,
-        nameFirst: name !== undefined ? first : str(c.name_first) || first,
-        nameLast: name !== undefined ? rest.join(" ") : str(c.name_last) || rest.join(" "),
+        nameFirst: name !== undefined ? first : wasFirst || first,
+        nameLast: name !== undefined ? rest.join(" ") : wasLast || rest.join(" "),
         email: next.email, mobile: next.mobile, address: "", postcode: "", rexId,
       } as unknown as OsContact;
       const sync = await pushContactUpdateToRex(contact, actor.id);
@@ -122,6 +164,8 @@ export async function PATCH(req: NextRequest) {
            2026): the held copy lasts twelve hours, and a card redrawn from it
            would show the old number straight after the change. */
         await q(`DELETE FROM os_cache WHERE key LIKE 'landlord:v2:%' AND payload->'landlord'->>'contactId' = $1`, [rexId]).catch(() => undefined);
+        /* The Portfolio book holds tenants and landlords for hours; read it again. */
+        await forgetBooks().catch(() => undefined);
       }
       await audit(actor, rexId, was, next, true);
       return NextResponse.json({ ok: true, person: { name: next.name, email: next.email, phone: next.mobile }, sync: { ok: true, detail: "Changed in REX." } });

@@ -4,7 +4,7 @@ import { upsertKnowledge, listKnowledge } from "@/lib/business/knowledge-store";
 import { searchEverything } from "@/lib/search";
 import { hasDb, q } from "@/lib/db";
 import { noDashes } from "@/lib/no-dashes";
-import { neverPress, type ScreenPlan, type ScreenStep } from "@/lib/steve-never";
+import { DELETE_WORDS, neverPress, type ScreenPlan, type ScreenStep } from "@/lib/steve-never";
 import { changeJob, jobsFor, nextRun, scheduleWords, MAX_JOBS_EACH, type Every } from "@/lib/steve-jobs";
 import { dayFacts, setBriefOff } from "@/lib/steve-brief";
 
@@ -80,7 +80,9 @@ const doOnScreen: AssistantTool = {
       if (act === "press" || act === "tick" || act === "untick") {
         if (c.never || neverPress(c.label, ctx.path)) {
           return {
-            error: `"${name}" is never yours to press - going live, publishing, invites and Admin are theirs alone. Plan everything up to it, and tell them that last button is theirs.`,
+            error: DELETE_WORDS.test(c.label)
+              ? `"${name}" deletes something, and you never delete - only a test file. Offer the tidy-up instead (Archive, Mark as lost), or tell them that button is theirs.`
+              : `"${name}" is never yours to press - going live, publishing, invites and Admin are theirs alone. Plan everything up to it, and tell them that last button is theirs.`,
           };
         }
       }
@@ -155,12 +157,41 @@ const learnThis: AssistantTool = {
 
 const GAPS_USER = "__steve";
 const GAPS_KEY = "steve.gaps";
-export type Gap = { at: string; who: string; asked: string; why: string };
+/* state (James, 23 Oct 2026: "action some of these and then hide the rest"):
+   none = still open, "built" = the OS can do it now, "hidden" = not doing it.
+   Nothing is ever thrown away; Hide is undone from the same list. */
+export type GapState = "built" | "hidden";
+export type Gap = { at: string; who: string; asked: string; why: string; state?: GapState; stateBy?: string };
 
 export async function listGaps(): Promise<Gap[]> {
   if (!hasDb()) return [];
   const rows = await q<{ value: { gaps?: Gap[] } }>(`SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = $2`, [GAPS_USER, GAPS_KEY]).catch(() => []);
   return rows[0]?.value?.gaps ?? [];
+}
+
+async function saveGaps(gaps: Gap[]) {
+  await q(
+    `INSERT INTO os_user_prefs (user_id, key, value, updated_at) VALUES ($1, $2, $3::jsonb, NOW())
+     ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [GAPS_USER, GAPS_KEY, JSON.stringify({ gaps })]
+  );
+}
+
+/** Mark one ask built or hidden, or back to open (state null). Keyed by when it was asked. */
+export async function setGapState(at: string, state: GapState | null, by: string): Promise<boolean> {
+  if (!hasDb()) return false;
+  const gaps = await listGaps();
+  const g = gaps.find((x) => x.at === at);
+  if (!g) return false;
+  if (state) {
+    g.state = state;
+    g.stateBy = by;
+  } else {
+    delete g.state;
+    delete g.stateBy;
+  }
+  await saveGaps(gaps);
+  return true;
 }
 
 const noteAGap: AssistantTool = {
@@ -185,12 +216,7 @@ const noteAGap: AssistantTool = {
       why: noDashes(str(input.why)).slice(0, 300),
     };
     if (!gap.asked) return { error: "Say what they asked for." };
-    const gaps = [...(await listGaps()), gap].slice(-200);
-    await q(
-      `INSERT INTO os_user_prefs (user_id, key, value, updated_at) VALUES ($1, $2, $3::jsonb, NOW())
-       ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-      [GAPS_USER, GAPS_KEY, JSON.stringify({ gaps })]
-    );
+    await saveGaps([...(await listGaps()), gap].slice(-200));
     return { ok: "On James's list." };
   },
 };

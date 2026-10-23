@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import CancelViewing from "@/components/CancelViewing";
 import {
@@ -64,6 +64,8 @@ export default function ViewingSheet({
   landlord,
   onApply,
   onCancelled,
+  propertyId,
+  listingId,
   onClose,
 }: {
   viewing: SheetViewing;
@@ -77,8 +79,26 @@ export default function ViewingSheet({
   onApply?: (p: { id: string; name: string; phone?: string | null }) => void;
   /** Given, a booked viewing still to come offers Cancel viewing (Lorna, 15 Oct 2026). */
   onCancelled?: (said: string) => void;
+  /** The home, for its key numbers (Sean McMahon, 22 Oct 2026: "show the key numbers"). */
+  propertyId?: string | null;
+  listingId?: string | null;
   onClose: () => void;
 }) {
+  /* Read from the home's key register (/api/property/keys, which keeps who may
+     see them to the agent and the office). Null while reading or not allowed. */
+  const [keys, setKeys] = useState<{ label: string; location: string | null; heldBy: string | null }[] | null>(null);
+  useEffect(() => {
+    if (!propertyId) return;
+    let gone = false;
+    const qs = new URLSearchParams({ property: propertyId, ...(listingId ? { listing: listingId } : {}) });
+    fetch(`/api/property/keys?${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { keys?: { label: string; location: string | null; heldBy: string | null }[] } | null) => !gone && setKeys(j?.keys ?? null))
+      .catch(() => !gone && setKeys(null));
+    return () => {
+      gone = true;
+    };
+  }, [propertyId, listingId]);
   const [setting, setSetting] = useState(false);
   const [asking, setAsking] = useState(false);
   const past = new Date(v.startsAt).getTime() < Date.now();
@@ -103,6 +123,10 @@ export default function ViewingSheet({
   /** The access line, in a word, and its colour. */
   const state = !access.kind
     ? { tone: "bg-accent-soft/70 text-accent-dark", text: "No access details yet" }
+    : access.kind === "lockbox"
+      ? access.lockboxCode
+        ? { tone: "bg-[#e7ece0] text-[#43513a]", text: `Lockbox · code ${access.lockboxCode}` }
+        : { tone: "bg-accent-soft/70 text-accent-dark", text: "Lockbox · no code yet" }
     : access.kind === "vacant"
       ? access.keysCollected
         ? { tone: "bg-[#e7ece0] text-[#43513a]", text: "Vacant · keys in the office" }
@@ -164,12 +188,18 @@ export default function ViewingSheet({
           ) : !access.kind ? (
             <>
               <p className="mt-2 max-w-xl text-[12.5px] leading-relaxed text-muted">
-                Nobody has said how we get into this property yet - keys, the tenant, or the landlord. Add that first and the
+                Nobody has said how we get into this property yet - keys, a lockbox, the tenant, or the landlord. Add that first and the
                 asking follows from it.
               </p>
               <button type="button" onClick={() => setSetting(true)} className={`${solid} mt-3`}>
                 Add access details
               </button>
+              {keys && keys.length > 0 && (
+                <p className="mt-3 text-[12.5px]">
+                  <span className="text-muted">Key numbers: </span>
+                  <b className="font-semibold">{keys.map((k) => k.label).join(", ")}</b>
+                </p>
+              )}
             </>
           ) : (
             <>
@@ -177,10 +207,24 @@ export default function ViewingSheet({
                 <div className="flex gap-3">
                   <dt className="w-[110px] shrink-0 text-muted">How</dt>
                   <dd className="font-medium">
-                    {access.kind === "vacant" ? "Vacant - we hold the keys" : access.kind === "tenant" ? "Through the tenant" : "Through the landlord"}
+                    {access.kind === "vacant" ? "Vacant - we hold the keys" : access.kind === "lockbox" ? "Lockbox at the property" : access.kind === "tenant" ? "Through the tenant" : "Through the landlord"}
                   </dd>
                 </div>
-                {access.kind !== "vacant" && (
+                {access.kind === "lockbox" && (
+                  <>
+                    <div className="flex gap-3">
+                      <dt className="w-[110px] shrink-0 text-muted">Code</dt>
+                      <dd className="font-semibold">{access.lockboxCode || <span className="font-medium text-accent-dark">No code recorded</span>}</dd>
+                    </div>
+                    {access.lockboxWhere && (
+                      <div className="flex gap-3">
+                        <dt className="w-[110px] shrink-0 text-muted">Where</dt>
+                        <dd>{access.lockboxWhere}</dd>
+                      </div>
+                    )}
+                  </>
+                )}
+                {access.kind !== "vacant" && access.kind !== "lockbox" && (
                   <>
                     <div className="flex gap-3">
                       <dt className="w-[110px] shrink-0 text-muted">Who</dt>
@@ -196,6 +240,19 @@ export default function ViewingSheet({
                     </div>
                   </>
                 )}
+                {keys && keys.length > 0 && (
+                  <div className="flex gap-3">
+                    <dt className="w-[110px] shrink-0 text-muted">Key numbers</dt>
+                    <dd>
+                      {keys.map((k, i) => (
+                        <span key={k.label + i} className="mr-2 inline-block">
+                          <b className="font-semibold">{k.label}</b>
+                          {k.heldBy ? <span className="text-muted"> · out with {k.heldBy}</span> : k.location ? <span className="text-muted"> · {k.location}</span> : null}
+                        </span>
+                      ))}
+                    </dd>
+                  </div>
+                )}
                 {request && (
                   <div className="flex gap-3">
                     <dt className="w-[110px] shrink-0 text-muted">Asked</dt>
@@ -208,7 +265,13 @@ export default function ViewingSheet({
               </dl>
 
               <div className="mt-3.5 flex flex-wrap items-center gap-2">
-                {access.kind === "vacant" ? (
+                {access.kind === "lockbox" ? (
+                  !access.lockboxCode ? (
+                    <button type="button" onClick={() => setSetting(true)} className={solid}>
+                      Add the lockbox code
+                    </button>
+                  ) : null
+                ) : access.kind === "vacant" ? (
                   <button type="button" onClick={() => onAccess({ ...access, keysCollected: !access.keysCollected })} className={pill}>
                     {access.keysCollected ? "Keys are back in the office" : "Keys collected"}
                   </button>

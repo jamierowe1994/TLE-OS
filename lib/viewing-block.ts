@@ -21,7 +21,7 @@ import { accessKeyFor } from "@/lib/access-key";
 type AccessRequest = { viewingId: string; when: string; to: string; requestedAt: string; grantedAt: string | null; blockOf?: string };
 type AccessPayload = { kind?: string | null; requests?: Record<string, AccessRequest> };
 
-export type BlockAccess = "granted" | "asked" | "vacant" | "none";
+export type BlockAccess = "granted" | "asked" | "vacant" | "lockbox" | "none";
 
 export async function copyBlockAccess(p: {
   listingId: string | null;
@@ -43,6 +43,7 @@ export async function copyBlockAccess(p: {
   if (!a?.kind) return "none";
   /* Empty and keyed: nobody to ask, the keys cover every viewing. */
   if (a.kind === "vacant") return "vacant";
+  if (a.kind === "lockbox") return "lockbox";
   const from = a.requests?.[p.fromViewingId];
   if (!from) return "none";
   const copy: AccessRequest = { ...from, viewingId: p.toViewingId, when: new Date(p.startsAt).toISOString(), blockOf: p.fromViewingId };

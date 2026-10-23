@@ -79,6 +79,9 @@ interface Row extends Record<string, unknown> {
   cancelled_at?: string | Date | null;
   cancelled_was?: string | Date | null;
   cancelled_by?: string | null;
+  archived_at?: string | Date | null;
+  archived_by?: string | null;
+  archived_why?: string | null;
   created_at: string | Date;
 }
 
@@ -87,7 +90,7 @@ const COLS = `id, lead_id, landlord, address, postcode, agent, appointment_at,
               stage, valuation, service_level, fee_pct, setup_fee, other_fees,
               valuation_note, valued_at, valued_by, rex_property_id,
               present_token, terms_sent_at, cancelled_at, cancelled_was,
-              cancelled_by, created_at`;
+              cancelled_by, archived_at, archived_by, archived_why, created_at`;
 
 function rowTo(r: Row): MarketAppraisal {
   return {
@@ -122,6 +125,9 @@ function rowTo(r: Row): MarketAppraisal {
     cancelledAt: r.cancelled_at ? new Date(r.cancelled_at).toISOString() : null,
     cancelledWas: r.cancelled_was ? new Date(r.cancelled_was).toISOString() : null,
     cancelledBy: r.cancelled_by ?? null,
+    archivedAt: r.archived_at ? new Date(r.archived_at).toISOString() : null,
+    archivedBy: r.archived_by ?? null,
+    archivedWhy: r.archived_why ?? null,
     createdAt: new Date(r.created_at).toISOString(),
   };
 }

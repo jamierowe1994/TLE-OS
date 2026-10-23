@@ -45,15 +45,16 @@ function publicView(o: WorksOrder) {
      invoiced, paid or cancelled job went on showing a key-safe code and the
      tenants' phones to whoever held it. The invoice step still works. */
   const live = !["done", "invoiced", "paid", "cancelled"].includes(o.status);
-  /* Asked for a price only (Sean, 20 Oct 2026): no works order yet, so no
-     tenants' numbers or way in until the quote is approved. */
+  /* Asked for a price (Sean, 20 Oct 2026). Since 22 Oct the tenants and the
+     way in show at the quote step too: a firm that needs a look arranges it
+     with the tenants ("contractors can't arrange to quote"). */
   const pricing = stepOf(o) === "quote";
   return {
     ref: o.ref, kind: o.kind, title: o.title, category: o.category, description: o.description, status: o.status, step: stepOf(o),
-    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: live && !pricing ? o.access : null, contractorName: o.contractorName,
+    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: live ? o.access : null, contractorName: o.contractorName,
     quoteStage: pricing ? (o.quotePence == null ? "asked" : "with_landlord") : null, quotePence: o.quotePence,
     /* Every tenant to arrange access with (a shared house has several). */
-    tenant: live && !pricing ? tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "",
+    tenant: live ? tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "",
     scheduledAt: o.scheduledAt, completedAt: o.completedAt, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef,
     files: o.files.map((f) => ({ name: f.name, at: f.at })),
   };
@@ -76,11 +77,14 @@ async function askedJob(token: string): Promise<{ order: WorksOrder; ask: QuoteA
 
 function askView(o: WorksOrder, a: QuoteAsk) {
   const closed = o.status === "cancelled" || a.state === "closed";
+  /* The tenants and the way in while this firm is still pricing it, so they
+     can arrange a look (22 Oct 2026); gone once their part is over. */
+  const looking = !closed && (a.state === "asked" || a.state === "quoted") && !["done", "invoiced", "paid", "cancelled"].includes(o.status);
   return {
     ref: o.ref, kind: o.kind, title: o.title, category: o.category, description: o.description, status: o.status, step: "quote",
-    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: null, contractorName: a.contractorName,
+    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: looking ? o.access : null, contractorName: a.contractorName,
     quoteStage: closed ? "closed" : a.state === "accepted" ? (o.status === "approval" ? "with_landlord" : "accepted") : a.state,
-    quotePence: a.quotePence, tenant: "", scheduledAt: null, completedAt: null, invoicePence: null, invoiceRef: "", files: [],
+    quotePence: a.quotePence, tenant: looking ? tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "", scheduledAt: null, completedAt: null, invoicePence: null, invoiceRef: "", files: [],
   };
 }
 

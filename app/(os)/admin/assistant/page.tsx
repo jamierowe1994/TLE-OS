@@ -79,7 +79,7 @@ function when(iso: string | null) {
 export default function AssistantConsole() {
   const [lines, setLines] = useState<Line[] | null>(null);
   const [trends, setTrends] = useState<Trend[]>([]);
-  const [gaps, setGaps] = useState<{ at: string; who: string; asked: string; why: string }[]>([]);
+  const [gaps, setGaps] = useState<{ at: string; who: string; asked: string; why: string; state?: "built" | "hidden"; stateBy?: string }[]>([]);
   const [brain, setBrain] = useState<{
     live: boolean;
     spent: number;
@@ -96,6 +96,9 @@ export default function AssistantConsole() {
   const [briefFlash, setBriefFlash] = useState<string | null>(null);
   const [who, setWho] = useState<string>("");
   const [denied, setDenied] = useState(false);
+  const [gapBusy, setGapBusy] = useState<string | null>(null);
+  const [gapErr, setGapErr] = useState<string | null>(null);
+  const [showPut, setShowPut] = useState(false);
 
   const load = useCallback(() => {
     fetch("/api/admin/assistant-brief")
@@ -120,7 +123,7 @@ export default function AssistantConsole() {
       .catch(() => setBrain(null));
     fetch("/api/admin/assistant-log")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
-      .then((d: { lines?: Line[]; trends?: Trend[]; gaps?: { at: string; who: string; asked: string; why: string }[] }) => {
+      .then((d: { lines?: Line[]; trends?: Trend[]; gaps?: { at: string; who: string; asked: string; why: string; state?: "built" | "hidden"; stateBy?: string }[] }) => {
         setLines(d.lines ?? []);
         setTrends(d.trends ?? []);
         setGaps(d.gaps ?? []);
@@ -128,6 +131,25 @@ export default function AssistantConsole() {
       .catch(() => setDenied(true));
   }, []);
   useEffect(load, [load]);
+
+  /* Built / Hide / Back on the list (23 Oct 2026): the list stays the
+     next-to-build list, and nothing is thrown away. */
+  const markGap = async (at: string, state: "built" | "hidden" | null) => {
+    setGapBusy(at);
+    setGapErr(null);
+    const r = await fetch("/api/admin/assistant-log", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ at, state }),
+    }).catch(() => null);
+    setGapBusy(null);
+    if (!r?.ok) {
+      const d = (await r?.json().catch(() => null)) as { error?: string } | null;
+      setGapErr(d?.error || "That didn't save. Try again.");
+      return;
+    }
+    setGaps((gs) => gs.map((g) => (g.at === at ? { ...g, state: state ?? undefined } : g)));
+  };
 
   if (denied) {
     return (
@@ -272,22 +294,82 @@ export default function AssistantConsole() {
         </p>
         {lines === null ? (
           <p className="mt-4 text-[12.5px] text-muted">Loading…</p>
-        ) : gaps.length === 0 ? (
+        ) : gaps.filter((g) => !g.state).length === 0 ? (
           <p className="mt-4 rounded-xl border border-dashed border-line p-4 text-[12.5px] text-muted">
-            Nothing yet. When somebody asks for something he can&rsquo;t do, it shows here.
+            Nothing open. When somebody asks for something he can&rsquo;t do, it shows here.
           </p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {gaps.map((g) => (
+            {gaps.filter((g) => !g.state).map((g) => (
               <li key={g.at + g.asked} className="rounded-[18px] border border-line/50 bg-white p-4">
-                <p className="text-[14px] font-semibold leading-snug">{g.asked.charAt(0).toUpperCase() + g.asked.slice(1)}</p>
-                <p className="mt-1 text-[12px] text-muted">
-                  {g.who} · {when(g.at)}
-                  {g.why ? ` · needs ${g.why.charAt(0).toLowerCase()}${g.why.slice(1)}` : ""}
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-semibold leading-snug">{g.asked.charAt(0).toUpperCase() + g.asked.slice(1)}</p>
+                    <p className="mt-1 text-[12px] text-muted">
+                      {g.who} · {when(g.at)}
+                      {g.why ? ` · needs ${g.why.charAt(0).toLowerCase()}${g.why.slice(1)}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-1.5">
+                    <button
+                      type="button"
+                      disabled={gapBusy === g.at}
+                      onClick={() => markGap(g.at, "built")}
+                      className="rounded-full border border-line/80 px-3 py-1 text-[12px] font-semibold hover:border-ink/40 disabled:opacity-50"
+                    >
+                      Built
+                    </button>
+                    <button
+                      type="button"
+                      disabled={gapBusy === g.at}
+                      onClick={() => markGap(g.at, "hidden")}
+                      className="rounded-full border border-line/80 px-3 py-1 text-[12px] text-muted hover:border-ink/40 hover:text-ink disabled:opacity-50"
+                    >
+                      Hide
+                    </button>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
+        )}
+        {gapErr && <p className="mt-2 text-[12px] text-red-700">{gapErr}</p>}
+        {gaps.some((g) => g.state) && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowPut((v) => !v)}
+              className="text-[12px] text-muted underline underline-offset-2 hover:text-ink"
+            >
+              {showPut ? "Hide" : "Show"}{" "}
+              {[
+                gaps.filter((g) => g.state === "built").length && `${gaps.filter((g) => g.state === "built").length} built`,
+                gaps.filter((g) => g.state === "hidden").length && `${gaps.filter((g) => g.state === "hidden").length} hidden`,
+              ].filter(Boolean).join(" and ")}
+            </button>
+            {showPut && (
+              <ul className="mt-2 space-y-1.5">
+                {gaps.filter((g) => g.state).map((g) => (
+                  <li key={g.at + g.asked} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line/40 px-3 py-2">
+                    <p className="min-w-0 flex-1 text-[12.5px] text-muted">
+                      <span className="mr-1.5 rounded-full bg-line/40 px-2 py-0.5 text-[11px] font-semibold text-ink">
+                        {g.state === "built" ? "Built" : "Hidden"}
+                      </span>
+                      {g.asked.charAt(0).toUpperCase() + g.asked.slice(1)}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={gapBusy === g.at}
+                      onClick={() => markGap(g.at, null)}
+                      className="shrink-0 text-[12px] text-muted underline underline-offset-2 hover:text-ink disabled:opacity-50"
+                    >
+                      Back on the list
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </section>
 

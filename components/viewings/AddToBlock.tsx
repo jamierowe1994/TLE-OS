@@ -232,6 +232,8 @@ export default function AddToBlock({ anchor, onClose }: { anchor: BlockAnchor | 
           ? `Access: asked for the ${anchor.slot ? "slot" : "first viewing"} and not confirmed yet.`
           : j.blockAccess === "vacant"
             ? "Access: vacant, keys in the office."
+            : j.blockAccess === "lockbox"
+              ? "Access: the lockbox at the property."
             : "Access: not asked yet - ask on the listing.";
     const said = [j.test ? j.said : j.outlook?.ok ? "In your Outlook calendar." : (j.outlook?.detail ?? "Booked."), access].filter(Boolean).join(" ");
     setAdded((cur) => [...cur, { startsAt: start, minutes: length, who: person.name, mine: true }]);

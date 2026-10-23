@@ -23,6 +23,7 @@ import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
 import HomeAgent from "@/components/portfolio/HomeAgent";
 import HomeKeys from "@/components/portfolio/HomeKeys";
+import HomeSource from "@/components/portfolio/HomeSource";
 import ContactBlock from "@/components/ContactBlock";
 import HomeLandlords from "@/components/HomeLandlords";
 import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
@@ -834,7 +835,7 @@ export default function PropertyPage() {
                 <p className="mt-1.5 text-[14px] text-muted">{noRent}</p>
               ) : null}
               <p className="mt-1 text-[13px] text-muted">{sub}</p>
-              {!/^pm-/i.test(String(propertyId ?? "")) && <OsAddressLine propertyId={propertyId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />}
+              <OsAddressLine propertyId={propertyId} listingId={p.listingId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />
               {house && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
@@ -924,6 +925,8 @@ export default function PropertyPage() {
                 <Info icon="clock" label="On the books since" text={day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince)} />
                 {/* Sean McMahon, 20 Oct 2026: the key numbers, from REX's key register. */}
                 {!p.test && <HomeKeys propertyId={p.propertyId} />}
+                {/* Sean McMahon, 21 Oct 2026: a re-let refused for want of a Source, settable here. */}
+                {!p.test && p.onRex !== false && <HomeSource propertyId={p.propertyId} />}
               </div>
 
               {/* How it stands: one chip per board, each opens its section. */}
@@ -1431,15 +1434,34 @@ function TenancyLine({ t, long = false }: { t: { startDate: string | null; endDa
 
 /** A tenant or the landlord: the same block as every person in the OS, changeable
  *  where REX knows them (James, 12 Oct 2026). REX PM's own tenants carry no REX
- *  contact, so theirs is read only. */
+ *  contact, so theirs save to the OS's own row (Sean McMahon, 21 Oct 2026:
+ *  Megan at 3 Oak Place) - email and number, not the name. */
 function PartyCard({ p, plain = false, role, home, about }: { p: Party; plain?: boolean; role?: string; home?: { propertyAddress?: string | null }; about?: string }) {
+  const rexId = /^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null;
+  const pmRef = /^rexpm:[^:]+:\d+$/.test(String(p.contactId ?? "")) ? String(p.contactId) : null;
+  const held = useRef({ email: p.email ?? "", phone: p.phone ?? "" });
+  const saver = pmRef
+    ? async (field: "name" | "email" | "phone", value: string) => {
+        if (field === "name") return { ok: false, error: "Their name comes from the tenancy record, so it can't be changed here." };
+        const r = await fetch("/api/people/contact", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ref: pmRef, tenantName: p.name, [field]: value, keep: held.current }),
+        }).catch(() => null);
+        const j = (await r?.json().catch(() => null)) as { ok?: boolean; error?: string; sync?: { detail?: string } } | null;
+        if (!j?.ok) return { ok: false, error: j?.error ?? "That didn't save. Try again." };
+        held.current = { ...held.current, [field]: value };
+        return { ok: true, detail: j.sync?.detail };
+      }
+    : undefined;
   const body = (
     <ContactBlock
       role={role}
       home={home}
       about={about}
       person={{ name: p.name, email: p.email, phone: p.phone }}
-      personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
+      personRef={rexId}
+      saver={saver}
     />
   );
   if (plain) return body;

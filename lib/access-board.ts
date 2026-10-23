@@ -50,6 +50,7 @@ type ViewRow = { id: string; listing_id: string; property_id: string | null; sta
 const stateOf = (a: Access | null, viewingId: string): { state: AccessState; through: string | null; askedAt: string | null } => {
   if (!a || !a.kind) return { state: "none", through: null, askedAt: null };
   if (a.kind === "vacant") return { state: a.keysCollected ? "sorted" : "keys", through: "Vacant, our keys", askedAt: null };
+  if (a.kind === "lockbox") return { state: a.lockboxCode ? "sorted" : "keys", through: "Lockbox", askedAt: null };
   const r = (a.requests ?? {})[viewingId];
   const through = `${a.kind === "tenant" ? "The tenant" : "The landlord"}${a.name ? `, ${a.name}` : ""}`;
   if (r?.grantedAt) return { state: "sorted", through, askedAt: r.requestedAt };

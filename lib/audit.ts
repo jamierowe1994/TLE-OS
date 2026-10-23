@@ -125,7 +125,16 @@ export type AuditKind =
   /* A let's guarantors and an owner's Repush, to its Propoly deal (22 Oct
      2026, lib/deal-guarantors, lib/propoly-repush): practice or live, what went. */
   | "propoly_guarantors_sent"
-  | "propoly_repush";
+  | "propoly_repush"
+  /* An appraisal tidied off the board or a test one deleted (23 Oct 2026,
+     lib/appraisal-tidy): who, which and why. */
+  | "appraisal_archived"
+  | "appraisal_deleted"
+  /* A REX PM tenant's email or number changed on the home's page (23 Oct
+     2026, lib/tenant-contacts saveTenantContact): OS only, before and after. */
+  | "tenant_contact_saved"
+  /* A home's Source picked on its page (23 Oct 2026, /api/homes/source). */
+  | "rex_property_source_set";
 
 export interface AuditRow {
   id: string;

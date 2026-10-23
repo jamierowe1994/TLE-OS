@@ -129,6 +129,10 @@ export interface MarketAppraisal {
   cancelledAt?: string | null;
   cancelledWas?: string | null;
   cancelledBy?: string | null;
+  /** Tidied off the board by hand (23 Oct 2026): kept, finished, and Bring back puts it where it was. */
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archivedWhy?: string | null;
   createdAt: string;
   /** Attached by the list API: the stage read from the record (lib/appraisal-stage)
    *  and one line saying why. Absent on a bare row. */

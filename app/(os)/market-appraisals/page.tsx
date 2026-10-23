@@ -142,7 +142,11 @@ export default function MarketAppraisals() {
      they are not the same kind of thing: one is this agent's actual work and
      the other is furniture. Concatenating them and sorting by urgency would
      bury a real appraisal among stand-ins. */
-  const all = useMemo(() => live ?? [], [live]);
+  /* Archived by hand (Tidy away, 23 Oct 2026) is off every tab and kept
+     behind its own Archived list, where the file's Bring back undoes it. */
+  const [showArchived, setShowArchived] = useState(false);
+  const archived = useMemo(() => (live ?? []).filter((m) => m.archivedAt), [live]);
+  const all = useMemo(() => (live ?? []).filter((m) => !m.archivedAt), [live]);
 
   const rows = useMemo(() => {
     const needle = q.trim();
@@ -151,10 +155,16 @@ export default function MarketAppraisals() {
       .filter((m) => inPeriod(m.appointmentAt, period))
       .filter((m) => !needle || searchMatches(needle, m.address, m.postcode, m.landlord, m.agent));
     const open = withStage.filter((m) => m.live !== "won" && m.live !== "lost");
+    if (showArchived) {
+      return archived
+        .map((m) => ({ ...m, live: effectiveStage(m) }))
+        .filter((m) => !needle || searchMatches(needle, m.address, m.postcode, m.landlord, m.agent))
+        .sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
+    }
     return (filter === "open" ? open : withStage.filter((m) => m.live === filter)).sort(
       (a, b) => urgencyOf(a) - urgencyOf(b)
     );
-  }, [filter, all, period, q]);
+  }, [filter, all, archived, showArchived, period, q]);
 
   /* Arriving from Leads: booking an appraisal sends the agent here with
      ?open=<id>, and we forward to that appraisal's file.
@@ -264,7 +274,7 @@ export default function MarketAppraisals() {
         label="Appraisal stages"
         allId="open"
         value={filter}
-        onChange={setFilter}
+        onChange={(v) => { setFilter(v); setShowArchived(false); }}
         stages={[
           { id: "open" as const, label: "All open", icon: "analytics", count: openCount, blurb: "Everything still in play" },
           ...OPEN_STAGES.map((st) => ({
@@ -279,13 +289,18 @@ export default function MarketAppraisals() {
       <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="hand text-[17px]">
-            {filter === "open" ? "Open appraisals" : MA_STAGES.find((s) => s.id === filter)?.label}
+            {showArchived ? "Archived" : filter === "open" ? "Open appraisals" : MA_STAGES.find((s) => s.id === filter)?.label}
             <span className="figures ml-2 text-[14px] text-muted">{rows.length}</span>
           </h2>
           <span className="flex items-center gap-3">
-            {filter !== "open" && (
-              <button type="button" onClick={() => setFilter("open")} className="text-[11.5px] text-muted underline">
+            {(filter !== "open" || showArchived) && (
+              <button type="button" onClick={() => { setFilter("open"); setShowArchived(false); }} className="text-[11.5px] text-muted underline">
                 Show all open
+              </button>
+            )}
+            {archived.length > 0 && !showArchived && (
+              <button type="button" onClick={() => setShowArchived(true)} className="text-[11.5px] text-muted underline">
+                Archived ({archived.length})
               </button>
             )}
             <ListSearch value={q} onChange={setQ} placeholder="Address, postcode, landlord…" />
@@ -297,7 +312,7 @@ export default function MarketAppraisals() {
           <BoardSkeleton kind={view === "tiles" ? "cards" : "rows"} label="Fetching the appraisals…" count={view === "tiles" ? 6 : 5} />
         ) : rows.length === 0 && loadError ? null : rows.length === 0 ? (
           <p className="py-6 text-[12.5px] text-muted">
-            Nothing at this stage{period === "any" ? "" : " in that date range"}.
+            {showArchived ? "Nothing archived matches that." : <>Nothing at this stage{period === "any" ? "" : " in that date range"}.</>}
           </p>
         ) : (
           /* A row opens the FILE, not a drawer. An appraisal is lived in for

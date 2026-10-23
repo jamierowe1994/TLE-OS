@@ -22,7 +22,10 @@ import DoodleIcon from "@/components/DoodleIcon";
  * tab - read everywhere, and still there when the home is re-let.
  */
 
-export type AccessKind = "vacant" | "tenant" | "landlord";
+/* Lockbox (Sean McMahon, 22 Oct 2026): "add 'Lockbox' as a way to gain
+   access, and add a box for the lockbox code". Like vacant, nobody is asked:
+   whoever goes uses the code. */
+export type AccessKind = "vacant" | "tenant" | "landlord" | "lockbox";
 
 export interface AccessRequestRecord {
   viewingId: string;
@@ -41,11 +44,17 @@ export interface Access {
   phone: string;
   /** Vacant: the keys are in the office. */
   keysCollected: boolean;
+  /** Lockbox: its code, and where on the property it is. */
+  lockboxCode?: string;
+  lockboxWhere?: string;
   /** Access asked for, by viewing. */
   requests: Record<string, AccessRequestRecord>;
 }
 
-export const NO_ACCESS: Access = { kind: null, name: "", email: "", phone: "", keysCollected: false, requests: {} };
+export const NO_ACCESS: Access = { kind: null, name: "", email: "", phone: "", keysCollected: false, lockboxCode: "", lockboxWhere: "", requests: {} };
+
+/** Nobody to ask: the keys are ours or in a lockbox. */
+export const selfAccess = (k: AccessKind | null | undefined) => k === "vacant" || k === "lockbox";
 
 /** A viewing already in the diary, for the request to hang off. */
 export interface ViewingOption {
@@ -58,6 +67,7 @@ const KINDS: { id: AccessKind; label: string; sub: string; icon: string }[] = [
   { id: "vacant", label: "Vacant", sub: "Nobody living there. We hold the keys.", icon: "key" },
   { id: "tenant", label: "Through the tenant", sub: "Somebody lives there and we ask them.", icon: "user" },
   { id: "landlord", label: "Through the landlord", sub: "The landlord lets us in, or arranges it.", icon: "home" },
+  { id: "lockbox", label: "Lockbox", sub: "The keys are in a lockbox at the property.", icon: "lock" },
 ];
 
 const firstName = (n: string) => n.trim().split(/\s+/)[0] ?? "";
@@ -133,16 +143,18 @@ export default function AccessRequest({
       ? "Request access"
       : access.kind === "vacant"
         ? access.keysCollected ? "Keys in the office" : "Vacant · take keys"
+        : access.kind === "lockbox"
+          ? access.lockboxCode ? `Lockbox · ${access.lockboxCode}` : "Lockbox · add the code"
         : access.kind === "tenant"
           ? "Ask the tenant for access"
           : access.kind === "landlord"
             ? "Ask the landlord for access"
             : "Request access";
 
-  const icon = access.kind === "vacant" ? "key" : access.kind ? "mail" : "lock";
+  const icon = access.kind === "vacant" ? "key" : access.kind === "lockbox" ? "lock" : access.kind ? "mail" : "lock";
 
   function press() {
-    if (!access.kind) return setChoosing(true);
+    if (!access.kind || access.kind === "lockbox") return setChoosing(true);
     if (access.kind === "vacant") return setAccess({ ...access, keysCollected: !access.keysCollected });
     setComposing(true);
   }
@@ -172,7 +184,7 @@ export default function AccessRequest({
         </AccessSheet>
       )}
 
-      {composing && access.kind && access.kind !== "vacant" && (
+      {composing && access.kind && !selfAccess(access.kind) && (
         <AccessSheet title={access.kind === "tenant" ? "Ask the tenant for access" : "Ask the landlord for access"} onClose={() => setComposing(false)} wide>
           <AccessComposer
             access={access}
@@ -222,7 +234,7 @@ export function AccessSettings({
   const field = "h-10 w-full rounded-xl border border-line/70 bg-white px-3.5 text-[13px] outline-none focus:border-ink";
   return (
     <div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         {KINDS.map((k) => {
           const on = value.kind === k.id;
           return (
@@ -239,7 +251,7 @@ export function AccessSettings({
           );
         })}
       </div>
-      {value.kind && value.kind !== "vacant" && (
+      {value.kind && !selfAccess(value.kind) && (
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <label className="block">
             <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Name</span>
@@ -260,6 +272,18 @@ export function AccessSettings({
           <input type="checkbox" checked={value.keysCollected} onChange={(e) => onChange({ ...value, keysCollected: e.target.checked })} className="h-4 w-4 accent-[var(--brown)]" />
           The keys are in the office
         </label>
+      )}
+      {value.kind === "lockbox" && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <label className="block">
+            <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Lockbox code</span>
+            <input className={field} value={value.lockboxCode ?? ""} autoComplete="off" placeholder="e.g. 4821" onChange={(e) => onChange({ ...value, lockboxCode: e.target.value.slice(0, 40) })} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Where it is</span>
+            <input className={field} value={value.lockboxWhere ?? ""} placeholder="e.g. Left of the front door" onChange={(e) => onChange({ ...value, lockboxWhere: e.target.value.slice(0, 120) })} />
+          </label>
+        </div>
       )}
       {onDone && (
         <div className="mt-5 flex justify-end">

@@ -20,7 +20,7 @@ import { Tag } from "@/components/ListingTags";
 import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
 import { accessKeyFor } from "@/lib/access-key";
 import ViewingSheet from "@/components/listing/ViewingSheet";
-import AccessRequest, { AccessSettings, NO_ACCESS, type Access } from "@/components/listing/AccessRequest";
+import AccessRequest, { AccessSettings, NO_ACCESS, selfAccess, type Access } from "@/components/listing/AccessRequest";
 import DropZone, { type DropKind } from "@/components/listing/DropZone";
 import { LISTING_BOOKER_LIVE } from "@/lib/viewing-sends";
 import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
@@ -1089,6 +1089,7 @@ function ListingDrawerBody({
           {!past && !v.cancelled && (() => {
             const r = (access.requests ?? {})[v.id];
             if (access.kind === "vacant") return <Tag tone={access.keysCollected ? "good" : "neutral"}>{access.keysCollected ? "Keys in" : "Keys to collect"}</Tag>;
+            if (access.kind === "lockbox") return <Tag tone={access.lockboxCode ? "good" : "accent"}>{access.lockboxCode ? "Lockbox" : "Lockbox code to add"}</Tag>;
             if (!access.kind) return <Tag tone="accent">No access details</Tag>;
             if (r?.grantedAt) return <Tag tone="good">Access confirmed</Tag>;
             return <Tag tone="accent">{r ? "Access asked" : "Access to ask"}</Tag>;
@@ -1290,7 +1291,7 @@ function ListingDrawerBody({
   };
   const needsOf: Record<TabKey, boolean> = {
     viewings:
-      (viewings?.upcoming ?? []).some((v) => !v.cancelled && access.kind && access.kind !== "vacant" && !(access.requests ?? {})[v.id]?.grantedAt) ||
+      (viewings?.upcoming ?? []).some((v) => !v.cancelled && access.kind && !selfAccess(access.kind) && !(access.requests ?? {})[v.id]?.grantedAt) ||
       (viewings?.past ?? []).some((v) => !v.cancelled && !v.feedbackId),
     enquiries: (enquiries?.length ?? 0) > 0,
     applications: openOffers > 0,
@@ -1415,7 +1416,7 @@ function ListingDrawerBody({
             <p className="mt-1 text-[13px] text-muted">
               {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
             </p>
-            <OsAddressLine propertyId={listing.propertyId} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} />
+            <OsAddressLine propertyId={listing.propertyId ? String(listing.propertyId) : null} listingId={String(listing.id)} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} />
             {/* The key numbers, from REX's key register (James, 22 Oct 2026). */}
             {Number(listing.id) > 0 && listing.propertyId && (
               <div className="mt-3">
@@ -1655,7 +1656,7 @@ function ListingDrawerBody({
                 <p className="text-[12px] text-muted">Reading…</p>
               ) : !access.kind ? (
                 <div>
-                  <p className="text-[12.5px] text-muted">Not recorded yet: vacant, through the tenant, or through the landlord.</p>
+                  <p className="text-[12.5px] text-muted">Not recorded yet: vacant, through the tenant, through the landlord, or a lockbox.</p>
                   <button type="button" onClick={() => setEditingAccess(true)} className="mt-2.5 rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40">
                     Choose how we get in
                   </button>
@@ -1664,6 +1665,14 @@ function ListingDrawerBody({
                 <div className="text-[13px]">
                   <p className="font-semibold">Vacant</p>
                   <p className="mt-0.5 text-[12px] text-muted">{access.keysCollected ? "The keys are in the office." : "The keys still need collecting."}</p>
+                </div>
+              ) : access.kind === "lockbox" ? (
+                <div className="text-[13px]">
+                  <p className="font-semibold">Lockbox</p>
+                  <p className="mt-0.5 text-[12px] text-muted">
+                    {access.lockboxCode ? <>Code <b className="font-semibold text-ink">{access.lockboxCode}</b></> : "No code recorded yet."}
+                    {access.lockboxWhere ? ` · ${access.lockboxWhere}` : ""}
+                  </p>
                 </div>
               ) : access.kind === "tenant" ? (
                 <div className="text-[13px]">
@@ -2682,6 +2691,8 @@ function ListingDrawerBody({
               contacts: v.contacts,
             }}
             address={listing.name}
+            propertyId={listing.propertyId ? String(listing.propertyId) : null}
+            listingId={String(listing.id)}
             agent={me}
             access={access}
             onAccess={setAccess}

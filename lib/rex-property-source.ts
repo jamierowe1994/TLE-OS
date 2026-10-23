@@ -114,7 +114,7 @@ export const wantsSource = (error: string | null | undefined) => /select a sourc
  */
 export async function fillPropertySource(propertyId: string, token: string | null, leadSource?: string | null): Promise<SourceOutcome> {
   const source = rexSourceFor(leadSource);
-  const words = "This home has no Source yet - how the landlord came to us - and a listing can't be made without one. Ask the office to add it, then try again.";
+  const words = "This home has no Source yet - how the landlord came to us - and a listing can't be made without one. Pick it under Source on the home's Portfolio page (or ask the office), then try again.";
   const switchedOn = await switchOn("rex_property_source").catch(() => false);
   if (!switchedOn || rexWritesLocked("CustomFields", "setFieldValues")) {
     return {
@@ -156,4 +156,32 @@ export async function fillPropertySource(propertyId: string, token: string | nul
   }
   noteFailure({ source: "REX", what: "CustomFields/setFieldValues (Source)", status: res.status || null, message: why });
   return { ok: false, reason: "refused", detail: words, ownerDetail: `Setting the property's Source was refused: ${why}` };
+}
+
+/**
+ * Picked by a person on the home's page (Sean McMahon, 21 Oct 2026: "Re-let
+ * 68 Main Street: blocked because the home has no Source. Agent can't add it
+ * and neither can Steve"). Same field and same switches as the automatic
+ * fill above, but the agent chooses the value, and a Source already there can
+ * be corrected. As the agent; as the office when REX refuses the agent and
+ * "Source written by the office" is on.
+ */
+export async function setPropertySource(propertyId: string, source: string, token: string | null): Promise<{ ok: true } | { ok: false; detail: string }> {
+  if (!(REX_SOURCES as readonly string[]).includes(source)) return { ok: false, detail: "Pick one of the sources on the list." };
+  if (!(await switchOn("rex_property_source").catch(() => false)) || rexWritesLocked("CustomFields", "setFieldValues")) {
+    return { ok: false, detail: "Setting the Source from here isn't switched on. Ask the office to add it." };
+  }
+  const write = (asToken: string | null) =>
+    rexCall("CustomFields", "setFieldValues", { service_name: "Properties", service_object_id: Number(propertyId), value_map: { [SOURCE_FIELD]: source } }, asToken).catch(
+      (e: Error) => ({ ok: false, error: e.message, status: 0, result: null })
+    );
+  const res = await write(token);
+  if (res.ok) return { ok: true };
+  console.warn(`[rex-property-source] the agent's Source pick on property ${propertyId} was refused: ${res.error ?? res.status}`);
+  if (token && (await switchOn("rex_property_source_office").catch(() => false))) {
+    const office = await write(null);
+    if (office.ok) return { ok: true };
+  }
+  noteFailure({ source: "REX", what: "CustomFields/setFieldValues (Source, picked)", status: res.status || null, message: `${res.error ?? res.status}` });
+  return { ok: false, detail: "The back office wouldn't take the Source from your login. The office can add it, and James has been told." };
 }

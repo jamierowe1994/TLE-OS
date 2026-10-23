@@ -863,6 +863,15 @@ function Now({
   const recordVisited = async (at: string | undefined) => {
     if (await onMove({ action: "visited", at, inspector: inspection.inspector || me?.name || "" }, "Visit")) onRecord("checks");
   };
+  /* Done and closed on its day, no room questions (Kayleigh Wright, 16 Oct
+     2026: "Record it as done" bounced back to Safety & checks every time, and
+     the visit stayed open - so the home stayed on Due). The checks are still
+     there for whoever wants them, one link down. */
+  const [withChecks, setWithChecks] = useState(false);
+  const recordDone = async (at: string | undefined) => {
+    if (!(await onMove({ action: "visited", at, inspector: inspection.inspector || me?.name || "" }, "Visit"))) return;
+    await onMove({ action: "close" }, "Close");
+  };
   /* Already been (6 Oct 2026): a visit made before it was booked here - the
      team moving across from the old system - is recorded on its real day
      without inventing a booking first. */
@@ -872,8 +881,13 @@ function Now({
       {already ? (
         <>
           <p className="mb-2 text-[12px] text-muted">Already been? Record it on the day it was done.</p>
-          <VisitedForm busy={busy} label="Record it as done" onSave={(at) => void recordVisited(at)} />
-          <button type="button" onClick={() => setAlready(false)} className="mt-2 text-[11.5px] text-muted underline">Cancel</button>
+          <VisitedForm busy={busy} label={withChecks ? "Record it, then the checks" : "Record it as done"} onSave={(at) => void (withChecks ? recordVisited(at) : recordDone(at))} />
+          <div className="mt-2 flex flex-wrap gap-3">
+            <button type="button" onClick={() => setWithChecks((v) => !v)} className="text-[11.5px] text-muted underline">
+              {withChecks ? "Just record it as done" : "Record it and go through the room checks"}
+            </button>
+            <button type="button" onClick={() => setAlready(false)} className="text-[11.5px] text-muted underline">Cancel</button>
+          </div>
         </>
       ) : (
         <button type="button" onClick={() => setAlready(true)} className="text-[11.5px] text-muted underline">Already been? Record the visit</button>

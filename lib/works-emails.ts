@@ -14,6 +14,10 @@ import { getLandlordPref, landlordHold } from "@/lib/landlord-prefs";
 import { propertyAgentFor } from "@/lib/works-property-agent";
 import { invoiceSettings } from "@/lib/invoices";
 import { withR2, R2_BUCKET, r2Configured } from "@/lib/r2";
+import { homePeople } from "@/lib/home-people";
+import { keyNumbersFor, rexIdOf } from "@/lib/home-keys";
+import { accessLineFor } from "@/lib/viewing-brief";
+import type { JobTenant } from "@/lib/works-orders";
 
 /**
  * The emails a job sends as it moves: to the contractor, the tenant and the
@@ -91,9 +95,38 @@ const day = (iso: string | null) =>
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
 
+/**
+ * WHAT THE HOME ITSELF SAYS ABOUT GETTING IN (Sean McMahon, 22 Oct 2026: a
+ * quote request went with no tenant or access, and the contractor asked why
+ * they had been sent it). The job's own tenants and access notes come first;
+ * where the job holds none (taken on from the old system, or raised before
+ * the tenants were on it) the home's sitting tenants and access notes are
+ * read, and the key numbers we hold and a lockbox are always added. Never
+ * throws: an email with less in it beats no email.
+ */
+async function homeAccessFor(o: WorksOrder): Promise<{ tenants: JobTenant[]; access: string }> {
+  if (!o.propertyId) return { tenants: [], access: "" };
+  const needPeople = !tenantsOf(o).length || !o.access;
+  const [people, rexId, keys] = await Promise.all([
+    needPeople ? homePeople(o.propertyId).catch(() => null) : Promise.resolve(null),
+    rexIdOf(o.propertyId).catch(() => null),
+    keyNumbersFor(o.propertyId).catch(() => ""),
+  ]);
+  /* The viewing access record says vacant-with-our-keys or a lockbox code;
+     the tenant/landlord kinds are about viewings and are left out. */
+  const viewing = await accessLineFor(null, rexId ?? o.propertyId).catch(() => null);
+  const self = viewing && /^(Vacant|Lockbox)/.test(viewing) ? viewing : "";
+  return {
+    tenants: (people?.tenants ?? []).map((t) => ({ name: t.name, phone: t.phone ?? "", email: t.email ?? "", ...(t.room ? { room: t.room } : {}) })),
+    access: [o.access ? "" : people?.access ?? "", self, keys ? `We hold keys in the office (${keys}).` : ""].map((x) => x.trim()).filter(Boolean).join(" "),
+  };
+}
+
 async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string>> {
   const c = await contractorOf(o.contractorId);
   const phone = await agentPhone(me.id);
+  const home = await homeAccessFor(o).catch(() => ({ tenants: [] as JobTenant[], access: "" }));
+  const tenants = tenantsOf(o).length ? tenantsOf(o) : home.tenants;
   return {
     ref: String(o.ref),
     title: o.title,
@@ -111,10 +144,10 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     contractorPhone: c?.phone ?? "",
     /* The name and the number are their own fields now. The old rows kept
        both in `tenant`, so those still get picked apart. */
-    tenantName: first(o.tenant.replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "")),
-    tenantPhone: o.tenantPhone || (o.tenant.match(/\+?\d[\d\s]{6,}\d/) ?? [""])[0].trim(),
+    tenantName: first((o.tenant || tenants[0]?.name || "").replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "")),
+    tenantPhone: o.tenantPhone || (o.tenant.match(/\+?\d[\d\s]{6,}\d/) ?? [""])[0].trim() || tenants[0]?.phone || "",
     landlordName: first(o.landlord),
-    access: o.access || "none recorded",
+    access: [o.access, home.access].map((x) => (x ?? "").trim()).filter(Boolean).join(" ") || "none recorded - ring us and we'll arrange it",
     description: o.description || "",
     quote: pounds(o.quotePence),
     authority: pounds(o.authorityPence),
@@ -128,7 +161,7 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     contractorLink: `${ORIGIN}/contractor/${o.contractorToken ?? ""}`,
     /* The planned works order's own four (works-contractor-planned). */
     dueDay: day(o.dueAt),
-    tenantsList: tenantsOf(o).map((t) => [`${esc(t.name || "Tenant")}${t.room ? ` (${esc(t.room)})` : ""}`, esc(t.phone), esc(t.email)].filter(Boolean).join(" · ")).join("<br>") || "None on file - ring us and we'll arrange access.",
+    tenantsList: tenants.map((t) => [`${esc(t.name || "Tenant")}${t.room ? ` (${esc(t.room)})` : ""}`, esc(t.phone), esc(t.email)].filter(Boolean).join(" · ")).join("<br>") || "None on file - ring us and we'll arrange access.",
     bookingLine: o.scheduledAt
       ? `It's already booked for <strong>${esc(when(o.scheduledAt))}</strong>. If that changes, tell us on the same page.`
       : "Once you've agreed a time with the tenants, press the button and tell us the date and time.",
