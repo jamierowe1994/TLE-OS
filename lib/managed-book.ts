@@ -763,7 +763,8 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
        whose tenancy never went ahead - lib/business/payprop-tenant-contacts
        pastOnlyPeople). Where that leaves nobody, PayProp's own current
        tenancy on the home names who is, if it holds one. */
-    const named = o.tenantNames.split(/\s*[,;]\s*/).filter(Boolean);
+    const parts = splitTenantNames(o.tenantNames);
+    const named = parts.map((x) => x.name);
     /* Not on a Let Only home (James, 23 Oct 2026): PayProp takes the first
        month's rent on a tenant find and then ends the tenancy, so every
        sitting tenant there reads as past. 85 homes showed nobody living in
@@ -777,7 +778,10 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
         .filter(Boolean);
     }
     p.tenants = names.map((name, i) => {
-      const c = known?.get(nameKey(name));
+      /* A contact held under the pair's joined name ("Lorna McLeod & Calum
+         More") is the first-named person's, as PayProp's joint record is. */
+      const joint = parts.find((x) => x.name === name)?.jointFirst;
+      const c = known?.get(nameKey(name)) ?? (joint ? known?.get(nameKey(joint)) : undefined);
       return { contactId: `rexpm:${o.id}:${i}`, name, email: c?.email ?? null, phone: c?.phone ?? null };
     });
   }
@@ -873,4 +877,29 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     counts,
     pulledAt: new Date().toISOString(),
   };
+}
+
+/**
+ * The names on a home's record, one person each (Sean McMahon, 23 Oct 2026:
+ * Flat 0/1/3 Lemmon Street). REX PM writes a joint tenancy as one name,
+ * "Lorna McLeod & Calum More", and the OS showed it as one tenant with one
+ * email and one number - so the second tenant's details had nowhere to go,
+ * on the home or on a contractor's job. 26 homes held a pair like that.
+ *
+ * Split on commas, then on "&" or "and" - but only where both sides are full
+ * names. "Adewale & Naheemat Salam" shares a surname and stays as written.
+ * `jointFirst` is the joined name on the first person of a pair, so a contact
+ * saved under the joined name still finds them.
+ */
+export function splitTenantNames(s: string): Array<{ name: string; jointFirst: string | null }> {
+  const out: Array<{ name: string; jointFirst: string | null }> = [];
+  for (const piece of s.split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean)) {
+    const halves = piece.split(/\s+(?:&|and)\s+/i).map((x) => x.trim()).filter(Boolean);
+    if (halves.length > 1 && halves.every((h) => h.split(/\s+/).length >= 2)) {
+      halves.forEach((h, i) => out.push({ name: h, jointFirst: i === 0 ? piece : null }));
+    } else {
+      out.push({ name: piece, jointFirst: null });
+    }
+  }
+  return out;
 }
