@@ -221,10 +221,11 @@ export default function PlcSplitReview({
       <div className="shrink-0 border-b border-line/60 px-5 py-4 sm:px-7">{head}</div>
 
       <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:overflow-hidden">
-        {/* ── left: who, and their documents ── */}
-        <div className="bg-[#2b201d] text-white lg:min-h-0 lg:overflow-y-auto" data-plc="split-left">
-          <div className="sticky top-0 z-10 bg-[#2b201d] px-4 pb-3 pt-4 sm:px-6">
-            <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-white/10 p-1.5" role="tablist">
+        {/* ── left: who, and their documents ──
+            White with outlined boxes (James, 23 Oct 2026): it was dark brown. */}
+        <div className="bg-page text-ink lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-line/60" data-plc="split-left">
+          <div className="sticky top-0 z-10 bg-page px-4 pb-3 pt-4 sm:px-6">
+            <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-line/70 bg-box p-1.5" role="tablist">
               {(["landlord", "tenant"] as Group[]).map((g) => {
                 const p = progress(g);
                 const on = tab === g;
@@ -235,10 +236,10 @@ export default function PlcSplitReview({
                     role="tab"
                     aria-selected={on}
                     onClick={() => setTab(g)}
-                    className={`rounded-xl px-3 py-2.5 text-left transition ${on ? "bg-white text-ink" : "text-white/80 hover:bg-white/10"}`}
+                    className={`rounded-xl px-3 py-2.5 text-left transition ${on ? "bg-ink text-page" : "text-ink/80 hover:bg-card"}`}
                   >
                     <span className="block text-[14px] font-semibold">{g === "landlord" ? "Landlord" : "Tenant"}</span>
-                    <span className={`block text-[11.5px] ${on ? "text-muted" : "text-white/60"}`}>
+                    <span className={`block text-[11.5px] ${on ? "text-page/70" : "text-muted"}`}>
                       {p.done} of {p.total} checked{p.no ? ` · ${p.no} no` : ""}
                     </span>
                   </button>
@@ -255,7 +256,7 @@ export default function PlcSplitReview({
               empty={tab === "landlord" ? people.problem ?? "No landlord is held for this let." : "No tenants are held for this let."}
             />
 
-            <section className="rounded-[18px] bg-card text-ink">
+            <section className="rounded-[18px] border border-line/70 bg-card text-ink">
               <div className="flex items-center justify-between gap-3 border-b border-line/60 px-5 py-4">
                 <Head icon="doc" title={tab === "landlord" ? "Landlord Documents" : "Tenant Documents"} />
                 <span className="hidden text-[12px] text-muted sm:inline">Is each one right?</span>
@@ -278,7 +279,7 @@ export default function PlcSplitReview({
             </section>
 
             {tab === "tenant" && (
-              <section className="rounded-[18px] bg-card px-5 py-4 text-ink" data-plc="tenant-answers">
+              <section className="rounded-[18px] border border-line/70 bg-card px-5 py-4 text-ink" data-plc="tenant-answers">
                 <Head icon="user" title="Tenant Answers" />
                 <p className="mb-3 mt-1.5 text-[12px] text-muted">What the tenants told us, in the order the Propoly deal asks for it.</p>
                 <TenantAnswersBody state={answers} />
@@ -325,7 +326,7 @@ export default function PlcSplitReview({
 
 function PeopleCard({ title, list, state, empty }: { title: string; list: Party[]; state: PeopleState; empty: string }) {
   return (
-    <section className="rounded-[18px] bg-card px-5 py-4 text-ink">
+    <section className="rounded-[18px] border border-line/70 bg-card px-5 py-4 text-ink">
       <Head icon="user" title={title} />
       {state.loading ? (
         <div className="mt-3 flex items-center gap-3 text-[13px] text-muted" role="status">
