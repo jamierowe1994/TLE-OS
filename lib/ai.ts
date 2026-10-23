@@ -54,6 +54,7 @@ export type AiFeature =
   | "library-reader"
   | "plc-scan"
   | "plc-sorter"
+  | "plc-summary"
   | "cert-reader"
   | "cert-register"
   | "epc-reader"
@@ -88,6 +89,11 @@ export const AI_FEATURES: Record<AiFeature, Spec> = {
   "library-reader": { label: "Marketing library reader", key: "LIBRARY_READER", model: "claude-sonnet-5-5", effort: "high", voice: "steve" },
   "plc-scan": { label: "PLC document check", key: "PLC_SCAN", model: "claude-sonnet-5-5", effort: "medium" },
   "plc-sorter": { label: "PLC file sorter", key: "PLC_SORTER", model: "claude-sonnet-5-5", effort: "low", legacy: "PLC_SORTER_MODEL" },
+  /* The few sentences at the top of a pack (23 Oct 2026): the scan's lines
+     read together into pass, fail or look first. The scan's model, at low
+     effort - it reads text, never a file. No head-to-head yet;
+     AI_MODEL_PLC_SUMMARY switches it. */
+  "plc-summary": { label: "PLC summary", key: "PLC_SUMMARY", model: "claude-sonnet-5-5", effort: "low" },
   "cert-reader": { label: "Certificate reader", key: "CERT_READER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },
   "cert-register": { label: "Engineer register reader", key: "CERT_REGISTER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },
   "epc-reader": { label: "EPC reader", key: "EPC_READER", model: "claude-haiku-5-5", effort: "low", legacy: "CERT_READER_MODEL" },

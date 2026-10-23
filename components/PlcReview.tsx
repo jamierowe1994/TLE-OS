@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { CopyButton } from "@/components/Bits";
 import type { AnswerGroup, TenantAnswers } from "@/lib/plc-tenant-answers";
-import { finalAskNow, finalAskSent, gateOf, sentAnywayNow, type Check, type CheckId, type Finding, type PlcCase, type SentAnyway } from "@/lib/plc";
+import { finalAskNow, finalAskSent, gateOf, sentAnywayNow, type Check, type CheckId, type Finding, type PlcAiSummary, type PlcCase, type SentAnyway } from "@/lib/plc";
 
 /**
  * The compliance side of a PLC handover, and the pieces it is built from.
@@ -153,7 +153,7 @@ export function Btn({
   );
 }
 
-function Head({ icon, title, tone = "neutral" }: { icon: string; title: string; tone?: "neutral" | "pink" }) {
+export function Head({ icon, title, tone = "neutral" }: { icon: string; title: string; tone?: "neutral" | "pink" }) {
   return (
     <h2 className="flex items-center gap-2.5 text-[15px] font-bold tracking-normal">
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tone === "pink" ? "bg-white/80 text-[#9d4340]" : "bg-accent-soft text-accent-dark"}`}>
@@ -306,7 +306,7 @@ const PUSH_POLL_MS = 4_000;
 
 /** Renders its own <li>, so the caller keys it and does NOT wrap it — an li
  *  inside an li is a hydration error, not just untidy markup. */
-function FindingRow({ f, checks }: { f: Finding; checks: Check[] }) {
+export function FindingRow({ f, checks }: { f: Finding; checks: Check[] }) {
   const label = checks.find((c) => c.id === f.checkId)?.label ?? f.checkId;
   /* Waiting to read (22 Oct 2026): not a finding about the file, so not
      amber - a quiet dot and the words, until it reads itself. */
@@ -336,7 +336,7 @@ function FindingRow({ f, checks }: { f: Finding; checks: Check[] }) {
 /* ───────────────────────────── tenant answers ──────────────────────────── */
 
 /** One group of answers, each line with its own copy button and the group with Copy All. */
-function AnswerBlock({ g }: { g: AnswerGroup }) {
+export function AnswerBlock({ g }: { g: AnswerGroup }) {
   const all = g.rows.map((r) => `${r.label}: ${r.value}`).join("\n");
   return (
     <div className="mt-3 first:mt-0">
@@ -390,14 +390,13 @@ function CopyAll({ value }: { value: string }) {
  * so the pack itself never waits on it. Open by default once the check is
  * done, when the deal is what comes next; a click away before that.
  */
-function TenantAnswersCard({ c, given, live }: { c: PlcCase; given?: TenantAnswers | null; live: boolean }) {
+/** What the tenants said, read once per pack (or handed in by the preview). */
+export function useTenantAnswers(c: PlcCase, given: TenantAnswers | null | undefined, live: boolean) {
   const [state, setState] = useState<{ answers: TenantAnswers | null; error: string | null; loading: boolean }>({
     answers: given ?? null,
     error: null,
     loading: live && !given,
   });
-  const [open, setOpen] = useState(c.state === "checked" || c.state === "approved");
-
   useEffect(() => {
     if (!live || given) return;
     let on = true;
@@ -409,7 +408,66 @@ function TenantAnswersCard({ c, given, live }: { c: PlcCase; given?: TenantAnswe
       on = false;
     };
   }, [c.id, live, given]);
+  return state;
+}
 
+/** The answers themselves, laid out to copy: the let, then each person. */
+export function TenantAnswersBody({ state }: { state: ReturnType<typeof useTenantAnswers> }) {
+  const a = state.answers;
+  if (state.loading) {
+    return (
+      <div className="flex items-center gap-3 py-2 text-[13px] text-muted" role="status">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
+        Reading the passport, the offer and the application…
+      </div>
+    );
+  }
+  if (state.error) return <Note>{state.error}</Note>;
+  if (!a || (!a.let.length && !a.people.some((p) => p.groups.length))) {
+    return (
+      <p className="text-[13px] text-muted">
+        Nothing from the tenants on file yet: no passport, offer or application answers for the people on this let.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-5">
+      {a.let.length > 0 && (
+        <div>
+          <p className="text-[14px] font-semibold text-ink">The Let</p>
+          {a.from.length > 0 && <p className="text-[12px] text-muted">From {a.from.join(" · ")}</p>}
+          <div className="mt-2">
+            {a.let.map((g) => (
+              <AnswerBlock key={g.title} g={g} />
+            ))}
+          </div>
+        </div>
+      )}
+      {a.people.map((p) => (
+        <div key={p.key} className="rounded-2xl bg-page p-4">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <p className="text-[14px] font-semibold text-ink">{p.name}</p>
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${p.role === "Guarantor" ? "bg-amber-50 text-amber-700" : "bg-accent-soft text-accent-dark"}`}>
+              {p.role}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[12px] text-muted">{p.from.length ? `From ${p.from.join(" · ")}` : "Nothing from them on file yet."}</p>
+          {p.groups.length > 0 && (
+            <div className="mt-3">
+              {p.groups.map((g) => (
+                <AnswerBlock key={g.title} g={g} />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TenantAnswersCard({ c, given, live }: { c: PlcCase; given?: TenantAnswers | null; live: boolean }) {
+  const state = useTenantAnswers(c, given, live);
+  const [open, setOpen] = useState(c.state === "checked" || c.state === "approved");
   if (!live && !given) return null;
   const a = state.answers;
   const tenants = a?.people.filter((p) => p.role !== "Guarantor").length ?? 0;
@@ -442,49 +500,157 @@ function TenantAnswersCard({ c, given, live }: { c: PlcCase; given?: TenantAnswe
 
       {open && (
         <div className="border-t border-line/60 px-5 py-4">
-          {state.loading ? (
-            <div className="flex items-center gap-3 py-2 text-[13px] text-muted" role="status">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
-              Reading the passport, the offer and the application…
-            </div>
-          ) : state.error ? (
+          <TenantAnswersBody state={state} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ──────────────────────────────── AI summary ───────────────────────────── */
+
+const VERDICT: Record<PlcAiSummary["verdict"], { label: string; tone: string; icon: string }> = {
+  pass: { label: "We think it passes", tone: PLC_GREEN, icon: "checklist" },
+  fail: { label: "We think it fails", tone: PLC_RED, icon: "cross" },
+  review: { label: "Check one thing first", tone: PLC_AMBER, icon: "search" },
+};
+
+/**
+ * The AI summary at the top of the pack (James, 23 Oct 2026). "From Richard
+ * Callow", then a few sentences and whether the OS thinks it is a pass or a
+ * fail. Everything the scan found is folded under it, a click away, rather
+ * than ninety lines to scroll past to reach the pack.
+ *
+ * Read from /api/plc/<id>/summary (lib/plc-summary) when the pack opens; the
+ * preview hands its own in.
+ */
+export function AiSummaryCard({
+  c,
+  checks,
+  scanLine,
+  given,
+}: {
+  c: PlcCase;
+  checks: Check[];
+  scanLine: string | null;
+  /** The sample's invented summary. Nothing is asked of the API when given. */
+  given?: PlcAiSummary | null;
+}) {
+  const [state, setState] = useState<{ summary: PlcAiSummary | null; error: string | null; loading: boolean }>({
+    summary: given ?? null,
+    error: null,
+    loading: !given,
+  });
+  const [all, setAll] = useState(false);
+
+  const load = async (again: boolean) => {
+    if (given) return;
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const r = await api<{ summary: PlcAiSummary | null }>(`/api/plc/${encodeURIComponent(c.id)}/summary`, again ? { method: "POST" } : undefined);
+      setState({ summary: r.summary, error: null, loading: false });
+    } catch (e) {
+      setState({ summary: null, error: (e as Error).message, loading: false });
+    }
+  };
+
+  /* Asked again whenever what it reads changes: a fresh scan, a file swapped. */
+  const basisKey = `${c.id}:${c.scannedAt ?? ""}:${c.findings.length}:${c.documents.map((d) => d.key).join(",")}`;
+  useEffect(() => {
+    if (given) {
+      setState({ summary: given, error: null, loading: false });
+      return;
+    }
+    void load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basisKey, given]);
+
+  const s = state.summary;
+  const v = s ? VERDICT[s.verdict] : null;
+  const n = c.findings.length;
+
+  return (
+    <section className="rounded-[18px] border border-line/70 bg-card" data-plc="ai-summary">
+      <div className="px-5 pb-4 pt-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Head icon="magic-wand" title="AI Summary" />
+            <p className="mt-1.5 text-[12px] text-muted">From {who(c.agentName)}</p>
+          </div>
+          {v && !state.loading && (
+            <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold ${v.tone}`} data-verdict={s?.verdict}>
+              <DoodleIcon name={v.icon} size={13} />
+              {v.label}
+            </span>
+          )}
+        </div>
+
+        {state.loading ? (
+          <div className="mt-4 flex items-center gap-3 text-[13px] text-muted" role="status">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
+            Reading what the scan found{n ? ` (${n} line${n === 1 ? "" : "s"})` : ""}…
+          </div>
+        ) : state.error ? (
+          <div className="mt-3 space-y-2">
             <Note>{state.error}</Note>
-          ) : !a || (!a.let.length && !a.people.some((p) => p.groups.length)) ? (
-            <p className="text-[13px] text-muted">
-              Nothing from the tenants on file yet: no passport, offer or application answers for the people on this let.
-            </p>
-          ) : (
-            <div className="space-y-5">
-              {a.let.length > 0 && (
-                <div>
-                  <p className="text-[14px] font-semibold text-ink">The Let</p>
-                  {a.from.length > 0 && <p className="text-[12px] text-muted">From {a.from.join(" · ")}</p>}
-                  <div className="mt-2">
-                    {a.let.map((g) => (
-                      <AnswerBlock key={g.title} g={g} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {a.people.map((p) => (
-                <div key={p.key} className="rounded-2xl bg-page p-4">
-                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                    <p className="text-[14px] font-semibold text-ink">{p.name}</p>
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${p.role === "Guarantor" ? "bg-amber-50 text-amber-700" : "bg-accent-soft text-accent-dark"}`}>
-                      {p.role}
+            <Btn onClick={() => void load(false)}>Try again</Btn>
+          </div>
+        ) : !s ? (
+          <p className="mt-3 text-[13px] text-muted">Nothing to summarise until the pack has been read.</p>
+        ) : (
+          <>
+            <p className="mt-4 text-[16px] font-semibold leading-snug text-ink">{s.headline}</p>
+            {s.summary && <p className="mt-2 text-[13.5px] leading-relaxed text-ink/80">{s.summary}</p>}
+            {s.points.length > 0 && (
+              <ul className="mt-3 space-y-2">
+                {s.points.map((p, i) => (
+                  <li key={i} className="flex gap-3 text-[13.5px] text-ink">
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${p.level === "blocker" ? "bg-[#c0504a]" : "bg-amber-500"}`} />
+                    <span className="min-w-0">
+                      {p.text}
+                      {p.checkId && <span className="block text-[12px] text-muted">{checks.find((k) => k.id === p.checkId)?.label ?? p.checkId}</span>}
                     </span>
-                  </div>
-                  <p className="mt-0.5 text-[12px] text-muted">{p.from.length ? `From ${p.from.join(" · ")}` : "Nothing from them on file yet."}</p>
-                  {p.groups.length > 0 && (
-                    <div className="mt-3">
-                      {p.groups.map((g) => (
-                        <AnswerBlock key={g.title} g={g} />
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {s.noise && <p className="mt-3 text-[12.5px] text-muted">{s.noise}</p>}
+            <p className="mt-3 text-[11.5px] text-muted">
+              A recommendation, not a decision. Written {prettyWhen(s.at)}.
+              {!given && (
+                <>
+                  {" "}
+                  <button type="button" onClick={() => void load(true)} className="underline underline-offset-2 hover:text-ink">
+                    Write it again
+                  </button>
+                </>
+              )}
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Everything the scan found, folded (James: "if she wants to open out all of the actual scans"). */}
+      {c.scannedAt && (
+        <div className="border-t border-line/60">
+          <button
+            type="button"
+            onClick={() => setAll((o) => !o)}
+            aria-expanded={all}
+            className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left text-[13px] transition hover:bg-page"
+          >
+            <span className="min-w-0">
+              <span className="font-semibold text-ink">{n ? `See everything the scan found (${n})` : "The scan found nothing to flag"}</span>
+              {scanLine && <span className="block text-[12px] text-muted">{scanLine} · read {prettyWhen(c.scannedAt)}</span>}
+            </span>
+            {n > 0 && <span className="shrink-0 rounded-full border border-line/80 px-3 py-1 text-[12px] font-semibold text-ink">{all ? "Hide" : "Show"}</span>}
+          </button>
+          {all && n > 0 && (
+            <ul className="border-t border-line/60">
+              {c.findings.map((f, i) => (
+                <FindingRow key={`${f.checkId}-${i}`} f={f} checks={checks} />
               ))}
-            </div>
+            </ul>
           )}
         </div>
       )}
@@ -498,6 +664,7 @@ export function ComplianceSide({
   onDecided,
   say,
   perform,
+  split,
 }: {
   data: Loaded;
   reload: () => Promise<void>;
@@ -515,6 +682,12 @@ export function ComplianceSide({
    * only place the panel reached for the network on its own.
    */
   perform?: (action: string, extra: Record<string, unknown>) => Promise<void>;
+  /**
+   * The full-screen review (James, 23 Oct 2026): the pack and the tenants'
+   * answers live in the left-hand panel there (components/PlcSplitReview),
+   * and the scan's lines fold under the AI summary at the top.
+   */
+  split?: { summary?: PlcAiSummary | null };
 }) {
   const c = data.case;
   const [busy, setBusy] = useState<string | null>(null);
@@ -585,6 +758,7 @@ export function ComplianceSide({
 
   return (
     <div className="space-y-4">
+      {split && c.scannedAt && <AiSummaryCard c={c} checks={data.checks} scanLine={data.summary} given={split.summary} />}
       {anyway && <SentAnywayCard s={anyway} checks={data.checks} />}
       <section className="rounded-[18px] border border-line/70 bg-card p-5">
         <div className="grid gap-4 sm:grid-cols-4">
@@ -671,7 +845,7 @@ export function ComplianceSide({
         </section>
       )}
 
-      {c.scannedAt && (
+      {c.scannedAt && !split && (
         <section className="rounded-[18px] border border-line/70 bg-card">
           <div className="border-b border-line/60 px-5 py-4">
             <Head icon="search" title="What the scan found" />
@@ -693,6 +867,7 @@ export function ComplianceSide({
         </section>
       )}
 
+      {!split && (
       <section className="rounded-[18px] border border-line/70 bg-card">
         <div className="border-b border-line/60 px-5 py-4">
           <Head icon="doc" title="The pack" />
@@ -768,6 +943,7 @@ export function ComplianceSide({
           })}
         </ul>
       </section>
+      )}
 
       {/* ── Step one: the first check (James, 30 Sep 2026) ──
           Josel reads every document against the pack. Passing it on is not
@@ -923,7 +1099,7 @@ export function ComplianceSide({
 
       {/* What the tenants said, for filling in the Propoly deal (21 Oct 2026).
           The public preview passes its own; anywhere else it is read live. */}
-      <TenantAnswersCard c={c} given={data.tenantAnswers} live={!perform} />
+      {!split && <TenantAnswersCard c={c} given={data.tenantAnswers} live={!perform} />}
 
       {/* ── Into Propoly ──
           The approved pack's files, placed in the deal's document slots so

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
-import { attachDocument, moveDocument, PlcRefused, removeDocument, setCovers, setDocumentLabel } from "@/lib/plc-store";
+import { attachDocument, complianceAttach, moveDocument, PlcRefused, removeDocument, setCovers, setDocumentLabel } from "@/lib/plc-store";
 import { checkById, COVERABLE, missingDocuments, PLC_CHECKS, type CheckId, type FileRead } from "@/lib/plc";
 import { keyIsOurs, r2Configured } from "@/lib/r2";
 import { actorName, currentUser } from "@/lib/plc-actor";
 import { mirrorToFile } from "@/lib/plc-from-file";
+import { can } from "@/lib/roles";
 
 /**
  * POST   /api/plc/<id>/documents  → file an already-uploaded document
@@ -28,7 +29,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean; read?: FileRead | null; hash?: string };
+  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean; read?: FileRead | null; hash?: string; compliance?: boolean; replaceKey?: string | null };
   try {
     body = await req.json();
   } catch {
@@ -69,6 +70,40 @@ export async function POST(req: NextRequest, ctx: Ctx) {
      sign it. */
   if (!keyIsOurs(key)) {
     return NextResponse.json({ ok: false, error: "That file reference isn't one of ours." }, { status: 400 });
+  }
+
+  /* ── Compliance putting a file on the pack (James, 23 Oct 2026) ───────
+     After it has left the agent: "in case the wrong one was uploaded, she
+     can just upload directly into the system". With replaceKey it takes
+     that file's place, and the one it replaced is kept on it. */
+  if (body.compliance) {
+    const me = await currentUser(req);
+    if (process.env.NODE_ENV === "production" && !(me && can(me.role, "work:plc"))) {
+      return NextResponse.json({ ok: false, error: "Adding files here is for whoever works the PLC queue." }, { status: 403 });
+    }
+    if (placeholder) {
+      return NextResponse.json({ ok: false, error: "Upload the file itself." }, { status: 400 });
+    }
+    try {
+      const name = (body.name ?? "").trim() || "Document";
+      const updated = await complianceAttach(
+        id,
+        {
+          checkId,
+          name,
+          key,
+          url: `/api/r2/file?key=${encodeURIComponent(key)}`,
+          addedBy: await actorName(req, "Compliance"),
+          read: cleanRead(body.read),
+          hash: typeof body.hash === "string" && /^[0-9a-f]{64}$/.test(body.hash) ? body.hash : undefined,
+        },
+        typeof body.replaceKey === "string" && body.replaceKey.trim() ? body.replaceKey.trim() : null
+      );
+      await mirrorToFile(updated, { checkId, name, key }, { id: me?.id ?? "", name: me?.name ?? "Compliance" });
+      return NextResponse.json({ ok: true, case: updated, missing: missingDocuments(updated).map((m) => m.id) });
+    } catch (e) {
+      return fail(e);
+    }
   }
 
   try {

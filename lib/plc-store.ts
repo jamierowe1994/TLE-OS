@@ -21,6 +21,8 @@ import {
   type PlcCase,
   type PlcDocument,
   type PlcState,
+  type PlcTick,
+  type PlcAiSummary,
   type PropolyPush,
   type RexPush,
   type PlcClauses,
@@ -79,6 +81,8 @@ interface Row extends Record<string, unknown> {
   file_keys: string[] | null;
   sent_anyway: SentAnyway[] | null;
   final_asks: FinalAsk[] | null;
+  ticks: Partial<Record<CheckId, PlcTick>> | null;
+  ai_summary: PlcAiSummary | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -120,6 +124,8 @@ function rowTo(r: Row): PlcCase {
     waivers: Array.isArray(r.waivers) ? r.waivers : [],
     sentAnyway: Array.isArray(r.sent_anyway) ? r.sent_anyway : [],
     finalAsks: Array.isArray(r.final_asks) ? r.final_asks : [],
+    ticks: r.ticks && typeof r.ticks === "object" ? r.ticks : {},
+    aiSummary: r.ai_summary ?? null,
     propolyPush: r.propoly_push ?? null,
     rexPush: r.rex_push ?? null,
     checkedAt: iso(r.checked_at),
@@ -141,7 +147,7 @@ function rowTo(r: Row): PlcCase {
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at,
-              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks, clauses`;
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks, clauses, ticks, ai_summary`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -755,6 +761,97 @@ export async function recordFinalAsk(id: string, ask: FinalAsk): Promise<PlcCase
     return rowTo(rows[0]);
   }
   return mutate(id, (c) => ({ ...c, finalAsks: [...(c.finalAsks ?? []), ask] }));
+}
+
+/* ── The review screen (James, 23 Oct 2026) ────────────────────────────────
+   Kirstie's checklist, the AI summary, and a file she puts on the pack
+   herself. The first two are written by their own UPDATE, like the Send to
+   Susan record: they are hers alone, and a tick must never race a decision
+   or a scan writing the whole case back. */
+
+/** Where a pack is with compliance, so their own writes are allowed. */
+const WITH_COMPLIANCE: PlcState[] = ["submitted", "scanning", "reviewing", "checked"];
+
+/** One line of her checklist: yes, no, or null to clear it. */
+export async function setTick(id: string, checkId: CheckId, tick: PlcTick | null): Promise<PlcCase> {
+  if (!checkById(checkId)) throw new PlcRefused("That isn't one of the checks.");
+  const current = await getCase(id);
+  if (!current) throw new PlcRefused("That handover no longer exists.");
+  if (!WITH_COMPLIANCE.includes(current.state)) {
+    throw new PlcRefused("The checklist is for a pack that is with compliance.");
+  }
+  if (hasDb()) {
+    const rows = await q<Row>(
+      tick
+        ? `UPDATE os_plc_cases SET ticks = COALESCE(ticks, '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb), updated_at = NOW()
+            WHERE id = $1 RETURNING ${COLS}`
+        : `UPDATE os_plc_cases SET ticks = COALESCE(ticks, '{}'::jsonb) - $2::text, updated_at = NOW()
+            WHERE id = $1 RETURNING ${COLS}`,
+      tick ? [id, checkId, JSON.stringify(tick)] : [id, checkId]
+    );
+    if (!rows[0]) throw new PlcRefused("That handover no longer exists.");
+    return rowTo(rows[0]);
+  }
+  return mutate(id, (c) => {
+    const ticks = { ...(c.ticks ?? {}) };
+    if (tick) ticks[checkId] = tick;
+    else delete ticks[checkId];
+    return { ...c, ticks };
+  });
+}
+
+/** The AI summary, as written. Its own column, so a save beside it cannot drop it. */
+export async function saveAiSummary(id: string, summary: PlcAiSummary): Promise<PlcCase> {
+  if (hasDb()) {
+    const rows = await q<Row>(
+      `UPDATE os_plc_cases SET ai_summary = $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING ${COLS}`,
+      [id, JSON.stringify(summary)]
+    );
+    if (!rows[0]) throw new PlcRefused("That handover no longer exists.");
+    return rowTo(rows[0]);
+  }
+  return mutate(id, (c) => ({ ...c, aiSummary: summary }));
+}
+
+/**
+ * A file compliance put on the pack, after it left the agent. With `replaceKey`
+ * it takes that file's place on the check, and the file it replaced is kept on
+ * the new one (PlcDocument.replaces), so the pack still says what was sent.
+ */
+export async function complianceAttach(
+  id: string,
+  doc: { checkId: CheckId; name: string; key: string; url: string; addedBy: string; read?: FileRead | null; hash?: string },
+  replaceKey: string | null
+): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    if (!WITH_COMPLIANCE.includes(c.state)) {
+      throw new PlcRefused("Files can be added here while the pack is with compliance. This one isn't.");
+    }
+    if (c.documents.some((d) => d.key === doc.key || (doc.hash && d.hash === doc.hash && d.key !== replaceKey))) {
+      const twin = c.documents.find((d) => d.key === doc.key || (doc.hash && d.hash === doc.hash));
+      throw new PlcRefused(`Already on the pack as "${twin?.name ?? doc.name}" under ${checkById(twin?.checkId ?? doc.checkId)?.label ?? doc.checkId}.`);
+    }
+    const now = new Date().toISOString();
+    const old = replaceKey ? c.documents.find((d) => d.key === replaceKey) ?? null : null;
+    if (replaceKey && !old) throw new PlcRefused("The file you were replacing has already gone from the pack.");
+    const next: PlcDocument = {
+      checkId: old?.checkId ?? doc.checkId,
+      name: doc.name,
+      key: doc.key,
+      url: doc.url,
+      addedAt: now,
+      addedBy: doc.addedBy,
+      byCompliance: true,
+      ...(doc.read ? { read: doc.read } : {}),
+      ...(doc.hash ? { hash: doc.hash } : {}),
+      ...(old?.covers?.length ? { covers: old.covers } : {}),
+      ...(old ? { replaces: { name: old.name, key: old.key, addedBy: old.addedBy, addedAt: old.addedAt, at: now, by: doc.addedBy } } : {}),
+    };
+    return {
+      ...c,
+      documents: old ? c.documents.map((d) => (d.key === old.key ? next : d)) : [...c.documents, next],
+    };
+  });
 }
 
 /** A Send anyway, written once the pack has gone (at = its submittedAt). */

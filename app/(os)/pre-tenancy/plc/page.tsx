@@ -8,7 +8,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PreTenancyHero from "@/components/pretenancy/Hero";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import { PlcEmails } from "@/components/MailThreads";
-import { api, ComplianceSide, Note, Pill, prettyDate, prettyWhen, PLC_GREEN, PLC_RED, SentAnywayTag, FinalAskTag, type Loaded } from "@/components/PlcReview";
+import PlcSplitReview, { type SplitSample } from "@/components/PlcSplitReview";
+import { api, Note, Pill, prettyDate, prettyWhen, PLC_GREEN, PLC_RED, SentAnywayTag, FinalAskTag, type Loaded } from "@/components/PlcReview";
 import type { PlcCase } from "@/lib/plc";
 
 /**
@@ -84,6 +85,8 @@ export default function PlcQueuePage() {
      packs so the page can be looked at. Never in production. */
   const [sample, setSample] = useState<{ cases: PlcCase[]; loaded: (c: PlcCase) => Loaded } | null>(null);
   const sampleRef = useRef<{ cases: PlcCase[]; loaded: (c: PlcCase) => Loaded } | null>(null);
+  /* The full-screen review's own sample: people, answers and the AI summary, invented. */
+  const [splitSample, setSplitSample] = useState<SplitSample | null>(null);
 
   const loadQueue = useCallback(async () => {
     try {
@@ -107,6 +110,21 @@ export default function PlcQueuePage() {
           loaded: (c: PlcCase): Loaded => ({ case: c, checks: PLC_CHECKS, missing: missingDocuments(c).map((x) => x.id), summary: c.scannedAt ? DEMO_SUMMARY : null, scanConfigured: true }),
         };
         sampleRef.current = built;
+        const { DEMO_PEOPLE, DEMO_ANSWERS, DEMO_AI_SUMMARY } = await import("@/lib/plc-demo");
+        setSplitSample({
+          people: DEMO_PEOPLE,
+          answers: DEMO_ANSWERS,
+          summary: DEMO_AI_SUMMARY,
+          /* A pretend file in place of an upload, on the open sample pack. */
+          attach: (caseId, checkId, name, replaceKey) => {
+            const c = cases.find((x) => x.id === caseId);
+            if (!c) return;
+            const now = new Date().toISOString();
+            const old = replaceKey ? c.documents.find((d) => d.key === replaceKey) : null;
+            const doc = { checkId: old?.checkId ?? checkId, name, key: `documents/sample/${Date.now()}-${name}`, url: "#", addedAt: now, addedBy: "You, in the sample", placeholder: true as const, byCompliance: true, ...(old ? { replaces: { name: old.name, key: old.key, addedBy: old.addedBy, addedAt: old.addedAt, at: now, by: "You, in the sample" } } : {}) };
+            c.documents = old ? c.documents.map((d) => (d.key === old.key ? doc : d)) : [...c.documents, doc];
+          },
+        });
         setSample(built);
         setQueue([...cases]);
         return;
@@ -242,25 +260,39 @@ export default function PlcQueuePage() {
         </section>
       )}
 
-      {/* ── the review, in a drawer from the right ── */}
+      {/* ── the review, opened out on the screen (James, 23 Oct 2026) ──
+          Was a drawer from the right. Full screen now: the landlord and the
+          tenants with their documents on the left, the AI summary and the
+          decision on the right (components/PlcSplitReview). */}
       {openId && openCase ? (
-        <div className="fixed inset-0 z-50 bg-[#2b201d]/40" onClick={() => setOpenId(null)}>
-          <div
-            className="drawer-in fixed inset-y-0 right-0 flex w-full max-w-[1040px] flex-col overflow-hidden bg-page shadow-[-20px_0_60px_-30px_rgba(40,25,20,0.5)] lg:w-[72vw] lg:rounded-l-[28px]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="px-5 pb-8 pt-5 sm:px-7">
+        <div className="drawer-in fixed inset-0 z-50 flex flex-col bg-page" role="dialog" aria-modal="true" aria-label={openCase.address}>
+          {open && open.case.id === openCase.id ? (
+            <PlcSplitReview
+              data={open}
+              reload={reload}
+              say={setError}
+              sample={sample ? splitSample : null}
+              perform={sample ? async (action, extra) => {
+                const c = sample.cases.find((x) => x.id === openCase.id)!;
+                if (action === "scan" || action === "skip-scan") Object.assign(c, { state: "reviewing", scannedAt: new Date().toISOString() });
+                if (action === "check") Object.assign(c, { state: "checked", checkedAt: new Date().toISOString(), checkedBy: "You, in the sample", checkNote: String(extra.note ?? "") });
+                if (action === "decide") Object.assign(c, { state: String(extra.decision ?? "approved"), decidedAt: new Date().toISOString(), decidedBy: "You, in the sample", decisionNote: String(extra.note ?? "") });
+              } : undefined}
+              /* Closing on a decision is the right end to the gesture:
+                 the pack has left the queue, so leaving it open would
+                 show a panel for something no longer on the list. */
+              onDecided={() => setOpenId(null)}
+              head={
                 <div className="flex items-start gap-4">
-                  <span className={`mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${ageOf(openCase.submittedAt).over ? PLC_RED : PLC_GREEN}`}><DoodleIcon name="shield" size={20} /></span>
+                  <span className={`mt-0.5 hidden h-11 w-11 shrink-0 items-center justify-center rounded-full sm:flex ${ageOf(openCase.submittedAt).over ? PLC_RED : PLC_GREEN}`}><DoodleIcon name="shield" size={18} /></span>
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-[28px] font-bold leading-tight">{openCase.address}</h2>
-                    <p className="mt-1 text-[13.5px] text-muted">
-                      From <span className="font-semibold text-ink">{openCase.agentName}</span>
-                      {openCase.moveInDate ? ` · moving in ${prettyDate(openCase.moveInDate)}` : ""}
-                      {openCase.submittedAt ? ` · waiting ${ageOf(openCase.submittedAt).label}` : ""}
-                    </p>
-                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    <h2 className="text-[22px] font-normal leading-tight tracking-normal sm:text-[26px]">{openCase.address}</h2>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-muted">
+                      <span>
+                        From <span className="font-semibold text-ink">{openCase.agentName}</span>
+                        {openCase.moveInDate ? ` · moving in ${prettyDate(openCase.moveInDate)}` : ""}
+                        {openCase.submittedAt ? ` · waiting ${ageOf(openCase.submittedAt).label}` : ""}
+                      </span>
                       <Pill state={openCase.state} />
                       <SentAnywayTag c={openCase} />
                       <FinalAskTag c={openCase} />
@@ -271,34 +303,15 @@ export default function PlcQueuePage() {
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
                   </button>
                 </div>
-                <div className="mt-5">
-                  {open && open.case.id === openCase.id ? (
-                    <>
-                    <ComplianceSide
-                      data={open}
-                      reload={reload}
-                      say={setError}
-                      perform={sample ? async (action, extra) => {
-                        const c = sample.cases.find((x) => x.id === openCase.id)!;
-                        if (action === "scan" || action === "skip-scan") Object.assign(c, { state: "reviewing", scannedAt: new Date().toISOString() });
-                        if (action === "check") Object.assign(c, { state: "checked", checkedAt: new Date().toISOString(), checkedBy: "You, in the sample", checkNote: String(extra.note ?? "") });
-                        if (action === "decide") Object.assign(c, { state: String(extra.decision ?? "approved"), decidedAt: new Date().toISOString(), decidedBy: "You, in the sample", decisionNote: String(extra.note ?? "") });
-                      } : undefined}
-                      /* Closing on a decision is the right end to the gesture:
-                         the pack has left the queue, so leaving it open would
-                         show a panel for something no longer on the list. */
-                      onDecided={() => setOpenId(null)}
-                    />
-                    {/* Email replies on the pack's threads (James, 21 Oct 2026). Not on the sample. */}
-                    {!sample && <PlcEmails key={`${open.case.state}:${open.case.finalAsks?.length ?? 0}:${open.case.rlpRequest?.at ?? ""}:${open.case.decidedAt ?? ""}`} caseId={openCase.id} />}
-                    </>
-                  ) : (
-                    <WorkspaceLoading height="min-h-[360px]" label="Opening the pack" />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+              }
+              after={
+                /* Email replies on the pack's threads (James, 21 Oct 2026). Not on the sample. */
+                !sample ? <div className="mt-4"><PlcEmails key={`${open.case.state}:${open.case.finalAsks?.length ?? 0}:${open.case.rlpRequest?.at ?? ""}:${open.case.decidedAt ?? ""}`} caseId={openCase.id} /></div> : null
+              }
+            />
+          ) : (
+            <WorkspaceLoading height="min-h-[360px]" label="Opening the pack" />
+          )}
         </div>
       ) : null}
     </div>

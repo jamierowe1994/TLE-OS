@@ -516,6 +516,56 @@ export type PlcDocument = {
    * in place of the file name to compliance and used as its name in Propoly.
    */
   label?: string;
+  /**
+   * Put on the pack by compliance after it left the agent (James, 23 Oct
+   * 2026: "in case the wrong one was uploaded, she can just upload directly
+   * into the system"). When it took the place of a file, that file is kept
+   * here, so the pack still says what the agent sent.
+   */
+  byCompliance?: boolean;
+  replaces?: { name: string; key: string; addedBy: string; addedAt: string; at: string; by: string };
+};
+
+/**
+ * Kirstie's own checklist on a pack (James, 23 Oct 2026: "she can say yes or
+ * no to each one, so she knows which ones she's done so far"). Her working
+ * notes, not a decision: nothing reads them but her screen.
+ *
+ * A tick is for the files that were on the check when she ticked it. `keys`
+ * holds them, so a file swapped afterwards - by her or by the agent on a
+ * resubmission - shows the check as not done again, without anything having
+ * to remember to clear it.
+ */
+export type PlcTick = { ok: boolean; by: string; at: string; keys: string[] };
+
+/** Is this tick still about the files on the check now? */
+export function tickHolds(t: PlcTick | undefined, keys: string[]): t is PlcTick {
+  if (!t) return false;
+  const now = [...keys].sort().join("|");
+  return [...t.keys].sort().join("|") === now;
+}
+
+/**
+ * The AI summary at the top of the pack (James, 23 Oct 2026: "it says what
+ * the scan found: 98 things ... we should just give her an answer saying we
+ * think that this is a fail or a pass"). A recommendation in a few
+ * sentences, read from the findings and the files; the person still decides.
+ *
+ * `basis` is a hash of what it was written from, so a pack that changes
+ * (a file replaced, a fresh scan) is summarised again rather than shown a
+ * summary of a pack that no longer exists.
+ */
+export type PlcAiSummary = {
+  verdict: "pass" | "fail" | "review";
+  headline: string;
+  summary: string;
+  /** The few things that actually matter, each one sentence. */
+  points: { checkId: CheckId | null; level: "blocker" | "query"; text: string }[];
+  /** What the scan flagged that does not matter, in a sentence. Empty when nothing. */
+  noise: string;
+  basis: string;
+  at: string;
+  model: string;
 };
 
 /** What a document is called on screen: the agent's own name for it, else the file name. */
@@ -734,6 +784,10 @@ export type PlcCase = {
   clauses?: PlcClauses | null;
   /** The last request sent to Legal for Landlords' RLP team. */
   rlpRequest?: RlpRequest | null;
+  /** Kirstie's checklist, by check (23 Oct 2026). */
+  ticks?: Partial<Record<CheckId, PlcTick>>;
+  /** The AI summary, as last written (23 Oct 2026). */
+  aiSummary?: PlcAiSummary | null;
   /** The final decision, the words, and the name against it. */
   decidedAt: string | null;
   decidedBy: string | null;

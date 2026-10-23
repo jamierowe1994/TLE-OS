@@ -1,4 +1,5 @@
-import type { Finding, PlcCase, PlcDocument } from "@/lib/plc";
+import type { Finding, PlcAiSummary, PlcCase, PlcDocument } from "@/lib/plc";
+import type { TenantAnswers } from "@/lib/plc-tenant-answers";
 import type { Prefill } from "@/lib/plc-prefill";
 
 /**
@@ -213,3 +214,71 @@ export const DEMO_SCANNED = demoCase({
 
 export const DEMO_SUMMARY =
   "Eight documents read. One blocker: the gas certificate runs out eleven days into the tenancy. One query on the EPC band. Everything else is in order.";
+
+/* ── The full-screen review's sample (23 Oct 2026) ─────────────────────────
+   Who is on the let, what the tenants said, and the AI summary, all
+   invented, so ?sample=1 on the PLC queue shows the whole screen without
+   reading anybody's real details or calling the model. */
+
+export const DEMO_PEOPLE = [
+  { key: "sample:landlord", role: "landlord" as const, name: "Pat Example", email: "pat.example@example.com", phone: "07700 900111", address: "2 Elsewhere Road, Leicester LE1 1AA", isPrimary: true },
+  { key: "sample:tenant:alex", role: "tenant" as const, name: "Alex Sample", email: "alex.sample@example.com", phone: "07700 900222", address: null, isPrimary: true },
+  { key: "sample:tenant:jordan", role: "tenant" as const, name: "Jordan Sample", email: "jordan.sample@example.com", phone: "07700 900333", address: null, isPrimary: false },
+];
+
+export const DEMO_ANSWERS: TenantAnswers = {
+  from: ["the offer, 20 Oct"],
+  let: [
+    {
+      title: "Terms",
+      rows: [
+        { label: "Rent, a month", value: "£1,100", copy: "1100" },
+        { label: "Move-in date", value: longDate(MOVE_IN), copy: `${MOVE_IN.slice(8, 10)}/${MOVE_IN.slice(5, 7)}/${MOVE_IN.slice(0, 4)}` },
+        { label: "Term", value: "12 months", copy: "12" },
+        { label: "Pets", value: "No" },
+        { label: "Smokers", value: "No" },
+      ],
+    },
+    { title: "Permitted Occupiers", rows: [{ label: "Adults moving in", value: "2" }, { label: "Children moving in", value: "0" }] },
+  ],
+  people: [
+    {
+      key: "tenant:alex",
+      name: "Alex Sample",
+      role: "Lead tenant",
+      from: ["their passport, finished 19 Oct"],
+      groups: [
+        {
+          title: "Details",
+          rows: [
+            { label: "Date of birth", value: "4 March 1994", copy: "04/03/1994" },
+            { label: "Email", value: "alex.sample@example.com" },
+            { label: "Mobile", value: "07700 900222" },
+          ],
+        },
+        { title: "Work", rows: [{ label: "Employer", value: "Sample Ltd" }, { label: "Income, a year", value: "£34,000", copy: "34000" }] },
+      ],
+    },
+    {
+      key: "tenant:jordan",
+      name: "Jordan Sample",
+      role: "Tenant",
+      from: ["their part of the offer, 20 Oct"],
+      groups: [{ title: "Details", rows: [{ label: "Date of birth", value: "17 July 1995", copy: "17/07/1995" }, { label: "Email", value: "jordan.sample@example.com" }] }],
+    },
+  ],
+};
+
+export const DEMO_AI_SUMMARY: PlcAiSummary = {
+  verdict: "fail",
+  headline: "I think this fails on the gas certificate.",
+  summary: `A full pack. The landlord's ID, the referencing, the EICR, the licence and the draft agreement are all in order. The gas safety record runs out on ${longDate(GAS_EXPIRES)}, eleven days after the tenants move in, so a new CP12 is needed first.`,
+  points: [
+    { checkId: "gas-safety", level: "blocker", text: `The gas safety record expires ${longDate(GAS_EXPIRES)}, eleven days into the tenancy. Ask the landlord for a new CP12 before move-in.` },
+    { checkId: "epc", level: "query", text: "The EPC is an E: lettable, but worth telling the landlord now." },
+  ],
+  noise: "The other lines are the reader confirming files it read cleanly.",
+  basis: "sample",
+  at: hoursAgo(1.8),
+  model: "sample",
+};
