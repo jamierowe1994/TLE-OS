@@ -858,6 +858,13 @@ async function pushDeal(
     }
     const contact = t.contactId ? await rexCall("Contacts", "read", { id: t.contactId }).catch(() => null) : null;
     const cc = ((contact?.ok ? contact.result : null) ?? {}) as Row;
+    /* Propoly refuses a tenant with no mobile ("Contact number is invalid"),
+       so say so in our words rather than send it to be refused. */
+    if (!tenantAttributes(cc, t).mobileno) {
+      await rec.add({ id: sid, label: tlabel, state: "failed", detail: "No mobile number, and Propoly needs one. Add it to their details and push again, or add them in Propoly." });
+      result = "failed";
+      continue;
+    }
     /* reference_required: every deal keyed by hand has it on (9 Oct 2026) -
        except a swap's staying tenants, who were referenced when they moved in. */
     const payload = {
@@ -1029,7 +1036,12 @@ export function landlordPayload(cc: Row, name: string, email: string) {
 export function refusal(res: { status: number; body: unknown }): string {
   const b = (res.body ?? {}) as Row;
   const errs = Array.isArray(b.errors) ? (b.errors as unknown[]).map(String).join("; ") : null;
-  return str(b.message) ?? errs ?? `it answered ${res.status || "nothing"}.`;
+  /* The reason as well as the headline (23 Oct 2026): "Failed to add tenant"
+     alone left Jade and Lorna guessing on 6 Tenbury Crescent, when Propoly
+     had said why - "Contact number is invalid". */
+  const msg = str(b.message);
+  if (msg && errs) return `${msg.replace(/[.\s]+$/, "")}: ${errs}.`;
+  return msg ?? errs ?? `it answered ${res.status || "nothing"}.`;
 }
 
 /** A Propoly property offered to the agent as a possible match. */
