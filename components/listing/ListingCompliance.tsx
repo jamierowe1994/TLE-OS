@@ -286,6 +286,7 @@ export default function ListingCompliance({
           landlords={landlord.name || landlord.email ? [{ name: landlord.name, email: landlord.email, phone: landlord.phone }] : []}
           agentLarn={agentLarn}
           serviceOnRecord={service}
+          scottish={home ? home.scotland : null}
           onChanged={terms.reload}
         />
       )}
@@ -1117,6 +1118,7 @@ function NewLookCompliance({
           landlords={landlord.name || landlord.email ? [{ name: landlord.name, email: landlord.email, phone: landlord.phone }] : []}
           agentLarn={agentLarn}
           serviceOnRecord={service}
+          scottish={home ? home.scotland : null}
           onChanged={terms.reload}
           more={<Menu label="More about the terms" items={[{ label: "Upload a signed copy", sub: "Signed on paper or by email", onClick: () => pickPaper("terms", "terms_of_business", "") }]} />}
         />
