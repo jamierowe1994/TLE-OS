@@ -764,7 +764,12 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
        pastOnlyPeople). Where that leaves nobody, PayProp's own current
        tenancy on the home names who is, if it holds one. */
     const named = o.tenantNames.split(/\s*[,;]\s*/).filter(Boolean);
-    let names = named.filter((n) => !people?.pastOnly.has(personKey(n)));
+    /* Not on a Let Only home (James, 23 Oct 2026): PayProp takes the first
+       month's rent on a tenant find and then ends the tenancy, so every
+       sitting tenant there reads as past. 85 homes showed nobody living in
+       them - 6 Linford Close's Ricky Harris, 17 Haven Close's Rosie Holland. */
+    const letOnly = p.service === "Let Only" || /tenant find/i.test(("pmService" in o && (o as PmHome).pmService) || "");
+    let names = letOnly ? named : named.filter((n) => !people?.pastOnly.has(personKey(n)));
     if (!names.length && named.length) {
       names = (people?.current.get(rentKey(p.address || p.name, p.postcode)) ?? [])
         .flatMap((r) => r.display.split(/\s*(?:,|&|\band\b)\s*/i))
@@ -790,6 +795,20 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
         p.tenants[i] = { ...t, email: c.email, phone: c.phone };
       }
     }
+  }
+  /* And what the OS itself holds for a tenant by name (James, 23 Oct 2026):
+     os_tenant_contacts was only read for the names REX PM gives, so a tenant
+     REX names with no email kept none though the contact sweep had found it
+     on their Propoly deal. A blank only - never over what REX or PayProp says. */
+  for (const p of currentLets(properties)) {
+    if (!p.propertyId || !p.tenants.some((t) => !t.email || !t.phone)) continue;
+    const o = pmFor.get(p.propertyId);
+    const known = o ? held.get(o.id) : undefined;
+    if (!known) continue;
+    p.tenants = p.tenants.map((t) => {
+      const c = known.get(nameKey(t.name));
+      return c ? { ...t, email: t.email || c.email, phone: t.phone || c.phone } : t;
+    });
   }
   /* THE RENT (rewritten 22 Oct 2026, Lianna Denholm's missing rents).
      PayProp's rent invoice billed today is the rent: what the tenant is
