@@ -10,7 +10,7 @@ import { forStaff } from "@/lib/terms/staff";
  * One set of terms, from the agent's side.
  *
  *   POST { action: "agent-signed" }        -> checked with DocuSeal, then every landlord is emailed
- *   POST { action: "remind", key }         -> that person's email again
+ *   POST { action: "remind", key? }        -> that person's email again; no key, everyone yet to sign
  *   POST { action: "cancel" }              -> withdrawn; the links stop working
  *
  * The agent who sent them, or an owner.
@@ -33,9 +33,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   try {
     if (b.action === "agent-signed") await agentSigned(id, origin, actor.id === t.agentId ? actor : null);
     else if (b.action === "remind") {
-      if (!b.key || !t.parties.some((p) => p.key === b.key)) throw new TermsRefused("Who should it go to?");
+      if (b.key && !t.parties.some((p) => p.key === b.key)) throw new TermsRefused("Who should it go to?");
       if (!t.agentSignedAt) throw new TermsRefused("Sign your part first, then it goes to them.");
-      await emailParties(t, actor, origin, [b.key]);
+      if (t.status !== "sent") throw new TermsRefused(t.status === "signed" ? "Everyone has signed." : "Those terms were withdrawn.");
+      const keys = b.key ? [b.key] : t.parties.filter((p) => !p.signedAt).map((p) => p.key);
+      await emailParties(t, actor, origin, keys);
     } else if (b.action === "cancel") await cancelTerms(id);
     else throw new TermsRefused("What should happen to them?");
     return NextResponse.json({ ok: true, terms: forStaff((await getTerms(id))!, origin) });

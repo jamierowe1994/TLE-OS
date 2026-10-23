@@ -28,6 +28,7 @@ type StaffParty = {
   key: string;
   name: string;
   email: string;
+  phone: string;
   status: "waiting" | "emailed" | "opened" | "signed";
   emailedAt: string | null;
   emailError: string | null;
@@ -39,6 +40,7 @@ type StaffParty = {
 type StaffTerms = {
   id: string;
   version: string;
+  country: Country;
   status: "agent" | "sent" | "signed" | "cancelled";
   propertyAddress: string;
   agentName: string;
@@ -49,7 +51,8 @@ type StaffTerms = {
   completedAt: string | null;
   createdAt: string;
   signedR2Key: string | null;
-  values: { serviceLevel: string };
+  values: { serviceLevel: string; setUpFee: string; managementFee: string; additionalFees: string; agentLarn: string };
+  replaces: string | null;
   parties: StaffParty[];
 };
 
@@ -89,6 +92,9 @@ export default function TermsPanel({
   const [preview, setPreview] = useState(false);
   const [editions, setEditions] = useState<Editions>({ scotland: null, england: null });
   const [sending, setSending] = useState(false);
+  /* Adjust contract (James, 23 Oct 2026): the drawer again, filled in from the set out now. */
+  const [adjusting, setAdjusting] = useState<StaffTerms | null>(null);
+  const [remindAsk, setRemindAsk] = useState(false);
   const [signing, setSigning] = useState<StaffTerms | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -113,6 +119,8 @@ export default function TermsPanel({
   }, [load]);
 
   const live = (all ?? []).find((t) => t.status !== "cancelled") ?? null;
+  /* While an adjusted set waits for the agent's signature, the one it replaces is still out. */
+  const replacing = live?.replaces ? (all ?? []).find((t) => t.id === live.replaces && t.status === "sent") ?? null : null;
 
   async function act(t: StaffTerms, body: Record<string, string>, key: string): Promise<string | null> {
     setBusy(key);
@@ -177,7 +185,9 @@ export default function TermsPanel({
             {!live
               ? `Nothing has gone yet. Send them and everyone who owns ${propertyAddress.split(",")[0] || "the home"} gets their own link to read and sign.`
               : live.status === "agent"
-                ? "Made, but nothing has gone: sign your part and they go out."
+                ? replacing
+                  ? `Adjusted, but nothing has gone: sign your part and it goes out. The contract sent ${day(replacing.sentAt)} stays live until you do.`
+                  : "Made, but nothing has gone: sign your part and they go out."
                 : live.status === "sent"
                   ? `Sent ${day(live.sentAt)} to ${names(live.parties)}. ${signedCount} of ${live.parties.length} signed.`
                   : `Signed by ${names(live.parties)} on ${day(live.completedAt)}.${live.signedR2Key ? " Copy on file." : ""}`}
@@ -194,6 +204,31 @@ export default function TermsPanel({
           <button type="button" className="nl-btn nl-btn--primary" onClick={() => setSigning(live)}>
             <Ico name="pen" size={15} /> Sign your part
           </button>
+        ) : live.status === "sent" ? (
+          <span className="nl-terms-acts">
+            <Badge tone="info">Sent</Badge>
+            {remindAsk ? (
+              <>
+                <button
+                  type="button"
+                  className="nl-btn nl-btn--secondary nl-btn--sm"
+                  disabled={busy === "remind"}
+                  onClick={async () => {
+                    const waitingOn = live.parties.filter((p) => !p.signedAt);
+                    const problem = await act(live, { action: "remind" }, "remind");
+                    setRemindAsk(false);
+                    setSaid(problem ?? `Reminder sent to ${names(waitingOn)}.`);
+                  }}
+                >
+                  {busy === "remind" ? "Sending…" : `Email ${names(live.parties.filter((p) => !p.signedAt))}`}
+                </button>
+                <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setRemindAsk(false)}>Cancel</button>
+              </>
+            ) : (
+              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setRemindAsk(true)}>Send a reminder</button>
+            )}
+            <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setAdjusting(live)}>Adjust contract</button>
+          </span>
         ) : live.status === "signed" ? (
           live.signedR2Key ? (
             <a className="nl-btn nl-btn--secondary nl-btn--sm" href={`/api/terms/${live.id}/document`} target="_blank" rel="noreferrer">
@@ -222,26 +257,19 @@ export default function TermsPanel({
               ) : (
                 <Badge tone="neutral">Emailed {day(p.emailedAt)}</Badge>
               )}
-              {!p.signedAt && (
-                <>
-                  <button type="button" className="nl-link" disabled={busy === p.key} onClick={async () => setSaid((await act(live, { action: "remind", key: p.key }, p.key)) ?? `Sent again to ${p.name}.`)}>
-                    {busy === p.key ? "Sending…" : "Send again"}
-                  </button>
-                  <button type="button" className="nl-link" onClick={() => copy(p)}>{copied === p.key ? "Copied" : "Copy their link"}</button>
-                </>
-              )}
+              {!p.signedAt && <button type="button" className="nl-link" onClick={() => copy(p)}>{copied === p.key ? "Copied" : "Copy their link"}</button>}
             </li>
           ))}
         </ul>
       )}
 
-      {live && (live.status === "sent" || live.status === "agent") && (
+      {live && live.status === "agent" && (
         <div className="flex flex-wrap items-center gap-3">
           {!withdrawAsk ? (
-            <button type="button" className="nl-link" onClick={() => setWithdrawAsk(true)}>Withdraw and start again</button>
+            <button type="button" className="nl-link" onClick={() => setWithdrawAsk(true)}>{replacing ? "Drop the adjusted one" : "Withdraw and start again"}</button>
           ) : (
             <span className="nl-confirm m-0 w-full">
-              <p>Withdraw these terms? Their links stop working, and you can send a fresh set straight away.</p>
+              <p>{replacing ? `Drop the adjusted contract? The one sent ${day(replacing.sentAt)} carries on as it was.` : "Withdraw these terms? Their links stop working, and you can send a fresh set straight away."}</p>
               <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setWithdrawAsk(false)}>Keep them</button>
               <button
                 type="button"
@@ -250,7 +278,7 @@ export default function TermsPanel({
                 onClick={async () => {
                   const p = await act(live, { action: "cancel" }, "cancel");
                   setWithdrawAsk(false);
-                  setSaid(p ?? "Withdrawn. Send a fresh set whenever you're ready.");
+                  setSaid(p ?? (replacing ? "Dropped. The contract that was out carries on." : "Withdrawn. Send a fresh set whenever you're ready."));
                 }}
               >
                 {busy === "cancel" ? "Withdrawing…" : "Withdraw"}
@@ -260,8 +288,17 @@ export default function TermsPanel({
         </div>
       )}
 
-      {sending && (
+      {(sending || adjusting) && (
         <SendDrawer
+          from={adjusting}
+          onWithdraw={adjusting ? async () => {
+            const p = await act(adjusting, { action: "cancel" }, "cancel");
+            if (!p) {
+              setAdjusting(null);
+              setSaid("Withdrawn. Their links have stopped working. Send a fresh set whenever you're ready.");
+            }
+            return p;
+          } : undefined}
           propertyAddress={propertyAddress}
           listingId={listingId}
           propertyId={propertyId}
@@ -272,9 +309,13 @@ export default function TermsPanel({
           scottish={scottish}
           editions={editions}
           preview={preview}
-          onClose={() => setSending(false)}
+          onClose={() => {
+            setSending(false);
+            setAdjusting(null);
+          }}
           onMade={async (t) => {
             setSending(false);
+            setAdjusting(null);
             await load();
             setSigning(t);
           }}
@@ -289,6 +330,8 @@ export default function TermsPanel({
 }
 
 function SendDrawer({
+  from = null,
+  onWithdraw,
   propertyAddress,
   listingId,
   propertyId,
@@ -302,6 +345,10 @@ function SendDrawer({
   onClose,
   onMade,
 }: {
+  /** Adjust contract: the set out now, whose answers the drawer starts from. */
+  from?: StaffTerms | null;
+  /** Adjust contract: withdraw the set out now without sending another. */
+  onWithdraw?: () => Promise<string | null>;
   propertyAddress: string;
   listingId: string | null;
   propertyId: string | null;
@@ -321,19 +368,24 @@ function SendDrawer({
      or by the postcode in the address as it's typed here; everything else is
      England. The agent can still pick the other one (a border postcode), and
      from then on it stays where they put it. */
-  const [address, setAddress] = useState(propertyAddress);
-  const [chosen, setChosen] = useState<Country | null>(null);
+  const homeAddress = from?.propertyAddress ?? propertyAddress;
+  const [address, setAddress] = useState(homeAddress);
   const byAddress: Country = (address.trim() === propertyAddress.trim() && scottish != null ? scottish : isScottish(address)) ? "scotland" : "england";
+  /* Adjusting keeps the country it went on only where the agent had picked against the address. */
+  const [chosen, setChosen] = useState<Country | null>(from && from.country !== byAddress ? from.country : null);
   const country: Country = chosen ?? (editions[byAddress] ? byAddress : byAddress === "scotland" ? "england" : "scotland");
   const setCountry = (c: Country) => setChosen(c);
   const known = landlords.filter((l) => l.name || l.email).map((l) => ({ name: l.name ?? "", email: l.email ?? "", phone: l.phone ?? "" }));
-  const [people, setPeople] = useState<Person[]>(known.length ? known : [{ name: "", email: "", phone: "" }]);
-  const start = guessService(country, serviceOnRecord);
+  const [people, setPeople] = useState<Person[]>(
+    from ? from.parties.map((p) => ({ name: p.name, email: p.email, phone: p.phone ?? "" })) : known.length ? known : [{ name: "", email: "", phone: "" }]
+  );
+  const start = (from && servicesFor(country).find((o) => o.label === from.values.serviceLevel)) || guessService(country, from?.values.serviceLevel ?? serviceOnRecord);
   const [service, setService] = useState(start.id);
-  const [setUpFee, setSetUpFee] = useState(start.setUpFee);
-  const [managementFee, setManagementFee] = useState(start.managementFee);
-  const [additional, setAdditional] = useState("");
-  const [larn, setLarn] = useState(agentLarn ?? "");
+  const [setUpFee, setSetUpFee] = useState(from?.values.setUpFee ?? start.setUpFee);
+  const [managementFee, setManagementFee] = useState(from?.values.managementFee ?? start.managementFee);
+  const [additional, setAdditional] = useState(from && from.values.additionalFees !== "None" ? from.values.additionalFees : "");
+  const [larn, setLarn] = useState(from && from.values.agentLarn !== "Not recorded" ? from.values.agentLarn : agentLarn ?? "");
+  const [withdrawAsk, setWithdrawAsk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -361,7 +413,7 @@ function SendDrawer({
     const j = await fetch("/api/terms", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ country, listingId, propertyId, appraisalId, propertyAddress: address, agentLarn: larn, serviceLevel: o?.label ?? service, setUpFee, managementFee, additionalFees: additional, people }),
+      body: JSON.stringify({ country, listingId, propertyId, appraisalId, propertyAddress: address, agentLarn: larn, serviceLevel: o?.label ?? service, setUpFee, managementFee, additionalFees: additional, people, replaces: from?.id ?? null }),
     })
       .then((r) => r.json())
       .catch(() => null);
@@ -372,13 +424,17 @@ function SendDrawer({
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div data-look="new" className="nl-drawer-wrap" role="dialog" aria-modal="true" aria-label="Send Terms of Business">
+    <div data-look="new" className="nl-drawer-wrap" role="dialog" aria-modal="true" aria-label={from ? "Adjust Contract" : "Send Terms of Business"}>
       <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={() => !busy && onClose()} />
       <div className="nl-drawer">
         <div className="nl-drawer-head">
           <div className="min-w-0 flex-1">
-            <h2 className="nl-drawer-title">Send Terms of Business</h2>
-            <p className="nl-meta mt-1">You sign first, then each person gets their own link from your mailbox. Anything we don&apos;t have about them, they fill in before they sign.</p>
+            <h2 className="nl-drawer-title">{from ? "Adjust Contract" : "Send Terms of Business"}</h2>
+            <p className="nl-meta mt-1">
+              {from
+                ? `Change what you need, then sign the new one. It goes to everyone with a fresh link, and the contract sent ${day(from.sentAt)} is withdrawn at the same moment.`
+                : "You sign first, then each person gets their own link from your mailbox. Anything we don't have about them, they fill in before they sign."}
+            </p>
           </div>
           <button type="button" className="nl-iconbtn nl-iconbtn--sm" aria-label="Close" onClick={onClose}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -452,9 +508,32 @@ function SendDrawer({
           {problem && <p className="nl-meta text-[var(--accent-dark)]">{problem}</p>}
         </div>
         <div className="nl-drawer-foot">
+          {from && onWithdraw && (
+            withdrawAsk ? (
+              <span className="nl-confirm m-0 mr-auto">
+                <p>Withdraw it without sending a new one? Their links stop working.</p>
+                <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setWithdrawAsk(false)} disabled={busy}>Keep it</button>
+                <button
+                  type="button"
+                  className="nl-btn nl-btn--danger nl-btn--sm"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    const p = await onWithdraw();
+                    setBusy(false);
+                    if (p) setProblem(p);
+                  }}
+                >
+                  {busy ? "Withdrawing…" : "Withdraw"}
+                </button>
+              </span>
+            ) : (
+              <button type="button" className="nl-link mr-auto" onClick={() => setWithdrawAsk(true)} disabled={busy}>Withdraw without a new one</button>
+            )
+          )}
           <button type="button" className="nl-btn nl-btn--quiet" onClick={onClose} disabled={busy}>Cancel</button>
           <button type="button" className="nl-btn nl-btn--primary" disabled={!ready || busy} onClick={() => void make()}>
-            {busy ? "Making the contract…" : "Sign and send"}
+            {busy ? "Making the contract…" : from ? "Sign and reissue" : "Sign and send"}
           </button>
         </div>
       </div>
