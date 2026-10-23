@@ -31,6 +31,10 @@ import { cardStatus, stageStatus } from "@/components/applications/LetsBoard";
 import { PORTAL_STAGES, propolyDealUrl, stagesFor } from "@/lib/business/propoly-stages";
 import { CANCEL_REASONS, CANCEL_WORDS } from "@/lib/let-cancel-words";
 import { isScottish } from "@/lib/property-flags";
+import { Badge, Ico, Menu, Tabs, type MenuItem, type Tone } from "@/components/new-look/Parts";
+import PhotoGrid from "@/components/new-look/PhotoGrid";
+import SteveFace from "@/components/SteveFace";
+import { AMBER_PILL, GREEN_PILL, RED_PILL } from "@/components/applications/LetsBoard";
 import { applicantKey } from "@/lib/lead-tenant-key";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
@@ -684,6 +688,8 @@ export default function ApplicationDrawer({
   backHref = "/applications",
   onStep,
   stepLabel,
+  initialTab = null,
+  newLook = false,
 }: {
   /** The application. Null for a home let through Propoly alone. */
   app: AppRecord | null;
@@ -697,6 +703,8 @@ export default function ApplicationDrawer({
   onStep?: (delta: number) => void;
   stepLabel?: string | null;
   initialTab?: string | null;
+  /** The new look (lib/new-look "application"): the design's record page. */
+  newLook?: boolean;
 }) {
   /* The page's own id: the application's, or the deal's for a Propoly-only let. */
   const letId = app?.id ?? deal?.app.id ?? "";
@@ -979,6 +987,12 @@ export default function ApplicationDrawer({
   const closePerson = useCallback(() => { setPerson(null); setPersonTab("messages"); }, []);
   const closeDocs = useCallback(() => setDocsOpen(false), []);
   const closeBuilder = useCallback(() => setBuilder(null), []);
+  /* The new look's own: its tabs, the photo grid and the note being written. */
+  type NlTab = "overview" | "people" | "documents" | "notes" | "activity";
+  const [nlTab, setNlTab] = useState<NlTab>(() => (["people", "documents", "notes", "activity"].includes(initialTab ?? "") ? (initialTab as NlTab) : "overview"));
+  const [gridFrom, setGridFrom] = useState<DOMRect | null>(null);
+  const heroRef = useRef<HTMLButtonElement>(null);
+  const [noteBusy, setNoteBusy] = useState(false);
 
   /* ── what the page says ─────────────────────────────────────────────── */
   const action = app ? NEXT_ACTION[app.stageKey] : undefined;
@@ -1121,6 +1135,949 @@ export default function ApplicationDrawer({
     (info?.people ?? []).find(
       (x) => x.role === "tenant" && ((p.email && x.email && x.email.toLowerCase() === p.email.toLowerCase()) || x.name.trim().toLowerCase() === p.name.trim().toLowerCase())
     ) ?? null;
+
+  /* Everything that opens over the page, the same in both looks. */
+  const overlays = (
+    <>
+      {/* ── over the page ────────────────────────────────────────────────── */}
+
+      {/* Activity and notes: a big pull-out from the right (James, 12 Oct
+          2026: "a nice big pull-out drawer where they can put in all the
+          comments"). Messages is the conversation with the lead tenant. */}
+      <Drawer open={Boolean(panel)} label="Activity and notes" onClose={closePanel}>
+        {panel && (
+          <RecordSidePanel
+            name={name}
+            tab={panel}
+            onTab={setPanel}
+            onClose={closePanel}
+            conversationUrl={letId && lead ? `/api/applications/${encodeURIComponent(letId)}/conversation?with=tenant&i=${Math.max(0, people.indexOf(lead))}` : null}
+            noConversation="Nobody is held on this let yet."
+            notes={commentRows}
+            onAddNote={addComment}
+            notePlaceholder="Add a note - chased the tenant, spoke to the landlord…"
+            noteSaid={{ ok: true, text: "Kept on the let, for everyone who opens it." }}
+            activity={activityLog}
+          />
+        )}
+      </Drawer>
+
+      {/* Push to Propoly from any stage of the let (James, 13 Oct 2026). The
+          same push as Next Step: it checks the deal terms first and stops to
+          ask which home if Propoly has more than one that could be it. */}
+      <Drawer open={propolyOpen} label="Push to Propoly" onClose={closePropoly}>
+        {propolyOpen && app && (
+          <>
+            <DrawerHead
+              icon="rocket"
+              title={propoly.state === "in" ? "In Propoly" : "Push to Propoly"}
+              sub={
+                propoly.state === "in"
+                  ? `${propoly.sub ?? "Pushed"}. The deal link shows here once Propoly is next read.`
+                  : propoly.state === "early"
+                    ? "Not in Propoly. The offer has to be accepted before anything goes across."
+                    : "Not in Propoly yet. Check the deal below, then push it - from any stage of the let."
+              }
+              onClose={closePropoly}
+            />
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+              {propoly.state === "early" ? (
+                <p className="rounded-xl bg-white px-4 py-3.5 text-[12.5px] leading-relaxed text-muted">
+                  Accept the offer first - from Next step on the page, or the Offers on its listing. Once it is accepted this button pushes it, whatever stage the let is at.
+                </p>
+              ) : (
+                <div className="rounded-2xl border border-line/60 bg-white p-4 sm:p-5 [&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0">
+                  <NextStepCard
+                    applicationId={app.id}
+                    actions={[pushAction]}
+                    loading={false}
+                    checks={[]}
+                    onPlay={() => {}}
+                    playing={null}
+                    confirming={null}
+                    onChanged={() => setJourneyTick((n) => n + 1)}
+                  />
+                </div>
+              )}
+              {propoly.state !== "early" && <HandoffPanel applicationId={app.id} />}
+            </div>
+          </>
+        )}
+      </Drawer>
+
+      {addLandlordOpen && letId && (
+        <AddLandlord
+          letId={letId}
+          hasDeal={Boolean(picture?.deal)}
+          live={Boolean(picture?.live)}
+          propertyAddress={[name, locality].filter(Boolean).join(", ")}
+          onClose={() => setAddLandlordOpen(false)}
+          onAdded={(j) => {
+            setAddLandlordOpen(false);
+            takePeople(j);
+            const n = ((j.let?.people ?? []) as Party[]).filter((p) => p.role === "landlord").length;
+            setPerson({ role: "landlord", index: Math.max(0, n - 1) });
+          }}
+        />
+      )}
+
+      {/* The tenant, or the landlord: details left, everything said right. */}
+      <Drawer open={Boolean(person)} width="lg:max-w-[min(1040px,calc(100%-4rem))]" label={person?.role === "landlord" ? "The landlord" : "The tenant"} onClose={closePerson}>
+        {person && (
+          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+            <div className="min-h-0 shrink-0 overflow-y-auto border-line/70 lg:w-[400px] lg:border-r">
+              <DrawerHead
+                icon={person.role === "landlord" ? "home" : "user"}
+                title={person.role === "landlord" ? landlordShown?.name ?? "The landlord" : tenantShown?.name ?? "The tenant"}
+                sub={person.role === "landlord" ? `Landlord of ${name}` : `${tenantShown?.isPrimary ? "Lead tenant" : "Tenant"} on ${name}`}
+                onClose={closePerson}
+              >
+                {/* Every landlord, one press apart, and Add beside them (20 Oct 2026). */}
+                {person.role === "landlord" && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {landlordsAll.length > 1 && landlordsAll.map((p, i) => (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setPerson({ role: "landlord", index: i })}
+                        className={`rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors ${i === person.index ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
+                      >
+                        {firstName(p.name) || `Landlord ${i + 1}`}
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => setAddLandlordOpen(true)} className="rounded-full border border-accent-dark/50 bg-white px-3 py-1 text-[11.5px] font-semibold text-accent-dark hover:bg-accent-soft">
+                      + Add landlord
+                    </button>
+                  </div>
+                )}
+                {person.role === "tenant" && people.length > 1 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {people.map((p, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setPerson({ role: "tenant", index: i })}
+                        className={`rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors ${i === person.index ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
+                      >
+                        {firstName(p.name) || `Tenant ${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </DrawerHead>
+              <div className="space-y-4 px-5 py-5 sm:px-6">
+                {person.role === "tenant" && tenantShown ? (
+                  <>
+                    <section className="rounded-xl border border-line/50 bg-white p-4">
+                      {(() => {
+                        const party = partyFor(tenantShown);
+                        return party && letId ? (
+                          <>
+                            <p className={`${eyebrow} mb-1`}>Their details</p>
+                            <PartyContact letId={letId} party={{ ...party, isPrimary: tenantShown.isPrimary }} propertyAddress={name} onAnswer={takePeople} showName />
+                            {sourceWords(party) && <p className="mt-1.5 text-[11px] text-muted">{sourceWords(party)}</p>}
+                            <PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />
+                          </>
+                        ) : (
+                          <ContactBlock
+                            showName={false}
+                            role={tenantShown.isPrimary ? "lead applicant" : "applicant"}
+                            person={{ name: tenantShown.name, email: tenantShown.email ?? null, phone: tenantShown.phone ?? null }}
+                            personRef={/^\d+$/.test(String(tenantShown.contactId ?? "")) ? `rex:${tenantShown.contactId}` : null}
+                          />
+                        );
+                      })()}
+                      {canChangeLead && !tenantShown.isPrimary && (
+                        <button
+                          type="button"
+                          onClick={() => makeLead(tenantShown)}
+                          disabled={Boolean(leadBusy)}
+                          className="mt-3 rounded-full border border-line/70 bg-white px-3 py-1.5 text-[12px] font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
+                        >
+                          {leadBusy === applicantKey(tenantShown) ? "Saving…" : `Make ${firstName(tenantShown.name) || "them"} the lead tenant`}
+                        </button>
+                      )}
+                    </section>
+                    {app && (
+                      <section className="rounded-xl border border-line/50 bg-white p-4">
+                        <p className={`${eyebrow} mb-3`}>Their application</p>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
+                          {([
+                            ["Income", tenantShown.income != null ? `${gbp(tenantShown.income)} a year` : "Not recorded"],
+                            ["Works", [tenantShown.employment, tenantShown.job].filter(Boolean).join(" · ") || "Not recorded"],
+                            ["Employer", tenantShown.company || "Not recorded"],
+                            ...(scottishLet
+                              ? []
+                              : [
+                                  ["Right to rent", <Answer key="rtr" v={tenantShown.rightToRent || (rtrOf(tenantShown) ? true : tenantShown.rightToRent)} yes="Recorded" no="Not recorded" />],
+                                ]),
+                            ["Landlord reference", <Answer key="ref" v={tenantShown.landlordRef} />],
+                            ["Guarantor", <Answer key="g" v={tenantShown.guarantor} yes="Available" no="None" />],
+                            ["Adverse credit", <Answer key="ac" v={tenantShown.adverseCredit == null ? null : !tenantShown.adverseCredit} yes="None" no="Disclosed" />],
+                            ["Moving in", moveIn ? niceDate(moveIn) : "Not set"],
+                          ] as Array<[string, React.ReactNode]>).map(([k, v]) => (
+                            <div key={k} className="min-w-0">
+                              <dt className="text-[10.5px] text-muted">{k}</dt>
+                              <dd className={`truncate font-semibold ${v === "Not recorded" ? "font-normal text-muted" : ""}`}>{v}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        {!tenantShown.isPrimary && <p className="mt-3 text-[11px] text-muted">Only the lead applicant is asked the four questions - the form stops after them.</p>}
+                      </section>
+                    )}
+                    {/* A field for the expiry, not only Steve (Kirstie, ticket
+                        066bb29e): chased from /right-to-rent, checked by pre-tenancy. */}
+                    {!scottishLet && letId && (
+                      <section className="rounded-xl border border-line/50 bg-white p-4" data-steve="application.rtr-expiry">
+                        <div className="mb-2 flex items-baseline justify-between gap-2">
+                          <p className={eyebrow}>Right to rent expiry</p>
+                          <Link href="/applications/right-to-rent" className="text-[11px] text-muted underline hover:text-ink">Renewals list</Link>
+                        </div>
+                        <RightToRentField
+                          key={`${tenantShown.name}-${rtrOf(tenantShown)?.id ?? "none"}`}
+                          record={rtrOf(tenantShown)}
+                          save={(until, noTimeLimit) => saveRtr(tenantShown.name, until, noTimeLimit)}
+                          canVerify={rtrCanVerify}
+                          onVerified={rtrKeep}
+                        />
+                      </section>
+                    )}
+                    {tenantFile ? (
+                      <Link href={`/leads?open=${encodeURIComponent(tenantFile)}`} className="inline-flex text-[12.5px] font-semibold text-accent-dark hover:underline">
+                        Open their full file →
+                      </Link>
+                    ) : (
+                      <p className="text-[11.5px] text-muted">No file for them in the OS yet.</p>
+                    )}
+                  </>
+                ) : person.role === "landlord" ? (
+                  info === null ? (
+                    <p className="text-[12.5px] text-muted">Looking them up…</p>
+                  ) : landlordShown ? (
+                    <>
+                      <section className="rounded-xl border border-line/50 bg-white p-4">
+                        {landlordParty && letId ? (
+                          <>
+                            <p className={`${eyebrow} mb-1`}>Their details</p>
+                            <PartyContact letId={letId} party={landlordParty} propertyAddress={[name, locality].filter(Boolean).join(", ")} onAnswer={takePeople} showName homeKey={info?.homeKey ?? null} />
+                            {sourceWords(landlordParty) && <p className="mt-1.5 text-[11px] text-muted">{sourceWords(landlordParty)}</p>}
+                            <PropolyLine letId={letId} party={landlordParty} picture={picture} onAnswer={takePeople} />
+                          </>
+                        ) : (
+                          <ContactBlock
+                            showName={false}
+                            role="landlord"
+                            person={{ name: landlordShown.name, email: landlordShown.email, phone: landlordShown.phone }}
+                            personRef={landlordShown.contactId && (landlordShown as LetLandlord).from !== "record" ? `rex:${landlordShown.contactId}` : null}
+                          />
+                        )}
+                        {!landlordParty && (landlordShown as LetLandlord).from === "record" && (
+                          <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">{info.listingId ? "From the managed property record. They are not on the listing yet." : "From the home's record in the OS. Change them on the home's page."}</p>
+                        )}
+                      </section>
+                      {info.listingId && (
+                        <Link href={`/listings/${encodeURIComponent(info.listingId)}`} className="inline-flex text-[12.5px] font-semibold text-accent-dark hover:underline">
+                          Open the listing →
+                        </Link>
+                      )}
+                    </>
+                  ) : (
+                    <div className="rounded-xl bg-[#fdefec] px-4 py-3 text-[12.5px] text-[#9d4340]">
+                      <p><b className="font-semibold">No landlord on this let.</b> Every let needs one. {info.landlordProblem ?? ""}</p>
+                      <button type="button" onClick={() => setAddLandlordOpen(true)} className="mt-2.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page">Add the landlord</button>
+                    </div>
+                  )
+                ) : null}
+              </div>
+            </div>
+            <div className="min-h-[420px] min-w-0 flex-1">
+              <RecordSidePanel
+                name={person.role === "landlord" ? firstName(landlordShown?.name) || "the landlord" : firstName(tenantShown?.name) || "the tenant"}
+                tab={personTab === "activity" ? "messages" : personTab}
+                onTab={setPersonTab}
+                onClose={closePerson}
+                conversationUrl={
+                  !letId
+                    ? null
+                    : person.role === "landlord"
+                      ? landlordShown ? `/api/applications/${encodeURIComponent(letId)}/conversation?with=landlord&i=${person.index}` : null
+                      : `/api/applications/${encodeURIComponent(letId)}/conversation?with=tenant&i=${person.index}`
+                }
+                noConversation={person.role === "landlord" ? "No landlord is held on the listing, so there's no conversation to show." : "Nobody is held for them on this let."}
+                notes={commentRows}
+                onAddNote={addComment}
+                notePlaceholder="Add a note to the let…"
+              />
+            </div>
+          </div>
+        )}
+      </Drawer>
+
+      {/* Add a document: up from the bottom, a big drop space. */}
+      <BottomSheet open={docsOpen} title="Documents" onClose={closeDocs}>
+        <FileDocuments
+          dropZone
+          address={[name, locality].filter(Boolean).join(", ")}
+          propertyId={app?.propertyId ?? null}
+          from={{ kind: "application", id: letId }}
+        />
+        <div className="mt-6 border-t border-line/60 pt-5 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
+          <p className={`${eyebrow} mb-3`}>The property file</p>
+          <PropertyFile
+            propertyId={app?.propertyId ?? null}
+            address={app?.propertyId ? null : [name, locality].filter(Boolean).join(", ")}
+            screen="the application"
+          />
+        </div>
+      </BottomSheet>
+
+      {/* Customer update and Send a reminder: the email builder. */}
+      <Drawer open={Boolean(builder)} label={builder?.mode === "reminder" ? "Send a reminder" : "Customer update"} onClose={closeBuilder}>
+        {builder && <EmailBuilder key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`} letId={letId} mode={builder.mode} people={info} start={builder.start} scotland={scottishLet} onClose={closeBuilder} />}
+      </Drawer>
+
+      {!newLook && lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={name} onClose={() => setLightbox(null)} />}
+
+      {cancelOpen && (
+        <CancelDeal
+          letId={letId}
+          property={name}
+          cancelled={cancelled}
+          onCancelled={(c) => {
+            setCancelled(c);
+            /* The board's held read is out of date the moment this lands. */
+            dropJson("/api/applications?limit=200");
+          }}
+          onTell={(role) => {
+            setCancelOpen(false);
+            setBuilder({ mode: "update", start: { kind: "cancelled", to: role === "landlord" ? "landlord" : "tenant:0" } });
+          }}
+          onClose={() => setCancelOpen(false)}
+        />
+      )}
+    </>
+  );
+
+  /* ── THE NEW LOOK (lib/new-look "application", 23 Oct 2026) ──────────────
+     The design's ApplicationDetail: the head with its jobs, the photos beside
+     The Deal, the stops in a line, then tabs. Every read, write and drawer is
+     the old page's own; only the markup and the paint are new. */
+  if (newLook) {
+    const pillTone = (pill: string): Tone => (pill === GREEN_PILL ? "good" : pill === RED_PILL ? "accent" : pill === AMBER_PILL ? "warning" : "neutral");
+    const initialsOf = (n: string) => n.split(/\s+/).filter(Boolean).map((x) => x[0]).slice(0, 2).join("").toUpperCase() || "?";
+    const quiet = (t: string) => /^(Not |No |None|—|-$|Reading)/.test(t);
+    const receivedMs = received ? Date.parse(received.when) : NaN;
+    const dayN = Number.isFinite(receivedMs) ? Math.max(1, Math.floor((Date.now() - receivedMs) / 86_400_000)) : null;
+    const leadFirst = firstName(lead?.name) || "the tenant";
+    const notesN = commentRows?.length ?? 0;
+    const landlordFirst = landlordsAll[0] ?? null;
+    const landlordName = landlordFirst?.name ?? info?.landlord?.name ?? null;
+    const landlordPhone = landlordFirst?.phone ?? info?.landlord?.phone ?? null;
+    const noLandlord = info !== null && !landlordsAll.length && !info.landlord;
+    const plcHref = app ? `/plc/start?application=${encodeURIComponent(app.id)}` : null;
+    const plcCan = Boolean(app) && !intro && !cancelled && offerIn && !plcDone;
+    const plcLabel = plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check";
+    const plcSub = intro ? "Marketing only - the landlord's" : cancelled ? "The deal is cancelled" : !app ? "Needs an application in the OS" : plcDone ? "PLC check done" : offerIn ? "Before the tenancy starts" : "Once the offer is accepted";
+    const telOf = (p: string) => `tel:${p.replace(/\s/g, "")}`;
+
+    /* The one orange job: whatever the let is waiting on us for. */
+    const mainJob = cancelled ? (
+      <button type="button" className="nl-btn nl-btn--primary" onClick={() => setBuilder({ mode: "update", start: { kind: "cancelled", to: "tenant:0" } })}>
+        <Ico name="mail" /> Update the tenant
+      </button>
+    ) : !intro && app && propoly.state === "push" ? (
+      <button type="button" className="nl-btn nl-btn--primary" onClick={() => setPropolyOpen(true)}>
+        <Ico name="arrow" /> Push to Propoly
+      </button>
+    ) : plcCan && plcHref ? (
+      <Link href={plcHref} className="nl-btn nl-btn--primary">
+        <Ico name="arrow" /> {plcLabel}
+      </Link>
+    ) : !app && deal ? (
+      <a href={propolyDealUrl(deal.app.id)} target="_blank" rel="noopener noreferrer" className="nl-btn nl-btn--primary">
+        Open in Propoly <Ico name="arrow" />
+      </a>
+    ) : null;
+
+    const menu: MenuItem[] = [
+      ...(!cancelled ? [{ label: "Customer update", sub: "Email the tenant or the landlord", onClick: () => setBuilder({ mode: "update" }) }] : []),
+      ...(!cancelled && !intro ? [{ label: "Send a reminder", sub: "Sign, pay, references", onClick: () => setBuilder({ mode: "reminder" }) }] : []),
+      { label: "Messages", sub: lead ? `Everything said with ${leadFirst}` : "The conversation with the tenant", onClick: () => setPanel("messages") },
+      { label: "Add a document", onClick: () => setNlTab("documents") },
+      { label: "Add a comment", onClick: () => setNlTab("notes") },
+      "rule",
+      ...(people.length ? [{ label: people.length > 1 ? "The tenants" : "The tenant", onClick: () => setPerson({ role: "tenant", index: 0 }) }] : []),
+      { label: noLandlord ? "Add the landlord" : landlordsAll.length > 1 ? "The landlords" : "The landlord", onClick: () => (noLandlord ? setAddLandlordOpen(true) : setPerson({ role: "landlord", index: 0 })) },
+      ...(plcHref && plcCan && !(mainJob && propoly.state !== "push") ? [{ label: plcLabel, href: plcHref }] : []),
+      ...(app && !intro && (propoly.state === "early" || (propoly.state === "in" && !propoly.url)) ? [{ label: propoly.state === "in" ? "In Propoly" : "Not in Propoly yet", sub: propoly.sub ?? undefined, onClick: () => setPropolyOpen(true) }] : []),
+      ...(app && !intro && propoly.state === "push" && cancelled ? [{ label: "Push to Propoly", onClick: () => setPropolyOpen(true) }] : []),
+      ...(propoly.state === "in" && propoly.url ? [{ label: "Open in Propoly", sub: propoly.sub ?? undefined, href: propoly.url }] : []),
+      ...(photoListing ? [{ label: "Open the listing", href: `/listings/${encodeURIComponent(String(photoListing))}` }] : []),
+      "rule",
+      cancelled
+        ? { label: "Deal cancelled", sub: cancelled.reason, onClick: () => setCancelOpen(true) }
+        : { label: "Cancel the deal", sub: "Give a reason first", danger: true, onClick: () => setCancelOpen(true) },
+    ];
+
+    /* Where Propoly stands, beside the stage, as on the old page's top row. */
+    const propolyWord = intro ? (
+      <Badge tone="good">Marketing only</Badge>
+    ) : propoly.state === "checking" ? (
+      <span className="nl-meta inline-flex items-center gap-2">
+        <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-ink" /> Checking Propoly
+      </span>
+    ) : propoly.state === "in" ? (
+      propoly.url ? (
+        <a href={propoly.url} target="_blank" rel="noopener noreferrer" title={propoly.sub ?? "Open the deal in Propoly"} className="nl-market-btn">
+          In Propoly ↗
+        </a>
+      ) : (
+        <button type="button" onClick={() => setPropolyOpen(true)} title={propoly.sub ?? undefined} className="nl-market-btn">
+          In Propoly
+        </button>
+      )
+    ) : propoly.state === "push" || propoly.state === "early" ? (
+      <button type="button" onClick={() => setPropolyOpen(true)} className="nl-market-btn nl-apps-notin">
+        {propoly.state === "push" ? "Not in Propoly - push it" : "Not in Propoly"}
+      </button>
+    ) : null;
+
+    /* Steve, from what is on this let - never a sample. */
+    const missingRtr = !scottishLet && app ? people.findIndex((p) => !(p.rightToRent === true || rtrOf(p))) : -1;
+    const ideas: { says: string; act: string; go: () => void }[] = cancelled
+      ? []
+      : [
+          ...(app && !intro && propoly.state === "push" ? [{ says: "It's accepted and not in Propoly yet. Push it across and Kirstie can take it from there.", act: "Push to Propoly", go: () => setPropolyOpen(true) }] : []),
+          ...(dealStatus?.text === "Move-in slipped" ? [{ says: `The move-in date has been and gone. Agree a new one with ${leadFirst} and the landlord.`, act: "Send a customer update", go: () => setBuilder({ mode: "update" }) }] : []),
+          ...(noLandlord ? [{ says: "There's no landlord on this let yet. Every let needs one.", act: "Add the landlord", go: () => setAddLandlordOpen(true) }] : []),
+          ...(flags.length ? [{ says: `Kirstie's side has flagged this one: ${flags[0]}.`, act: "Add a comment", go: () => setNlTab("notes") }] : []),
+          ...(missingRtr >= 0 ? [{ says: `${firstName(people[missingRtr]?.name) || "One tenant"} has no right to rent answer recorded yet.`, act: "Open their details", go: () => setPerson({ role: "tenant", index: missingRtr }) }] : []),
+        ];
+    const idea = ideas[0];
+    const steveReading = (app && journey === null) || info === null;
+
+    const nlTabs: { id: NlTab; label: string; count?: number | null }[] = [
+      { id: "overview", label: "Overview" },
+      { id: "people", label: "People", count: people.length + landlordsAll.length || null },
+      { id: "documents", label: "Documents" },
+      { id: "notes", label: "Notes", count: notesN || null },
+      { id: "activity", label: "Activity" },
+    ];
+
+    const thingLine = (label: string, sub: string, go: (() => void) | null, href?: string | null, done?: boolean) => {
+      const inner = (
+        <>
+          <span className="nl-strong">{label}</span>
+          <span className="nl-meta">{sub}</span>
+          {done ? <Ico name="check" size={14} /> : go || href ? <Ico name="arrow" size={14} /> : <span />}
+        </>
+      );
+      return (
+        <li key={label}>
+          {href && !done ? (
+            <Link href={href} className="nl-apps-todo">{inner}</Link>
+          ) : (
+            <button type="button" className="nl-apps-todo" onClick={go ?? undefined} disabled={!go || done} title={!go || done ? sub : undefined}>
+              {inner}
+            </button>
+          )}
+        </li>
+      );
+    };
+
+    /* What moved, newest first: the deal's events, then the record's own. */
+    const history = journey?.ok ? journey.history ?? [] : [];
+    const recordLog = (app?.activity ?? []).filter((a) => !a.note);
+
+    return (
+      <SaveScopeProvider scope={saves}>
+        <div data-look="new" data-steve="application.drawer" className="nl-page nl-rise nl-app">
+          <div className="nl-crumbs">
+            <Link href={backHref} className="nl-crumb">
+              <Ico name="back" size={14} /> Applications
+            </Link>
+            <SaveChip scope={saves} className="bg-card" />
+            <RexWaitingChip refs={[["TenancyApplications", app?.id], ["listing", app?.listingId]]} />
+            {stepLabel && onStep && (
+              <span className="ml-auto flex items-center gap-1.5">
+                <span className="nl-mono mr-1">{stepLabel}</span>
+                <button type="button" aria-label="Previous let" onClick={() => onStep(-1)} className="nl-iconbtn nl-iconbtn--sm">‹</button>
+                <button type="button" aria-label="Next let" onClick={() => onStep(1)} className="nl-iconbtn nl-iconbtn--sm">›</button>
+              </span>
+            )}
+          </div>
+
+          <div className="nl-rhead">
+            <div className="nl-rhead-text">
+              <div className="nl-rhead-meta">
+                {dealStatus && !cancelled && <Badge tone={pillTone(dealStatus.tone)}>{dealStatus.text}</Badge>}
+                <Badge tone={cancelled ? "accent" : "neutral"} plain={!cancelled}>{stageLabel}</Badge>
+                {app?.flag && <Badge tone="accent">{app.flag}</Badge>}
+                {propolyWord}
+                <span className="nl-mono">{[dayN ? `Day ${dayN}` : null, agent !== "—" ? agent : null].filter(Boolean).join(" · ")}</span>
+              </div>
+              <h1 className="nl-title">
+                {name}
+                {isSwap && <span className="text-muted"> ({swapWord})</span>}
+              </h1>
+              <p className="nl-rhead-sub">
+                {[
+                  locality || null,
+                  lead ? `${lead.name}${others ? ` +${others}` : ""}` : null,
+                  rent ? `${rent} ${per}` : "no offer recorded",
+                  moveIn ? `moves in ${niceDate(moveIn)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <div className="nl-rhead-acts">
+              {!cancelled && (
+                <button type="button" className="nl-btn nl-btn--secondary" onClick={() => setBuilder({ mode: "update" })}>
+                  <Ico name="mail" /> Customer update
+                </button>
+              )}
+              {mainJob}
+              <Menu items={menu} />
+            </div>
+          </div>
+
+          {cancelled && (
+            <div className="nl-confirm">
+              <p>
+                <b className="font-semibold">Deal cancelled</b> by {cancelled.by}, {whenWords(cancelled.at)}: {cancelled.reason.toLowerCase()}
+                {cancelled.note ? `. ${cancelled.note}` : ""}. Kirstie has it on her feed to cancel in Propoly.
+              </p>
+            </div>
+          )}
+
+          <div className="nl-hero">
+            <div className={`nl-hero-photo${gridFrom ? " is-lifted" : ""}`}>
+              {shots.length > 1 && <i className="nl-hero-under u2" aria-hidden />}
+              {shots.length > 1 && <i className="nl-hero-under u1" aria-hidden />}
+              <button
+                type="button"
+                ref={heroRef}
+                className="nl-hero-main"
+                onClick={() => shots.length && setGridFrom(heroRef.current?.getBoundingClientRect() ?? null)}
+                aria-label={shots.length ? `See all ${shots.length} photos` : "No photos"}
+              >
+                {shots.length ? (
+                  <PropertyPhoto src={shots[0]} alt="" width={1400} height={875} loading="eager" className="absolute inset-0 h-full w-full object-cover" />
+                ) : (
+                  <span className="nl-hero-empty">
+                    <svg width="72" height="56" viewBox="0 0 56 44" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" aria-hidden><path d="M4 42h48M10 42V20L28 6l18 14v22M23 42V30h10v12" /></svg>
+                    No photos of this home yet
+                  </span>
+                )}
+                {shots.length > 1 && (
+                  <span className="nl-hero-more">
+                    <Ico name="image" size={15} /> +{shots.length - 1} more
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <section className="nl-facts">
+              <div className="nl-facts-head">
+                <h3 className="nl-block-title">The Deal</h3>
+                {waitingOn && !cancelled && <span className="nl-meta">{waitingOn === "you" ? "Waiting on you" : `Waiting on ${waitingOn}`}</span>}
+              </div>
+              <div className="nl-facts-grid">
+                {facts.map((f) => (
+                  <div key={f.label} className="nl-fact">
+                    <span>{f.label}</span>
+                    <b className={quiet(f.text) ? "is-quiet" : ""} title={f.text}>{f.text}</b>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          {/* Where it's up to: the offer, then Kirstie's stages. */}
+          {stops ? (
+            <div className="nl-apps-track">
+              <div className="nl-progress" style={{ "--nl-steps": stops.length } as React.CSSProperties} aria-label="Where it's up to">
+                {stops.map((st) => (
+                  <div key={st.id} title={st.sub ?? undefined} className={`nl-step${st.state === "done" ? " done" : st.state === "current" ? " now" : ""}${st.state === "off" ? " is-off" : ""}`}>
+                    <i />
+                    <span>{st.label}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="nl-meta nl-apps-track-note">
+                Step {(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of {stops.length}
+                {here?.sub ? ` · ${here.sub}` : ""}
+                {intro ? " · Marketing only: the offer, and that's the end of it." : ""}
+              </p>
+            </div>
+          ) : (
+            <p className="nl-meta nl-apps-track-wait">
+              {journey && !journey.ok ? (
+                journey.error ?? "Couldn't read where this is up to."
+              ) : (
+                <>
+                  <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-ink" /> Checking where this is up to…
+                </>
+              )}
+            </p>
+          )}
+
+          <Tabs label="This let" className="nl-ltabs" value={nlTab} onChange={setNlTab} items={nlTabs} />
+
+          <div key={nlTab} className="nl-pane">
+            {nlTab === "overview" && (
+              <div className="nl-bento">
+                {/* ── Next Up ── */}
+                <section className="nl-cell span2 nl-apps-nextup">
+                  <div className="nl-cell-head">
+                    <h3 className="nl-block-title">Next Up</h3>
+                    <Badge tone={cancelled ? "accent" : "info"}>{stageLabel}</Badge>
+                  </div>
+                  {cancelled ? (
+                    <>
+                      <p className="nl-apps-next-line">Let the tenant and landlord know.</p>
+                      <p className="nl-meta">The deal is cancelled: {cancelled.reason.toLowerCase()}. Kirstie has it on her feed to cancel in Propoly.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setBuilder({ mode: "update", start: { kind: "cancelled", to: "tenant:0" } })} className="nl-btn nl-btn--primary nl-btn--sm">
+                          <Ico name="mail" size={14} /> Update the tenant
+                        </button>
+                        <button type="button" onClick={() => setBuilder({ mode: "update", start: { kind: "cancelled", to: "landlord" } })} className="nl-btn nl-btn--secondary nl-btn--sm">
+                          Update the landlord
+                        </button>
+                      </div>
+                    </>
+                  ) : app ? (
+                    <div className="nl-apps-nextbody">
+                      {intro && app.listingId && <IntroKeys listingId={String(app.listingId)} address={[app.property, app.locality].filter(Boolean).join(", ")} />}
+                      {intro?.done && (
+                        <div className="nl-apps-flag is-good">
+                          <Ico name="check" size={16} />
+                          <span>
+                            <b>Marketing only - nothing more to do.</b> The landlord has agreed the tenant. Invoice the marketing fee and the file is finished: the landlord takes it from here.
+                          </span>
+                        </div>
+                      )}
+                      {flags.length > 0 && (
+                        <div className="nl-apps-flag">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 4l9 16H3zM12 10v4M12 17.5h.01" /></svg>
+                          <span>
+                            <b>Needs a look, from Kirstie&apos;s side.</b> {flags.join(". ")}.
+                          </span>
+                        </div>
+                      )}
+                      <div className="nl-apps-nextcard">
+                        <NextStepCard
+                          applicationId={app.id}
+                          actions={journey?.ok ? journey.actions ?? [] : null}
+                          loading={journey === null}
+                          checks={intro?.done ? [] : checklist}
+                          onPlay={(a) => void play(a)}
+                          playing={playing}
+                          confirming={confirming}
+                          onChanged={() => setJourneyTick((n) => n + 1)}
+                        />
+                      </div>
+                      {journey?.ok && (journey.actions ?? []).some((a) => a.test || a.decide) && (
+                        <ul className="nl-lines">
+                          {(journey.actions ?? []).filter((a) => a.test || a.decide).map((a) => (
+                            <li key={a.id} className="flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => void play(a)}
+                                onBlur={() => confirming === a.id && setConfirming(null)}
+                                disabled={playing !== null}
+                                className={`nl-btn nl-btn--sm ${confirming === a.id ? "nl-btn--danger" : a.test === "decline" || a.decide === "declined" || a.decide === "undo" ? "nl-btn--quiet" : "nl-btn--secondary"}`}
+                              >
+                                {playing === a.id ? "Working…" : confirming === a.id ? "Yes, decline it" : a.label}
+                              </button>
+                              <span className="nl-meta min-w-0 flex-1 basis-[220px]">{a.detail}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {playError && <p className="nl-meta text-accent-dark">{playError}</p>}
+                      <div className="empty:hidden">
+                        <CustomerUpdates
+                          key={`${app.id}:${journey?.ok ? journey.deal?.id ?? "" : ""}:${journeyTick}`}
+                          applicationId={app.id}
+                          dealId={journey?.ok ? journey.deal?.id ?? null : null}
+                          openOnly
+                          hideWhenEmpty
+                        />
+                      </div>
+                      {(propoly.state === "in" || Boolean(deal)) && (
+                        <MoveInPackCard
+                          dealId={(journey?.ok ? journey.deal?.id : null) ?? deal?.app.id ?? null}
+                          address={[app.property, app.locality].filter(Boolean).join(", ")}
+                          moveIn={moveIn}
+                        />
+                      )}
+                      {app.listingId && !app.swapKind && (propoly.state === "in" || propoly.state === "push") && (
+                        <AdvertOffline listingId={String(app.listingId)} applicationId={app.id} propertyId={app.propertyId ?? null} address={[app.property, app.locality].filter(Boolean).join(", ")} />
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <p className="nl-apps-next-line">{dealHere?.label ?? "In Propoly"}{dealStatus ? `: ${dealStatus.text.toLowerCase()}.` : "."}</p>
+                      <p className="nl-meta">Let through Propoly, with no application in the OS. Kirstie moves it through the stages; ask her if something looks stuck.</p>
+                      {deal && <MoveInPackCard dealId={deal.app.id} address={[deal.app.propertyName, deal.app.locality].filter(Boolean).join(", ")} moveIn={moveIn} />}
+                    </>
+                  )}
+                </section>
+
+                {/* ── The Applicant ── */}
+                <section className="nl-cell">
+                  <div className="nl-cell-head">
+                    <h3 className="nl-block-title">{people.length > 1 ? "The Applicants" : "The Applicant"}</h3>
+                    {people.length > 0 && <button type="button" className="nl-link" onClick={() => setPerson({ role: "tenant", index: 0 })}>Open</button>}
+                  </div>
+                  {lead ? (
+                    <>
+                      <div className="nl-person">
+                        <span className="nl-avatar">{initialsOf(lead.name)}</span>
+                        <span className="min-w-0">
+                          <span className="nl-strong block truncate">{lead.name}{others ? ` +${others}` : ""}</span>
+                          <span className="nl-meta block">Lead applicant</span>
+                        </span>
+                      </div>
+                      <div className="nl-contact">
+                        {lead.phone ? <a href={telOf(lead.phone)}><Ico name="phone" size={14} />{lead.phone}</a> : <span className="text-muted"><Ico name="phone" size={14} />No phone on file</span>}
+                        {lead.email ? <a href={`mailto:${lead.email}`}><Ico name="mail" size={14} />{lead.email}</a> : <span className="text-muted"><Ico name="mail" size={14} />No email on file</span>}
+                      </div>
+                      <div className="mt-auto flex flex-wrap items-center gap-3 pt-1">
+                        {lead.phone && <a href={telOf(lead.phone)} className="nl-btn nl-btn--secondary nl-btn--sm"><Ico name="phone" size={14} /> Call</a>}
+                        <button type="button" className="nl-link" onClick={() => setPanel("messages")}>Messages</button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="nl-meta">No tenant recorded on this let yet.</p>
+                  )}
+                </section>
+
+                {/* ── The handover, once the offer is accepted ── */}
+                {aside && !cancelled && !intro && <section className="nl-cell span3 nl-apps-aside">{aside}</section>}
+
+                {/* ── Things to Do: the old page's eight tiles ── */}
+                <section className="nl-cell">
+                  <h3 className="nl-block-title">Things to Do</h3>
+                  <ul className="nl-apps-todos">
+                    {!intro && thingLine(plcLabel, plcSub, null, plcCan ? plcHref : null, plcDone)}
+                    {thingLine("Send a reminder", intro ? "Marketing only - nothing to chase" : "Sign, pay, references", cancelled || intro ? null : () => setBuilder({ mode: "reminder" }))}
+                    {thingLine("Customer update", "Email tenant or landlord", () => setBuilder({ mode: "update" }))}
+                    {thingLine("Add a document", "ID, payslips, receipts", () => setNlTab("documents"))}
+                    {thingLine("Add a comment", "For the whole team", () => setNlTab("notes"))}
+                    {thingLine(cancelled ? "Deal cancelled" : "Cancel the deal", cancelled ? cancelled.reason : "Give a reason first", () => setCancelOpen(true))}
+                  </ul>
+                </section>
+
+                {/* ── The landlord ── */}
+                <section className="nl-cell">
+                  <div className="nl-cell-head">
+                    <h3 className="nl-block-title">{landlordsAll.length > 1 ? "Landlords" : "Landlord"}</h3>
+                    {!noLandlord && info !== null && <button type="button" className="nl-link" onClick={() => setPerson({ role: "landlord", index: 0 })}>Open</button>}
+                  </div>
+                  {info === null ? (
+                    <p className="nl-meta">Reading…</p>
+                  ) : landlordName ? (
+                    <>
+                      <div className="nl-person">
+                        <span className="nl-avatar">{initialsOf(landlordName)}</span>
+                        <span className="min-w-0">
+                          <span className="nl-strong block truncate">{landlordName}</span>
+                          <span className="nl-meta block">{landlordsAll.length > 1 ? `+${landlordsAll.length - 1} more ${landlordsAll.length === 2 ? "landlord" : "landlords"}` : "Landlord"}</span>
+                        </span>
+                      </div>
+                      <div className="mt-auto flex flex-wrap items-center gap-3 pt-1">
+                        {landlordPhone && <a href={telOf(landlordPhone)} className="nl-btn nl-btn--secondary nl-btn--sm"><Ico name="phone" size={14} /> Call</a>}
+                        {!cancelled && <button type="button" className="nl-link" onClick={() => setBuilder({ mode: "update", start: { kind: "general", to: "landlord" } })}>Send update</button>}
+                        <button type="button" className="nl-link" onClick={() => setAddLandlordOpen(true)}>Add landlord</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="nl-meta"><b className="font-semibold text-ink">No landlord on this let.</b> Every let needs one. {info.landlordProblem ?? ""}</p>
+                      <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" onClick={() => setAddLandlordOpen(true)}>Add the landlord</button>
+                    </>
+                  )}
+                </section>
+
+                {/* ── Steve, from what is on the let ── */}
+                <section className="nl-cell nl-cell--sage nl-steve-cell">
+                  <div className="flex items-center gap-2">
+                    <SteveFace size={30} mood={idea ? "thinking" : undefined} />
+                    <b className="font-[family-name:var(--font-heading)] text-[16px]">Steve</b>
+                  </div>
+                  {steveReading && !idea ? (
+                    <p className="text-muted">Having a look…</p>
+                  ) : idea ? (
+                    <>
+                      <p>{idea.says}</p>
+                      <button type="button" className="nl-btn nl-btn--sage nl-btn--sm mt-auto self-stretch" onClick={idea.go}>{idea.act}</button>
+                    </>
+                  ) : (
+                    <p>{cancelled ? "This one's cancelled. Once the tenant and landlord know, there's nothing more to do." : "Nothing needs you on this one right now. Nice."}</p>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {nlTab === "people" && (
+              <div className="nl-holder">
+                {picture?.deal && <PropolySummary picture={picture} people={info?.people ?? []} />}
+                <div className="nl-listbar">
+                  <h3 className="nl-block-title">{people.length === 1 ? "The Applicant" : `The Applicants`}</h3>
+                  {people.length > 1 && <span className="nl-count">{people.length}</span>}
+                </div>
+                {people.length ? (
+                  <div className="nl-apps-people">
+                    {people.map((p, i) => {
+                      const party = partyFor(p);
+                      return (
+                        <section key={(p.contactId ?? "") + i} className="nl-cell nl-apps-personcard">
+                          <div className="nl-cell-head">
+                            <button type="button" onClick={() => setPerson({ role: "tenant", index: i })} className="nl-person min-w-0 text-left">
+                              <span className="nl-avatar">{initialsOf(p.name)}</span>
+                              <span className="min-w-0">
+                                <span className="nl-strong block truncate hover:underline">{p.name}</span>
+                                <span className="nl-meta block">{p.isPrimary ? "Lead applicant" : "Applicant"}</span>
+                              </span>
+                            </button>
+                            {p.isPrimary ? (
+                              <Badge tone="accent">Lead</Badge>
+                            ) : canChangeLead ? (
+                              <button type="button" onClick={() => makeLead(p)} disabled={Boolean(leadBusy)} data-steve="application.make-lead" className="nl-btn nl-btn--secondary nl-btn--sm">
+                                {leadBusy === applicantKey(p) ? "Saving…" : "Make lead tenant"}
+                              </button>
+                            ) : null}
+                          </div>
+                          {party && letId ? (
+                            <>
+                              <PartyContact letId={letId} party={{ ...party, isPrimary: p.isPrimary }} propertyAddress={name} onAnswer={takePeople} />
+                              <PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />
+                            </>
+                          ) : (
+                            <ContactBlock
+                              showName={false}
+                              role={p.isPrimary ? "lead applicant" : "applicant"}
+                              person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
+                              personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
+                            />
+                          )}
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="nl-empty">No tenant recorded on this let yet.</p>
+                )}
+                {letId && people.length > 0 && <Guarantors source={{ let: letId }} onChange={setGuarantorSig} />}
+                {letId && <GuarantorsToPropoly letId={letId} tick={`${guarantorSig}:${picture ? "p" : ""}`} />}
+                {letId && <LetTenants letId={letId} onChange={reloadPeople} picture={picture} people={info?.people ?? null} />}
+                {letId && (
+                  <LandlordsBox
+                    letId={letId}
+                    people={info === null ? null : info.people ?? []}
+                    picture={picture}
+                    problem={info?.landlordProblem ?? null}
+                    propertyAddress={[name, locality].filter(Boolean).join(", ")}
+                    onAnswer={takePeople}
+                    homeKey={info?.homeKey ?? null}
+                    reload={reloadPeople}
+                  />
+                )}
+              </div>
+            )}
+
+            {nlTab === "documents" && (
+              <div className="nl-holder">
+                <FileDocuments dropZone address={[name, locality].filter(Boolean).join(", ")} propertyId={app?.propertyId ?? null} from={{ kind: "application", id: letId }} />
+                <div className="nl-apps-propfile">
+                  <PropertyFile propertyId={app?.propertyId ?? null} address={app?.propertyId ? null : [name, locality].filter(Boolean).join(", ")} screen="the application" />
+                </div>
+              </div>
+            )}
+
+            {nlTab === "notes" && (
+              <div>
+                <form
+                  className="nl-composer"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!draft.trim() || noteBusy) return;
+                    setNoteBusy(true);
+                    await addComment(draft);
+                    setNoteBusy(false);
+                  }}
+                >
+                  <textarea rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a note - chased the tenant, spoke to the landlord…" aria-label="Add a note" data-steve="application.add-comment" />
+                  <button type="submit" className="nl-send" disabled={!draft.trim() || noteBusy} aria-label="Save the note">
+                    <Ico name="arrow" size={16} />
+                  </button>
+                </form>
+                <p className="nl-meta -mt-2 mb-5">
+                  Kept on the let, for everyone who opens it.{" "}
+                  <button type="button" className="nl-link" onClick={() => setPanel("messages")}>
+                    Messages with {leadFirst}
+                  </button>
+                </p>
+                {commentRows === null ? (
+                  <p className="nl-meta flex items-center gap-2 py-6"><span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-ink" />Reading the notes…</p>
+                ) : commentRows.length ? (
+                  <ul className="nl-rowlist">
+                    {commentRows.map((n) => (
+                      <li key={n.id}>
+                        <span className="nl-avatar nl-apps-noteav">{initialsOf(n.author)}</span>
+                        <div className="min-w-0">
+                          <p className="nl-meta"><b className="font-medium text-ink">{n.author}</b> · {n.when}</p>
+                          <p className="nl-note-text">{n.text}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="nl-empty">No notes on this let yet.</p>
+                )}
+              </div>
+            )}
+
+            {nlTab === "activity" && (
+              <div>
+                {app && journey === null ? (
+                  <p className="nl-meta flex items-center gap-2 py-6"><span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-ink" />Reading what moved…</p>
+                ) : history.length + recordLog.length ? (
+                  <ul className="nl-timeline">
+                    {history.map((e) => (
+                      <li key={e.id}>
+                        <span className="nl-mono">{whenWords(e.at)}</span>
+                        <span>{eventSentence(e)}</span>
+                      </li>
+                    ))}
+                    {recordLog.map((a, i) => (
+                      <li key={`r${i}`}>
+                        <span className="nl-mono">{/^\d{4}-\d{2}-\d{2}/.test(a.when) ? niceDate(a.when.slice(0, 10)) : a.when}</span>
+                        <span>
+                          {a.what} <span className="nl-meta">{a.by}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="nl-empty">Nothing has moved on the deal yet.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Inside the new look's colours: everything that opens over the page. */}
+        <div data-look="new">
+          {overlays}
+          {gridFrom !== null && shots.length > 0 && <PhotoGrid photos={shots} name={name} origin={gridFrom} onClose={() => setGridFrom(null)} />}
+        </div>
+      </SaveScopeProvider>
+    );
+  }
 
   return (
     <SaveScopeProvider scope={saves}>
@@ -1552,322 +2509,7 @@ export default function ApplicationDrawer({
         </div>
       </div>
 
-      {/* ── over the page ────────────────────────────────────────────────── */}
-
-      {/* Activity and notes: a big pull-out from the right (James, 12 Oct
-          2026: "a nice big pull-out drawer where they can put in all the
-          comments"). Messages is the conversation with the lead tenant. */}
-      <Drawer open={Boolean(panel)} label="Activity and notes" onClose={closePanel}>
-        {panel && (
-          <RecordSidePanel
-            name={name}
-            tab={panel}
-            onTab={setPanel}
-            onClose={closePanel}
-            conversationUrl={letId && lead ? `/api/applications/${encodeURIComponent(letId)}/conversation?with=tenant&i=${Math.max(0, people.indexOf(lead))}` : null}
-            noConversation="Nobody is held on this let yet."
-            notes={commentRows}
-            onAddNote={addComment}
-            notePlaceholder="Add a note - chased the tenant, spoke to the landlord…"
-            noteSaid={{ ok: true, text: "Kept on the let, for everyone who opens it." }}
-            activity={activityLog}
-          />
-        )}
-      </Drawer>
-
-      {/* Push to Propoly from any stage of the let (James, 13 Oct 2026). The
-          same push as Next Step: it checks the deal terms first and stops to
-          ask which home if Propoly has more than one that could be it. */}
-      <Drawer open={propolyOpen} label="Push to Propoly" onClose={closePropoly}>
-        {propolyOpen && app && (
-          <>
-            <DrawerHead
-              icon="rocket"
-              title={propoly.state === "in" ? "In Propoly" : "Push to Propoly"}
-              sub={
-                propoly.state === "in"
-                  ? `${propoly.sub ?? "Pushed"}. The deal link shows here once Propoly is next read.`
-                  : propoly.state === "early"
-                    ? "Not in Propoly. The offer has to be accepted before anything goes across."
-                    : "Not in Propoly yet. Check the deal below, then push it - from any stage of the let."
-              }
-              onClose={closePropoly}
-            />
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
-              {propoly.state === "early" ? (
-                <p className="rounded-xl bg-white px-4 py-3.5 text-[12.5px] leading-relaxed text-muted">
-                  Accept the offer first - from Next step on the page, or the Offers on its listing. Once it is accepted this button pushes it, whatever stage the let is at.
-                </p>
-              ) : (
-                <div className="rounded-2xl border border-line/60 bg-white p-4 sm:p-5 [&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0">
-                  <NextStepCard
-                    applicationId={app.id}
-                    actions={[pushAction]}
-                    loading={false}
-                    checks={[]}
-                    onPlay={() => {}}
-                    playing={null}
-                    confirming={null}
-                    onChanged={() => setJourneyTick((n) => n + 1)}
-                  />
-                </div>
-              )}
-              {propoly.state !== "early" && <HandoffPanel applicationId={app.id} />}
-            </div>
-          </>
-        )}
-      </Drawer>
-
-      {addLandlordOpen && letId && (
-        <AddLandlord
-          letId={letId}
-          hasDeal={Boolean(picture?.deal)}
-          live={Boolean(picture?.live)}
-          propertyAddress={[name, locality].filter(Boolean).join(", ")}
-          onClose={() => setAddLandlordOpen(false)}
-          onAdded={(j) => {
-            setAddLandlordOpen(false);
-            takePeople(j);
-            const n = ((j.let?.people ?? []) as Party[]).filter((p) => p.role === "landlord").length;
-            setPerson({ role: "landlord", index: Math.max(0, n - 1) });
-          }}
-        />
-      )}
-
-      {/* The tenant, or the landlord: details left, everything said right. */}
-      <Drawer open={Boolean(person)} width="lg:max-w-[min(1040px,calc(100%-4rem))]" label={person?.role === "landlord" ? "The landlord" : "The tenant"} onClose={closePerson}>
-        {person && (
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-            <div className="min-h-0 shrink-0 overflow-y-auto border-line/70 lg:w-[400px] lg:border-r">
-              <DrawerHead
-                icon={person.role === "landlord" ? "home" : "user"}
-                title={person.role === "landlord" ? landlordShown?.name ?? "The landlord" : tenantShown?.name ?? "The tenant"}
-                sub={person.role === "landlord" ? `Landlord of ${name}` : `${tenantShown?.isPrimary ? "Lead tenant" : "Tenant"} on ${name}`}
-                onClose={closePerson}
-              >
-                {/* Every landlord, one press apart, and Add beside them (20 Oct 2026). */}
-                {person.role === "landlord" && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {landlordsAll.length > 1 && landlordsAll.map((p, i) => (
-                      <button
-                        key={p.key}
-                        type="button"
-                        onClick={() => setPerson({ role: "landlord", index: i })}
-                        className={`rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors ${i === person.index ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
-                      >
-                        {firstName(p.name) || `Landlord ${i + 1}`}
-                      </button>
-                    ))}
-                    <button type="button" onClick={() => setAddLandlordOpen(true)} className="rounded-full border border-accent-dark/50 bg-white px-3 py-1 text-[11.5px] font-semibold text-accent-dark hover:bg-accent-soft">
-                      + Add landlord
-                    </button>
-                  </div>
-                )}
-                {person.role === "tenant" && people.length > 1 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {people.map((p, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setPerson({ role: "tenant", index: i })}
-                        className={`rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors ${i === person.index ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
-                      >
-                        {firstName(p.name) || `Tenant ${i + 1}`}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </DrawerHead>
-              <div className="space-y-4 px-5 py-5 sm:px-6">
-                {person.role === "tenant" && tenantShown ? (
-                  <>
-                    <section className="rounded-xl border border-line/50 bg-white p-4">
-                      {(() => {
-                        const party = partyFor(tenantShown);
-                        return party && letId ? (
-                          <>
-                            <p className={`${eyebrow} mb-1`}>Their details</p>
-                            <PartyContact letId={letId} party={{ ...party, isPrimary: tenantShown.isPrimary }} propertyAddress={name} onAnswer={takePeople} showName />
-                            {sourceWords(party) && <p className="mt-1.5 text-[11px] text-muted">{sourceWords(party)}</p>}
-                            <PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />
-                          </>
-                        ) : (
-                          <ContactBlock
-                            showName={false}
-                            role={tenantShown.isPrimary ? "lead applicant" : "applicant"}
-                            person={{ name: tenantShown.name, email: tenantShown.email ?? null, phone: tenantShown.phone ?? null }}
-                            personRef={/^\d+$/.test(String(tenantShown.contactId ?? "")) ? `rex:${tenantShown.contactId}` : null}
-                          />
-                        );
-                      })()}
-                      {canChangeLead && !tenantShown.isPrimary && (
-                        <button
-                          type="button"
-                          onClick={() => makeLead(tenantShown)}
-                          disabled={Boolean(leadBusy)}
-                          className="mt-3 rounded-full border border-line/70 bg-white px-3 py-1.5 text-[12px] font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
-                        >
-                          {leadBusy === applicantKey(tenantShown) ? "Saving…" : `Make ${firstName(tenantShown.name) || "them"} the lead tenant`}
-                        </button>
-                      )}
-                    </section>
-                    {app && (
-                      <section className="rounded-xl border border-line/50 bg-white p-4">
-                        <p className={`${eyebrow} mb-3`}>Their application</p>
-                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
-                          {([
-                            ["Income", tenantShown.income != null ? `${gbp(tenantShown.income)} a year` : "Not recorded"],
-                            ["Works", [tenantShown.employment, tenantShown.job].filter(Boolean).join(" · ") || "Not recorded"],
-                            ["Employer", tenantShown.company || "Not recorded"],
-                            ...(scottishLet
-                              ? []
-                              : [
-                                  ["Right to rent", <Answer key="rtr" v={tenantShown.rightToRent || (rtrOf(tenantShown) ? true : tenantShown.rightToRent)} yes="Recorded" no="Not recorded" />],
-                                ]),
-                            ["Landlord reference", <Answer key="ref" v={tenantShown.landlordRef} />],
-                            ["Guarantor", <Answer key="g" v={tenantShown.guarantor} yes="Available" no="None" />],
-                            ["Adverse credit", <Answer key="ac" v={tenantShown.adverseCredit == null ? null : !tenantShown.adverseCredit} yes="None" no="Disclosed" />],
-                            ["Moving in", moveIn ? niceDate(moveIn) : "Not set"],
-                          ] as Array<[string, React.ReactNode]>).map(([k, v]) => (
-                            <div key={k} className="min-w-0">
-                              <dt className="text-[10.5px] text-muted">{k}</dt>
-                              <dd className={`truncate font-semibold ${v === "Not recorded" ? "font-normal text-muted" : ""}`}>{v}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                        {!tenantShown.isPrimary && <p className="mt-3 text-[11px] text-muted">Only the lead applicant is asked the four questions - the form stops after them.</p>}
-                      </section>
-                    )}
-                    {/* A field for the expiry, not only Steve (Kirstie, ticket
-                        066bb29e): chased from /right-to-rent, checked by pre-tenancy. */}
-                    {!scottishLet && letId && (
-                      <section className="rounded-xl border border-line/50 bg-white p-4" data-steve="application.rtr-expiry">
-                        <div className="mb-2 flex items-baseline justify-between gap-2">
-                          <p className={eyebrow}>Right to rent expiry</p>
-                          <Link href="/applications/right-to-rent" className="text-[11px] text-muted underline hover:text-ink">Renewals list</Link>
-                        </div>
-                        <RightToRentField
-                          key={`${tenantShown.name}-${rtrOf(tenantShown)?.id ?? "none"}`}
-                          record={rtrOf(tenantShown)}
-                          save={(until, noTimeLimit) => saveRtr(tenantShown.name, until, noTimeLimit)}
-                          canVerify={rtrCanVerify}
-                          onVerified={rtrKeep}
-                        />
-                      </section>
-                    )}
-                    {tenantFile ? (
-                      <Link href={`/leads?open=${encodeURIComponent(tenantFile)}`} className="inline-flex text-[12.5px] font-semibold text-accent-dark hover:underline">
-                        Open their full file →
-                      </Link>
-                    ) : (
-                      <p className="text-[11.5px] text-muted">No file for them in the OS yet.</p>
-                    )}
-                  </>
-                ) : person.role === "landlord" ? (
-                  info === null ? (
-                    <p className="text-[12.5px] text-muted">Looking them up…</p>
-                  ) : landlordShown ? (
-                    <>
-                      <section className="rounded-xl border border-line/50 bg-white p-4">
-                        {landlordParty && letId ? (
-                          <>
-                            <p className={`${eyebrow} mb-1`}>Their details</p>
-                            <PartyContact letId={letId} party={landlordParty} propertyAddress={[name, locality].filter(Boolean).join(", ")} onAnswer={takePeople} showName homeKey={info?.homeKey ?? null} />
-                            {sourceWords(landlordParty) && <p className="mt-1.5 text-[11px] text-muted">{sourceWords(landlordParty)}</p>}
-                            <PropolyLine letId={letId} party={landlordParty} picture={picture} onAnswer={takePeople} />
-                          </>
-                        ) : (
-                          <ContactBlock
-                            showName={false}
-                            role="landlord"
-                            person={{ name: landlordShown.name, email: landlordShown.email, phone: landlordShown.phone }}
-                            personRef={landlordShown.contactId && (landlordShown as LetLandlord).from !== "record" ? `rex:${landlordShown.contactId}` : null}
-                          />
-                        )}
-                        {!landlordParty && (landlordShown as LetLandlord).from === "record" && (
-                          <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">{info.listingId ? "From the managed property record. They are not on the listing yet." : "From the home's record in the OS. Change them on the home's page."}</p>
-                        )}
-                      </section>
-                      {info.listingId && (
-                        <Link href={`/listings/${encodeURIComponent(info.listingId)}`} className="inline-flex text-[12.5px] font-semibold text-accent-dark hover:underline">
-                          Open the listing →
-                        </Link>
-                      )}
-                    </>
-                  ) : (
-                    <div className="rounded-xl bg-[#fdefec] px-4 py-3 text-[12.5px] text-[#9d4340]">
-                      <p><b className="font-semibold">No landlord on this let.</b> Every let needs one. {info.landlordProblem ?? ""}</p>
-                      <button type="button" onClick={() => setAddLandlordOpen(true)} className="mt-2.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page">Add the landlord</button>
-                    </div>
-                  )
-                ) : null}
-              </div>
-            </div>
-            <div className="min-h-[420px] min-w-0 flex-1">
-              <RecordSidePanel
-                name={person.role === "landlord" ? firstName(landlordShown?.name) || "the landlord" : firstName(tenantShown?.name) || "the tenant"}
-                tab={personTab === "activity" ? "messages" : personTab}
-                onTab={setPersonTab}
-                onClose={closePerson}
-                conversationUrl={
-                  !letId
-                    ? null
-                    : person.role === "landlord"
-                      ? landlordShown ? `/api/applications/${encodeURIComponent(letId)}/conversation?with=landlord&i=${person.index}` : null
-                      : `/api/applications/${encodeURIComponent(letId)}/conversation?with=tenant&i=${person.index}`
-                }
-                noConversation={person.role === "landlord" ? "No landlord is held on the listing, so there's no conversation to show." : "Nobody is held for them on this let."}
-                notes={commentRows}
-                onAddNote={addComment}
-                notePlaceholder="Add a note to the let…"
-              />
-            </div>
-          </div>
-        )}
-      </Drawer>
-
-      {/* Add a document: up from the bottom, a big drop space. */}
-      <BottomSheet open={docsOpen} title="Documents" onClose={closeDocs}>
-        <FileDocuments
-          dropZone
-          address={[name, locality].filter(Boolean).join(", ")}
-          propertyId={app?.propertyId ?? null}
-          from={{ kind: "application", id: letId }}
-        />
-        <div className="mt-6 border-t border-line/60 pt-5 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
-          <p className={`${eyebrow} mb-3`}>The property file</p>
-          <PropertyFile
-            propertyId={app?.propertyId ?? null}
-            address={app?.propertyId ? null : [name, locality].filter(Boolean).join(", ")}
-            screen="the application"
-          />
-        </div>
-      </BottomSheet>
-
-      {/* Customer update and Send a reminder: the email builder. */}
-      <Drawer open={Boolean(builder)} label={builder?.mode === "reminder" ? "Send a reminder" : "Customer update"} onClose={closeBuilder}>
-        {builder && <EmailBuilder key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`} letId={letId} mode={builder.mode} people={info} start={builder.start} scotland={scottishLet} onClose={closeBuilder} />}
-      </Drawer>
-
-      {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={name} onClose={() => setLightbox(null)} />}
-
-      {cancelOpen && (
-        <CancelDeal
-          letId={letId}
-          property={name}
-          cancelled={cancelled}
-          onCancelled={(c) => {
-            setCancelled(c);
-            /* The board's held read is out of date the moment this lands. */
-            dropJson("/api/applications?limit=200");
-          }}
-          onTell={(role) => {
-            setCancelOpen(false);
-            setBuilder({ mode: "update", start: { kind: "cancelled", to: role === "landlord" ? "landlord" : "tenant:0" } });
-          }}
-          onClose={() => setCancelOpen(false)}
-        />
-      )}
+      {overlays}
     </SaveScopeProvider>
   );
 }

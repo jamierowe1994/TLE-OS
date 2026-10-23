@@ -5,6 +5,9 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import OverviewPanel, { useOverviewPanel } from "@/components/portfolio/OverviewPanel";
+import { useNewLook } from "@/lib/use-new-look";
+import { Mast, Badge, Ico } from "@/components/new-look/Parts";
+import { Stat, Meter, Card as NlCard, Failed, Loading, Spin } from "@/components/new-look/backoffice/Bits";
 
 /**
  * Overview (1 Oct 2026): property management at a glance, one tile per part
@@ -63,6 +66,18 @@ export default function Overview() {
     if (panel) hadPanel.current = true;
     else if (hadPanel.current) { hadPanel.current = false; load(); }
   }, [panel, load]);
+  const look = useNewLook("overview");
+
+  /* ── THE NEW LOOK (lib/new-look "overview", 23 Oct 2026) ──────────────────
+     The same /api/overview read, the same pop-outs and links, drawn as the
+     design's Overview: four figures across the top, occupancy and what is
+     coming up beside it, then a card per part of the job. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening Overview…</p>;
+  }
+  if (look) {
+    return <OverviewNew data={data} error={error} reload={() => { setData(null); setError(null); load(); }} open={open} panel={<OverviewPanel panel={panel} onClose={closeNow} />} />;
+  }
 
   return (
     <>
@@ -315,5 +330,275 @@ function Rows({ rows, empty }: { rows: [string, string, string][]; empty: string
         </li>
       ))}
     </ul>
+  );
+}
+
+/* ── The new look ───────────────────────────────────────────────────────── */
+
+type PanelId = Parameters<ReturnType<typeof useOverviewPanel>["open"]>[0];
+
+function OverviewNew({ data, error, reload, open, panel }: { data: Board | null; error: string | null; reload: () => void; open: (id: PanelId) => void; panel: React.ReactNode }) {
+  const p = data?.properties;
+  const a = data?.arrears;
+  const pd = p?.ok ? p.data : null;
+  const ad = a?.ok ? a.data : null;
+  const tileErr = (t: Tile<unknown> | undefined) => (t && !t.ok ? t.error : null);
+  const reading = !data && !error;
+  const vac = data?.moveOuts && data?.lettings ? combine(data.moveOuts, data.lettings) : undefined;
+
+  return (
+    <div data-look="new" className="nl-page nl-rise nl-bo">
+      <Mast
+        eyebrow={data?.scope ? (data.scope.whole ? "Every home across the business" : "The homes on your own book") : "Back office"}
+        title="Overview"
+        blurb="Your homes at a glance: what is late, what is coming up, and where to go next. Every figure is live from the screen it opens."
+      />
+
+      {error && <Failed onRetry={reload}>{error}</Failed>}
+      {reading && <Loading>Reading every board… the first look of the day can take half a minute.</Loading>}
+
+      <div className="nl-bo-stats">
+        <Stat
+          label="Managed"
+          href="/portfolio"
+          value={error ? "-" : pd ? pd.managed.toLocaleString("en-GB") : null}
+          error={tileErr(p)}
+          note={pd ? `homes for ${pd.landlords.toLocaleString("en-GB")} landlord${pd.landlords === 1 ? "" : "s"}` : undefined}
+        />
+        <Stat
+          label="Occupancy"
+          href="/portfolio"
+          value={error ? "-" : pd ? (pd.occupied != null ? pct(pd.occupied, pd.managed) : "-") : null}
+          error={tileErr(p)}
+          delta={pd && pd.occupied != null ? `${pd.vacant ?? 0} vacant` : undefined}
+          deltaTone={pd && (pd.vacant ?? 0) > 0 ? "bad" : "quiet"}
+          note={pd ? (pd.occupied != null ? `${pd.upcoming ?? 0} becoming vacant` : "tenancy status not read yet") : undefined}
+        />
+        <Stat
+          label="Rent roll"
+          href="/portfolio"
+          value={error ? "-" : pd ? compact(pd.rentRoll) : null}
+          error={tileErr(p)}
+          delta={pd ? "a month" : undefined}
+          note={pd ? `average ${pounds(pd.avgRent)}` : undefined}
+        />
+        <Stat
+          label="Arrears"
+          href="/finances"
+          warm={!!ad && ad.tenants > 0}
+          value={error ? "-" : ad ? compact(ad.owed) : null}
+          error={tileErr(a)}
+          delta={ad ? `${ad.tenants} tenant${ad.tenants === 1 ? "" : "s"}` : undefined}
+          deltaTone={ad && ad.tenants > 0 ? "bad" : "quiet"}
+          note={ad ? (ad.tenants > 0 ? `behind · largest ${pounds(ad.largest)}` : "behind on rent") : undefined}
+        />
+      </div>
+
+      <div className="nl-bo-g2">
+        <NlCard title="Occupancy" aside={<Link href="/portfolio" className="nl-link nl-bo-aside">Portfolio</Link>}>
+          {!p ? (
+            <Loading>Reading the book…</Loading>
+          ) : !p.ok ? (
+            <p className="nl-bo-err">{p.error}</p>
+          ) : p.data.occupied == null ? (
+            /* Before the old system's tenancy status is read, REX only knows whether a tenant's
+               name is on file, which reads half the book as empty - so no meters. */
+            <>
+              <p className="nl-meta">Tenanted and vacant come from the tenancy status, which has not been read yet. Until it is, the book as it stands:</p>
+              <div className="nl-bo-mini" style={{ "--n": 3 } as React.CSSProperties}>
+                <MiniFact k="Homes" v={p.data.managed} />
+                <MiniFact k="Landlords" v={p.data.landlords} />
+                <div className="min-w-0"><span>Average rent</span><b>{pounds(p.data.avgRent)}</b></div>
+              </div>
+            </>
+          ) : (
+            <div className="nl-bo-meters">
+              <Meter label="Tenanted" n={p.data.occupied} of={p.data.managed} />
+              <Meter label="Vacant" n={p.data.vacant ?? 0} of={p.data.managed} quiet hot={(p.data.vacant ?? 0) > 0} />
+              <Meter label="Becoming vacant" n={p.data.upcoming ?? 0} of={p.data.managed} quiet />
+            </div>
+          )}
+        </NlCard>
+
+        <NlCard
+          title="Upcoming Vacancies"
+          onClick={() => open("move-outs")}
+          aside={<button type="button" className="nl-link nl-bo-aside" onClick={(e) => { e.stopPropagation(); open("move-outs"); }}>View all</button>}
+        >
+          {!vac ? (
+            <Loading>Reading the move-outs…</Loading>
+          ) : !vac.ok ? (
+            <p className="nl-bo-err">{vac.error}</p>
+          ) : (
+            <>
+              <p className="nl-bo-fig">
+                {vac.data.open.toLocaleString("en-GB")}
+                <span className="nl-meta"> tenancies ending</span>
+              </p>
+              <div className="nl-bo-mini" style={{ "--n": 4 } as React.CSSProperties}>
+                <MiniFact k="Overdue" v={vac.data.overdue} hot={vac.data.overdue > 0} />
+                <MiniFact k="Next 30 days" v={vac.data.next30} />
+                <MiniFact k="On the market" v={vac.data.available} />
+                <MiniFact k="Let agreed" v={vac.data.letAgreed} />
+              </div>
+              {vac.data.next.length === 0 ? (
+                <p className="nl-meta mt-3">No move-out days ahead.</p>
+              ) : (
+                <ul className="nl-bo-list">
+                  {vac.data.next.map((l, i) => (
+                    <li key={i}>
+                      <span className="nl-strong min-w-0 flex-1 truncate">{l.where}</span>
+                      <span className="nl-meta shrink-0">{l.on ? shortDay(l.on) : ""}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </NlCard>
+      </div>
+
+      <div className="nl-bo-g3">
+        <Part title="Maintenance" href="/maintenance" tile={data?.maintenance}>
+          {(d) => (
+            <>
+              <Fig n={d.open} label="open jobs" />
+              <div className="nl-bo-mini" style={{ "--n": 3 } as React.CSSProperties}>
+                <MiniFact k="Overdue" v={d.overdue} hot={d.overdue > 0} />
+                <MiniFact k="Follow up" v={d.followUp} hot={d.followUp > 0} />
+                <MiniFact k="Emergencies" v={d.emergencies} hot={d.emergencies > 0} />
+              </div>
+              {d.late.length === 0 ? (
+                <p className="nl-meta mt-3">Nothing late.</p>
+              ) : (
+                <ul className="nl-bo-list">
+                  {d.late.map((l, i) => (
+                    <li key={i}>
+                      <span className="min-w-0 flex-1 truncate"><span className="nl-strong">{l.title}</span>{l.where ? <span className="nl-meta"> · {l.where}</span> : null}</span>
+                      {l.dueOn ? <Badge tone="accent" plain>due {shortDay(l.dueOn)}</Badge> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {d.partial && <p className="nl-bo-err mt-2">{d.partial}</p>}
+            </>
+          )}
+        </Part>
+
+        <Part title="Inspections" onOpen={() => open("inspections")} tile={data?.inspections}>
+          {(d) => (
+            <>
+              <Fig n={d.due} label="visits due" />
+              <div className="nl-bo-mini" style={{ "--n": 3 } as React.CSSProperties}>
+                <MiniFact k="Overdue" v={d.overdue} hot={d.overdue > 0} />
+                <MiniFact k="Booked in" v={d.booked} />
+                <MiniFact k="Waiting on tenant" v={d.awaitingTenant} />
+              </div>
+            </>
+          )}
+        </Part>
+
+        <Part title="Tenancy Reviews" onOpen={() => open("tenancy-reviews")} tile={data?.reviews}>
+          {(d) => (
+            <>
+              <Fig n={d.due} label="to review" />
+              <div className="nl-bo-mini" style={{ "--n": 3 } as React.CSSProperties}>
+                <MiniFact k="Overdue" v={d.overdue} hot={d.overdue > 0} />
+                <MiniFact k="Notice served" v={d.noticeServed} />
+                <MiniFact k="Done this month" v={d.doneThisMonth} />
+              </div>
+            </>
+          )}
+        </Part>
+
+        <Part title="Compliance" href="/compliance" tile={data?.compliance}>
+          {(d) => (
+            <>
+              <Fig n={d.expired} label="certificates expired" hot={d.expired > 0} />
+              <div className="nl-bo-mini" style={{ "--n": 2 } as React.CSSProperties}>
+                <MiniFact k="Due in 30 days" v={d.dueSoon} hot={d.dueSoon > 0} />
+                <MiniFact k="Homes affected" v={d.homesAffected} />
+              </div>
+            </>
+          )}
+        </Part>
+
+        <Part title="Applications" href="/applications" tile={data?.applications}>
+          {(d) => (
+            <>
+              <Fig n={d.open} label="open applications" />
+              <div className="nl-bo-mini" style={{ "--n": 1 } as React.CSSProperties}>
+                <MiniFact k="Moving in" v={d.movingIn} />
+              </div>
+            </>
+          )}
+        </Part>
+
+        <Part title="Lettings" href="/listings" tile={data?.lettings}>
+          {(d) => (
+            <>
+              <Fig n={d.available} label="homes on the market" />
+              <div className="nl-bo-mini" style={{ "--n": 2 } as React.CSSProperties}>
+                <MiniFact k="Let agreed" v={d.letAgreed} />
+                <MiniFact k="Drafts" v={d.drafts} />
+              </div>
+            </>
+          )}
+        </Part>
+      </div>
+
+      {data && (
+        <p className="nl-meta mt-8 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>Read at {new Date(data.at).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" })}.</span>
+          <button type="button" onClick={reload} className="nl-link">Read again</button>
+        </p>
+      )}
+
+      {panel}
+    </div>
+  );
+}
+
+/** One part of the job: its figure, its counts, and where it opens. */
+function Part<T>({ title, href, onOpen, tile, children }: { title: string; href?: string; onOpen?: () => void; tile: Tile<T> | undefined; children: (d: T) => React.ReactNode }) {
+  return (
+    <NlCard
+      title={title}
+      className="nl-bo-part"
+      onClick={onOpen}
+      aside={
+        onOpen ? (
+          <button type="button" className="nl-link nl-bo-aside" onClick={(e) => { e.stopPropagation(); onOpen(); }}>View all</button>
+        ) : href ? (
+          <Link href={href} className="nl-link nl-bo-aside">View all <Ico name="arrow" size={13} /></Link>
+        ) : null
+      }
+    >
+      {!tile ? (
+        <p className="nl-bo-fig is-reading"><Spin /> <span className="nl-meta">reading…</span></p>
+      ) : !tile.ok ? (
+        <p className="nl-bo-err">{tile.error}</p>
+      ) : (
+        children(tile.data)
+      )}
+    </NlCard>
+  );
+}
+
+function Fig({ n, label, hot }: { n: number; label: string; hot?: boolean }) {
+  return (
+    <p className={`nl-bo-fig${hot ? " is-hot" : ""}`}>
+      {n.toLocaleString("en-GB")}
+      <span className="nl-meta"> {label}</span>
+    </p>
+  );
+}
+
+function MiniFact({ k, v, hot }: { k: string; v: number; hot?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <span>{k}</span>
+      <b className={hot ? "is-hot" : ""}>{v.toLocaleString("en-GB")}</b>
+    </div>
   );
 }

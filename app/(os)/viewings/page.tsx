@@ -18,13 +18,17 @@ import Tiles from "@/components/viewings/Tiles";
 import WeekGrid from "@/components/viewings/WeekGrid";
 import { card, dateOfOffset, fmtFull, fmtShort, groupByDay, nearLabel, secondary } from "@/components/viewings/shared";
 import { KIND_META, minutesOf, type Appt, type ApptKind } from "@/lib/diary";
-import { useDiary } from "@/lib/diary-store";
+import { refreshDiary, useDiary } from "@/lib/diary-store";
 import { fetchMe } from "@/lib/me";
 import BookViewing from "@/components/viewings/BookViewing";
 import NewAppointment from "@/components/viewings/NewAppointment";
 import ChangeViewing from "@/components/viewings/ChangeViewing";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import { PressButton } from "@/components/Bits";
+import { useNewLook } from "@/lib/use-new-look";
+import { Mast, Menu, Tabs, Ico } from "@/components/new-look/Parts";
+import { DayDial, DiaryRows, MonthGrid, Spinner, dayLabel } from "@/components/new-look/diary/DiaryParts";
+import { openGuide } from "@/lib/guide-sheet";
 
 /**
  * Viewings: one screen, one person's diary.
@@ -65,8 +69,14 @@ const hasFeedback = (a: Appt) => Boolean(a.feedback);
 type TileId = "upcoming" | "today" | "week" | "due" | "in";
 /** What the space beside the month is showing. `day` is a month click. */
 type Panel = AgendaMode | "week";
+/** The new look's tabs (lib/new-look "diary"): the old views and panels, side by side. */
+type NlTab = "day" | "week" | "month" | "upcoming" | "due" | "in" | "report";
 
 export default function Viewings() {
+  const look = useNewLook("diary");
+  const [nlTab, setNlTab] = useState<NlTab>("day");
+  /* Upcoming in the new look: whole days, about this many rows at a time. */
+  const [upRows, setUpRows] = useState(20);
   /* Three views, not two. "Feedback" is the landlord's question - people have
      been round, what did they say - and it is asked per PROPERTY, which is a
      different shape from a diary. See components/viewings/FeedbackReport. */
@@ -178,7 +188,7 @@ export default function Viewings() {
 
   /* What the Print button prints: the day, or the seven days. */
   const printGroups: PrintGroup[] =
-    panel === "day"
+    (look ? nlTab === "day" : panel === "day")
       ? [{ heading: fmtFull(dateOfOffset(selected)), sub: nearLabel(selected) ?? undefined, list: byDay.get(selected) ?? [] }]
       : Array.from({ length: 7 }, (_, i) => ({
           heading: fmtFull(dateOfOffset(i)),
@@ -210,6 +220,301 @@ export default function Viewings() {
             ? "Feedback due"
             : "Feedback in";
   const listDays = [...new Set(listRows.map((a) => a.day))];
+
+  /* The drawers and the booking flows, the same in both looks. In the new look the
+     quick look is drawn the new way (its newLook prop); the viewing file and the
+     bookers are the same components either way, and still book into Outlook. */
+  const overlays = (
+    <>
+      <PrintSheet owner={owner} groups={printGroups} />
+
+      <AppointmentDrawer
+        newLook={Boolean(look)}
+        appt={quick}
+        onClose={() => setQuickId(null)}
+        onOpenViewing={(a) => {
+          setQuickId(null);
+          setFullId(a.id);
+        }}
+        onChangeTime={(a) => {
+          setQuickId(null);
+          setChanging(a);
+        }}
+        onAddToBlock={(anchor) => {
+          setQuickId(null);
+          setBlockAnchor(anchor);
+        }}
+        sentExtra={sentExtra}
+        onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
+      />
+
+      <ViewingDrawer
+        appt={full}
+        onClose={() => setFullId(null)}
+        onChangeTime={(a) => {
+          setFullId(null);
+          setChanging(a);
+        }}
+        onAddToBlock={(anchor) => {
+          setFullId(null);
+          setBlockAnchor(anchor);
+        }}
+        sentExtra={sentExtra}
+        onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
+      />
+
+      <BookViewing open={booking} onClose={() => setBooking(false)} />
+      <NewAppointment open={making} onClose={() => setMaking(false)} day={dateOfOffset(selected)} />
+      <ChangeViewing appt={changing} onClose={() => setChanging(null)} />
+      <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
+    </>
+  );
+
+  /* ── THE NEW LOOK (lib/new-look "diary", 23 Oct 2026) ─────────────────────
+     The same diary, people, kinds, search, drawers and bookers as the screen
+     below, drawn the new way: a type-only header, one filter row, text tabs,
+     the day on a dial and the month as a grid. The tiles became tabs - Day,
+     Week, Month, Upcoming, Feedback due, Feedback in and the Feedback report -
+     so every view the old screen had is one click away. The old screen stays
+     underneath until the switch has bedded in. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening the Diary…</p>;
+  }
+  if (look) {
+    /* A figure is only said once the diary has answered, and never over a
+       failed read (the live-figures rule). */
+    const sure = !loading && !error;
+    const nlPick = (offset: number) => {
+      pickDay(offset);
+      setNlTab("day");
+    };
+    const dayList = byDay.get(selected) ?? [];
+    const dayCount = counted(dayList);
+    const weekCount = counted(week);
+    const n = (x: number) => (sure ? x : null);
+    const tabs: { id: NlTab; label: string; count?: number | null }[] = [
+      { id: "day", label: "Day" },
+      { id: "week", label: "Next 7 days", count: n(weekCount) },
+      { id: "month", label: "Month" },
+      { id: "upcoming", label: "Upcoming", count: n(counted(upcoming)) },
+      { id: "due", label: "Feedback due", count: n(due.length) },
+      { id: "in", label: "Feedback in", count: n(fedBack.length) },
+      { id: "report", label: "Feedback report" },
+    ];
+    const blurbs: Record<NlTab, string> = {
+      day: "",
+      week: "Today and the six days after it, hour by hour.",
+      month: "Pick a day to open it on the dial.",
+      upcoming: "Everything still to happen, a day at a time.",
+      due: "Been, and nobody has written down what was said.",
+      in: "What the applicant said, ready for the landlord.",
+      report: "Every viewing's feedback, gathered by property.",
+    };
+    const whose = fAgent ? (fAgent === me?.name ? "in your diary" : `in ${fAgent}'s diary`) : everything ? "across the team" : "";
+    const blurb = loading
+      ? "Reading the diary…"
+      : error
+        ? "The diary couldn't be read just now, so no figures are shown. Try again in a moment."
+        : `${weekCount === 0 ? "Nothing" : weekCount === 1 ? "One appointment" : `${weekCount} appointments`} in the next seven days${whose ? ` ${whose}` : ""}. Step through the days on the dial, or open the month.`;
+    const anySet = Boolean(q.trim() || fKind || (everything && fAgent));
+    const loadingLine = (
+      <p className="nl-empty" role="status">
+        <Spinner />
+        Reading the diary…
+      </p>
+    );
+    /* Upcoming, a day at a time, each day a door back to the dial. */
+    const allUpDays = [...new Set(upcoming.map((a) => a.day))];
+    /* Paged by DAY, so a day is never cut in half. */
+    const upcomingDays: number[] = [];
+    let upLeft = upRows;
+    for (const d of allUpDays) {
+      if (upLeft <= 0) break;
+      upcomingDays.push(d);
+      upLeft -= upcoming.filter((a) => a.day === d).length;
+    }
+    const upHidden = upcoming.filter((a) => a.day > (upcomingDays[upcomingDays.length - 1] ?? Infinity)).length;
+    return (
+      <>
+        <div data-look="new" className="nl-page nl-rise nl-diary">
+          <Mast
+            title="Diary"
+            blurb={blurb}
+            actions={
+              <>
+                <button type="button" data-steve="viewings.book" onClick={() => setBooking(true)} className="nl-btn nl-btn--primary">
+                  <Ico name="plus" /> Book a viewing
+                </button>
+                <button type="button" data-steve="viewings.new-appointment" onClick={() => setMaking(true)} className="nl-btn nl-btn--secondary" title="A meeting, an inspection or something personal">
+                  New appointment
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    pickDay(0);
+                    setNlTab("day");
+                  }}
+                  className="nl-btn nl-btn--secondary"
+                >
+                  Back to today
+                </button>
+                <Menu
+                  items={[
+                    {
+                      label: nlTab === "day" ? "Print this day" : "Print the next seven days",
+                      sub: "A run sheet for the car",
+                      onClick: () => window.print(),
+                    },
+                    "rule",
+                    { label: "How the Diary works", onClick: () => openGuide("viewings") },
+                  ]}
+                />
+              </>
+            }
+          />
+
+          {/* Can we get in? Only there when something needs sorting. */}
+          <AccessBoard newLook />
+
+          <div className="nl-filters">
+            <label className="nl-fsearch">
+              <Ico name="search" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Who, where or what" aria-label="Search the diary" />
+            </label>
+            {/* Only an owner has a book to choose from. An agent's diary is
+                their own and arrives already scoped. */}
+            {everything && agents.length > 1 && (
+              <span className={`nl-fsel${fAgent ? " is-set" : ""}`}>
+                <select aria-label="Whose diary" value={fAgent ?? ""} onChange={(e) => setFAgent(e.target.value || null)}>
+                  <option value="">Everyone</option>
+                  {agents.map((a) => (
+                    <option key={a} value={a}>{a === me?.name ? `${a} (you)` : a}</option>
+                  ))}
+                </select>
+              </span>
+            )}
+            {kinds.length > 1 && (
+              <span className={`nl-fsel${fKind ? " is-set" : ""}`}>
+                <select aria-label="What kind" value={fKind ?? ""} onChange={(e) => setFKind((e.target.value || null) as ApptKind | null)}>
+                  <option value="">Everything</option>
+                  {kinds.map((k) => (
+                    <option key={k} value={k}>{KIND_META[k].label}</option>
+                  ))}
+                </select>
+              </span>
+            )}
+            {anySet && (
+              <button type="button" className="nl-fmore" onClick={() => { setQ(""); setFKind(null); if (everything) setFAgent(null); }}>
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="mt-7">
+            <Tabs label="Diary views" value={nlTab} onChange={setNlTab} items={tabs} />
+            {blurbs[nlTab] && <p className="nl-meta mt-3">{blurbs[nlTab]}</p>}
+          </div>
+
+          {error && !loading && (
+            <div className="nl-diary-error" role="alert">
+              <div className="min-w-0 flex-1">
+                <p className="nl-block-title">The diary didn&apos;t load</p>
+                <p className="nl-meta mt-1">
+                  {DIARY.length ? "What's below is the last good read and may be out of date." : "Nothing can be shown until it answers."}
+                </p>
+              </div>
+              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => void refreshDiary()}>
+                Try again
+              </button>
+            </div>
+          )}
+
+          <div className="nl-diary-body" key={nlTab}>
+            {nlTab === "day" && (
+              <>
+                <DayDial selected={selected} byDay={byDay} onSelect={pickDay} />
+                <div className="nl-diary-dayhead">
+                  <h2 className="nl-section-title">{dayLabel(selected)}</h2>
+                  <span className="nl-meta">
+                    {nearLabel(selected) ? fmtFull(dateOfOffset(selected)) : ""}
+                    {nearLabel(selected) && sure && dayCount ? " · " : ""}
+                    {sure && dayCount ? `${dayCount} ${dayCount === 1 ? "appointment" : "appointments"}` : ""}
+                  </span>
+                  <button type="button" className="nl-link ml-auto" onClick={() => window.print()}>
+                    Print
+                  </button>
+                </div>
+                {loading && !dayList.length ? (
+                  loadingLine
+                ) : dayList.length ? (
+                  <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />
+                ) : (
+                  <p className="nl-empty">{selected < 0 ? "Nothing was booked that day." : "A clear day. Rare. Enjoy it."}</p>
+                )}
+              </>
+            )}
+
+            {nlTab === "week" && (
+              <div className="nl-diary-holder">
+                {loading && !DIARY.length ? loadingLine : <WeekGrid appts={scoped} onOpen={(a) => setQuickId(a.id)} onPrint={() => window.print()} onPickDay={nlPick} />}
+              </div>
+            )}
+
+            {nlTab === "month" && <MonthGrid byDay={byDay} selected={selected} monthShift={monthShift} onMonthShift={setMonthShift} onPick={nlPick} />}
+
+            {nlTab === "upcoming" &&
+              (loading && !upcoming.length ? (
+                loadingLine
+              ) : upcoming.length === 0 ? (
+                <p className="nl-empty">Nothing booked ahead.</p>
+              ) : (
+                upcomingDays.map((d) => {
+                  const list = upcoming.filter((a) => a.day === d);
+                  const c = counted(list);
+                  return (
+                    <section key={d} className="nl-diary-group">
+                      <button type="button" className="nl-diary-grouphead" onClick={() => nlPick(d)}>
+                        <span className={`nl-block-title${d === 0 ? " is-today" : ""}`}>{dayLabel(d)}</span>
+                        <span className="nl-meta">{nearLabel(d) ? fmtShort(dateOfOffset(d)) : ""}</span>
+                        <span className="nl-meta ml-auto">{c} {c === 1 ? "appointment" : "appointments"}</span>
+                      </button>
+                      <DiaryRows list={list} page={list.length} resetKey={`up:${d}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />
+                    </section>
+                  );
+                }).concat(
+                  upHidden > 0 ? (
+                    <button key="more" type="button" className="nl-btn nl-btn--secondary nl-btn--sm mt-6" onClick={() => setUpRows((n) => n + 20)}>
+                      See more · {upHidden} to go
+                    </button>
+                  ) : upRows > 20 ? (
+                    <button key="less" type="button" className="nl-link mt-6" onClick={() => setUpRows(20)}>
+                      Show less
+                    </button>
+                  ) : (
+                    []
+                  )
+                )
+              ))}
+
+            {(nlTab === "due" || nlTab === "in") &&
+              (() => {
+                const list = nlTab === "due" ? due : fedBack;
+                if (loading && !list.length) return loadingLine;
+                if (!list.length) return <p className="nl-empty">{nlTab === "due" ? "Nothing waiting on feedback. Rare, and good." : "No feedback recorded yet."}</p>;
+                return <DiaryRows list={list} showDay resetKey={nlTab} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />;
+              })()}
+
+            {nlTab === "report" && (
+              <div className="nl-diary-holder">
+                <FeedbackReport appts={scoped} loading={loading} error={error} onOpen={(a) => setQuickId(a.id)} onPrint={() => window.print()} />
+              </div>
+            )}
+          </div>
+        </div>
+        {overlays}
+      </>
+    );
+  }
 
   return (
     <>
@@ -389,46 +694,7 @@ export default function Viewings() {
         </div>
       )}
 
-      <PrintSheet owner={owner} groups={printGroups} />
-
-      <AppointmentDrawer
-        appt={quick}
-        onClose={() => setQuickId(null)}
-        onOpenViewing={(a) => {
-          setQuickId(null);
-          setFullId(a.id);
-        }}
-        onChangeTime={(a) => {
-          setQuickId(null);
-          setChanging(a);
-        }}
-        onAddToBlock={(anchor) => {
-          setQuickId(null);
-          setBlockAnchor(anchor);
-        }}
-        sentExtra={sentExtra}
-        onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
-      />
-
-      <ViewingDrawer
-        appt={full}
-        onClose={() => setFullId(null)}
-        onChangeTime={(a) => {
-          setFullId(null);
-          setChanging(a);
-        }}
-        onAddToBlock={(anchor) => {
-          setFullId(null);
-          setBlockAnchor(anchor);
-        }}
-        sentExtra={sentExtra}
-        onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
-      />
-
-      <BookViewing open={booking} onClose={() => setBooking(false)} />
-      <NewAppointment open={making} onClose={() => setMaking(false)} day={dateOfOffset(selected)} />
-      <ChangeViewing appt={changing} onClose={() => setChanging(null)} />
-      <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
+      {overlays}
     </>
   );
 }

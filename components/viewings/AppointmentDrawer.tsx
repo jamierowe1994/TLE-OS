@@ -32,6 +32,7 @@ import { WhatsAppButton } from "@/components/WhatsAppQr";
 import CancelAppointment, { canCancelGeneral } from "@/components/CancelAppointment";
 import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/CancelViewing";
 import AppraisalChange, { canChangeAppraisalAppt } from "@/components/AppraisalChange";
+import { Badge, Ico } from "@/components/new-look/Parts";
 
 /**
  * The quick look: what IS this, and what do I need to know before I go.
@@ -83,6 +84,7 @@ export default function AppointmentDrawer({
   onAddToBlock,
   sentExtra,
   onSend,
+  newLook = false,
 }: {
   appt: Appt | null;
   outcome?: Outcome;
@@ -95,6 +97,8 @@ export default function AppointmentDrawer({
   onAddToBlock?: (anchor: BlockAnchor) => void;
   sentExtra: Set<string>;
   onSend: (apptId: string, label: string) => void;
+  /** The Diary's new look (lib/new-look "diary"): the same card as a new-look drawer. */
+  newLook?: boolean;
 }) {
   /* A slot: the viewings booked inside it, from the same diary (8 Oct 2026). */
   const { appts: diary } = useDiary();
@@ -164,6 +168,357 @@ export default function AppointmentDrawer({
   const mapsHref = appt.where
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(appt.where)}`
     : null;
+
+  /* Remove an OS slot: ask once, then go (the new look's foot; the card below keeps its own). */
+  async function removeSlot() {
+    if (!appt) return;
+    if (removing !== "ask") return setRemoving("ask");
+    setRemoving("busy");
+    const j = await fetch("/api/viewings/slot", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ slotId: appt.id }) })
+      .then((r) => r.json() as Promise<{ ok?: boolean; said?: string }>)
+      .catch(() => null);
+    if (!j?.ok) {
+      setRemoving(null);
+      setSlotSaid(j?.said ?? "That didn't remove it. Try again.");
+      return;
+    }
+    await refreshDiary().catch(() => null);
+    onClose();
+  }
+
+  /* ── THE NEW LOOK (lib/new-look "diary", 23 Oct 2026) ─────────────────────
+     The same facts, checks and buttons as the card below, drawn as the new
+     look's side drawer: what and when up top, the facts as a list, then the
+     slot, the confirmations and the feedback, and the way in along the foot. */
+  if (newLook) {
+    const nb = "nl-btn nl-btn--secondary nl-btn--sm";
+    const np = "nl-btn nl-btn--primary nl-btn--sm";
+    const time = appt.allDay ? "All day" : `${appt.start} to ${endTime(appt)}`;
+    const slotInside = (() => {
+      if (appt.kind !== "slot") return [];
+      const from = new Date(apptStartIso(appt)).getTime();
+      const to = from + appt.mins * 60_000;
+      return diary
+        .filter((a) => a.kind === "viewing" && ((appt.listingId && a.listingId === appt.listingId) || (!!appt.where && a.where === appt.where)))
+        .filter((a) => {
+          const t = new Date(apptStartIso(a)).getTime();
+          return t < to && t + a.mins * 60_000 > from;
+        })
+        .sort((a, b) => apptStartIso(a).localeCompare(apptStartIso(b)));
+    })();
+    const anchor = anchorFromAppt({ ...appt, listingId: appt.listingId ?? match?.listingId ?? null });
+    return createPortal(
+      <div data-look="new" className="nl-drawer-wrap nl-diary-drawer" data-shown={shown} data-steve="appointment.drawer" role="dialog" aria-modal="true" aria-label={subject || meta.label}>
+        <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={onClose} />
+        <div className="nl-drawer">
+          <div className="nl-drawer-head">
+            <div className="min-w-0 flex-1">
+              <p className="nl-eyebrow">
+                {meta.label}
+                {appt.unaccompanied ? " (unaccompanied)" : ""} · {near ?? fmtFull(dateOfOffset(appt.day))} · {time}
+                {past ? " · happened" : ""}
+              </p>
+              <h2 className="nl-drawer-title mt-1.5">{subject || meta.label}</h2>
+              {appt.who && appt.kind !== "slot" && <p className="nl-meta mt-1.5">with {appt.who}</p>}
+            </div>
+            <button type="button" className="nl-iconbtn" aria-label="Close" onClick={onClose}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+
+          <div className="nl-drawer-body">
+            <dl className="nl-diary-dl">
+              <div>
+                <dt>When</dt>
+                <dd>
+                  {when}, {time}
+                  {!appt.allDay && <span className="nl-diary-quiet"> · {lengthLabel(appt.mins)}</span>}
+                </dd>
+              </div>
+              <div>
+                <dt>Where</dt>
+                <dd>
+                  {appt.where ? (
+                    <>
+                      {appt.where}
+                      {match?.locality && match.locality !== appt.where && <span className="nl-diary-quiet block">{match.locality}</span>}
+                      {mapsHref && (
+                        <span className="mt-1.5 block">
+                          <a href={mapsHref} target="_blank" rel="noreferrer" className="nl-link">
+                            Open in Maps
+                          </a>
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="nl-diary-quiet">No address on this entry.</span>
+                  )}
+                </dd>
+              </div>
+              {appt.kind !== "slot" && (
+                <div>
+                  <dt>{appt.kind === "viewing" ? (past ? "Who viewed" : "Who's coming") : "Who it's with"}</dt>
+                  <dd>
+                    {appt.who ? appt.who : <span className="nl-diary-quiet">Nobody named on this entry.</span>}
+                    {appt.contact && (appt.contact.phone || appt.contact.email) ? (
+                      <span className="mt-2 flex flex-wrap gap-2">
+                        {appt.contact.phone && (
+                          <>
+                            <a href={`tel:${appt.contact.phone.replace(/\s+/g, "")}`} className={nb}>
+                              <Ico name="phone" size={14} />
+                              {appt.contact.phone}
+                            </a>
+                            <WhatsAppButton phone={appt.contact.phone} name={appt.who || ""} className={nb}>
+                              WhatsApp
+                            </WhatsAppButton>
+                          </>
+                        )}
+                        {appt.contact.email && (
+                          <a href={`mailto:${appt.contact.email}`} className={nb}>
+                            <Ico name="mail" size={14} />
+                            Email
+                          </a>
+                        )}
+                      </span>
+                    ) : (
+                      appt.who && <span className="nl-diary-quiet block">No contact details on the calendar entry.</span>
+                    )}
+                  </dd>
+                </div>
+              )}
+              {atProperty && (
+                <>
+                  <div>
+                    <dt>Keys</dt>
+                    <dd>
+                      {match === undefined || (match && keys === null) ? (
+                        <span className="nl-diary-quiet">Checking the register…</span>
+                      ) : match === null ? (
+                        <span className="nl-diary-quiet">Couldn&apos;t match this entry to a property record, so the key register can&apos;t be checked.</span>
+                      ) : !keys || keys.length === 0 ? (
+                        <span className="nl-diary-quiet">No key set on the register for this property.</span>
+                      ) : (
+                        keys.map((k) => (
+                          <span key={k.id} className="block">
+                            {k.label}
+                            {k.description ? `, ${k.description === k.description.toUpperCase() ? k.description.charAt(0) + k.description.slice(1).toLowerCase() : k.description}` : ""}
+                            {k.heldBy ? (
+                              <span className="nl-diary-warn">
+                                {" "}- out with {k.heldBy}
+                                {k.reason ? ` (${k.reason})` : ""}
+                              </span>
+                            ) : (
+                              <span className="nl-diary-quiet"> - on the shelf{k.location ? `, ${k.location}` : ""}</span>
+                            )}
+                          </span>
+                        ))
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Occupier</dt>
+                    <dd>
+                      {appt.tenant ? (
+                        <>
+                          {appt.tenant} in situ
+                          {tenantTold === true && <span className="nl-diary-ok"> · told</span>}
+                          {tenantTold === false && <span className="nl-diary-warn"> · not yet told</span>}
+                        </>
+                      ) : appt.tenant === null ? (
+                        "Vacant - nobody to arrange around."
+                      ) : (
+                        <span className="nl-diary-quiet">Not known whether anyone lives here - check before you travel.</span>
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Landlord</dt>
+                    <dd>
+                      {landlordTold === true ? (
+                        "Told about this appointment."
+                      ) : landlordTold === false ? (
+                        <span className="nl-diary-warn">Not yet told.</span>
+                      ) : (
+                        <span className="nl-diary-quiet">No access arrangement recorded.</span>
+                      )}
+                    </dd>
+                  </div>
+                </>
+              )}
+              <div>
+                <dt>Diary</dt>
+                <dd>{appt.agent || <span className="nl-diary-quiet">Not recorded</span>}</dd>
+              </div>
+            </dl>
+
+            {appt.notes && (
+              <section>
+                <h3 className="nl-block-title">Notes</h3>
+                <p className="nl-diary-notes">{appt.notes}</p>
+              </section>
+            )}
+
+            {appt.kind === "slot" && (
+              <section>
+                <h3 className="nl-block-title">
+                  Booked in This Slot <span className="nl-count">{slotInside.length}</span>
+                </h3>
+                {slotInside.length ? (
+                  <ul className="nl-lines mt-2">
+                    {slotInside.map((a) => (
+                      <li key={a.id}>
+                        <span className="nl-mono w-12 shrink-0">{a.start}</span>
+                        <span className="nl-strong min-w-0 flex-1 truncate">{a.who || "Viewer"}</span>
+                        <span className="nl-meta">{a.mins} min</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="nl-meta mt-2">Nobody booked in it yet. Book within slot to add the first tenant.</p>
+                )}
+                <p className="nl-meta mt-2">Held time - nobody is told about the slot itself.</p>
+              </section>
+            )}
+
+            {appt.kind !== "other" && appt.kind !== "travel" && appt.kind !== "slot" && (
+              <section>
+                <h3 className="nl-block-title">Confirmations</h3>
+                {appt.confirmPending && (
+                  <p className="nl-diary-warn mt-2 text-[13.5px]">
+                    Booked in the OS. The confirmation to {appt.confirmPending} hasn&apos;t been sent yet
+                    {appt.leadId ? (
+                      <>
+                        {" - "}
+                        <a href={`/leads?open=${encodeURIComponent(appt.leadId)}`} className="nl-link">send it from their lead</a>.
+                      </>
+                    ) : "."}
+                  </p>
+                )}
+                {appt.comms.length === 0 ? (
+                  appt.confirmPending ? null : (
+                    <p className="nl-meta mt-2">{appt.fromRex ? "No record of what was sent for this appointment." : "Nothing to send for this one."}</p>
+                  )
+                ) : (
+                  <ul className="nl-lines mt-2">
+                    {appt.comms.map((c) => {
+                      const done = c.done || sentExtra.has(`${appt.id}:${c.label}`);
+                      return (
+                        <li key={c.label}>
+                          <span className={`nl-diary-tick${done ? " is-done" : ""}`} aria-hidden>
+                            {done && <Ico name="check" size={12} />}
+                          </span>
+                          <span className={`min-w-0 flex-1 ${done ? "" : "text-[var(--muted)]"}`}>{c.label}</span>
+                          {done ? (
+                            <span className="nl-meta">Sent</span>
+                          ) : past ? (
+                            <span className="nl-diary-warn text-[12px] font-medium">Never sent</span>
+                          ) : (
+                            <button type="button" onClick={() => onSend(appt.id, c.label)} className={np}>
+                              Send it now
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {missing.length > 0 && !past && <p className="nl-diary-warn mt-2 text-[12px]">{missing.length} still to send.</p>}
+              </section>
+            )}
+
+            {appt.kind === "viewing" && past && (
+              <section>
+                <h3 className="nl-block-title">After the Viewing</h3>
+                {appt.feedback ? (
+                  <>
+                    <p className="mt-2 flex flex-wrap items-center gap-2">
+                      {appt.feedback.interest && <Badge tone="good">{appt.feedback.interest}</Badge>}
+                      {appt.feedback.date && (
+                        <span className="nl-meta">
+                          {new Date(`${appt.feedback.date}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                      )}
+                    </p>
+                    {appt.feedback.note ? <p className="nl-diary-notes">{appt.feedback.note}</p> : <p className="nl-meta mt-2">Logged, with nothing written down.</p>}
+                    {appt.feedback.agent && <p className="nl-meta mt-2">Recorded by {appt.feedback.agent}</p>}
+                  </>
+                ) : (
+                  <p className="nl-meta mt-2">Nobody has written down what was said. Record it from the viewing file.</p>
+                )}
+              </section>
+            )}
+          </div>
+
+          <div className="nl-drawer-foot">
+            {appt.kind === "slot" ? (
+              <>
+                {slotSaid && <p className="nl-diary-warn w-full text-[12px]">{slotSaid}</p>}
+                {appt.id.startsWith("os-") && (
+                  <button
+                    type="button"
+                    disabled={removing === "busy"}
+                    onBlur={() => removing === "ask" && setRemoving(null)}
+                    onClick={removeSlot}
+                    className="nl-btn nl-btn--quiet nl-btn--sm"
+                  >
+                    {removing === "busy" ? "Removing…" : removing === "ask" ? "Yes, remove the slot" : "Remove slot"}
+                  </button>
+                )}
+                {onAddToBlock && anchor && (
+                  <button type="button" data-steve="appointment.book-within-slot" onClick={() => onAddToBlock({ ...anchor, locality: match?.locality })} className={np}>
+                    Book within slot
+                  </button>
+                )}
+              </>
+            ) : appt.kind === "viewing" ? (
+              <>
+                {canCancelViewing(appt) && <CancelViewing target={targetFromAppt(appt)} onDone={() => onClose()} className="nl-btn nl-btn--quiet nl-btn--sm" />}
+                {appt.link && (
+                  <Link href={appt.link.href} className={nb} title={appt.link.label}>
+                    Property
+                  </Link>
+                )}
+                {onAddToBlock && anchor && (
+                  <button type="button" data-steve="appointment.add-to-block" onClick={() => onAddToBlock({ ...anchor, locality: match?.locality })} className={nb}>
+                    Add another viewing to this slot
+                  </button>
+                )}
+                {onChangeTime && canChangeTime(appt) && (
+                  <button type="button" onClick={() => onChangeTime(appt)} className={nb}>
+                    Change time
+                  </button>
+                )}
+                <button type="button" data-steve="appointment.open-viewing" onClick={() => onOpenViewing(appt)} className={np}>
+                  {past && !appt.feedback ? "Open the viewing and record feedback" : "Open the viewing file"}
+                </button>
+              </>
+            ) : appt.appraisalId ? (
+              <>
+                {canChangeAppraisalAppt(appt) && <AppraisalChange key={appt.appraisalId} appraisalId={appt.appraisalId} buttonClass={nb} />}
+                <Link href={`/market-appraisals/${encodeURIComponent(appt.appraisalId)}`} className={np}>
+                  Open the appraisal
+                </Link>
+              </>
+            ) : appt.link ? (
+              <Link href={appt.link.href} className={np}>
+                Take me to the file - {appt.link.label}
+              </Link>
+            ) : canCancelGeneral(appt) ? (
+              <>
+                <p className="nl-meta mr-auto">Not linked to a record.</p>
+                <CancelAppointment appt={appt} onDone={onClose} className={nb} />
+              </>
+            ) : (
+              <p className="nl-meta w-full">
+                {appt.fromPersonal ? "From your personal calendar. Only the time is shown here - change it in your personal calendar." : appt.fromRex || appt.fromOutlook ? "A calendar entry made outside the OS, not linked to a record here. Change it where it was made." : "Not linked to a record."}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div className="so-root fixed inset-0 z-[130]" data-shown={shown} data-steve="appointment.drawer">

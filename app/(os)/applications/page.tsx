@@ -17,6 +17,9 @@ import { isLet } from "@/lib/application-record";
 import { rememberApplicationOrder } from "@/lib/application-order";
 import { SAGE_INK, SAGE_WASH } from "@/components/appraisal/NextUp";
 import type { Application } from "@/lib/applications";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Ico, Mast, Tabs, type Tone } from "@/components/new-look/Parts";
+import LetsByStage from "@/components/new-look/applications/LetsByStage";
 
 /* The appraisal file's grammar, so the two boards read as one product. */
 const card = "rounded-[22px] border border-line/50 bg-white";
@@ -158,6 +161,8 @@ function book() {
 
 export default function Applications() {
   const router = useRouter();
+  /* The new look (lib/new-look "applications"): asked before the board draws. */
+  const look = useNewLook("applications");
   const [apps, setApps] = useState<Application[] | null>(() => peekJson<AppsAnswer>(APPS_URL)?.applications ?? null);
   const [osAccepted, setOsAccepted] = useState<OsAccepted[]>(() => peekJson<AppsAnswer>(APPS_URL)?.osAccepted ?? []);
   const [propolyOnly, setPropolyOnly] = useState<PropolyOnly[]>(() => peekJson<AppsAnswer>(APPS_URL)?.propolyOnly ?? []);
@@ -310,6 +315,318 @@ export default function Applications() {
      that one IS theirs to chase. */
 
 
+
+  /* ── THE NEW LOOK (lib/new-look "applications", 23 Oct 2026) ───────────
+     The same reads, scope, filters and doors as the board below, drawn as
+     the design's Applications: a type-only header, the stages as counted
+     tabs over rows grouped by stage, and the application records a toggle
+     away. The old board stays underneath until the switch has bedded in. */
+  if (look === null) {
+    return (
+      <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted">
+        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+        Opening Applications…
+      </p>
+    );
+  }
+  if (look) {
+    const waitingLets = (apps ?? [])
+      .filter((a) => isLet(a) && !a.closed && (a.stageLabel === "Handover due" || a.stageLabel === "Accepted"))
+      .map((a) => ({
+        id: a.id,
+        property: a.property,
+        locality: a.locality,
+        image: a.image,
+        tenant: a.applicants.find((p) => p.isPrimary)?.name ?? a.applicants[0]?.name ?? "No tenant recorded",
+        agent: a.agent,
+        moveIn: a.startDate,
+        swap: Boolean(a.swap),
+      }));
+    const viewToggle = (
+      <span className="nl-toggle" role="group" aria-label="Show as">
+        <button type="button" className={view === "board" ? "is-on" : ""} aria-pressed={view === "board"} onClick={() => setView("board")}>
+          By stage
+        </button>
+        <button type="button" className={view === "list" ? "is-on" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>
+          Every application
+        </button>
+      </span>
+    );
+    /* Agent screens never name the lettings software (23 Oct 2026). */
+    const listTabs: { id: StageKey | "open"; label: string; count: number | null; blurb: string }[] = [
+      { id: "open", label: "In progress", count: apps === null ? null : counts.open, blurb: "Accepted, and working through to a tenancy." },
+      { id: "rex", label: "To mark accepted", count: apps === null ? null : counts.by("rex"), blurb: "Accepted here. The lettings record still has to be marked accepted by hand." },
+      { id: "closed", label: "Closed", count: apps === null ? null : counts.closed, blurb: "Moved in, or it came off the market after it was accepted." },
+      { id: "attention", label: "Needs attention", count: apps === null ? null : counts.attention, blurb: "Rent over 40% of income, adverse credit, or no landlord answer in two months." },
+    ];
+    const hereTab = listTabs.find((t) => t.id === stage);
+    const statusBadge = (a: Application) => {
+      const text = a.stageLabel ?? a.statusLabel;
+      const [tone, words]: [Tone, string] = a.closed
+        ? ["neutral", a.closed]
+        : rexToMark(a)
+          ? ["good", "Accepted"]
+          : a.status === "accepted"
+            ? ["good", text]
+            : a.status === "communicated"
+              ? ["accent", text]
+              : ["neutral", text];
+      return <Badge tone={tone}>{words}</Badge>;
+    };
+    const shortDay = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    return (
+      <div data-look="new" className="nl-page nl-rise nl-apps">
+        <Mast
+          title="Applications"
+          blurb={
+            scope && !scope.everything
+              ? `${scope.label}'s lets in progress. An offer comes here once it's accepted; until then it's on its listing.`
+              : "Every let in progress. An offer comes here once it's accepted; until then it's on its listing, still taking viewings."
+          }
+          actions={
+            <>
+              {/* Who should hear what, across every let (2 Oct 2026). */}
+              <Link href="/applications/updates" className="nl-btn nl-btn--secondary">
+                Customer updates
+                {updatesOpen ? <span className="nl-apps-btn-n">{updatesOpen}</span> : null}
+              </Link>
+              {/* Overseas tenants' expiry dates to chase (Kirstie, ticket 066bb29e, 16 Oct 2026). */}
+              <Link href="/applications/right-to-rent" className="nl-btn nl-btn--quiet">
+                Right to rent
+              </Link>
+            </>
+          }
+        />
+
+        {view === "board" ? (
+          <LetsByStage
+            everything={Boolean(scope?.everything)}
+            matchApplication={(d) => {
+              const lid = d.app.listingId ? Number(d.app.listingId) : null;
+              const name = d.app.propertyName.trim().toLowerCase();
+              const hit =
+                (apps ?? []).find((a) => a.propolyDealId === d.app.id) ??
+                (apps ?? []).find((a) => isLet(a) && ((lid != null && a.listingId === lid) || a.property.trim().toLowerCase() === name));
+              return hit?.id ?? null;
+            }}
+            onOpenApplication={(id, order) => openApp(id, order)}
+            q={q}
+            onQ={setQ}
+            agent={boardAgent}
+            onAgent={setBoardAgent}
+            agents={boardAgents}
+            onAgents={setBoardAgents}
+            waiting={waitingLets}
+            waitingReady={apps !== null}
+            extra={viewToggle}
+          />
+        ) : (
+          <>
+            <Tabs
+              label="Application statuses"
+              value={stage}
+              onChange={(id) => setStage(id === stage && id !== "open" ? "open" : id)}
+              items={listTabs.map((t) => ({ id: t.id, label: t.label, count: t.count }))}
+            />
+            <div className="nl-apps-under">
+              {hereTab && <p className="nl-meta">{hereTab.blurb}</p>}
+              {/* Offers still waiting on a decision live on their listings now. */}
+              <Link href="/listings?stage=offers" className="nl-link">
+                {openOffers === null ? "Open offers" : `${openOffers} open ${openOffers === 1 ? "offer" : "offers"}`} on the listings <Ico name="arrow" size={14} />
+              </Link>
+            </div>
+
+            <div className="nl-filters nl-apps-filters">
+              <label className="nl-fsearch">
+                <Ico name="search" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Property, tenant or agent" aria-label="Search applications" />
+              </label>
+              {scope?.everything && agents.length > 1 && (
+                <span className={`nl-fsel${fAgent ? " is-set" : ""}`}>
+                  <select aria-label="Agent" value={fAgent ?? ""} onChange={(e) => setFAgent(e.target.value || null)}>
+                    <option value="">All agents</option>
+                    {agents.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              )}
+              <button type="button" className="nl-fmore" aria-pressed={byActivity} onClick={() => setByActivity((v) => !v)}>
+                {byActivity ? "Latest activity first" : "Sort by latest activity"}
+              </button>
+              {stage !== "open" && (
+                <button type="button" className="nl-fmore" onClick={() => setStage("open")}>
+                  Show every let
+                </button>
+              )}
+              <span className="nl-fcount">{apps === null ? "" : `${rows.length + (stage === "open" ? propolyMine.length : 0)} ${rows.length + (stage === "open" ? propolyMine.length : 0) === 1 ? "let" : "lets"}`}</span>
+              {viewToggle}
+            </div>
+
+            <div className="nl-apps-list">
+              {/* Let through Propoly alone (9 Oct 2026): no application here, shown from Propoly. */}
+              {stage === "open" && propolyMine.length > 0 && (
+                <section className="nl-apps-group">
+                  <div className="nl-apps-group-head">
+                    <h2 className="nl-section-title">Let Through Propoly</h2>
+                    <span className="nl-count">{propolyMine.length}</span>
+                    <span className="nl-meta nl-apps-group-note">In Propoly with no application here. Open one to see where it is up to.</span>
+                  </div>
+                  <div className="nl-rows">
+                    {propolyMine.map((p) => (
+                      <button key={p.id} type="button" data-steve-row="" onClick={() => openApp(p.id, propolyMine.map((x) => x.id))} className="nl-apps-arow is-propoly" aria-label={`Open ${p.address}`}>
+                        <span className="min-w-0">
+                          <span className="nl-strong block truncate">{p.address}</span>
+                          <span className="nl-meta block truncate">
+                            {p.tenants}
+                            {p.moveIn ? ` · moving in ${new Date(`${p.moveIn}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                            {scope?.everything && p.agentName ? ` · ${p.agentName}` : ""}
+                          </span>
+                        </span>
+                        <span className="nl-row-fact nl-hide-sm">
+                          <span className="nl-price">{p.offer != null ? gbp(p.offer) : "No offer"}</span>
+                          <span className="nl-meta">{p.offer != null ? "pcm" : "recorded"}</span>
+                        </span>
+                        <span className="flex flex-wrap justify-end gap-1.5">
+                          {p.status && <Badge tone="info">{p.status}</Badge>}
+                          <Badge tone="neutral" plain>Propoly</Badge>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {apps === null ? (
+                <p className="nl-meta flex items-center gap-2 py-10">
+                  <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" />
+                  Reading the applications…
+                </p>
+              ) : error ? (
+                <div className="nl-apps-problem" role="alert">
+                  <p className="nl-block-title">The applications didn&apos;t load</p>
+                  <p className="nl-meta mt-1.5 max-w-md">{error}</p>
+                </div>
+              ) : rows.length === 0 && !(stage === "open" && propolyMine.length) ? (
+                <p className="nl-empty">
+                  {stage === "attention"
+                    ? "Nothing needs a hand. Rare, and good."
+                    : stage === "open"
+                      ? "No lets in progress. Accepted offers come here from their listing."
+                      : "Nothing at this stage."}
+                </p>
+              ) : rows.length === 0 ? null : (
+                <div className="nl-rows">
+                  {shown.map((a) => {
+                    const lead = a.applicants.find((p) => p.isPrimary) ?? a.applicants[0];
+                    const others = a.applicants.length - 1;
+                    const flag = needsAttention(a);
+                    const act = nextAction(a);
+                    const go = () => openApp(a.id, rows.map((r) => r.id));
+                    return (
+                      <div
+                        key={a.id}
+                        data-steve-row=""
+                        role="button"
+                        tabIndex={0}
+                        onClick={go}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            go();
+                          }
+                        }}
+                        className="nl-apps-arow"
+                        aria-label={`Open ${a.property}`}
+                      >
+                        <span className="nl-row-photo">
+                          {a.image ? (
+                            <PropertyPhoto src={a.image} className="absolute inset-0 h-full w-full object-cover" />
+                          ) : (
+                            <span className="absolute inset-0 grid place-items-center text-muted" aria-hidden>
+                              <svg width="30" height="24" viewBox="0 0 56 44" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M4 42h48M10 42V20L28 6l18 14v22M23 42V30h10v12" /></svg>
+                            </span>
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="nl-strong block truncate" title={a.property}>{a.property}</span>
+                          <span className="nl-meta block truncate">
+                            {lead?.name ?? "No applicant recorded"}
+                            {others > 0 ? ` + ${others} other${others === 1 ? "" : "s"}` : ""}
+                            {a.locality ? ` · ${a.locality}` : ""}
+                          </span>
+                          {flag && <span className="nl-prop-why block">{flag}</span>}
+                        </span>
+                        <span className="nl-row-fact nl-hide-sm">
+                          <span className="nl-price">{a.offerAmount ? gbp(a.offerAmount) : "No offer"}</span>
+                          <span className="nl-meta">{a.startDate ? `Move in ${shortDay(a.startDate)}` : "No move-in date"}</span>
+                        </span>
+                        <span className="nl-apps-arow-badges">
+                          {statusBadge(a)}
+                          {a.agent && scope?.everything && <span className="nl-meta nl-hide-sm">{a.agent}</span>}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            go();
+                          }}
+                          className={`nl-btn nl-btn--sm nl-hide-sm ${act.strong ? "nl-btn--primary" : "nl-btn--secondary"}`}
+                        >
+                          {act.label}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {rows.length > PER_PAGE && (
+                <div className="nl-apps-pager">
+                  <p className="nl-meta">
+                    Showing {page * PER_PAGE + 1} to {Math.min((page + 1) * PER_PAGE, rows.length)} of {rows.length}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button type="button" aria-label="Previous page" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="nl-iconbtn nl-iconbtn--sm">‹</button>
+                    {Array.from({ length: pages }, (_, i) => (
+                      <button key={i} type="button" onClick={() => setPage(i)} className={`nl-apps-page${i === page ? " is-on" : ""}`}>
+                        {i + 1}
+                      </button>
+                    ))}
+                    <button type="button" aria-label="Next page" onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1} className="nl-iconbtn nl-iconbtn--sm">›</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* The caveats about what the record holds, folded (James, 12 Sep 2026). */}
+        <details className="nl-apps-about">
+          <summary>About these figures</summary>
+          <ul>
+            <li>
+              <b>In progress leaves out the ones that have finished.</b> An application stays open on paper after the tenant moves in, or after the home goes to someone else. Those sit under Closed: accepted with the move-in date passed, or not accepted on a home that is now let or withdrawn. In progress covers every open application on the book, however old; the other tabs show the latest 200 as well.
+            </li>
+            <li>
+              Once an application is accepted, the <b>eight pre-tenancy stages</b> (holding fee, referencing, PLC, deposit, move day) come from its deal in Propoly, and show on the let&apos;s own page when you open it.
+            </li>
+            <li>
+              <b>Right to rent, landlord reference, guarantor and credit</b> are read from the application form, which only asks the lead applicant.
+            </li>
+            <li>
+              <b>No guarantor is named on any application yet.</b> The form asks whether the applicant can provide one, but not who.
+            </li>
+            <li>
+              <b>Referencing is followed up by hand for now.</b> No referencing results come into the OS yet.
+            </li>
+          </ul>
+        </details>
+      </div>
+    );
+  }
 
   return (
     <>

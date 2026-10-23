@@ -6,6 +6,8 @@ import { GUIDES, GUIDE_SECTIONS } from "@/lib/guides";
 import { AGENT_GUIDES } from "@/lib/agent-guides";
 import GuideButton from "@/components/GuideButton";
 import { BACK_OFFICE } from "@/lib/showroom/back-office";
+import HelpLook from "@/components/new-look/help/HelpLook";
+import { TOUR_URL } from "@/lib/launch";
 
 /**
  * Help: the guide shelf, reached from Help at the foot of the sidebar
@@ -21,8 +23,19 @@ export default function GuidesPage() {
     name: s,
     items: GUIDES.filter((g) => g.section === s),
   })).filter((s) => s.items.length > 0);
+  const backOffice = BACK_OFFICE.map((j) => ({ id: j.id, title: j.title, lead: j.lead, scenes: j.scenes(j.ways?.[0]?.id ?? "portal").length }));
 
+  /* The new look (lib/new-look "help", 23 Oct 2026) draws the same shelf its
+     own way; with the switch off, the page below is drawn exactly as it was. */
   return (
+    <HelpLook
+      data={{
+        tourUrl: TOUR_URL,
+        howTo: AGENT_GUIDES.map((g) => ({ id: g.id, title: g.title, blurb: g.blurb, icon: g.icon, steps: g.steps.length, minutes: g.minutes })),
+        backOffice,
+        shelves: sections.map((sec) => ({ name: sec.name, items: sec.items.map((g) => ({ slug: g.slug, title: g.title, blurb: g.blurb, icon: g.icon, minutes: g.minutes, ready: g.ready })) })),
+      }}
+      old={
     <>
       <PageHeader
         title="Help"
@@ -63,7 +76,7 @@ export default function GuidesPage() {
           is a guide to read and a live demo on the real screens (7 Oct 2026).
           Shown only to people the Showroom is switched on for. */}
       <BackOfficeGuideCards
-        cards={BACK_OFFICE.map((j) => ({ id: j.id, title: j.title, lead: j.lead, scenes: j.scenes(j.ways?.[0]?.id ?? "portal").length }))}
+        cards={backOffice}
       />
 
       {sections.map((section) => (
@@ -114,5 +127,7 @@ export default function GuidesPage() {
         </section>
       ))}
     </>
+      }
+    />
   );
 }

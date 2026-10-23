@@ -2,6 +2,19 @@
 @import "./new-look/offers.css";
 @import "./new-look/compliance.css";
 @import "./new-look/steve.css";
+@import "./new-look/dashboard.css";
+@import "./new-look/huddles.css";
+@import "./new-look/leads.css";
+@import "./new-look/appraisals.css";
+@import "./new-look/diary.css";
+@import "./new-look/applications.css";
+@import "./new-look/portfolio.css";
+@import "./new-look/backoffice.css";
+@import "./new-look/compliance-book.css";
+@import "./new-look/plc.css";
+@import "./new-look/advert.css";
+@import "./new-look/help.css";
+@import "./new-look/admin.css";
 
 /* ===========================================================================
    THE NEW LOOK (Claude Design, 23 Oct 2026), one screen at a time.

@@ -1,0 +1,147 @@
+/* New look: admin (lib/new-look). Scoped under [data-look="new"]. */
+
+/* ── the frame: a way back on every admin screen ───────────────────────── */
+[data-look="new"] .nl-adm-back { margin: 4px auto 14px; }
+
+/* Loading: a small turning ring and a line saying what it's reading. */
+[data-look="new"] .nl-adm-spin {
+  display: inline-block; width: 14px; height: 14px; flex: none; border-radius: 999px;
+  border: 2px solid var(--line-strong); border-top-color: var(--ink); animation: nl-adm-spin 0.8s linear infinite;
+}
+@keyframes nl-adm-spin { to { transform: rotate(360deg); } }
+[data-look="new"] .nl-adm-loading { display: flex; align-items: center; gap: 10px; padding: 22px 0; font-size: 13px; color: var(--muted); margin: 0; }
+
+/* ── the Admin Centre: four areas on hairlines, two by two ──────────────── */
+[data-look="new"] .nl-adm-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-sec { padding: 28px 32px 28px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+[data-look="new"] .nl-adm-sec:nth-child(even) { padding: 28px 0 28px 32px; border-left: 1px solid var(--line); }
+[data-look="new"] .nl-adm-sec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+[data-look="new"] .nl-adm-sec-title { font-family: var(--font-heading); font-weight: 600; font-size: 22px; line-height: 28px; letter-spacing: -0.3px; margin: 0; color: var(--ink); }
+[data-look="new"] .nl-adm-stat { display: flex; flex-direction: column; align-items: flex-end; text-align: right; min-width: 0; }
+[data-look="new"] .nl-adm-stat b { font-family: var(--nl-serif); font-weight: 400; font-size: 26px; line-height: 30px; color: var(--ink); }
+[data-look="new"] .nl-adm-blurb { font-family: var(--nl-serif); font-size: 17px; line-height: 25px; color: var(--muted); margin: 10px 0 14px; }
+
+[data-look="new"] .nl-adm-links { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-adm-links > li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-links > li:first-child { border-top: 0; }
+[data-look="new"] .nl-adm-links a {
+  display: grid; grid-template-columns: minmax(140px, auto) minmax(0, 1fr) 16px; gap: 14px; align-items: center;
+  padding: 13px 4px; border-radius: 10px; color: inherit; text-decoration: none;
+  transition: background-color 0.2s, padding 0.3s var(--nl-ease);
+}
+[data-look="new"] .nl-adm-links a:hover { background: var(--panel); padding-left: 10px; }
+[data-look="new"] .nl-adm-links a svg { color: var(--faint); }
+[data-look="new"] .nl-adm-links a .nl-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-adm-links.is-big a { padding-top: 16px; padding-bottom: 16px; }
+[data-look="new"] .nl-adm-links.is-big { border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-adm-gap { display: block; }
+
+/* ── the census, the activity and the tickets ───────────────────────────── */
+[data-look="new"] .nl-adm-block { margin-top: 48px; min-width: 0; }
+[data-look="new"] .nl-adm-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+[data-look="new"] .nl-adm-block-head .nl-count { margin-left: 6px; }
+[data-look="new"] .nl-adm-census { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-adm-census > li + li { border-left: 1px solid var(--line); }
+[data-look="new"] .nl-adm-census a { display: flex; flex-direction: column; gap: 4px; padding: 18px 18px 18px 0; color: inherit; text-decoration: none; transition: background-color 0.2s; }
+[data-look="new"] .nl-adm-census > li + li a { padding-left: 18px; }
+[data-look="new"] .nl-adm-census a:hover { background: var(--panel); }
+[data-look="new"] .nl-adm-census b { font-family: var(--nl-serif); font-weight: 400; font-size: 30px; line-height: 34px; }
+[data-look="new"] .nl-adm-census span { font-size: 13px; color: var(--muted); }
+
+[data-look="new"] .nl-adm-two { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 0 48px; }
+[data-look="new"] .nl-adm-two.is-one { grid-template-columns: minmax(0, 1fr); }
+[data-look="new"] .nl-adm-log { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-log > li { display: flex; align-items: baseline; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 20px; min-width: 0; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-log .nl-mono { flex: none; }
+[data-look="new"] .nl-adm-muted { color: var(--muted); }
+[data-look="new"] .nl-adm-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); flex: none; transform: translateY(-2px); }
+[data-look="new"] .nl-adm-dot.is-hot { background: var(--primary); }
+[data-look="new"] .nl-adm-log > li:has(> .nl-adm-ticket) { padding: 0; }
+[data-look="new"] .nl-adm-ticket { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 12px 4px; color: inherit; text-decoration: none; border-radius: 10px; transition: background-color 0.2s; }
+[data-look="new"] .nl-adm-ticket:hover { background: var(--panel); }
+[data-look="new"] .nl-adm-prio {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; margin-top: 1px; flex: none;
+  border-radius: 999px; border: 1px solid var(--line-strong); font-size: 11px; font-weight: 600; color: var(--muted);
+}
+[data-look="new"] .nl-adm-prio.is-set { border-color: transparent; background: var(--accent-soft); color: var(--accent-dark); }
+[data-look="new"] .nl-adm-prio.is-a { border-color: transparent; background: var(--accent-dark); color: #fff; }
+[data-look="new"] .nl-adm-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ── People ─────────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-adm-ptabs { margin: -12px 0 28px; }
+[data-look="new"] .nl-adm-ptabs .nl-tab { text-decoration: none; position: relative; }
+[data-look="new"] .nl-adm-ptabs .nl-tab.is-on::after,
+[data-look="new"] .nl-adm-chips .nl-tab.is-on::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--ink); }
+[data-look="new"] .nl-adm-chips .nl-tab { position: relative; }
+
+[data-look="new"] .nl-adm-card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 24px 28px; min-width: 0; }
+[data-look="new"] .nl-adm-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 22px; line-height: 28px; letter-spacing: -0.3px; margin: 0; color: var(--ink); }
+[data-look="new"] .nl-adm-card-title .nl-count { margin-left: 4px; }
+[data-look="new"] .nl-adm-card > .nl-meta { margin: 6px 0 0; font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-adm-card-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+[data-look="new"] .nl-adm-card-acts a { text-decoration: none; }
+[data-look="new"] .nl-adm-pcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+[data-look="new"] .nl-adm-pcards.is-one { grid-template-columns: minmax(0, 1fr); }
+[data-look="new"] .nl-adm-flash { margin: 16px 0 0; padding: 14px 18px; border-radius: 16px; background: var(--sage-soft); font-size: 14px; line-height: 20px; }
+
+[data-look="new"] .nl-adm-everyone { margin-top: 16px; }
+[data-look="new"] .nl-adm-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+[data-look="new"] .nl-adm-find { flex: 0 1 560px; justify-content: flex-end; }
+[data-look="new"] .nl-adm-find .nl-fsearch { flex: 1 1 260px; }
+[data-look="new"] .nl-adm-chips { margin-top: 4px; }
+[data-look="new"] .nl-adm-shown { margin: 12px 0 4px; }
+
+[data-look="new"] .nl-adm-people { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-adm-people > li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px;
+  padding: 16px 4px; border-top: 1px solid var(--line);
+}
+[data-look="new"] .nl-adm-people > li:first-child { border-top: 0; }
+[data-look="new"] .nl-adm-who { flex: 1 1 340px; min-width: 0; }
+[data-look="new"] .nl-adm-who-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+[data-look="new"] .nl-adm-who-line .nl-badge { font-size: 12px; }
+[data-look="new"] .nl-adm-name { color: var(--ink); text-decoration: none; }
+[data-look="new"] .nl-adm-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-adm-mail { margin-top: 2px; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+[data-look="new"] .nl-adm-acts a { text-decoration-line: underline; }
+[data-look="new"] .nl-adm-role { display: inline-flex; align-items: center; gap: 8px; }
+[data-look="new"] .nl-adm-role .nl-fsel { min-width: 150px; }
+[data-look="new"] .nl-adm-role .nl-fsel select { width: 100%; }
+[data-look="new"] .nl-adm-role select:disabled { opacity: 0.45; cursor: not-allowed; }
+[data-look="new"] .nl-adm-foot { margin-top: 16px; }
+
+/* ── narrower ───────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  [data-look="new"] .nl-adm-census { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  [data-look="new"] .nl-adm-census > li:nth-child(4) { border-left: 0; }
+  [data-look="new"] .nl-adm-census > li:nth-child(4) a { padding-left: 0; }
+  [data-look="new"] .nl-adm-census > li:nth-child(n + 4) { border-top: 1px solid var(--line); }
+  [data-look="new"] .nl-adm-two { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  [data-look="new"] .nl-adm-grid { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-adm-sec, [data-look="new"] .nl-adm-sec:nth-child(even) { padding: 24px 0; border-left: 0; }
+  [data-look="new"] .nl-adm-pcards { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-adm-links a { grid-template-columns: minmax(0, 1fr) 16px; gap: 2px 12px; }
+  [data-look="new"] .nl-adm-links a .nl-meta { grid-column: 1; grid-row: 2; white-space: normal; }
+  [data-look="new"] .nl-adm-links a svg { grid-column: 2; grid-row: 1 / span 2; }
+  [data-look="new"] .nl-adm-links a .nl-adm-gap { display: none; }
+  [data-look="new"] .nl-adm-census { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-look="new"] .nl-adm-census > li { border-left: 0 !important; border-top: 1px solid var(--line); }
+  [data-look="new"] .nl-adm-census > li:nth-child(-n + 2) { border-top: 0; }
+  [data-look="new"] .nl-adm-census > li:nth-child(even) { border-left: 1px solid var(--line) !important; }
+  [data-look="new"] .nl-adm-census a, [data-look="new"] .nl-adm-census > li + li a { padding: 14px 12px 14px 0; }
+  [data-look="new"] .nl-adm-census > li:nth-child(even) a { padding-left: 14px; }
+  [data-look="new"] .nl-adm-census > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  [data-look="new"] .nl-adm-card { padding: 20px; border-radius: 20px; }
+  [data-look="new"] .nl-adm-find { flex-basis: 100%; }
+  [data-look="new"] .nl-adm-find .nl-fsel { flex: 1 1 100%; }
+  [data-look="new"] .nl-adm-who { flex-basis: 100%; }
+  [data-look="new"] .nl-adm-role { flex: 1 1 100%; }
+  [data-look="new"] .nl-adm-role .nl-fsel { flex: 1; }
+  [data-look="new"] .nl-adm-log > li { flex-wrap: wrap; }
+  [data-look="new"] .nl-adm-block { margin-top: 36px; }
+}

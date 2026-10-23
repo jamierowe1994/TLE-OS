@@ -54,6 +54,9 @@ import RecordPastVisit from "@/components/inspections/RecordPastVisit";
 import TenantChange from "@/components/portfolio/TenantChange";
 import TakeOnTile from "@/components/portfolio/TakeOnTile";
 import HomeNotes from "@/components/portfolio/HomeNotes";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Tabs, Menu, Ico, type MenuItem, type Tone } from "@/components/new-look/Parts";
+import PhotoGrid from "@/components/new-look/PhotoGrid";
 
 /**
  * One home, the whole of it, on one page.
@@ -70,7 +73,8 @@ import HomeNotes from "@/components/portfolio/HomeNotes";
  * fails says it failed and the rest of the page stands. Nothing is a sample.
  */
 
-type Tab = "maintenance" | "compliance" | "inspections" | "tenancy" | "documents" | "notes";
+/* "overview" is the new look's first tab (lib/new-look "property"); the old page has no such tab. */
+type Tab = "overview" | "maintenance" | "compliance" | "inspections" | "tenancy" | "documents" | "notes";
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "maintenance", label: "Maintenance", icon: "setting" },
   { id: "compliance", label: "Compliance", icon: "shield" },
@@ -180,6 +184,13 @@ export default function PropertyPage() {
   const [room, setRoom] = useState<string>("house");
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [order, setOrder] = useState<string[]>([]);
+  /* The new look (lib/new-look "property", 23 Oct 2026): it opens on Overview,
+     and its photos open in the shared photo grid. */
+  const look = useNewLook("property");
+  const firstTab = look ? "overview" : "maintenance";
+  const [gridFrom, setGridFrom] = useState<DOMRect | null>(null);
+  const heroRef = useRef<HTMLButtonElement | null>(null);
+  const tabAsked = useRef(false);
 
   /* Same read as the Portfolio list, so arriving from it paints at once. */
   useEffect(() => {
@@ -193,7 +204,7 @@ export default function PropertyPage() {
     try {
       const sp = new URLSearchParams(window.location.search);
       const t = sp.get("tab");
-      if (t && TABS.some((x) => x.id === t)) setTab(t as Tab);
+      if (t && (TABS.some((x) => x.id === t) || t === "overview")) { setTab(t as Tab); tabAsked.current = true; }
       /* ?email=certificates (the compliance drawer's Email Certificates) opens it straight away. */
       if (sp.get("email") === "certificates") {
         /* &start=<document>: one certificate's Email Tenant, from the compliance drawer or the desk. */
@@ -217,10 +228,16 @@ export default function PropertyPage() {
     setTab(t);
     try {
       const u = new URL(window.location.href);
-      if (t === "maintenance") u.searchParams.delete("tab"); else u.searchParams.set("tab", t);
+      if (t === firstTab) u.searchParams.delete("tab"); else u.searchParams.set("tab", t);
       window.history.replaceState(null, "", u.toString());
     } catch { /* fine */ }
-  }, []);
+  }, [firstTab]);
+  /* The new look lands on Overview unless the link asked for a tab; the old
+     page has no Overview, so it falls back to Maintenance there. */
+  useEffect(() => {
+    if (look === true && !tabAsked.current) { tabAsked.current = true; setTab("overview"); }
+    if (look === false) setTab((t) => (t === "overview" ? "maintenance" : t));
+  }, [look]);
 
   const properties = book.state === "ready" ? book.data.properties : [];
   const everything = book.state === "ready" && Boolean(book.data.everything);
@@ -245,13 +262,13 @@ export default function PropertyPage() {
   const step = (d: number) => {
     const i = order.indexOf(listingId);
     if (i < 0 || order.length < 2) return;
-    router.push(`/portfolio/${encodeURIComponent(order[(i + d + order.length) % order.length])}${tab === "maintenance" ? "" : `?tab=${tab}`}`);
+    router.push(`/portfolio/${encodeURIComponent(order[(i + d + order.length) % order.length])}${tab === firstTab ? "" : `?tab=${tab}`}`);
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || showAll || showLogins || sendOpen || recordOpen || threadOpen || mailOpen || lightbox != null) return;
+      if (action || openJob || showAll || showLogins || sendOpen || recordOpen || threadOpen || mailOpen || lightbox != null || gridFrom) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -480,6 +497,24 @@ export default function PropertyPage() {
     return (
       <div className="py-16">
         <Loading label="Opening the property…" />
+      </div>
+    );
+  }
+  if (book.state === "failed" && look) {
+    return (
+      <div data-look="new" className="nl-page py-16" role="alert">
+        <h1 className="nl-block-title">The book could not be read</h1>
+        <p className="nl-meta mt-1.5 max-w-xl">{book.error}</p>
+        <Link href="/portfolio" className="nl-btn nl-btn--secondary nl-btn--sm mt-4">Back to Properties</Link>
+      </div>
+    );
+  }
+  if (book.state === "ready" && (!home || !p) && look) {
+    return (
+      <div data-look="new" className="nl-page py-16">
+        <h1 className="nl-block-title">This home isn&apos;t in your book</h1>
+        <p className="nl-meta mt-1.5 max-w-xl">It may belong to another agent, or the link is wrong.</p>
+        <Link href="/portfolio" className="nl-btn nl-btn--secondary nl-btn--sm mt-4">Back to Properties</Link>
       </div>
     );
   }
@@ -756,6 +791,624 @@ export default function PropertyPage() {
     letSince: p.letSince,
   };
   const roomsOnly = houseView && Boolean(house) && !lets;
+
+  /* The pop-ups, the same in both looks: every action opens over the page. */
+  const popups = (
+    <>
+      {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={title} onClose={() => setLightbox(null)} />}
+
+      {showAll && <AllActivity title={title} items={allActivity} reading={reading} onClose={() => setShowAll(false)} />}
+
+      {/* ── the pop-ups ───────────────────────────────────────────────── */}
+      {action && (action.kind === "repair" || action.kind === "planned") && raiseHome && (
+        <Modal onClose={closeAction} wide>
+          <RaiseJob
+            key={`${action.kind}-${action.draft?.id ?? "new"}`}
+            inline
+            kind={action.kind}
+            home={raiseHome}
+            draft={(action.draft?.data as RaiseDraft | undefined) ?? null}
+            onDraft={(d) => keepDraft(action.kind, d as Record<string, unknown>)}
+            contractors={works.state === "ready" ? works.data.contractors : []}
+            onClose={closeAction}
+            onRaised={(o) => {
+              void finishAction();
+              loadWorks();
+              pickTab("maintenance");
+              /* Straight on to telling the landlord, as on Maintenance. */
+              setOpenJob(o);
+            }}
+          />
+        </Modal>
+      )}
+      {action?.kind === "inspection" && visits.state === "ready" && (
+        <Modal onClose={closeAction} title={action.inspection.kind === "check_out" ? "Book the check-out" : "Book a property visit"} wide>
+          <BookVisit
+            inspection={action.inspection}
+            team={visits.data.team}
+            me={visits.data.me}
+            onBooked={() => { setAction(null); loadVisits(); pickTab("inspections"); }}
+          />
+        </Modal>
+      )}
+      {action?.kind === "past-visit" && visits.state === "ready" && propertyId && (
+        <Modal onClose={closeAction} title="Record a past visit" wide>
+          <RecordPastVisit
+            home={{
+              propertyName: house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name,
+              locality: p.locality,
+              propertyId,
+              listingId: String(p.listingId),
+              address: noticeHome.address,
+              rexPropertyId: /^\d+$/.test(propertyId) ? propertyId : null,
+              landlord: landlord?.name ?? "",
+              landlordEmail: landlord?.email ?? "",
+              tenant: tenants.map((t) => t.name).join(", "),
+              tenantEmail: tenants[0]?.email ?? "",
+              tenantPhone: tenants[0]?.phone ?? "",
+              tenancyStart: tenancy.state === "ready" ? tenancy.data.tenancy?.startDate ?? null : null,
+            }}
+            open={visits.data.inspections}
+            due={visits.data.due}
+            me={visits.data.me?.name ?? ""}
+            onCancel={closeAction}
+            onDone={() => { setAction(null); loadVisits(); pickTab("inspections"); }}
+          />
+        </Modal>
+      )}
+      {sendOpen && (
+        <SendToTenants
+          listing={String(p.listingId)}
+          listings={loginListings}
+          title={roomP ? `${roomLabel(roomP)}, ${title}` : title}
+          heading={sendOpen.heading}
+          start={sendOpen.start}
+          onClose={() => setSendOpen(null)}
+          onSent={loadSends}
+        />
+      )}
+      {recordOpen && <SendRecord id={recordOpen} onClose={() => setRecordOpen(null)} />}
+      {threadOpen && <ThreadView thread={threadOpen} onClose={() => setThreadOpen(null)} />}
+      {mailOpen && <PropolyMailView mail={mailOpen} onClose={() => setMailOpen(null)} />}
+      {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
+      {action?.kind === "tenant-notice" && propertyId && (
+        <Modal onClose={closeAction} title="Tenant gave notice">
+          <NoticeSheet
+            propertyId={propertyId}
+            propertyName={house ? house.name : p.name}
+            tenants={tenants}
+            landlord={landlord?.name ?? ""}
+            rent={rentLine ?? ""}
+            draft={(action.draft?.data as NoticeDraft | undefined) ?? null}
+            onDraft={(d) => keepDraft("tenant-notice", d as Record<string, unknown>)}
+            onClose={closeAction}
+            onSaved={() => { void finishAction(); loadEnding(); pickTab("tenancy"); }}
+          />
+        </Modal>
+      )}
+      {action?.kind === "swap-open" && swapOn && (
+        <Modal onClose={closeAction} title={`${swapOn.swap.label ?? "Tenant swap"} under way`}>
+          <SwapOpen s={swapOn} onAnother={() => act({ kind: "swap" })} canAct={canAct && tenants.length > 0} />
+        </Modal>
+      )}
+      {action?.kind === "swap" && (
+        <Modal onClose={closeAction} title="Change the tenants">
+          <TenantChange listingId={String(p.listingId)} tenants={tenants} rent={p.rentMonthly ?? null} onClose={closeAction} />
+        </Modal>
+      )}
+      {/* Michael's Section 8 / 13 checklist is its own pop-up already. */}
+      {action?.kind === "notices" && !roomsOnly && (
+        <HomeNotices key={`start-${action.start}-${p.listingId}`} home={noticeHome} start={action.start} bare onDone={() => { setAction(null); loadNotices(); }} />
+      )}
+    </>
+  );
+
+  /* ── THE NEW LOOK (lib/new-look "property", 23 Oct 2026) ────────────────
+     The same home, reads, actions and pop-ups as the page below, laid out as
+     the design's record: the head with its two jobs and the menu, the photo
+     beside The Details, how it stands, then the tabs. Every action the old
+     page's tiles held is a button in the head or a line in its menu. */
+  if (look) {
+    const goTab = (t: Tab, then?: () => void) => {
+      pickTab(t);
+      setTimeout(() => {
+        document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        then?.();
+      }, 60);
+    };
+    const serviceTone: Tone = p.test ? "accent" : p.service === "Managed" ? "good" : "neutral";
+    const rentShown = houseView && house && !lets ? houseLine : rentLine;
+    const menu: MenuItem[] = [
+      { label: "Book a property visit", sub: "Every 6 months: the home and the tenant", disabled: !canAct || visits.state !== "ready", onClick: () => void bookVisit() },
+      { label: "Record a past visit", sub: "Already done elsewhere. No emails", disabled: !canAct || visits.state !== "ready", onClick: () => act({ kind: "past-visit" }) },
+      { label: "Serve notice", sub: roomsOnly ? "Pick a room first" : "Section 8, checked by compliance", disabled: roomsOnly, onClick: () => act({ kind: "notices", start: "s8" }) },
+      { label: "Rent review", sub: roomsOnly ? "Pick a room first" : "Section 13 rent increase", disabled: roomsOnly, onClick: () => act({ kind: "notices", start: "s13" }) },
+      { label: "Tenant gave notice", sub: "Starts the move-out", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "tenant-notice" }) },
+      swapOn
+        ? { label: `${swapOn.swap.label ?? "Tenant swap"} under way`, sub: `${(swapOn.swap.joining.length ? swapOn.swap.joining : swapOn.swap.rereference ?? []).join(", ")} from ${day(swapOn.swap.moveIn)} · ${swapOn.plc?.short ?? "PLC check next"}`, onClick: () => act({ kind: "swap-open" }) }
+        : { label: "Change the tenants", sub: "Add someone, swap a sharer or re-reference", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "swap" }) },
+      "rule",
+      { label: "Send out logins", sub: "Tenant account, to report repairs", disabled: p.test || !loginListings.length, onClick: () => setShowLogins(true) },
+      { label: "Email Certificates", sub: "To the tenants, kept on the record", disabled: p.test || !loginListings.length, onClick: () => setSendOpen({ start: null, heading: "Email Certificates" }) },
+      { label: "Add a certificate", sub: "Read and filed on the home", disabled: !propertyId, onClick: () => goTab("compliance") },
+      { label: "Add a document", sub: "An inventory, an agreement, anything else", disabled: p.test, onClick: () => goTab("documents") },
+      { label: "Add a note", sub: "A call, an email, a query", disabled: !propertyId, onClick: () => goTab("notes", () => document.getElementById("home-note")?.focus({ preventScroll: true })) },
+      ...(everything && !p.test && p.onRex !== false ? ["rule" as const, { label: "Open the record behind this home", href: rexListingUrl(p.listingId, "leased") }] : []),
+    ];
+    const outstanding = certs.state === "ready" ? certs.data.outstanding : 0;
+    /* How it stands: one line per board, each opening its tab. */
+    const standing: { id: Tab; label: string; state: "wait" | "hot" | "ok" | "quiet"; text: React.ReactNode }[] = [
+      {
+        id: "compliance",
+        label: "Compliance",
+        state: certs.state === "loading" ? "wait" : certs.state === "failed" ? "quiet" : certs.data.outstanding > 0 ? "hot" : certs.data.checked && certs.data.rows > 0 ? "ok" : "quiet",
+        text: certs.state === "loading" ? "Reading…" : certs.state === "failed" ? "Not available"
+          : certs.data.outstanding > 0 ? `${certs.data.outstanding} ${certs.data.outstanding === 1 ? "certificate" : "certificates"} outstanding`
+          : certs.data.checking > 0 ? `${certs.data.checking === 1 ? "One" : certs.data.checking} with compliance for checking`
+          : certs.data.checked && certs.data.rows > 0 ? "All in date" : "None held yet",
+      },
+      {
+        id: "maintenance",
+        label: "Jobs",
+        state: works.state === "loading" ? "wait" : works.state === "failed" ? "quiet" : openJobs.length + works.data.carried.length > 0 ? "hot" : "ok",
+        text: works.state === "loading" ? "Reading…" : works.state === "failed" ? "Not available"
+          : openJobs.length + works.data.carried.length > 0 ? `${openJobs.length + works.data.carried.length} open ${openJobs.length + works.data.carried.length === 1 ? "job" : "jobs"}` : "No open jobs",
+      },
+      {
+        id: "inspections",
+        label: "Inspections",
+        state: visits.state === "loading" ? "wait" : visits.state === "failed" ? "quiet" : owedVisit && owedVisit.daysAway < 0 && !nextVisit ? "hot" : "ok",
+        text: visits.state === "loading" ? "Reading…" : visits.state === "failed" ? "Not available"
+          : nextVisit ? `Booked ${stamp(nextVisit.bookedAt)}`
+          : owedVisit ? `${VISIT_KIND[owedVisit.kind] ?? "Visit"} ${owedVisit.daysAway < 0 ? "overdue" : `due ${day(owedVisit.dueAt)}`}`
+          : "None owed",
+      },
+      {
+        id: "tenancy",
+        label: "Tenancy",
+        state: leaving ? "hot" : tenancy.state === "loading" ? "wait" : "ok",
+        text: leaving ? `Relet · leaving ${leaving.moveOutOn ? day(leaving.moveOutOn) : "date to set"}`
+          : tenancy.state === "loading" ? "Reading…"
+          : tenancy.state === "ready" && tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} />
+          : `${tenants.length} ${tenants.length === 1 ? "tenant" : "tenants"}`,
+      },
+    ];
+    const nlTabs: { id: Tab; label: string; count?: number | null; dot?: boolean }[] = [
+      { id: "overview", label: "Overview" },
+      { id: "tenancy", label: "Tenancy", dot: Boolean(leaving) },
+      { id: "compliance", label: "Compliance", count: outstanding > 0 ? outstanding : null },
+      { id: "maintenance", label: "Maintenance", count: works.state === "ready" && openJobs.length > 0 ? openJobs.length : null },
+      { id: "inspections", label: "Inspections" },
+      { id: "documents", label: "Documents" },
+      { id: "notes", label: "Notes", count: noteCount > 0 ? noteCount : null },
+    ];
+    const tenancyRow = tenancy.state === "loading" ? "Reading…"
+      : tenancy.state === "failed" ? "Not read"
+      : tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? `Ends ${day(tenancy.data.tenancy.endDate)}` : "Rolling") : "Not on record";
+    const changed = Boolean(landlord && landlord.contactId.startsWith("changed:") && propertyId);
+    const jobEmails = landlord?.email && landlord.email.includes("@") ? (
+      <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line pt-3" />
+    ) : null;
+    const isRecord = Boolean(landlord?.contactId.startsWith("record:"));
+
+    return (
+      <SaveScopeProvider scope={saves}>
+        <div data-look="new" className="nl-page nl-prop-page">
+          <div className="nl-rise">
+            {/* Crumb, the save chip, and ‹ › through the list it was opened from. */}
+            <div className="nl-crumbs">
+              <Link href="/portfolio" className="nl-crumb"><Ico name="back" size={14} /> Properties</Link>
+              <SaveChip scope={saves} className="bg-card" />
+              {order.includes(listingId) && order.length > 1 && (
+                <span className="ml-auto flex items-center gap-1.5">
+                  <span className="nl-mono mr-1">{order.indexOf(listingId) + 1} of {order.length}</span>
+                  <button type="button" aria-label="Previous property" onClick={() => step(-1)} className="nl-iconbtn nl-iconbtn--sm">‹</button>
+                  <button type="button" aria-label="Next property" onClick={() => step(1)} className="nl-iconbtn nl-iconbtn--sm">›</button>
+                </span>
+              )}
+            </div>
+
+            {/* The head: the service, the name, one line of facts, then the jobs. */}
+            <div className="nl-rhead">
+              <div className="nl-rhead-text">
+                <div className="nl-rhead-meta">
+                  <Badge tone={serviceTone}>{p.test ? "Test home" : p.service ?? "Service not set"}</Badge>
+                  {/* Susan, 12 Oct 2026: the PayProp service tag (RLP or not) and the management fee. */}
+                  {!p.test && <span className="nl-prop-tag"><ServiceTag listingId={String(p.listingId)} /></span>}
+                  {leaving && <Badge tone="warning">Relet · leaving {leaving.moveOutOn ? day(leaving.moveOutOn) : "date to set"}</Badge>}
+                </div>
+                <h1 className="nl-title">{title}</h1>
+                <p className="nl-rhead-sub">
+                  {[sub, rentShown ?? (!(houseView && house && !lets) && !p.test ? noRent : null)].filter(Boolean).join(" · ")}
+                </p>
+                <div className="nl-prop-addr"><OsAddressLine propertyId={propertyId} listingId={p.listingId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} /></div>
+                {house && (
+                  <div className="nl-prop-rooms">
+                    <button type="button" onClick={() => setRoom("house")} className={`nl-prop-room${room === "house" ? " is-on" : ""}`} aria-pressed={room === "house"}>
+                      The house
+                    </button>
+                    <RoomPicker
+                      options={house.rooms.map((r) => ({ id: r.listingId, ...pickerOption(house, r, R) }))}
+                      value={room === "house" ? null : room}
+                      onChange={setRoom}
+                      placeholder={lets ? "Tenants" : "Rooms"}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="nl-rhead-acts">
+                {/* Management transfer (Dan Richards a9f80822, 19 Oct 2026): only where it applies. */}
+                <TakeOnTile
+                  home={{ ref: String(p.listingId), name: p.name, locality: p.locality, landlord: p.landlord, tenants, rent: p.rentMonthly }}
+                  offer={!roomsOnly && (!tenants.length || !p.landlord || p.onRex === false)}
+                  disabled={!canAct}
+                  className="nl-btn nl-btn--secondary"
+                  icon={null}
+                  text={(label, what) => <span title={what}>{label}</span>}
+                />
+                {canAct && noticeIn && (
+                  <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className="nl-btn nl-btn--secondary" title={leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in"}>
+                    <Ico name="calendar" /> Book the check-out
+                  </button>
+                )}
+                {/* Re-let waits for notice (Michael and James, 8 Oct 2026). */}
+                {canAct && p.onRex !== false && mayRelet && <ReletAction home={p} className="nl-btn nl-btn--sage" />}
+                <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className="nl-btn nl-btn--secondary" title="A gas safety, EICR or service, by a date">
+                  <Ico name="calendar" /> Plan a certificate
+                </button>
+                <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className="nl-btn nl-btn--primary" title="Tenant and landlord told at each step">
+                  <Ico name="pen" /> Report a repair
+                </button>
+                <Menu items={menu} label="More for this home" />
+              </div>
+            </div>
+
+            {(actionErr || p.held) && (
+              <div className="nl-prop-notes">
+                {actionErr && <p className="nl-prop-err" role="alert">{actionErr}</p>}
+                {/* Kept on the book through notice (lib/portfolio-notice, 9 Oct 2026). */}
+                {p.held && (
+                  <p className="nl-prop-held">
+                    <b>Kept on your book until the tenants move out{p.notice?.leavingOn ? ` on ${day(p.notice.leavingOn)}` : ""}.</b>{" "}
+                    The let is no longer on the main record, so this is the home as it last was. It drops off once the move-out is closed, and comes back with the next let.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* The photo stack beside The Details. */}
+            <div className="nl-hero">
+              <div className={`nl-hero-photo${gridFrom ? " is-lifted" : ""}`}>
+                {shots.length > 1 && <i className="nl-hero-under u2" aria-hidden />}
+                {shots.length > 1 && <i className="nl-hero-under u1" aria-hidden />}
+                <button
+                  type="button"
+                  ref={heroRef}
+                  className="nl-hero-main"
+                  disabled={!shots.length}
+                  onClick={() => shots.length && setGridFrom(heroRef.current?.getBoundingClientRect() ?? null)}
+                  aria-label={shots.length ? `See all ${shots.length} photos` : "No photos"}
+                >
+                  {shots.length ? (
+                    <PropertyPhoto src={shots[0]} alt="" width={1400} height={875} loading="eager" className="absolute inset-0 h-full w-full object-cover" />
+                  ) : (
+                    <span className="nl-hero-empty">
+                      <svg width="72" height="56" viewBox="0 0 56 44" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" aria-hidden><path d="M4 42h48M10 42V20L28 6l18 14v22M23 42V30h10v12" /></svg>
+                      No photos on record for this home.
+                    </span>
+                  )}
+                  {shots.length > 1 && (
+                    <span className="nl-hero-more"><Ico name="image" size={15} /> +{shots.length - 1} more</span>
+                  )}
+                </button>
+              </div>
+
+              <section className="nl-facts">
+                <div className="nl-facts-head">
+                  <h3 className="nl-block-title">The Details</h3>
+                </div>
+                <div className="nl-facts-grid">
+                  {houseView && house && !lets ? (
+                    <div className="nl-fact"><span>Rent{pricedRooms ? `, ${pricedRooms} ${pricedRooms === 1 ? "room" : "rooms"}` : ""}</span><b className={roomRent > 0 ? "" : "is-quiet"}>{roomRent > 0 ? `${money(roomRent)} pcm` : "No room rents yet"}</b></div>
+                  ) : (
+                    <div className="nl-fact"><span>Rent</span><b className={rentLine ? "" : "is-quiet"} title={rentLine ? undefined : noRent}>{rentLine ?? (p.test ? "Test home" : noRent)}</b></div>
+                  )}
+                  <div className="nl-fact"><span>Let type</span><b className={p.letType ? "" : "is-quiet"}>{p.letType ?? "Not set"}</b></div>
+                  <div className="nl-fact"><span>Let since</span><b className={p.letSince ? "" : "is-quiet"}>{p.letSince ? day(p.letSince) : "Not set"}</b></div>
+                  <div className="nl-fact"><span>Tenancy</span><b className={tenancy.state === "ready" && tenancy.data.tenancy ? "" : "is-quiet"}>{tenancyRow}</b></div>
+                  <div className="nl-fact"><span>{roomsOnly ? "Rooms let" : tenants.length === 1 ? "Tenant" : "Tenants"}</span><b className={(roomsOnly ? letRooms.length : tenants.length) ? "" : "is-quiet"}>{roomsOnly && house ? `${letRooms.length} of ${house.rooms.length}` : tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"}</b></div>
+                  <div className="nl-fact"><span>On the books since</span><b>{day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince).replace("—", "Not known")}</b></div>
+                </div>
+                {/* The agent, the key numbers and the source: each changeable in place. */}
+                <div className="nl-prop-more">
+                  <HomeAgent propertyId={p.test ? null : p.propertyId} agent={p.agent} movedFrom={p.agentMovedFrom} everything={everything} />
+                  {/* Sean McMahon, 20 Oct 2026: the key numbers, from the key register. */}
+                  {!p.test && <HomeKeys propertyId={p.propertyId} />}
+                  {/* Sean McMahon, 21 Oct 2026: a re-let refused for want of a Source, settable here. */}
+                  {!p.test && p.onRex !== false && <HomeSource propertyId={p.propertyId} />}
+                </div>
+              </section>
+            </div>
+
+            {/* How it stands: a line each, read live, each opening its tab. */}
+            <div className="nl-prop-standing" aria-label="How it stands">
+              {standing.map((x) => (
+                <button key={x.id} type="button" onClick={() => pickTab(x.id)} className={`nl-prop-stand is-${x.state}${tab === x.id ? " is-on" : ""}`}>
+                  <i aria-hidden />
+                  <span className="nl-meta">{x.label}</span>
+                  <b>{x.text}</b>
+                </button>
+              ))}
+            </div>
+
+            <div id="sections" className="scroll-mt-6">
+              <Tabs label="This home" className="nl-ltabs" value={tab} onChange={pickTab} items={nlTabs} />
+            </div>
+
+            <div key={tab} className="nl-pane">
+              {tab === "overview" && (
+                <div className="nl-bento">
+                  {/* The tenants, or a shared house's rooms. */}
+                  <section className="nl-cell span2">
+                    <div className="nl-cell-head">
+                      <h3 className="nl-block-title">{roomsOnly ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</h3>
+                      {!p.test && (
+                        <button type="button" className="nl-link" onClick={() => goTab("tenancy", () => document.getElementById("past-tenants")?.scrollIntoView({ behavior: "smooth", block: "start" }))}>
+                          Past tenants
+                        </button>
+                      )}
+                    </div>
+                    {roomsOnly && house ? (
+                      <ul className="nl-lines">
+                        {house.rooms.map((r) => (
+                          <li key={r.listingId}>
+                            <button type="button" className="nl-line" onClick={() => setRoom(r.listingId)}>
+                              <span className="nl-strong w-[70px] shrink-0">{roomLabel(r)}</span>
+                              <span className="min-w-0 flex-1 truncate">{r.tenants[0]?.name ?? <span className="nl-meta">Empty</span>}</span>
+                              <span className="nl-price shrink-0 text-[16px]">{r.rent == null ? <span className="nl-meta">No rent</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : tenants.length ? (
+                      <ul className="nl-prop-people">
+                        {tenants.map((t) => <li key={t.contactId}><PartyCard p={t} plain role="tenant" about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} /></li>)}
+                      </ul>
+                    ) : (
+                      <p className="nl-empty">No tenant on record. It is empty, or the let has not been recorded.</p>
+                    )}
+                    {/* Their guarantors, from the lead and the let (lib/guarantors). */}
+                    {tenants.length > 0 && !roomsOnly && !p.test && <Guarantors source={{ listing: String(p.listingId) }} />}
+                    {/* Overseas tenants' right to rent expiry (Kirstie, ticket 066bb29e). */}
+                    {tenants.length > 0 && !roomsOnly && !p.test && (
+                      <HomeRightToRent key={String(p.listingId)} listingId={String(p.listingId)} tenants={tenants.map((t) => ({ name: t.name, email: t.email }))} />
+                    )}
+                    {tenants.length > 0 && (
+                      <p className="nl-prop-dates">
+                        {tenancy.state === "loading" ? "Reading the tenancy dates…"
+                          : tenancy.state === "failed" ? "The tenancy dates could not be read."
+                          : tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} long />
+                          : tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}
+                      </p>
+                    )}
+                  </section>
+
+                  {/* The landlords section, the same on every screen (James, 20 Oct 2026). */}
+                  <section className="nl-cell">
+                    <HomeLandlords
+                      homeKey={p.test ? null : propertyId}
+                      address={homeLine}
+                      readOnly={p.test ? "A test home keeps its own people." : null}
+                      main={
+                        landlord && !changed
+                          ? [{
+                              key: landlord.contactId,
+                              name: landlord.name,
+                              email: landlord.email,
+                              phone: landlord.phone,
+                              personRef: /^\d+$/.test(landlord.contactId) ? `rex:${landlord.contactId}` : isRecord && propertyId ? `home:${propertyId}` : null,
+                              note: isRecord ? "From the home's own record in the OS - the main record names no owner." : null,
+                              after: jobEmails,
+                            }]
+                          : []
+                      }
+                      mainSlot={
+                        changed && landlord && propertyId ? (
+                          <div className="text-[13px]">
+                            <ListingChangedLandlord key={landlord.contactId} listingId={String(p.listingId)} propertyId={propertyId} address={homeLine} onChanged={landlordUndone} />
+                            {jobEmails}
+                          </div>
+                        ) : undefined
+                      }
+                      mainAction={
+                        propertyId && !p.test ? (
+                          <ChangeLandlordButton
+                            where={{ listingId: String(p.listingId), propertyId, address: homeLine }}
+                            current={landlord ? { name: landlord.name, email: landlord.email, phone: landlord.phone } : null}
+                            onChanged={landlordChanged}
+                          />
+                        ) : null
+                      }
+                    />
+                  </section>
+
+                  {/* Every board's newest, one list (James, 7 Oct 2026: five here, the rest in View all). */}
+                  <section className="nl-cell span2" id="action-box">
+                    <div className="nl-cell-head">
+                      <h3 className="nl-block-title">Latest Activity</h3>
+                      {allActivity.length > 0 && (
+                        <button type="button" className="nl-link" onClick={() => setShowAll(true)}>
+                          View all{allActivity.length > latest.length ? ` ${allActivity.length}` : ""}
+                        </button>
+                      )}
+                    </div>
+                    {drafts.state === "ready" && drafts.data.length > 0 && (
+                      <p className="nl-meta -mt-1">{drafts.data.length} not finished</p>
+                    )}
+                    {latest.length > 0 ? (
+                      <ul className="nl-prop-acts">{latest.map((a) => <NlActivityRow key={a.key} a={a} />)}</ul>
+                    ) : reading ? (
+                      <Loading label="Reading what has happened here" />
+                    ) : (
+                      <p className="nl-empty">Nothing recorded on this home yet. Pick an action and it shows here.</p>
+                    )}
+                    {reading && latest.length > 0 && <Loading label="Still reading" />}
+                  </section>
+
+                  {/* Rent where the map was (James, 8 Oct 2026): up to date or how far behind, live from PayProp. */}
+                  {!p.test ? (
+                    <RentBox
+                      listingId={String(p.listingId)}
+                      className="nl-cell nl-prop-rent"
+                      shape={houseView && house && !lets
+                        ? { kind: "rooms", rooms: house.rooms.map((r) => ({ id: String(r.listingId), label: roomLabel(r), tenant: r.tenants[0]?.name ?? null, rent: r.rent, period: r.rentPeriod, monthly: r.rentMonthly })) }
+                        : { kind: "home", rent: p.rentMonthly, tenants: tenants.map((t) => t.name) }}
+                    />
+                  ) : (
+                    <section className="nl-cell"><h3 className="nl-block-title">Rent</h3><p className="nl-meta">A test home has no rent account.</p></section>
+                  )}
+                </div>
+              )}
+
+              {tab === "tenancy" && (
+                <div className="nl-bento nl-prop-two">
+                  <section className="nl-cell">
+                    <h3 className="nl-block-title">The Tenancy</h3>
+                    {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
+                      <dl className="nl-prop-dl">
+                        <NlFact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"} />
+                        <NlFact label="Rent" value={rentLine ?? noRent} />
+                        <NlFact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.letSince ? day(p.letSince) : "-"} />
+                        <NlFact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : "Rolling, no end date") : "-"} />
+                        <NlFact label="Deposit" value={tenancy.data.tenancy?.depositId ? `Registered · ${tenancy.data.tenancy.depositId}` : "-"} />
+                        <NlFact label="Rent and legal protection" value={tenancy.data.protection === "protected" ? "On" : tenancy.data.protection === "without" ? "Not taken" : "-"} />
+                      </dl>
+                    )}
+                    {tenancy.state === "ready" && !tenancy.data.ready && (
+                      <p className="nl-meta">{tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}</p>
+                    )}
+                  </section>
+
+                  <section className="nl-cell">
+                    <h3 className="nl-block-title">Moving Out</h3>
+                    {ending.state === "loading" ? <Loading label="Reading reviews and move-outs" /> : ending.state === "failed" ? <Failed error={ending.error} /> : (
+                      <NlEnding data={ending.data} />
+                    )}
+                  </section>
+
+                  {reviewDue && (
+                    <section className="nl-cell nl-cell--manilla span2">
+                      <h3 className="nl-block-title">Tenancy Review</h3>
+                      <p className="text-[14px]">
+                        {reviewDue.dueOn ? `Due ${day(reviewDue.dueOn)}` : "Due, no date set"}
+                        {reviewDue.agreement ? <span className="nl-meta"> · {reviewDue.agreement}</span> : null}
+                      </p>
+                      {reviewDue.why && <p className="nl-meta">{reviewDue.why}</p>}
+                      <Link href="/tenancy-reviews" className="nl-link self-start">Record the review</Link>
+                    </section>
+                  )}
+
+                  {/* Rent review (Section 13) and Serve notice (Section 8): Michael's checklists. */}
+                  <section id="notices" className="nl-cell span2 scroll-mt-6">
+                    {roomsOnly ? (
+                      <>
+                        <h3 className="nl-block-title">Rent Review and Notices</h3>
+                        <p className="nl-meta">Each room is its own tenancy. Pick a room at the top to start its rent review or notice.</p>
+                      </>
+                    ) : (
+                      <div className="nl-holder"><HomeNotices key={p.listingId} home={noticeHome} /></div>
+                    )}
+                  </section>
+
+                  {/* Who lived here before, with how to reach them (Josel, 20 Oct 2026). */}
+                  {!p.test && (
+                    <section id="past-tenants" className="nl-cell span2 scroll-mt-6">
+                      <h3 className="nl-block-title">Past Tenants</h3>
+                      <PastTenantPeople key={p.listingId} listing={String(p.listingId)} listings={sendListings} about={homeLine} />
+                    </section>
+                  )}
+
+                  {/* Every let this home has had since the archive started (lib/tenancy-archive). */}
+                  {p.propertyId && (
+                    <section className="nl-cell span2">
+                      <h3 className="nl-block-title">Past Tenancies</h3>
+                      <PastTenancies propertyId={p.propertyId} compact />
+                    </section>
+                  )}
+                </div>
+              )}
+
+              {tab === "compliance" && (
+                <div className="nl-holder">
+                  {!p.test && loginListings.length > 0 && (
+                    <NlSendBar onSend={() => setSendOpen({ start: null, heading: "Email Certificates" })} what="this home's certificates" label="Email Certificates" />
+                  )}
+                  {houseView && house && !house.house && !lets && (
+                    <p className="nl-meta">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
+                  )}
+                  {propertyId ? (
+                    <div className="nl-prop-file">
+                      <PropertyFile
+                        key={propertyId}
+                        propertyId={propertyId}
+                        propertyName={house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name}
+                        screen="the property page"
+                        emailTenant={{
+                          open: (start) => setSendOpen({ start, heading: "Email Tenant" }),
+                          none: p.test ? "This is a test home" : loginListings.length ? null : "Nobody is living here",
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="nl-empty">There is no property record behind this home yet, so there are no certificates to check.</p>
+                  )}
+                </div>
+              )}
+
+              {tab === "maintenance" && (
+                works.state === "loading" ? <Loading label="Reading the jobs on this home" /> : works.state === "failed" ? <Failed error={works.error} /> : (
+                  <NlJobs orders={works.data.orders} carried={works.data.carried} onOpen={setOpenJob} />
+                )
+              )}
+
+              {tab === "inspections" && (
+                visits.state === "loading" ? <Loading label="Reading the visits on this home" /> : visits.state === "failed" ? <Failed error={visits.error} /> : (
+                  <NlVisits data={visits.data} />
+                )
+              )}
+
+              {tab === "documents" && (
+                <div className="nl-holder">
+                  {!p.test && loginListings.length > 0 && (
+                    <NlSendBar onSend={() => setSendOpen({ start: null })} what="this home's certificates and documents" label="Send to Tenants" />
+                  )}
+                  {/* The home's documents (lib/file-documents): kept on the OS; nobody is sent anything. */}
+                  <FileDocuments
+                    key={p.listingId}
+                    address={noticeHome.address}
+                    propertyId={/^\d+$/.test(String(p.propertyId ?? "")) ? p.propertyId : null}
+                    from={{ kind: "property", id: String(p.listingId) }}
+                    showMissing={false}
+                    dropZone
+                    intro="Inventories, agreements and anything else that isn't a certificate. Kept on this home, so the office and the agent both see them, including what was added at pre-tenancy. Uploading sends nothing to the landlord or tenant."
+                  />
+                  {/* The clean sweep's papers, for the office (Josel, 20 Oct 2026). */}
+                  {!p.test && <RecordFiles key={`record-${p.listingId}`} listing={String(p.listingId)} listings={sendListings} />}
+                </div>
+              )}
+
+              {tab === "notes" && (
+                <HomeNotes key={`${propertyId}-${p.listingId}`} propertyId={propertyId} listingId={String(p.listingId)} onCount={setNoteCount} />
+              )}
+            </div>
+          </div>
+
+          {gridFrom && <PhotoGrid photos={shots} name={title} origin={gridFrom} onClose={() => setGridFrom(null)} />}
+          {popups}
+        </div>
+      </SaveScopeProvider>
+    );
+  }
 
   return (
     <SaveScopeProvider scope={saves}>
@@ -1272,112 +1925,7 @@ export default function PropertyPage() {
         </div>
       </div>
 
-      {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={title} onClose={() => setLightbox(null)} />}
-
-      {showAll && <AllActivity title={title} items={allActivity} reading={reading} onClose={() => setShowAll(false)} />}
-
-      {/* ── the pop-ups ───────────────────────────────────────────────── */}
-      {action && (action.kind === "repair" || action.kind === "planned") && raiseHome && (
-        <Modal onClose={closeAction} wide>
-          <RaiseJob
-            key={`${action.kind}-${action.draft?.id ?? "new"}`}
-            inline
-            kind={action.kind}
-            home={raiseHome}
-            draft={(action.draft?.data as RaiseDraft | undefined) ?? null}
-            onDraft={(d) => keepDraft(action.kind, d as Record<string, unknown>)}
-            contractors={works.state === "ready" ? works.data.contractors : []}
-            onClose={closeAction}
-            onRaised={(o) => {
-              void finishAction();
-              loadWorks();
-              pickTab("maintenance");
-              /* Straight on to telling the landlord, as on Maintenance. */
-              setOpenJob(o);
-            }}
-          />
-        </Modal>
-      )}
-      {action?.kind === "inspection" && visits.state === "ready" && (
-        <Modal onClose={closeAction} title={action.inspection.kind === "check_out" ? "Book the check-out" : "Book a property visit"} wide>
-          <BookVisit
-            inspection={action.inspection}
-            team={visits.data.team}
-            me={visits.data.me}
-            onBooked={() => { setAction(null); loadVisits(); pickTab("inspections"); }}
-          />
-        </Modal>
-      )}
-      {action?.kind === "past-visit" && visits.state === "ready" && propertyId && (
-        <Modal onClose={closeAction} title="Record a past visit" wide>
-          <RecordPastVisit
-            home={{
-              propertyName: house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name,
-              locality: p.locality,
-              propertyId,
-              listingId: String(p.listingId),
-              address: noticeHome.address,
-              rexPropertyId: /^\d+$/.test(propertyId) ? propertyId : null,
-              landlord: landlord?.name ?? "",
-              landlordEmail: landlord?.email ?? "",
-              tenant: tenants.map((t) => t.name).join(", "),
-              tenantEmail: tenants[0]?.email ?? "",
-              tenantPhone: tenants[0]?.phone ?? "",
-              tenancyStart: tenancy.state === "ready" ? tenancy.data.tenancy?.startDate ?? null : null,
-            }}
-            open={visits.data.inspections}
-            due={visits.data.due}
-            me={visits.data.me?.name ?? ""}
-            onCancel={closeAction}
-            onDone={() => { setAction(null); loadVisits(); pickTab("inspections"); }}
-          />
-        </Modal>
-      )}
-      {sendOpen && (
-        <SendToTenants
-          listing={String(p.listingId)}
-          listings={loginListings}
-          title={roomP ? `${roomLabel(roomP)}, ${title}` : title}
-          heading={sendOpen.heading}
-          start={sendOpen.start}
-          onClose={() => setSendOpen(null)}
-          onSent={loadSends}
-        />
-      )}
-      {recordOpen && <SendRecord id={recordOpen} onClose={() => setRecordOpen(null)} />}
-      {threadOpen && <ThreadView thread={threadOpen} onClose={() => setThreadOpen(null)} />}
-      {mailOpen && <PropolyMailView mail={mailOpen} onClose={() => setMailOpen(null)} />}
-      {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
-      {action?.kind === "tenant-notice" && propertyId && (
-        <Modal onClose={closeAction} title="Tenant gave notice">
-          <NoticeSheet
-            propertyId={propertyId}
-            propertyName={house ? house.name : p.name}
-            tenants={tenants}
-            landlord={landlord?.name ?? ""}
-            rent={rentLine ?? ""}
-            draft={(action.draft?.data as NoticeDraft | undefined) ?? null}
-            onDraft={(d) => keepDraft("tenant-notice", d as Record<string, unknown>)}
-            onClose={closeAction}
-            onSaved={() => { void finishAction(); loadEnding(); pickTab("tenancy"); }}
-          />
-        </Modal>
-      )}
-      {action?.kind === "swap-open" && swapOn && (
-        <Modal onClose={closeAction} title={`${swapOn.swap.label ?? "Tenant swap"} under way`}>
-          <SwapOpen s={swapOn} onAnother={() => act({ kind: "swap" })} canAct={canAct && tenants.length > 0} />
-        </Modal>
-      )}
-      {action?.kind === "swap" && (
-        <Modal onClose={closeAction} title="Change the tenants">
-          <TenantChange listingId={String(p.listingId)} tenants={tenants} rent={p.rentMonthly ?? null} onClose={closeAction} />
-        </Modal>
-      )}
-      {/* Michael's Section 8 / 13 checklist is its own pop-up already. */}
-      {action?.kind === "notices" && !roomsOnly && (
-        <HomeNotices key={`start-${action.start}-${p.listingId}`} home={noticeHome} start={action.start} bare onDone={() => { setAction(null); loadNotices(); }} />
-      )}
-
+      {popups}
     </SaveScopeProvider>
   );
 }
@@ -1895,5 +2443,177 @@ function AllActivity({ title, items, reading, onClose }: { title: string; items:
         </div>
       </aside>
     </div>
+  );
+}
+
+/* ── the new look's pieces (lib/new-look "property") ─────────────────────
+   The same rows as the old page's lists, drawn as the design's row lists:
+   hairlines, a word with a dot for the state, the action on the right. */
+
+function NlFact({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="nl-fact">
+      <span>{label}</span>
+      <b className="nl-prop-dl-v">{value}</b>
+    </div>
+  );
+}
+
+function NlSendBar({ onSend, what, label }: { onSend: () => void; what: string; label: string }) {
+  return (
+    <div className="nl-prop-sendbar">
+      <p className="nl-meta">Email the tenants {what}, from you. You pick the files and the people, edit the email before it goes, and each send is kept on the record.</p>
+      <button type="button" onClick={onSend} className="nl-btn nl-btn--secondary nl-btn--sm"><Ico name="mail" size={14} />{label}</button>
+    </div>
+  );
+}
+
+function NlActivityRow({ a }: { a: Activity }) {
+  return (
+    <li className={`nl-prop-act${a.unfinished ? " is-draft" : ""}${a.hot ? " is-hot" : ""}`}>
+      <button type="button" onClick={a.go} className="nl-prop-act-main">
+        <span className="nl-prop-act-ic" aria-hidden><DoodleIcon name={a.icon} size={13} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="nl-strong block truncate">{a.title}</span>
+          <span className="nl-meta nl-prop-act-sub block truncate">{a.sub}</span>
+        </span>
+        <span className="nl-mono shrink-0">{a.unfinished ? "Carry on" : shortDay(a.at)}</span>
+      </button>
+      {a.bin && (
+        <button type="button" onClick={() => void a.bin?.()} aria-label="Bin this draft" title="Bin this draft" className="nl-iconbtn nl-iconbtn--sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg>
+        </button>
+      )}
+    </li>
+  );
+}
+
+function NlJobs({ orders, carried, onOpen }: { orders: WorksOrder[]; carried: CarriedJob[]; onOpen: (o: WorksOrder) => void }) {
+  const [showClosed, setShowClosed] = useState(false);
+  const open = orders.filter((o) => OPEN.includes(o.status));
+  const closed = orders.filter((o) => !OPEN.includes(o.status));
+  if (!orders.length && !carried.length) {
+    return <p className="nl-empty">No jobs on this home yet. Report a repair or plan a certificate and it lands here.</p>;
+  }
+  const row = (o: WorksOrder) => {
+    const next = nextFor(o);
+    const tone: Tone = o.status === "done" || o.status === "paid" ? "good" : next.hot ? "accent" : "neutral";
+    return (
+      <li key={o.id}>
+        <button type="button" onClick={() => onOpen(o)} className="nl-prop-job">
+          <span className="nl-mono nl-prop-job-ref">#{o.ref} · {o.kind === "repair" ? "Repair" : "Planned"}</span>
+          <span className="min-w-0">
+            <span className="nl-strong block truncate">{o.title}</span>
+            <span className="nl-meta block truncate">{o.category} · reported {shortDay(o.reportedAt ?? o.createdAt)}</span>
+          </span>
+          <span className={`nl-prop-job-next${next.hot ? " is-hot" : ""}`}>{next.text}</span>
+          <Badge tone={tone}>{statusLabel(o)}</Badge>
+        </button>
+      </li>
+    );
+  };
+  return (
+    <div className="nl-holder">
+      {open.length > 0 ? <ul className="nl-prop-list">{open.map(row)}</ul> : <p className="nl-empty">Nothing open on this home.</p>}
+      {carried.length > 0 && (
+        <div>
+          <h3 className="nl-block-title mb-2">Still Open from the Old System</h3>
+          <ul className="nl-prop-list">
+            {carried.map((c) => (
+              <li key={c.taskId} className="nl-prop-carried">
+                <span className="min-w-0">
+                  <span className="nl-strong block truncate">{c.title}</span>
+                  <span className="nl-meta block truncate">{c.category} · {c.progress || "Not started"}{c.managedBy ? ` · with ${c.managedBy}` : ""}</span>
+                </span>
+                {c.dueOn ? <Badge tone={c.overdue ? "accent" : "neutral"} bare>{c.overdue ? "Overdue" : "Due"} {day(c.dueOn)}</Badge> : <span />}
+              </li>
+            ))}
+          </ul>
+          <p className="nl-meta mt-1.5">Taken on from the Maintenance board.</p>
+        </div>
+      )}
+      {closed.length > 0 && (
+        <div>
+          <button type="button" className="nl-link" onClick={() => setShowClosed((v) => !v)} aria-expanded={showClosed}>
+            {showClosed ? "Hide finished jobs" : `${closed.length} finished ${closed.length === 1 ? "job" : "jobs"}`}
+          </button>
+          {showClosed && <ul className="nl-prop-list nl-fade mt-3">{closed.map(row)}</ul>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NlVisits({ data }: { data: Visits }) {
+  const open = data.inspections.filter((i) => OPEN_VISIT.includes(i.status));
+  const past = data.inspections.filter((i) => !OPEN_VISIT.includes(i.status));
+  const row = (i: Inspection) => (
+    <li key={i.id}>
+      <Link href={`/inspections?open=${encodeURIComponent(i.id)}`} className="nl-prop-visit">
+        <span className="min-w-0">
+          <span className="nl-strong block truncate">{VISIT_KIND[i.kind] ?? "Visit"}</span>
+          <span className="nl-meta block truncate">#{i.ref}{i.inspector ? ` · ${i.inspector}` : ""}</span>
+        </span>
+        <span className="nl-meta nl-prop-visit-when">
+          {i.visitedAt ? `Visited ${day(i.visitedAt)}` : i.bookedAt ? `Booked ${stamp(i.bookedAt)}` : i.dueAt ? `Due ${day(i.dueAt)}` : ""}
+        </span>
+        <Badge tone={i.status === "closed" || i.status === "reported" ? "good" : i.status === "no_access" ? "accent" : "neutral"}>{VISIT_STATUS[i.status] ?? i.status}</Badge>
+      </Link>
+      {/* The report that came with it (a visit recorded from Inventory Base, 19 Oct 2026). */}
+      {i.files?.length > 0 && (
+        <div className="nl-prop-visit-files">
+          {i.files.map((f) => (
+            <a key={f.key} href={`/api/r2/file?key=${encodeURIComponent(f.key)}`} target="_blank" rel="noopener noreferrer" className="nl-link">
+              <Ico name="download" size={13} /><span className="truncate">{f.name}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+  return (
+    <div className="nl-holder">
+      {data.due.map((d) => (
+        <div key={d.key} className={`nl-prop-due${d.daysAway < 0 ? " is-hot" : ""}`}>
+          <b>{VISIT_KIND[d.kind] ?? "Visit"} {d.daysAway < 0 ? "overdue since" : "due"} {day(d.dueAt)}</b>
+          <span className="nl-meta"> · {d.why}</span>
+        </div>
+      ))}
+      {open.length > 0 && <ul className="nl-prop-list">{open.map(row)}</ul>}
+      {past.length > 0 && (
+        <div>
+          <h3 className="nl-block-title mb-2">Past Visits</h3>
+          <ul className="nl-prop-list">{past.map(row)}</ul>
+        </div>
+      )}
+      {!data.due.length && !data.inspections.length && <p className="nl-empty">No visits on this home yet, and none owed.</p>}
+    </div>
+  );
+}
+
+function NlEnding({ data }: { data: Ending }) {
+  if (!data.open.length && !data.done.length && !data.reviewsDone.some((r) => r.outcome === "ending")) {
+    return <p className="nl-meta">No notice on this tenancy.</p>;
+  }
+  return (
+    <ul className="nl-lines">
+      {data.open.map((m) => (
+        <li key={m.key} className="nl-prop-leaving">
+          <span className="min-w-0 flex-1">
+            <span className="nl-strong block">{m.moveOutOn ? `Leaving ${day(m.moveOutOn)}` : "Leaving, date to set"}{m.daysAway != null && m.daysAway >= 0 ? <span className="nl-meta"> · in {m.daysAway} {m.daysAway === 1 ? "day" : "days"}</span> : null}</span>
+            <span className="nl-meta block">{[m.tenant, m.progress].filter(Boolean).join(" · ")}</span>
+          </span>
+          <Link href="/move-outs" className="nl-link shrink-0">Open the move-out</Link>
+        </li>
+      ))}
+      {data.done.map((m) => (
+        <li key={m.id}>
+          <span className="nl-meta">
+            {m.outcome === "moved_out" ? `Moved out ${day(m.movedOutOn)}` : m.outcome === "staying" ? "Notice withdrawn, staying" : m.note || "Closed"}
+            {m.tenant ? ` · ${m.tenant}` : ""}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

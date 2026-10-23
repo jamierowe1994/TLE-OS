@@ -22,6 +22,9 @@ import { OPEN, PAYRUN_LABEL, PayrunTag, day, nextFor, pounds, type Property } fr
 import { searchMatches } from "@/lib/search-match";
 import { usePref } from "@/lib/prefs-store";
 import { useNoteVisit } from "@/lib/recent-visits";
+import { useNewLook } from "@/lib/use-new-look";
+import { Mast, Badge, Tabs, Ico } from "@/components/new-look/Parts";
+import { Stat, Failed, Loading, EmptyCard } from "@/components/new-look/backoffice/Bits";
 
 /**
  * Maintenance: every job on the managed book, reported through paid.
@@ -143,6 +146,175 @@ export default function Maintenance() {
   /* The month-ago snapshot is the whole business's, so Mine draws no delta
      rather than one measured against everybody's jobs. */
   const was = view === "mine" ? null : data?.lastMonth ?? null;
+  const look = useNewLook("maintenance");
+
+  /* ── THE NEW LOOK (lib/new-look "maintenance", 23 Oct 2026) ───────────────
+     The same jobs, sections, Mine / Everyone and every button, drawn as the
+     design's Maintenance: four figures, text tabs, a card per step (JobGroup).
+     Invoices and Accounts are the same components as below, repainted. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening Maintenance…</p>;
+  }
+  if (look) {
+    /* Every one of the four counts something you would rather have less of, so UP is the bad direction. */
+    const delta = (now: number, before: number | null | undefined, money = false) => {
+      if (before == null) return null;
+      const d = now - before;
+      return { text: d === 0 ? "level with" : `${d > 0 ? "+" : "-"}${money ? pounds(Math.abs(d)) : Math.abs(d)}`, tone: (d === 0 ? "quiet" : d > 0 ? "bad" : "good") as "quiet" | "bad" | "good" };
+    };
+    const tiles = s
+      ? [
+          { label: "Open jobs", value: String(s.open), d: delta(s.open, was?.open), note: `${s.byKind.repair} repair${s.byKind.repair === 1 ? "" : "s"} · ${s.byKind.planned} planned` },
+          { label: "Overdue", value: String(s.overdue), d: delta(s.overdue, was?.overdue), note: s.emergencies ? `${s.emergencies} emergenc${s.emergencies === 1 ? "y" : "ies"} open` : "past their date", warm: s.overdue > 0 },
+          { label: "Awaiting the landlord", value: String(s.awaitingLandlord), d: delta(s.awaitingLandlord, was?.awaitingLandlord), note: "quotes over their authority" },
+          { label: "Invoiced, unpaid", value: pounds(s.invoicedUnpaidPence), d: delta(s.invoicedUnpaidPence, was?.invoicedUnpaidPence, true), note: "contractor invoices to settle" },
+        ]
+      : ["Open jobs", "Overdue", "Awaiting the landlord", "Invoiced, unpaid"].map((label) => ({ label, value: null, d: null, note: "", warm: false }));
+    const jobsTab = section === "repair" || section === "planned";
+    return (
+      <div data-look="new" className="nl-page nl-rise nl-bo">
+        <Mast
+          title="Maintenance"
+          blurb="Every job on the managed book, reported through paid. Repairs run on an urgency; planned jobs like a gas safety run on a date. A job carries its contractor, its quote, its invoice and who said yes."
+          actions={
+            <>
+              <button type="button" className="nl-btn nl-btn--primary" onClick={() => { setSection("repair"); setRaising("repair"); }}><Ico name="plus" /> Report a repair</button>
+              <button type="button" className="nl-btn nl-btn--secondary" onClick={() => { setSection("planned"); setRaising("planned"); }}><Ico name="plus" /> Plan a certificate</button>
+              <button type="button" className="nl-btn nl-btn--secondary" onClick={() => setLoggingDone(true)}>Log work already done</button>
+              <WalkthroughLink step="repair" className="nl-bo-how" />
+            </>
+          }
+        />
+
+        {loggingDone && <div className="nl-bo-legacy"><LogDone contractors={data?.contractors ?? []} onClose={() => setLoggingDone(false)} onSaved={(id) => { setLoggingDone(false); load(); setOpenId(id); }} /></div>}
+
+        <div className="nl-bo-stats">
+          {tiles.map((t) => (
+            <Stat
+              key={t.label}
+              label={t.label}
+              value={error && !s ? "-" : t.value}
+              warm={t.warm}
+              delta={t.d ? t.d.text : undefined}
+              deltaTone={t.d?.tone}
+              note={t.d ? "from last month" : t.note}
+            />
+          ))}
+        </div>
+
+        <div className="nl-bo-tabrow">
+          <Tabs
+            label="Maintenance sections"
+            value={section === "contractors" ? "repair" : section}
+            onChange={(v) => setSection(v)}
+            items={[
+              { id: "repair" as const, label: "Repairs", count: s?.byKind.repair ?? null },
+              { id: "planned" as const, label: "Planned", count: s?.byKind.planned ?? null },
+              { id: "invoices" as const, label: "Invoices" },
+              { id: "accounts" as const, label: "Accounts", count: orders.filter((o) => o.status === "invoiced").length || null },
+            ]}
+          />
+          {section !== "contractors" && section !== "invoices" && (
+            <div className="nl-bo-tabrow-side">
+              {mine && (
+                <span className="nl-toggle" role="group" aria-label="Whose jobs">
+                  <button type="button" className={view === "mine" ? "is-on" : ""} aria-pressed={view === "mine"} title="Jobs on the homes in your own book, and any you raised" onClick={() => saveView("mine")}>Mine</button>
+                  <button type="button" className={view === "everyone" ? "is-on" : ""} aria-pressed={view === "everyone"} title="Every job on the managed book" onClick={() => saveView("everyone")}>Everyone</button>
+                </span>
+              )}
+              {section !== "accounts" && (
+                <button type="button" className="nl-link nl-bo-aside" onClick={() => setShowClosed((v) => !v)}>{showClosed ? "Hide finished jobs" : "Show finished jobs"}</button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {jobsTab && (
+          <div className="nl-filters mb-5">
+            <label className="nl-fsearch">
+              <Ico name="search" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search jobs, addresses, contractors" aria-label="Search jobs" />
+            </label>
+            {data && <span className="nl-fcount">{rows.length + carried.length} {rows.length + carried.length === 1 ? "job" : "jobs"}</span>}
+          </div>
+        )}
+        {view === "mine" && mine?.note && section !== "contractors" && section !== "invoices" && <p className="nl-meta mb-4">{mine.note}</p>}
+
+        {error && <Failed onRetry={load}>{error}</Failed>}
+        {data && !data.live && <p className="nl-bo-note mb-4">{data.reason}</p>}
+
+        {section === "invoices" ? (
+          <div className="nl-bo-legacy"><Invoices onOpen={(id) => router.push(`/maintenance/invoices/${id}`)} /></div>
+        ) : section === "accounts" ? (
+          <div className="nl-bo-legacy"><Accounts orders={orders} loaded={!!data} onOpen={setOpenId} onChanged={load} canPayrun={data?.canPayrun === true} /></div>
+        ) : section === "contractors" ? (
+          <Loading>Contractors have their own place now, under Portfolio. Taking you there…</Loading>
+        ) : !data ? (
+          !error && <Loading>Reading the jobs…</Loading>
+        ) : grouped.length === 0 && carried.length === 0 ? (
+          <EmptyCard
+            title={section === "repair" ? (view === "mine" ? "Nothing Broken on Your Homes" : "Nothing Broken That We Know Of") : view === "mine" ? "Nothing Planned on Your Homes" : "Nothing Planned"}
+            action={
+              <span className="flex flex-wrap items-center justify-center gap-3">
+                <button type="button" className="nl-btn nl-btn--primary" onClick={() => setRaising(section === "repair" ? "repair" : "planned")}><Ico name="plus" /> {section === "repair" ? "Report a repair" : "Plan a certificate"}</button>
+                {view === "mine" && <button type="button" className="nl-link" onClick={() => saveView("everyone")}>See everyone&apos;s</button>}
+              </span>
+            }
+          >
+            {section === "repair"
+              ? "Report a repair when a tenant or landlord lets you know, and it runs from here."
+              : "Plan a certificate from Compliance when one is coming up, or straight from here."}
+          </EmptyCard>
+        ) : (
+          <div className="nl-bo-stack">
+            {grouped.map((g) => (
+              <section key={g.status} className="nl-bo-card nl-bo-group">
+                <div className="nl-bo-card-head">
+                  <h2 className="nl-bo-card-title">{g.label}</h2>
+                  <span className="nl-count">{g.rows.length}</span>
+                </div>
+                <ul className="nl-bo-jobs">
+                  {g.rows.map((o) => {
+                    const next = nextFor(o, data?.ringForApproval?.includes(o.id));
+                    const urg = o.urgency ? URGENCIES.find((u) => u.id === o.urgency)?.label : null;
+                    return (
+                      <li key={o.id}>
+                        <button type="button" className="nl-bo-job" onClick={() => setOpenId(o.id)}>
+                          <span className="nl-bo-job-n nl-mono">#{o.ref}</span>
+                          <span className="min-w-0">
+                            <span className="nl-bo-job-title">{o.title}</span>
+                            <span className="nl-meta block truncate">{o.propertyName}{o.locality ? `, ${o.locality}` : ""}{o.tenant ? ` · ${o.tenant}` : ""}</span>
+                          </span>
+                          <span className="nl-bo-job-tags">
+                            {urg ? <Badge tone={o.urgency === "emergency" ? "accent" : "neutral"}>{urg}</Badge> : o.kind === "planned" ? <Badge tone="info">Planned</Badge> : null}
+                            {o.category && <span className="nl-meta">{o.category}</span>}
+                            <PayrunTag o={o} />
+                          </span>
+                          <span className={`nl-bo-job-next${next.hot ? " is-hot" : ""}`}>{next.text}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+            {carried.length > 0 && <div className="nl-bo-legacy"><CarriedList jobs={carried} readAt={data?.carriedReadAt ?? null} busy={takingOn} onTakeOn={(j) => void takeOn(j)} /></div>}
+            {section === "planned" && carriedDone.length > 0 && <div className="nl-bo-legacy"><DoneOnCertificates jobs={carriedDone} /></div>}
+          </div>
+        )}
+        {data?.carriedError && <div className="mt-4"><Failed>{data.carriedError}</Failed></div>}
+
+        {raising && (
+          <RaiseJob
+            kind={raising}
+            contractors={data?.contractors ?? []}
+            onClose={() => setRaising(null)}
+            onRaised={(o) => { setRaising(null); load(); setOpenId(o.id); }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <>

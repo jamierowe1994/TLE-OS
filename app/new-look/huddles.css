@@ -1,0 +1,344 @@
+/* New look: huddles (lib/new-look). Scoped under [data-look="new"].
+   After the design's Huddles: the list in a 320px column titled Huddles with
+   New, the sections as quiet headings, and the open chat beside it - serif
+   bubbles, a hairline under the head, and a rounded box to write in. Full
+   bleed: the frame's own padding is cancelled so the chat fills the window,
+   as the old screen did. Markup in app/(os)/huddles/page.tsx (NlCtx). */
+
+/* ── the frame: cancel main's padding (components/Shell) ────────────────── */
+[data-look="new"].nl-hud {
+  --hud-line: var(--line);
+  --hud-line-strong: var(--line-strong);
+  --hud-them: var(--card);
+  margin: -32px -20px -112px;
+  background: var(--page);
+}
+@media (min-width: 1024px) { [data-look="new"].nl-hud { margin-left: -40px; margin-right: -40px; } }
+@media (min-width: 1280px) { [data-look="new"].nl-hud { margin-right: -84px; } }
+@media (min-width: 1536px) { [data-look="new"].nl-hud { margin-left: -56px; } }
+/* The new sidebar and frame pad the page 56px a side, 18px on a phone. */
+[data-nav-look="new"] [data-look="new"].nl-hud { margin-left: -56px; margin-right: -56px; }
+@media (max-width: 760px) { [data-nav-look="new"] [data-look="new"].nl-hud { margin-left: -18px; margin-right: -18px; } }
+
+[data-look="new"] .nl-hud-frame {
+  display: grid; grid-template-columns: 320px minmax(0, 1fr); overflow: hidden; background: var(--page);
+}
+@media (max-width: 1100px) { [data-look="new"] .nl-hud-frame { grid-template-columns: 290px minmax(0, 1fr); } }
+/* A phone: the list, or the open chat with a back arrow. */
+@media (max-width: 760px) {
+  [data-look="new"] .nl-hud-frame { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-hud-frame.is-chat .nl-hud-list { display: none; }
+  [data-look="new"] .nl-hud-frame:not(.is-chat) .nl-hud-thread { display: none; }
+}
+
+/* ── the list ───────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-hud-list { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid var(--line); }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-list { border-right: 0; } }
+[data-look="new"] .nl-hud-list-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 28px 24px 4px; }
+[data-look="new"] .nl-hud-title { font-family: var(--font-heading); font-weight: 700; font-size: 28px; line-height: 32px; letter-spacing: -0.5px; margin: 0; color: var(--ink); }
+[data-look="new"] .nl-hud-title.is-sub { flex: 1; font-size: 22px; line-height: 28px; letter-spacing: -0.3px; }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-list-head { padding: 20px 18px 4px; } }
+[data-look="new"] .nl-hud-list-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 16px 16px; }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-list-scroll { padding: 4px 10px 16px; } }
+
+/* A heading in the list; sticky, as the four lists scroll as one. */
+[data-look="new"] .nl-hud-group {
+  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px;
+  margin: 0; padding: 20px 10px 6px; background: var(--page);
+  font-size: 12px; font-weight: 500; line-height: 16px; color: var(--muted);
+}
+[data-look="new"] .nl-hud-group.is-first { padding-top: 14px; }
+[data-look="new"] .nl-hud-group > span:first-child { flex: 1; }
+[data-look="new"] .nl-hud-nothing { margin: 0; padding: 6px 10px 8px; font-size: 13px; line-height: 19px; color: var(--faint); }
+
+[data-look="new"] .nl-hud-swipe { position: relative; user-select: none; -webkit-user-select: none; overflow: hidden; border-radius: 16px; }
+[data-look="new"] .nl-hud-swipe + .nl-hud-swipe { margin-top: 4px; }
+[data-look="new"] .nl-hud-swipe-acts { position: absolute; top: 0; bottom: 0; right: 0; display: flex; transition: opacity 0.2s; }
+[data-look="new"] .nl-hud-swipe-acts.is-shut { opacity: 0; pointer-events: none; }
+[data-look="new"] .nl-hud-swipe-btn {
+  font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  width: 74px; height: 100%; border: 0; background: var(--box); color: var(--ink);
+  font-size: 11.5px; font-weight: 500; cursor: pointer; transition: opacity 0.2s;
+}
+[data-look="new"] .nl-hud-swipe-btn:hover { opacity: 0.88; }
+[data-look="new"] .nl-hud-swipe-btn.is-loud { background: #b5452c; color: #fff; }
+[data-look="new"] .nl-hud-slide { position: relative; background: var(--page); transition: transform 0.3s var(--nl-ease); }
+
+[data-look="new"] .nl-hud-item {
+  font: inherit; color: inherit; text-align: left; display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px; border: 1px solid transparent; border-radius: 16px; background: var(--page); cursor: pointer;
+  transition: background-color 0.25s var(--nl-ease), border-color 0.25s;
+}
+[data-look="new"] .nl-hud-item:hover { background: var(--panel); }
+[data-look="new"] .nl-hud-item.is-on { background: var(--card); border-color: var(--line); }
+[data-look="new"] .nl-hud-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+[data-look="new"] .nl-hud-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+[data-look="new"] .nl-hud-item-name { display: flex; align-items: baseline; gap: 8px; font-size: 14px; line-height: 20px; }
+[data-look="new"] .nl-hud-item-name > b { flex: 1; min-width: 0; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-hud-item.is-unread .nl-hud-item-name > b { font-weight: 600; }
+[data-look="new"] .nl-hud-item-tag { flex: none; font-size: 11px; color: var(--muted); }
+[data-look="new"] .nl-hud-item-at { flex: none; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-hud-item-about { font-size: 12px; line-height: 16px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-hud-item-last { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-hud-item-last > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-hud-item.is-unread .nl-hud-item-last > span:first-child { color: var(--ink); }
+
+/* Unread: a small count in the one orange. */
+[data-look="new"] .nl-hud-n {
+  flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--primary); color: var(--on-primary);
+  font-family: var(--nl-mono); font-size: 10.5px; font-weight: 500; line-height: 18px; text-align: center; letter-spacing: 0;
+}
+
+[data-look="new"] .nl-hud-foot { flex: none; border-top: 1px solid var(--line); padding: 10px 16px 14px; }
+[data-look="new"] .nl-hud-foot-btn {
+  font: inherit; display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px;
+  border: 0; border-radius: 12px; background: none; color: var(--muted); font-size: 13px; cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-hud-foot-btn > span:nth-child(2) { flex: 1; text-align: left; }
+[data-look="new"] .nl-hud-foot-btn:hover { background: var(--panel); color: var(--ink); }
+[data-look="new"] .nl-hud-foot p { margin: 2px 10px 0; font-size: 11.5px; line-height: 16px; color: var(--faint); }
+
+/* ── faces ──────────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-hud-slot { display: flex; align-items: center; flex: none; }
+[data-look="new"] .nl-hud-av {
+  position: relative; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 999px;
+  font-weight: 600; letter-spacing: 0; background: var(--info-soft); color: var(--ink);
+}
+[data-look="new"] .nl-hud-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+[data-look="new"] .nl-hud-av--pink { background: var(--accent-soft); color: var(--accent-dark); }
+[data-look="new"] .nl-hud-av--sage { background: var(--sage-soft); color: var(--sage-ink); }
+[data-look="new"] .nl-hud-av--clay { background: var(--info-soft); color: var(--ink); }
+[data-look="new"] .nl-hud-av--more { background: var(--box); color: var(--muted); font-size: 10.5px; margin-left: -8px; }
+[data-look="new"] .nl-hud-av.is-ring { box-shadow: 0 0 0 2px var(--page); }
+[data-look="new"] .nl-hud-stack { display: flex; align-items: center; }
+[data-look="new"] .nl-hud-stack > span { position: relative; display: flex; }
+[data-look="new"] .nl-hud-stack > span + span { margin-left: -8px; }
+[data-look="new"] .nl-hud-stack.is-pair > span + span { margin-left: 2px; }
+[data-look="new"] .nl-hud-stack > .nl-hud-av--more { margin-left: -8px; }
+
+/* ── the open chat ──────────────────────────────────────────────────────── */
+[data-look="new"] .nl-hud-thread { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; animation: nl-fade 0.4s ease both; }
+[data-look="new"] .nl-hud-head { position: relative; z-index: 20; flex: none; display: flex; align-items: center; gap: 12px; padding: 22px 40px; border-bottom: 1px solid var(--line); }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-head { padding: 14px 16px; gap: 10px; } }
+[data-look="new"] .nl-hud-back { display: none; flex: none; }
+[data-look="new"] .nl-hud-back.is-always { display: inline-grid; }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-back { display: inline-grid; } }
+[data-look="new"] .nl-hud-head-text { flex: 1; min-width: 0; }
+[data-look="new"] .nl-hud-head-name {
+  font-family: var(--font-heading); font-weight: 600; font-size: 18px; line-height: 24px; letter-spacing: -0.2px; margin: 0; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+[data-look="new"] .nl-hud-head-sub { margin: 1px 0 0; font-size: 12px; line-height: 17px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-hud-head-acts { flex: none; display: flex; gap: 8px; }
+
+/* People: who is in it and what can be done, under the head. */
+[data-look="new"] .nl-hud-pop {
+  position: absolute; right: 40px; top: calc(100% - 10px); z-index: 30; width: 290px; max-width: calc(100% - 32px); padding: 6px;
+  background: var(--page); border: 1px solid var(--line-strong); border-radius: 16px;
+  animation: nl-menu 0.2s var(--nl-ease) both; transform-origin: top right;
+}
+@media (max-width: 760px) { [data-look="new"] .nl-hud-pop { right: 16px; } }
+[data-look="new"] .nl-hud-pop-label { margin: 0; padding: 8px 10px 4px; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-hud-pop ul { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; }
+[data-look="new"] .nl-hud-pop li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; font-size: 13.5px; }
+[data-look="new"] .nl-hud-pop-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-hud-pop-you { flex: none; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-hud-pop-take {
+  flex: none; font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 3px 8px; border-radius: 8px; cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-hud-pop-take:hover { background: var(--accent-soft); color: var(--accent-dark); }
+[data-look="new"] .nl-hud-pop hr { border: 0; border-top: 1px solid var(--line); margin: 5px 8px; }
+[data-look="new"] .nl-hud-pop-btn {
+  font: inherit; display: flex; width: 100%; padding: 9px 12px; border: 0; border-radius: 10px; background: none;
+  font-size: 13.5px; color: var(--ink); text-align: left; cursor: pointer;
+}
+[data-look="new"] .nl-hud-pop-btn:hover { background: var(--box); }
+[data-look="new"] .nl-hud-pop-btn.is-danger { color: var(--accent-dark); }
+
+/* The messages: oldest at the top, scrolled to the newest. */
+[data-look="new"] .nl-hud-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+[data-look="new"] .nl-hud-msgs { list-style: none; margin: 0 auto; padding: 24px 40px 32px; max-width: 980px; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-msgs { padding: 14px 16px 24px; } }
+[data-look="new"] .nl-hud-day { display: flex; align-items: center; gap: 14px; margin: 26px 0 14px; font-size: 12px; line-height: 16px; color: var(--muted); }
+[data-look="new"] .nl-hud-day:first-child { margin-top: 4px; }
+[data-look="new"] .nl-hud-day::before, [data-look="new"] .nl-hud-day::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+[data-look="new"] .nl-hud-msg { display: flex; flex-direction: column; align-items: flex-start; border-radius: 16px; animation: nl-in 0.5s var(--nl-ease) both; }
+[data-look="new"] .nl-hud-msg.is-me { align-items: flex-end; }
+[data-look="new"] .nl-hud-msg.is-head { margin-top: 10px; }
+[data-look="new"] .nl-hud-from { font-size: 12px; line-height: 16px; color: var(--muted); margin: 0 0 4px 42px; }
+[data-look="new"] .nl-hud-line { display: flex; align-items: flex-end; gap: 10px; max-width: min(720px, 88%); }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-line { max-width: 94%; gap: 8px; } }
+[data-look="new"] .nl-hud-msg.is-me .nl-hud-line { flex-direction: row-reverse; }
+[data-look="new"] .nl-hud-facegap { width: 28px; flex: none; }
+[data-look="new"] .nl-hud-bubble {
+  min-width: 0; font-family: var(--nl-serif); font-size: 17px; line-height: 25px; color: var(--ink); letter-spacing: 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px 20px 20px 6px; padding: 10px 16px;
+  white-space: pre-wrap; overflow-wrap: anywhere; text-align: left;
+}
+@media (max-width: 760px) { [data-look="new"] .nl-hud-bubble { font-size: 16px; line-height: 23px; padding: 9px 14px; } }
+[data-look="new"] .nl-hud-msg.is-me .nl-hud-bubble { background: var(--info-soft); border-color: transparent; border-radius: 20px 20px 6px 20px; }
+[data-look="new"] button.nl-hud-bubble { cursor: pointer; transition: border-color 0.2s; }
+[data-look="new"] button.nl-hud-bubble:hover { border-color: var(--faint); }
+[data-look="new"] .nl-hud-q { display: block; margin-top: 6px; font-family: var(--font-body); font-size: 12px; font-weight: 500; line-height: 16px; color: var(--accent-dark); }
+[data-look="new"] .nl-hud-quote {
+  font: inherit; display: block; width: 100%; min-width: 140px; margin-bottom: 6px; padding: 6px 10px;
+  border: 0; border-left: 3px solid var(--primary); border-radius: 8px; background: color-mix(in srgb, var(--ink) 5%, transparent);
+  text-align: left; font-family: var(--font-body); font-size: 12.5px; line-height: 17px; color: var(--muted); cursor: pointer; white-space: normal;
+}
+[data-look="new"] .nl-hud-quote:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+[data-look="new"] .nl-hud-quote b { display: block; font-size: 11.5px; font-weight: 600; color: var(--accent-dark); }
+[data-look="new"] .nl-hud-quote span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-look="new"] .nl-hud-gif { display: flex; flex-direction: column; max-width: 260px; min-width: 0; }
+[data-look="new"] .nl-hud-gif img { display: block; max-height: 220px; max-width: 100%; border-radius: 16px; background: var(--panel); object-fit: contain; }
+[data-look="new"] .nl-hud-reply {
+  flex: none; align-self: center; width: 28px; height: 28px; display: grid; place-items: center;
+  border: 0; border-radius: 999px; background: none; color: var(--muted); opacity: 0; cursor: pointer;
+  transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-hud-msg:hover .nl-hud-reply, [data-look="new"] .nl-hud-reply:focus-visible { opacity: 1; }
+[data-look="new"] .nl-hud-reply:hover { background: var(--box); color: var(--ink); }
+@media (hover: none) { [data-look="new"] .nl-hud-reply { opacity: 0.6; } }
+[data-look="new"] .nl-hud-t { display: flex; align-items: center; font-size: 11px; line-height: 14px; color: var(--faint); margin: 4px 6px 0 44px; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-hud-msg.is-me .nl-hud-t { margin: 4px 6px 0 0; }
+[data-look="new"] .nl-hud-typing { display: inline-flex; gap: 4px; padding: 14px 16px; border-radius: 20px 20px 20px 6px; background: var(--card); border: 1px solid var(--line); }
+[data-look="new"] .nl-hud-typing i { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: hud-dot 1.2s ease-in-out infinite; }
+[data-look="new"] .nl-hud-typing i:nth-child(2) { animation-delay: 0.16s; }
+[data-look="new"] .nl-hud-typing i:nth-child(3) { animation-delay: 0.32s; }
+[data-look="new"] .nl-hud-msg.is-typing .nl-hud-from { margin-left: 42px; }
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-hud-msg, [data-look="new"] .nl-hud-thread { animation: none; }
+  [data-look="new"] .nl-hud-typing i { animation: none; }
+}
+
+[data-look="new"] .nl-hud-empty { margin: 0; padding: 72px 20px; text-align: center; font-family: var(--nl-serif); font-size: 18px; line-height: 27px; color: var(--muted); }
+[data-look="new"] .nl-hud-empty.is-small { padding: 32px 12px; font-size: 15px; line-height: 22px; }
+[data-look="new"] .nl-hud-pick { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+[data-look="new"] .nl-hud-pick-ico { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+[data-look="new"] .nl-hud-pick-title { margin: 14px 0 0; font-family: var(--font-heading); font-weight: 600; font-size: 17px; line-height: 22px; color: var(--ink); }
+[data-look="new"] .nl-hud-pick-sub { margin: 6px 0 0; max-width: 320px; font-family: var(--nl-serif); font-size: 16px; line-height: 23px; color: var(--muted); }
+
+[data-look="new"] .nl-hud-wait { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 48px 12px; font-size: 13px; color: var(--muted); }
+[data-look="new"] .nl-hud-wait i, [data-look="new"] .nl-hud-spin {
+  display: inline-block; width: 15px; height: 15px; border-radius: 999px; border: 2px solid var(--line-strong); border-top-color: var(--ink);
+  animation: nl-hud-spin 0.8s linear infinite;
+}
+@keyframes nl-hud-spin { to { transform: rotate(360deg); } }
+[data-look="new"] .nl-hud-error { margin: 10px; padding: 12px 14px; border-radius: 14px; background: var(--warning-soft); color: var(--ink); font-size: 13px; line-height: 19px; }
+
+/* ── the box you type in ────────────────────────────────────────────────── */
+/* Room on the right for Steve in the corner, so the two never touch. */
+[data-look="new"] .nl-hud-compose { position: relative; flex: none; padding: 0 84px 24px 40px; }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-compose { padding: 0 74px 14px 12px; } }
+[data-look="new"] .nl-hud-box {
+  display: flex; align-items: flex-end; gap: 6px; max-width: 900px; margin: 0 auto;
+  padding: 8px 8px 8px 10px; border: 1px solid var(--line-strong); border-radius: 22px; background: var(--card);
+  transition: border-color 0.25s;
+}
+[data-look="new"] .nl-hud-box:focus-within { border-color: var(--faint); }
+[data-look="new"] .nl-hud-box textarea {
+  flex: 1; min-width: 0; min-height: 35px; max-height: 140px; padding: 5px 4px;
+  font-family: var(--nl-serif); font-size: 17px; line-height: 25px; color: var(--ink);
+  border: 0; background: transparent; resize: none; outline: none;
+}
+[data-look="new"] .nl-hud-box textarea::placeholder { color: var(--faint); }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-box textarea { font-size: 16px; } }
+[data-look="new"] .nl-hud-tool {
+  flex: none; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 10px;
+  background: none; color: var(--muted); cursor: pointer; transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-hud-tool:hover, [data-look="new"] .nl-hud-tool.is-on { background: var(--box); color: var(--ink); }
+[data-look="new"] .nl-hud-gifmark { border: 1.5px solid currentColor; border-radius: 5px; padding: 0 4px; font-size: 9.5px; font-weight: 700; line-height: 13px; letter-spacing: 0.04em; }
+[data-look="new"] .nl-hud-ask {
+  flex: none; height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: 10px; background: none;
+  font: inherit; font-size: 12.5px; font-weight: 500; color: var(--ink); white-space: nowrap; cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-hud-ask:hover { border-color: var(--faint); }
+[data-look="new"] .nl-hud-ask.is-on { background: var(--sage-deep); border-color: var(--sage-deep); color: #fff; }
+@media (max-width: 760px) {
+  /* A phone: the toggle is the question mark alone, so the box keeps room to write. */
+  [data-look="new"] .nl-hud-ask { width: 34px; padding: 0; justify-content: center; font-size: 14px; }
+  [data-look="new"] .nl-hud-ask-long { display: none; }
+  [data-look="new"] .nl-hud-box { gap: 4px; padding: 6px 6px 6px 6px; }
+  [data-look="new"] .nl-hud-tool, [data-look="new"] .nl-hud-send { width: 32px; height: 32px; }
+  [data-look="new"] .nl-hud-ask { width: 32px; height: 32px; }
+  /* Steve's corner: the hint under Archived stops short of him. */
+  [data-look="new"] .nl-hud-foot { padding-right: 84px; }
+}
+[data-look="new"] .nl-hud-send {
+  flex: none; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 10px;
+  background: var(--primary); color: var(--on-primary); cursor: pointer;
+  transition: background-color 0.3s var(--nl-ease), color 0.3s;
+}
+[data-look="new"] .nl-hud-send:hover:not(:disabled) { background: var(--accent-dark); color: #faf9f5; }
+[data-look="new"] .nl-hud-send:disabled { background: var(--box); color: var(--faint); cursor: default; }
+[data-look="new"] .nl-hud-send .nl-hud-spin { width: 13px; height: 13px; }
+[data-look="new"] .nl-hud-note { max-width: 900px; margin: 8px auto 0; padding: 0 12px; font-size: 12px; line-height: 17px; color: var(--muted); }
+[data-look="new"] .nl-hud-note.is-warn { color: var(--accent-dark); }
+[data-look="new"] .nl-hud-compose > .nl-hud-note.is-warn:first-child, [data-look="new"] .nl-hud-compose > .nl-hud-tray + .nl-hud-note.is-warn { margin: 0 auto 8px; }
+[data-look="new"] .nl-hud-replying {
+  display: flex; align-items: flex-start; gap: 8px; max-width: 900px; margin: 0 auto 8px; padding: 8px 6px 8px 12px;
+  border-left: 3px solid var(--primary); border-radius: 12px; background: var(--panel); color: var(--muted);
+}
+[data-look="new"] .nl-hud-replying > svg { flex: none; margin-top: 2px; }
+[data-look="new"] .nl-hud-replying-text { flex: 1; min-width: 0; font-size: 12.5px; line-height: 17px; }
+[data-look="new"] .nl-hud-replying-text b { display: block; font-size: 11.5px; font-weight: 600; color: var(--accent-dark); }
+[data-look="new"] .nl-hud-replying-text span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-look="new"] .nl-hud-replying .nl-hud-tool { width: 28px; height: 28px; }
+
+/* The emoji and GIF trays rise from the box. */
+[data-look="new"] .nl-hud-tray {
+  position: absolute; left: 40px; bottom: calc(100% - 14px); z-index: 30; display: flex; flex-direction: column;
+  width: min(340px, calc(100% - 32px)); max-height: 360px; overflow: hidden;
+  background: var(--page); border: 1px solid var(--line-strong); border-radius: 20px;
+  animation: nl-menu 0.2s var(--nl-ease) both; transform-origin: bottom left;
+}
+[data-look="new"] .nl-hud-tray.is-wide { width: min(380px, calc(100% - 32px)); }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-tray { left: 12px; } }
+
+/* ── starting a huddle, inviting people ─────────────────────────────────── */
+[data-look="new"] .nl-hud-modal-back {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: color-mix(in srgb, #141413 32%, transparent); animation: nl-fade 0.25s ease both;
+}
+[data-look="new"] .nl-hud-modal {
+  display: flex; flex-direction: column; width: 100%; max-width: 460px; max-height: min(660px, 90dvh); overflow: hidden;
+  background: var(--page); border: 1px solid var(--line); border-radius: 24px; animation: nl-in 0.4s var(--nl-ease) both;
+}
+[data-look="new"] .nl-hud-modal-head { flex: none; display: flex; align-items: flex-start; gap: 12px; padding: 24px 24px 14px; }
+[data-look="new"] .nl-hud-modal-text { flex: 1; min-width: 0; }
+[data-look="new"] .nl-hud-modal-title { font-family: var(--font-heading); font-weight: 600; font-size: 22px; line-height: 28px; letter-spacing: -0.3px; margin: 0; color: var(--ink); }
+[data-look="new"] .nl-hud-modal-sub { margin: 4px 0 0; font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-hud-modal-search { flex: none; padding: 0 24px; }
+[data-look="new"] .nl-hud-modal-search .nl-fsearch { width: 100%; min-width: 0; }
+[data-look="new"] .nl-hud-modal-list { flex: 1; min-height: 200px; overflow-y: auto; padding: 4px 16px 10px; }
+[data-look="new"] .nl-hud-pgroup { margin: 16px 8px 4px; font-size: 12px; line-height: 16px; color: var(--muted); }
+[data-look="new"] .nl-hud-people { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-hud-person {
+  font: inherit; color: inherit; display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px;
+  border: 0; border-radius: 14px; background: none; text-align: left; cursor: pointer; transition: background-color 0.2s;
+}
+[data-look="new"] .nl-hud-person:hover { background: var(--panel); }
+[data-look="new"] .nl-hud-person.is-on { background: var(--sage-soft); }
+[data-look="new"] .nl-hud-person-main { flex: 1; min-width: 0; }
+[data-look="new"] .nl-hud-person-name { display: block; font-size: 14px; line-height: 20px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-hud-person-town { display: block; font-size: 12px; line-height: 16px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-hud-tick { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; border: 1.5px solid var(--line-strong); color: #fff; transition: background-color 0.2s, border-color 0.2s; }
+[data-look="new"] .nl-hud-person.is-on .nl-hud-tick { background: var(--sage-deep); border-color: var(--sage-deep); }
+[data-look="new"] .nl-hud-modal-name { padding: 0 24px 12px; }
+[data-look="new"] .nl-hud-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+[data-look="new"] .nl-hud-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 2px; border-radius: 999px; background: var(--panel); font-size: 12.5px; color: var(--ink); }
+[data-look="new"] .nl-hud-modal-foot { flex: none; border-top: 1px solid var(--line); padding: 14px 24px 18px; }
+[data-look="new"] .nl-hud-modal-foot .nl-hud-note { margin: 0 0 10px; padding: 0; }
+[data-look="new"] .nl-hud-modal-acts { display: flex; align-items: center; gap: 8px; }
+[data-look="new"] .nl-hud-modal-go { flex: 1; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-hud-modal-head { padding: 20px 18px 12px; }
+  [data-look="new"] .nl-hud-modal-search, [data-look="new"] .nl-hud-modal-name { padding-left: 18px; padding-right: 18px; }
+  [data-look="new"] .nl-hud-modal-list { padding: 4px 10px 10px; }
+  [data-look="new"] .nl-hud-modal-foot { padding: 12px 18px 16px; }
+}

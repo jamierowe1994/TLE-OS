@@ -23,6 +23,8 @@ import {
 } from "@/lib/market-appraisal";
 import BookAppraisalWizard from "@/components/appraisal/BookAppraisalWizard";
 import { searchMatches } from "@/lib/search-match";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Ico, Mast, Tabs } from "@/components/new-look/Parts";
 
 /**
  * Market Appraisals — the landlord side, from booked to won.
@@ -91,6 +93,8 @@ function inPeriod(iso: string | null, period: PeriodId): boolean {
 }
 
 export default function MarketAppraisals() {
+  /* The new look (lib/new-look "appraisals", 23 Oct 2026): null until known. */
+  const look = useNewLook("appraisals");
   const [filter, setFilter] = useState<MaStage | "open">("open");
   /* The bar under the header is this list's search - one search per page,
      the same as Leads (James, 11 Sep: the two bars were different widths). */
@@ -203,6 +207,151 @@ export default function MarketAppraisals() {
     }
     return m;
   }, [inWindow]);
+
+  /* ── THE NEW LOOK (lib/new-look "appraisals", 23 Oct 2026) ──────────────
+     The same book, stages, date window, search and archive as the board
+     below, drawn the new way: a type-only header, one filter row, text tabs,
+     and the stages as lanes side by side (or rows on hairlines). The old
+     board stays underneath until the switch has bedded in. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening Market Appraisals…</p>;
+  }
+  if (look) {
+    const tabValue = showArchived ? "archived" : filter;
+    const stageBlurb = showArchived
+      ? "Tidied away by hand. Open one and Bring back puts it on the board again."
+      : filter === "open"
+        ? "Everything still in play, the most pressing first."
+        : noDash(MA_STAGES.find((s) => s.id === filter)?.blurb ?? "");
+    const weekAhead = inWindow.filter((m) => {
+      if (!m.appointmentAt || m.cancelledAt) return false;
+      const t = new Date(m.appointmentAt).getTime();
+      return t >= Date.now() && t <= Date.now() + 7 * 864e5;
+    }).length;
+    const unreadFiles = all.filter((m) => (m.unreadMessages ?? 0) > 0).length;
+    const lanes = filter === "open" ? OPEN_STAGES : MA_STAGES.filter((s) => s.id === filter);
+    const narrowed = Boolean(q.trim()) || period !== "any";
+    return (
+      <>
+        {booking ? (
+          <BookAppraisalWizard onClose={() => setBooking(false)} onFinished={() => setReload((n) => n + 1)} />
+        ) : null}
+        <div data-look="new" className="nl-page nl-rise nl-appr">
+          <Mast
+            title="Market Appraisals"
+            blurb={
+              live === null
+                ? "Fetching the appraisals…"
+                : loadError && all.length === 0
+                  ? "From the day it's booked to signed terms."
+                  : `From the day it's booked to signed terms. ${openCount} open${period === "any" ? "" : " in that window"}, ${weekAhead === 0 ? "no visits" : weekAhead === 1 ? "one visit" : `${weekAhead} visits`} in the next seven days${unreadFiles ? `, and ${unreadFiles === 1 ? "one landlord has" : `${unreadFiles} landlords have`} written back` : ""}.`
+            }
+            actions={
+              <button type="button" data-steve="ma.book" onClick={() => setBooking(true)} className="nl-btn nl-btn--primary">
+                <Ico name="plus" /> Book an appraisal
+              </button>
+            }
+          />
+
+          <div className="nl-filters">
+            <label className="nl-fsearch">
+              <Ico name="search" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Address, postcode, landlord" aria-label="Search appraisals" />
+            </label>
+            <span className={`nl-fsel${period !== "any" ? " is-set" : ""}`}>
+              <select aria-label="When" value={period} onChange={(e) => setPeriod(e.target.value as PeriodId)}>
+                {PERIODS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </span>
+            {narrowed && (
+              <button type="button" className="nl-fmore" onClick={() => { setQ(""); setPeriod("any"); }}>
+                Clear
+              </button>
+            )}
+            <span className="nl-fcount">{live === null ? "" : `${rows.length} ${rows.length === 1 ? "appraisal" : "appraisals"}`}</span>
+            <span className="nl-toggle" role="group" aria-label="Show as">
+              <button type="button" className={view === "tiles" ? "is-on" : ""} aria-pressed={view === "tiles"} onClick={() => setView("tiles")}>Lanes</button>
+              <button type="button" className={view === "list" ? "is-on" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>List</button>
+            </span>
+          </div>
+
+          <div className="mt-6">
+            <Tabs
+              label="Appraisal stages"
+              value={tabValue}
+              onChange={(id) => {
+                if (id === "archived") {
+                  setShowArchived(true);
+                  return;
+                }
+                setFilter(id as MaStage | "open");
+                setShowArchived(false);
+              }}
+              items={[
+                { id: "open", label: "All open", count: live === null ? null : openCount },
+                ...OPEN_STAGES.map((st) => ({ id: st.id as string, label: st.label, count: live === null ? null : counts.get(st.id) ?? 0 })),
+                ...(archived.length > 0 ? [{ id: "archived", label: "Archived", count: archived.length }] : []),
+              ]}
+            />
+            <p className="nl-meta mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>{stageBlurb}</span>
+              {(filter !== "open" || showArchived) && (
+                <button type="button" className="nl-link" onClick={() => { setFilter("open"); setShowArchived(false); }}>
+                  Show all open
+                </button>
+              )}
+            </p>
+          </div>
+
+          <div className="mt-7">
+            {loadError && (
+              <div className="nl-appr-error" role="alert">
+                <p className="nl-block-title">The appraisals didn&apos;t load</p>
+                <p className="nl-meta mt-1">{loadError}</p>
+              </div>
+            )}
+            {live === null ? (
+              <BoardSkeleton kind="rows" label="Fetching the appraisals…" count={5} />
+            ) : rows.length === 0 && loadError ? null : rows.length === 0 ? (
+              <p className="nl-empty">
+                {showArchived ? "Nothing archived matches that." : q.trim() ? "Nothing matches that search." : `Nothing at this stage${period === "any" ? "" : " in that date range"}.`}
+              </p>
+            ) : view === "tiles" && !showArchived ? (
+              <div className={`nl-appr-lanes${lanes.length === 1 ? " is-one" : ""}`}>
+                {lanes.map((st) => {
+                  const items = rows.filter((m) => m.live === st.id);
+                  return (
+                    <section key={st.id} className="nl-appr-lane" aria-label={st.label}>
+                      <div className="nl-appr-lane-head">
+                        <h2 className="nl-section-title">{st.label}</h2>
+                        <span className="nl-count">{items.length}</span>
+                      </div>
+                      {items.length === 0 ? (
+                        <p className="nl-appr-lane-empty">Nothing here{narrowed ? " that matches" : ""}.</p>
+                      ) : (
+                        <div className="nl-appr-lane-items">
+                          {items.map((m) => <NlLaneItem key={m.id} m={m} />)}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="nl-appr-rows">
+                {rows.map((m) => <NlRow key={m.id} m={m} />)}
+              </div>
+            )}
+          </div>
+
+          <p className="nl-appr-foot">
+            <InfoIcon />
+            Once the terms are signed and the checks are done, an appraisal becomes a listing.
+          </p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -477,5 +626,115 @@ function AppraisalCard({ m, tile }: { m: MarketAppraisal & { live: MaStage }; ti
       </div>
       <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">{badges}</div>
     </Link>
+  );
+}
+
+
+/* ── the new look's pieces (lib/new-look "appraisals") ────────────────── */
+
+/** No em dashes in anything a person reads (house rule); the stage blurbs carry some. */
+const noDash = (t: string) => t.replace(/\s*—\s*/g, " - ");
+
+const nlWhen = (iso: string) =>
+  new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+function nlWhenLine(m: MarketAppraisal) {
+  if (m.appointmentAt) return nlWhen(m.appointmentAt);
+  if (m.cancelledAt) return `Cancelled${m.cancelledWas ? ` - was ${nlWhen(m.cancelledWas)}` : ""}`;
+  return "No date booked";
+}
+
+function NlBadges({ m }: { m: MarketAppraisal & { live: MaStage } }) {
+  const unread = m.unreadMessages ?? 0;
+  const missing = needsValuation(m);
+  if (!unread && !m.cancelledAt && !missing) return null;
+  return (
+    <span className="nl-appr-badges">
+      {unread > 0 && <Badge tone="accent">{unread === 1 ? "New message" : `${unread} new messages`}</Badge>}
+      {m.cancelledAt && <Badge tone="accent">Cancelled</Badge>}
+      {missing && <Badge tone="warning">No figure yet</Badge>}
+    </span>
+  );
+}
+
+/** One appraisal in its stage's lane: the address, who and when, and where it's up to. */
+function NlLaneItem({ m }: { m: MarketAppraisal & { live: MaStage } }) {
+  return (
+    <Link data-steve-row="" href={`/market-appraisals/${m.id}`} className="nl-appr-item">
+      <span className="nl-strong">{m.address}</span>
+      <span className="nl-meta">
+        {m.landlord}
+        {m.postcode && !m.address.toUpperCase().includes(m.postcode.toUpperCase()) ? ` · ${m.postcode}` : ""}
+      </span>
+      <span className="nl-mono">
+        {nlWhenLine(m)}
+        {m.agent ? ` · ${m.agent}` : ""}
+      </span>
+      {(m.valuation || m.stageWhy) && (
+        <span className={`nl-appr-note${m.valuation ? " is-good" : ""}`}>
+          {m.valuation ? `${gbp(m.valuation)} pcm` : ""}
+          {m.valuation && m.stageWhy ? " · " : ""}
+          {m.stageWhy ?? ""}
+        </span>
+      )}
+      <NlBadges m={m} />
+    </Link>
+  );
+}
+
+/** The seven steps as a thin line: done in ink, now in coral, the rest a hairline. */
+function NlStrip({ m }: { m: MarketAppraisal & { live: MaStage } }) {
+  const at = SPINE.findIndex((s) => s.id === m.live);
+  const stage = MA_STAGES.find((s) => s.id === m.live)?.label;
+  return (
+    <span className="nl-appr-strip" title={at >= 0 ? `Stage ${at + 1} of ${SPINE.length}: ${stage}` : stage}>
+      <span className="nl-appr-strip-bars" aria-hidden>
+        {SPINE.map((s, i) => <i key={s.id} className={i < at ? "done" : i === at ? "now" : ""} />)}
+      </span>
+      <span className="nl-meta">{at >= 0 ? `${stage} · ${at + 1} of ${SPINE.length}` : stage}</span>
+    </span>
+  );
+}
+
+/** One appraisal as a row on a hairline: who, when, how to reach them, where it's up to. */
+function NlRow({ m }: { m: MarketAppraisal & { live: MaStage } }) {
+  return (
+    <Link data-steve-row="" href={`/market-appraisals/${m.id}`} className="nl-appr-row">
+      <span className="nl-appr-row-main">
+        <span className="nl-strong">{m.address}</span>
+        <span className="nl-meta">
+          {m.landlord}
+          {m.postcode && !m.address.toUpperCase().includes(m.postcode.toUpperCase()) ? ` · ${m.postcode}` : ""}
+        </span>
+        <span className="nl-appr-contact">
+          {!m.landlordMobile && !m.landlordEmail ? (
+            <span>No contact recorded</span>
+          ) : (
+            <>
+              {m.landlordMobile && <span><Ico name="phone" size={12} /> {m.landlordMobile}</span>}
+              {m.landlordEmail && <span className="min-w-0 truncate"><Ico name="mail" size={12} /> {m.landlordEmail}</span>}
+            </>
+          )}
+        </span>
+      </span>
+      <span className="nl-appr-row-when">
+        <span className="nl-mono">{nlWhenLine(m)}</span>
+        <span className="nl-meta">{m.agent ? `with ${m.agent}` : "No agent recorded"}</span>
+      </span>
+      <NlStrip m={m} />
+      <span className="nl-appr-row-tags">
+        {m.valuation ? <Badge tone="good" plain>{gbp(m.valuation)} pcm</Badge> : null}
+        <NlBadges m={m} />
+      </span>
+    </Link>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5M12 8h.01" />
+    </svg>
   );
 }

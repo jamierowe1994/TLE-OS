@@ -9,6 +9,7 @@ import { peekJson, readJson } from "@/lib/page-cache";
 import { applicationOrder } from "@/lib/application-order";
 import { checksFor, isLet, toAppRecord } from "@/lib/application-record";
 import { sameHome } from "@/lib/address-parse";
+import { useNewLook } from "@/lib/use-new-look";
 import type { Application } from "@/lib/applications";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
@@ -50,6 +51,8 @@ export default function LetPage() {
   const params = useParams<{ id: string }>();
   const id = decodeURIComponent(String(params.id ?? ""));
   const router = useRouter();
+  /* The new look (lib/new-look "application"): asked before the page draws, so it never swaps under somebody. */
+  const look = useNewLook("application");
 
   /* The board's last good read paints at once (lib/page-cache). */
   const [apps, setApps] = useState<Loaded<Application[]>>(() => {
@@ -134,12 +137,21 @@ export default function LetPage() {
   );
 
   const waiting = apps.state === "loading" || (!appRaw && deals.state === "loading") || Boolean(appForDeal);
-  if (!app && !deal && waiting) {
+  if ((!app && !deal && waiting) || look === null) {
     return (
       <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted">
         <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
         Opening the let…
       </p>
+    );
+  }
+  if (!app && !deal && look) {
+    return (
+      <div data-look="new" className="nl-page py-16">
+        <h1 className="nl-section-title">This Let Isn&apos;t on Your Book</h1>
+        <p className="nl-meta mt-2">{apps.state === "failed" ? apps.error : "It may belong to another agent, or the link is wrong."}</p>
+        <Link href="/applications" className="nl-btn nl-btn--secondary nl-btn--sm mt-5">Back to Applications</Link>
+      </div>
     );
   }
   if (!app && !deal) {
@@ -164,6 +176,7 @@ export default function LetPage() {
          is nothing to push, and offering it invites somebody to jump the gun. */
       aside={appRaw && isLet(appRaw) ? <HandoffPanel applicationId={String(appRaw.id)} /> : undefined}
       initialTab={initialTab}
+      newLook={look}
     />
   );
 }

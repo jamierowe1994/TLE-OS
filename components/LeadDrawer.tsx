@@ -64,6 +64,9 @@ import Guarantors from "@/components/Guarantors";
 import OfferFromViewing from "@/components/offers/OfferFromViewing";
 import type { PreOnBooking } from "@/lib/pre-send-time";
 import { useNoteVisit } from "@/lib/recent-visits";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Ico, Menu, Tabs, type MenuItem, type Tone } from "@/components/new-look/Parts";
+import { LIco, Person, initialsOf, sayNoRex } from "@/components/new-look/leads/LeadBits";
 
 /**
  * The lead record, as a sheet that slides in from the right over a scrim.
@@ -75,6 +78,10 @@ import { useNoteVisit } from "@/lib/recent-visits";
  */
 
 type TabKey = "activity" | "tasks" | "viewings" | "documents" | "properties";
+/** The new look's tabs on the record itself (lib/new-look "lead"). */
+type NlTab = "overview" | "viewings" | "properties" | "tasks" | "documents" | "notes" | "activity";
+/** No em dashes in what an agent reads: the journey's own words carry a few. */
+const noDash = (s: string) => s.replace(/\s*—\s*/g, " - ");
 
 /**
  * The side questions live in the top bar, not under the record: click one and
@@ -670,6 +677,9 @@ type LeadDrawerProps = {
   onClose: () => void;
   /** −1 / +1 through the list, so you can work a queue without going back. */
   onStep: (delta: number) => void;
+  /** The new look only (lib/new-look "lead"): open on this tab rather than
+   *  Overview - Add a note on the Leads board opens on Notes. */
+  nlStartTab?: "notes" | null;
 };
 
 /* The save scope sits OUTSIDE the drawer's body, so the saves made by the
@@ -691,11 +701,35 @@ function LeadDrawerBody({
   onClose: closeNow,
   onStep,
   saves,
+  nlStartTab = null,
 }: LeadDrawerProps & { saves: SaveScope }) {
   const router = useRouter();
   /* Every way out of the drawer plays it out first (lib/use-slide-over). */
   const { shown, close: onClose } = useSlideOver(Boolean(lead), closeNow, lead?.id);
   const [tab, setTab] = useState<TabKey | null>(null);
+  /* ── The new look (lib/new-look "lead", 23 Oct 2026) ────────────────────
+     Only ever on through this switch, wherever the drawer is opened from.
+     Its own few bits of state: the tab on the record, The Details being
+     edited, and a copied line. Every read and handler below is shared. */
+  const look = useNewLook("lead");
+  const newLook = look === true;
+  const [nlTab, setNlTab] = useState<NlTab>("overview");
+  const [nlFactsEdit, setNlFactsEdit] = useState(false);
+  const [nlDraft, setNlDraft] = useState<{ name: string; phone: string; email: string; area: string } | null>(null);
+  const [nlFactsBusy, setNlFactsBusy] = useState(false);
+  const [nlCopied, setNlCopied] = useState<string | null>(null);
+  useEffect(() => {
+    setNlTab(nlStartTab === "notes" ? "notes" : "overview");
+    setNlFactsEdit(false);
+    setNlDraft(null);
+    // Only when a different lead opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead?.id]);
+  const nlCopy = (text: string, key: string) => {
+    void navigator.clipboard?.writeText(text).catch(() => undefined);
+    setNlCopied(key);
+    window.setTimeout(() => setNlCopied((c) => (c === key ? null : c)), 1600);
+  };
 
   // Editable state, seeded per lead — the wireframe should feel like software,
   // not a picture of software.
@@ -2848,8 +2882,1358 @@ function LeadDrawerBody({
     }
   }
 
+  /* ── THE NEW LOOK (lib/new-look "lead", 23 Oct 2026) ────────────────────
+     One lead as a record page, the way the design draws a record: the crumb,
+     a head with the one orange next step and the rest in the three-dot menu,
+     their enquiry beside The Details (edited in place), where it's up to as
+     a plain line, then tabs. Every action is the old drawer's own handler -
+     the booker, the log, the passport, the notes, the documents, archive -
+     and the pop-ups below are shared. Only the frame is new. */
+  const nlAside = newLook
+    ? (() => {
+        const first = (personName || lead.name || "them").split(" ")[0];
+        const sideWord = isTenant ? "Tenant" : "Landlord";
+        const src = enquiry?.source || lead.source;
+        const stepAt = Math.min(step, track.length - 1);
+        const pickAnyStep = Boolean(sp) || isTenant;
+        const book = (mode: "viewing" | "appraisal") => {
+          setBookMode(mode);
+          setBooking(true);
+        };
+        const stageBadge = lostNow ? (
+          <Badge tone="neutral">Lost</Badge>
+        ) : sp?.label ? (
+          <Badge tone={sp.lost ? "neutral" : sp.booked ? "good" : sp.nurture ? "neutral" : "accent"}>{sp.label}</Badge>
+        ) : (
+          <Badge tone={STAGE_TONE[lead.stage] as Tone}>{lead.stage}</Badge>
+        );
+        const sub = isTenant
+          ? [enqProperty && enqProperty !== "—" ? enqProperty : interestedIn || (lead.subject === "Viewing enquiry" ? "Viewing enquiry" : "General enquiry"), `via ${src}`, receivedIso ? whenAgo(receivedIso) : ""]
+          : [propAddress ? firstLine(propAddress) : "", `via ${src}`, receivedIso ? whenAgo(receivedIso) : ""];
+        const backLabel = typeof window !== "undefined" && window.location.pathname.startsWith("/leads") ? "Leads" : "Back";
+
+        /* ── The head's jobs ── */
+        const passportBtn = isTenant ? (
+          <button
+            type="button"
+            data-steve="lead.passport"
+            onClick={() => (passport?.done ? setAnswersOpen(true) : setPassportFlow("ask"))}
+            disabled={!passport?.done && (!passportEmail || passportBusy)}
+            title={passport?.done ? "Open their answers" : passport?.sent ? "Sent - send it again" : passportEmail ? "Ask for their details" : "No email on this lead"}
+            className={`nl-btn ${passport?.done ? "nl-btn--sage" : "nl-btn--secondary"}`}
+          >
+            {passport?.done ? <LIco name="check" size={15} /> : <LIco name="user" size={15} />}
+            {passport?.done ? "Passport done" : passportBusy ? "Sending…" : passport?.sent ? "Passport sent" : "Send passport"}
+          </button>
+        ) : null;
+        const booked1 = isTenant && cancellable(nextViewing) && nextViewing ? nextViewing : null;
+        const jobs = isTenant ? (
+          booked1 ? (
+            <>
+              <CancelViewing target={cancelTargetOf(booked1)} onDone={viewingCancelled} className="nl-btn nl-btn--secondary" />
+              {canCallDone ? (
+                <button type="button" onClick={() => setDoneEarly(booked1.id)} className="nl-btn nl-btn--primary">
+                  <LIco name="check" size={15} /> Viewing done
+                </button>
+              ) : (
+                <button type="button" onClick={() => book("viewing")} className="nl-btn nl-btn--primary">
+                  <Ico name="calendar" /> Book another
+                </button>
+              )}
+            </>
+          ) : (
+            <button type="button" data-steve="lead.book-viewing" onClick={() => book("viewing")} className="nl-btn nl-btn--primary">
+              <Ico name="calendar" /> {afterViewing ? "Book another viewing" : "Book a viewing"}
+            </button>
+          )
+        ) : sp?.booked ? (
+          <Link href={handoverTarget(`lead-${lead.id}`)} className="nl-btn nl-btn--primary">
+            <Ico name="calendar" /> Open on Market Appraisals
+          </Link>
+        ) : (
+          <button type="button" data-steve="lead.book-appraisal" onClick={() => book("appraisal")} className="nl-btn nl-btn--primary">
+            <Ico name="calendar" /> Book an appraisal
+          </button>
+        );
+        const menu: MenuItem[] = [
+          { label: "Messages", sub: "Emails and texts with them", onClick: () => setPanelTab("messages"), steve: "lead.panel.messages" },
+          ...(contact.email ? [{ label: "Email them", onClick: () => setComposing(true) }] : []),
+          ...(isTenant ? [{ label: "Send properties", onClick: () => setEmailing(true) }] : []),
+          ...(isTenant && booked1 && canCallDone ? [{ label: "Book another viewing", onClick: () => book("viewing") }] : []),
+          ...(!isTenant && sp?.booked ? [{ label: "Book another appraisal", onClick: () => book("appraisal") }] : []),
+          { label: "Log an attempt", sub: "A call, text, WhatsApp or email", onClick: () => setLogging("attempt") },
+          ...(!isTenant
+            ? [{ label: nurturing ? "In nurture" : "Send to nurture", disabled: Boolean(nurturing) || Boolean(sp?.booked), onClick: () => setLogging("nurture") }]
+            : []),
+          { label: me?.office ? "Reassign" : "Not my lead", sub: me?.office ? "Give it to another agent, or the office" : "Pass it to the right agent, or the office", onClick: () => { setPanelTab(null); setReassigning(true); }, steve: "lead.reassign" },
+          ...(!lostNow ? [{ label: "Mark as lost", onClick: () => setLogging("lost") }] : []),
+          { label: nlCopied === "link" ? "Link copied" : "Copy a link to this lead", onClick: () => nlCopy(`${window.location.origin}/leads?open=${encodeURIComponent(lead.id)}`, "link") },
+          "rule",
+          { label: "Archive", sub: "Off the board. Archived brings them back.", danger: true, onClick: () => { setPanelTab(null); setRemoveMsg(null); setRemoving(true); }, steve: "lead.archive" },
+        ];
+
+        /* ── The Details: read, or Edit and change them where they stand ── */
+        const areaShown = isTenant ? contact.area : real(contact.area) || propAddress;
+        const nameEditable = ours || Boolean(lead.contactId);
+        const factsView: { label: string; text: string }[] = isTenant
+          ? [
+              { label: "Mobile", text: contact.phone },
+              { label: "Email", text: contact.email },
+              { label: "Their address", text: real(contact.area) },
+              { label: "Budget", text: real(lead.budget) },
+              { label: "Moving", text: real(lead.moveDate) },
+              { label: "Came in", text: receivedIso ? whenAgo(receivedIso) : real(lead.received) },
+            ]
+          : [
+              { label: "Mobile", text: contact.phone },
+              { label: "Email", text: contact.email },
+              { label: "The home to let", text: real(areaShown) },
+              { label: "Source", text: real(src) },
+              { label: "Came in", text: receivedIso ? whenAgo(receivedIso) : real(lead.received) },
+              { label: "Agent", text: !lead.agent || lead.agent === "Unassigned" ? "Not assigned" : agentName(lead.agent) },
+            ];
+        const startFacts = () => {
+          setNlDraft({ name: personName || lead.name, phone: contact.phone, email: contact.email, area: areaShown });
+          setNlFactsEdit(true);
+        };
+        const draftDirty = Boolean(
+          nlDraft && (nlDraft.name.trim() !== (personName || lead.name) || nlDraft.phone !== contact.phone || nlDraft.email !== contact.email || nlDraft.area !== areaShown)
+        );
+        /* Field by field, through the old record's own saves, in its order. */
+        const saveFacts = async () => {
+          const d = nlDraft;
+          if (!d || nlFactsBusy) return;
+          setNlFactsBusy(true);
+          try {
+            const nm = d.name.trim();
+            if (nameEditable && nm && (nm !== personName || needsName)) {
+              setPersonName(nm);
+              await saveField({ name: nm });
+            }
+            if (d.phone !== contact.phone) {
+              setContact((c) => ({ ...c, phone: d.phone }));
+              await saveField({ mobile: d.phone });
+            }
+            if (d.email !== contact.email) {
+              setContact((c) => ({ ...c, email: d.email }));
+              await saveField({ email: d.email });
+            }
+            if (d.area !== areaShown) {
+              if (isTenant) {
+                setContact((c) => ({ ...c, area: d.area }));
+                const pc = d.area.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
+                await saveField({ address: d.area, ...(pc ? { postcode: pc.toUpperCase() } : {}) });
+              } else landlordAddress(d.area);
+            }
+          } finally {
+            setNlFactsBusy(false);
+            setNlFactsEdit(false);
+          }
+        };
+        const setD = (k: "name" | "phone" | "email" | "area") => (e: React.ChangeEvent<HTMLInputElement>) => setNlDraft((x) => (x ? { ...x, [k]: e.target.value } : x));
+
+        /* ── Tabs ── */
+        const localTasks = tasks.filter((t) => !(t.id === "t1" && t.title === "Make first contact"));
+        const openTasks = (realTasks ?? []).filter((x) => !x.done).length + localTasks.filter((x) => !x.done).length;
+        const nlTabs: { id: NlTab; label: string; count?: number | null }[] = [
+          { id: "overview", label: "Overview" },
+          ...(isTenant ? [{ id: "viewings" as const, label: "Viewings", count: theirViewings.length || null }] : []),
+          { id: "properties", label: "Properties", count: (isTenant ? shortlist.length : (propAddress ? 1 : 0) + leadHomes.length) || null },
+          { id: "tasks", label: "Tasks", count: openTasks || null },
+          { id: "documents", label: "Documents", count: docs.length || null },
+          { id: "notes", label: "Notes", count: noteRows.length || null },
+          { id: "activity", label: "Activity" },
+        ];
+        const tabIs: NlTab = nlTabs.some((t) => t.id === nlTab) ? nlTab : "overview";
+
+        /* ── Next Up: the step's own next action, as the old card ── */
+        const nextUp = (
+          <section ref={nextUpRef} className="nl-cell span2 nl-lead-next">
+            <div className="nl-cell-head">
+              <h3 className="nl-block-title">Next Up</h3>
+              <Badge tone="info">{noDash(here.label)}</Badge>
+            </div>
+            {logInline ? (
+              <>
+                <p className="nl-lead-nextline">{noDash(here.title)}</p>
+                <div className="nl-lead-log">
+                  <LogTouch
+                    key={`${lead.id}-${touches.length}`}
+                    inline
+                    {...(isTenant ? { askBooked: false, audience: "tenant" as const } : { onBook: () => book("appraisal") })}
+                    leadId={lead.id}
+                    leadName={lead.name}
+                    leadFacts={{ name: lead.name, email: contact.email || lead.email, contactId: lead.contactId ?? null }}
+                    mode="attempt"
+                    onClose={() => undefined}
+                    onLogged={(j) => takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign })}
+                  />
+                </div>
+                {isTenant && tc?.nurture ? (
+                  <div className="nl-lead-aside">
+                    <p className="nl-strong">In nurture since {whenAgo(tc.nurture.at)}</p>
+                    <p className="nl-meta">
+                      {tc.nurture.reason}. Added by {tc.nurture.byName}. A call they answer or a reply brings them straight back. No emails go to tenants from nurture yet.
+                    </p>
+                    <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" onClick={() => void logTouch({ kind: "rejoin" })}>
+                      Back on the track
+                    </button>
+                  </div>
+                ) : isTenant && tc && !tc.reached && tc.attempts > 0 ? (
+                  <div className="nl-lead-aside">
+                    <p className="nl-meta">
+                      {tc.attempts >= CONTACT_TRIES ? `${tc.attempts} tries and no answer yet. Send ${first} to nurture, or try once more.` : `No answer yet - that was try ${tc.attempts} of ${CONTACT_TRIES}.`}
+                    </p>
+                    <button type="button" className={`nl-btn nl-btn--sm self-start ${tc.attempts >= CONTACT_TRIES ? "nl-btn--primary" : "nl-btn--secondary"}`} onClick={() => setLogging("nurture")}>
+                      <LIco name="clock" size={14} /> Send to nurture
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : afterViewing ? (
+              <>
+                <p className="nl-lead-nextline">Viewing done - do they want it?</p>
+                <p className="nl-meta">
+                  {firstLine(afterViewing.address)}, {whenFull(afterViewing.startsAt)}
+                  {afterViewing.agent ? ` with ${afterViewing.agent}` : ""}
+                </p>
+                <div className="nl-holder">
+                  <OfferFromViewing key={afterViewing.id} listingId={afterViewing.listingId} address={firstLine(afterViewing.address)} name={personName || lead.name} email={contact.email || lead.email || ""} />
+                </div>
+                <button type="button" className="nl-link self-start" onClick={() => book("viewing")}>
+                  Not for them? Book another viewing
+                </button>
+              </>
+            ) : stalled ? (
+              <p className="nl-meta">
+                Not proceeding - {first} stopped at &ldquo;{noDash(here.label)}&rdquo;. Pick a step on the line above to restart them.
+              </p>
+            ) : nurturing ? (
+              <>
+                <p className="nl-lead-nextline">In nurture</p>
+                <p className="nl-meta">
+                  Since {whenAgo(nurturing.at)} - {nurturing.reason}. Added by {nurturing.byName}. Log a call they answered or a reply and they come straight back on the spine, at {noDash(here.label).toLowerCase()}.
+                </p>
+                <p className="nl-meta">
+                  {isTenant
+                    ? "No emails go to tenants from nurture yet - they wait here until they answer."
+                    : campaign
+                      ? `On ${campaign.name}${campaign.step > 0 ? ` - step ${campaign.step} sent` : " - first step to come"}`
+                      : "No campaign fits that reason yet - marketing can write one on the Marketing screen."}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => void logTouch({ kind: "rejoin" })}>
+                    Back on the spine
+                  </button>
+                  <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setLogging("attempt")}>
+                    Log an attempt
+                  </button>
+                </div>
+              </>
+            ) : sp?.booked ? (
+              <>
+                <p className="nl-lead-nextline">Appraisal booked</p>
+                <p className="nl-meta">The lead&apos;s work is done here. Everything from the visit onwards happens on Market Appraisals - the confirmation, the deck, the valuation and the terms.</p>
+                <Link href={handoverTarget(`lead-${lead.id}`)} className="nl-btn nl-btn--primary nl-btn--sm self-start">
+                  Open on Market Appraisals
+                </Link>
+              </>
+            ) : here.id === "terms" && termsOut ? (
+              <>
+                <p className="nl-lead-nextline">Out for signature - waiting</p>
+                <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm self-start" onClick={() => { setTermsOut(false); advance(); }}>
+                  Signed copy came back
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="nl-lead-nextline">{noDash(here.title)}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={fire} className="nl-btn nl-btn--primary nl-btn--sm">
+                    {here.action === "takeon" && takeOnBooked ? "Add photos and details" : noDash(here.cta)}
+                  </button>
+                  {here.id === "checks" && (
+                    <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setDocsOpen("checks")}>
+                      Add AML and compliance documents
+                    </button>
+                  )}
+                  {here.action !== "none" && !finished && !sp && (
+                    <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={advance}>
+                      Already done - move on
+                    </button>
+                  )}
+                  {sp && here.id === "email" && (
+                    <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => void logTouch({ kind: "email", outcome: "sent", body: "Sent from my own mailbox" })}>
+                      Sent it from Outlook - log it
+                    </button>
+                  )}
+                  {sp && here.id !== "lead" && here.id !== "appraisal_booked" && here.action !== "log" && (
+                    <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setLogging("attempt")}>
+                      Log an attempt
+                    </button>
+                  )}
+                  {sp && !sp.booked && here.id !== "appraisal_booked" && (
+                    <button type="button" data-steve="lead.book-appraisal" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => book("appraisal")}>
+                      They said yes - book the appraisal
+                    </button>
+                  )}
+                </div>
+                {finished && !sp && <p className="nl-meta">Last step on the {isTenant ? "tenant" : "landlord"} track.</p>}
+              </>
+            )}
+          </section>
+        );
+
+        /* ── Who they are ── */
+        const contactCell = (
+          <section className="nl-cell">
+            <div className="nl-cell-head">
+              <h3 className="nl-block-title">The {sideWord}</h3>
+              {passport?.done && <Badge tone="good" plain>From their passport</Badge>}
+            </div>
+            <Person name={personName || lead.name} sub={`${sideWord} enquiry`} />
+            <ul className="nl-lead-contact">
+              <li>
+                <LIco name="phone" size={15} />
+                <span className="min-w-0 flex-1 truncate">{contact.phone || <span className="text-muted">No mobile yet</span>}</span>
+                {contact.phone && (
+                  <button type="button" className="nl-link" onClick={() => nlCopy(contact.phone, "phone")}>
+                    {nlCopied === "phone" ? "Copied" : "Copy"}
+                  </button>
+                )}
+              </li>
+              <li>
+                <LIco name="mail" size={15} />
+                <span className="min-w-0 flex-1 truncate" title={contact.email}>{contact.email || <span className="text-muted">No email yet</span>}</span>
+                {contact.email && (
+                  <button type="button" className="nl-link" onClick={() => nlCopy(contact.email, "email")}>
+                    {nlCopied === "email" ? "Copied" : "Copy"}
+                  </button>
+                )}
+              </li>
+            </ul>
+            <div className="flex flex-wrap items-center gap-2">
+              {contact.phone && (
+                <a href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`} className="nl-btn nl-btn--secondary nl-btn--sm">
+                  <LIco name="phone" size={14} /> Call
+                </a>
+              )}
+              {contact.phone && (
+                <WhatsAppButton
+                  phone={contact.phone}
+                  name={lead.name ?? ""}
+                  onSent={async (message) => {
+                    const j = await logTouch({ kind: "whatsapp", outcome: "sent", body: message });
+                    return j?.ok ? null : ((j as { error?: string } | null)?.error ?? "That didn't save.");
+                  }}
+                  className="nl-btn nl-btn--secondary nl-btn--sm"
+                >
+                  <LIco name="chat" size={14} /> WhatsApp
+                </WhatsAppButton>
+              )}
+              {contact.email && (
+                <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setComposing(true)}>
+                  <LIco name="mail" size={14} /> Email
+                </button>
+              )}
+              <button type="button" data-steve="lead.panel.messages" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setPanelTab("messages")}>
+                <LIco name="chat" size={14} /> Messages
+              </button>
+            </div>
+            {isTenant && passport?.done && passport.summary && (
+              <dl className="nl-lead-dl">
+                {([
+                  ["Household income", passport.summary.householdIncome != null ? `£${passport.summary.householdIncome.toLocaleString("en-GB")} a year` : null],
+                  ["Works", passport.summary.applicantType],
+                  ["Moving in", [passport.summary.adults && `${passport.summary.adults} adult${passport.summary.adults === "1" ? "" : "s"}`, passport.summary.children && passport.summary.children !== "0" && `${passport.summary.children} children`].filter(Boolean).join(", ") || null],
+                  ["Pets", passport.summary.pets],
+                  ["Guarantor", passport.summary.guarantor],
+                  ["Right to rent", passport.summary.rightToRent],
+                ] as Array<[string, string | null]>)
+                  .filter(([, v]) => v)
+                  .map(([k, v]) => (
+                    <div key={k} className="min-w-0">
+                      <dt className="nl-meta">{k}</dt>
+                      <dd className="truncate">{v}</dd>
+                    </div>
+                  ))}
+              </dl>
+            )}
+            <div className="nl-lead-sub">
+              {isTenant ? (
+                <Guarantors source={{ lead: lead.id }} />
+              ) : (
+                <div className="divide-y divide-line">
+                  <LandlordHomeAddress
+                    email={contact.email || lead.email}
+                    personRef={ours ? `os:${osContactIdFrom(lead.id)}` : lead.contactId ? `rex:${lead.contactId}` : null}
+                    name={lead.name}
+                    propertyAddress={propAddress || null}
+                  />
+                  <ZeroDepositOptOut
+                    email={contact.email || lead.email}
+                    personRef={ours ? `os:${osContactIdFrom(lead.id)}` : lead.contactId ? `rex:${lead.contactId}` : null}
+                    name={lead.name}
+                  />
+                </div>
+              )}
+            </div>
+            {/* Tags: the quick facts about the person, at the foot of who they are. */}
+            <div className="nl-lead-tags">
+              {tags.map((t) => (
+                <button key={t} type="button" className="nl-lead-tag" onClick={() => changeTags(tags.filter((x) => x !== t))} title="Remove tag">
+                  {t}
+                  <LIco name="x" size={11} />
+                </button>
+              ))}
+              <div className="nl-menu-wrap">
+                <button type="button" className="nl-lead-tag is-add" aria-expanded={tagging} onClick={() => setTagging((t) => !t)}>
+                  <LIco name="plus" size={11} /> Add tag
+                </button>
+                {tagging && (
+                  <div className="nl-menu nl-lead-tagmenu" role="menu">
+                    <small className="px-3 pb-1 pt-1.5">Sales intent</small>
+                    {SALES_TAGS.filter((t) => !tags.includes(t)).map((t) => (
+                      <button key={t} type="button" role="menuitem" onClick={() => { changeTags([...tags, t]); setTagging(false); }}>
+                        {t}
+                      </button>
+                    ))}
+                    <hr />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setTagging(false);
+                        const t = window.prompt("New tag");
+                        if (t?.trim() && !tags.includes(t.trim())) changeTags([...tags, t.trim()]);
+                      }}
+                    >
+                      Something else…
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        );
+
+        /* ── The home: what a tenant asked about, or the landlord's let ── */
+        const propertyCell = isTenant ? (
+          <section className="nl-cell">
+            <div className="nl-cell-head">
+              <h3 className="nl-block-title">The Property</h3>
+              {lead.listingId != null && (
+                <Link href={`/listings?open=${lead.listingId}`} className="nl-link">
+                  View
+                </Link>
+              )}
+            </div>
+            {enqProperty && enqProperty !== "—" ? (
+              <div className="flex gap-3">
+                <PropertyPhoto src={lead.photo ?? null} className="h-[72px] w-[96px] shrink-0 overflow-hidden rounded-xl" />
+                <div className="min-w-0">
+                  <p className="nl-strong">{enqProperty}</p>
+                  {lead.office && <p className="nl-meta">{lead.office}</p>}
+                </div>
+              </div>
+            ) : shortlist.length ? (
+              <ul className="nl-lines">
+                {shortlist.slice(0, 3).map((h) => (
+                  <li key={h.id}>
+                    <PropertyPhoto src={h.image ?? null} className="h-[44px] w-[60px] shrink-0 overflow-hidden rounded-lg" />
+                    <span className="min-w-0">
+                      <Link href={`/listings?open=${encodeURIComponent(h.id)}`} className="nl-strong block truncate hover:underline">{h.name}</Link>
+                      <span className="nl-meta block truncate">{[h.locality, h.rent != null ? `£${h.rent.toLocaleString("en-GB")} pcm` : ""].filter(Boolean).join(" · ")}</span>
+                    </span>
+                  </li>
+                ))}
+                {shortlist.length > 3 && (
+                  <li>
+                    <button type="button" className="nl-link" onClick={() => setNlTab("properties")}>
+                      And {shortlist.length - 3} more on their list
+                    </button>
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <p className="nl-meta">A general enquiry - not about one property.</p>
+            )}
+          </section>
+        ) : (
+          <section className="nl-cell">
+            <div className="nl-cell-head">
+              <h3 className="nl-block-title">The Property</h3>
+              <button
+                type="button"
+                onClick={() => void fillPage()}
+                disabled={filling || !hasFullAddress}
+                title={!hasFullAddress ? "Needs a full address with a postcode first" : filling ? "Looking it up…" : "Find with AI"}
+                className={`nl-btn nl-btn--sm ${hasFullAddress && !filling ? "nl-btn--secondary" : "nl-btn--quiet"}${filling ? " animate-pulse" : ""}`}
+              >
+                <LIco name="wand" size={14} /> {filling ? "Looking…" : "Find with AI"}
+              </button>
+            </div>
+            {propAddress && (
+              <p className="nl-strong truncate" title={propAddress}>
+                {firstLine(propAddress)}
+              </p>
+            )}
+            {(prop.image || (prop.lat != null && prop.lng != null)) && (
+              <div className="h-[110px] overflow-hidden rounded-2xl">
+                {prop.image ? <PropertyPhoto src={prop.image} className="h-full w-full" /> : <PinMap lat={prop.lat!} lng={prop.lng!} className="h-full w-full" />}
+              </div>
+            )}
+            <PropertyFacts value={{ type: prop.type, beds: prop.beds, baths: prop.baths, receptions: prop.receptions }} onChange={(v) => changeProp({ ...prop, ...v })} />
+            {prop.epc && <p className="nl-meta">EPC rating {prop.epc}</p>}
+            {factsSync?.bad && (
+              <p className="nl-meta text-accent-dark" aria-live="polite">
+                {sayNoRex(factsSync.text)}{" "}
+                <button type="button" onClick={() => void flushFacts()} className="nl-link">
+                  Try again
+                </button>
+              </p>
+            )}
+            {fillNote && <p className="nl-meta">{sayNoRex(fillNote)}</p>}
+            {nearMisses.length > 0 && (
+              <div className="nl-lead-aside">
+                <p className="nl-meta">Is it one of these?</p>
+                <ul className="nl-lines">
+                  {nearMisses.map((h) => (
+                    <li key={h.id}>
+                      <button type="button" onClick={() => pickRex(h)} className="nl-line">
+                        <PropertyPhoto src={h.image} className="h-8 w-10 shrink-0 overflow-hidden rounded-md" />
+                        <span className="nl-strong min-w-0 flex-1 truncate">{h.address}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        );
+
+        /* ── At a glance, newest first ── */
+        const glance: { icon: "clock" | "calendar" | "doc" | "home" | "target"; title: string; sub: string }[] = [
+          latestTouch
+            ? { icon: "clock", title: touchSentence(latestTouch), sub: `${latestTouch.byName} · ${whenAgo(latestTouch.at)}` }
+            : { icon: "clock", title: "Nothing logged yet", sub: "Log a call, text, WhatsApp or email in Next Up" },
+          isTenant
+            ? {
+                icon: "calendar",
+                title: nextViewing ? `Viewing ${whenFull(nextViewing.startsAt)}` : theirs.past.length ? `${theirs.past.length} viewing${theirs.past.length === 1 ? "" : "s"} been` : "No viewing booked",
+                sub: nextViewing ? `${nextViewing.address}${nextViewing.agent ? ` · with ${nextViewing.agent}` : ""}` : theirs.past.length ? `Last: ${theirs.past[0].address}` : noDash(track[stepAt]?.label ?? "Enquiry"),
+              }
+            : {
+                icon: "calendar",
+                title: sp?.booked ? "Appraisal booked" : nurturing ? "In nurture" : `Next: ${noDash(here.title)}`,
+                sub: sp?.booked ? "Carry on in Market Appraisals" : nurturing ? nurturing.reason : `${sp?.attempts ?? 0} contact attempt${(sp?.attempts ?? 0) === 1 ? "" : "s"} logged`,
+              },
+          isTenant
+            ? { icon: "doc", title: passport?.done ? "Passport done" : passport?.sent ? "Passport sent, not finished" : "Passport not sent", sub: passport?.done ? "Their answers are under Passport done" : passportEmail ? "Send passport, at the top" : "No email to send it to yet" }
+            : { icon: "home", title: !propAddress ? "No property address yet" : prop.matched === "rex" ? "Property matched" : prop.matched === "pin" ? "Property pinned on the map" : "Property not looked up yet", sub: propAddress || "Add one and Find with AI does the rest" },
+          { icon: "target", title: receivedIso ? `Came in ${whenAgo(receivedIso)}` : `Came in ${lead.received}`, sub: `${receivedIso ? `${whenFull(receivedIso)} · ` : ""}via ${src}` },
+        ];
+        const glanceCell = (
+          <section className="nl-cell">
+            <h3 className="nl-block-title">At a Glance</h3>
+            <ul className="nl-lines">
+              {glance.map((g, i) => (
+                <li key={i} className="!items-start">
+                  <span className="nl-lead-ic"><LIco name={g.icon} size={15} /></span>
+                  <span className="min-w-0">
+                    <span className="nl-strong block">{g.title}</span>
+                    {g.sub && <span className="nl-meta block">{g.sub}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+
+        /* ── Things to do: the side jobs, one press each ── */
+        const todo: { title: string; sub: string; go: () => void }[] = [
+          ...(isTenant
+            ? [
+                { title: "Send properties", sub: "Email them homes from the book", go: () => setEmailing(true) },
+                { title: "Find them homes", sub: "Search the live book and shortlist", go: () => setNlTab("properties") },
+              ]
+            : [
+                { title: "Write an email", sub: "From your own mailbox, logged here", go: () => setComposing(true) },
+                { title: "Add another home", sub: "Anything else they own", go: () => { setNlTab("properties"); setJustAddedHome(false); setAddingHome(true); } },
+              ]),
+          { title: "Add a task", sub: "Still there tomorrow", go: () => setNlTab("tasks") },
+          { title: "Add a document", sub: isTenant ? "Right to rent, references, proof of address" : "ID, ownership, AML, certificates", go: () => { setNlTab("documents"); setDocsSaid(null); setDocPicking(true); } },
+          { title: "Add a note", sub: "For the team", go: () => setNlTab("notes") },
+        ];
+        const todoCell = (
+          <section className="nl-cell">
+            <h3 className="nl-block-title">Things to Do</h3>
+            <ul className="nl-lines">
+              {todo.map((t) => (
+                <li key={t.title}>
+                  <button type="button" className="nl-line nl-lead-todo" onClick={t.go}>
+                    <span className="nl-strong">{t.title}</span>
+                    <span className="nl-meta">{t.sub}</span>
+                    <LIco name="arrow" size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+
+        /* ── Viewings, as rows on hairlines ── */
+        const vrow = (v: PersonViewing, kind: "ahead" | "cancelled" | "been") => {
+          const at = new Date(v.startsAt);
+          const day = at.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: kind === "been" ? undefined : "short", day: "numeric", month: "short" });
+          const time = at.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+          return (
+            <li key={v.id} className={kind === "cancelled" ? "is-cancelled" : ""}>
+              <span className="nl-vwhen">
+                {day}
+                <span>{time}</span>
+              </span>
+              <span className="min-w-0">
+                <span className="nl-strong block truncate">{v.address}</span>
+                <span className="nl-meta block">
+                  {[v.agent ? `with ${v.agent}` : "", v.test ? "test file" : ""].filter(Boolean).join(" · ")}
+                  {v.confirmed ? `${v.agent || v.test ? " · " : ""}${v.confirmed}` : ""}
+                </span>
+                {kind === "been" && v.listingId && (
+                  <span className="mt-1.5 block">
+                    <OfferFromViewing small listingId={v.listingId} address={firstLine(v.address)} name={personName || lead.name || ""} email={contact.email || lead.email || ""} />
+                  </span>
+                )}
+              </span>
+              <span className="nl-vstate">
+                <Badge tone={v.cancelled ? "neutral" : kind === "been" ? (v.feedback ? "good" : "neutral") : "info"}>{v.cancelled ? "Cancelled" : kind === "been" ? (v.feedback ? "Feedback in" : "Been") : "Booked"}</Badge>
+              </span>
+              <span className="nl-vacts flex-wrap">
+                {kind === "ahead" && v.booking && !v.confirmed && (
+                  <button
+                    type="button"
+                    className="nl-link"
+                    onClick={() => setConfirming({ id: v.id, when: whenFull(v.startsAt) ?? "", property: v.address, locality: "", outcome: "Booked", confirm: v.booking! })}
+                  >
+                    Send confirmation
+                  </button>
+                )}
+                {kind === "ahead" && cancellable(v) && <CancelViewing target={cancelTargetOf(v)} onDone={viewingCancelled} className="nl-link" />}
+                {v.listingId && (
+                  <a href={`/listings?open=${encodeURIComponent(v.listingId)}`} target="_blank" rel="noreferrer" className="nl-link">
+                    The property
+                  </a>
+                )}
+              </span>
+            </li>
+          );
+        };
+
+        /* ── What has happened, newest first ── */
+        const happened = [...touches].sort((a, b) => b.at.localeCompare(a.at));
+
+        return (
+          <aside data-shown={shown} className="so-panel nl-lead-sheet absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden lg:w-[calc(100%-17rem)]">
+            <div className="nl-lead-scroll">
+              <div className="nl-page">
+                {/* Crumb, the save chip, and ‹ › through the board. */}
+                <div className="nl-crumbs">
+                  <button type="button" className="nl-crumb" onClick={onClose} title="Close (Esc)">
+                    <Ico name="back" size={14} /> {backLabel}
+                  </button>
+                  {autoSaveChip}
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <button type="button" aria-label="Previous lead" title="Previous (left arrow)" onClick={() => onStep(-1)} className="nl-iconbtn nl-iconbtn--sm">
+                      <span className="inline-flex rotate-180"><LIco name="chevron" size={14} /></span>
+                    </button>
+                    <button type="button" aria-label="Next lead" title="Next (right arrow)" onClick={() => onStep(1)} className="nl-iconbtn nl-iconbtn--sm">
+                      <LIco name="chevron" size={14} />
+                    </button>
+                    <button type="button" aria-label="Close" title="Close (Esc)" onClick={onClose} className="nl-iconbtn nl-iconbtn--sm">
+                      <LIco name="x" size={14} />
+                    </button>
+                  </span>
+                </div>
+
+                {/* The head: where they are, who they are, then the jobs. */}
+                <div className="nl-rhead">
+                  <div className="nl-rhead-text">
+                    <div className="nl-rhead-meta">
+                      {stageBadge}
+                      {isTenant && passport?.done && (
+                        <button type="button" className="nl-market-btn" onClick={() => setAnswersOpen(true)} title="Open their answers">
+                          Passport done
+                        </button>
+                      )}
+                      {isTenant && !passport?.done && passport?.sent && <Badge tone="accent" plain>Passport sent</Badge>}
+                      <span className="nl-mono">
+                        {sideWord} enquiry · step {stepAt + 1} of {track.length}
+                      </span>
+                    </div>
+                    <h1 className="nl-title nl-lead-title">{personName || lead.name}</h1>
+                    <p className="nl-rhead-sub">{sub.filter(Boolean).join(" · ")}</p>
+                    {(lead.onFileAs || lead.onFilePhone) && (
+                      <p className="nl-meta mt-2">
+                        {lead.onFileAs
+                          ? `On file as ${[lead.onFileAs, lead.onFilePhone].filter(Boolean).join(", ")} - the email they used belongs to that record.`
+                          : `Number on file: ${lead.onFilePhone}. The one above is the number they gave on this enquiry.`}
+                      </p>
+                    )}
+                    {lead.passedOn && (
+                      <p className="nl-meta mt-1">
+                        {lead.passedOn.pool ? `Back with the office - sent by ${lead.passedOn.byName}` : `Passed to ${lead.passedOn.toName} by ${lead.passedOn.byName}`}
+                        {lead.passedOn.fromName && lead.passedOn.fromName !== lead.passedOn.byName ? ` (was ${lead.passedOn.fromName})` : ""}
+                        {`, ${whenAgo(lead.passedOn.at)}`}
+                        {lead.passedOn.reason ? ` - ${lead.passedOn.reason}` : ""}
+                      </p>
+                    )}
+                  </div>
+                  <div className="nl-rhead-acts">
+                    {passportBtn}
+                    {!isTenant && contact.email && (
+                      <button type="button" className="nl-btn nl-btn--secondary" onClick={() => setComposing(true)}>
+                        <Ico name="mail" /> Email
+                      </button>
+                    )}
+                    {jobs}
+                    <Menu items={menu} />
+                  </div>
+                </div>
+
+                {booked1 && (
+                  <p className="nl-meta -mt-7 mb-8">
+                    Booked: {booked1.address}, {whenFull(booked1.startsAt)}
+                    {theirs.upcoming.length > 1 ? ` (and ${theirs.upcoming.length - 1} more on the Viewings tab)` : ""}
+                  </p>
+                )}
+                {cancelSaid && <p className="nl-meta -mt-6 mb-8 text-accent-dark">{cancelSaid}</p>}
+                {lostNow && (
+                  <div className="nl-confirm">
+                    <p>
+                      <b>Lost</b> {whenAgo(lostNow.at)} · {lostNow.reason} <span className="text-muted">· marked by {lostNow.byName}</span>
+                    </p>
+                    <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => void logTouch({ kind: "rejoin" })}>
+                      Bring them back
+                    </button>
+                  </div>
+                )}
+
+                {/* Their own words beside The Details. */}
+                <div className="nl-hero nl-lead-hero">
+                  <section className="nl-cell nl-lead-enquiry">
+                    <div className="nl-cell-head">
+                      <h3 className="nl-block-title">Their Enquiry</h3>
+                      {receivedIso && <span className="nl-mono">{whenFull(receivedIso)}</span>}
+                    </div>
+                    {enquiry === undefined && !enqMessage ? (
+                      <p className="nl-meta flex items-center gap-2">
+                        <span className="nl-leads-spin" aria-hidden /> Reading their enquiry…
+                      </p>
+                    ) : enqMessage ? (
+                      <>
+                        <p className="nl-lead-said">{enqMessage}</p>
+                        <TranslateText text={enqMessage} onLanguage={setTheirLanguage} />
+                        {(enqMessage.length > 320 || enqMessage.split("\n").length > 5) && (
+                          <button type="button" className="nl-link self-start" onClick={() => setEnquiryOpen(true)}>
+                            Read it all
+                          </button>
+                        )}
+                      </>
+                    ) : enqFacts.length ? (
+                      <dl className="nl-lead-dl">
+                        {enqFacts.map(([k, v]) => (
+                          <div key={k} className="min-w-0">
+                            <dt className="nl-meta">{k}</dt>
+                            <dd className="truncate">{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : (
+                      <p className="nl-empty !py-2">They sent no message with this enquiry.</p>
+                    )}
+                    <p className="nl-meta mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 pt-2">
+                      <span>
+                        Via {src}
+                        {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
+                      </span>
+                      {(enquiry?.email?.text || enquiry?.email?.html) && (
+                        <button type="button" className="nl-link" onClick={() => setEmailOpen(true)}>
+                          <LIco name="mail" size={13} /> See the full email
+                        </button>
+                      )}
+                    </p>
+                  </section>
+
+                  <section className={`nl-facts${nlFactsEdit ? " is-editing" : ""}`}>
+                    <div className="nl-facts-head">
+                      <h3 className="nl-block-title">The Details</h3>
+                      {nlFactsEdit ? (
+                        <span className="nl-facts-flag">
+                          <i /> Editing
+                        </span>
+                      ) : (
+                        <button type="button" className="nl-link" onClick={startFacts}>
+                          <Ico name="pen" size={13} /> Edit
+                        </button>
+                      )}
+                    </div>
+                    {!nlFactsEdit || !nlDraft ? (
+                      <div className="nl-facts-grid">
+                        {factsView.map((f) => (
+                          <div key={f.label} className="nl-fact">
+                            <span>{f.label}</span>
+                            <b className={f.text ? "" : "is-quiet"} title={f.text || undefined}>
+                              {f.text || "Not given"}
+                            </b>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="nl-facts-grid nl-lead-editgrid">
+                          {nameEditable && (
+                            <div className="nl-fact">
+                              <span>Name</span>
+                              <div className="nl-fact-in"><input value={nlDraft.name} onChange={setD("name")} aria-label="Name" /></div>
+                            </div>
+                          )}
+                          <div className="nl-fact">
+                            <span>Mobile</span>
+                            <div className="nl-fact-in"><input type="tel" value={nlDraft.phone} onChange={setD("phone")} aria-label="Mobile" /></div>
+                          </div>
+                          <div className="nl-fact">
+                            <span>Email</span>
+                            <div className="nl-fact-in"><input type="email" value={nlDraft.email} onChange={setD("email")} aria-label="Email" /></div>
+                          </div>
+                          <div className="nl-fact">
+                            <span>{isTenant ? "Their address" : "The home to let"}</span>
+                            <div className="nl-fact-in"><input value={nlDraft.area} onChange={setD("area")} aria-label={isTenant ? "Their address" : "The home to let"} /></div>
+                          </div>
+                        </div>
+                        {draftDirty || nlFactsBusy ? (
+                          <div className="nl-saverow">
+                            <span className="nl-saverow-dot" />
+                            <span>{nlFactsBusy ? "Saving…" : "Not saved yet"}</span>
+                            <span className="flex-1" />
+                            <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" disabled={nlFactsBusy} onClick={() => { setNlFactsEdit(false); setNlDraft(null); }}>
+                              Discard
+                            </button>
+                            <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={nlFactsBusy} onClick={() => void saveFacts()}>
+                              {nlFactsBusy ? "Saving…" : "Save changes"}
+                            </button>
+                          </div>
+                        ) : (
+                          <button type="button" className="nl-link mt-2 self-start" onClick={() => { setNlFactsEdit(false); setNlDraft(null); }}>
+                            Close without changes
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {sync && !nlFactsEdit && (
+                      <p className={`nl-meta mt-2 flex items-center gap-1.5${sync.bad ? " text-accent-dark" : ""}`} aria-live="polite">
+                        {sync.busy ? <span className="nl-leads-spin" aria-hidden /> : !sync.bad ? <span className="nl-saved"><i /></span> : null}
+                        {sayNoRex(sync.text)}
+                      </p>
+                    )}
+                  </section>
+                </div>
+
+                {/* Where it's up to: a step each, nothing written under them. */}
+                {!appraisalTakesOver && (
+                  <div className="nl-lead-track">
+                    <div className="nl-progress" style={{ "--nl-steps": track.length } as React.CSSProperties} aria-label="Where it's up to">
+                      {track.map((t, i) => {
+                        const done = sp ? Boolean(sp.done[t.id as SpineId]) : i < step;
+                        const now = i === stepAt && !done;
+                        const reachable = pickAnyStep || i <= step + 1;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            disabled={!reachable}
+                            title={(!isTenant ? stepHints[t.id] : null) ?? noDash(t.detail)}
+                            onClick={() => {
+                              stepMoved.current = true;
+                              setStep(i);
+                            }}
+                            className={`nl-step${done ? " done" : now ? " now" : ""}`}
+                          >
+                            <i />
+                            <span>{noDash(t.label)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {!isTenant && (
+                      <p className="nl-meta -mt-10 mb-12">
+                        <button
+                          type="button"
+                          className="nl-link"
+                          disabled={!nurturing && !canNurture}
+                          title={nurturing ? "Put them back on the spine" : canNurture ? noDash(NURTURE_BRANCH.detail) : sp?.booked ? "Booked - nothing to nurture" : "Log an attempt first; nurture is for a lead that has stopped answering"}
+                          onClick={() => (nurturing ? void logTouch({ kind: "rejoin" }) : setLogging("nurture"))}
+                        >
+                          <LIco name="clock" size={13} />
+                          {nurturing ? "In nurture - put them back on the spine" : `${noDash(NURTURE_BRANCH.label)}`}
+                        </button>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <Tabs label="This lead" className="nl-ltabs" value={tabIs} onChange={(t) => setNlTab(t)} items={nlTabs} />
+
+                <div key={tabIs} className="nl-pane">
+                  {tabIs === "overview" && (
+                    <div className="nl-bento">
+                      {appraisalTakesOver ? (
+                        <section className="nl-cell span3">
+                          <AppraisalTrack
+                            value={appraisal}
+                            onChange={setAppraisal}
+                            who="You"
+                            landlordEmail={lead.email}
+                            recordId={lead.id}
+                            outerStep={`Step ${step + 1} of ${track.length}`}
+                            onWon={advance}
+                            onShowProcess={() => setShowProcess(true)}
+                            invite={{
+                              landlordName: lead.name,
+                              address: lead.area && lead.area !== "—" ? lead.area : "your property",
+                              whenPretty: appraisal.bookedFor ?? "",
+                              startsAt: appraisal.bookedAt,
+                              minutes: appraisal.bookedMinutes ?? 45,
+                              agentName: lead.agent || "The Letting Experts",
+                              agentPhone: "0161 883 2525",
+                            }}
+                          />
+                          {saveLabel(appraisalSave) && <p className="nl-meta">{saveLabel(appraisalSave)}</p>}
+                        </section>
+                      ) : (
+                        nextUp
+                      )}
+                      {contactCell}
+                      {propertyCell}
+                      {glanceCell}
+                      {todoCell}
+                      {isSalesIntent(tags) && (
+                        <section className="nl-cell span3">
+                          <ReferToAgent name={lead.name} trigger={tags.find((t) => isSalesIntent([t])) ?? "for sale"} />
+                        </section>
+                      )}
+                    </div>
+                  )}
+
+                  {tabIs === "viewings" && (
+                    <div>
+                      <div className="nl-listbar">
+                        <div>
+                          <h3 className="nl-block-title">Their Viewings</h3>
+                          <span className="nl-meta">
+                            {theirs.upcoming.length} coming up · {theirs.past.length} been to{theirs.cancelled.length ? ` · ${theirs.cancelled.length} cancelled` : ""}
+                          </span>
+                        </div>
+                        <span className="flex-1" />
+                        <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => book("viewing")}>
+                          <Ico name="calendar" size={14} /> Book a viewing
+                        </button>
+                      </div>
+                      {cancelSaid && <p className="nl-meta mb-3 text-accent-dark">{cancelSaid}</p>}
+                      {theirViewings.length === 0 && theirs.cancelled.length === 0 ? (
+                        <p className="nl-empty">Nothing booked, and nothing viewed yet.</p>
+                      ) : (
+                        <div className="space-y-6">
+                          {theirs.upcoming.length > 0 && (
+                            <div>
+                              <p className="nl-meta mb-2">Coming up</p>
+                              <ul className="nl-vrows">{theirs.upcoming.map((v) => vrow(v, "ahead"))}</ul>
+                            </div>
+                          )}
+                          {theirs.past.length > 0 && (
+                            <div>
+                              <p className="nl-meta mb-2">Been to</p>
+                              <ul className="nl-vrows">{theirs.past.map((v) => vrow(v, "been"))}</ul>
+                            </div>
+                          )}
+                          {theirs.cancelled.length > 0 && (
+                            <div>
+                              <p className="nl-meta mb-2">Cancelled</p>
+                              <ul className="nl-vrows">{theirs.cancelled.map((v) => vrow(v, "cancelled"))}</ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {tabIs === "properties" && (
+                    <div className="nl-holder">
+                      {isTenant ? (
+                        <>
+                          {shortlist.length > 0 && (
+                            <div className="nl-lead-bar">
+                              <span>
+                                <b>{shortlist.length}</b> on the list for {first}
+                              </span>
+                              <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => setEmailing(true)}>
+                                <Ico name="mail" size={14} /> Email properties
+                              </button>
+                            </div>
+                          )}
+                          <TenantPropertySearch
+                            origin={lead.lat != null && lead.lng != null ? { lat: lead.lat, lng: lead.lng } : null}
+                            originLabel={contact.area || lead.area || ""}
+                            originListingId={lead.listingId != null ? String(lead.listingId) : null}
+                            shortlisted={shortlist.map((p) => p.id)}
+                            onShortlist={(l) => {
+                              keepOnList(l);
+                              setJustAdded(true);
+                            }}
+                            onBook={() => book("viewing")}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <ul className="nl-rowlist">
+                            {propAddress && (
+                              <li>
+                                <span className="block h-14 w-[72px] overflow-hidden rounded-xl">
+                                  {prop.image ? <PropertyPhoto src={prop.image} className="h-full w-full" /> : prop.lat != null && prop.lng != null ? <PinMap lat={prop.lat} lng={prop.lng} className="h-full w-full" /> : <PropertyPhoto src={null} className="h-full w-full" />}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="nl-strong block truncate">{firstLine(propAddress)}</span>
+                                  <span className="nl-meta block truncate" title={propAddress}>{propAddress}</span>
+                                  <Badge tone="accent" bare>The home they enquired about</Badge>
+                                </span>
+                              </li>
+                            )}
+                            {leadHomes.map((h) => (
+                              <li key={h.id} className="!grid-cols-[auto_minmax(0,1fr)_auto]">
+                                <span className="block h-14 w-[72px] overflow-hidden rounded-xl">
+                                  <PropertyPhoto src={null} className="h-full w-full" />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="nl-strong block truncate">{firstLine(h.address)}</span>
+                                  <span className="nl-meta block truncate" title={h.address}>{h.address}</span>
+                                  <span className="nl-meta block">Added by {h.byName} · {whenAgo(h.at)}</span>
+                                </span>
+                                <button type="button" className="nl-link" onClick={() => void removeHome(h.id)} aria-label={`Remove ${h.address}`}>
+                                  Remove
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          {!propAddress && !leadHomes.length && !addingHome && <p className="nl-empty">No home on this lead yet. Add the one they want to let below.</p>}
+                        </>
+                      )}
+
+                      {(isTenant ? justAdded : justAddedHome) ? (
+                        <div className="nl-lead-done">
+                          <p className="nl-strong flex items-center gap-2">
+                            <span className="nl-saved"><i /></span> Property attached
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {isTenant ? (
+                              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => book("viewing")}>
+                                <Ico name="calendar" size={14} /> Schedule a viewing
+                              </button>
+                            ) : (
+                              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => book("appraisal")}>
+                                <Ico name="calendar" size={14} /> Book a market appraisal
+                              </button>
+                            )}
+                            <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => (isTenant ? setEmailing(true) : setComposing(true))}>
+                              <Ico name="mail" size={14} /> {isTenant ? "Send details" : "Write an email"}
+                            </button>
+                            <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => (isTenant ? setJustAdded(false) : (setJustAddedHome(false), setAddingHome(true)))}>
+                              Add another
+                            </button>
+                          </div>
+                        </div>
+                      ) : !isTenant && addingHome ? (
+                        <div className="nl-lead-done">
+                          <p className="nl-meta">Another home of theirs</p>
+                          <AddressField value={homeDraft} onChange={setHomeDraft} onResolved={(a) => setHomePc(a.postcode ?? "")} />
+                          {homeSaid && <p className="nl-meta text-accent-dark">{homeSaid}</p>}
+                          <div className="flex justify-end gap-2">
+                            <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => { setAddingHome(false); setHomeDraft(""); setHomeSaid(null); }}>
+                              Cancel
+                            </button>
+                            <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => void attachHome()} disabled={homeBusy || homeDraft.trim().length < 6}>
+                              {homeBusy ? "Attaching…" : "Attach this home"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : !isTenant ? (
+                        <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setAddingHome(true)}>
+                          <Ico name="plus" size={14} /> Add property
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {tabIs === "tasks" && (
+                    <div className="max-w-3xl">
+                      <form className="nl-composer" onSubmit={(e) => { e.preventDefault(); void addTask(newTask); }}>
+                        <textarea rows={1} value={newTask} onChange={(e) => setNewTask(e.target.value)} placeholder="Add a task" aria-label="Add a task" />
+                        <button type="submit" className="nl-send" disabled={taskBusy || !newTask.trim()} aria-label="Add task">
+                          <Ico name="plus" size={16} />
+                        </button>
+                      </form>
+                      {realTasks === null ? (
+                        <p className="nl-meta flex items-center gap-2"><span className="nl-leads-spin" aria-hidden /> Reading the tasks…</p>
+                      ) : realTasks.length + localTasks.length === 0 ? (
+                        <p className="nl-empty">Nothing outstanding.</p>
+                      ) : (
+                        <ul className="nl-rowlist">
+                          {realTasks.map((t) => (
+                            <li key={t.id}>
+                              <button type="button" className={`nl-lead-tick${t.done ? " is-on" : ""}`} aria-label={t.done ? "Mark not done" : "Mark done"} onClick={() => void toggleTask(t)}>
+                                {t.done && <LIco name="check" size={11} />}
+                              </button>
+                              <span className="min-w-0">
+                                <span className={`block text-[14px]${t.done ? " text-muted line-through" : ""}`}>{t.title}</span>
+                                {t.detail && <span className="nl-meta block">{t.detail}</span>}
+                              </span>
+                            </li>
+                          ))}
+                          {localTasks.map((t) => (
+                            <li key={t.id}>
+                              <button type="button" className={`nl-lead-tick${t.done ? " is-on" : ""}`} aria-label={t.done ? "Mark not done" : "Mark done"} onClick={() => setTasks((cur) => cur.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)))}>
+                                {t.done && <LIco name="check" size={11} />}
+                              </button>
+                              <span className="min-w-0">
+                                <span className={`block text-[14px]${t.done ? " text-muted line-through" : ""}`}>{t.title}</span>
+                                <span className="nl-meta block">{t.due}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {tabIs === "documents" && (
+                    <div>
+                      <div className="nl-listbar">
+                        <div>
+                          <h3 className="nl-block-title">Documents</h3>
+                          <span className="nl-meta">{isTenant ? "Right to rent, references, proof of address." : "ID, proof of ownership, AML, certificates."}</span>
+                        </div>
+                        <span className="flex-1" />
+                        {!docPicking && (
+                          <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={docsBusy} onClick={() => { setDocsSaid(null); setDocPicking(true); }}>
+                            <Ico name="upload" size={14} /> Upload
+                          </button>
+                        )}
+                      </div>
+                      {docPicking && (
+                        <div className="mb-4">
+                          <UploadForm sides={isTenant ? ["tenant"] : ["landlord", "home"]} onUpload={uploadTyped} onCancel={() => setDocPicking(false)} />
+                        </div>
+                      )}
+                      {!docsSaid && docs.some((d) => d.rexNever) && <p className="nl-meta mb-3">A test file, so its documents stay in the OS and are never backed up.</p>}
+                      {docsSaid && (
+                        <p className={`nl-meta mb-3${docsSaid.ok ? "" : " text-accent-dark"}`} aria-live="polite">
+                          {sayNoRex(docsSaid.text)}
+                        </p>
+                      )}
+                      {docs.length ? (
+                        <ul className="nl-rowlist">
+                          {docs.map((d) => (
+                            <li key={d.id} className="!grid-cols-[auto_minmax(0,1fr)_auto]">
+                              <span className="nl-lead-ic"><LIco name="doc" size={15} /></span>
+                              <span className="min-w-0">
+                                {renaming === d.id ? (
+                                  <input
+                                    autoFocus
+                                    onFocus={(e) => e.target.select()}
+                                    defaultValue={d.name}
+                                    onBlur={(e) => {
+                                      const v = e.target.value.trim();
+                                      if (v && v !== d.name) changeDoc(d.id, { name: v });
+                                      setRenaming(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                      if (e.key === "Escape") setRenaming(null);
+                                    }}
+                                    className="nl-input !py-1.5 !text-[14px]"
+                                    aria-label="Document name"
+                                  />
+                                ) : (
+                                  <button type="button" onClick={() => setRenaming(d.id)} className="nl-strong block max-w-full truncate text-left hover:underline" title="Click to rename">
+                                    {d.name}
+                                  </button>
+                                )}
+                                <span className="nl-meta flex flex-wrap items-center gap-x-3 gap-y-1">
+                                  <span>{d.size} · {d.when}</span>
+                                  {d.url && (
+                                    <a href={d.url} target="_blank" rel="noopener noreferrer" className="nl-link !text-[12px]">
+                                      Open
+                                    </a>
+                                  )}
+                                  {d.rexAt ? (
+                                    <Badge tone="good" plain>Backed up</Badge>
+                                  ) : d.url && !d.rexNever ? (
+                                    <button type="button" className="nl-link !text-[12px]" onClick={() => void docToRex(d.id)} disabled={docRexBusy === d.id} title={d.rexError ? sayNoRex(d.rexError) : undefined}>
+                                      {docRexBusy === d.id ? "Backing up…" : "Back it up"}
+                                    </button>
+                                  ) : null}
+                                </span>
+                                {!d.rexAt && d.rexError && !d.rexNever && <span className="nl-meta block">{sayNoRex(d.rexError)}</span>}
+                              </span>
+                              <span className="nl-fsel">
+                                <select value={d.tag} onChange={(e) => changeDoc(d.id, { tag: e.target.value as DocTag })} aria-label="What it is">
+                                  {[...new Set([...DOC_TYPES.filter((t) => (isTenant ? t.side === "tenant" : t.side !== "tenant")).map((t) => t.label), ...(isTenant ? DOC_TAGS : LANDLORD_DOC_TAGS), d.tag])].map((t) => (
+                                    <option key={t} value={t}>{t}</option>
+                                  ))}
+                                </select>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="nl-empty">No documents yet.</p>
+                      )}
+                      {isTenant && <p className="nl-meta mt-5">Lettings documents only - right to rent, income, references, guarantor. No AML here: that&apos;s a sales-side check.</p>}
+                    </div>
+                  )}
+
+                  {tabIs === "notes" && (
+                    <div className="max-w-3xl">
+                      <form className="nl-composer" onSubmit={(e) => { e.preventDefault(); void addNote(); }}>
+                        <textarea id="lead-note" rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a note - what was said, what to remember" aria-label="Add a note" />
+                        <button type="submit" data-steve="lead.save-note" className="nl-send" disabled={!draft.trim()} aria-label="Save note">
+                          <Ico name="arrow" size={16} />
+                        </button>
+                      </form>
+                      {noteRex && <p className={`nl-meta -mt-2 mb-4${noteRex.ok ? "" : " text-accent-dark"}`} aria-live="polite">{sayNoRex(noteRex.text)}</p>}
+                      {(realTasks ?? []).some((t) => !t.done) && (
+                        <ul className="nl-rowlist mb-6">
+                          {(realTasks ?? []).filter((t) => !t.done).map((t) => (
+                            <li key={`task-${t.id}`}>
+                              <button type="button" className="nl-lead-tick" aria-label="Mark done" onClick={() => void toggleTask(t)} />
+                              <span className="min-w-0">
+                                <span className="block text-[14px]">{t.title}</span>
+                                <span className="nl-meta block">Task{t.detail ? ` · ${t.detail}` : ""}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {noteRows.length ? (
+                        <ul className="nl-rowlist">
+                          {noteRows.map((n) => (
+                            <li key={n.id} className={n.pinned ? "nl-lead-pinned" : ""}>
+                              <span className="nl-leads-avatar !h-7 !w-7 !text-[10px]" aria-hidden>{initialsOf(n.author || "?")}</span>
+                              <span className="min-w-0">
+                                <span className="nl-meta flex flex-wrap items-center gap-x-2">
+                                  <span>{[n.author, n.when].filter(Boolean).join(" · ")}</span>
+                                  {n.inRex && <Badge tone="good" plain>Backed up</Badge>}
+                                  {!n.id.startsWith("touch-") && (
+                                    <button type="button" className="nl-link !text-[12px]" onClick={() => setNotes((cur) => cur.map((x) => (x.id === n.id ? { ...x, pinned: !x.pinned } : x)))}>
+                                      {n.pinned ? "Unpin" : "Pin"}
+                                    </button>
+                                  )}
+                                </span>
+                                <span className="nl-note-text block">{n.text}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="nl-empty">No notes yet - yours will be the first.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {tabIs === "activity" && (
+                    <div className="max-w-3xl">
+                      {happened.length || viewings.length || lead.activity.length ? (
+                        <ul className="nl-timeline">
+                          {happened.map((t) => (
+                            <li key={t.id}>
+                              <span className="nl-mono">{whenAgo(t.at)}</span>
+                              <span>
+                                {touchSentence(t)}
+                                {t.kind !== "nurture" && t.kind !== "moved" && t.body ? <span className="text-muted"> - {t.body}</span> : null}
+                                <span className="nl-meta block">{t.byName}</span>
+                              </span>
+                            </li>
+                          ))}
+                          {viewings.map((v) => (
+                            <li key={v.id}>
+                              <span className="nl-mono">{v.when}</span>
+                              <span>
+                                Viewing - {v.property}{v.locality ? `, ${v.locality}` : ""}
+                                <span className="nl-meta block">{v.confirmed ? v.confirmed : v.rex ? sayNoRex(v.rex) : v.outcome}</span>
+                                {v.confirm && !v.confirmed && (
+                                  <button type="button" className="nl-link !text-[12px]" onClick={() => setConfirming(v)}>
+                                    Send confirmation
+                                  </button>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                          {lead.activity.map((a, i) => (
+                            <li key={`a${i}`}>
+                              <span className="nl-mono">{a.when}</span>
+                              <span>{a.text}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="nl-empty">Nothing logged on this lead yet.</p>
+                      )}
+                      <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-line pt-4">
+                        <button type="button" className="nl-link" onClick={() => nlCopy(`${window.location.origin}/leads?open=${encodeURIComponent(lead.id)}`, "link")}>
+                          <LIco name="link" size={14} /> {nlCopied === "link" ? "Link copied" : "Copy a link to this lead"}
+                        </button>
+                        <button type="button" className="nl-link" onClick={() => setPanelTab("messages")}>
+                          <LIco name="chat" size={14} /> Messages
+                        </button>
+                        <button type="button" className="nl-link text-accent-dark" onClick={() => { setPanelTab(null); setRemoveMsg(null); setRemoving(true); }}>
+                          Archive this lead…
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Messages, pulled out over the record (as on a listing). */}
+            <div className={`absolute inset-0 z-50 ${panelTab ? "" : "pointer-events-none"}`} aria-hidden={!panelTab}>
+              <button type="button" aria-label="Close" tabIndex={panelTab ? 0 : -1} onClick={() => setPanelTab(null)} className={`absolute inset-0 cursor-default bg-ink/20 transition-opacity duration-300 ${panelTab ? "opacity-100" : "opacity-0"}`} />
+              <div
+                className={`absolute inset-y-0 right-0 w-full max-w-[460px] overflow-hidden border-l border-line bg-card transition-transform duration-[380ms] ${panelTab ? "translate-x-0" : "translate-x-full"}`}
+                style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+              >
+                {panelTab && (
+                  <RecordSidePanel
+                    name={first}
+                    tab={panelTab}
+                    onTab={setPanelTab}
+                    onClose={() => setPanelTab(null)}
+                    conversationUrl={conversationUrl}
+                    noConversation={`No email or mobile on ${first}'s record yet, so there's nothing to show.`}
+                    notes={panelNotes.map((n) => ({ ...n, badge: n.badge ? "Backed up" : null }))}
+                    onAddNote={addNoteText}
+                    noteSaid={noteRex ? { ok: noteRex.ok, text: sayNoRex(noteRex.text) } : null}
+                    activity={activityTab}
+                    onLanguage={setTheirLanguage}
+                  />
+                )}
+              </div>
+            </div>
+          </aside>
+        );
+      })()
+    : null;
+
   return (
-    <div className="so-root fixed inset-0 z-[120]" data-shown={shown} data-steve="lead.drawer">
+    <div className="so-root fixed inset-0 z-[120]" data-shown={shown} data-steve="lead.drawer" data-look={newLook ? "new" : undefined}>
       {/* The scrim — clicking anywhere on it closes, as asked. */}
       <button
         aria-label="Close"
@@ -2858,6 +4242,18 @@ function LeadDrawerBody({
         className="so-scrim absolute inset-0 cursor-default bg-ink/35"
       />
 
+      {/* The new look's record (lib/new-look "lead"), or a moment's wait
+          while the switch is asked; otherwise the drawer as it has been. */}
+      {look === null ? (
+        <aside data-shown={shown} className="so-panel absolute inset-y-0 right-0 flex w-full items-start bg-page p-8 lg:w-[calc(100%-17rem)]">
+          <p className="flex items-center gap-2 text-[12.5px] text-muted">
+            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+            Opening the lead…
+          </p>
+        </aside>
+      ) : newLook ? (
+        nlAside
+      ) : (
       <aside
         data-shown={shown}
         className={`so-panel absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] ${
@@ -3875,6 +5271,7 @@ function LeadDrawerBody({
         </div>
         </div>
       </aside>
+      )}
 
       {/* ── Their enquiry in full. ── */}
       {enquiryOpen && (

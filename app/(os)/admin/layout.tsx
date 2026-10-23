@@ -7,6 +7,9 @@ import WorkspaceRail from "@/components/WorkspaceRail";
 import { workspacesFor } from "@/lib/nav";
 import { can, type Capability } from "@/lib/roles";
 import { fetchMe } from "@/lib/me";
+import { useNewLook } from "@/lib/use-new-look";
+import { areasFor, whereIs } from "@/components/new-look/admin/areas";
+import { Ico } from "@/components/new-look/Parts";
 
 /**
  * Admin's own rail — the SAME panel as the agent sidebar, different contents.
@@ -208,6 +211,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
      gets this layout with one entry, People, and nothing else. */
   const [teamOnly, setTeamOnly] = useState(false);
   const pathname = usePathname() ?? "";
+  /* The new look (lib/new-look "admin", 23 Oct 2026): the same entries, grouped
+     into the design's four areas with an owner each, and a way back to the
+     area on every admin screen. Null until known, and the rail waits for it
+     rather than drawing the old groups and swapping them. */
+  const look = useNewLook("admin");
 
   useEffect(() => {
     let gone = false;
@@ -226,12 +234,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, []);
 
   const groups = useMemo(() => {
-    if (role === undefined) return [];
+    if (role === undefined || look === null) return [];
     if (teamOnly) return [{ title: null, items: [{ href: "/admin/team", label: "People", needs: "staff:internal" as Capability }] }];
+    if (look) {
+      /* Admin Centre first, as Overview was, then the four areas. Every old
+         entry is in one of them (components/new-look/admin/areas). */
+      const centre = can(role, "see:people") ? [{ title: null, items: [{ href: "/admin", label: "Admin Centre", exact: true }] }] : [];
+      return [...centre, ...areasFor(role).map((a) => ({ title: `${a.name} · ${a.ownerShort}`, items: a.tools }))];
+    }
     return GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => can(role, i.needs)) })).filter(
       (g) => g.items.length > 0
     );
-  }, [role, teamOnly]);
+  }, [role, teamOnly, look]);
+
+  /* The way back from a tool to its area (the design's AdminTool crumb). Not on
+     the Admin Centre itself or on People, which the design draws without one;
+     a person's file or the Invites tab goes back to People instead. */
+  const back = useMemo(() => {
+    if (!look || teamOnly || pathname === "/admin" || pathname === "/admin/people") return null;
+    const at = whereIs(pathname);
+    if (!at) return { href: "/admin", label: "Admin Centre" };
+    if (pathname !== at.tool.href && pathname.startsWith(`${at.tool.href}/`)) return { href: at.tool.href, label: at.tool.label };
+    return { href: `/admin?area=${at.area.id}`, label: at.area.name };
+  }, [look, teamOnly, pathname]);
 
   /**
    * The admin area is the OWNER'S, and this is the last line that says so.
@@ -300,7 +325,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }
         />
 
-        <div className="min-w-0 flex-1 py-3">{children}</div>
+        {look ? (
+          /* The older admin screens inside the new frame take its colours and
+             type from the scoped tokens; their workings are untouched. */
+          <div data-look="new" className="nl-adm-main min-w-0 flex-1">
+            {back && (
+              <div className="nl-page nl-crumbs nl-adm-back">
+                <Link href={back.href} className="nl-crumb">
+                  <Ico name="back" size={14} /> {back.label}
+                </Link>
+              </div>
+            )}
+            {children}
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1 py-3">{children}</div>
+        )}
       </div>
     </div>
   );

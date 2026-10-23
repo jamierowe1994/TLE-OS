@@ -7,6 +7,8 @@ import { SAGE_INK, SAGE_WASH } from "@/components/appraisal/NextUp";
 import AdminLoadFailed from "@/components/AdminLoadFailed";
 import { useAdmin, when, AUDIT_KIND } from "@/lib/admin-client";
 import { useEffect, useState } from "react";
+import { useNewLook } from "@/lib/use-new-look";
+import AdminHomeNew from "@/components/new-look/admin/AdminHomeNew";
 
 /**
  * The overview, in the same frame as every board in the OS (James, 12 Sep
@@ -55,9 +57,16 @@ const TICKET_RANK: Record<string, number> = { A: 0, none: 1, B: 2, C: 3 };
 export default function AdminOverview() {
   const { d, denied, failed, load } = useAdmin();
   const tickets = useOpenTickets();
+  /* The new look (lib/new-look "admin", 23 Oct 2026): the Admin Centre's four
+     areas, then the same census, activity and tickets. Null until known. */
+  const look = useNewLook("admin");
 
   if (denied) return <div className="py-16 text-center"><p className="hand text-[20px]">Nothing here</p></div>;
   if (failed) return <AdminLoadFailed onRetry={load} />;
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening Admin…</p>;
+  }
+  if (look) return <AdminHomeNew d={d} tickets={tickets} />;
 
   const s = d?.summary;
   const tiles = [

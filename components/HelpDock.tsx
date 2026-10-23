@@ -860,6 +860,37 @@ function Dock() {
     window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
   }, [path]);
 
+  /* ── Asked from somewhere else (the new-look Dashboard, 23 Oct 2026) ──────
+     window "os-steve-ask" with the question as its detail opens him on Help
+     and sends it, exactly as if it had been typed here. The conversation is
+     read first when this visit has none, so the question lands after it
+     rather than being replaced by it. Queued in state and sent by the effect
+     below, so it goes with this render's stage and thread, not a stale one.
+     Mid-introduction (he is still asking their name) it goes in the box
+     instead of being sent as their name. */
+  const [queued, setQueued] = useState<string | null>(null);
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const q = String((e as CustomEvent<string>).detail ?? "").trim();
+      if (!q) return;
+      setTab("help");
+      setOpen(true);
+      void (async () => {
+        if (!linesRef.current.length) await loadHistoryRef.current?.();
+        setQueued(q);
+      })();
+    };
+    window.addEventListener("os-steve-ask", onAsk);
+    return () => window.removeEventListener("os-steve-ask", onAsk);
+  }, []);
+  useEffect(() => {
+    if (!queued || busy || !signedIn) return;
+    setQueued(null);
+    if (stage === "ask") void say(queued);
+    else setDraft(queued);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queued, busy, stage, signedIn]);
+
   if (!signedIn) return null;
 
   async function toggle() {

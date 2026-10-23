@@ -12,6 +12,9 @@ import { ROLES, ROLE_LABEL, ROLE_BLURB } from "@/lib/roles";
 import PickOne from "@/components/PickOne";
 import { fetchMe } from "@/lib/me";
 import { searchMatches } from "@/lib/search-match";
+import { useNewLook } from "@/lib/use-new-look";
+import { Mast, Badge, Ico } from "@/components/new-look/Parts";
+import PeopleTabsNew from "@/components/new-look/admin/PeopleTabsNew";
 
 /**
  * The list, filtered and ordered. Pure, so the rules are readable in one
@@ -107,11 +110,18 @@ export default function AdminPeople() {
      list and not the reset button - a control that answers 404 reads as a
      broken page rather than as a boundary. */
   const [mayManage, setMayManage] = useState(false);
+  /* Whether Invites is theirs, for the new look's "Add a Person" card, which
+     goes to that tab rather than inviting from here. */
+  const [mayInvite, setMayInvite] = useState(false);
+  /* The new look (lib/new-look "admin", 23 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
   useEffect(() => {
     let gone = false;
     fetchMe()
       .then((j) => {
-        if (!gone) setMayManage(can(j?.role, "manage:people"));
+        if (gone) return;
+        setMayManage(can(j?.role, "manage:people"));
+        setMayInvite(can(j?.role, "see:prelaunch"));
       })
       .catch(() => {});
     return () => {
@@ -238,6 +248,16 @@ export default function AdminPeople() {
 
   if (denied) return <div className="py-16 text-center"><p className="hand text-[20px]">Nothing here</p></div>;
   if (failed) return <AdminLoadFailed onRetry={load} />;
+  if (look === null || (look && !d)) {
+    return (
+      <div data-look={look ? "new" : undefined} className={look ? "nl-page nl-adm" : undefined}>
+        <p className={look ? "nl-adm-loading" : "flex items-center gap-2 py-16 text-[12.5px] text-muted"}>
+          {look ? <span className="nl-adm-spin" aria-hidden /> : <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />}
+          Reading the team…
+        </p>
+      </div>
+    );
+  }
   if (!d) return <p className="text-[12.5px] text-muted">Loading…</p>;
 
   const rows = shown(d.people, q, roleFilter, order);
@@ -251,6 +271,158 @@ export default function AdminPeople() {
     ...held.map((r) => ({ id: r, label: ROLE_LABEL[r], n: d.people.filter((p) => p.hasAccount && p.role === r).length })),
     { id: "none", label: "No account yet", n: d.people.filter((p) => !p.hasAccount).length },
   ];
+
+  /* ── THE NEW LOOK (lib/new-look "admin", 23 Oct 2026) ─────────────────────
+     The design's People: a type-only header, the cards on a white page, and
+     everybody as rows on hairlines with their role and a reset beside them.
+     Every control the list below has is here, calling the same functions. */
+  if (look) {
+    const roleTone = (r: string | null) => (r === "owner" ? "accent" : "neutral") as "accent" | "neutral";
+    return (
+      <div data-look="new" className="nl-page nl-rise nl-adm">
+        <Mast title="People" blurb="Everyone in REX, joined to who's actually got in. Set their role, send a password reset, or see the OS as they do." />
+        <PeopleTabsNew />
+
+        <div className={`nl-adm-pcards${mayInvite ? "" : " is-one"}`}>
+          {mayInvite && (
+            <section className="nl-adm-card">
+              <h2 className="nl-adm-card-title">Add a Person</h2>
+              <p className="nl-meta">They get an email with a link to set their password. Invites have their own tab, with who&apos;s been asked and who&apos;s joined.</p>
+              <div className="nl-adm-card-acts">
+                <Link href="/admin/people/invites" className="nl-btn nl-btn--secondary nl-btn--sm">
+                  <Ico name="mail" size={14} /> Go to Invites
+                </Link>
+              </div>
+            </section>
+          )}
+          {/* Re-pull the TEG Team Hub. James fills bios and headshots in there by
+              hand, so what's worth showing is how many are still blank. */}
+          <section className="nl-adm-card">
+            <h2 className="nl-adm-card-title">TEG Team Hub</h2>
+            <p className="nl-meta">
+              {tegNote ??
+                `${d.people.filter((p) => p.partnerPackage).length} with a package · ${d.people.filter((p) => p.hasBio).length} with a bio, of ${d.people.length}`}
+            </p>
+            <div className="nl-adm-card-acts">
+              <button type="button" onClick={pullTeg} disabled={busy === "teg"} className="nl-btn nl-btn--secondary nl-btn--sm">
+                {busy === "teg" ? "Pulling…" : "Re-pull from TEG Hub"}
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {flash && (
+          <p className="nl-adm-flash" role="status">
+            {flash}
+          </p>
+        )}
+
+        <section className="nl-adm-card nl-adm-everyone">
+          <div className="nl-adm-card-head">
+            <h2 className="nl-adm-card-title">
+              Everyone <span className="nl-count">{d.people.length}</span>
+            </h2>
+            <div className="nl-filters nl-adm-find">
+              <label className="nl-fsearch">
+                <Ico name="search" size={15} />
+                <input data-steve="people.search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find somebody by name or email" aria-label="Find somebody" />
+              </label>
+              <span className={`nl-fsel${order !== "recent" ? " is-set" : ""}`}>
+                <select aria-label="Order" value={order} onChange={(e) => setOrder(e.target.value as "recent" | "stale" | "name")}>
+                  <option value="recent">Signed in most recently</option>
+                  <option value="stale">Longest since they signed in</option>
+                  <option value="name">Name, A to Z</option>
+                </select>
+              </span>
+            </div>
+          </div>
+
+          <div className="nl-tabs nl-adm-chips" role="tablist" aria-label="Role">
+            {chips.map((c) => (
+              <button key={c.id} type="button" role="tab" aria-selected={roleFilter === c.id} onClick={() => setRoleFilter(c.id)} className={`nl-tab${roleFilter === c.id ? " is-on" : ""}`}>
+                {c.label}
+                <span className="nl-tab-n">{c.n}</span>
+              </button>
+            ))}
+          </div>
+          <p className="nl-meta nl-adm-shown">
+            {rows.length} of {d.people.length} · {d.summary.neverSignedIn} never signed in
+          </p>
+
+          {rows.length === 0 ? (
+            <p className="nl-empty">Nobody matches that.</p>
+          ) : (
+            <ul className="nl-adm-people">
+              {rows.map((p) => {
+                const file = p.rexId || p.userId;
+                return (
+                  <li key={p.email}>
+                    <div className="nl-adm-who">
+                      <div className="nl-adm-who-line">
+                        {file ? (
+                          <Link href={`/admin/people/${file}`} className="nl-strong nl-adm-name">{p.name}</Link>
+                        ) : (
+                          <span className="nl-strong">{p.name}</span>
+                        )}
+                        {p.hasAccount && p.role && p.role !== "agent" && (
+                          <Badge tone={roleTone(p.role)} bare>{ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] ?? p.role}</Badge>
+                        )}
+                        {!p.hasAccount && <Badge tone="neutral" bare>Not invited</Badge>}
+                        {p.hasAccount && !p.lastSeenAt && <Badge tone="warning" bare>Never signed in</Badge>}
+                        {p.hasAccount && !p.hasPhoto && <Badge tone="neutral" bare>No headshot</Badge>}
+                        {p.partnerPackage && <Badge tone="info" bare>{p.partnerPackage}</Badge>}
+                        {!p.hasBio && <Badge tone="neutral" bare>No bio</Badge>}
+                      </div>
+                      <div className="nl-meta nl-adm-mail">
+                        {p.email}
+                        {p.rexId ? ` · REX ${p.rexId}` : " · not in REX"}
+                        {p.hasAccount ? ` · last in ${when(p.lastSeenAt)}` : ""}
+                      </div>
+                    </div>
+                    <div className="nl-adm-acts">
+                      {/* The role, on every person - with an account or not. Somebody who
+                          has not joined yet is who most needs it set. */}
+                      <label className="nl-adm-role" title={ROLE_BLURB[(p.role ?? "agent") as keyof typeof ROLE_BLURB]}>
+                        <span className="nl-meta">{p.hasAccount ? "Role" : "Joins as"}</span>
+                        <span className="nl-fsel">
+                          <select value={p.role ?? "agent"} disabled={busy !== null} onChange={(e) => setPersonRole(p, e.target.value)} aria-label={`${p.hasAccount ? "Role" : "Joins as"} for ${p.name}`}>
+                            {ROLES.map((r) => (
+                              <option key={r} value={r}>
+                                {ROLE_LABEL[r]}
+                              </option>
+                            ))}
+                          </select>
+                        </span>
+                      </label>
+                      {mayManage && p.hasAccount && p.userId && (
+                        <button type="button" disabled={busy !== null} onClick={() => sendReset(p.userId!)} className="nl-btn nl-btn--secondary nl-btn--sm">
+                          Send Password Reset
+                        </button>
+                      )}
+                      {/* Not for another owner: view-as refuses it. */}
+                      {mayManage && p.role !== "owner" && (p.userId || p.rexId) && (
+                        <button data-steve="people.view-as" type="button" disabled={busy !== null} onClick={() => viewAs(p)} className="nl-btn nl-btn--quiet nl-btn--sm">
+                          {busy === (p.userId ?? p.rexId) ? "Opening…" : `View as ${p.name.split(" ")[0]}`}
+                        </button>
+                      )}
+                      {file && (
+                        <Link href={`/admin/people/${file}`} className="nl-btn nl-btn--quiet nl-btn--sm">
+                          Open their file
+                        </Link>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+        <p className="nl-meta nl-adm-foot">
+          Resetting sends <em>them</em> a link - no password is ever set or shown here. Somebody who hasn&apos;t joined yet arrives as the role set beside their name.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>

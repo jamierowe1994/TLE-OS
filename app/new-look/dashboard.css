@@ -1,0 +1,220 @@
+/* New look: dashboard (lib/new-look). Scoped under [data-look="new"].
+   After the design's Dashboard: a centred hello with Steve and the ask box,
+   four figures between two hairlines, Today and Needs You side by side, and
+   the launch checklist folded at the foot. Components in
+   components/new-look/dashboard. */
+
+/* ── the hello ──────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-dash-hello { max-width: 720px; margin: 56px auto 72px; text-align: center; }
+[data-look="new"] .nl-dash-date { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+[data-look="new"] .nl-dash-title {
+  font-family: var(--font-heading); font-weight: 700; font-size: 52px; line-height: 58px; letter-spacing: -1.2px;
+  color: var(--ink); margin: 0 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 16px; text-wrap: balance;
+}
+[data-look="new"] .nl-dash-face { flex: none; }
+[data-look="new"] .nl-dash-says { font-size: 14px; line-height: 21px; color: var(--muted); margin: 0 0 30px; animation: nl-in 0.8s var(--nl-ease) 0.3s both; }
+[data-look="new"] .nl-dash-says b { color: var(--ink); font-weight: 600; }
+
+[data-look="new"] .nl-dash-ask {
+  text-align: left; background: var(--card); border: 1px solid var(--line-strong); border-radius: 24px;
+  padding: 16px 14px 10px 20px; transition: border-color 0.3s;
+}
+[data-look="new"] .nl-dash-ask:focus-within { border-color: var(--faint); }
+[data-look="new"] .nl-dash-ask textarea {
+  display: block; width: 100%; min-height: 56px; resize: none; border: 0; outline: 0; background: transparent;
+  font-family: var(--nl-serif); font-size: 19px; line-height: 28px; color: var(--ink);
+}
+[data-look="new"] .nl-dash-ask textarea::placeholder { color: var(--faint); }
+[data-look="new"] .nl-dash-ask-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+[data-look="new"] .nl-dash-ask-who { font-size: 12px; color: var(--faint); margin-right: 6px; min-width: 0; }
+[data-look="new"] .nl-dash-ask-send {
+  width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 0; border-radius: 10px; cursor: pointer;
+  background: var(--primary); color: var(--on-primary); transition: background-color 0.3s var(--nl-ease), color 0.3s;
+}
+[data-look="new"] .nl-dash-ask-send:hover:not(:disabled) { background: var(--accent-dark); color: #faf9f5; }
+[data-look="new"] .nl-dash-ask-send.is-idle { background: var(--box); color: var(--faint); cursor: default; }
+[data-look="new"] .nl-dash-ask-send:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* the agent's own quick links, where the design has its sample questions */
+[data-look="new"] .nl-dash-quick { margin-top: 16px; }
+[data-look="new"] .nl-dash-pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 34px; }
+[data-look="new"] .nl-dash-pill {
+  font: inherit; font-size: 13px; line-height: 20px; color: var(--ink); background: transparent; cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 12px; padding: 6px 14px;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  transition: background-color 0.25s var(--nl-ease), border-color 0.25s, color 0.25s;
+}
+[data-look="new"] .nl-dash-pill:hover { background: var(--card); }
+[data-look="new"] .nl-dash-pill.is-edit { color: var(--muted); border-style: dashed; }
+[data-look="new"] .nl-dash-pill.is-edit:hover, [data-look="new"] .nl-dash-pill.is-on { color: var(--ink); border-color: var(--faint); }
+[data-look="new"] .nl-dash-picker {
+  list-style: none; margin: 14px 0 0; padding: 8px; text-align: left;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+}
+[data-look="new"] .nl-dash-pick {
+  font: inherit; color: inherit; width: 100%; text-align: left; display: flex; align-items: center; gap: 12px;
+  padding: 9px 10px; border: 0; border-radius: 12px; background: transparent; cursor: pointer; transition: background-color 0.2s;
+}
+[data-look="new"] .nl-dash-pick:hover { background: var(--box); }
+
+/* ── the figures ────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-dash-glance {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 28px 0; margin-bottom: 72px;
+}
+[data-look="new"] .nl-dash-glance-item {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 4px 24px; border-left: 1px solid var(--line);
+  color: inherit; text-decoration: none; transition: opacity 0.2s;
+  animation: nl-in 0.6s var(--nl-ease) both;
+}
+[data-look="new"] .nl-dash-glance-item:nth-child(2) { animation-delay: 0.06s; }
+[data-look="new"] .nl-dash-glance-item:nth-child(3) { animation-delay: 0.12s; }
+[data-look="new"] .nl-dash-glance-item:nth-child(4) { animation-delay: 0.18s; }
+[data-look="new"] .nl-dash-glance-item:first-child { border-left: 0; padding-left: 0; }
+[data-look="new"] .nl-dash-glance-item:hover .nl-dash-fig { color: var(--accent-dark); }
+[data-look="new"] .nl-dash-glance-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 8px; }
+[data-look="new"] .nl-dash-fig {
+  font-family: var(--nl-serif); font-size: 44px; line-height: 48px; letter-spacing: 0; color: var(--ink);
+  font-variant-numeric: tabular-nums; transition: color 0.2s;
+}
+[data-look="new"] .nl-dash-skel { display: block; height: 48px; padding: 4px 0; }
+[data-look="new"] .nl-dash-skel i {
+  display: block; height: 40px; width: 50%; border-radius: 10px;
+  background: linear-gradient(90deg, var(--box), var(--panel), var(--box)); background-size: 200% 100%;
+  animation: nl-dash-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes nl-dash-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+[data-look="new"] .nl-dash-warn { color: var(--accent-dark); }
+
+/* ── Today and Needs You ────────────────────────────────────────────────── */
+[data-look="new"] .nl-dash-cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 72px; margin-bottom: 72px; }
+[data-look="new"] .nl-dash-col { min-width: 0; }
+[data-look="new"] .nl-dash-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+[data-look="new"] .nl-dash-sec-title { font-family: var(--font-heading); font-weight: 600; font-size: 22px; line-height: 28px; letter-spacing: -0.3px; color: var(--ink); margin: 0; }
+[data-look="new"] .nl-dash-sub { font-size: 12px; font-weight: 500; color: var(--muted); margin: 22px 0 4px; }
+[data-look="new"] .nl-dash-note { font-size: 14px; line-height: 21px; color: var(--muted); margin: 10px 0 0; }
+[data-look="new"] .nl-dash-wait { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); margin: 10px 0 0; }
+[data-look="new"] .nl-dash-spin {
+  width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink);
+  animation: nl-dash-spin 0.8s linear infinite;
+}
+@keyframes nl-dash-spin { to { transform: rotate(360deg); } }
+[data-look="new"] .nl-dash-strong { display: block; font-size: 15px; font-weight: 500; line-height: 22px; color: var(--ink); }
+[data-look="new"] .nl-dash-line-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+[data-look="new"] .nl-dash-line-text .nl-meta { overflow-wrap: anywhere; }
+[data-look="new"] .nl-dash-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 18px; }
+
+[data-look="new"] .nl-dash-agenda { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-dash-agenda > li { border-top: 1px solid var(--line); animation: nl-in 0.6s var(--nl-ease) both; }
+[data-look="new"] .nl-dash-agenda > li:first-child { border-top: 0; }
+[data-look="new"] .nl-dash-agenda-row {
+  font: inherit; color: inherit; width: 100%; text-align: left; background: transparent; border: 0;
+  display: grid; grid-template-columns: 52px 10px minmax(0, 1fr); gap: 14px; align-items: baseline;
+  padding: 16px 0; border-radius: 12px; transition: background-color 0.2s, padding 0.3s var(--nl-ease);
+}
+[data-look="new"] button.nl-dash-agenda-row { cursor: pointer; }
+[data-look="new"] button.nl-dash-agenda-row:hover { background: var(--panel); padding-left: 10px; padding-right: 10px; }
+[data-look="new"] .nl-dash-agenda.is-small .nl-dash-agenda-row { padding-top: 11px; padding-bottom: 11px; }
+[data-look="new"] .nl-dash-agenda.is-small .nl-dash-strong { font-size: 14px; color: var(--muted); }
+[data-look="new"] .nl-dash-time { font-family: var(--nl-mono); font-size: 12px; color: var(--muted); letter-spacing: 0; }
+[data-look="new"] .nl-dash-time.is-allday { font-family: var(--font-body); font-size: 11px; }
+[data-look="new"] .nl-dash-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transform: translateY(-1px); }
+[data-look="new"] .nl-dash-dot.info { background: var(--info); }
+[data-look="new"] .nl-dash-dot.accent { background: var(--accent); }
+[data-look="new"] .nl-dash-dot.warning { background: var(--warning); }
+[data-look="new"] .nl-dash-dot.sage { background: var(--sage-deep); }
+[data-look="new"] .nl-dash-dot.grey { background: var(--line-strong); }
+
+[data-look="new"] .nl-dash-needs { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-dash-needs > li {
+  display: flex; align-items: center; gap: 14px; padding: 16px 0; border-top: 1px solid var(--line);
+  transition: opacity 0.5s; animation: nl-in 0.6s var(--nl-ease) both;
+}
+[data-look="new"] .nl-dash-needs > li:first-child { border-top: 0; }
+[data-look="new"] .nl-dash-needs > li.is-seen .nl-dash-strong { color: var(--muted); font-weight: 400; }
+[data-look="new"] .nl-dash-needs > li.is-ticked { opacity: 0.4; }
+[data-look="new"] .nl-dash-needs > li.is-ticked .nl-dash-strong { text-decoration: line-through; text-decoration-color: var(--faint); }
+[data-look="new"] .nl-dash-tick {
+  width: 20px; height: 20px; flex: none; display: grid; place-items: center; padding: 0; cursor: pointer;
+  border-radius: 50%; border: 1.5px solid var(--line-strong); background: transparent; color: #fff;
+  transition: background-color 0.3s var(--nl-ease), border-color 0.3s;
+}
+[data-look="new"] .nl-dash-tick:hover { border-color: var(--sage-deep); }
+[data-look="new"] .is-ticked .nl-dash-tick { background: var(--sage-deep); border-color: var(--sage-deep); }
+[data-look="new"] .nl-dash-go {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-size: 13px; font-weight: 500; line-height: 18px; color: #fff; background: var(--sage-deep);
+  border-radius: 10px; padding: 7px 14px; text-decoration: none; transition: background-color 0.25s var(--nl-ease), gap 0.25s var(--nl-ease);
+}
+[data-look="new"] .nl-dash-go:hover { background: var(--sage-ink); gap: 9px; }
+:root[data-theme="dark"] [data-look="new"] .nl-dash-go { color: #141413; }
+
+/* in the old pop-outs, which sit outside the page */
+[data-look="new"].nl-dash-pop { background: transparent; }
+[data-look="new"].nl-dash-pop .nl-dash-sub { margin-top: 26px; }
+
+/* ── Get Set for Launch ─────────────────────────────────────────────────── */
+[data-look="new"] .nl-dash-launch { max-width: 720px; margin: 0 auto 24px; border: 1px solid var(--line); border-radius: 24px; background: var(--card); }
+[data-look="new"] .nl-dash-launch-bar { display: flex; align-items: center; gap: 8px; padding-right: 22px; }
+[data-look="new"] .nl-dash-launch-toggle {
+  font: inherit; color: inherit; flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px;
+  padding: 18px 8px 18px 24px; background: none; border: 0; cursor: pointer; text-align: left; border-radius: 24px;
+}
+[data-look="new"] .nl-dash-launch-label { flex: 1; min-width: 0; }
+[data-look="new"] .nl-dash-launch-label .nl-dash-strong { display: inline; }
+[data-look="new"] .nl-dash-caret { color: var(--faint); display: inline-grid; transition: transform 0.45s var(--nl-ease); }
+[data-look="new"] .nl-dash-launch.is-open .nl-dash-caret { transform: rotate(90deg); }
+[data-look="new"] .nl-dash-hide { flex: none; color: var(--muted); }
+[data-look="new"] .nl-dash-ring {
+  width: 22px; height: 22px; border-radius: 50%; flex: none;
+  background: conic-gradient(var(--sage-deep) calc(var(--p) * 360deg), var(--box) 0);
+  -webkit-mask: radial-gradient(circle, transparent 7px, #000 7.5px); mask: radial-gradient(circle, transparent 7px, #000 7.5px);
+}
+[data-look="new"] .nl-dash-launch-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; padding: 0 24px 24px; }
+[data-look="new"] .nl-dash-task {
+  display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 10px; color: inherit; text-decoration: none;
+  transition: background-color 0.2s;
+}
+[data-look="new"] .nl-dash-task:hover { background: var(--box); }
+[data-look="new"] .nl-dash-task.is-done .nl-dash-strong { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+[data-look="new"] .nl-dash-tickmark {
+  width: 18px; height: 18px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  border: 1.5px solid var(--line-strong); color: #fff; transition: background-color 0.3s var(--nl-ease), border-color 0.3s;
+}
+[data-look="new"] .is-done > .nl-dash-tickmark, [data-look="new"] .nl-dash-pick.is-on > .nl-dash-tickmark { background: var(--sage-deep); border-color: var(--sage-deep); }
+
+/* ── smaller screens ────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  [data-look="new"] .nl-dash-cols { gap: 48px; }
+}
+@media (max-width: 900px) {
+  [data-look="new"] .nl-dash-glance { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 24px; }
+  [data-look="new"] .nl-dash-glance-item:nth-child(3) { border-left: 0; padding-left: 0; }
+  [data-look="new"] .nl-dash-cols { grid-template-columns: minmax(0, 1fr); gap: 48px; }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-dash-hello { margin: 24px auto 48px; }
+  [data-look="new"] .nl-dash-title { flex-direction: column; gap: 6px; font-size: 34px; line-height: 40px; letter-spacing: -0.8px; }
+  [data-look="new"] .nl-dash-says { margin-bottom: 22px; }
+  [data-look="new"] .nl-dash-ask { padding: 14px 12px 10px 16px; border-radius: 20px; }
+  [data-look="new"] .nl-dash-ask textarea { font-size: 17px; line-height: 25px; }
+  [data-look="new"] .nl-dash-glance { margin-bottom: 48px; padding: 22px 0; }
+  [data-look="new"] .nl-dash-glance-item { padding: 2px 16px; }
+  [data-look="new"] .nl-dash-fig { font-size: 36px; line-height: 40px; }
+  [data-look="new"] .nl-dash-cols { margin-bottom: 48px; }
+  [data-look="new"] .nl-dash-agenda-row { grid-template-columns: 46px 10px minmax(0, 1fr); gap: 12px; }
+  [data-look="new"] .nl-dash-needs > li { flex-wrap: wrap; }
+  [data-look="new"] .nl-dash-needs .nl-dash-go { margin-left: 34px; }
+  [data-look="new"] .nl-dash-launch-grid, [data-look="new"] .nl-dash-picker { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-dash-launch-bar { padding-right: 16px; }
+  [data-look="new"] .nl-dash-launch-toggle { padding-left: 18px; }
+  [data-look="new"] .nl-dash-launch-label .nl-dash-strong { display: block; }
+  [data-look="new"] .nl-dash-launch-label .nl-meta { display: block; }
+  [data-look="new"] .nl-dash-launch-label .nl-meta .nl-dash-dotsep { display: none; }
+  [data-look="new"] .nl-dash-launch-grid { padding: 0 14px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-dash-glance-item, [data-look="new"] .nl-dash-agenda > li, [data-look="new"] .nl-dash-needs > li, [data-look="new"] .nl-dash-says { animation: none; }
+  [data-look="new"] .nl-dash-skel i, [data-look="new"] .nl-dash-spin { animation-duration: 3s; }
+}

@@ -449,9 +449,9 @@ function DayList({ list, empty, muted = false }: { list: Appt[]; empty: string; 
 }
 
 /* ── Attention list, with its ticks. ── */
-const noticesSlot: Slot = { p: null };
+export const noticesSlot: Slot = { p: null };
 /* Lines ticked in this tab, so a held copy of the list never paints them back before the next read. */
-const clearedHere = new Set<string>();
+export const clearedHere = new Set<string>();
 
 /**
  * What needs you: the bell's own notices, on the board.
@@ -788,7 +788,7 @@ type BookForTile = {
 };
 let bookPromise: Promise<{ ok?: boolean; unlinked?: boolean; error?: string; counts?: BookForTile["counts"]; properties?: BookForTile["properties"] } | null> | null = null;
 
-function useManagedBook() {
+export function useManagedBook() {
   const [state, setState] = useState<{
     book: BookForTile | null;
     loading: boolean;
@@ -1060,10 +1060,10 @@ type Fetched<T> = { data: T | null; loading: boolean; unlinked: boolean; error: 
 /* `last` is the last GOOD answer, kept ten minutes so coming back to the
    dashboard draws the tile at once and corrects it when the new read lands,
    rather than greying every tile again (2 Oct 2026). The read is always made. */
-type Slot = { p: Promise<unknown> | null; last?: { at: number; raw: unknown } };
+export type Slot = { p: Promise<unknown> | null; last?: { at: number; raw: unknown } };
 const SLOT_KEEP_MS = 10 * 60 * 1000;
 
-function useShared<T>(
+export function useShared<T>(
   slot: Slot,
   url: string,
   pick: (j: Record<string, unknown>) => T | null
@@ -1111,16 +1111,16 @@ function useShared<T>(
   return state;
 }
 
-const leadsSlot: Slot = { p: null };
-const listingsSlot: Slot = { p: null };
-const applicationsSlot: Slot = { p: null };
+export const leadsSlot: Slot = { p: null };
+export const listingsSlot: Slot = { p: null };
+export const applicationsSlot: Slot = { p: null };
 
-const sameDay = (iso: string | undefined, d: Date) => {
+export const sameDay = (iso: string | undefined, d: Date) => {
   if (!iso) return false;
   const t = new Date(iso);
   return t.getFullYear() === d.getFullYear() && t.getMonth() === d.getMonth() && t.getDate() === d.getDate();
 };
-const daysSince = (iso: string | null | undefined, ms?: number | null) => {
+export const daysSince = (iso: string | null | undefined, ms?: number | null) => {
   const t = iso ? new Date(iso).getTime() : ms ?? NaN;
   return Number.isFinite(t) ? Math.floor((Date.now() - t) / 86_400_000) : null;
 };
@@ -1376,13 +1376,13 @@ function LeadsTodayWidget({ w, h }: { w: number; h: number }) {
 /** On the market: Available by lib/listing-stages - published and not let
  *  agreed, archived drafts aside. The same rule as Listings and the Overview
  *  (Rig run 3, P-026); shared with the Pipeline snapshot. */
-const onMarketOf = (listings: OsListing[], accepted?: ReadonlySet<string>) =>
+export const onMarketOf = (listings: OsListing[], accepted?: ReadonlySet<string>) =>
   listings.filter((l) => !(l as { archived?: boolean }).archived && stageOf(l, accepted) === "Available");
 
 /** Offers accepted in the OS that REX has not marked let agreed yet - the same
  *  list Listings reads, so those homes are let agreed here too. */
 const activitySlot: Slot = { p: null };
-function useAccepted(): ReadonlySet<string> | undefined {
+export function useAccepted(): ReadonlySet<string> | undefined {
   const { data } = useShared<{ accepted: string[] }>(
     activitySlot, "/api/activity",
     (j) => (j.ok && Array.isArray(j.accepted) ? { accepted: j.accepted as string[] } : null)
@@ -1457,7 +1457,7 @@ function OnMarketWidget({ w, h }: { w: number; h: number }) {
 /** Open offers: received, or with the landlord, on a home not since let or
  *  withdrawn - REX leaves those on "Communicated" for ever (see closedReasons
  *  in lib/applications). Shared with the Pipeline snapshot. */
-const openOffersOf = (apps: Application[]) =>
+export const openOffersOf = (apps: Application[]) =>
   apps.filter((a) => (a.status === "received" || a.status === "communicated") && !a.closed);
 
 function ApplicationsWidget({ w, h }: { w: number; h: number }) {

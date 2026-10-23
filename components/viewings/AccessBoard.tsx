@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { Badge, type Tone } from "@/components/new-look/Parts";
 import type { AccessRow, AccessState } from "@/lib/access-board";
 
 /**
@@ -28,7 +29,10 @@ const WORDS: Record<AccessState, { label: string; tone: string; rank: number }> 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
-export default function AccessBoard({ days = 14 }: { days?: number }) {
+/* The same states as badges, for the new look (lib/new-look "diary"). */
+const NL_TONE: Record<AccessState, Tone> = { none: "accent", keys: "warning", "to-ask": "warning", asked: "neutral", sorted: "good" };
+
+export default function AccessBoard({ days = 14, newLook = false }: { days?: number; newLook?: boolean }) {
   const [rows, setRows] = useState<AccessRow[] | null>(null);
 
   useEffect(() => {
@@ -59,6 +63,41 @@ export default function AccessBoard({ days = 14 }: { days?: number }) {
   }
   const homes = [...byHome.values()].sort((a, b) => WORDS[a.row.state].rank - WORDS[b.row.state].rank || a.row.startsAt.localeCompare(b.row.startsAt));
   const list = homes.slice(0, 8);
+
+  if (newLook) {
+    return (
+      <section className="nl-diary-access" aria-label="Can We Get In?">
+        <div className="nl-diary-access-head">
+          <h2 className="nl-block-title">Can We Get In?</h2>
+          <p className="nl-meta">
+            The next {days} days · {chase.length} to sort{asked.length ? `, ${asked.length} waiting on an answer` : ""}
+            {sorted ? ` · ${sorted} sorted` : ""} · by property
+          </p>
+        </div>
+        <ul className="nl-lines">
+          {list.map(({ row: r, count }) => (
+            <li key={r.listingId} className="nl-diary-access-row">
+              <span className="nl-diary-access-when">{when(r.startsAt)}</span>
+              <span className="min-w-0 flex-1">
+                <span className="nl-strong block truncate">{r.address}</span>
+                <span className="nl-meta block truncate">
+                  {count > 1 ? `${count} viewings` : r.who}
+                  {r.agent ? ` · with ${r.agent}` : ""}
+                  {r.through ? ` · ${r.through}` : ""}
+                  {r.test ? " · test file" : ""}
+                </span>
+              </span>
+              <Badge tone={NL_TONE[r.state]}>{WORDS[r.state].label}</Badge>
+              <a href={`/listings?open=${encodeURIComponent(r.listingId)}`} className="nl-btn nl-btn--secondary nl-btn--sm">
+                Sort it
+              </a>
+            </li>
+          ))}
+        </ul>
+        {list.length < homes.length && <p className="nl-meta mt-2">And {homes.length - list.length} more.</p>}
+      </section>
+    );
+  }
 
   return (
     <section className="fade-up rounded-[22px] border border-line/50 bg-white p-5">

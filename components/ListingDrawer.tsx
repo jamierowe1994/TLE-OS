@@ -56,6 +56,8 @@ import { fetchMe } from "@/lib/me";
 import RexWaitingChip from "@/components/RexWaitingChip";
 import { Badge, Ico, Menu, Tabs } from "@/components/new-look/Parts";
 import PhotoGrid from "@/components/new-look/PhotoGrid";
+import EditAdvert from "@/components/new-look/advert/EditAdvert";
+import { useNewLook } from "@/lib/use-new-look";
 import SteveFace from "@/components/SteveFace";
 import { OPTIONS } from "@/lib/listing-requirements";
 import HomeKeys from "@/components/portfolio/HomeKeys";
@@ -286,6 +288,8 @@ function ListingDrawerBody({
     const asked = askedTab(initialTab);
     return newLook && asked !== "marketing" ? null : asked;
   });
+  /* Edit the advert's own switch (lib/new-look "advert"): null until known. */
+  const advertLook = useNewLook("advert");
   /* The new look's tab on the page itself; Edit the advert stays a pop-out. */
   const [nlTab, setNlTab] = useState<NlTab>(() => {
     const asked = askedTab(initialTab);
@@ -1390,6 +1394,31 @@ function ListingDrawerBody({
     );
   };
   const openTab = tab ? TABS.find((x) => x.key === tab) ?? null : null;
+  /* Edit the advert in the new look (lib/new-look "advert", 23 Oct 2026): its
+     own drawer, drawn instead of the Marketing pop-out on either page while
+     the switch is on. Off, nothing below changes. Same reads, same save. */
+  const advertDrawer =
+    advertLook === true && tab === "marketing" ? (
+      <EditAdvert
+        listingId={String(listing.id)}
+        address={[listing.name, listing.locality].filter(Boolean).join(", ")}
+        initial={live && liveLocks ? { details: live, locks: liveLocks } : null}
+        canEdit={editCanPress}
+        lockedNote={editCanPress ? null : lockedSentence(editArea, editLevel)}
+        onSaved={(d) => {
+          setLive(d);
+          setSaved({ heading: d.heading || null, body: d.body || null });
+          setPub((cur) => (cur ? { ...cur, status: d.status, blockers: [...new Set([...d.blockers.publish, ...d.blockers.portals])] } : cur));
+        }}
+        onClose={closeTab}
+        live={isLive}
+        publish={
+          !isLive && !listing.letAgreed && !publishHidden
+            ? { ready: readyToGoLive, why: missingWords, onPress: () => { closeTab(); pushLive(); } }
+            : null
+        }
+      />
+    ) : null;
 
   /* The pieces both layouts draw (lib/new-look "listing", 23 Oct 2026): the
      sections, the pop-ups over the page, the landlord, how we get in and where
@@ -3145,9 +3174,10 @@ function ListingDrawerBody({
         </div>
 
         {/* Edit the advert slides in from the right; the page stays put. */}
-        <SectionPanel open={tab === "marketing"} icon="pack/photo" title="Edit the Advert" lead={TAB_LEAD.marketing} onClose={closeTab}>
+        <SectionPanel open={tab === "marketing" && advertLook === false} icon="pack/photo" title="Edit the Advert" lead={TAB_LEAD.marketing} onClose={closeTab}>
           {tab === "marketing" && <div className="fade-up">{sectionBody("marketing")}</div>}
         </SectionPanel>
+        {advertDrawer}
         {/* Preview: where it is advertised and how it is doing. */}
         <SectionPanel open={portalStats} icon="megaphone" title="On the Portals" lead={TAB_LEAD.portals} onClose={() => setPortalStats(false)}>
           {portalStats && <div className="fade-up">{sectionBody("portals")}</div>}
@@ -3661,13 +3691,14 @@ function ListingDrawerBody({
       </div>
 
       {/* ── the pop-outs: each section slides out over the page ────────── */}
-      <SectionPanel open={Boolean(openTab)} icon={openTab?.icon ?? "home"} title={openTab?.label ?? ""} lead={tab ? TAB_LEAD[tab] : ""} onClose={closeTab}>
+      <SectionPanel open={Boolean(openTab) && !(tab === "marketing" && advertLook !== false)} icon={openTab?.icon ?? "home"} title={openTab?.label ?? ""} lead={tab ? TAB_LEAD[tab] : ""} onClose={closeTab}>
         {tab && (
           <div key={`view-${tab}`} className="fade-up">
             {sectionBody(tab)}
           </div>
         )}
       </SectionPanel>
+      {advertDrawer}
 
       {overlays}
     </div>

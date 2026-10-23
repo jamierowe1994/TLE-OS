@@ -15,6 +15,8 @@ import {
 } from "@/lib/compliance";
 import { searchMatches } from "@/lib/search-match";
 import { useNoteVisit } from "@/lib/recent-visits";
+import { useNewLook } from "@/lib/use-new-look";
+import { Mast, Ico } from "@/components/new-look/Parts";
 
 /**
  * Compliance — the page that keeps every home legal and every tenant safe.
@@ -69,9 +71,52 @@ function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?:
   );
 }
 
+/* ── The new look's pieces (lib/new-look "compliance", 23 Oct 2026) ──────────
+   The same words as CertPill above, drawn as coloured text rather than a
+   filled pill (the design's Cell). Nothing is counted differently. */
+const noDash = (s: string) => s.replace(/\s*—\s*/g, ", ");
+
+function NlCert({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?: string }) {
+  if (cert?.checking && !cert.checking.queried && statusOf(cert) !== "ok" && statusOf(cert) !== "watch") {
+    return <span className="nl-cbook-cert is-info" title={`${name ? noDash(name) : ""}: ${CHECKING_LABEL}`}>with compliance</span>;
+  }
+  const s = shownStatus(cert);
+  const held = renewalHeld(cert);
+  const text = held
+    ? "with council"
+    : s === "expired"
+      ? `${Math.abs(cert!.expires!)}d over`
+      : s === "missing"
+        ? isStaleRecord(cert) ? "old record" : "no record"
+        : s === "urgent"
+          ? `${cert!.expires}d left`
+          : s === "watch"
+            ? `${cert!.expires}d`
+            : "in date";
+  const tone = held ? "is-info" : s === "expired" ? "is-over" : s === "missing" ? "is-missing" : s === "urgent" ? "is-soon" : s === "watch" ? "is-watch" : "is-ok";
+  return (
+    <span
+      className={`nl-cbook-cert ${tone}`}
+      title={isStaleRecord(cert) ? `${name ? noDash(name) : ""}: the last one on file ran out ${Math.round(Math.abs(cert!.expires!) / 30)} months ago and no renewal has reached us` : name ? noDash(name) : undefined}
+    >
+      {text}
+    </span>
+  );
+}
+
+/** Two small line icons the shared set doesn't carry: over (a warning) and left (a clock). */
+function NlReqIcon({ over }: { over: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {over ? <path d="M12 4l9 16H3zM12 10v4M12 17h.01" /> : <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>}
+    </svg>
+  );
+}
+
 type Filter = "all" | "expired" | "urgent" | "missing" | "ok";
 
 export default function Compliance() {
+  const look = useNewLook("compliance");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -191,6 +236,240 @@ export default function Compliance() {
     { key: "missing", label: "No record", value: counts.missing, hint: "can't prove it's safe", icon: "search" },
     { key: "ok", label: "In date", value: counts.ok, hint: "of the managed book", icon: "shield" },
   ];
+
+  /* ── THE NEW LOOK (lib/new-look "compliance", 23 Oct 2026) ───────────────
+     The same book, the same reads, the same four counts and the same drawer,
+     drawn the design's way: a type-only header, four quiet tiles that still
+     filter the book, the next month as a list, and the book as a table that
+     folds into cards on a phone. The old page stays below until the switch
+     has bedded in. */
+  if (look === null) {
+    return (
+      <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted">
+        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+        Opening Compliance…
+      </p>
+    );
+  }
+  if (look) {
+    const failed = !source.loading && !source.live && !source.properties.length;
+    const blurb = source.loading
+      ? "Reading every certificate on every home…"
+      : source.live && source.counts
+        ? `Live${source.ageMs != null ? `, ${asOf(source.ageMs).text}` : ""}. ${BOOK.length} ${source.scope && !source.scope.whole ? "homes on your own book" : "homes we manage"}. ${noGas} have no gas supply, from the signed terms or the property's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only and rent collect homes are the landlord's to keep compliant, and homes whose agent has left are not ours, so neither is here. A certificate more than 6 months out of date reads as an old record, not an expiry.`
+        : failed
+          ? "The certificates didn't load just now, so nothing on this page has been checked."
+          : (source.reason ?? "Every certificate on every home, and the button that fixes each one.");
+    const tone = (key: Filter, value: number) =>
+      source.loading || !source.live ? "" : key === "expired" ? (value > 0 ? " is-accent" : " is-sage") : key === "ok" ? " is-sage" : "";
+    const who = (name: string | null | undefined) => (name && name.trim() && name.trim() !== "—" ? name : null);
+    const filterLabel = TILES.find((t) => t.key === filter)?.label;
+    return (
+      <div data-look="new">
+        <div className="nl-page nl-rise">
+          <Mast
+            eyebrow="Portfolio"
+            title="Compliance"
+            blurb={blurb}
+            actions={<WalkthroughLink step="compliance" className="nl-cbook-how" />}
+          />
+
+          {/* The four counts. Each is also the filter for the book below. */}
+          <div className="nl-cbook-tiles" aria-busy={source.loading}>
+            {TILES.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                aria-pressed={filter === t.key}
+                onClick={() => setFilter(filter === t.key ? "all" : t.key)}
+                className={`nl-cbook-tile${tone(t.key, t.value)}${filter === t.key ? " is-on" : ""}`}
+              >
+                <span className="nl-cbook-tile-label">{t.label}</span>
+                {/* Nothing read is "-", never 0 (bug P-017): a 0 reads as all clear. */}
+                {source.loading ? (
+                  <span className="nl-cbook-skel" aria-label="Loading" />
+                ) : (
+                  <b className="nl-cbook-fig">{failed ? "-" : t.value.toLocaleString("en-GB")}</b>
+                )}
+                <span className="nl-cbook-tile-note">{t.hint}</span>
+              </button>
+            ))}
+          </div>
+
+          {failed && (
+            <div className="nl-cbook-fail" role="alert">
+              <p className="nl-block-title">The Certificates Didn&rsquo;t Load</p>
+              <p className="nl-meta mt-1.5 max-w-xl">
+                {source.reason ?? "Nothing on this page has been checked."} Don&rsquo;t read the page as all clear.
+              </p>
+              <button type="button" onClick={reload} className="nl-btn nl-btn--secondary nl-btn--sm mt-4">Try again</button>
+            </div>
+          )}
+
+          {/* THE NEXT MONTH: the reason this page exists. The whole row opens the home; nothing is done from here. */}
+          <section className="nl-cbook-card">
+            <h2 className="nl-section-title nl-cbook-h">Coming Out of Compliance in the Next Month</h2>
+            {urgent.length ? (
+              <ul className="nl-cbook-soon">
+                <li className="nl-cbook-soon-head" aria-hidden>
+                  <span>Days</span><span>Property</span><span>Requirement</span><span>Expiry date</span>
+                </li>
+                {urgent.map(({ p, key, cert, status }) => {
+                  const days = cert?.expires ?? null;
+                  const over = days == null ? 0 : Math.abs(days);
+                  const expiry = days == null ? null : new Date(Date.now() + days * 86400000);
+                  const isOver = status === "expired";
+                  const landlord = who(p.landlord);
+                  return (
+                    <li key={`${p.id}:${key}`}>
+                      <button type="button" onClick={() => setOpenId(p.id)} className="nl-cbook-soon-row">
+                        <span className={`nl-cbook-days${isOver ? " is-over" : ""}`}>
+                          {/* Past two years, days stop meaning anything: years instead. */}
+                          <b>{!isOver ? days : over > 730 ? Math.floor(over / 365) : over}</b>
+                          <small>{!isOver ? "days left" : over > 730 ? "years over" : "days over"}</small>
+                        </span>
+                        <span className="nl-cbook-prop">
+                          <span className="nl-strong">{p.name}</span>
+                          <span className="nl-meta">
+                            {[p.locality, landlord && `landlord ${landlord}`, p.tenant, p.hmo && "HMO"].filter(Boolean).join(" · ")}
+                          </span>
+                        </span>
+                        <span className="nl-cbook-reqcell">
+                          <span className={`nl-cbook-req${isOver ? " is-over" : ""}`}>
+                            <NlReqIcon over={isOver} />
+                            {noDash(CERT_META[key].label)}
+                          </span>
+                        </span>
+                        <span className="nl-cbook-date">
+                          {expiry ? expiry.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not recorded"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : source.loading ? (
+              /* Never an all-clear before anything has been read (bug P-017). */
+              <p className="nl-cbook-wait"><span className="nl-cbook-spin" aria-hidden />Reading every certificate…</p>
+            ) : !source.live ? (
+              <p className="nl-cbook-bad">
+                The certificates didn&rsquo;t load, so nothing here has been checked. Don&rsquo;t read it as all clear - try again in a minute.
+              </p>
+            ) : (
+              <p className="nl-empty">Nothing expires this month. It happens.</p>
+            )}
+          </section>
+
+          {/* The whole book, one row per home, the big three as columns. */}
+          <section className="nl-cbook-card">
+            <div className="nl-cbook-bookhead">
+              <h2 className="nl-section-title nl-cbook-h">The Book</h2>
+              {filter !== "all" && (
+                <button type="button" onClick={() => setFilter("all")} className="nl-cbook-chip" aria-label={`Clear the ${filterLabel ?? ""} filter`}>
+                  {filterLabel}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+              )}
+              <span className="nl-cbook-tools">
+                <label className="nl-fsearch nl-cbook-search">
+                  <Ico name="search" />
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Property or landlord" aria-label="Search the book" />
+                </label>
+                {/* Kirstie, 16 Oct 2026: every certificate on the homes shown, with its contractor (lib/exports). */}
+                <ExcelButton
+                  href="/api/export/certificates"
+                  className="nl-cbook-excel"
+                  disabled={!source.live || book.length === 0}
+                  body={() => ({
+                    properties: book.map(({ p }) => p.id),
+                    filters: [
+                      filter !== "all" && (TILES.find((t) => t.key === filter)?.label ?? filter),
+                      query.trim() && `Search "${query.trim()}"`,
+                    ].filter(Boolean).join(", "),
+                  })}
+                />
+              </span>
+            </div>
+
+            <table className="nl-cbook-table">
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  {BIG_THREE.map((k) => <th key={k}>{CERT_META[k].short}</th>)}
+                  <th>HMO extras</th>
+                  <th>Who&apos;s there</th>
+                </tr>
+              </thead>
+              <tbody>
+                {book.map(({ p }) => {
+                  const landlord = who(p.landlord);
+                  return (
+                    <tr key={p.id} onClick={() => setOpenId(p.id)}>
+                      <td className="nl-cbook-tprop">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setOpenId(p.id); }} className="nl-strong nl-cbook-open">
+                          {p.name}
+                        </button>
+                        {p.hmo && <span className="nl-cbook-hmo">HMO</span>}
+                        <span className="nl-meta block">{p.locality}</span>
+                      </td>
+                      {BIG_THREE.map((k) => (
+                        <td key={k} data-label={CERT_META[k].short}>
+                          {k === "gas" && !p.hasGas ? (
+                            <span className="nl-cbook-cert is-none">no gas</span>
+                          ) : (
+                            <NlCert cert={p.certs[k]} name={CERT_META[k].label} />
+                          )}
+                        </td>
+                      ))}
+                      <td data-label="HMO extras" className={`nl-cbook-textras${p.hmo ? "" : " is-empty"}`}>
+                        {p.hmo ? (
+                          <span className="nl-cbook-extras">
+                            {(["licence", "fire", "pat"] as CertKey[]).map((k) => (
+                              <span key={k}>
+                                <i>{CERT_META[k].short}</i>
+                                <NlCert cert={p.certs[k]} name={CERT_META[k].label} />
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="nl-meta">-</span>
+                        )}
+                      </td>
+                      <td data-label="Who's there" className="nl-cbook-twho">
+                        <span className="nl-cbook-line" title={landlord ?? undefined}>{landlord ?? "No landlord on record"}</span>
+                        {p.tenant === null ? (
+                          <span className="nl-meta nl-cbook-line" title="No tenant on the listing: either nobody is in, or it has not been recorded">No tenant on record</span>
+                        ) : p.tenant ? (
+                          <span className="nl-meta nl-cbook-line" title={p.tenant}>{p.tenant}</span>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {!book.length && (
+              source.loading ? (
+                <p className="nl-cbook-wait"><span className="nl-cbook-spin" aria-hidden />Reading the book…</p>
+              ) : failed ? (
+                <p className="nl-cbook-bad">Nothing to show - the certificates didn&rsquo;t load.</p>
+              ) : (
+                <p className="nl-empty">Nothing matches. Clear the filter or the search.</p>
+              )
+            )}
+
+            <p className="nl-cbook-foot">
+              <b>Putting one right:</b> open the home and upload the renewed certificate. Compliance checks it,
+              and once they have, it goes to the landlord and the tenant for you. If compliance query it, you get
+              an email saying what needs fixing.
+            </p>
+          </section>
+        </div>
+
+        <ComplianceDrawer property={open} book={BOOK} onClose={() => setOpenId(null)} onChanged={reload} />
+      </div>
+    );
+  }
 
   return (
     <>

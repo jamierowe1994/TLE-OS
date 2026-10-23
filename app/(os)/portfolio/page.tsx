@@ -26,6 +26,9 @@ import ExcelButton from "@/components/ExcelButton";
 import TakeOnWizard from "@/components/portfolio/TakeOnWizard";
 import RentRange from "@/components/portfolio/RentRange";
 import { searchMatches } from "@/lib/search-match";
+import { useNewLook } from "@/lib/use-new-look";
+import { Mast, Badge, Tabs, Ico, type Tone } from "@/components/new-look/Parts";
+import { BoardSkeleton } from "@/components/Skeleton";
 
 /**
  * Portfolio — the managed book. Every property the business looks after,
@@ -166,6 +169,16 @@ export default function Portfolio() {
   const [reletOnly, setReletOnly] = useState(false);
   const [sort, setSort] = useState<string | null>(null);
   const router = useRouter();
+  /* The new look (lib/new-look "portfolio"): cards or rows, and the second filter row. */
+  const look = useNewLook("portfolio");
+  const [nlView, setNlView] = useState<"cards" | "list">("cards");
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem("os-portfolio-view");
+      if (v === "cards" || v === "list") setNlView(v);
+    } catch { /* fine - cards */ }
+  }, []);
   /* ?open=<listing id> from the search bar: straight to the home's own page. */
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("open");
@@ -407,6 +420,428 @@ export default function Portfolio() {
 
   const pillClass = (on: boolean) =>
     `rounded-full border px-3.5 py-2 text-[12px] transition-colors ${on ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"}`;
+
+  /* ── THE NEW LOOK (lib/new-look "portfolio", 23 Oct 2026) ────────────────
+     The same book, figures, filters, tabs and buttons as the screen below,
+     drawn the new way: a type-only header, the figures on a hairline, one
+     filter row, text tabs, and the homes as cards or rows. The old screen
+     stays underneath until the switch has bedded in. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening Portfolio…</p>;
+  }
+  if (look) {
+    const pickView = (v: "cards" | "list") => {
+      setNlView(v);
+      try { window.localStorage.setItem("os-portfolio-view", v); } catch { /* fine */ }
+    };
+    const clearAll = () => { setQ(""); setService(null); setAgent(null); setTown(null); setRent(null); setLookOnly(false); setNotOnRexOnly(false); setReletOnly(false); };
+    const moreSet = [sort, rent].filter(Boolean).length;
+    const certTone: Record<CertStatus, Tone> = { expired: "accent", urgent: "warning", missing: "neutral", watch: "neutral", ok: "good" };
+    const nlBlurb =
+      state.status === "loading" ? "Fetching the managed book…"
+      : state.status === "failed" ? (state.unlinked ? "We can't show you a portfolio yet." : "The book couldn't be read.")
+      : `${(state.book.counts.homes ?? state.book.counts.properties).toLocaleString("en-GB")} homes under management across ${state.book.counts.towns} towns, for ${state.book.counts.landlords} landlords${state.everything ? "" : ` (${state.scope}'s book)`}.${state.ageMs != null ? ` Figures ${asOf(state.ageMs).text}.` : state.stale ? " Refreshing behind." : ""}`;
+    const nlCertsHint =
+      certs.status === "checking" ? "Checking the certificates…"
+      : certs.status === "slow" ? "Still reading them. Refresh in a few minutes."
+      : certs.status === "failed" ? certs.error
+      : `${certTally.expired} expired · ${certTally.urgent} due in 30 days · ${certTally.missing} with no current record${certs.ageMs != null ? ` · ${asOf(certs.ageMs).text}` : certs.stale ? " · refreshing" : ""}`;
+    /* What one home (or shared house) shows, card or row. */
+    const facts = ({ p, house }: { p: ManagedProperty; house: House | null }) => {
+      const s = summaryOf(p);
+      const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0).length : 0;
+      const rentPcm = house && house.kind === "rooms" ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
+      const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
+      const notice = house ? house.rooms.find((r) => r.notice)?.notice ?? null : p.notice ?? null;
+      const where = house ? `${house.locality} · ${house.kind === "lets" ? `${house.rooms.length} lets on record` : `${house.rooms.length} rooms, ${letRooms} let`}` : p.locality;
+      const who = house
+        ? `${new Set(house.rooms.flatMap((r) => r.tenants.map((t) => t.contactId))).size} tenants`
+        : byAgent ? (p.agent?.name ? `Agent ${p.agent.name}` : "No agent") : (p.tenants[0]?.name ?? "No tenant on record");
+      const price = rentPcm ? (
+        <>{money(rentPcm)}<small>pcm</small></>
+      ) : !house && p.rentStarts ? (
+        <>{money(p.rentStarts.monthly)}<small>pcm from {shortDay(p.rentStarts.from)}</small></>
+      ) : (
+        <span className="nl-port-norent">{!house && p.rentUnread ? "Rent not read" : "No rent found"}</span>
+      );
+      const tags = (
+        <>
+          {p.test ? <Badge tone="accent">Test</Badge> : p.service ? <Badge tone={p.service === "Managed" ? "good" : "neutral"}>{p.service}</Badge> : <Badge tone="neutral">Service not set</Badge>}
+          {!p.test && p.onRex === false && <Badge tone="accent">Not on the main record</Badge>}
+          {p.onRex !== false && p.rexLet === false && !p.held && <Badge tone="neutral">Not marked let</Badge>}
+          {notice && <Badge tone="warning">Relet{notice.leavingOn ? ` · ${shortDay(notice.leavingOn)}` : ""}</Badge>}
+        </>
+      );
+      const cert = s ? (
+        <Badge tone={certTone[s.worst]} bare>{s.label}</Badge>
+      ) : certs.status === "ready" ? (
+        <span className="nl-meta">No property record</span>
+      ) : certs.status === "failed" || certs.status === "slow" ? (
+        <span className="nl-meta">Not read</span>
+      ) : (
+        <span className="nl-meta">Checking…</span>
+      );
+      const photo = p.image ?? house?.rooms.find((r) => r.image)?.image ?? null;
+      return { s, price, tags, cert, photo, where, who, landlord, title: house ? house.name : p.name, letSince: house ? null : p.letSince };
+    };
+
+    return (
+      <div data-look="new" className="nl-page nl-rise">
+        {logins && (
+          <SendLogins
+            listings={filtering ? filteredHomes.filter((h) => h.tenants.length > 0).map((h) => String(h.listingId)) : undefined}
+            title={filtering ? `The ${filteredHomes.length === 1 ? "home" : `${filteredHomes.length} homes`} shown${agent ? `, ${agent}` : ""}` : undefined}
+            onClose={() => setLogins(false)}
+          />
+        )}
+        {takeOn && <TakeOnWizard onClose={() => setTakeOn(false)} />}
+
+        <Mast
+          eyebrow="Portfolio"
+          title="Properties"
+          blurb={nlBlurb}
+          actions={
+            <>
+              {/* Management transfer (Dan Richards a9f80822, 19 Oct 2026). */}
+              <button type="button" onClick={() => setTakeOn(true)} className="nl-btn nl-btn--primary">
+                <Ico name="plus" /> Take on a managed home
+              </button>
+              {/* Sean McMahon, 16 Oct 2026: every tenant's portal login at once, reviewed first. Filtered, it covers what's shown. */}
+              <button type="button" disabled={!book} onClick={() => setLogins(true)} className="nl-btn nl-btn--secondary">
+                <Ico name="mail" /> Send out logins
+              </button>
+              {/* Kirstie, 16 Oct 2026: the homes on show as a spreadsheet, filters and all (lib/exports). */}
+              {view === "properties" && (
+                <ExcelButton
+                  href="/api/export/portfolio"
+                  className="nl-btn nl-btn--quiet nl-port-excel"
+                  disabled={!book || filteredHomes.length === 0}
+                  body={() => ({
+                    listings: filteredHomes.map((h) => String(h.listingId)),
+                    filters: [
+                      q.trim() && `Search "${q.trim()}"`,
+                      service && `Service ${service}`,
+                      agent && `Agent ${agents.find((a) => a.id === agent)?.label ?? agent}`,
+                      town && `Town ${town}`,
+                      rent && `Rent ${money(rent[0])} to ${money(rent[1])} pcm`,
+                      lookOnly && "Needs a look",
+                      notOnRexOnly && "Not on REX",
+                      reletOnly && "Relet",
+                    ].filter(Boolean).join(", "),
+                  })}
+                />
+              )}
+            </>
+          }
+        />
+
+        {state.status === "failed" ? (
+          <div className="py-6" role="alert">
+            <p className="nl-block-title">{state.unlinked ? "We can't show you a portfolio yet" : "The book couldn't be read"}</p>
+            <p className="nl-meta mt-1.5 max-w-xl">{state.error}</p>
+            {!state.unlinked && (
+              <button type="button" onClick={load} className="nl-btn nl-btn--secondary nl-btn--sm mt-4">Try again</button>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* The book at a glance: four figures, each read live, each with what it counts. */}
+            <div className="nl-port-glance" aria-busy={!book}>
+              <div className="nl-port-fig">
+                <span className="nl-meta">Homes</span>
+                {/* Counted the way the old system counts its managed homes (2 Oct 2026): every room let on its own is a home. */}
+                <b>{book ? (book.counts.homes ?? book.counts.properties).toLocaleString("en-GB") : <span className="nl-port-wait" aria-label="Loading" />}</b>
+                {book && (
+                  <span className="nl-meta">
+                    {book.counts.homes != null
+                      ? `${(book.counts.homesOccupied ?? 0).toLocaleString("en-GB")} occupied · ${book.counts.homesVacant ?? 0} vacant · ${book.counts.upcomingVacancies ?? 0} becoming vacant`
+                      : Object.entries(book.counts.byService).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(" · ")}
+                  </span>
+                )}
+              </div>
+              <div className="nl-port-fig">
+                <span className="nl-meta">Rent roll</span>
+                <b>{!book ? <span className="nl-port-wait" aria-label="Loading" /> : book.counts.rentsUnread ? <span className="is-quiet">Not read</span> : <>{money(book.counts.rentRoll)}<small>pcm</small></>}</b>
+                {book && (
+                  <span className="nl-meta">
+                    {book.counts.rentsUnread
+                      ? "PayProp's rents couldn't be read at the last check, so no rent roll is shown rather than a short one."
+                      : `${money(book.counts.managedRentRoll)} on homes we manage or collect rent for · average ${book.counts.avgRent == null ? "not known" : `${money(book.counts.avgRent)} pcm`}`}
+                  </span>
+                )}
+              </div>
+              <div className="nl-port-fig">
+                <span className="nl-meta">Landlords</span>
+                <b>{book ? book.counts.landlords.toLocaleString("en-GB") : <span className="nl-port-wait" aria-label="Loading" />}</b>
+                {book && <span className="nl-meta">{book.counts.withoutLandlord ? `${book.counts.withoutLandlord} homes have no landlord on record` : "Every home has a landlord on record"}</span>}
+              </div>
+              <div className={`nl-port-fig${certs.status === "ready" && certTally.toRenew > 0 ? " is-hot" : ""}`}>
+                <span className="nl-meta">Certificates to renew</span>
+                <b>{certs.status === "ready" ? certTally.toRenew.toLocaleString("en-GB") : certs.status === "checking" ? <span className="nl-port-wait" aria-label="Loading" /> : <span className="is-quiet">Not read</span>}</b>
+                {book && <span className={`nl-meta${certs.status === "failed" ? " nl-port-bad" : ""}`}>{nlCertsHint}</span>}
+              </div>
+            </div>
+
+            <Tabs
+              label="Show the book as"
+              className="mt-10"
+              value={view}
+              onChange={setView}
+              items={[
+                { id: "properties" as const, label: "Properties", count: book ? filteredHomes.length : null },
+                { id: "landlords" as const, label: "Landlords", count: book ? landlords.length : null },
+                { id: "past" as const, label: "Archive" },
+              ]}
+            />
+
+            <div className="mt-6">
+              <div className="nl-filters">
+                <label className="nl-fsearch">
+                  <Ico name="search" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={byAgent ? "Search addresses, landlords, tenants, agents" : "Search addresses, landlords, tenants"} aria-label="Search the book" />
+                </label>
+                {view !== "past" && (
+                  <>
+                    <span className={`nl-fsel${service ? " is-set" : ""}`}>
+                      <select aria-label="Service" value={service ?? ""} onChange={(e) => setService(e.target.value || null)}>
+                        <option value="">Any service</option>
+                        {services.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                      </select>
+                    </span>
+                    <span className={`nl-fsel${town ? " is-set" : ""}`}>
+                      <select aria-label="Town" value={town ?? ""} onChange={(e) => setTown(e.target.value || null)}>
+                        <option value="">Any town</option>
+                        {towns.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                      </select>
+                    </span>
+                    {byAgent && (
+                      <span className={`nl-fsel${agent ? " is-set" : ""}`}>
+                        <select aria-label="Agent" value={agent ?? ""} onChange={(e) => setAgent(e.target.value || null)}>
+                          <option value="">Any agent</option>
+                          {agents.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                        </select>
+                      </span>
+                    )}
+                    <button type="button" className="nl-fmore" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+                      <Ico name="filter" size={15} />
+                      {moreOpen ? "Fewer filters" : moreSet ? `More filters · ${moreSet}` : "More filters"}
+                    </button>
+                    {filtering && <button type="button" className="nl-fmore" onClick={clearAll}>Clear</button>}
+                  </>
+                )}
+              </div>
+              {view !== "past" && (
+                <div className={`nl-collapse${moreOpen ? " is-open" : ""}`}>
+                  <div>
+                    <div className="nl-filters pt-2.5">
+                      <span className={`nl-fsel${sort ? " is-set" : ""}`}>
+                        <select aria-label="Sort by" value={sort ?? ""} onChange={(e) => setSort(e.target.value || null)}>
+                          <option value="">Let most recently</option>
+                          {SORTS.filter((x) => x.id !== "let-new").map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                        </select>
+                      </span>
+                      <span className="nl-port-range"><RentRange max={rentTop} value={rent} onChange={setRent} /></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Three quick narrowings, each on or off on its own. */}
+              {view !== "past" && (
+                <div className="nl-port-quick" role="group" aria-label="Narrow the book">
+                  <button
+                    type="button"
+                    aria-pressed={lookOnly}
+                    disabled={certs.status !== "ready"}
+                    onClick={() => setLookOnly((v) => !v)}
+                    className={lookOnly ? "is-on" : ""}
+                    title={certs.status !== "ready" ? "Available once the certificates have been read" : "Certificates expired, or due inside 30 days"}
+                  >
+                    Needs a look{certs.status === "ready" ? <span className="nl-tab-n">{attention.size}</span> : null}
+                  </button>
+                  <button type="button" aria-pressed={reletOnly} onClick={() => setReletOnly((v) => !v)} className={reletOnly ? "is-on" : ""} title="Tenants have given notice: the home stays here until they move out">
+                    Relet{book ? <span className="nl-tab-n">{relets}</span> : null}
+                  </button>
+                  <button type="button" aria-pressed={notOnRexOnly} onClick={() => setNotOnRexOnly((v) => !v)} className={notOnRexOnly ? "is-on" : ""} title="Homes property management looks after that the main record has no property for, or does not mark as let">
+                    Not on the main record
+                  </button>
+                  {view === "properties" && (
+                    <span className="nl-port-quick-end">
+                      <span className="nl-fcount">{book ? `${filteredHomes.length} ${filteredHomes.length === 1 ? "home" : "homes"}` : ""}</span>
+                      <span className="nl-toggle" role="group" aria-label="Show as">
+                        <button type="button" className={nlView === "cards" ? "is-on" : ""} aria-pressed={nlView === "cards"} onClick={() => pickView("cards")}>Cards</button>
+                        <button type="button" className={nlView === "list" ? "is-on" : ""} aria-pressed={nlView === "list"} onClick={() => pickView("list")}>List</button>
+                      </span>
+                    </span>
+                  )}
+                </div>
+              )}
+              {book && filtering && view !== "past" && (
+                <p className="nl-meta mt-3">
+                  {filteredHomes.length} of {book.counts.properties} homes · {book.counts.rentsUnread ? "rents not read" : `${money(rentRoll)} pcm`}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-7">
+              {/* ---------------------------------------------- properties -- */}
+              {view === "properties" && (
+                state.status === "loading" ? (
+                  <BoardSkeleton kind={nlView === "cards" ? "cards" : "rows"} label="Reading the managed book…" count={6} />
+                ) : filtered.length === 0 ? (
+                  <p className="nl-empty">Nothing matches. Clear a filter.</p>
+                ) : nlView === "cards" ? (
+                  <div className="nl-cards">
+                    {listRows.map((row) => {
+                      const f = facts(row);
+                      return (
+                        <Link key={row.house ? row.house.key : row.p.listingId} href={`/portfolio/${encodeURIComponent(row.p.listingId)}`} onClick={remember} className="nl-prop h-full" aria-label={`Open ${f.title}`}>
+                          <span className="nl-prop-photo">
+                            <PropertyPhoto src={f.photo} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                            <span className="nl-prop-tags">{f.tags}</span>
+                          </span>
+                          <span className="nl-prop-body">
+                            <span className="nl-price">{f.price}</span>
+                            <span className="nl-strong">{f.title}</span>
+                            <span className="nl-meta">{f.where}</span>
+                            <span className="nl-meta">{[f.who, f.landlord ? `Landlord ${f.landlord.name}` : "No landlord on record"].join(" · ")}</span>
+                            <span className="nl-prop-foot">
+                              {f.letSince && <span>Let since <b>{day(f.letSince)}</b></span>}
+                              <span className="ml-auto min-w-0">{f.cert}</span>
+                            </span>
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="nl-rows">
+                    {listRows.map((row) => {
+                      const f = facts(row);
+                      return (
+                        <Link key={row.house ? row.house.key : row.p.listingId} href={`/portfolio/${encodeURIComponent(row.p.listingId)}`} onClick={remember} className="nl-row nl-port-row" aria-label={`Open ${f.title}`}>
+                          <span className="nl-row-photo"><PropertyPhoto src={f.photo} alt="" className="absolute inset-0 h-full w-full object-cover" /></span>
+                          <span className="min-w-0">
+                            <span className="flex flex-wrap gap-1.5">{f.tags}</span>
+                            <span className="nl-strong mt-1.5 block truncate">{f.title}</span>
+                            <span className="nl-meta block truncate">{f.where}</span>
+                          </span>
+                          <span className="nl-row-fact">
+                            <span className="nl-price">{f.price}</span>
+                          </span>
+                          <span className="nl-row-fact nl-hide-sm min-w-0">
+                            <span className="nl-meta">Landlord</span>
+                            <b className="truncate">{f.landlord ? f.landlord.name : "Not on record"}</b>
+                          </span>
+                          <span className="nl-row-fact nl-hide-sm min-w-0">
+                            <span className="nl-meta">{row.house ? "Tenants" : byAgent ? "Agent" : "Tenant"}</span>
+                            <b className="truncate">{row.house ? f.who : byAgent ? (row.p.agent?.name ?? "None") : (row.p.tenants[0]?.name ?? "None")}</b>
+                          </span>
+                          <span className="nl-row-fact nl-hide-sm">
+                            <span className="nl-meta">Let since</span>
+                            <b>{f.letSince ? day(f.letSince) : "-"}</b>
+                          </span>
+                          <span className="nl-hide-sm flex justify-end">{f.cert}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              {/* ----------------------------------------------- landlords -- */}
+              {view === "landlords" && (
+                state.status === "loading" ? (
+                  <BoardSkeleton kind="rows" label="Reading the managed book…" count={6} />
+                ) : landlords.length === 0 ? (
+                  <p className="nl-empty">No landlord matches.</p>
+                ) : (
+                  <ul className="nl-port-lls">
+                    {landlords.map((l) => {
+                      const mine = l.listingIds.map((id) => byId.get(id)).filter((p): p is ManagedProperty => !!p);
+                      const flagged = mine.filter((p) => attention.has(p.listingId)).length;
+                      const isOpen = expanded.has(l.contactId);
+                      return (
+                        <li key={l.contactId} className={`nl-port-ll${isOpen ? " is-open" : ""}`}>
+                          <div className="nl-port-ll-head">
+                            <span className="nl-avatar" aria-hidden>{l.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="nl-strong truncate">{l.name}</p>
+                              <p className="nl-port-ll-contact">
+                                {l.phone && <a href={`tel:${l.phone.replace(/\s+/g, "")}`}><Ico name="phone" size={13} />{l.phone}</a>}
+                                {l.email && <a href={`mailto:${l.email}`}><Ico name="mail" size={13} /><span className="truncate">{l.email}</span></a>}
+                                {!l.phone && !l.email && <span className="nl-meta">No contact details on record</span>}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="nl-price">{money(l.rentRoll)}<small>pcm</small></p>
+                              <p className="nl-meta">{l.listingIds.length} {l.listingIds.length === 1 ? "home" : "homes"}</p>
+                            </div>
+                          </div>
+                          <div className="nl-port-ll-tags">
+                            {Object.entries(l.services).map(([s, n]) => (
+                              <Badge key={s} tone={s === "Managed" ? "good" : "neutral"}>{s} {n}</Badge>
+                            ))}
+                            {flagged > 0 && <Badge tone="accent">{flagged} needs a look</Badge>}
+                            <button
+                              type="button"
+                              aria-expanded={isOpen}
+                              onClick={() => setExpanded((e) => { const n = new Set(e); if (n.has(l.contactId)) n.delete(l.contactId); else n.add(l.contactId); return n; })}
+                              className="nl-link ml-auto"
+                            >
+                              {isOpen ? "Hide homes" : "Show homes"}
+                            </button>
+                          </div>
+                          {isOpen && (
+                            <div className="nl-fade">
+                              <ul className="nl-port-ll-homes">
+                                {mine.map((p) => {
+                                  const s = summaryOf(p);
+                                  return (
+                                    <li key={p.listingId}>
+                                      <Link href={`/portfolio/${encodeURIComponent(p.listingId)}`} onClick={remember}>
+                                        <span className="nl-port-ll-ph"><PropertyPhoto src={p.image} alt="" className="absolute inset-0 h-full w-full object-cover" /></span>
+                                        <span className="min-w-0 flex-1">
+                                          <span className="nl-strong block truncate">{p.name}</span>
+                                          <span className="nl-meta block truncate">{p.locality}{p.service ? ` · ${p.service}` : ""}</span>
+                                        </span>
+                                        <span className="nl-price shrink-0">{p.rentMonthly == null ? "-" : money(p.rentMonthly)}</span>
+                                        {s && needsLook(s) && <Badge tone={certTone[s.worst]}>{s.label}</Badge>}
+                                      </Link>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              {/* What this landlord told us, across every home of theirs at once. */}
+                              <ZeroDepositOptOut
+                                email={l.email}
+                                personRef={/^\d+$/.test(l.contactId) ? `rex:${l.contactId}` : null}
+                                name={l.name}
+                                className="mt-3 border-t border-line pt-1"
+                              />
+                              <div className="mt-3">
+                                <PropertyAnswers
+                                  propertyIds={mine.map((p) => p.propertyId).filter((x): x is string => Boolean(x))}
+                                  title={`What ${l.name.split(" ")[0]} told us`}
+                                  showAddress={mine.length > 1}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )
+              )}
+
+              {/* ------------------------------------ the archive: past tenancies -- */}
+              {view === "past" && <div className="nl-holder"><PastTenancies search={q} /></div>}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>

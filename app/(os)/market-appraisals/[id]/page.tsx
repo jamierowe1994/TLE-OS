@@ -31,6 +31,8 @@ import ContactBlock from "@/components/ContactBlock";
 import HomeLandlords from "@/components/HomeLandlords";
 import { LandlordOnFile } from "@/components/LandlordHomeAddress";
 import FileDocuments from "@/components/FileDocuments";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Ico, Menu, Tabs, type Tone } from "@/components/new-look/Parts";
 
 /**
  * The appraisal file, to James's mock of 11 Sep 2026.
@@ -76,6 +78,12 @@ interface FileRow {
 
 export default function AppraisalFile({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  /* The new look (lib/new-look "appraisal", 23 Oct 2026): null until known. */
+  const look = useNewLook("appraisal");
+  /* The new look's tabs, and which stage of "Where it's up to" is opened out
+     (null: the one it is at). Asked for here, above the early returns. */
+  const [nlTab, setNlTab] = useState<NlTab>("overview");
+  const [openStage, setOpenStage] = useState<number | null>(null);
   /* `undefined` means we have not looked yet and `null` means we looked and it
      is not there — the two must stay separate, or the page flashes "No such
      appraisal" at somebody who has just this second booked one. */
@@ -193,6 +201,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   const openPhotos = useCallback(() => {
     setWizard(true);
     setShowPhotos(true);
+    setNlTab("photos");
   }, []);
   useEffect(() => {
     if (booked === undefined) return;
@@ -213,6 +222,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   const markRead = useCallback(() => setReadHere(true), []);
   const openMessages = useCallback(() => {
     setShowMessages(true);
+    setNlTab("messages");
     setTimeout(() => document.getElementById("messages")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   }, []);
   useEffect(() => {
@@ -225,7 +235,34 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     openMessages();
   }, [booked, openMessages]);
 
-  if (booked === undefined) {
+  if (look && booked === undefined) {
+    return (
+      <div data-look="new" className="nl-page">
+        <p className="nl-empty">
+          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+          Fetching the appraisal…
+        </p>
+      </div>
+    );
+  }
+
+  if (look && !ma) {
+    return (
+      <div data-look="new" className="nl-page nl-rise">
+        <div className="nl-crumbs">
+          <Link href="/market-appraisals" className="nl-crumb">
+            <Ico name="back" size={14} /> Market Appraisals
+          </Link>
+        </div>
+        <div className="py-12">
+          <h1 className="nl-section-title">No Such Appraisal</h1>
+          <p className="nl-meta mt-2">It may have been removed, or the link is wrong.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (booked === undefined || look === null) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
         <p className="text-[12.5px] text-muted">Fetching the appraisal…</p>
@@ -260,12 +297,493 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     live === "takeon" || live === "aml" || live === "won" || (ma.ticks ?? []).some((t) => t.id === "terms-signed" && t.done);
   const openFile = () => {
     setShowFile(true);
+    setNlTab("file");
     setTimeout(() => document.getElementById("property-file")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
   const openDocs = () => {
     setShowDocs(true);
+    setNlTab("documents");
     setTimeout(() => document.getElementById("documents")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
+
+  /* ── THE NEW LOOK (lib/new-look "appraisal", 23 Oct 2026) ───────────────
+     The same file, read and saved the same way, drawn as the design's
+     record: the head with its jobs, the step that changes with the stage
+     beside At a glance, the progress line, then tabs. The quick links of
+     the old page are the tabs and the three-dot menu; the old page stays
+     below until the switch has bedded in. */
+  if (look) {
+    const stageLabel = live === "lost" ? "Lost" : MA_STAGES.find((s) => s.id === live)?.label ?? "Booked";
+    const tone: Tone = live === "won" ? "good" : live === "lost" ? "neutral" : live === "post_appraisal" || live === "takeon" || live === "aml" ? "accent" : "info";
+    const unread = !readHere ? ma.unreadMessages ?? 0 : 0;
+    const openIdx = openStage ?? at;
+    const goTab = (t: NlTab) => {
+      setNlTab(t);
+      if (t === "messages") setShowMessages(true);
+      if (t === "photos") setShowPhotos(true);
+      if (t === "documents") setShowDocs(true);
+      if (t === "file") setShowFile(true);
+      setTimeout(() => document.getElementById("nl-appr-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    };
+    const openUrl = (url: string) => window.open(url, "_blank", "noopener,noreferrer");
+    const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    const opened = (n: number) => (n > 0 ? `opened ${n === 1 ? "once" : `${n} times`}` : "not opened yet");
+    const homeLine = [ma.address, ma.postcode && !ma.address.includes(ma.postcode) ? ma.postcode : null].filter(Boolean).join(", ");
+
+    return (
+      <SaveScopeProvider scope={saves}>
+        <div data-look="new" className="nl-page nl-rise nl-appr">
+          <div className="nl-crumbs">
+            <Link href="/market-appraisals" className="nl-crumb">
+              <Ico name="back" size={14} /> Market Appraisals
+            </Link>
+            <SaveChip scope={saves} className="bg-card" />
+          </div>
+
+          {/* The head: where it is, the address, one line of facts, then the jobs. */}
+          <div className="nl-rhead">
+            <div className="nl-rhead-text">
+              <div className="nl-rhead-meta">
+                <Badge tone={tone}>{stageLabel}</Badge>
+                <span className="nl-meta">Market appraisal · stage {at + 1} of {spine.length}</span>
+                {ma.cancelledAt && <Badge tone="accent">Cancelled</Badge>}
+              </div>
+              <h1 className="nl-title">{ma.address}</h1>
+              <p className="nl-rhead-sub">
+                {[ma.postcode && !ma.address.includes(ma.postcode) ? ma.postcode : null, ma.landlord, ma.agent ? `with ${ma.agent}` : null, ma.valuation ? `valued ${gbp(ma.valuation)} pcm` : null].filter(Boolean).join(" · ")}
+              </p>
+              {ma.stageWhy && <p className="nl-meta mt-3 max-w-2xl">{ma.stageWhy}</p>}
+              {/* Off the board without losing it, or a test file gone (23 Oct 2026). */}
+              <div className="nl-appr-tidy">
+                <AppraisalTidy
+                  id={ma.id}
+                  archivedAt={ma.archivedAt}
+                  archivedBy={ma.archivedBy}
+                  archivedWhy={ma.archivedWhy}
+                  onLost={async () => {
+                    await fetch("/api/appraisals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ma.id, outcome: "lost" }) }).catch(() => null);
+                    window.location.reload();
+                  }}
+                />
+              </div>
+            </div>
+            <div className="nl-rhead-acts">
+              {/* Once the terms are signed, the listing is one press away whatever the stage. */}
+              {termsSigned && <ListingAction ma={ma} className="nl-btn nl-btn--secondary" onLinked={saved} />}
+              {!past && (
+                <Link href={`/market-appraisals/${ma.id}/build`} className="nl-btn nl-btn--secondary" data-steve="appraisal.build">
+                  <Ico name="pen" /> {deck ? "Update presentation" : "Build presentation"}
+                </Link>
+              )}
+              {/* The stage is read from the record; these are the two hand moves. */}
+              {!ma.archivedAt && (
+                <span className="nl-appr-outcome">
+                  <AppraisalOutcome id={ma.id} stage={live} why={null} size="large" />
+                </span>
+              )}
+              <Menu
+                items={[
+                  ...(pre ? [{ label: "Pre-appraisal deck", sub: ma.preSend?.state === "sent" ? "Sent to the landlord" : "What the landlord is sent before the visit", onClick: () => openUrl(pre.url) }] : []),
+                  ...(deck
+                    ? [
+                        { label: "View presentation", onClick: () => openUrl(deck.url) },
+                        { label: "Download PDF", sub: "To have with you at the appointment", onClick: () => openUrl(`${deck.url.split("?")[0]}/print`) },
+                      ]
+                    : []),
+                  ...(post ? [{ label: "Post-appraisal deck", onClick: () => openUrl(post.url) }] : []),
+                  ...(pre || deck || post ? (["rule"] as const) : []),
+                  { label: "Photographs", onClick: () => goTab("photos") },
+                  { label: unread ? `Messages (${unread} new)` : "Messages", onClick: () => goTab("messages") },
+                  { label: "Documents", onClick: () => goTab("documents") },
+                  { label: "Property file", onClick: () => goTab("file") },
+                ]}
+              />
+              <span className="nl-appr-guide">
+                <GuideButton id="appraisals" />
+              </span>
+            </div>
+          </div>
+
+          {/* The one box that changes with the stage, beside At a glance. */}
+          <div className="nl-appr-hero">
+            <div className="nl-appr-next">
+              <NextUp
+                look="new"
+                ma={ma}
+                decks={decks}
+                onSaved={saved}
+                onDecksChanged={() => {
+                  loadDecks();
+                  reload();
+                }}
+                onAttach={openFile}
+              />
+            </div>
+            <section className="nl-facts">
+              <div className="nl-facts-head">
+                <h3 className="nl-block-title">At a Glance</h3>
+              </div>
+              <ul className="nl-appr-glance">
+                {glanceFor(ma, live, decks === undefined ? undefined : { deck: Boolean(deck), post: post ? { opens: post.opens } : null }, file).map((g, i) => (
+                  <li key={i}>
+                    <b>{g.title}</b>
+                    {g.sub && <span>{g.sub}</span>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+
+          {/* Where it's up to: a step each, nothing written under them. */}
+          <div className="nl-progress nl-appr-progress" style={{ "--nl-steps": spine.length } as React.CSSProperties} aria-label={`Stage ${at + 1} of ${spine.length}`}>
+            {spine.map((s, i) => (
+              <div key={s.id} className={`nl-step${i < at || (live === "won" && i === at) ? " done" : s.id === live ? " now" : ""}`}>
+                <i />
+                <span>{s.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <div id="nl-appr-tabs" className="scroll-mt-6">
+            <Tabs
+              label="This appraisal"
+              className="nl-ltabs"
+              value={nlTab}
+              onChange={(t) => goTab(t)}
+              items={[
+                { id: "overview" as NlTab, label: "Overview" },
+                { id: "messages" as NlTab, label: "Messages", count: unread || null, dot: unread > 0 },
+                { id: "photos" as NlTab, label: "Photographs" },
+                { id: "documents" as NlTab, label: "Documents" },
+                { id: "file" as NlTab, label: "Property file", count: file?.held || null },
+                { id: "presentation" as NlTab, label: "Presentation", count: decks ? decks.length || null : null },
+              ]}
+            />
+          </div>
+
+          <div key={nlTab} className="nl-pane">
+            {nlTab === "overview" && (
+              <div className="nl-bento">
+                {/* The stages opened out, with the small ticks read from the record. */}
+                <section className="nl-cell span2">
+                  <div className="nl-cell-head">
+                    <h3 className="nl-block-title">Where It&apos;s Up To</h3>
+                    <span className="nl-meta">Stage {at + 1} of {spine.length}</span>
+                  </div>
+                  <ol className="nl-appr-stages">
+                    {spine.map((s, i) => {
+                      const here = s.id === live;
+                      const done = i < at || (live === "won" && here);
+                      const ticks = (ma.ticks ?? []).filter((t) => t.stage === s.id);
+                      const ticked = ticks.filter((t) => t.done).length;
+                      const isOpen = openIdx === i;
+                      return (
+                        <li key={s.id} className={`nl-appr-stage ${done ? "is-done" : here ? "is-now" : "is-next"}${isOpen ? " is-open" : ""}`}>
+                          <button type="button" className="nl-appr-stage-head" aria-expanded={isOpen} onClick={() => setOpenStage(isOpen ? -1 : i)}>
+                            <span className="nl-appr-dot">{done ? <Ico name="check" size={12} /> : i + 1}</span>
+                            <span className="nl-appr-stage-name">{s.label}</span>
+                            <span className="nl-meta">{done ? "Done" : here ? (ticks.length ? `${ticked} of ${ticks.length}` : "Now") : ticks.length && ticked ? `${ticked} of ${ticks.length}` : "Not yet"}</span>
+                            <svg className="nl-appr-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </button>
+                          <div className={`nl-collapse${isOpen ? " is-open" : ""}`}>
+                            <div>
+                              <div className="nl-appr-stage-body">
+                                {here && <p className="nl-meta">{s.blurb.replace(/\s*—\s*/g, " - ")}</p>}
+                                {ticks.length > 0 ? (
+                                  <ul className="nl-appr-ticks">
+                                    {ticks.map((t) => (
+                                      <li key={t.id} title={t.at ? new Date(t.at).toLocaleString("en-GB") : undefined}>
+                                        <span className={`nl-appr-check${t.done ? " on" : ""}`} aria-label={t.done ? "Done" : "Not done"}>
+                                          {t.done && <Ico name="check" size={11} />}
+                                        </span>
+                                        <span className={t.done ? "" : "nl-appr-tick-todo"}>{t.label}</span>
+                                        {t.detail ? <span className="nl-meta">{t.detail}</span> : t.done && t.at ? <span className="nl-mono">{day(t.at)}</span> : null}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  !here && <p className="nl-meta">Nothing to tick at this stage.</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <p className="nl-appr-foot">
+                    <Ico name="arrow" size={14} />
+                    Once terms are signed this stops being an appraisal and becomes a listing.
+                  </p>
+                </section>
+
+                {/* The landlord, changeable here and back to the record. */}
+                <section className="nl-cell">
+                  <h3 className="nl-block-title">The Landlord</h3>
+                  <ContactBlock
+                    className="pb-2"
+                    role="landlord"
+                    person={{ name: ma.landlord, email: ma.landlordEmail ?? null, phone: ma.landlordMobile ?? null }}
+                    personRef={ma.landlordRef ?? null}
+                    home={{ propertyAddress: homeLine }}
+                    onSaved={() => reload()}
+                    onWhatsAppSent={
+                      ma.leadId
+                        ? async (message) => {
+                            /* The appraisal came from a lead, and the lead keeps the log. */
+                            const settle = saves.reporter.begin("WhatsApp log");
+                            let problem: string | null;
+                            try {
+                              const r = await fetch(`/api/leads/${encodeURIComponent(ma.leadId as string)}/touches`, {
+                                method: "POST",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({ kind: "whatsapp", outcome: "sent", body: message }),
+                              });
+                              const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+                              problem = j?.ok ? null : (j?.error ?? "That didn't save.");
+                            } catch {
+                              problem = "That didn't save - the connection dropped.";
+                            }
+                            settle(problem ? { ok: false, problem } : { ok: true });
+                            return problem;
+                          }
+                        : undefined
+                    }
+                  />
+                  <HomeLandlords
+                    className="mb-2"
+                    heading={null}
+                    homeKey={ma.rexPropertyId ?? `appraisal:${ma.id}`}
+                    address={homeLine}
+                    main={[]}
+                    requireOne={false}
+                  />
+                  <LandlordOnFile
+                    className="pb-2"
+                    email={ma.landlordEmail ?? null}
+                    name={ma.landlord}
+                    propertyAddress={[ma.address, ma.postcode].filter(Boolean).join(", ")}
+                    appraisalId={ma.id}
+                  />
+                  <div className="nl-appr-picker mt-auto">
+                    <RexPropertyPicker appraisal={ma} onSaved={saved} />
+                  </div>
+                </section>
+
+                {/* The appointment */}
+                <section className="nl-cell">
+                  <h3 className="nl-block-title">The Appointment</h3>
+                  {when ? (
+                    <>
+                      <p className="nl-appr-when">{longDate(ma.appointmentAt!)}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {past ? <Badge tone="good">Visit done</Badge> : <Badge tone="info">Coming up</Badge>}
+                        <span className="nl-meta">{ma.agent ? `with ${ma.agent}` : "In the diary"}</span>
+                      </div>
+                      {past && (
+                        <p className="nl-meta">
+                          {missingFigure ? "No figure recorded yet - the post-appraisal deck waits on it." : "The figure is recorded, so the post-appraisal deck can go."}
+                        </p>
+                      )}
+                    </>
+                  ) : ma.cancelledAt ? (
+                    <>
+                      {ma.cancelledWas && <p className="nl-appr-when is-struck">{longDate(ma.cancelledWas)}</p>}
+                      <p className="nl-meta">
+                        Cancelled{ma.cancelledBy ? ` by ${ma.cancelledBy}` : ""} on{" "}
+                        {new Date(ma.cancelledAt).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}. Nothing is in the diary for it.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="nl-meta">
+                      No date on this appraisal. It was booked without one - worth chasing, because the pre-appraisal deck is scheduled from the appointment.
+                    </p>
+                  )}
+                  {(ma.cancelledAt || (when && !past)) && (
+                    <div className="flex flex-wrap gap-2">
+                      <AppraisalChange
+                        appraisalId={ma.id}
+                        appraisal={ma}
+                        buttonClass="nl-btn nl-btn--secondary nl-btn--sm"
+                        noteClass="w-full nl-meta"
+                        onChanged={(next) => {
+                          if (next) saved(next as MarketAppraisal);
+                          else reload();
+                        }}
+                      />
+                    </div>
+                  )}
+                  {/* What the landlord has been sent, as the record has it. */}
+                  {when && (
+                    <div className="nl-appr-confirm">
+                      <ConfirmLine appraisalId={ma.id} appointmentAt={ma.appointmentAt!} />
+                    </div>
+                  )}
+                </section>
+
+                {/* The property file, counted; the full panel is its own tab. */}
+                <section className="nl-cell">
+                  <h3 className="nl-block-title">Property File</h3>
+                  <p className="nl-meta">
+                    {file === undefined
+                      ? "Reading the property file…"
+                      : file === null
+                        ? "We couldn't read the property file just now. Open it to try again."
+                        : file.held === 0 && file.outstanding === 0
+                          ? "Nothing on file yet. Certificates the landlord hands over at the visit are filed here, against the address."
+                          : `${file.held} on file${file.outstanding ? `, ${file.outstanding} still to come` : ""}. Filed against the address, so they are on the home the day it is instructed.`}
+                  </p>
+                  <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" onClick={() => goTab("file")}>
+                    Open the property file
+                  </button>
+                </section>
+
+                {/* What the landlord will be asked for, beyond the five (Susan, 19 Sep 2026). */}
+                <section className="nl-cell nl-appr-reqdocs">
+                  <RequiredDocs appraisalId={ma.id} address={ma.address} postcode={ma.postcode} propertyType={propertyType} />
+                </section>
+              </div>
+            )}
+
+            {nlTab === "messages" && (
+              <div id="messages" className="scroll-mt-6">
+                <AppraisalMessages appraisalId={ma.id} landlord={ma.landlord} onRead={markRead} />
+              </div>
+            )}
+
+            {nlTab === "photos" && (
+              <div id="photos" className="scroll-mt-6">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <p className="nl-meta min-w-0 flex-1 basis-[260px]">The take-on visit is written up in its own window. What came of it, the photographs and the advert, sits here.</p>
+                  <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setWizard(true)}>
+                    <Ico name="camera" size={15} /> Write up the take-on visit
+                  </button>
+                </div>
+                <PhotosPanel ma={ma} />
+              </div>
+            )}
+
+            {nlTab === "documents" && (
+              <section id="documents" className="scroll-mt-6">
+                <FileDocuments
+                  address={ma.postcode && !ma.address.toUpperCase().includes(ma.postcode.toUpperCase()) ? `${ma.address}, ${ma.postcode}` : ma.address}
+                  propertyId={ma.rexPropertyId ?? null}
+                  from={{ kind: "appraisal", id: ma.id }}
+                  sides={["landlord", "home"]}
+                />
+              </section>
+            )}
+
+            {nlTab === "file" && (
+              <div id="property-file" className="scroll-mt-6 nl-appr-file">
+                <PropertyFile
+                  propertyId={ma.rexPropertyId}
+                  address={ma.address}
+                  screen="the market appraisal"
+                  onLink={async (rexPropertyId) => {
+                    await fetch("/api/appraisals", {
+                      method: "PATCH",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ id: ma.id, rexPropertyId }),
+                    }).catch(() => null);
+                    reload();
+                  }}
+                />
+              </div>
+            )}
+
+            {nlTab === "presentation" && (
+              <ul className="nl-appr-decks">
+                {decks === undefined ? (
+                  <li><span className="nl-meta">Reading the decks…</span></li>
+                ) : decks === null ? (
+                  <li><span className="nl-meta">We couldn&apos;t read the decks just now. Refresh in a minute.</span></li>
+                ) : (
+                  <>
+                    <li className={pre ? "" : "is-muted"}>
+                      <span className={`nl-appr-deck-ic${pre ? " ok" : ""}`}><Ico name="mail" size={14} /></span>
+                      <span className="nl-appr-deck-main">
+                        <span className="nl-strong">Pre-appraisal deck</span>
+                        <span className="nl-meta">
+                          {pre
+                            ? `Made ${day(pre.createdAt)} · ${ma.preSend?.state === "sent" ? `sent${ma.preSend.at ? ` ${day(ma.preSend.at)}` : ""}` : ma.preSend?.state === "queued" ? "waiting to go" : "not sent"} · ${opened(pre.opens)}`
+                            : "Made from the file once the visit is booked"}
+                        </span>
+                      </span>
+                      <span className="nl-appr-deck-acts">
+                        {pre && !past && !ma.cancelledAt && ma.preSend?.state !== "sent" && (
+                          <WelcomeVideoRecorder compact token={pre.token} address={ma.address} className="nl-btn nl-btn--secondary nl-btn--sm" />
+                        )}
+                        {pre && (
+                          <a href={pre.url} target="_blank" rel="noreferrer" className="nl-btn nl-btn--quiet nl-btn--sm">
+                            View <Ico name="arrow" size={14} />
+                          </a>
+                        )}
+                      </span>
+                    </li>
+                    <li className={deck ? "" : "is-muted"}>
+                      <span className={`nl-appr-deck-ic${deck ? " ok" : ""}`}><Ico name="image" size={14} /></span>
+                      <span className="nl-appr-deck-main">
+                        <span className="nl-strong">Appraisal presentation</span>
+                        <span className="nl-meta">{deck ? `The deck you take on the day · built ${day(deck.createdAt)}` : past ? "Not built, and the visit has been" : "Not built yet"}</span>
+                      </span>
+                      <span className="nl-appr-deck-acts">
+                        {deck && (
+                          <a href={deck.url} target="_blank" rel="noreferrer" className="nl-btn nl-btn--quiet nl-btn--sm">
+                            View <Ico name="arrow" size={14} />
+                          </a>
+                        )}
+                        {deck && (
+                          <a href={`${deck.url.split("?")[0]}/print`} target="_blank" rel="noreferrer" className="nl-btn nl-btn--secondary nl-btn--sm">
+                            <Ico name="download" size={14} /> Download PDF
+                          </a>
+                        )}
+                        {!past && (
+                          <Link href={`/market-appraisals/${ma.id}/build`} className="nl-btn nl-btn--secondary nl-btn--sm">
+                            <Ico name="pen" size={14} /> {deck ? "Update" : "Build presentation"}
+                          </Link>
+                        )}
+                      </span>
+                    </li>
+                    <li className={post ? "" : "is-muted"}>
+                      <span className={`nl-appr-deck-ic${post ? " ok" : ""}`}><Ico name="coin" size={14} /></span>
+                      <span className="nl-appr-deck-main">
+                        <span className="nl-strong">Post-appraisal deck</span>
+                        <span className="nl-meta">{post ? `Built ${day(post.createdAt)} · ${opened(post.opens)}` : ma.valuation == null ? "Built once the figure is in" : "Not built yet. The figure is in, so it can be built from Next up."}</span>
+                      </span>
+                      <span className="nl-appr-deck-acts">
+                        {post && ma.valuation != null && (
+                          <ChangeFees
+                            appraisalId={ma.id}
+                            className="nl-btn nl-btn--secondary nl-btn--sm"
+                            onSaved={(next) => {
+                              saved(next);
+                              loadDecks();
+                            }}
+                          >
+                            <Ico name="pen" size={14} /> Change the fees
+                          </ChangeFees>
+                        )}
+                        {post && (
+                          <a href={post.url} target="_blank" rel="noreferrer" className="nl-btn nl-btn--quiet nl-btn--sm">
+                            View <Ico name="arrow" size={14} />
+                          </a>
+                        )}
+                      </span>
+                    </li>
+                  </>
+                )}
+              </ul>
+            )}
+          </div>
+
+          {wizard && <TakeOnWizard ma={ma} onClose={() => setWizard(false)} onSaved={reload} />}
+        </div>
+      </SaveScopeProvider>
+    );
+  }
 
   return (
     <SaveScopeProvider scope={saves}>
@@ -715,6 +1233,8 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     </SaveScopeProvider>
   );
 }
+
+type NlTab = "overview" | "messages" | "photos" | "documents" | "file" | "presentation";
 
 /* ── small pieces ─────────────────────────────────────────────────────── */
 

@@ -29,7 +29,7 @@ type Deal = PreTenancyDeal;
 /* A tenant swap in Propoly, however it was made: some tenants sent for
    referencing and some not - the newcomer and the people staying (James,
    13 Oct 2026: "44 South Road tenant (tenant swap)"). */
-const isSwapDeal = (d: Deal): boolean => {
+export const isSwapDeal = (d: Deal): boolean => {
   const refs = (d.app.propoly as { tenantRefs?: Array<{ required: boolean }> } | null | undefined)?.tenantRefs ?? [];
   return refs.some((r) => r.required) && refs.some((r) => !r.required);
 };
@@ -39,10 +39,10 @@ const isSwapDeal = (d: Deal): boolean => {
  *  waiting to be handed over, and each opens its file to push. */
 export type WaitingLet = { id: string; property: string; locality: string; image: string | null; tenant: string; agent: string | null; moveIn: string | null; swap: boolean };
 
-const GREEN_PILL = "bg-[#f1f4ec] text-[#56634a]";
-const RED_PILL = "bg-[#fdefec] text-[#9d4340]";
-const AMBER_PILL = "bg-amber-50 text-amber-700";
-const QUIET_PILL = "bg-page text-muted";
+export const GREEN_PILL = "bg-[#f1f4ec] text-[#56634a]";
+export const RED_PILL = "bg-[#fdefec] text-[#9d4340]";
+export const AMBER_PILL = "bg-amber-50 text-amber-700";
+export const QUIET_PILL = "bg-page text-muted";
 
 /* One grey for every column (James, 11 Oct 2026: "make the backgrounds the
    same grey ... a little bit more uniform"), white cards on it, and the stage
@@ -71,28 +71,28 @@ export const STAGE_DOODLE: Record<string, string> = {
 
 const stageLabel = (key: string) => PORTAL_STAGE_BY_KEY[key]?.label ?? key.replace(/_/g, " ");
 const londonDay = (at: Date) => at.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
-const isOverdue = (d: Deal) => d.statusKey !== "cancelled" && d.app.startDate != null && d.app.startDate < londonDay(new Date());
-const daysSince = (iso?: string | null) => {
+export const isOverdue = (d: Deal) => d.statusKey !== "cancelled" && d.app.startDate != null && d.app.startDate < londonDay(new Date());
+export const daysSince = (iso?: string | null) => {
   if (!iso) return Infinity;
   const t = Date.parse(iso);
   return Number.isNaN(t) ? Infinity : (Date.now() - t) / 86_400_000;
 };
-const fmtDate = (iso: string | null | undefined, year = false) => {
+export const fmtDate = (iso: string | null | undefined, year = false) => {
   if (!iso) return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}) });
 };
-const agoLabel = (iso: string | null) => {
+export const agoLabel = (iso: string | null) => {
   const days = daysSince(iso);
   if (!Number.isFinite(days)) return "";
   if (days < 1) return "Today";
   const n = Math.floor(days);
   return n === 1 ? "1 day ago" : `${n} days ago`;
 };
-const lastActivity = (d: Deal) =>
+export const lastActivity = (d: Deal) =>
   [d.portal.lastNote?.at ?? null, d.portal.override?.at ?? null, d.app.dateReceived].filter((x): x is string => !!x).sort().at(-1) ?? null;
 /* Kirstie's board hides deals that should have finished before 2026 (stale records). */
-const isStale = (d: Deal) => {
+export const isStale = (d: Deal) => {
   const ref = d.app.startDate ?? d.app.dateReceived;
   return ref != null && ref < "2026-01-01";
 };

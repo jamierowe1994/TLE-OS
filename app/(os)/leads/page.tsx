@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BoardSkeleton } from "@/components/Skeleton";
 import dynamic from "next/dynamic";
 import { whenIdle } from "@/lib/when-idle";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PressButton } from "@/components/Bits";
 import AddedHere from "@/components/AddedHere";
 import { contactToLead, type ContactRow } from "@/lib/contacts-as-leads";
@@ -37,6 +37,9 @@ import { doneAgo, type DonePassport } from "@/lib/passports-done-shape";
 import { PASSPORT_LABEL, type PassportState, type PassportStateRow } from "@/lib/passport-states-shape";
 import type { LeadViewingRow } from "@/lib/lead-viewings-shape";
 import { SAGE_INK, SAGE_WASH } from "@/components/ListingTags";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Ico, Mast, Tabs, type Tone } from "@/components/new-look/Parts";
+import { LIco, Person, TagsMenu } from "@/components/new-look/leads/LeadBits";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -206,6 +209,15 @@ export default function Leads() {
   }, []);
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState(false);
+  /* ── The new look (lib/new-look "leads", 23 Oct 2026) ──────────────────
+     Its own few bits of state: which row is open in place, which tab the
+     record should open on, and rows or the old table. Everything else -
+     the reads, the filters, the paging - is the board's own, below. */
+  const look = useNewLook("leads");
+  const router = useRouter();
+  const [nlOpenRow, setNlOpenRow] = useState<string | null>(null);
+  const [nlStartTab, setNlStartTab] = useState<"notes" | null>(null);
+  const [nlTable, saveNlTable] = usePref<boolean>("leads-nl-table-v1", false);
   /** Bumped when a contact is saved, so the strip above the table re-reads. */
   const [addedTick, setAddedTick] = useState(0);
   // Stacks of 25 — enough by default, more when they want a long scroll.
@@ -781,6 +793,366 @@ export default function Leads() {
 
   const pages = Math.max(1, Math.ceil(book.length / perPage));
   const rows = book.slice(page * perPage, page * perPage + perPage);
+
+  /* ── THE NEW LOOK (lib/new-look "leads", 23 Oct 2026) ───────────────────
+     The same book, filters, views and paging as the board below, drawn the
+     way the design draws Leads: a type-only header, one filter row, All /
+     Tenants / Landlords as text tabs, and a row per person that opens in
+     place to say what they asked and what to do next. Every action the old
+     board has is here; the old board stays underneath until the switch has
+     bedded in. */
+  if (look === null) {
+    return (
+      <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted">
+        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+        Opening Leads…
+      </p>
+    );
+  }
+  if (look) {
+    const sideOf = (id: "all" | "tenant" | "landlord") => (id === "all" ? null : id);
+    /* Counted the way the list below is: completed leads only when Groups or "Show completed" has them in. */
+    const keepDone = view === "groups" || showDone;
+    const working = (s: "tenant" | "landlord" | null) => ALL.filter((l) => (!s || leadSide(l) === s) && (keepDone || !isCompleted(l))).length;
+    const sideTabs = [
+      { id: "all" as const, label: "All", count: source.loading && !ALL.length ? null : working(null) },
+      { id: "tenant" as const, label: "Tenants", count: source.loading && !ALL.length ? null : working("tenant") },
+      { id: "landlord" as const, label: "Landlords", count: source.loading && !ALL.length ? null : working("landlord") },
+    ];
+    const pickSide = (id: "all" | "tenant" | "landlord") => {
+      const s = sideOf(id);
+      setNlOpenRow(null);
+      router.push(s ? `/leads?side=${s}` : "/leads");
+    };
+    const shape: "rows" | "table" | "groups" = view === "groups" ? "groups" : nlTable ? "table" : "rows";
+    const pickShape = (to: "rows" | "table" | "groups") => {
+      if (to === "groups") return pickView("groups");
+      if (view === "groups") pickView("list");
+      saveNlTable(to === "table");
+    };
+    const anySet = Boolean(fSource || fAgent || fStage || fTags.length || fPassport || q.trim());
+    const clearAll = () => { setFSource(null); setFAgent(null); setFStage(null); setFTags([]); setFPassport(null); setQ(""); };
+    const stageTone = (l: Lead): Tone =>
+      l.spineLabel ? (l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent") : STAGE_TONE[l.stage];
+    const homeOf = (l: Lead) => l.address || (l.preferred && l.preferred !== "—" ? l.preferred : "") || (l.area && l.area !== "—" ? l.area : "");
+    const real = (v?: string | null) => (v && v.trim() && v.trim() !== "—" ? v.trim() : "");
+    const passportWord = (l: Lead) => {
+      const p = passportStateOf(l);
+      if (!p) return null;
+      if (!passportRows) {
+        return passportRowsFailed ? (
+          <span className="nl-meta" title="The passports didn't load. Try again in a minute.">Passport didn&apos;t load</span>
+        ) : (
+          <span className="nl-leads-spin" aria-label="Loading the passport" />
+        );
+      }
+      const when = p.at ? doneAgo(p.at) : "";
+      if (p.state === "none") return <Badge tone="neutral" plain>Passport not sent</Badge>;
+      return (
+        <Badge tone={p.state === "done" ? "good" : p.state === "started" ? "info" : "accent"} title={when ? `${PASSPORT_LABEL[p.state]} ${when}` : undefined}>
+          {p.state === "done" ? "Passport done" : p.state === "started" ? "Passport started" : "Passport sent"}
+          {when ? ` · ${when}` : ""}
+        </Badge>
+      );
+    };
+    const viewingWord = (l: Lead) => {
+      if (leadSide(l) !== "tenant") return null;
+      if (!viewingRows) {
+        return viewingRowsFailed ? <span className="nl-meta">Viewings didn&apos;t load</span> : <span className="nl-leads-spin" aria-label="Loading the viewings" />;
+      }
+      const list = viewingsOf(l);
+      if (!list.length) return null;
+      const now = Date.now();
+      const ahead = list.filter((v) => new Date(v.startsAt).getTime() >= now - 30 * 60_000).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+      const been = list.filter((v) => !ahead.includes(v)).sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+      const v = ahead[0] ?? been[0];
+      const at = new Date(v.startsAt);
+      const day = at.toLocaleDateString("en-GB", { timeZone: LONDON, weekday: "short", day: "numeric", month: "short" });
+      const time = at.toLocaleTimeString("en-GB", { timeZone: LONDON, hour: "2-digit", minute: "2-digit" });
+      return ahead[0] ? (
+        <Badge tone="good" title={`Booked to view ${v.address || "the property"}${v.agent ? ` with ${v.agent}` : ""}`}>
+          Viewing {day}, {time}
+          {ahead.length > 1 ? ` +${ahead.length - 1}` : ""}
+        </Badge>
+      ) : (
+        <Badge tone="neutral" title={`Viewed ${v.address || "the property"}`}>Viewed {day}</Badge>
+      );
+    };
+    /** The record opened from a row, on the tab asked for, or straight into the booker. */
+    const openLead = (l: Lead, how: "open" | "book" | "note" = "open") => {
+      if (how === "book") {
+        const u = new URL(window.location.href);
+        u.searchParams.set("book", leadSide(l) === "landlord" ? "appraisal" : "viewing");
+        window.history.replaceState(window.history.state, "", u.toString());
+      }
+      setNlStartTab(how === "note" ? "notes" : null);
+      setOpenId(l.id);
+    };
+    const pager = (
+      <div className="nl-leads-pager">
+        <p className="nl-meta flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span>
+            Showing {book.length ? page * perPage + 1 : 0} to {Math.min((page + 1) * perPage, book.length)} of {book.length.toLocaleString("en-GB")} leads
+          </span>
+          {doneCount > 0 && !fStage && !fPassport && !q.trim() && (
+            <button type="button" className="nl-link" aria-pressed={showDone} onClick={() => setShowDone((v) => !v)}>
+              {showDone ? `Hide ${doneCount.toLocaleString("en-GB")} completed` : `Show ${doneCount.toLocaleString("en-GB")} completed`}
+            </button>
+          )}
+          <span className="nl-fsel nl-leads-perpage">
+            <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} aria-label="Leads per page">
+              {[25, 50, 75, 100].map((n) => (
+                <option key={n} value={n}>{n} per page</option>
+              ))}
+            </select>
+          </span>
+        </p>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <button type="button" className="nl-leads-pg" aria-label="Previous page" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+            <span className="inline-block rotate-180"><LIco name="chevron" size={14} /></span>
+          </button>
+          {pageWindow(page, pages).map((i, at) =>
+            i === "gap" ? (
+              <span key={`gap-${at}`} aria-hidden className="nl-meta px-1">…</span>
+            ) : (
+              <button key={i} type="button" className={`nl-leads-pg${i === page ? " is-on" : ""}`} aria-current={i === page ? "page" : undefined} onClick={() => setPage(i)}>
+                {i + 1}
+              </button>
+            )
+          )}
+          <button type="button" className="nl-leads-pg" aria-label="Next page" onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}>
+            <LIco name="chevron" size={14} />
+          </button>
+        </div>
+      </div>
+    );
+
+    return (
+      <div data-look="new" className="nl-page nl-rise nl-leads">
+        <Mast
+          title={side === "tenant" ? "Tenant Leads" : side === "landlord" ? "Landlord Leads" : "Leads"}
+          blurb={
+            source.loading
+              ? "Fetching today's enquiries…"
+              : source.live
+                ? `${side === "tenant" ? "Everyone who might rent from us" : side === "landlord" ? "Everyone who might let with us" : "Everyone who might rent from us, or let with us"}, live from the portals, your ads and the website${source.total ? ` - ${source.total.toLocaleString("en-GB")} enquiries on record` : ""}. Open one to see what's next.`
+                : (source.reason ?? "New enquiries from the portals, your ads and the website.")
+          }
+          actions={
+            <>
+              <button type="button" data-steve="leads.new" onClick={() => setCreating(true)} className="nl-btn nl-btn--primary">
+                <Ico name="plus" /> Add lead
+              </button>
+              {side === "tenant" && (
+                <button type="button" onClick={() => pickPassports(!passportsOn)} aria-pressed={passportsOn} className={`nl-btn nl-btn--secondary${passportsOn ? " nl-leads-on" : ""}`}>
+                  <LIco name="user" size={15} />
+                  Passports Done
+                  {donePassports && <span className="nl-count">{donePassports.length.toLocaleString("en-GB")}</span>}
+                </button>
+              )}
+              <button type="button" data-steve="leads.archived" onClick={() => setArchiveOpen(true)} className="nl-btn nl-btn--quiet">
+                Archived
+              </button>
+            </>
+          }
+        />
+
+        <div className="nl-leads-added">
+          <AddedHere refreshKey={addedTick} />
+        </div>
+        <ArchivedLeads open={archiveOpen} onClose={() => setArchiveOpen(false)} />
+
+        <div className="nl-leads-filters">
+          <div className="nl-filters">
+            <label className="nl-fsearch">
+              <Ico name="search" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search names, phones and addresses" aria-label="Search leads" />
+            </label>
+            <span className={`nl-fsel${fSource ? " is-set" : ""}`}>
+              <select aria-label="Source" value={fSource ?? ""} onChange={(e) => setFSource(e.target.value || null)}>
+                <option value="">Any source</option>
+                {sources.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </span>
+            <span className={`nl-fsel${fAgent ? " is-set" : ""}`}>
+              <select aria-label="Agent" value={fAgent ?? ""} onChange={(e) => setFAgent(e.target.value || null)}>
+                <option value="">Any agent</option>
+                {agents.map((o) => <option key={o} value={o}>{o === "Unassigned" ? "Not assigned" : o}</option>)}
+              </select>
+            </span>
+            <span className={`nl-fsel${fStage ? " is-set" : ""}`}>
+              <select aria-label="Stage" value={fStage ?? ""} onChange={(e) => setFStage(e.target.value || null)}>
+                <option value="">Any stage</option>
+                {stages.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </span>
+            {passportsWanted && (
+              <span className={`nl-fsel${fPassport ? " is-set" : ""}`}>
+                <select aria-label="Passport" value={fPassport ?? ""} onChange={(e) => setFPassport((e.target.value || null) as PassportState | "none" | null)}>
+                  <option value="">Any passport</option>
+                  {PASSPORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{`Passport ${o.label.toLowerCase()}`}</option>)}
+                </select>
+              </span>
+            )}
+            <TagsMenu tags={tagCounts} value={fTags} onChange={setFTags} />
+            {manyAgents && (unassigned > 0 || fAgent === "Unassigned") && (
+              <button type="button" className="nl-fmore" aria-pressed={fAgent === "Unassigned"} onClick={() => setFAgent(fAgent === "Unassigned" ? null : "Unassigned")}>
+                <LIco name="user" size={14} />
+                {fAgent === "Unassigned" ? "Showing not assigned" : `${unassigned.toLocaleString("en-GB")} not assigned`}
+              </button>
+            )}
+            {anySet && (
+              <button type="button" className="nl-fmore" onClick={clearAll}>
+                Clear
+              </button>
+            )}
+            <span className="nl-fcount">
+              {source.loading && !ALL.length ? "" : showPassports ? "" : `${book.length.toLocaleString("en-GB")} ${book.length === 1 ? "lead" : "leads"}`}
+            </span>
+          </div>
+
+          <div className="nl-leads-tabline">
+            <Tabs label="Who the leads are" className="min-w-0 flex-1" value={side === "tenant" || side === "landlord" ? side : "all"} onChange={pickSide} items={sideTabs} />
+            {!showPassports && (
+              <span className="nl-toggle" role="group" aria-label="Show as">
+                <button type="button" className={shape === "rows" ? "is-on" : ""} aria-pressed={shape === "rows"} onClick={() => pickShape("rows")}>Rows</button>
+                {side && <button type="button" className={shape === "groups" ? "is-on" : ""} aria-pressed={shape === "groups"} onClick={() => pickShape("groups")}>Groups</button>}
+                <button type="button" className={shape === "table" ? "is-on" : ""} aria-pressed={shape === "table"} onClick={() => pickShape("table")}>Table</button>
+              </span>
+            )}
+          </div>
+          {scanNote && <p className="nl-meta mt-3">{scanNote}</p>}
+        </div>
+
+        {source.failed && ALL.length > 0 && (
+          <p className="nl-leads-warn" role="alert">
+            Your enquiries didn&apos;t load, so only the people added here by hand are showing. Try again in a minute.
+          </p>
+        )}
+
+        <div className="mt-6">
+          {!source.live && ALL.length === 0 && source.loading ? (
+            <BoardSkeleton label="Fetching your leads…" count={7} />
+          ) : !source.live && ALL.length === 0 ? (
+            <div className="py-10" role={source.failed ? "alert" : "status"}>
+              <p className="nl-block-title">{source.failed ? "Your leads didn't load" : "No leads to show yet"}</p>
+              <p className="nl-meta mt-1.5 max-w-md">{source.reason}</p>
+              {source.failed && (
+                <button type="button" onClick={() => window.location.reload()} className="nl-btn nl-btn--secondary nl-btn--sm mt-4">
+                  Try again
+                </button>
+              )}
+            </div>
+          ) : showPassports ? (
+            <div className="nl-holder">
+              <PassportsDoneList
+                passports={donePassports}
+                error={passportsError}
+                leads={ALL.filter((l) => leadSide(l) === "tenant")}
+                activeId={openId}
+                onOpen={(id) => setOpenId(id === openId ? null : id)}
+                q={q}
+                manyAgents={manyAgents}
+              />
+            </div>
+          ) : shape === "groups" ? (
+            <div className="nl-holder">
+              <div className="flex justify-end">
+                <GroupsCustomiser value={groupsConfig} onChange={saveGroupsConfig} />
+              </div>
+              <LeadGroups
+                leads={book}
+                activeId={openId}
+                onOpen={(l) => setOpenId(l.id === openId ? null : l.id)}
+                config={groupsConfig}
+                badge={passportsWanted && viewingRows ? (l) => (leadSide(l) === "tenant" ? <ViewingChip list={viewingsOf(l)} /> : null) : undefined}
+              />
+            </div>
+          ) : shape === "table" ? (
+            <>
+              <div className="mb-3 flex justify-end">
+                <ColumnCustomiser cols={cols} tone="pink" />
+              </div>
+              <div className="nl-leads-table">
+                <DataTable cols={cols} rows={rows} activeId={openId} onRowClick={(l) => setOpenId(l.id === openId ? null : l.id)} />
+              </div>
+              {book.length === 0 && <p className="nl-empty">No one matches that. Loosen a filter?</p>}
+              {pager}
+            </>
+          ) : (
+            <>
+              <div className="nl-leads-rows">
+                {rows.map((l) => {
+                  const isOpen = nlOpenRow === l.id;
+                  const said = (l.enquiryMessage && !/^[A-Z][A-Za-z ]{1,30}:/.test(l.enquiryMessage) ? l.enquiryMessage : "") || real(l.notes);
+                  const tenant = leadSide(l) === "tenant";
+                  const pw = passportWord(l);
+                  const vw = viewingWord(l);
+                  const facts = [real(l.email), real(l.phone), real(l.budget) && `Budget ${real(l.budget)}`, tenant && real(l.moveDate) && `Moving ${real(l.moveDate)}`].filter(Boolean) as string[];
+                  const who = `${tenant ? "Tenant" : "Landlord"}${manyAgents ? ` · ${l.agent && l.agent !== "Unassigned" ? `for ${l.agent}` : "not assigned"}` : ""}`;
+                  return (
+                    <div key={l.id} className={`nl-leads-row${isOpen ? " is-open" : ""}${openId === l.id ? " is-current" : ""}`}>
+                      <button type="button" data-steve-row="" className="nl-leads-rowbtn" aria-expanded={isOpen} onClick={() => setNlOpenRow(isOpen ? null : l.id)}>
+                        <Person name={l.name} sub={who} />
+                        <span className="nl-leads-want" title={homeOf(l)}>
+                          {homeOf(l) || "Not about one home"}
+                          {real(l.budget) && <span className="nl-meta"> · {real(l.budget)}</span>}
+                        </span>
+                        <span className="nl-meta nl-leads-src">{l.source}</span>
+                        <span className="nl-leads-stage">
+                          <Badge tone={stageTone(l)}>{l.spineLabel ?? l.stage}</Badge>
+                        </span>
+                        <span className="nl-meta nl-leads-when">{l.received}</span>
+                        <span className="nl-leads-caret"><LIco name="chevron" size={15} /></span>
+                      </button>
+                      <div className={`nl-collapse${isOpen ? " is-open" : ""}`}>
+                        <div>
+                          {isOpen && (
+                            <div className="nl-leads-more">
+                              <p className="nl-leads-said">{said || "No message came with this enquiry."}</p>
+                              {(pw || vw || facts.length > 0) && (
+                                <div className="nl-leads-facts">
+                                  {pw}
+                                  {vw}
+                                  {facts.map((f) => <span key={f} className="nl-meta">{f}</span>)}
+                                </div>
+                              )}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => openLead(l)}>
+                                  Open the lead <LIco name="arrow" size={14} />
+                                </button>
+                                <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => openLead(l, "book")}>
+                                  <LIco name="calendar" size={14} />
+                                  {tenant ? "Book a viewing" : "Book an appraisal"}
+                                </button>
+                                <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => openLead(l, "note")}>
+                                  Add a note
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {book.length === 0 && <p className="nl-empty">No one matches that. Loosen a filter?</p>}
+              {pager}
+            </>
+          )}
+        </div>
+
+        <LeadDrawer lead={open} onClose={() => setOpenId(null)} onStep={step} nlStartTab={nlStartTab} />
+        <NewLeadPanel
+          open={creating}
+          initialKind={side === "tenant" || side === "landlord" ? side : undefined}
+          onClose={() => setCreating(false)}
+          onCreated={() => setAddedTick((n) => n + 1)}
+        />
+      </div>
+    );
+  }
 
   return (
     <>

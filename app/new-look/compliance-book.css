@@ -1,0 +1,163 @@
+/* New look: compliance-book (lib/new-look). Scoped under [data-look="new"]. */
+/* ===========================================================================
+   COMPLIANCE, the book (/compliance). Off the design's Compliance screen:
+   four quiet tiles that filter the book, the next month as a list, the book
+   as a table that folds into cards on a phone. Classes are nl-cbook- so they
+   never meet the listing's Compliance tab (compliance.css, nl-ct-).
+=========================================================================== */
+
+/* the header's How it works: a quiet underlined link, not a pill */
+[data-look="new"] .nl-cbook-how {
+  border: 0; padding: 4px 4px; border-radius: 0; font-size: 14px; color: var(--ink);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong);
+}
+[data-look="new"] .nl-cbook-how:hover { text-decoration-color: currentColor; }
+
+/* ── the four tiles ─────────────────────────────────────────────────────── */
+[data-look="new"] .nl-cbook-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+[data-look="new"] .nl-cbook-tile {
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 0; min-width: 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 24px;
+  transition: border-color .25s, background-color .25s;
+}
+[data-look="new"] .nl-cbook-tile:hover { border-color: var(--line-strong); }
+[data-look="new"] .nl-cbook-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-cbook-tile.is-accent { background: var(--accent-soft); border-color: transparent; }
+[data-look="new"] .nl-cbook-tile.is-sage { background: var(--sage-soft); border-color: transparent; }
+[data-look="new"] .nl-cbook-tile.is-on { border-color: var(--ink); }
+[data-look="new"] .nl-cbook-tile-label { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted); }
+[data-look="new"] .nl-cbook-fig {
+  display: block; margin-top: 10px; font-family: var(--nl-serif); font-weight: 400; font-size: 36px; line-height: 40px;
+  letter-spacing: 0; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+[data-look="new"] .nl-cbook-tile.is-accent .nl-cbook-fig { color: var(--accent-dark); }
+[data-look="new"] .nl-cbook-tile-note { margin-top: 6px; font-size: 12px; line-height: 17px; color: var(--muted); }
+[data-look="new"] .nl-cbook-skel {
+  display: block; margin: 12px 0 2px; height: 36px; width: 46%; border-radius: 8px;
+  background: linear-gradient(90deg, var(--box), var(--panel), var(--box)); background-size: 200% 100%;
+  animation: nl-cbook-shimmer 1.3s linear infinite;
+}
+@keyframes nl-cbook-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* ── cards ──────────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-cbook-card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 28px; min-width: 0; }
+[data-look="new"] .nl-cbook-card + .nl-cbook-card { margin-top: 16px; }
+[data-look="new"] .nl-cbook-h { font-weight: 500; letter-spacing: 0; }
+[data-look="new"] .nl-cbook-fail { padding: 4px 0 26px; }
+[data-look="new"] .nl-cbook-wait { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 26px 0 10px; font-size: 13px; color: var(--muted); }
+[data-look="new"] .nl-cbook-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--ink); animation: nl-cbook-spin .8s linear infinite; }
+@keyframes nl-cbook-spin { to { transform: rotate(360deg); } }
+[data-look="new"] .nl-cbook-bad { padding: 22px 0 6px; font-size: 14px; line-height: 21px; color: var(--accent-dark); }
+
+/* ── the next month ─────────────────────────────────────────────────────── */
+[data-look="new"] .nl-cbook-soon { list-style: none; margin: 14px 0 0; padding: 0; }
+[data-look="new"] .nl-cbook-soon-head,
+[data-look="new"] .nl-cbook-soon-row {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr) minmax(0, 240px) 128px; gap: 16px; align-items: center;
+}
+[data-look="new"] .nl-cbook-soon-head { padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 500; color: var(--muted); }
+[data-look="new"] .nl-cbook-soon-head > span:first-child { text-align: center; }
+[data-look="new"] .nl-cbook-soon > li + li:not(:nth-child(2)) { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-cbook-soon-row {
+  width: 100%; font: inherit; color: inherit; text-align: left; background: none; border: 0; cursor: pointer;
+  padding: 16px 12px; border-radius: 14px; transition: background-color .2s;
+}
+[data-look="new"] .nl-cbook-soon-row:hover { background: var(--panel); }
+[data-look="new"] .nl-cbook-soon-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+[data-look="new"] .nl-cbook-days { text-align: center; }
+[data-look="new"] .nl-cbook-days b { display: block; font-family: var(--nl-serif); font-weight: 400; font-size: 24px; line-height: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-cbook-days.is-over b { color: var(--accent-dark); }
+[data-look="new"] .nl-cbook-days small { display: block; white-space: nowrap; font-size: 11px; font-weight: 500; color: var(--muted); }
+[data-look="new"] .nl-cbook-prop { display: flex; flex-direction: column; min-width: 0; }
+[data-look="new"] .nl-cbook-prop > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-cbook-reqcell { min-width: 0; }
+[data-look="new"] .nl-cbook-req {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 500; line-height: 16px;
+  padding: 5px 11px; border-radius: 12px; border: 1px solid var(--line-strong); color: var(--ink);
+}
+[data-look="new"] .nl-cbook-req svg { flex: none; }
+[data-look="new"] .nl-cbook-req.is-over { border-color: var(--accent); color: var(--accent-dark); }
+[data-look="new"] .nl-cbook-date { font-size: 15px; font-weight: 500; white-space: nowrap; }
+
+/* ── the book ───────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-cbook-bookhead { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
+[data-look="new"] .nl-cbook-chip {
+  display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12px; font-weight: 500;
+  padding: 5px 10px; border-radius: 10px; border: 0; background: var(--accent-soft); color: var(--accent-dark); cursor: pointer;
+}
+[data-look="new"] .nl-cbook-tools { margin-left: auto; flex: 1 1 auto; justify-content: flex-end; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
+[data-look="new"] .nl-cbook-search { flex: 0 1 260px; min-width: 180px; background: var(--page); }
+[data-look="new"] .nl-cbook-excel {
+  border-radius: 12px; border-color: var(--faint); padding: 9px 16px; font-size: 13px; font-weight: 500; color: var(--ink);
+}
+[data-look="new"] .nl-cbook-excel:hover:not(:disabled) { border-color: var(--ink); }
+
+[data-look="new"] .nl-cbook-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+[data-look="new"] .nl-cbook-table th {
+  font-size: 12px; font-weight: 500; color: var(--muted); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+[data-look="new"] .nl-cbook-table td { padding: 16px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 14px; }
+[data-look="new"] .nl-cbook-table tbody tr { cursor: pointer; transition: background-color .2s; }
+[data-look="new"] .nl-cbook-table tbody tr:hover { background: var(--panel); }
+[data-look="new"] .nl-cbook-table tbody tr:last-child td { border-bottom: 0; }
+[data-look="new"] .nl-cbook-tprop { min-width: 0; }
+[data-look="new"] .nl-cbook-open { font: inherit; font-size: 15px; font-weight: 500; color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+[data-look="new"] .nl-cbook-open:hover { text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-cbook-hmo { margin-left: 8px; font-size: 11px; font-weight: 500; color: var(--info); }
+[data-look="new"] .nl-cbook-extras { display: flex; flex-direction: column; gap: 2px; }
+[data-look="new"] .nl-cbook-extras > span { display: flex; gap: 8px; white-space: nowrap; }
+[data-look="new"] .nl-cbook-extras i { font-style: normal; font-size: 12px; color: var(--muted); min-width: 52px; }
+[data-look="new"] .nl-cbook-twho { max-width: 220px; }
+[data-look="new"] .nl-cbook-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* a certificate's state: coloured words, no fill */
+[data-look="new"] .nl-cbook-cert { font-size: 13px; font-weight: 500; white-space: nowrap; }
+[data-look="new"] .nl-cbook-cert.is-ok { color: var(--sage-ink); }
+[data-look="new"] .nl-cbook-cert.is-over { color: var(--accent-dark); }
+[data-look="new"] .nl-cbook-cert.is-soon { color: var(--warning); }
+[data-look="new"] .nl-cbook-cert.is-watch { color: var(--ink); }
+[data-look="new"] .nl-cbook-cert.is-missing { color: var(--accent-dark); text-decoration: underline dashed; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+[data-look="new"] .nl-cbook-cert.is-info { color: var(--info); }
+[data-look="new"] .nl-cbook-cert.is-none { color: var(--muted); font-weight: 400; }
+
+[data-look="new"] .nl-cbook-foot { margin: 20px 0 0; max-width: 80ch; font-size: 13px; line-height: 20px; color: var(--muted); }
+[data-look="new"] .nl-cbook-foot b { font-weight: 600; color: var(--ink); }
+
+/* ── narrower ───────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  [data-look="new"] .nl-cbook-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-look="new"] .nl-cbook-soon-head,
+  [data-look="new"] .nl-cbook-soon-row { grid-template-columns: 76px minmax(0, 1fr) minmax(0, 200px) 112px; }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-cbook-tiles { gap: 10px; }
+  [data-look="new"] .nl-cbook-tile { padding: 16px; border-radius: 18px; }
+  [data-look="new"] .nl-cbook-fig { font-size: 30px; line-height: 34px; margin-top: 6px; }
+  [data-look="new"] .nl-cbook-card { padding: 20px 16px; border-radius: 20px; }
+
+  /* the next month: days beside the home, requirement and date underneath */
+  [data-look="new"] .nl-cbook-soon-head { display: none; }
+  [data-look="new"] .nl-cbook-soon > li + li:not(:nth-child(2)) { border-top: 1px solid var(--line); }
+  [data-look="new"] .nl-cbook-soon-row { grid-template-columns: 56px minmax(0, 1fr); gap: 6px 12px; padding: 14px 4px; }
+  [data-look="new"] .nl-cbook-reqcell, [data-look="new"] .nl-cbook-date { grid-column: 2; }
+  [data-look="new"] .nl-cbook-date { font-size: 13px; color: var(--muted); }
+  [data-look="new"] .nl-cbook-prop > span { white-space: normal; }
+
+  /* the book: a card per home */
+  [data-look="new"] .nl-cbook-tools { margin-left: 0; width: 100%; }
+  [data-look="new"] .nl-cbook-search { flex: 1 1 100%; }
+  [data-look="new"] .nl-cbook-table, [data-look="new"] .nl-cbook-table tbody { display: block; }
+  [data-look="new"] .nl-cbook-table thead { display: none; }
+  [data-look="new"] .nl-cbook-table tbody tr {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; padding: 16px 4px; border-top: 1px solid var(--line);
+  }
+  [data-look="new"] .nl-cbook-table tbody tr:first-child { border-top: 0; }
+  [data-look="new"] .nl-cbook-table td { display: block; padding: 0; border: 0; min-width: 0; }
+  [data-look="new"] .nl-cbook-table td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 2px; }
+  [data-look="new"] .nl-cbook-tprop, [data-look="new"] .nl-cbook-textras, [data-look="new"] .nl-cbook-twho { grid-column: 1 / -1; }
+  [data-look="new"] .nl-cbook-twho { max-width: none; }
+  [data-look="new"] .nl-cbook-textras.is-empty { display: none; }
+  [data-look="new"] .nl-cbook-extras { flex-direction: row; flex-wrap: wrap; gap: 4px 16px; }
+  [data-look="new"] .nl-cbook-extras i { min-width: 0; }
+}

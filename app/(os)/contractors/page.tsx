@@ -15,6 +15,9 @@ import { PayrunTag, day, pounds } from "@/components/maintenance/works-ui";
 import { hhmm, londonDay, londonToday, ukDaysFromToday, worksLate } from "@/lib/london-clock";
 import { searchMatches } from "@/lib/search-match";
 import { usePref } from "@/lib/prefs-store";
+import { useNewLook } from "@/lib/use-new-look";
+import { Mast, Badge, Tabs, Ico } from "@/components/new-look/Parts";
+import { Stat as NlStat, Failed, Loading } from "@/components/new-look/backoffice/Bits";
 
 /**
  * Portfolio > Contractors (James, 19 Oct 2026, after the back-office Q&A).
@@ -187,6 +190,239 @@ export default function ContractorsPage() {
   ];
   const waitCount = attention.length - pastDay.length;
   const upcoming = [...outToday, ...thisWeek];
+  const look = useNewLook("contractors");
+
+  /* ── THE NEW LOOK (lib/new-look "contractors", 23 Oct 2026) ───────────────
+     The same board, tabs, Mine / Everyone, drawers and forms, drawn as the
+     design's Contractors: a type-only head, three figures, text tabs, and the
+     book as a table of who, their work and their paperwork. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening Contractors…</p>;
+  }
+  if (look) {
+    const table = (rows: Row[]) => (
+      <ContractorTable rows={rows} per={per} onOpen={setProfile} onEdit={setEditing} canEdit={canEdit} searching={Boolean(needle)} />
+    );
+    return (
+      <div data-look="new" className="nl-page nl-rise nl-bo">
+        <Mast
+          title="Contractors"
+          blurb="Your contractors, bookings and invoices: who's out today, what's scheduled and what needs attention."
+          actions={
+            <>
+              <button type="button" className="nl-btn nl-btn--primary" onClick={() => { setTab("book"); setEditing({ ...BLANK_CONTRACTOR }); }}><Ico name="plus" /> Add a contractor</button>
+              <button type="button" className="nl-btn nl-btn--secondary" disabled={!data} onClick={() => { setLogged(null); setRaising(true); }}><Ico name="upload" /> Log an invoice</button>
+            </>
+          }
+        />
+
+        {err && <Failed onRetry={load}>{err}</Failed>}
+        {logged !== null && (
+          <div className="nl-bo-done" role="status">
+            <Ico name="check" />
+            <span className="min-w-0 flex-1">Invoice logged. It is on the home as a finished job, it is under To pay, and accounts have been told.</span>
+            {logged && <a href={jobHref(logged)} className="nl-link">Open the job</a>}
+            <button type="button" className="nl-link" onClick={() => setLogged(null)}>Dismiss</button>
+          </div>
+        )}
+
+        <div className="nl-bo-stats is-3">
+          <NlStat
+            label="Needs attention"
+            onClick={() => setTab("bookings")}
+            value={err && !data ? "-" : loading ? null : String(attention.length)}
+            warm={!loading && attention.length > 0}
+            note={attention.length ? [pastDay.length ? `${pastDay.length} past ${pastDay.length === 1 ? "its" : "their"} date` : "", waitCount ? `${plural(waitCount, "job")} waiting for a date` : ""].filter(Boolean).join(", ") : "Nothing waiting on you"}
+          />
+          <NlStat
+            label="Booked this week"
+            onClick={() => setTab("bookings")}
+            value={err && !data ? "-" : loading ? null : String(upcoming.length)}
+            note={outToday.length ? `${outToday.length} out today, ${plural(new Set(outToday.map((j) => j.contractorId)).size, "contractor")} on site` : "Nobody out today"}
+          />
+          <NlStat
+            label="To pay"
+            onClick={() => setTab("pay")}
+            value={err && !data ? "-" : loading ? null : pounds(owedPence)}
+            delta={longWait.length ? `${longWait.length} over ${WAITING_DAYS} days` : undefined}
+            deltaTone="bad"
+            note={unpaid.length ? `${plural(unpaid.length, "invoice")} to pay` : "Nothing owed"}
+          />
+        </div>
+
+        <div className="nl-bo-tabrow">
+          <Tabs
+            label="Contractors sections"
+            value={tab}
+            onChange={(v) => setTab(v)}
+            items={[
+              { id: "bookings" as const, label: "Bookings", dot: attention.length > 0 },
+              { id: "book" as const, label: "Contractors", count: data ? all.length : null },
+              { id: "pay" as const, label: "To pay", count: unpaid.length || null },
+            ]}
+          />
+          {canSwitch && (
+            <div className="nl-bo-tabrow-side">
+              <span className="nl-toggle" role="group" aria-label="Whose jobs">
+                <button type="button" className={view === "mine" ? "is-on" : ""} aria-pressed={view === "mine"} onClick={() => saveView("mine")}>My jobs</button>
+                <button type="button" className={view === "everyone" ? "is-on" : ""} aria-pressed={view === "everyone"} onClick={() => saveView("everyone")}>Everyone&apos;s</button>
+              </span>
+            </div>
+          )}
+        </div>
+        {data && (
+          <p className="nl-meta mb-5">
+            {data.office ? "You see every agent's contractors and jobs, because the office pays them." : data.mineNote ?? "Only your own jobs show here: the homes in your book, and jobs you raised."}
+          </p>
+        )}
+
+        {loading ? (
+          <Loading>Reading the contractors…</Loading>
+        ) : !data ? null : tab === "bookings" ? (
+          <div className="nl-bo-g2 is-even">
+            <section className="nl-bo-card">
+              <div className="nl-bo-card-head">
+                <h2 className="nl-bo-card-title">Needs Attention</h2>
+                <span className="nl-count">{attention.length}</span>
+              </div>
+              <p className="nl-meta -mt-2 mb-2">Jobs that need your input to move forward.</p>
+              {attention.length === 0 ? (
+                <p className="nl-bo-quiet">Nothing needs a look. Every works order has a date.</p>
+              ) : (
+                <ul className="nl-bo-jobs">
+                  {attention.map(({ j, iso, why, hot, note }) => (
+                    <NlJobRow key={j.id} j={j} iso={iso} c={mark(j)} onWho={openProfile} pill={why} hot={hot} note={note} />
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section className="nl-bo-card">
+              <div className="nl-bo-card-head">
+                <h2 className="nl-bo-card-title">Upcoming Bookings</h2>
+                <span className="nl-count">{upcoming.length}</span>
+              </div>
+              <p className="nl-meta -mt-2 mb-2">Contractors due to attend in the next seven days.</p>
+              {upcoming.length === 0 ? (
+                <p className="nl-bo-quiet">Nothing booked for the next seven days.</p>
+              ) : (
+                <ul className="nl-bo-jobs">
+                  {upcoming.map((j) => {
+                    const isToday = londonDay(j.scheduledAt!) === today;
+                    return <NlJobRow key={j.id} j={j} iso={j.scheduledAt} c={mark(j)} onWho={openProfile} pill={isToday ? `Today ${hhmm(j.scheduledAt!)}` : hhmm(j.scheduledAt!)} strong={isToday} />;
+                  })}
+                </ul>
+              )}
+              {later.length > 0 && (
+                <>
+                  <p className="nl-bo-sub">Later</p>
+                  <ul className="nl-bo-jobs">
+                    {later.map((j) => <NlJobRow key={j.id} j={j} iso={j.scheduledAt} c={mark(j)} onWho={openProfile} pill={hhmm(j.scheduledAt!)} />)}
+                  </ul>
+                </>
+              )}
+            </section>
+          </div>
+        ) : tab === "book" ? (
+          <div className="nl-bo-stack">
+            <div className="nl-filters">
+              <label className="nl-fsearch">
+                <Ico name="search" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, trade, phone, Gas Safe number" aria-label="Search contractors" />
+              </label>
+              <span className="nl-fcount">{plural(mine.length + company.length + others.length, "contractor")}</span>
+            </div>
+            {editing && (
+              <div ref={formRef} className="nl-bo-card nl-bo-legacy scroll-mt-6">
+                <div className="nl-bo-card-head"><h2 className="nl-bo-card-title">{editing.id ? `Edit ${editing.name || "Contractor"}` : "New Contractor"}</h2></div>
+                <ContractorForm initial={editing} canCorporate={data.canCorporate} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
+              </div>
+            )}
+            <NlShelf title="Your Contractors" blurb="The people you ring. Added by you." count={mine.length}>{table(mine)}</NlShelf>
+            <NlShelf title="The Company's Contractors" blurb="Kept by the office. Everyone can book them." count={company.length}>{table(company)}</NlShelf>
+            {data.office && othersByOwner.map(([owner, rows]) => (
+              <NlShelf key={owner} title={`${owner}'s Contractors`} blurb={`Added by ${owner}. Only they and the office see these.`} count={rows.length}>{table(rows)}</NlShelf>
+            ))}
+          </div>
+        ) : (
+          <div className="nl-bo-stack">
+            <section className="nl-bo-card">
+              <div className="nl-bo-card-head">
+                <h2 className="nl-bo-card-title">Invoices to Pay</h2>
+                <span className="nl-bo-total">{pounds(owedPence)}</span>
+              </div>
+              <p className="nl-meta -mt-2 mb-2">Their invoice is on the job and accounts have been told. Oldest first. Over {WAITING_DAYS} days is marked.</p>
+              {unpaid.length === 0 ? (
+                <p className="nl-bo-quiet">Nothing owed. Every contractor invoice on the OS is paid.</p>
+              ) : (
+                <ul className="nl-bo-jobs">
+                  {unpaid.map((j) => {
+                    const w = waitedDays(j);
+                    const c = mark(j);
+                    return (
+                      <li key={j.id}>
+                        <a href={jobHref(j.id)} className="nl-bo-payrow">
+                          <ContractorMark name={j.contractorName} logoUrl={c?.logoUrl} size={34} />
+                          <span className="min-w-0 flex-1">
+                            <span className="nl-strong block truncate">{j.payee === "agent" ? `${j.raisedBy} (paid it themselves)` : j.contractorName}</span>
+                            <span className="nl-meta block truncate">{j.propertyName} · #{j.ref} {j.title}{j.invoiceRef ? ` · invoice ${j.invoiceRef}` : ""}</span>
+                          </span>
+                          <span className="nl-bo-payrow-end">
+                            <PayrunTag o={j} />
+                            <Badge tone={w > WAITING_DAYS ? "accent" : "neutral"}>{w <= 0 ? "in today" : plural(w, "day")}</Badge>
+                            <span className="nl-bo-money">{j.invoicePence != null ? pounds(j.invoicePence) : ""}</span>
+                          </span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+            {recentlyPaid.length > 0 && (
+              <section className="nl-bo-card">
+                <div className="nl-bo-card-head"><h2 className="nl-bo-card-title">Paid in the Last 90 Days</h2></div>
+                <p className="nl-meta -mt-2 mb-2">Marked paid on the job.</p>
+                <ul className="nl-bo-jobs">
+                  {recentlyPaid.map((j) => (
+                    <li key={j.id}>
+                      <a href={jobHref(j.id)} className="nl-bo-payrow">
+                        <ContractorMark name={j.contractorName} logoUrl={mark(j)?.logoUrl} size={30} />
+                        <span className="min-w-0 flex-1">
+                          <span className="nl-strong block truncate">{j.contractorName}</span>
+                          <span className="nl-meta block truncate">{j.propertyName} · paid {day(j.paidAt)}</span>
+                        </span>
+                        <span className="nl-bo-money is-quiet">{j.invoicePence != null ? pounds(j.invoicePence) : ""}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            <p className="nl-meta">A contractor emailed you an invoice for work with no job on the OS? Press Log an invoice at the top of the page.</p>
+          </div>
+        )}
+
+        {profile && (
+          <ContractorProfile
+            id={profile.id}
+            ownerName={profile.ownerId && profile.ownerId !== data?.me ? profile.ownerName : null}
+            onClose={closeProfile}
+            onEdit={(c) => { closeProfile(); setTab("book"); setEditing(c); }}
+            onChanged={load}
+            canEdit={canEdit}
+          />
+        )}
+
+        <RaiseInvoiceDrawer
+          open={raising}
+          contractors={all}
+          me={data?.me ?? null}
+          onClose={() => setRaising(false)}
+          onSaved={(orderId) => { setRaising(false); setLogged(orderId); setTab("pay"); load(); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -567,5 +803,110 @@ function Card({ c, p, onOpen, onEdit }: { c: Row; p: { open: number; owed: numbe
         )}
       </div>
     </div>
+  );
+}
+
+/* ── The new look ───────────────────────────────────────────────────────── */
+
+function NlShelf({ title, blurb, count, children }: { title: string; blurb: string; count: number; children: React.ReactNode }) {
+  return (
+    <section>
+      <div className="nl-bo-shelf-head">
+        <h2 className="nl-bo-card-title">{title}</h2>
+        <span className="nl-count">{count}</span>
+      </div>
+      <p className="nl-meta mb-3">{blurb}</p>
+      {children}
+    </section>
+  );
+}
+
+/** The design's Contractors table: who, their work, their paperwork. The whole row opens the record. */
+function ContractorTable({ rows, per, onOpen, onEdit, canEdit, searching }: {
+  rows: Row[]; per: Per; onOpen: (c: Row) => void; onEdit: (c: Contractor) => void; canEdit: (c: Contractor) => boolean; searching: boolean;
+}) {
+  if (rows.length === 0) return <p className="nl-bo-quiet is-boxed">{searching ? "Nobody here matches that." : "Nobody here yet."}</p>;
+  return (
+    <div className="nl-bo-table">
+      <table>
+        <thead>
+          <tr><th>Contractor</th><th>Work</th><th className="nl-bo-hide-sm">Paperwork</th><th className="nl-bo-hide-md">Contact</th><th className="nl-bo-th-edit" aria-label="Edit" /></tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => {
+            const p = per.get(c.id);
+            const creds = credentialsOf(c);
+            const pl = liabilityOf(c);
+            return (
+              <tr key={c.id} tabIndex={0} className={c.active ? "" : "is-off"} onClick={() => onOpen(c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(c); } }}>
+                <td>
+                  <span className="nl-bo-who">
+                    <ContractorMark name={c.name} logoUrl={c.logoUrl} size={32} />
+                    <span className="min-w-0">
+                      <span className="nl-strong block truncate">{c.name}</span>
+                      <span className="nl-meta block truncate">{[c.trade, creds[0] ? `${creds[0].label} ${creds[0].value}` : "", creds.length > 1 ? `+${creds.length - 1}` : ""].filter(Boolean).join(" · ") || "Trade not given"}</span>
+                    </span>
+                  </span>
+                </td>
+                <td>
+                  <span className="flex flex-col items-start gap-1">
+                    {p?.today ? <Badge tone="info">Out today</Badge> : !c.active ? <Badge tone="neutral">Not active</Badge> : <Badge tone={p?.open ? "good" : "neutral"}>{p?.open ? plural(p.open, "open job") : "No open jobs"}</Badge>}
+                    {p?.owed ? <span className="nl-meta">{pounds(p.owed)} owed</span> : null}
+                  </span>
+                </td>
+                <td className="nl-bo-hide-sm">
+                  <span className={pl.tone === "warn" ? "nl-bo-warn" : pl.tone === "accent" ? "nl-bo-err" : "nl-bo-paper"}>{pl.pill}</span>
+                  {!creds.length && <span className="nl-meta block">No registration on file</span>}
+                </td>
+                <td className="nl-bo-hide-md"><span className="nl-meta block max-w-[220px] truncate">{[c.contact, c.phone || c.email].filter(Boolean).join(" · ") || "No contact details yet"}</span></td>
+                <td className="text-right">
+                  {canEdit(c) && (
+                    <button type="button" className="nl-link nl-bo-aside" onClick={(e) => { e.stopPropagation(); onEdit(c); }}><Ico name="pen" size={13} /><span className="nl-bo-hide-sm">Edit</span></button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** One job: the date, the home, the job, the contractor, why it's here. The whole row opens the job. */
+function NlJobRow({ j, iso, c, onWho, pill, hot = false, strong = false, note }: {
+  j: Job; iso: string | null; c: Contractor | undefined; onWho: (id: string | null) => void;
+  pill: string; hot?: boolean; strong?: boolean; note?: string;
+}) {
+  const d = iso ? new Date(iso) : null;
+  const f = (o: Intl.DateTimeFormatOptions) => (d ? d.toLocaleDateString("en-GB", { ...o, timeZone: "Europe/London" }) : "");
+  return (
+    <li>
+      <a href={jobHref(j.id)} className="nl-bo-brow">
+        {d ? (
+          <span className="nl-bo-date"><small>{f({ weekday: "short" })}</small><b>{f({ day: "numeric" })}</b><small>{f({ month: "short" })}</small></span>
+        ) : (
+          <span className="nl-bo-date is-blank" aria-hidden />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="nl-strong block truncate">{j.propertyName || "A home"}{j.locality ? <span className="nl-meta">, {j.locality}</span> : null}</span>
+          <span className="nl-meta block truncate">#{j.ref} · {j.title}{note ? ` · ${note}` : ""}</span>
+          <span className="mt-1.5 flex flex-wrap items-center gap-2">
+            <span
+              role="button"
+              tabIndex={0}
+              className="nl-bo-whochip"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onWho(j.contractorId); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onWho(j.contractorId); } }}
+            >
+              <ContractorMark name={j.contractorName} logoUrl={c?.logoUrl} size={18} />
+              <span className="truncate">{j.contractorName || "A contractor"}</span>
+            </span>
+            <Badge tone={hot ? "accent" : strong ? "info" : "neutral"}>{pill}</Badge>
+          </span>
+        </span>
+        <Ico name="arrow" size={14} />
+      </a>
+    </li>
   );
 }

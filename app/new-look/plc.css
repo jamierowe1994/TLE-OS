@@ -1,0 +1,144 @@
+/* New look: plc (lib/new-look). Scoped under [data-look="new"]. */
+/* ===========================================================================
+   PLC, the handover harness (/plc). Off the design's PlcQueue and PlcReview:
+   who you are as a two-part switch, three counts, the cases as a queue
+   beside the form that starts one, then the chosen case as a review - the
+   documents on the left, where it stands and what to do on the right. The
+   compliance half is the shared PlcReview panel, repainted by the tokens and
+   squared up to the cards here. Classes are nl-plc-.
+=========================================================================== */
+
+/* ── who you are ────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-plc-who { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 20px; }
+[data-look="new"] .nl-plc-who > .nl-meta { flex: 1 1 220px; }
+[data-look="new"] .nl-plc-seg {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; flex: 0 1 620px; min-width: 0;
+  border: 1px solid var(--line); border-radius: 24px; background: var(--card);
+}
+[data-look="new"] .nl-plc-seg button {
+  font: inherit; text-align: left; padding: 10px 16px; border: 0; border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer;
+  transition: background-color .25s, color .25s; min-width: 0;
+}
+[data-look="new"] .nl-plc-seg button:hover:not(.is-on) { background: var(--box); }
+[data-look="new"] .nl-plc-seg button b { display: block; font-size: 14px; font-weight: 600; }
+[data-look="new"] .nl-plc-seg button span { display: block; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-plc-seg button.is-on { background: var(--ink); color: var(--card); }
+[data-look="new"] .nl-plc-seg button.is-on span { color: var(--card); opacity: .75; }
+
+/* ── three counts ───────────────────────────────────────────────────────── */
+[data-look="new"] .nl-plc-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+[data-look="new"] .nl-plc-tile { display: flex; flex-direction: column; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 24px; }
+[data-look="new"] .nl-plc-tile.is-accent { background: var(--accent-soft); border-color: transparent; }
+[data-look="new"] .nl-plc-tile.is-sage { background: var(--sage-soft); border-color: transparent; }
+[data-look="new"] .nl-plc-tile-label { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted); }
+[data-look="new"] .nl-plc-fig { display: block; margin-top: 10px; font-family: var(--nl-serif); font-weight: 400; font-size: 36px; line-height: 40px; letter-spacing: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-plc-tile.is-accent .nl-plc-fig { color: var(--accent-dark); }
+[data-look="new"] .nl-plc-tile-note { margin-top: 6px; font-size: 12px; line-height: 17px; color: var(--muted); }
+[data-look="new"] .nl-plc-skel {
+  display: block; margin: 12px 0 2px; height: 36px; width: 40%; border-radius: 8px;
+  background: linear-gradient(90deg, var(--box), var(--panel), var(--box)); background-size: 200% 100%;
+  animation: nl-plc-shimmer 1.3s linear infinite;
+}
+@keyframes nl-plc-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+[data-look="new"] .nl-plc-wait { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 26px 0 10px; font-size: 13px; color: var(--muted); }
+[data-look="new"] .nl-plc-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--ink); animation: nl-plc-spin .8s linear infinite; }
+@keyframes nl-plc-spin { to { transform: rotate(360deg); } }
+
+/* ── cards ──────────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-plc-card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 24px; min-width: 0; }
+[data-look="new"] .nl-plc-card.is-accent { background: var(--accent-soft); border-color: transparent; }
+[data-look="new"] .nl-plc-card.is-sage { background: var(--sage-soft); border-color: transparent; }
+[data-look="new"] .nl-plc-card.is-panel { background: var(--panel); }
+[data-look="new"] .nl-plc-cardhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 12px; }
+[data-look="new"] .nl-plc-h { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 20px; line-height: 26px; letter-spacing: 0; color: var(--ink); }
+[data-look="new"] .nl-plc-say { margin: 8px 0 6px; font-family: var(--nl-serif); font-size: 17px; line-height: 25px; color: var(--ink); white-space: pre-wrap; }
+[data-look="new"] .nl-plc-next { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid rgba(0, 0, 0, .08); font-size: 14px; line-height: 21px; }
+[data-look="new"] .nl-plc-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+[data-look="new"] .nl-plc-failed { padding: 16px 0 4px; }
+[data-look="new"] .nl-plc-bad { margin: 0; font-size: 14px; line-height: 21px; color: var(--accent-dark); }
+[data-look="new"] .nl-plc-error { margin: 0 0 16px; padding: 12px 16px; border-radius: 14px; background: var(--accent-soft); color: var(--accent-dark); font-size: 14px; line-height: 20px; }
+
+/* the queue beside the start form */
+[data-look="new"] .nl-plc-top { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 28px; }
+[data-look="new"] .nl-plc-rows { list-style: none; margin: 10px -8px 0; padding: 0; }
+[data-look="new"] .nl-plc-rows > li + li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-plc-row {
+  width: 100%; display: flex; align-items: center; gap: 16px; padding: 14px 8px; font: inherit; color: inherit; text-align: left;
+  background: none; border: 0; border-radius: 14px; cursor: pointer; transition: background-color .2s;
+}
+[data-look="new"] .nl-plc-row:hover { background: var(--panel); }
+[data-look="new"] .nl-plc-row.is-on { background: var(--box); }
+[data-look="new"] .nl-plc-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+[data-look="new"] .nl-plc-waitfig { width: 76px; flex: none; font-family: var(--nl-serif); font-size: 15px; color: var(--ink); white-space: nowrap; }
+[data-look="new"] .nl-plc-waitfig.is-over { color: var(--accent-dark); }
+[data-look="new"] .nl-plc-waitfig small { display: block; font-family: var(--font-body); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0; }
+[data-look="new"] .nl-plc-rowmain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+[data-look="new"] .nl-plc-rowmain > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-plc-chev { flex: none; color: var(--muted); }
+
+/* ── the review ─────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-plc-review { border-top: 1px solid var(--line); padding-top: 28px; }
+[data-look="new"] .nl-plc-head { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+[data-look="new"] .nl-plc-chip { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--box); color: var(--ink); flex: none; }
+[data-look="new"] .nl-plc-headtext { flex: 1; min-width: 0; }
+[data-look="new"] .nl-plc-title { margin: 0 0 4px; font-family: var(--font-heading); font-weight: 500; font-size: 26px; line-height: 32px; letter-spacing: 0; color: var(--ink); overflow-wrap: anywhere; }
+[data-look="new"] .nl-plc-headmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+[data-look="new"] .nl-plc-headmeta .nl-badge { padding-left: 0; background: transparent; }
+[data-look="new"] .nl-plc-savechip { flex: none; }
+
+[data-look="new"] .nl-plc-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+[data-look="new"] .nl-plc-right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* the documents, one check a row */
+[data-look="new"] .nl-plc-docs { padding: 0; overflow: hidden; }
+[data-look="new"] .nl-plc-docs .nl-plc-cardhead { padding: 22px 24px 12px; }
+[data-look="new"] .nl-plc-doclist { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-plc-doc { display: flex; gap: 12px; align-items: flex-start; padding: 16px 24px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-plc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; margin-top: 8px; background: var(--line-strong); }
+[data-look="new"] .nl-plc-dot.is-sage { background: var(--sage-deep); }
+[data-look="new"] .nl-plc-dot.is-accent { background: var(--accent); }
+[data-look="new"] .nl-plc-docmain { flex: 1; min-width: 0; }
+[data-look="new"] .nl-plc-docmain > p { margin: 0; }
+[data-look="new"] .nl-plc-docmain > .nl-meta { margin-top: 2px; }
+[data-look="new"] .nl-plc-tag { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 500; color: var(--muted); vertical-align: 1px; }
+[data-look="new"] .nl-plc-tag.is-accent { color: var(--accent-dark); }
+[data-look="new"] .nl-plc-waiver { margin-top: 8px !important; padding: 6px 10px; border-radius: 10px; background: var(--warning-soft); color: var(--warning); font-size: 12.5px; line-height: 18px; }
+[data-look="new"] .nl-plc-files { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+[data-look="new"] .nl-plc-files li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px; min-width: 0; }
+[data-look="new"] .nl-plc-file { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); overflow-wrap: anywhere; min-width: 0; }
+[data-look="new"] .nl-plc-remove { font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-plc-remove:hover { color: var(--accent-dark); }
+[data-look="new"] .nl-plc-docact { flex: none; }
+
+/* the compliance half: the shared panel, squared up to these cards */
+[data-look="new"] .nl-plc-side { min-width: 0; }
+[data-look="new"] .nl-plc-side > div > section { border-radius: 24px; border-color: var(--line); background: var(--card); }
+[data-look="new"] .nl-plc-side h2 { font-family: var(--font-heading); font-weight: 500; font-size: 18px; letter-spacing: 0; }
+
+/* ── narrower ───────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  [data-look="new"] .nl-plc-top, [data-look="new"] .nl-plc-split { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-plc-seg { flex-basis: 100%; }
+  [data-look="new"] .nl-plc-seg button { padding: 10px 12px; }
+  [data-look="new"] .nl-plc-tiles { grid-template-columns: 1fr; gap: 10px; }
+  [data-look="new"] .nl-plc-tile { padding: 16px 18px; border-radius: 18px; }
+  [data-look="new"] .nl-plc-fig { font-size: 28px; line-height: 32px; margin-top: 4px; }
+  [data-look="new"] .nl-plc-card { padding: 18px 16px; border-radius: 20px; }
+  [data-look="new"] .nl-plc-docs { padding: 0; }
+  [data-look="new"] .nl-plc-docs .nl-plc-cardhead { padding: 18px 16px 10px; }
+  [data-look="new"] .nl-plc-doc { flex-wrap: wrap; padding: 14px 16px; }
+  [data-look="new"] .nl-plc-docact { width: 100%; padding-left: 19px; }
+  [data-look="new"] .nl-plc-row { flex-wrap: wrap; gap: 4px 12px; }
+  [data-look="new"] .nl-plc-waitfig { width: auto; }
+  [data-look="new"] .nl-plc-rowmain { flex-basis: 100%; order: 2; }
+  [data-look="new"] .nl-plc-rowmain > span { white-space: normal; }
+  [data-look="new"] .nl-plc-row .nl-badge { order: 1; margin-left: auto; }
+  [data-look="new"] .nl-plc-chev { display: none; }
+  [data-look="new"] .nl-plc-head { flex-wrap: wrap; align-items: flex-start; }
+  [data-look="new"] .nl-plc-chip { display: none; }
+  [data-look="new"] .nl-plc-title { font-size: 21px; line-height: 27px; }
+  [data-look="new"] .nl-plc-savechip { flex-basis: 100%; }
+  [data-look="new"] .nl-plc-side > div > section { border-radius: 20px; }
+}

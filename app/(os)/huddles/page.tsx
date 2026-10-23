@@ -1,9 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import LineIcon from "@/components/LineIcon";
+import { Ico } from "@/components/new-look/Parts";
 import { searchMatches } from "@/lib/search-match";
 import { isGif, previewOf, TEAM_GIFS } from "@/lib/chat-gif";
+import { useNewLook } from "@/lib/use-new-look";
+
+/**
+ * THE NEW LOOK (lib/new-look "huddles", 23 Oct 2026). Every part below draws
+ * itself the old way unless this says otherwise; the page sets it once, so the
+ * same panes, rows, composer and picker - with every fetch and handler they
+ * hold - serve both looks. Styles in app/new-look/huddles.css (nl-hud-).
+ */
+const NlCtx = createContext(false);
+const useNl = () => useContext(NlCtx);
 
 /**
  * HUDDLES in the OS (Susan via James, 12 Oct 2026): the chats from the phone
@@ -82,6 +93,14 @@ const TONES: Record<Tone, string> = {
 const toneOf = (id: string): Tone => (["pink", "sage", "clay"] as const)[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % 3]!;
 
 function Avatar({ name, photo, size = 36, tone = "pink", ring = false }: { name: string; photo?: string | null; size?: number; tone?: Tone; ring?: boolean }) {
+  const nl = useNl();
+  if (nl)
+    return (
+      <span className={`nl-hud-av nl-hud-av--${tone}${ring ? " is-ring" : ""}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }} title={name}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {photo ? <img src={photo} alt="" loading="lazy" /> : initials(name)}
+      </span>
+    );
   return (
     <span
       className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold ${TONES[tone]} ${ring ? "ring-2 ring-card" : ""}`}
@@ -118,7 +137,34 @@ function BrandFace({ size = 38 }: { size?: number }) {
 }
 
 const SLOT = 66;
-function GroupFace({ faces, members, name, size = 28 }: { faces: Face[]; members: number; name: string; size?: number }) {
+/* The new look's slot: the design's faces are smaller. */
+const NL_SLOT = 56;
+function GroupFace({ faces, members, name, size = 28, slot = SLOT }: { faces: Face[]; members: number; name: string; size?: number; slot?: number }) {
+  const nl = useNl();
+  if (nl) {
+    const more = faces.length >= 3 && members > 3;
+    const shown = !faces.length ? [] : members <= 2 || faces.length < 3 ? faces.slice(0, 2) : faces.slice(0, more ? 2 : 3);
+    return (
+      <span className="nl-hud-slot" style={{ width: slot || undefined }}>
+        {!shown.length ? (
+          <Avatar name={name} size={34} tone="sage" />
+        ) : (
+          <span className={`nl-hud-stack${shown.length === 2 && !more && (members <= 2 || faces.length < 3) ? " is-pair" : ""}`}>
+            {shown.map((f, i) => (
+              <span key={f.id} style={{ zIndex: 3 - i }}>
+                <Avatar name={f.name} photo={f.photo} size={size} tone={toneOf(f.id)} ring />
+              </span>
+            ))}
+            {more && (
+              <span className="nl-hud-av nl-hud-av--more is-ring" style={{ width: size, height: size }} title={`${members} people`}>
+                +{members - 2}
+              </span>
+            )}
+          </span>
+        )}
+      </span>
+    );
+  }
   if (!faces.length) return <span className="flex shrink-0 items-center" style={{ width: SLOT }}><Avatar name={name} size={38} tone="sage" /></span>;
   if (members <= 2 || faces.length < 3) {
     return (
@@ -152,6 +198,13 @@ function GroupFace({ faces, members, name, size = 28 }: { faces: Face[]; members
 }
 
 function Spinner({ label }: { label: string }) {
+  if (useNl())
+    return (
+      <div className="nl-hud-wait" role="status">
+        <i aria-hidden />
+        {label}
+      </div>
+    );
   return (
     <div className="flex items-center justify-center gap-2 py-12 text-[12.5px] text-muted">
       <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />
@@ -161,11 +214,24 @@ function Spinner({ label }: { label: string }) {
 }
 
 function Count({ n }: { n: number }) {
+  const nl = useNl();
   if (n <= 0) return null;
+  if (nl) return <span className="nl-hud-n" aria-label={`${n} unread`}>{n > 99 ? "99+" : n}</span>;
   return <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent-dark px-1.5 text-[11px] font-semibold text-white">{n > 99 ? "99+" : n}</span>;
 }
 
 function ErrorBox({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  if (useNl())
+    return (
+      <div className="nl-hud-error" role="alert">
+        {text}{" "}
+        {onRetry && (
+          <button type="button" onClick={onRetry} className="nl-link">
+            Try again
+          </button>
+        )}
+      </div>
+    );
   return (
     <div className="m-2 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px]">
       {text}{" "}
@@ -208,6 +274,7 @@ function urlFor(tab: Tab, pick: Pick | null): string {
 /* ── The page ──────────────────────────────────────────────────────────── */
 
 export default function Huddles() {
+  const look = useNewLook("huddles");
   const [data, setData] = useState<{ work: Thread[]; rooms: Room[]; unread: { work: number; play: number } } | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("team");
@@ -296,7 +363,8 @@ export default function Huddles() {
       window.clearTimeout(t);
       window.removeEventListener("resize", fit);
     };
-  }, []);
+    /* Measured again once the look is known: the frame is not drawn before. */
+  }, [look]);
 
   const openRoom = open?.kind === "room" ? data?.rooms.find((r) => r.id === open.id) ?? null : null;
 
@@ -369,6 +437,184 @@ export default function Huddles() {
       : { label: "Archive", icon: "archive", tone: "quiet", run: () => void act(key, "archive", what) },
     { label: what.kind === "huddle" ? "Leave" : "Delete", icon: "trash", tone: "loud", run: () => void act(key, "delete", what) },
   ];
+
+  /* ── THE NEW LOOK (lib/new-look "huddles", 23 Oct 2026) ─────────────────
+     The design's Huddles: the list in a 320px column titled Huddles with New,
+     the four sections as quiet headings, Archived at the foot, and the open
+     chat beside it with serif bubbles and a rounded box to write in. Same
+     chats, same address, same archive and delete, same panes and picker as
+     the old screen below, which stays as it is until the switch beds in. */
+  if (look === null) {
+    return (
+      <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted">
+        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+        Opening Huddles…
+      </p>
+    );
+  }
+  if (look) {
+    const roomRow = (r: Room, archived: boolean) => {
+      const key = `room:${r.id}`;
+      const general = r.kind === "general";
+      return (
+        <SwipeRow key={key} open={swiped === key} onOpen={() => setSwiped(key)} onClose={() => setSwiped(null)} actions={actionsFor(key, archived, { name: general ? GENERAL_NAME : r.name, kind: r.kind })}>
+          <Row
+            active={open?.kind === "room" && open.id === r.id}
+            onClick={() => go("team", { kind: "room", id: r.id, thread: null })}
+            face={
+              general ? (
+                <span className="nl-hud-slot" style={{ width: NL_SLOT }}>
+                  <BrandFace size={34} />
+                </span>
+              ) : (
+                <GroupFace faces={r.faces} members={r.members} name={r.name} size={24} slot={NL_SLOT} />
+              )
+            }
+            name={general ? GENERAL_NAME : r.name}
+            line={r.last ? `${first(r.last.who)}: ${previewOf(r.last.body)}` : archived ? "Nothing said yet" : general ? "Everyone is in this one" : `${r.members} people · say hello`}
+            at={r.last?.at ?? null}
+            unread={r.unread}
+          />
+        </SwipeRow>
+      );
+    };
+    const threadRow = (t: Thread) => {
+      const [kind, ...rest] = t.key.split(":");
+      const id = rest.join(":");
+      const landlord = kind === "landlord";
+      return (
+        <SwipeRow key={t.key} open={swiped === t.key} onOpen={() => setSwiped(t.key)} onClose={() => setSwiped(null)} actions={actionsFor(t.key, t.archived, { name: t.name, kind: landlord ? "landlord" : "tenant" })}>
+          <Row
+            active={open?.kind === kind && open.id === id}
+            onClick={() => go("customers", { kind: landlord ? "landlord" : "tenant", id })}
+            face={
+              <span className="nl-hud-slot" style={{ width: NL_SLOT }}>
+                <Avatar name={t.name} size={34} tone={landlord ? "pink" : "sage"} />
+              </span>
+            }
+            name={t.name}
+            about={landlord ? t.about : ""}
+            line={`${t.last.from === "agent" ? "You: " : ""}${t.last.body}`}
+            at={t.last.at}
+            unread={t.unread}
+          />
+        </SwipeRow>
+      );
+    };
+    return (
+      <NlCtx.Provider value>
+        <div data-look="new" className="nl-hud">
+          <div ref={frame} style={{ height: frameH ?? 560 }} className={`nl-hud-frame${showChat ? " is-chat" : ""}`}>
+            <aside className="nl-hud-list" aria-label="Your chats">
+              {showArchived ? (
+                <div className="nl-hud-list-head">
+                  <button type="button" onClick={() => setShowArchived(false)} aria-label="Back to your chats" className="nl-iconbtn nl-iconbtn--sm">
+                    <Ico name="back" />
+                  </button>
+                  <h1 className="nl-hud-title is-sub">Archived</h1>
+                </div>
+              ) : (
+                <div className="nl-hud-list-head">
+                  <h1 className="nl-hud-title">Huddles</h1>
+                  <button type="button" onClick={() => setPicker({ invite: null })} className="nl-btn nl-btn--primary nl-btn--sm">
+                    <Ico name="plus" size={14} />
+                    New
+                  </button>
+                </div>
+              )}
+
+              <div className="nl-hud-list-scroll">
+                {listError && !data ? (
+                  <ErrorBox text={listError} onRetry={load} />
+                ) : !data ? (
+                  <Spinner label="Loading your chats" />
+                ) : showArchived ? (
+                  <>
+                    {archivedRooms.map((r) => roomRow(r, true))}
+                    {archivedWork.map((t) => threadRow(t))}
+                    {!archivedRooms.length && !archivedWork.length && <Nothing>Nothing archived.</Nothing>}
+                  </>
+                ) : (
+                  <>
+                    <SectionHead label="Huddles" n={huddlesHere.reduce((a, r) => a + r.unread, 0)} first />
+                    {huddlesHere.length ? huddlesHere.map((r) => roomRow(r, false)) : <Nothing>No huddles yet. Start one with New.</Nothing>}
+
+                    <SectionHead label="Team" n={generalHere?.unread ?? 0} />
+                    {generalHere ? roomRow(generalHere, false) : <Nothing>Archived. Bring it back from Archived below.</Nothing>}
+
+                    <SectionHead label="Landlords" n={landlordsHere.reduce((a, t) => a + t.unread, 0)} />
+                    {landlordsHere.length ? landlordsHere.map((t) => threadRow(t)) : <Nothing>Nothing from a landlord yet.</Nothing>}
+
+                    <SectionHead label="Tenants" n={tenantsHere.reduce((a, t) => a + t.unread, 0)} />
+                    {tenantsHere.length ? tenantsHere.map((t) => threadRow(t)) : <Nothing>Nothing from a tenant yet.</Nothing>}
+                  </>
+                )}
+              </div>
+
+              {data && !showArchived && (
+                <div className="nl-hud-foot">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSwiped(null);
+                      setShowArchived(true);
+                    }}
+                    className="nl-hud-foot-btn"
+                  >
+                    <ArchiveIcon />
+                    <span>Archived{archivedHere.length ? ` (${archivedHere.length})` : ""}</span>
+                    <Count n={archivedUnread} />
+                  </button>
+                  <p>Double-click a chat, or swipe it on a phone, to archive or delete it.</p>
+                </div>
+              )}
+            </aside>
+
+            <section className="nl-hud-thread" aria-label="Conversation">
+              {open?.kind === "room" ? (
+                <RoomPane
+                  key={`${open.id}|${open.thread ?? ""}`}
+                  id={open.id}
+                  thread={open.thread}
+                  groupFaces={openRoom ? { faces: openRoom.faces, members: openRoom.members } : null}
+                  onBack={() => (open.thread ? go("team", { kind: "room", id: open.id, thread: null }) : go("team", null))}
+                  onOpenThread={(q) => go("team", { kind: "room", id: open.id, thread: q })}
+                  onRead={load}
+                  onInvite={() => setPicker({ invite: open.id })}
+                  onLeft={() => {
+                    load();
+                    go("team", null);
+                  }}
+                />
+              ) : open ? (
+                <CustomerPane key={`${open.kind}:${open.id}`} kind={open.kind} id={open.id} onBack={() => go("customers", null)} onRead={load} />
+              ) : (
+                <div className="nl-hud-pick">
+                  <span className="nl-hud-pick-ico">
+                    <LineIcon name="message" size={20} />
+                  </span>
+                  <p className="nl-hud-pick-title">Pick a Conversation</p>
+                  <p className="nl-hud-pick-sub">Pick a huddle, the team room, a landlord or a tenant on the left.</p>
+                </div>
+              )}
+            </section>
+          </div>
+
+          {picker && (
+            <PeoplePicker
+              invite={picker.invite}
+              onClose={() => setPicker(null)}
+              onDone={(id) => {
+                setPicker(null);
+                load();
+                go("team", { kind: "room", id, thread: null });
+              }}
+            />
+          )}
+        </div>
+      </NlCtx.Provider>
+    );
+  }
 
   return (
     /* FULL BLEED (James, 18 Oct 2026). This sat in a bordered card inside the
@@ -577,10 +823,11 @@ function ArchiveIcon({ up = false }: { up?: boolean }) {
 function SwipeRow({ open, onOpen, onClose, actions, children }: { open: boolean; onOpen: () => void; onClose: () => void; actions: SwipeAction[]; children: React.ReactNode }) {
   const W = actions.length * 74;
   const touch = useRef<{ x: number; y: number } | null>(null);
+  const nl = useNl();
   return (
     <div
       data-swipe-open={open ? "" : undefined}
-      className="relative select-none overflow-hidden rounded-xl"
+      className={nl ? "nl-hud-swipe" : "relative select-none overflow-hidden rounded-xl"}
       onDoubleClick={(e) => {
         e.preventDefault();
         if (open) onClose();
@@ -602,14 +849,22 @@ function SwipeRow({ open, onOpen, onClose, actions, children }: { open: boolean;
       }}
     >
       {/* Hidden while shut, or its colour shows round the row's rounded edge. */}
-      <div className={`absolute inset-y-0 right-0 flex transition-opacity duration-200 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`} style={{ width: W }} aria-hidden={!open}>
+      <div
+        className={nl ? `nl-hud-swipe-acts${open ? "" : " is-shut"}` : `absolute inset-y-0 right-0 flex transition-opacity duration-200 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        style={{ width: W }}
+        aria-hidden={!open}
+      >
         {actions.map((a) => (
           <button
             key={a.label}
             type="button"
             tabIndex={open ? 0 : -1}
             onClick={a.run}
-            className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-opacity hover:opacity-90 ${a.tone === "loud" ? "bg-accent-dark text-white" : "bg-[#e6e1dc] text-brown"}`}
+            className={
+              nl
+                ? `nl-hud-swipe-btn${a.tone === "loud" ? " is-loud" : ""}`
+                : `flex h-full flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-opacity hover:opacity-90 ${a.tone === "loud" ? "bg-accent-dark text-white" : "bg-[#e6e1dc] text-brown"}`
+            }
             style={{ width: 74 }}
           >
             {a.icon === "trash" ? <LineIcon name="trash" size={16} /> : <ArchiveIcon up={a.icon === "unarchive"} />}
@@ -618,7 +873,7 @@ function SwipeRow({ open, onOpen, onClose, actions, children }: { open: boolean;
         ))}
       </div>
       <div
-        className="relative bg-[var(--hud-list)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className={nl ? "nl-hud-slide" : "relative bg-[var(--hud-list)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}
         style={{ transform: open ? `translateX(-${W}px)` : "translateX(0)" }}
         onClickCapture={(e) => {
           if (open) {
@@ -640,6 +895,13 @@ function SwipeRow({ open, onOpen, onClose, actions, children }: { open: boolean;
  * they are.
  */
 function SectionHead({ label, n, first = false }: { label: string; n: number; first?: boolean }) {
+  if (useNl())
+    return (
+      <p className={`nl-hud-group${first ? " is-first" : ""}`}>
+        <span>{label}</span>
+        <Count n={n} />
+      </p>
+    );
   return (
     <p className={`sticky top-0 z-10 flex items-center gap-2 bg-[var(--hud-list)] px-2 pb-1 ${first ? "pt-1" : "pt-4"} text-[11px] font-semibold uppercase tracking-[0.08em] text-muted`}>
       <span className="flex-1">{label}</span>
@@ -649,10 +911,29 @@ function SectionHead({ label, n, first = false }: { label: string; n: number; fi
 }
 
 function Nothing({ children }: { children: React.ReactNode }) {
+  if (useNl()) return <p className="nl-hud-nothing">{children}</p>;
   return <p className="mx-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-2.5 text-[12px] leading-snug text-muted">{children}</p>;
 }
 
 function Row({ active, onClick, face, name, tag, about, line, at, unread }: { active: boolean; onClick: () => void; face: React.ReactNode; name: string; tag?: string; about?: string; line: string; at: string | null; unread: number }) {
+  if (useNl())
+    return (
+      <button type="button" onClick={onClick} aria-current={active ? "true" : undefined} className={`nl-hud-item${active ? " is-on" : ""}${unread ? " is-unread" : ""}`}>
+        {face}
+        <span className="nl-hud-item-main">
+          <span className="nl-hud-item-name">
+            <b>{name}</b>
+            {tag && <span className="nl-hud-item-tag">{tag}</span>}
+            {at && <span className="nl-hud-item-at">{ago(at)}</span>}
+          </span>
+          {about && <span className="nl-hud-item-about">{about}</span>}
+          <span className="nl-hud-item-last">
+            <span>{line}</span>
+            <Count n={unread} />
+          </span>
+        </span>
+      </button>
+    );
   return (
     <button type="button" onClick={onClick} className={`flex w-full items-center gap-1 rounded-xl px-2.5 py-2.5 text-left transition-colors ${active ? "bg-[var(--hud-row-active)]" : "hover:bg-[var(--hud-row-hover)]"}`}>
       {face}
@@ -676,7 +957,22 @@ function Row({ active, onClick, face, name, tag, about, line, at, unread }: { ac
 
 /* ── Panes ─────────────────────────────────────────────────────────────── */
 
-function PaneHead({ back, backAlways, face, title, line, right }: { back: () => void; backAlways?: boolean; face?: React.ReactNode; title: string; line?: string; right?: React.ReactNode }) {
+function PaneHead({ back, backAlways, face, title, line, right, children }: { back: () => void; backAlways?: boolean; face?: React.ReactNode; title: string; line?: string; right?: React.ReactNode; children?: React.ReactNode }) {
+  if (useNl())
+    return (
+      <header className="nl-hud-head">
+        <button type="button" onClick={back} aria-label="Back" className={`nl-iconbtn nl-iconbtn--sm nl-hud-back${backAlways ? " is-always" : ""}`}>
+          <Ico name="back" />
+        </button>
+        {face}
+        <div className="nl-hud-head-text">
+          <h2 className="nl-hud-head-name">{title}</h2>
+          {line && <p className="nl-hud-head-sub">{line}</p>}
+        </div>
+        {right}
+        {children}
+      </header>
+    );
   return (
     <header className="relative flex shrink-0 items-center gap-3 border-b border-[var(--hud-line)] bg-[var(--hud-bar)] px-4 py-3">
       <button
@@ -884,6 +1180,116 @@ function RoomPane({
         : "";
   const faces = data && !general && !thread ? (groupFaces?.faces.length ? groupFaces : { faces: data.members.slice(0, 4), members: data.members.length }) : null;
 
+  const nl = useNl();
+  if (nl)
+    return (
+      <>
+        <PaneHead
+          back={onBack}
+          backAlways={Boolean(thread)}
+          face={faces ? <GroupFace faces={faces.faces} members={faces.members} name={data!.room.name} size={30} slot={0} /> : general && !thread ? <BrandFace size={36} /> : undefined}
+          title={title}
+          line={line}
+          right={
+            data && !general && !thread ? (
+              <button type="button" onClick={() => setPeople((p) => !p)} aria-expanded={people} className="nl-btn nl-btn--secondary nl-btn--sm">
+                <LineIcon name="user" size={14} />
+                People
+              </button>
+            ) : undefined
+          }
+        >
+          {people && data && (
+            <div className="nl-hud-pop" role="menu">
+              <p className="nl-hud-pop-label">In this huddle</p>
+              <ul>
+                {data.members.map((m) => (
+                  <li key={m.id}>
+                    <Avatar name={m.name} photo={m.photo} size={28} tone={toneOf(m.id)} />
+                    <span className="nl-hud-pop-name">{m.name}</span>
+                    {m.id === data.me ? (
+                      <span className="nl-hud-pop-you">You</span>
+                    ) : admin ? (
+                      <button type="button" onClick={() => void removePerson(m)} className="nl-hud-pop-take">
+                        Take out
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              <hr />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setPeople(false);
+                  onInvite();
+                }}
+                className="nl-hud-pop-btn"
+              >
+                Invite More People
+              </button>
+              {admin && (
+                <button type="button" role="menuitem" onClick={() => void rename()} className="nl-hud-pop-btn">
+                  Rename This Chat
+                </button>
+              )}
+              <button type="button" role="menuitem" onClick={leave} className="nl-hud-pop-btn">
+                Leave the Huddle
+              </button>
+              {admin && (
+                <button type="button" role="menuitem" onClick={() => void deleteForAll()} className="nl-hud-pop-btn is-danger">
+                  Delete for Everyone
+                </button>
+              )}
+            </div>
+          )}
+        </PaneHead>
+
+        <div className="nl-hud-scroll" onClick={() => people && setPeople(false)}>
+          {error && !data ? (
+            <ErrorBox text={error} onRetry={() => void load()} />
+          ) : !data ? (
+            <Spinner label="Opening the chat" />
+          ) : (
+            <Bubbles
+              items={data.messages.map((m) => ({
+                id: m.id,
+                mine: m.authorId === data.me,
+                who: m.author,
+                whoId: m.authorId,
+                photo: m.photo,
+                body: m.body,
+                at: m.at,
+                question: m.question && !thread ? { replies: m.replies, open: () => onOpenThread(m.id) } : undefined,
+                tick: otherRead && m.authorId === data.me ? (m.at <= otherRead ? "seen" : "sent") : undefined,
+                quote: m.quote ? { id: m.quote.id, who: m.quote.authorId === data.me ? "You" : m.quote.author, body: m.quote.body } : undefined,
+                onReply: () => setReplying(m),
+              }))}
+              typing={typing.length ? { names: typing, pair: Boolean(otherRead), face: otherRead ? data.members.find((x) => x.id !== data.me) ?? null : null } : null}
+              empty={thread ? "No answers yet. Be the first." : general ? "Nobody has said anything yet. Start it off." : "Say hello to your huddle."}
+            />
+          )}
+        </div>
+
+        {data && (
+          <Composer
+            key={`${id}|${thread ?? ""}`}
+            placeholder={thread ? "Write an answer..." : general ? "Say something to everyone..." : `Message ${data.room.name}...`}
+            canAsk={general && !thread && !replying}
+            gifs
+            replying={replying ? { who: replying.authorId === data.me ? "yourself" : replying.author, body: replying.body } : null}
+            onCancelReply={() => setReplying(null)}
+            onSend={(text, q) => {
+              lastPing.current = 0;
+              return send(text, q);
+            }}
+            onTyping={onTyping}
+          />
+        )}
+      </>
+    );
+
   return (
     <>
       <PaneHead
@@ -1045,6 +1451,55 @@ function CustomerPane({ kind, id, onBack, onRead }: { kind: "landlord" | "tenant
   const name = t?.title || (kind === "landlord" ? "Landlord" : "Tenant");
   const tone: Tone = kind === "landlord" ? "pink" : "sage";
 
+  if (useNl())
+    return (
+      <>
+        <PaneHead
+          back={onBack}
+          face={<Avatar name={name} size={36} tone={tone} />}
+          title={name}
+          line={t ? (kind === "landlord" ? t.about || "Landlord" : "Tenant · from their portal") : undefined}
+          right={
+            t && (t.phone || t.email) ? (
+              <span className="nl-hud-head-acts">
+                {t.phone && (
+                  <a href={`tel:${t.phone.replace(/[^\d+]/g, "")}`} title={`Call ${t.phone}`} aria-label={`Call ${t.phone}`} className="nl-iconbtn nl-iconbtn--sm">
+                    <Ico name="phone" size={15} />
+                  </a>
+                )}
+                {t.email && (
+                  <a href={`mailto:${t.email}`} title={t.email} aria-label={`Email ${t.email}`} className="nl-iconbtn nl-iconbtn--sm">
+                    <Ico name="mail" size={15} />
+                  </a>
+                )}
+              </span>
+            ) : undefined
+          }
+        />
+        <div className="nl-hud-scroll">
+          {error && !t ? (
+            <ErrorBox text={error} onRetry={() => void load()} />
+          ) : !t ? (
+            <Spinner label="Opening the conversation" />
+          ) : (
+            <Bubbles
+              items={t.messages.map((m) => ({ id: m.id, mine: m.from === "agent", who: name, whoId: `${kind}:${id}`, tone, body: m.body, at: m.at, tick: m.from === "agent" ? (m.seen ? "seen" : "sent") : undefined }))}
+              empty={`Nothing yet. Say hello to ${first(name)}.`}
+            />
+          )}
+        </div>
+        {t && (
+          <Composer
+            key={`${kind}:${id}`}
+            placeholder={`Reply to ${first(name)}...`}
+            foot={note ?? "Your reply is emailed to them, with a link back into this conversation."}
+            footWarn={Boolean(note)}
+            onSend={(text) => send(text)}
+          />
+        )}
+      </>
+    );
+
   return (
     <>
       <PaneHead
@@ -1155,6 +1610,20 @@ type Typing = { names: string[]; pair: boolean; face: Face | null };
 function TypingBubble({ typing }: { typing: Typing }) {
   const who = typing.names.map(first);
   const label = typing.pair ? "" : who.length === 1 ? `${who[0]} is typing` : who.length === 2 ? `${who[0]} and ${who[1]} are typing` : `${who.length} people are typing`;
+  if (useNl())
+    return (
+      <li className="nl-hud-msg is-head is-typing" aria-live="polite">
+        {label && <span className="nl-hud-from">{label}</span>}
+        <div className="nl-hud-line">
+          {typing.face ? <Avatar name={typing.face.name} photo={typing.face.photo} size={28} tone={toneOf(typing.face.id)} /> : <span className="nl-hud-facegap" />}
+          <span className="nl-hud-typing" aria-label={label || "Typing"}>
+            <i />
+            <i />
+            <i />
+          </span>
+        </div>
+      </li>
+    );
   return (
     <li className="hud-typing mt-2 flex flex-col items-start" aria-live="polite">
       {label && <span className="mb-1 ml-11 text-[11.5px] font-medium text-muted">{label}</span>}
@@ -1209,6 +1678,74 @@ function Bubbles({ items, empty, typing = null }: { items: Item[]; empty: string
     return out;
   }, [items]);
 
+  const nl = useNl();
+  if (nl) {
+    if (!items.length && !typing) return <p className="nl-hud-empty">{empty}</p>;
+    return (
+      <ol className="nl-hud-msgs">
+        {rows.map((r) => {
+          if ("day" in r)
+            return (
+              <li key={`d-${r.day}`} className="nl-hud-day">
+                <span>{r.day}</span>
+              </li>
+            );
+          const { m, head, tail } = r;
+          const gif = isGif(m.body);
+          const quote = m.quote && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                jumpTo(m.quote!.id);
+              }}
+              className="nl-hud-quote"
+            >
+              <b>{m.quote.who}</b>
+              <span>{quoteText(m.quote.body)}</span>
+            </button>
+          );
+          const content = gif ? (
+            <div className="nl-hud-gif">
+              {quote}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={m.body.trim()} alt="GIF" onLoad={() => items.slice(-3).some((x) => x.id === m.id) && end.current?.scrollIntoView({ block: "end" })} />
+            </div>
+          ) : m.question ? (
+            <button type="button" onClick={m.question.open} className="nl-hud-bubble is-question">
+              {m.body}
+              <span className="nl-hud-q">Question · {m.question.replies ? `${m.question.replies} ${m.question.replies === 1 ? "answer" : "answers"}` : "Answer it"}</span>
+            </button>
+          ) : (
+            <div className="nl-hud-bubble">
+              {quote}
+              {m.body}
+            </div>
+          );
+          return (
+            <li key={m.id} id={`msg-${m.id}`} className={`nl-hud-msg${m.mine ? " is-me" : ""}${head ? " is-head" : ""}`}>
+              {!m.mine && head && <span className="nl-hud-from">{m.who}</span>}
+              <div className="nl-hud-line">
+                {!m.mine && (tail ? <Avatar name={m.who} photo={m.photo} size={28} tone={m.tone ?? toneOf(m.whoId)} /> : <span className="nl-hud-facegap" />)}
+                {content}
+                {m.onReply && (
+                  <button type="button" onClick={m.onReply} aria-label={`Reply to ${m.mine ? "your message" : m.who}`} title="Reply" className="nl-hud-reply">
+                    <ReplyIcon />
+                  </button>
+                )}
+              </div>
+              <span className="nl-hud-t">
+                {timeOf(m.at)}
+                {m.mine && m.tick && <Ticks seen={m.tick === "seen"} />}
+              </span>
+            </li>
+          );
+        })}
+        {typing && typing.names.length > 0 && <TypingBubble typing={typing} />}
+        <div ref={end} />
+      </ol>
+    );
+  }
   if (!items.length && !typing) return <p className="py-16 text-center text-[13px] text-muted">{empty}</p>;
   return (
     <ol className="mx-auto flex max-w-[1040px] flex-col gap-1 px-2 py-5">
@@ -1394,6 +1931,83 @@ function Composer({
     });
   };
 
+  const nl = useNl();
+  if (nl)
+    return (
+      <form
+        ref={wrap}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+        className="nl-hud-compose"
+      >
+        {pop === "emoji" && <EmojiTray onPick={addEmoji} />}
+        {pop === "gif" && <GifTray busy={busy} onPick={(url) => void send(url)} />}
+        {err && (
+          <p className="nl-hud-note is-warn" role="alert">
+            {err}
+          </p>
+        )}
+        {replying && (
+          <div className="nl-hud-replying">
+            <ReplyIcon size={14} />
+            <span className="nl-hud-replying-text">
+              <b>Replying to {replying.who}</b>
+              <span>{quoteText(replying.body)}</span>
+            </span>
+            <button type="button" onClick={onCancelReply} aria-label="Stop replying" title="Stop replying" className="nl-hud-tool">
+              <svg viewBox="0 0 24 24" aria-hidden width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+        )}
+        <div className="nl-hud-box">
+          <button type="button" onClick={() => setPop((p) => (p === "emoji" ? null : "emoji"))} aria-label="Emoji" aria-expanded={pop === "emoji"} title="Emoji" className={`nl-hud-tool${pop === "emoji" ? " is-on" : ""}`}>
+            <svg viewBox="0 0 24 24" aria-hidden width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="8.5" />
+              <path d="M8.5 14.2c.9 1.2 2.1 1.8 3.5 1.8s2.6-.6 3.5-1.8M9.2 9.7h.01M14.8 9.7h.01" />
+            </svg>
+          </button>
+          {gifs && (
+            <button type="button" onClick={() => setPop((p) => (p === "gif" ? null : "gif"))} aria-label="GIF" aria-expanded={pop === "gif"} title="GIF" className={`nl-hud-tool${pop === "gif" ? " is-on" : ""}`}>
+              <span className="nl-hud-gifmark">GIF</span>
+            </button>
+          )}
+          <textarea
+            ref={box}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              onTyping?.(e.target.value.trim().length > 0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void send();
+              } else if (e.key === "Escape" && replying && !pop) {
+                onCancelReply?.();
+              }
+            }}
+            rows={1}
+            placeholder={placeholder}
+            aria-label={placeholder.replace(/\.+$/, "")}
+          />
+          {canAsk && (
+            <button type="button" onClick={() => setAsQuestion((x) => !x)} aria-pressed={asQuestion} aria-label="Ask as a Question" title="Ask as a Question: others answer it in its own thread" className={`nl-hud-ask${asQuestion ? " is-on" : ""}`}>
+              <span aria-hidden>?</span>
+              <span className="nl-hud-ask-long" aria-hidden>Ask as a Question</span>
+            </button>
+          )}
+          <button type="submit" disabled={!text.trim() || busy} aria-label="Send" className="nl-hud-send">
+            {busy ? <i className="nl-hud-spin" aria-hidden /> : <Ico name="arrow" size={16} />}
+          </button>
+        </div>
+        {foot && <p className={`nl-hud-note${footWarn ? " is-warn" : ""}`}>{foot}</p>}
+      </form>
+    );
+
   return (
     <form
       ref={wrap}
@@ -1501,6 +2115,7 @@ function Composer({
 }
 
 function Tray({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
+  if (useNl()) return <div className={`nl-hud-tray${wide ? " is-wide" : ""}`}>{children}</div>;
   return (
     <div className={`absolute bottom-[calc(100%-6px)] left-4 z-30 flex max-h-[360px] flex-col rounded-2xl border border-[var(--hud-line)] bg-card shadow-[0_18px_40px_-18px_rgba(0,0,0,0.4)] ${wide ? "w-[min(380px,calc(100%-32px))]" : "w-[min(340px,calc(100%-32px))]"}`}>
       {children}
@@ -1666,6 +2281,132 @@ function PeoplePicker({ invite, onClose, onDone }: { invite: string | null; onCl
     if (r.ok) onDone(invite ?? r.id!);
     else setSaveErr(r.error ?? "That did not work.");
   };
+
+  const nl = useNl();
+  if (nl) {
+    const nlGroup = (title: string, list: Person[]) =>
+      list.length > 0 && (
+        <div key={title}>
+          <p className="nl-hud-pgroup">{title}</p>
+          <ul className="nl-hud-people">
+            {list.map((p) => {
+              const on = picked.has(p.id);
+              return (
+                <li key={p.id}>
+                  <button type="button" onClick={() => toggle(p.id)} aria-pressed={on} className={`nl-hud-person${on ? " is-on" : ""}`}>
+                    <Avatar name={p.name} photo={p.photo} size={34} tone={toneOf(p.id)} />
+                    <span className="nl-hud-person-main">
+                      <span className="nl-hud-person-name">{p.name}</span>
+                      <span className="nl-hud-person-town">{p.town ? (p.miles != null ? `${p.town} · ${p.miles} mi` : p.town) : "No patch set"}</span>
+                    </span>
+                    <span className="nl-hud-tick" aria-hidden>
+                      {on && <Ico name="check" size={12} />}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
+    return (
+      <div className="nl-hud-modal-back" onClick={onClose}>
+        <div role="dialog" aria-modal="true" aria-label={invite ? "Invite people" : "Start a huddle"} className="nl-hud-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="nl-hud-modal-head">
+            <div className="nl-hud-modal-text">
+              <h2 className="nl-hud-modal-title">{invite ? "Invite People" : step === "name" ? "Name Your Huddle" : "Start a Huddle"}</h2>
+              <p className="nl-hud-modal-sub">
+                {step === "name" ? `You and ${picked.size} ${picked.size === 1 ? "other" : "others"}. Something like "Northampton Crew".` : "Tick the people you want. Nearest first, by the patch each set on the app."}
+              </p>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close" className="nl-iconbtn nl-iconbtn--sm">
+              <svg viewBox="0 0 24 24" aria-hidden width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+
+          {step === "pick" ? (
+            <>
+              <div className="nl-hud-modal-search">
+                <label className="nl-fsearch">
+                  <Ico name="search" size={15} />
+                  <input autoFocus value={needle} onChange={(e) => setNeedle(e.target.value)} type="search" placeholder="Name or town..." aria-label="Search the team" />
+                </label>
+              </div>
+              <div className="nl-hud-modal-list">
+                {error ? (
+                  <div className="nl-hud-error" role="alert">
+                    {error}
+                  </div>
+                ) : !people ? (
+                  <Spinner label="Finding the team" />
+                ) : (
+                  <>
+                    {nlGroup("Nearest You", near)}
+                    {nlGroup(near.length ? "Everyone Else" : "The Team", rest)}
+                    {!shown.length && <p className="nl-hud-empty is-small">Nobody matches that.</p>}
+                  </>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="nl-hud-modal-name">
+              <div className="nl-hud-chips">
+                {chosen.map((p) => (
+                  <span key={p.id} className="nl-hud-chip">
+                    <Avatar name={p.name} photo={p.photo} size={22} tone={toneOf(p.id)} />
+                    {first(p.name)}
+                  </span>
+                ))}
+              </div>
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && name.trim() && !busy && void save()}
+                maxLength={60}
+                placeholder="Huddle name"
+                aria-label="Huddle name"
+                className="nl-input"
+              />
+            </div>
+          )}
+
+          <div className="nl-hud-modal-foot">
+            {saveErr && (
+              <p className="nl-hud-note is-warn" role="alert">
+                {saveErr}
+              </p>
+            )}
+            <div className="nl-hud-modal-acts">
+              {step === "name" && (
+                <button type="button" onClick={() => setStep("pick")} className="nl-btn nl-btn--secondary">
+                  Back
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={!picked.size || busy || (step === "name" && !name.trim())}
+                onClick={() => (invite || step === "name" ? void save() : setStep("name"))}
+                className="nl-btn nl-btn--primary nl-hud-modal-go"
+              >
+                {busy
+                  ? "Saving..."
+                  : !picked.size
+                    ? "Tick the people you want"
+                    : invite
+                      ? `Add ${picked.size} to the Huddle`
+                      : step === "name"
+                        ? "Start the Huddle"
+                        : `Next: Name It (${picked.size})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const group = (title: string, list: Person[]) =>
     list.length > 0 && (

@@ -1,0 +1,204 @@
+/* New look: applications (lib/new-look). Scoped under [data-look="new"].
+   The board (app/(os)/applications/page.tsx, components/new-look/applications)
+   and one let (components/ApplicationDrawer newLook branch). Measured off the
+   design's Applications and ApplicationDetail. */
+
+/* ── the board: header button count ─────────────────────────────────────── */
+[data-look="new"] .nl-apps-btn-n { font-family: var(--nl-mono); font-size: 11px; color: var(--accent-dark); margin-left: 2px; }
+
+/* ── the stages, counted, with an underline that slides ─────────────────── */
+[data-look="new"] .nl-apps-stages {
+  position: relative; display: grid; grid-template-columns: repeat(10, minmax(84px, 1fr));
+  border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none;
+}
+[data-look="new"] .nl-apps-stages::-webkit-scrollbar { display: none; }
+[data-look="new"] .nl-apps-stage {
+  font: inherit; color: var(--muted); background: none; border: 0; text-align: left; cursor: pointer;
+  padding: 6px 10px 16px; display: flex; flex-direction: column; gap: 2px; position: relative; min-width: 0; transition: color .3s;
+}
+[data-look="new"] .nl-apps-stage + .nl-apps-stage::before { content: ""; position: absolute; left: 0; top: 14px; height: 22px; width: 1px; background: var(--line); }
+[data-look="new"] .nl-apps-stage:hover, [data-look="new"] .nl-apps-stage.is-on { color: var(--ink); }
+[data-look="new"] .nl-apps-stage:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+[data-look="new"] .nl-apps-stage-n { font-family: var(--font-heading); font-weight: 700; font-size: 28px; line-height: 32px; letter-spacing: -0.6px; color: var(--ink); min-height: 32px; display: flex; align-items: center; transition: color .3s; }
+[data-look="new"] .nl-apps-stage.is-empty .nl-apps-stage-n { color: var(--line-strong); }
+[data-look="new"] .nl-apps-stage-name { font-size: 12.5px; line-height: 16px; }
+[data-look="new"] .nl-apps-stage-ind { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--ink); border-radius: 2px; pointer-events: none; }
+[data-look="new"] .nl-apps-stage-ind.is-ready { transition: transform .55s var(--nl-ease), width .55s var(--nl-ease); }
+[data-look="new"] .nl-apps-dots { display: inline-flex; gap: 4px; }
+[data-look="new"] .nl-apps-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); animation: steve-dot 1s ease-in-out infinite; }
+[data-look="new"] .nl-apps-dots i:nth-child(2) { animation-delay: .15s; }
+[data-look="new"] .nl-apps-dots i:nth-child(3) { animation-delay: .3s; }
+
+[data-look="new"] .nl-apps-filters { margin: 20px 0 8px; }
+[data-look="new"] .nl-apps-under { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; margin-top: 12px; }
+
+/* ── groups of lets ─────────────────────────────────────────────────────── */
+[data-look="new"] .nl-apps-groups, [data-look="new"] .nl-apps-list { display: flex; flex-direction: column; gap: 36px; margin-top: 20px; }
+[data-look="new"] .nl-apps-group { display: flex; flex-direction: column; gap: 10px; animation: nl-in .6s var(--nl-ease) both; }
+[data-look="new"] .nl-apps-group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 4px; }
+[data-look="new"] .nl-apps-group-note { flex-basis: 100%; }
+
+/* One let: a hairline card that opens in place. */
+[data-look="new"] .nl-apps-let { border: 1px solid var(--line); border-radius: 24px; transition: border-color .3s, background-color .3s; }
+[data-look="new"] .nl-apps-let:hover, [data-look="new"] .nl-apps-let.is-open { border-color: var(--line-strong); }
+[data-look="new"] .nl-apps-let.is-open { background: var(--card); }
+[data-look="new"] .nl-apps-letrow {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) 210px 80px 120px 30px; gap: 18px; align-items: center;
+  padding: 14px 18px; border-radius: 24px; cursor: pointer; transition: background-color .25s;
+}
+[data-look="new"] .nl-apps-letrow.is-handover { grid-template-columns: 52px minmax(0, 1fr) auto auto; }
+[data-look="new"] .nl-apps-letrow:hover { background: var(--panel); }
+[data-look="new"] .nl-apps-let.is-open .nl-apps-letrow:hover { background: transparent; }
+[data-look="new"] .nl-apps-letrow:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+[data-look="new"] .nl-apps-thumb {
+  position: relative; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; overflow: hidden;
+  background: var(--info-soft); color: var(--muted); flex: none;
+}
+[data-look="new"] .nl-apps-badge { min-width: 0; overflow: hidden; }
+[data-look="new"] .nl-apps-badge .nl-badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .nl-apps-age { font-family: var(--nl-mono); font-size: 12px; color: var(--muted); letter-spacing: 0; white-space: nowrap; }
+[data-look="new"] .nl-apps-age.is-old { color: var(--accent-dark); }
+[data-look="new"] .nl-apps-pips { display: flex; gap: 3px; }
+[data-look="new"] .nl-apps-pips i { flex: 1; height: 4px; border-radius: 2px; background: var(--box); }
+[data-look="new"] .nl-apps-pips i.done { background: var(--ink); }
+[data-look="new"] .nl-apps-pips i.now { background: var(--primary); }
+[data-look="new"] .nl-apps-peek {
+  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent;
+  color: var(--faint); cursor: pointer; transition: background-color .2s, color .2s;
+}
+[data-look="new"] .nl-apps-peek:hover { background: var(--box); color: var(--ink); }
+[data-look="new"] .nl-apps-peek:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-apps-caret { transform: rotate(90deg); transition: transform .35s var(--nl-ease); }
+[data-look="new"] .nl-apps-let.is-open .nl-apps-caret { transform: rotate(-90deg); }
+
+/* The peek: the eight stops, a sentence, the way in. */
+[data-look="new"] .nl-apps-more { padding: 4px 18px 22px 88px; }
+[data-look="new"] .nl-apps-more > p { font-family: var(--nl-serif); font-size: 17px; line-height: 26px; color: var(--ink); margin: 16px 0 14px; max-width: 70ch; }
+[data-look="new"] .nl-apps-more > p.nl-apps-flagline { font-family: var(--font-body); font-size: 13px; line-height: 19px; color: var(--warning); background: var(--warning-soft); padding: 9px 13px; border-radius: 12px; margin-top: -4px; }
+[data-look="new"] .nl-apps-journey { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(var(--nl-steps, 8), minmax(0, 1fr)); gap: 4px; }
+[data-look="new"] .nl-apps-journey li { display: flex; flex-direction: column; gap: 8px; font-size: 11.5px; line-height: 15px; color: var(--faint); position: relative; min-width: 0; }
+[data-look="new"] .nl-apps-journey li i { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: grid; place-items: center; background: var(--card); position: relative; z-index: 1; color: var(--card); }
+[data-look="new"] .nl-apps-journey li:not(:last-child)::after { content: ""; position: absolute; left: 18px; right: 0; top: 8.5px; height: 1px; background: var(--line-strong); }
+[data-look="new"] .nl-apps-journey li.done { color: var(--ink); }
+[data-look="new"] .nl-apps-journey li.done i { background: var(--ink); border-color: var(--ink); }
+[data-look="new"] .nl-apps-journey li.done::after { background: var(--ink); }
+[data-look="new"] .nl-apps-journey li.now { color: var(--ink); font-weight: 600; }
+[data-look="new"] .nl-apps-journey li.now i { border-color: var(--primary); background: var(--primary); }
+
+[data-look="new"] .nl-apps-problem { padding: 28px 0; }
+
+/* ── every application: rows on hairlines ───────────────────────────────── */
+[data-look="new"] .nl-apps-arow {
+  position: relative; display: grid; align-items: center; gap: 18px; width: 100%; text-align: left; cursor: pointer;
+  grid-template-columns: 88px minmax(0, 1fr) 120px minmax(0, 200px) auto;
+  padding: 14px 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; font: inherit; color: inherit;
+  transition: background-color .2s;
+}
+[data-look="new"] .nl-apps-arow.is-propoly { grid-template-columns: minmax(0, 1fr) 120px auto; }
+[data-look="new"] .nl-apps-arow:hover { background: var(--card); }
+[data-look="new"] .nl-apps-arow:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+[data-look="new"] .nl-apps-arow-badges { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+[data-look="new"] .nl-apps-arow-badges .nl-badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .nl-apps-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; }
+[data-look="new"] .nl-apps-page { font: inherit; font-family: var(--nl-mono); font-size: 12px; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 999px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+[data-look="new"] .nl-apps-page:hover { color: var(--ink); background: var(--box); }
+[data-look="new"] .nl-apps-page.is-on { background: var(--ink); color: var(--page); }
+
+[data-look="new"] .nl-apps-about { margin-top: 48px; font-size: 12.5px; color: var(--muted); }
+[data-look="new"] .nl-apps-about summary { cursor: pointer; font-weight: 500; color: var(--muted); width: fit-content; }
+[data-look="new"] .nl-apps-about summary:hover { color: var(--ink); }
+[data-look="new"] .nl-apps-about ul { margin: 12px 0 0; padding-left: 18px; display: grid; gap: 8px; max-width: 760px; line-height: 19px; list-style: disc; }
+[data-look="new"] .nl-apps-about b { font-weight: 600; color: var(--ink); }
+
+@media (max-width: 1100px) {
+  [data-look="new"] .nl-apps-letrow { grid-template-columns: 52px minmax(0, 1fr) auto 30px; }
+  [data-look="new"] .nl-apps-letrow .nl-apps-age, [data-look="new"] .nl-apps-letrow .nl-apps-pips { display: none; }
+  [data-look="new"] .nl-apps-arow { grid-template-columns: 72px minmax(0, 1fr) auto; }
+  [data-look="new"] .nl-apps-arow .nl-row-photo { width: 72px; height: 56px; }
+  [data-look="new"] .nl-apps-arow > .nl-hide-sm, [data-look="new"] .nl-apps-arow .nl-hide-sm { display: none; }
+  [data-look="new"] .nl-apps-arow.is-propoly { grid-template-columns: minmax(0, 1fr) auto; }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-apps-letrow { grid-template-columns: 44px minmax(0, 1fr) 30px; gap: 4px 12px; padding: 12px 12px; }
+  [data-look="new"] .nl-apps-letrow .nl-apps-badge { grid-column: 2; grid-row: 2; }
+  [data-look="new"] .nl-apps-letrow .nl-apps-peek { grid-column: 3; grid-row: 1 / span 2; }
+  [data-look="new"] .nl-apps-letrow.is-handover { grid-template-columns: 44px minmax(0, 1fr); }
+  [data-look="new"] .nl-apps-letrow.is-handover > .nl-btn { grid-column: 2; justify-self: start; }
+  [data-look="new"] .nl-apps-thumb { width: 44px; height: 44px; border-radius: 12px; grid-row: 1 / span 2; }
+  [data-look="new"] .nl-apps-more { padding: 4px 14px 18px; }
+  [data-look="new"] .nl-apps-journey { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 14px; }
+  [data-look="new"] .nl-apps-journey li:nth-child(4n)::after { display: none; }
+  [data-look="new"] .nl-apps-arow { grid-template-columns: 64px minmax(0, 1fr); gap: 6px 14px; }
+  [data-look="new"] .nl-apps-arow .nl-row-photo { width: 64px; height: 50px; grid-row: 1 / span 2; }
+  [data-look="new"] .nl-apps-arow .nl-apps-arow-badges { grid-column: 2; flex-direction: row; }
+  [data-look="new"] .nl-apps-arow.is-propoly { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-apps-arow.is-propoly .nl-apps-arow-badges, [data-look="new"] .nl-apps-arow.is-propoly > span:last-child { grid-column: 1; justify-content: flex-start; }
+  [data-look="new"] .nl-apps-stage-n { font-size: 24px; line-height: 28px; min-height: 28px; }
+  [data-look="new"] .nl-apps-filters .nl-toggle { margin-left: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-apps-stage-ind, [data-look="new"] .nl-apps-group, [data-look="new"] .nl-apps-caret, [data-look="new"] .nl-apps-dots i { animation: none !important; transition: none !important; }
+}
+
+/* ===========================================================================
+   ONE LET (components/ApplicationDrawer, newLook): the design's
+   ApplicationDetail on the record page parts in app/new-look.css.
+=========================================================================== */
+[data-look="new"] .nl-apps-notin { color: var(--accent-dark); border-color: color-mix(in srgb, var(--accent-dark) 40%, transparent); }
+[data-look="new"] .nl-apps-notin:hover { color: var(--accent-dark); border-color: var(--accent-dark); }
+
+[data-look="new"] .nl-apps-track { margin-bottom: 52px; }
+[data-look="new"] .nl-apps-track .nl-progress { margin-bottom: 12px; }
+[data-look="new"] .nl-apps-track .nl-step { cursor: default; }
+[data-look="new"] .nl-apps-track .nl-step.is-off span { text-decoration: line-through; text-decoration-color: var(--line-strong); }
+[data-look="new"] .nl-apps-track-wait { display: flex; align-items: center; gap: 8px; margin-bottom: 52px; }
+
+[data-look="new"] .nl-apps-nextup { gap: 14px; }
+[data-look="new"] .nl-apps-next-line { font-family: var(--nl-serif); font-size: 22px; line-height: 30px; margin: 2px 0 0; text-wrap: pretty; }
+[data-look="new"] .nl-apps-nextbody { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+[data-look="new"] .nl-apps-nextbody > :empty { display: none; }
+/* The old Next Step card, flattened into the cell. */
+[data-look="new"] .nl-apps-nextcard > section { border: 0 !important; background: transparent !important; padding: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+[data-look="new"] .nl-apps-flag { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: var(--warning-soft); font-size: 14px; line-height: 20px; }
+[data-look="new"] .nl-apps-flag svg { color: var(--warning); flex: none; margin-top: 2px; }
+[data-look="new"] .nl-apps-flag b { font-weight: 600; }
+[data-look="new"] .nl-apps-flag.is-good { background: var(--sage-soft); }
+[data-look="new"] .nl-apps-flag.is-good svg { color: var(--sage-ink); }
+[data-look="new"] .nl-apps-aside { padding: 18px 20px; }
+[data-look="new"] .nl-apps-aside > section, [data-look="new"] .nl-apps-aside > div > section { box-shadow: none !important; }
+
+/* Things to Do: a line each, the label, why, an arrow. */
+[data-look="new"] .nl-apps-todos { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-apps-todos > li + li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-apps-todo {
+  font: inherit; color: inherit; width: 100%; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 16px; gap: 12px; align-items: center;
+  text-align: left; background: none; border: 0; padding: 12px 4px; cursor: pointer; border-radius: 10px; text-decoration: none;
+  transition: background-color .2s, padding .3s var(--nl-ease);
+}
+[data-look="new"] .nl-apps-todo svg { color: var(--faint); }
+[data-look="new"] .nl-apps-todo:hover:not(:disabled) { background: var(--panel); padding-left: 10px; }
+[data-look="new"] .nl-apps-todo:disabled { cursor: default; }
+[data-look="new"] .nl-apps-todo:disabled .nl-strong { color: var(--muted); }
+[data-look="new"] .nl-apps-todo:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+[data-look="new"] .nl-apps-people { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); }
+[data-look="new"] .nl-apps-personcard { gap: 14px; }
+[data-look="new"] .nl-apps-personcard .nl-person { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+[data-look="new"] .nl-apps-propfile { padding-top: 28px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-apps-propfile > section { border: 0 !important; padding: 0 !important; background: transparent !important; }
+[data-look="new"] .nl-apps-noteav { width: 34px; height: 34px; font-size: 11px; background: var(--info-soft); }
+
+@media (max-width: 760px) {
+  [data-look="new"] .nl-apps-track { margin-bottom: 40px; }
+  [data-look="new"] .nl-apps-todo { grid-template-columns: minmax(0, 1fr) 16px; gap: 2px 12px; }
+  [data-look="new"] .nl-apps-todo .nl-meta { grid-column: 1; grid-row: 2; }
+  [data-look="new"] .nl-apps-todo svg { grid-column: 2; grid-row: 1 / span 2; }
+  [data-look="new"] .nl-apps-next-line { font-size: 19px; line-height: 26px; }
+}
+/* The handover packet is its own card already: no second box round it. */
+[data-look="new"] .nl-cell.nl-apps-aside { background: transparent; border: 0; padding: 0; }
+@media (max-width: 760px) {
+  [data-look="new"].nl-app .nl-rhead-acts { width: 100%; }
+  [data-look="new"].nl-app .nl-rhead-acts > .nl-menu-wrap { margin-left: auto; }
+}

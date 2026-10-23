@@ -30,6 +30,27 @@ export const LOOK_SCREENS = [
   { id: "listings", label: "Listings board", what: "The Listings page: type-only header, the filter row, text tabs and the new cards." },
   { id: "listing", label: "Listing page", what: "One listing: the head with its two jobs, the big photo beside The Details, the progress line and the tabs." },
   { id: "settings", label: "Settings", what: "Your Profile, every tab: the form with the landlord's preview, appearance, connections, automations and the rest." },
+  /* The rest of the site (James, 23 Oct 2026): built behind these, each turned on when he's ready. */
+  { id: "dashboard", label: "Dashboard", what: "The greeting, today's diary and the figures, laid out as the design has them." },
+  { id: "huddles", label: "Huddles", what: "The team chats: the list of huddles and the conversation beside it." },
+  { id: "leads", label: "Leads board", what: "Leads: the header, filter row, text tabs and the new rows." },
+  { id: "lead", label: "Lead page", what: "One lead: the head, their details, the timeline and what happens next." },
+  { id: "appraisals", label: "Market Appraisals board", what: "Market Appraisals: the list of booked and done appraisals with their stages." },
+  { id: "appraisal", label: "Appraisal page", what: "One appraisal: the stages from booking to terms, the landlord and the home." },
+  { id: "diary", label: "Diary", what: "The diary: the week and month views and the appointment drawer." },
+  { id: "applications", label: "Applications board", what: "Applications: lets in progress, their stage and what each is waiting on." },
+  { id: "application", label: "Application page", what: "One let in progress: the tenants, the checks, the documents and the handover." },
+  { id: "portfolio", label: "Portfolio", what: "Portfolio and the list of homes under management." },
+  { id: "property", label: "Property page", what: "One managed home: rent, tenancy, certificates, works and documents." },
+  { id: "overview", label: "Back-office Overview", what: "The back office at a glance." },
+  { id: "maintenance", label: "Maintenance", what: "Repairs and planned jobs, grouped as the design has them." },
+  { id: "contractors", label: "Contractors", what: "The contractor list and each contractor's details." },
+  { id: "finances", label: "Finances", what: "Income, costs and the figures behind them." },
+  { id: "compliance", label: "Compliance", what: "Certificates across the book: what's in date, due and missing." },
+  { id: "plc", label: "PLC", what: "Pre-let checks: the queue and the review screen." },
+  { id: "advert", label: "Edit advert", what: "The advert editor on a listing." },
+  { id: "help", label: "Help", what: "Guides and help." },
+  { id: "admin", label: "Admin", what: "Admin's home, People and the admin tools." },
 ] as const;
 
 export type LookScreen = (typeof LOOK_SCREENS)[number]["id"];
@@ -40,4 +61,4 @@ export const isLookScreen = (v: unknown): v is LookScreen => LOOK_SCREENS.some((
 /** Who is on, screen by screen. */
 export type LookOn = Record<LookScreen, boolean>;
 
-export const ALL_OFF: LookOn = { nav: false, steve: false, listings: false, listing: false, settings: false };
+export const ALL_OFF = Object.fromEntries(LOOK_SCREENS.map((d) => [d.id, false])) as LookOn;

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Check, CheckId, Finding, PlcCase } from "@/lib/plc";
 import SaveChip, { SaveScopeProvider, trackSave, useSaveReporter, useSaveScope } from "@/components/SaveChip";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Ico, Mast, type Tone } from "@/components/new-look/Parts";
 
 /**
  * The PLC handover, both sides of it, on one screen.
@@ -48,11 +50,14 @@ function AgentSide({
   reload,
   onSubmitted,
   say,
+  newLook = false,
 }: {
   data: Loaded;
   reload: () => Promise<void>;
   onSubmitted: () => void;
   say: (e: string | null) => void;
+  /** Draw it the new look's way (lib/new-look "plc"). Same handlers either way. */
+  newLook?: boolean;
 }) {
   const c = data.case;
   const editable = c.state === "assembling";
@@ -160,6 +165,175 @@ function AgentSide({
       setBusy(null);
     }
   };
+
+  /* ── THE NEW LOOK (lib/new-look "plc", 23 Oct 2026): the same handlers and
+     the same fields, drawn as the design's review screen - the documents on
+     the left, where the pack stands and what to do next on the right. ── */
+  if (newLook) {
+    const withCompliance = c.state === "submitted" || c.state === "scanning" || c.state === "reviewing" || c.state === "checked";
+    return (
+      <div className="nl-plc-split">
+        <section className="nl-plc-card nl-plc-docs" data-plc="split-left">
+          <div className="nl-plc-cardhead">
+            <h3 className="nl-plc-h">Submission Documents</h3>
+            <span className="nl-meta">{data.missing.length ? `${data.missing.length} still to attach` : "All attached"}</span>
+          </div>
+          <ul className="nl-plc-doclist">
+            {data.checks.map((check) => {
+              const filed = c.documents.filter((d) => d.checkId === check.id || d.covers?.includes(check.id));
+              const short = data.missing.includes(check.id);
+              const w = (c.waivers ?? []).find((x) => x.checkId === check.id);
+              return (
+                <li key={check.id} className="nl-plc-doc" data-check={check.id}>
+                  <span className={`nl-plc-dot${filed.length ? " is-sage" : short ? " is-accent" : ""}`} aria-hidden />
+                  <div className="nl-plc-docmain">
+                    <p className="nl-strong">
+                      {check.label}
+                      {short && <span className="nl-plc-tag is-accent">Missing</span>}
+                      {check.scan === "none" && <span className="nl-plc-tag">Not scanned</span>}
+                    </p>
+                    <p className="nl-meta">{check.needs}</p>
+                    {/* The agent's reason sits where the file would be: a claim with a name on it. */}
+                    {w && (
+                      <p className="nl-plc-waiver">
+                        Not needed, says {w.by}: &ldquo;{w.reason}&rdquo;
+                      </p>
+                    )}
+                    {filed.length > 0 && (
+                      <ul className="nl-plc-files">
+                        {filed.map((d) => (
+                          <li key={d.key}>
+                            <a href={d.url} target="_blank" rel="noreferrer" className="nl-plc-file">{d.name}</a>
+                            <span className="nl-meta">{d.addedBy} · {prettyDate(d.addedAt)}</span>
+                            {editable && (
+                              <button type="button" onClick={() => unfile(d.key)} disabled={busy === d.key} className="nl-link nl-plc-remove">
+                                {busy === d.key ? "Removing…" : "Remove"}
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  {editable && (
+                    <div className="nl-plc-docact">
+                      <input
+                        ref={(el) => {
+                          files.current[check.id] = el;
+                        }}
+                        type="file"
+                        accept="application/pdf,image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) attach(check.id, f);
+                          e.target.value = "";
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => files.current[check.id]?.click()}
+                        disabled={busy === check.id}
+                        className="nl-btn nl-btn--secondary nl-btn--sm"
+                      >
+                        <Ico name="upload" size={14} />
+                        {busy === check.id ? "Working…" : filed.length ? "Add another" : "Attach"}
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <div className="nl-plc-right">
+          {c.state === "deferred" && (
+            <section className="nl-plc-card is-accent">
+              <h3 className="nl-plc-h">Compliance Sent This Back</h3>
+              <p className="nl-plc-say">{c.decisionNote}</p>
+              <p className="nl-meta">{c.decidedBy} · {prettyWhen(c.decidedAt)}</p>
+              <button type="button" onClick={reopen} disabled={busy === "reopen"} className="nl-btn nl-btn--primary mt-4">
+                {busy === "reopen" ? "Working…" : "Reopen and fix it"}
+              </button>
+            </section>
+          )}
+          {c.state === "approved" && (
+            <section className="nl-plc-card is-sage">
+              <h3 className="nl-plc-h">Approved by {c.decidedBy}</h3>
+              {c.decisionNote && <p className="nl-plc-say">{c.decisionNote}</p>}
+              <p className="nl-meta">{prettyWhen(c.decidedAt)}</p>
+              {/* What happens now is the agent's, and it is not in the OS (Howard, 15 Sep 2026). */}
+              <p className="nl-plc-next">
+                Next: finish the deal in Propoly. The OS can&apos;t move it on there, so open the application and use its link to the deal.
+              </p>
+            </section>
+          )}
+          {c.state === "declined" && (
+            <section className="nl-plc-card is-accent">
+              <h3 className="nl-plc-h">Declined by {c.decidedBy}</h3>
+              <p className="nl-plc-say">{c.decisionNote}</p>
+            </section>
+          )}
+          {withCompliance && (
+            <section className="nl-plc-card is-panel">
+              <p className="nl-plc-say">With compliance since {prettyWhen(c.submittedAt)}. You will get it back with a decision.</p>
+            </section>
+          )}
+
+          <section className="nl-plc-card">
+            <h3 className="nl-plc-h">The Tenancy</h3>
+            <div className="nl-form mt-4">
+              <label className="nl-field">
+                <span>Move-in date</span>
+                <input
+                  type="date"
+                  value={moveIn}
+                  disabled={!editable}
+                  onChange={(e) => setMoveIn(e.target.value)}
+                  onBlur={() => moveIn !== (c.moveInDate ?? "") && saveDetails({ moveInDate: moveIn })}
+                />
+                <small>Every date check is measured against this, not against today.</small>
+              </label>
+              <label className="nl-field">
+                <span>Anything compliance should know</span>
+                <textarea
+                  rows={3}
+                  value={note}
+                  disabled={!editable}
+                  onChange={(e) => setNote(e.target.value)}
+                  onBlur={() => note !== c.agentNote && saveDetails({ agentNote: note })}
+                />
+              </label>
+            </div>
+          </section>
+
+          {editable && (
+            <section className="nl-plc-card is-accent">
+              <h3 className="nl-plc-h">Hand It Over</h3>
+              <p className="nl-plc-say">
+                {data.missing.length
+                  ? `${data.missing.length} ${data.missing.length === 1 ? "document is" : "documents are"} still to attach. Send it when the pack is whole, or send it anyway and say why in the note.`
+                  : "Every document is attached. Send it to the PLC team."}
+              </p>
+              <div className="nl-plc-acts">
+                <button type="button" onClick={() => submit(false)} disabled={busy === "submit"} className="nl-btn nl-btn--primary">
+                  <Ico name="check" size={15} />
+                  {busy === "submit" ? "Working…" : "Submit to the PLC team"}
+                </button>
+                {data.missing.length > 0 && (
+                  <button type="button" onClick={() => submit(true)} disabled={busy === "submit"} className="nl-btn nl-btn--secondary">
+                    {busy === "submit" ? "Working…" : "Submit anyway"}
+                  </button>
+                )}
+              </div>
+              <p className="nl-meta mt-3">Once it goes you cannot change the pack until compliance send it back.</p>
+            </section>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -373,8 +547,26 @@ function AgentSide({
 
 /* ─────────────────────────────── the harness ───────────────────────────── */
 
+/* The new look's words for each state: the same labels as PlcReview's Pill. */
+const STATE: Record<PlcCase["state"], { label: string; tone: Tone }> = {
+  assembling: { label: "Assembling", tone: "neutral" },
+  submitted: { label: "Submitted", tone: "warning" },
+  scanning: { label: "Scanning", tone: "warning" },
+  reviewing: { label: "First check", tone: "accent" },
+  checked: { label: "Final approval", tone: "warning" },
+  approved: { label: "Approved", tone: "good" },
+  deferred: { label: "Deferred", tone: "warning" },
+  declined: { label: "Declined", tone: "accent" },
+};
+const WITH_COMPLIANCE: PlcCase["state"][] = ["submitted", "scanning", "reviewing", "checked"];
+
 export default function PlcDryRun() {
+  const look = useNewLook("plc");
   const [cases, setCases] = useState<PlcCase[]>([]);
+  /** The list has answered (or failed), so the counts are real. */
+  const [listed, setListed] = useState(false);
+  /** The list didn't load: the counts are unknown, not nought. */
+  const [listFailed, setListFailed] = useState(false);
   const [id, setId] = useState<string | null>(null);
   const [data, setData] = useState<Loaded | null>(null);
   const [role, setRole] = useState<"agent" | "compliance">("agent");
@@ -389,6 +581,7 @@ export default function PlcDryRun() {
     try {
       const res = await api<{ cases: PlcCase[] }>("/api/plc");
       setCases(res.cases);
+      setListFailed(false);
       /* ?case=<id> is how the wizard's "See where it is up to" arrives, so a
          handover just sent opens on itself rather than on whatever happens to
          be newest. Read once, on the first load, so it cannot fight a
@@ -397,6 +590,9 @@ export default function PlcDryRun() {
       setId((prev) => prev ?? (asked && res.cases.some((c) => c.id === asked) ? asked : null) ?? res.cases[0]?.id ?? null);
     } catch (e) {
       setError((e as Error).message);
+      setListFailed(true);
+    } finally {
+      setListed(true);
     }
   }, []);
 
@@ -442,6 +638,182 @@ export default function PlcDryRun() {
       setStarting(false);
     }
   };
+
+  /* ── THE NEW LOOK (lib/new-look "plc", 23 Oct 2026) ──────────────────────
+     The design's PLC queue and review on one page, as the harness has always
+     been: who you are, the cases as a queue, starting one, then the chosen
+     case as a review. Same loads, same writes, same switch. */
+  if (look === null) {
+    return (
+      <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted">
+        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+        Opening the PLC handover…
+      </p>
+    );
+  }
+  if (look) {
+    const now = Date.now();
+    const waiting = cases.filter((k) => WITH_COMPLIANCE.includes(k.state));
+    const overdue = waiting.filter((k) => k.submittedAt && now - new Date(k.submittedAt).getTime() > 48 * 3600e3);
+    const weekEnd = now + 7 * 86400e3;
+    const movingSoon = cases.filter((k) => {
+      if (!k.moveInDate || k.state === "approved" || k.state === "declined") return false;
+      const t = new Date(`${k.moveInDate}T23:59:59`).getTime();
+      return t >= now - 86400e3 && t <= weekEnd;
+    });
+    const tiles: { label: string; value: number; note: string; tone: string }[] = [
+      { label: "With compliance", value: waiting.length, note: "Handed over and waiting on a check", tone: "" },
+      { label: "Past 48 hours", value: overdue.length, note: "Waiting longer than two days", tone: overdue.length ? " is-accent" : "" },
+      { label: "Moving in this week", value: movingSoon.length, note: "Open packs with a move-in inside seven days", tone: " is-sage" },
+    ];
+    const current = data?.case ?? null;
+    return (
+      <div data-look="new" className="nl-page nl-rise">
+        <Mast
+          eyebrow="Dry run"
+          title="PLC Handover"
+          blurb="Both sides of the handover on one screen. Submitting takes you to the compliance view; deciding sends you back to the agent. Everything you press writes to the real store."
+        />
+
+        {/* The switch. Two big buttons, because "which one am I looking at" has to be answerable from across a desk. */}
+        <div className="nl-plc-who">
+          <div className="nl-plc-seg" role="group" aria-label="You are">
+            {(
+              [
+                ["agent", "Agent", "Puts the pack together and hands it over"],
+                ["compliance", "Kirstie, compliance", "Reads the pack and decides"],
+              ] as const
+            ).map(([key, label, sub]) => (
+              <button key={key} type="button" aria-pressed={role === key} onClick={() => setRole(key)} className={role === key ? "is-on" : ""}>
+                <b>You are: {label}</b>
+                <span>{sub}</span>
+              </button>
+            ))}
+          </div>
+          <p className="nl-meta">Nothing here is sent to anybody. It is one browser playing two people.</p>
+        </div>
+
+        <div className="nl-plc-tiles" aria-busy={!listed}>
+          {tiles.map((t) => (
+            <div key={t.label} className={`nl-plc-tile${listed && !listFailed ? t.tone : ""}`}>
+              <span className="nl-plc-tile-label">{t.label}</span>
+              {listed ? <b className="nl-plc-fig">{listFailed ? "-" : t.value}</b> : <span className="nl-plc-skel" aria-label="Loading" />}
+              <span className="nl-plc-tile-note">{t.note}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="nl-plc-top">
+          {/* The cases, newest first as the store gives them. */}
+          <section className="nl-plc-card nl-plc-queue">
+            <div className="nl-plc-cardhead">
+              <h2 className="nl-plc-h">Handovers</h2>
+              <span className="nl-meta">{listed && !listFailed ? `${cases.length} ${cases.length === 1 ? "case" : "cases"}` : ""}</span>
+            </div>
+            {!listed ? (
+              <p className="nl-plc-wait"><span className="nl-plc-spin" aria-hidden />Reading the handovers…</p>
+            ) : listFailed && cases.length === 0 ? (
+              <div className="nl-plc-failed" role="alert">
+                <p className="nl-plc-bad">The handovers didn&rsquo;t load, so nothing here has been checked.</p>
+                <button type="button" onClick={() => void loadList()} className="nl-btn nl-btn--secondary nl-btn--sm mt-3">Try again</button>
+              </div>
+            ) : cases.length === 0 ? (
+              <p className="nl-empty">Nothing yet. Start a handover.</p>
+            ) : (
+              <ul className="nl-plc-rows">
+                {cases.map((k) => {
+                  const since = k.submittedAt ? now - new Date(k.submittedAt).getTime() : null;
+                  const over = since != null && WITH_COMPLIANCE.includes(k.state) && since > 48 * 3600e3;
+                  const st = STATE[k.state];
+                  return (
+                    <li key={k.id}>
+                      <button type="button" onClick={() => setId(k.id)} aria-current={k.id === id ? "true" : undefined} className={`nl-plc-row${k.id === id ? " is-on" : ""}`}>
+                        <span className={`nl-plc-waitfig${over ? " is-over" : ""}`}>
+                          {since == null ? "Not sent" : since < 48 * 3600e3 ? `${Math.max(0, Math.round(since / 3600e3))} hrs` : `${(since / 86400e3).toFixed(1)} days`}
+                          {over && <small>over</small>}
+                        </span>
+                        <span className="nl-plc-rowmain">
+                          <span className="nl-strong">{k.address}</span>
+                          <span className="nl-meta">
+                            {[
+                              k.agentName && k.agentName !== "Unassigned" ? k.agentName : null,
+                              k.submittedAt ? `handed over ${prettyWhen(k.submittedAt)}` : "not handed over yet",
+                              k.moveInDate ? `moving in ${prettyDate(k.moveInDate)}` : null,
+                            ].filter(Boolean).join(" · ")}
+                          </span>
+                        </span>
+                        <Badge tone={st.tone} plain>{st.label}</Badge>
+                        <svg className="nl-plc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="nl-plc-card nl-plc-start">
+            <h2 className="nl-plc-h">Start a Handover</h2>
+            <div className="nl-form mt-4">
+              <label className="nl-field">
+                <span>Application reference</span>
+                <input value={form.applicationRef} onChange={(e) => setForm({ ...form, applicationRef: e.target.value })} />
+              </label>
+              <label className="nl-field">
+                <span>Property address</span>
+                <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              </label>
+              <label className="nl-field">
+                <span>Move-in date</span>
+                <input type="date" value={form.moveInDate} onChange={(e) => setForm({ ...form, moveInDate: e.target.value })} />
+              </label>
+            </div>
+            <button type="button" onClick={start} disabled={starting || !form.applicationRef || !form.address} className="nl-btn nl-btn--secondary mt-5">
+              <Ico name="plus" size={15} />
+              {starting ? "Working…" : "Start it"}
+            </button>
+          </section>
+        </div>
+
+        {error && <p className="nl-plc-error" role="alert">{error}</p>}
+
+        {current ? (
+          <section className="nl-plc-review" aria-label={`PLC check, ${current.address}`}>
+            <header className="nl-plc-head">
+              <span className="nl-plc-chip" aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="M9 12l2 2 4-4" /></svg>
+              </span>
+              <div className="nl-plc-headtext">
+                <h2 className="nl-plc-title">{current.address}</h2>
+                <div className="nl-plc-headmeta">
+                  <span className="nl-meta">
+                    {[
+                      current.agentName && current.agentName !== "Unassigned" ? `From ${current.agentName}` : null,
+                      current.applicationRef ? `Application ${current.applicationRef}` : null,
+                      current.moveInDate ? `moving in ${prettyDate(current.moveInDate)}` : "no move-in date yet",
+                    ].filter(Boolean).join(" · ")}
+                  </span>
+                  <Badge tone={STATE[current.state].tone} plain>{STATE[current.state].label}</Badge>
+                </div>
+              </div>
+              {role === "agent" ? <SaveChip scope={saves} className="nl-plc-savechip" /> : null}
+            </header>
+            {role === "agent" ? (
+              <SaveScopeProvider scope={saves}>
+                <AgentSide data={data!} reload={reload} say={setError} onSubmitted={() => setRole("compliance")} newLook />
+              </SaveScopeProvider>
+            ) : (
+              <div className="nl-plc-side">
+                <ComplianceSide data={data!} reload={reload} say={setError} onDecided={() => setRole("agent")} />
+              </div>
+            )}
+          </section>
+        ) : id && listed ? (
+          <p className="nl-plc-wait"><span className="nl-plc-spin" aria-hidden />Opening the case…</p>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">

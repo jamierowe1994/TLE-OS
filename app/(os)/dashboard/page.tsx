@@ -8,6 +8,8 @@ import QuickLinks from "@/components/QuickLinks";
 import LaunchReady from "@/components/LaunchReady";
 import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
 import { fetchMe } from "@/lib/me";
+import { useNewLook } from "@/lib/use-new-look";
+import DashboardNew from "@/components/new-look/dashboard/DashboardNew";
 
 /**
  * The dashboard is now a bento board the agent owns. The DEFAULT layout is
@@ -72,6 +74,18 @@ export default function Dashboard() {
       .catch(() => {});
     return () => { gone = true; };
   }, []);
+  const look = useNewLook("dashboard");
+
+  /* ── THE NEW LOOK (lib/new-look "dashboard", 23 Oct 2026) ─────────────────
+     The greeting, today's diary and the figures, laid out as the design has
+     them: components/new-look/dashboard. The same reads as the tiles below -
+     the board stays underneath, untouched, until the switch has bedded in.
+     The phone redirect above runs for both. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening your dashboard…</p>;
+  }
+  if (look) return <DashboardNew title={greeting(name)} />;
+
   return (
     <>
       <PageHeader

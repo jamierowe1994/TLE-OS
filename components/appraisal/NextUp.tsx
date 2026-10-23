@@ -49,6 +49,7 @@ export default function NextUp({
   onSaved,
   onDecksChanged,
   onAttach,
+  look,
 }: {
   ma: MarketAppraisal;
   /** The decks for this appraisal: undefined while reading, null if that failed. */
@@ -59,6 +60,8 @@ export default function NextUp({
   onDecksChanged?: () => void;
   /** Show the property file (the AML step's attach button). */
   onAttach?: () => void;
+  /** "new": drawn as the new look's big sage card (lib/new-look "appraisal"). Same steps, same buttons. */
+  look?: "new";
 }) {
   const refId = ma.leadId ?? ma.id;
   const [error, setError] = useState<string | null>(null);
@@ -192,10 +195,12 @@ export default function NextUp({
         ? "cannot go out on its own - there is no email for the landlord on this file"
         : "goes as soon as you send it";
 
-  const primary =
-    "inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60";
-  const ghost =
-    "inline-flex items-center gap-2 rounded-full border border-line/70 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40";
+  const primary = look === "new"
+    ? "nl-btn nl-btn--primary"
+    : "inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60";
+  const ghost = look === "new"
+    ? "nl-btn nl-btn--secondary"
+    : "inline-flex items-center gap-2 rounded-full border border-line/70 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40";
 
   type Card = { icon: string; eyebrow?: string; title: React.ReactNode; sub?: string; body?: React.ReactNode };
   let card: Card;
@@ -403,6 +408,20 @@ export default function NextUp({
         </div>
       ),
     };
+  }
+
+  /* The new look: the design's "Next up" card - sage, a big title, the
+     words in the serif, the step's own buttons under them. */
+  if (look === "new") {
+    return (
+      <section className="nl-appr-nextcard">
+        <div className="nl-eyebrow">{card.eyebrow ?? "Next up"}</div>
+        <h2 className="nl-appr-nextcard-title">{card.title}</h2>
+        {card.sub && <p className="nl-appr-nextcard-sub">{card.sub}</p>}
+        {card.body && <div className="nl-appr-nextcard-body">{card.body}</div>}
+        {error && <p className="nl-appr-nextcard-err">{error}</p>}
+      </section>
+    );
   }
 
   return (

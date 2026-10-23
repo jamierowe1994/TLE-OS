@@ -1,0 +1,232 @@
+/* New look: backoffice (lib/new-look). Scoped under [data-look="new"].
+   Overview, Maintenance, Contractors and Finances, after the design's
+   Overview, Maintenance + JobGroup, Contractors and Finance. Prefix nl-bo-. */
+
+/* ── shared bits ────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-bo-spin {
+  display: inline-block; width: 14px; height: 14px; flex: none; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--ink); animation: nl-bo-spin 0.8s linear infinite; vertical-align: middle;
+}
+@keyframes nl-bo-spin { to { transform: rotate(360deg); } }
+[data-look="new"] .nl-bo-loading { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); margin: 0 0 18px; }
+[data-look="new"] .nl-bo-failed {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 18px; padding: 14px 18px;
+  border-radius: 16px; background: var(--accent-soft); color: var(--ink); font-size: 13.5px; line-height: 20px;
+}
+[data-look="new"] .nl-bo-err { font-size: 13px; line-height: 19px; color: var(--accent-dark); }
+[data-look="new"] .nl-bo-note { font-size: 13px; line-height: 19px; color: var(--muted); }
+
+/* The design's StatCard. */
+[data-look="new"] .nl-bo-stats { display: grid; gap: 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+[data-look="new"] .nl-bo-stats.is-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1100px) { [data-look="new"] .nl-bo-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { [data-look="new"] .nl-bo-stats.is-3 { grid-template-columns: 1fr; } }
+[data-look="new"] .nl-bo-stat {
+  position: relative; overflow: hidden; display: flex; flex-direction: column; min-width: 0; text-align: left;
+  background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 26px 28px 24px;
+  color: inherit; font: inherit; text-decoration: none; transition: border-color 0.25s;
+}
+[data-look="new"] .nl-bo-stat.is-link { cursor: pointer; }
+[data-look="new"] .nl-bo-stat.is-link:hover { border-color: var(--line-strong); }
+[data-look="new"] .nl-bo-stat.is-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-bo-stat-label { font-size: 13px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-bo-stat.has-spark .nl-bo-stat-label { padding-right: 84px; }
+[data-look="new"] .nl-bo-stat-value {
+  font-family: var(--nl-serif); font-size: 30px; line-height: 36px; margin-top: 14px; color: var(--ink);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+[data-look="new"] .nl-bo-stat-value.is-reading { display: flex; align-items: center; height: 36px; }
+[data-look="new"] .nl-bo-stat-delta { font-size: 12.5px; line-height: 18px; color: var(--muted); margin-top: 6px; }
+[data-look="new"] .nl-bo-stat-delta b { font-weight: 500; color: var(--ink); }
+[data-look="new"] .nl-bo-stat-delta b.is-good { color: var(--sage-ink); }
+[data-look="new"] .nl-bo-stat-delta b.is-bad { color: var(--accent-dark); }
+[data-look="new"] .nl-bo-stat-err { margin-top: 14px; font-size: 13px; line-height: 19px; color: var(--accent-dark); }
+[data-look="new"] .nl-bo-spark { position: absolute; right: 22px; top: 22px; width: 72px; height: 28px; color: var(--primary); }
+[data-look="new"] .nl-bo-spark .area { fill: var(--pal-sage); opacity: 0.25; stroke: none; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-bo-stat { padding: 18px 18px 16px; border-radius: 20px; }
+  [data-look="new"] .nl-bo-stat-label { padding-right: 0; }
+  [data-look="new"] .nl-bo-stat-value { font-size: 24px; line-height: 30px; margin-top: 8px; }
+  [data-look="new"] .nl-bo-spark { display: none; }
+}
+
+/* Cards and the grids they sit in. */
+[data-look="new"] .nl-bo-g2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); margin-bottom: 16px; }
+[data-look="new"] .nl-bo-g2.is-even { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+[data-look="new"] .nl-bo-g3 { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1180px) { [data-look="new"] .nl-bo-g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { [data-look="new"] .nl-bo-g2, [data-look="new"] .nl-bo-g2.is-even { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { [data-look="new"] .nl-bo-g3 { grid-template-columns: 1fr; } }
+[data-look="new"] .nl-bo-card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 26px 28px; min-width: 0; display: flex; flex-direction: column; }
+[data-look="new"] .nl-bo-card.is-click { cursor: pointer; transition: border-color 0.25s; }
+[data-look="new"] .nl-bo-card.is-click:hover { border-color: var(--line-strong); }
+[data-look="new"] .nl-bo-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+[data-look="new"] .nl-bo-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 22px; line-height: 28px; letter-spacing: -0.3px; margin: 0; color: var(--ink); min-width: 0; }
+[data-look="new"] .nl-bo-part .nl-bo-card-title { font-size: 18px; line-height: 24px; letter-spacing: -0.2px; }
+[data-look="new"] .nl-bo-aside { font-size: 13px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-bo-card { padding: 20px 18px; border-radius: 20px; }
+  [data-look="new"] .nl-bo-card-title { font-size: 19px; line-height: 25px; }
+}
+
+/* A figure with its words. */
+[data-look="new"] .nl-bo-fig { font-family: var(--nl-serif); font-size: 34px; line-height: 40px; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-bo-fig .nl-meta { font-family: var(--font-body); font-size: 12.5px; margin-left: 2px; }
+[data-look="new"] .nl-bo-fig.is-hot { color: var(--accent-dark); }
+[data-look="new"] .nl-bo-fig.is-reading { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 40px; }
+[data-look="new"] .nl-bo-mini {
+  display: grid; gap: 10px 14px; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
+  border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px;
+}
+[data-look="new"] .nl-bo-mini > div { display: flex; flex-direction: column; gap: 2px; }
+[data-look="new"] .nl-bo-mini span { font-size: 12px; line-height: 16px; color: var(--muted); }
+[data-look="new"] .nl-bo-mini b { font-family: var(--nl-serif); font-weight: 400; font-size: 19px; line-height: 24px; color: var(--ink); }
+[data-look="new"] .nl-bo-mini b.is-hot { color: var(--accent-dark); }
+[data-look="new"] .nl-bo-list { list-style: none; margin: 14px 0 0; padding: 0; }
+[data-look="new"] .nl-bo-list > li { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; min-width: 0; }
+[data-look="new"] .nl-bo-list > li:last-child { padding-bottom: 0; }
+
+/* Meters, for occupancy. */
+[data-look="new"] .nl-bo-meters { display: flex; flex-direction: column; gap: 16px; }
+[data-look="new"] .nl-bo-meter-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 7px; font-size: 14px; }
+[data-look="new"] .nl-bo-meter-bar { height: 6px; border-radius: 3px; background: var(--box); overflow: hidden; }
+[data-look="new"] .nl-bo-meter-bar i { display: block; height: 100%; border-radius: 3px; background: var(--ink); transform-origin: left; animation: nl-bo-grow-x 0.7s var(--nl-ease) both; }
+[data-look="new"] .nl-bo-meter-bar.is-quiet i { opacity: 0.55; }
+[data-look="new"] .nl-bo-meter-bar.is-hot i { background: var(--accent-dark); opacity: 1; }
+@keyframes nl-bo-grow-x { from { transform: scaleX(0); } to { transform: none; } }
+
+/* Bars, for a run of months. */
+[data-look="new"] .nl-bo-bars { display: flex; align-items: flex-end; gap: 16px; height: 200px; padding-top: 8px; }
+[data-look="new"] .nl-bo-bar { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; height: 100%; }
+[data-look="new"] .nl-bo-bar i { width: 100%; max-width: 40px; border-radius: 6px 6px 2px 2px; background: var(--box); transform-origin: bottom; animation: nl-bo-grow-y 0.6s var(--nl-ease) both; }
+[data-look="new"] .nl-bo-bar.is-now i { background: var(--accent); }
+[data-look="new"] .nl-bo-bar span { font-family: var(--nl-mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+@keyframes nl-bo-grow-y { from { transform: scaleY(0); } to { transform: none; } }
+@media (max-width: 760px) { [data-look="new"] .nl-bo-bars { gap: 8px; height: 170px; } [data-look="new"] .nl-bo-bar span { font-size: 10px; } }
+
+/* The design's empty card. */
+[data-look="new"] .nl-bo-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 24px; text-align: center; color: var(--muted);
+  background: var(--card); border: 1px solid var(--line); border-radius: 24px;
+}
+[data-look="new"] .nl-bo-empty b { color: var(--ink); font-family: var(--font-heading); font-weight: 600; font-size: 17px; line-height: 22px; }
+[data-look="new"] .nl-bo-empty .nl-btn { margin-top: 12px; }
+
+[data-look="new"] .nl-bo-ini { display: inline-grid; place-items: center; flex: none; border-radius: 50%; background: var(--info-soft); color: var(--ink); font-weight: 600; }
+
+/* ── Maintenance ────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-bo-how {
+  border: 0 !important; padding: 10px 6px !important; font-size: 14px !important; color: var(--ink) !important;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong);
+}
+[data-look="new"] .nl-bo-how:hover { text-decoration-color: currentColor; }
+[data-look="new"] .nl-bo-tabrow { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; margin: 28px 0 20px; }
+[data-look="new"] .nl-bo-tabrow > .nl-tabs { flex: 1 1 360px; min-width: 0; }
+[data-look="new"] .nl-bo-tabrow-side { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-bottom: 6px; }
+[data-look="new"] .nl-bo-stack { display: flex; flex-direction: column; gap: 16px; }
+[data-look="new"] .nl-bo-group { padding: 22px 26px 8px; }
+[data-look="new"] .nl-bo-group .nl-bo-card-head { margin-bottom: 4px; }
+[data-look="new"] .nl-bo-jobs { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-bo-jobs > li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-bo-job {
+  display: grid; grid-template-columns: 64px minmax(0, 1.6fr) 190px minmax(0, 1fr); gap: 16px; align-items: center;
+  width: 100%; padding: 16px 8px; margin: 0 -8px; box-sizing: content-box; text-align: left; font: inherit; color: inherit;
+  background: none; border: 0; border-radius: 12px; cursor: pointer; transition: background-color 0.2s;
+}
+[data-look="new"] .nl-bo-job:hover { background: var(--panel); }
+[data-look="new"] .nl-bo-job-n { font-size: 12px; }
+[data-look="new"] .nl-bo-job-title { display: block; font-size: 14.5px; line-height: 21px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-bo-job-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+[data-look="new"] .nl-bo-job-next { font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-bo-job-next.is-hot { color: var(--accent-dark); font-weight: 500; }
+@media (max-width: 900px) {
+  [data-look="new"] .nl-bo-job { grid-template-columns: 52px minmax(0, 1fr); gap: 6px 12px; }
+  [data-look="new"] .nl-bo-job-tags, [data-look="new"] .nl-bo-job-next { grid-column: 2; }
+  [data-look="new"] .nl-bo-group { padding: 18px 18px 6px; }
+}
+
+/* Older pieces kept inside the new screens (Invoices, Accounts, Still in the
+   Old System, Log work already done): their boxes take the new card. */
+[data-look="new"] .nl-bo-legacy [class*="rounded-[22px]"] { border-radius: 24px; background: var(--card); border-color: var(--line); }
+[data-look="new"] .nl-bo-legacy .hand { font-weight: 500; }
+[data-look="new"] .nl-bo-legacy h2, [data-look="new"] .nl-bo-legacy h3 { font-family: var(--font-heading); font-weight: 600; letter-spacing: -0.2px; }
+[data-look="new"] .nl-bo-legacy > .mt-4:first-child, [data-look="new"] .nl-bo-legacy > .mt-6:first-child { margin-top: 0; }
+[data-look="new"] .nl-bo-legacy table { min-width: 0; }
+[data-look="new"] .nl-bo-legacy .overflow-x-auto { max-width: 100%; }
+
+/* ── Contractors ────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-bo-done {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 0 0 18px; padding: 14px 18px;
+  border-radius: 16px; background: var(--sage-soft); color: var(--ink); font-size: 13.5px; line-height: 20px;
+}
+[data-look="new"] .nl-bo-done > svg { color: var(--sage-ink); flex: none; }
+[data-look="new"] .nl-bo-quiet { margin: 8px 0 4px; padding: 20px 16px; border-radius: 16px; background: var(--panel); text-align: center; font-size: 13px; color: var(--muted); }
+[data-look="new"] .nl-bo-quiet.is-boxed { margin: 0; }
+[data-look="new"] .nl-bo-sub { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; font-weight: 500; color: var(--muted); }
+[data-look="new"] .nl-bo-total { font-family: var(--nl-serif); font-size: 22px; line-height: 28px; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-bo-money { font-family: var(--nl-serif); font-size: 16px; min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-bo-money.is-quiet { color: var(--muted); }
+[data-look="new"] .nl-bo-warn { color: var(--warning); font-size: 14px; }
+[data-look="new"] .nl-bo-paper { color: var(--muted); font-size: 14px; }
+[data-look="new"] .nl-bo-table td .nl-bo-err { font-size: 14px; }
+
+/* A booking row: the date tile, the home and the job, who, why. */
+[data-look="new"] .nl-bo-brow, [data-look="new"] .nl-bo-payrow {
+  display: flex; align-items: center; gap: 14px; padding: 14px 8px; margin: 0 -8px; border-radius: 12px;
+  color: inherit; text-decoration: none; transition: background-color 0.2s;
+}
+[data-look="new"] .nl-bo-brow:hover, [data-look="new"] .nl-bo-payrow:hover { background: var(--panel); }
+[data-look="new"] .nl-bo-brow > svg { flex: none; color: var(--muted); transition: transform 0.3s var(--nl-ease); }
+[data-look="new"] .nl-bo-brow:hover > svg { transform: translateX(2px); }
+[data-look="new"] .nl-bo-payrow { flex-wrap: wrap; }
+[data-look="new"] .nl-bo-payrow > .flex-1 { flex-basis: 200px; }
+[data-look="new"] .nl-bo-payrow-end { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+[data-look="new"] .nl-bo-date { display: flex; flex-direction: column; align-items: center; width: 48px; flex: none; padding: 6px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--page); line-height: 1; }
+[data-look="new"] .nl-bo-date.is-blank { border-color: transparent; background: transparent; }
+[data-look="new"] .nl-bo-date small { font-size: 10px; color: var(--muted); }
+[data-look="new"] .nl-bo-date b { font-family: var(--nl-serif); font-weight: 400; font-size: 18px; margin: 3px 0 2px; }
+[data-look="new"] .nl-bo-whochip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 2px 10px 2px 2px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--page); font-size: 12px; cursor: pointer;
+}
+[data-look="new"] .nl-bo-whochip:hover { border-color: var(--faint); }
+
+/* The book, as the design's table. */
+[data-look="new"] .nl-bo-shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 12px; }
+[data-look="new"] .nl-bo-table { border: 1px solid var(--line); border-radius: 24px; overflow: hidden; background: var(--card); }
+[data-look="new"] .nl-bo-table table { width: 100%; border-collapse: collapse; table-layout: auto; }
+[data-look="new"] .nl-bo-table th { font-size: 12px; font-weight: 500; color: var(--muted); text-align: left; padding: 12px 20px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+[data-look="new"] .nl-bo-table td { padding: 14px 20px; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 14px; }
+[data-look="new"] .nl-bo-table tr:last-child td { border-bottom: 0; }
+[data-look="new"] .nl-bo-table tbody tr { cursor: pointer; transition: background-color 0.2s; }
+[data-look="new"] .nl-bo-table tbody tr:hover { background: var(--page); }
+[data-look="new"] .nl-bo-table tbody tr:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+[data-look="new"] .nl-bo-table tbody tr.is-off { opacity: 0.6; }
+[data-look="new"] .nl-bo-who { display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 360px; }
+@media (max-width: 1180px) { [data-look="new"] .nl-bo-hide-md { display: none; } }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-bo-hide-sm { display: none; }
+  [data-look="new"] .nl-bo-table { border-radius: 20px; }
+  [data-look="new"] .nl-bo-table th, [data-look="new"] .nl-bo-table td { padding: 12px 12px; }
+  [data-look="new"] .nl-bo-table td:first-child { max-width: 190px; }
+  [data-look="new"] .nl-bo-brow { gap: 10px; }
+  [data-look="new"] .nl-bo-brow > svg { display: none; }
+}
+
+/* ── Finances ───────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-bo-list.is-first { margin-top: 0; }
+[data-look="new"] .nl-bo-list.is-first > li:first-child { border-top: 0; padding-top: 2px; }
+[data-look="new"] .nl-bo-boardhead { margin: 44px 0 18px; display: flex; flex-direction: column; gap: 4px; }
+/* The board's own tiles keep their machine; the page around them is the new one. */
+[data-look="new"] .nl-bo-board { min-width: 0; }
+[data-look="new"] .nl-bo-table { overflow-x: auto; }
+@media (min-width: 1181px) {
+  [data-look="new"] .nl-bo-table table { table-layout: fixed; }
+  [data-look="new"] .nl-bo-table th:nth-child(2) { width: 17%; }
+  [data-look="new"] .nl-bo-table th:nth-child(3) { width: 24%; }
+  [data-look="new"] .nl-bo-table th:nth-child(4) { width: 20%; }
+  [data-look="new"] .nl-bo-table th.nl-bo-th-edit { width: 96px; }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-bo-table th.nl-bo-th-edit, [data-look="new"] .nl-bo-table td:last-child { width: 36px; padding-left: 0; }
+}
