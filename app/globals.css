@@ -1634,3 +1634,38 @@ body:has(.fixed.inset-0.flex.items-center.justify-center, .fixed.inset-0.flex.it
   pointer-events: none;
   transform: translateY(14px);
 }
+
+/* Portfolio's rent slider (components/portfolio/RentRange): two range inputs
+   over one drawn track, so only the thumbs take the pointer. */
+.rent-range input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  margin: 0;
+  height: 100%;
+}
+.rent-range input[type="range"]::-webkit-slider-runnable-track { background: transparent; }
+.rent-range input[type="range"]::-moz-range-track { background: transparent; }
+.rent-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid var(--accent-dark);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  cursor: grab;
+}
+.rent-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid var(--accent-dark);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  cursor: grab;
+}
+.rent-range input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent-dark); outline-offset: 2px; }

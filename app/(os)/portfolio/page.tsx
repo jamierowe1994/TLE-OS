@@ -10,7 +10,6 @@ import DoodleIcon from "@/components/DoodleIcon";
 import StatTile from "@/components/StatTile";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
 import PropertyAnswers from "@/components/PropertyAnswers";
 import ZeroDepositOptOut from "@/components/ZeroDepositOptOut";
@@ -25,16 +24,18 @@ import ListSearch from "@/components/ListSearch";
 import SendLogins from "@/components/portfolio/SendLogins";
 import ExcelButton from "@/components/ExcelButton";
 import TakeOnWizard from "@/components/portfolio/TakeOnWizard";
+import RentRange from "@/components/portfolio/RentRange";
 import { searchMatches } from "@/lib/search-match";
 
 /**
  * Portfolio — the managed book. Every property the business looks after,
- * every landlord it looks after them for, and where they all are.
+ * and every landlord it looks after them for.
  *
- * ── Three views of one list ───────────────────────────────────────────────
+ * ── Two views of one list ─────────────────────────────────────────────────
  *
- * Properties, Landlords and Map are the same filtered set drawn three ways,
- * so a filter set on one is still set on the next. The search box reads
+ * Properties and Landlords are the same filtered set drawn two ways, so a
+ * filter set on one is still set on the next. (The Map went 23 Oct 2026,
+ * James tidying the row; components/PortfolioMap is kept.) The search box reads
  * addresses, landlords, tenants and agents at once, because "the Patel one in
  * Filton" is how a property is actually asked for.
  *
@@ -44,7 +45,7 @@ import { searchMatches } from "@/lib/search-match";
  * each day (see lib/managed-book-cache.ts). So the list is drawn as soon as
  * it exists and the certificate column says "checking" until the second
  * fetch answers, polling until it does. A property needing a look is picked
- * out in the accent everywhere — the row, the map pin, the landlord's card —
+ * out in the accent everywhere — the row, the landlord's card —
  * once that answer is in, and nowhere before it.
  *
  * ── No sample, no fallback ────────────────────────────────────────────────
@@ -56,7 +57,7 @@ import { searchMatches } from "@/lib/search-match";
 
 type BookState =
   | { status: "loading" }
-  | { status: "ready"; book: ManagedBook; scope: string; everything: boolean; stale: boolean; ageMs?: number }
+  | { status: "ready"; book: ManagedBook; scope: string; everything: boolean; byAgent: boolean; stale: boolean; ageMs?: number }
   | { status: "failed"; error: string; unlinked?: boolean };
 
 type CertsState =
@@ -65,7 +66,7 @@ type CertsState =
   | { status: "slow" }
   | { status: "failed"; error: string };
 
-type View = "properties" | "landlords" | "map" | "past";
+type View = "properties" | "landlords" | "past";
 
 const SORTS = [
   { id: "let-new", label: "Let most recently" },
@@ -156,6 +157,8 @@ export default function Portfolio() {
   const [service, setService] = useState<string | null>(null);
   const [agent, setAgent] = useState<string | null>(null);
   const [town, setTown] = useState<string | null>(null);
+  /* Rent pcm between two figures; null is every rent (components/portfolio/RentRange). */
+  const [rent, setRent] = useState<[number, number] | null>(null);
   const [lookOnly, setLookOnly] = useState(false);
   /* Homes REX CRM has no property for: the OS holds them from REX PM (6 Sep 2026). */
   const [notOnRexOnly, setNotOnRexOnly] = useState(false);
@@ -184,6 +187,7 @@ export default function Portfolio() {
             book: { properties: j.properties, landlords: j.landlords, counts: j.counts, pulledAt: j.pulledAt },
             scope: j.scope ?? "",
             everything: Boolean(j.everything),
+            byAgent: Boolean(j.byAgent),
             stale: Boolean(j.stale),
             ageMs: typeof j.ageMs === "number" ? j.ageMs : undefined,
           });
@@ -226,7 +230,8 @@ export default function Portfolio() {
   }, [state.status]);
 
   const book = state.status === "ready" ? state.book : null;
-  const everything = state.status === "ready" && state.everything;
+  /* Admins only pick by agent and see the Agent column; everybody else gets Tenant. */
+  const byAgent = state.status === "ready" && state.byAgent;
   const certBy = certs.status === "ready" ? certs.by : null;
   /* Shared houses: one row in the list, rooms as tabs in the drawer. */
   const houses = useMemo(() => housesIn(book?.properties ?? [], R), [book]);
@@ -287,6 +292,8 @@ export default function Portfolio() {
     for (const p of book.properties) if (p.agent) m.set(p.agent.id, p.agent.name);
     return [...m.entries()].map(([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label, "en-GB"));
   }, [book]);
+  /* The slider's top: the highest rent in the book on show, so it rolls with the book. */
+  const rentTop = useMemo(() => (book ? book.properties.reduce((m, p) => Math.max(m, p.rentMonthly ?? 0), 0) : 0), [book]);
   const towns = useMemo(() => {
     if (!book) return [];
     const m = new Map<string, number>();
@@ -301,6 +308,8 @@ export default function Portfolio() {
       if (service && (p.service ?? "Not set") !== service) return false;
       if (agent && p.agent?.id !== agent) return false;
       if (town && p.town !== town) return false;
+      /* A home with no rent read cannot be said to be in the band. */
+      if (rent && (p.rentMonthly == null || p.rentMonthly < rent[0] || p.rentMonthly > rent[1])) return false;
       if (lookOnly && !attention.has(p.listingId)) return false;
       if (notOnRexOnly && p.onRex !== false && p.rexLet !== false) return false;
       if (reletOnly && !p.notice) return false;
@@ -328,13 +337,13 @@ export default function Portfolio() {
     });
     /* A tester's own test home sits at the top, whatever the order. */
     return [...rows.filter((p) => p.test), ...rows.filter((p) => !p.test)];
-  }, [book, q, service, agent, town, lookOnly, notOnRexOnly, reletOnly, sort, attention, certBy, summaryOf]);
+  }, [book, q, service, agent, town, rent, lookOnly, notOnRexOnly, reletOnly, sort, attention, certBy, summaryOf]);
 
   const [logins, setLogins] = useState(false);
   /* Management transfer (Dan Richards a9f80822, 19 Oct 2026): a home that is
      already let comes straight here, skipping leads, listings and applications. */
   const [takeOn, setTakeOn] = useState(false);
-  const filtering = Boolean(q.trim() || service || agent || town || lookOnly || notOnRexOnly || reletOnly);
+  const filtering = Boolean(q.trim() || service || agent || town || rent || lookOnly || notOnRexOnly || reletOnly);
   const relets = useMemo(() => (book ? currentLets(book.properties).filter((p) => p.notice).length : 0), [book]);
 
   /* Landlords: those with at least one property in the filtered set, or, when
@@ -346,12 +355,12 @@ export default function Portfolio() {
     return book.landlords.filter((l) => {
       if (l.listingIds.some((id) => ids.has(id))) return true;
       if (!filtering) return true;
-      if (needle && !service && !agent && !town && !lookOnly) {
+      if (needle && !service && !agent && !town && !rent && !lookOnly) {
         return searchMatches(needle, l.name, l.email, l.phone);
       }
       return false;
     });
-  }, [book, filtered, q, filtering, service, agent, town, lookOnly]);
+  }, [book, filtered, q, filtering, service, agent, town, rent, lookOnly]);
 
 
   /* Counted and added up on each home's latest let only (lib/current-lets);
@@ -471,14 +480,14 @@ export default function Portfolio() {
               options={[
                 { id: "properties" as const, label: book ? `Properties · ${filteredHomes.length}` : "Properties", icon: <DoodleIcon name="list" size={14} /> },
                 { id: "landlords" as const, label: book ? `Landlords · ${landlords.length}` : "Landlords", icon: <DoodleIcon name="user" size={14} /> },
-                { id: "map" as const, label: "Map", icon: <DoodleIcon name="target" size={14} /> },
                 { id: "past" as const, label: "Archive", icon: <DoodleIcon name="clock" size={14} /> },
               ]}
             />
             <span className="hidden h-6 w-px bg-line/80 sm:block" />
             <PickOne label="Service" options={services} value={service} onChange={setService} />
-            {everything && <PickOne label="Agent" options={agents} value={agent} onChange={setAgent} />}
+            {byAgent && <PickOne label="Agent" options={agents} value={agent} onChange={setAgent} />}
             <PickOne label="Town" options={towns} value={town} onChange={setTown} />
+            <RentRange max={rentTop} value={rent} onChange={setRent} />
             <button
               type="button"
               disabled={certs.status !== "ready"}
@@ -511,6 +520,7 @@ export default function Portfolio() {
                   service && `Service ${service}`,
                   agent && `Agent ${agents.find((a) => a.id === agent)?.label ?? agent}`,
                   town && `Town ${town}`,
+                  rent && `Rent ${money(rent[0])} to ${money(rent[1])} pcm`,
                   lookOnly && "Needs a look",
                   notOnRexOnly && "Not on REX",
                   reletOnly && "Relet",
@@ -522,14 +532,14 @@ export default function Portfolio() {
               Take on a managed home
             </button>
             <span className="ml-auto">
-              <ListSearch value={q} onChange={setQ} placeholder="Address, landlord, tenant or agent…" />
+              <ListSearch value={q} onChange={setQ} placeholder={byAgent ? "Address, landlord, tenant or agent…" : "Address, landlord or tenant…"} />
             </span>
           </div>
 
           {book && filtering && (
             <p className="mt-2 text-[11.5px] text-muted">
               {filteredHomes.length} of {book.counts.properties} properties · {book.counts.rentsUnread ? "rents not read" : `${money(rentRoll)} pcm`} ·{" "}
-              <button type="button" onClick={() => { setQ(""); setService(null); setAgent(null); setTown(null); setLookOnly(false); setNotOnRexOnly(false); setReletOnly(false); }} className="underline hover:text-ink">
+              <button type="button" onClick={() => { setQ(""); setService(null); setAgent(null); setTown(null); setRent(null); setLookOnly(false); setNotOnRexOnly(false); setReletOnly(false); }} className="underline hover:text-ink">
                 clear
               </button>
             </p>
@@ -549,7 +559,7 @@ export default function Portfolio() {
                       let date wait for a wide screen (xl), because at 1100px
                       they were truncating every landlord to a first name. */}
                   <li className="hidden grid-cols-[56px_minmax(0,2fr)_90px_100px_minmax(0,1.3fr)_120px] items-center gap-3 border-b border-line/70 px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted md:grid xl:grid-cols-[56px_minmax(0,2.2fr)_90px_100px_minmax(0,1.4fr)_minmax(0,1fr)_100px_120px]">
-                    <span /><span>Property</span><span>Rent</span><span>Service</span><span>Landlord</span><span className="hidden xl:block">{everything ? "Agent" : "Tenant"}</span><span className="hidden xl:block">Let since</span><span>Certificates</span>
+                    <span /><span>Property</span><span>Rent</span><span>Service</span><span>Landlord</span><span className="hidden xl:block">{byAgent ? "Agent" : "Tenant"}</span><span className="hidden xl:block">Let since</span><span>Certificates</span>
                   </li>
                   {listRows.map(({ p, house }) => {
                     const s = summaryOf(p);
@@ -595,7 +605,7 @@ export default function Portfolio() {
                             {landlord ? landlord.name : <span className="text-muted">Not on record</span>}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] text-muted xl:block">
-                            {house ? `${new Set(house.rooms.flatMap((r) => r.tenants.map((t) => t.contactId))).size} tenants` : everything ? (p.agent?.name ?? "—") : (p.tenants[0]?.name ?? "—")}
+                            {house ? `${new Set(house.rooms.flatMap((r) => r.tenants.map((t) => t.contactId))).size} tenants` : byAgent ? (p.agent?.name ?? "—") : (p.tenants[0]?.name ?? "—")}
                           </span>
                           <span className="hidden text-[12px] text-muted xl:block">{house ? "—" : day(p.letSince)}</span>
                           <span className="hidden md:block">
@@ -707,17 +717,6 @@ export default function Portfolio() {
                     );
                   })}
                 </ul>
-              )}
-            </div>
-          )}
-
-          {/* ----------------------------------------------------- map -- */}
-          {view === "map" && (
-            <div className="mt-4 h-[calc(100vh-380px)] min-h-[420px]">
-              {state.status === "loading" ? (
-                <div className="flex h-full items-center justify-center rounded-2xl border border-line/70 bg-card"><FindingData label="Reading the managed book" /></div>
-              ) : (
-                <PortfolioMap properties={filtered} attention={attention} onOpen={openHome} />
               )}
             </div>
           )}

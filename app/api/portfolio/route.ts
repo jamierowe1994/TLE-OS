@@ -6,6 +6,7 @@ import { hasDb } from "@/lib/db";
 import { testHomesFor } from "@/lib/test-overlay";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
+import { can } from "@/lib/roles";
 
 /**
  * The managed book for the Portfolio screen.
@@ -55,6 +56,10 @@ export async function GET(req: NextRequest) {
       live: true,
       scope: scope.label,
       everything: scope.everything,
+      /* The Agent filter and column are for admins only (James, 23 Oct 2026):
+         the office sees the whole book too, but has no need to pick an agent.
+         An owner viewing as somebody sees what they would. */
+      byAgent: scope.everything && Boolean(who?.actor && !who.viewingAs && can(who.actor.role, "admin:open")),
       ...book,
       ...(tests.length ? { properties: [...tests, ...book.properties] } : {}),
       ageMs,
