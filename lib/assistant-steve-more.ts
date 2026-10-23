@@ -363,6 +363,17 @@ export async function memoryFor(userId: string | null | undefined): Promise<Memo
   return v && Array.isArray(v.notes) ? v : { notes: [] };
 }
 
+/** Take kept notes away - only ever from the "remove" card's press (lib/assistant-actions). Returns how many went. */
+export async function forgetNotes(userId: string, words: string): Promise<number> {
+  const w = words.trim().toLowerCase();
+  if (!w || !hasDb()) return 0;
+  const m = await memoryFor(userId);
+  const before = m.notes.length;
+  m.notes = m.notes.filter((n) => !n.text.toLowerCase().includes(w));
+  if (m.notes.length !== before) await saveMemory(userId, m);
+  return before - m.notes.length;
+}
+
 async function saveMemory(userId: string, m: Memory): Promise<void> {
   await q(
     `INSERT INTO os_user_prefs (user_id, key, value, updated_at) VALUES ($1, $2, $3::jsonb, NOW())
@@ -389,10 +400,15 @@ const remember: AssistantTool = {
     const m = await memoryFor(userId);
     const forget = str(input.forget).toLowerCase();
     if (forget) {
-      const before = m.notes.length;
-      m.notes = m.notes.filter((n) => !n.text.toLowerCase().includes(forget));
-      await saveMemory(userId, m);
-      return { ok: before === m.notes.length ? "Nothing matched to forget." : "Forgotten." };
+      /* Never forgotten from here (James, 23 Oct 2026): a card asks "Are you
+         sure that you want to action this step?" and their press does it. */
+      const going = m.notes.filter((n) => n.text.toLowerCase().includes(forget));
+      if (!going.length) return { ok: "Nothing matched to forget." };
+      return {
+        __proposal: { kind: "remove", listingId: null, address: null, what: "note", words: forget, title: going.length === 1 ? "Forget this note?" : `Forget these ${going.length} notes?`, text: going.map((n) => n.text).join("\n") },
+        done: false,
+        note: 'Nothing is forgotten yet. They have a card asking "Are you sure that you want to action this step?" - say what would go, in one line, and that it waits for their press.',
+      };
     }
     const note = noDashes(str(input.note)).slice(0, 240);
     if (!note) return { error: "Nothing to remember." };

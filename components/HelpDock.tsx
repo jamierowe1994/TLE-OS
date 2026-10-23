@@ -221,6 +221,8 @@ type Line = {
   plan?: ScreenPlan;
   /** "running" while it runs, then what happened. */
   planState?: string;
+  /** A plan that deletes, waiting on "Are you sure that you want to action this step?" */
+  askSure?: boolean;
   /** Set once the button has been pressed, so it cannot be pressed twice. */
   settled?: string;
   /** Files that went up with this message. Only ever on an agent's line. */
@@ -229,7 +231,7 @@ type Line = {
 
 /** Mirrors ActionProposal server-side, narrowed to what the card draws. */
 type Proposal = {
-  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose" | "tasks" | "job" | "rtr-expiry" | "address";
+  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose" | "tasks" | "job" | "rtr-expiry" | "address" | "remove";
   items?: { title: string; detail?: string; due?: string | null }[];
   assigneeName?: string | null;
   address?: string | null;
@@ -300,6 +302,7 @@ const CARD_TITLE: Record<Proposal["kind"], string> = {
   email: "Email, ready to send",
   "rtr-expiry": "Right to rent expiry, ready to save",
   address: "New address, ready to change",
+  remove: "Are you sure that you want to action this step?",
 };
 const CARD_BUTTON: Record<Proposal["kind"], string> = {
   "fill-compose": "Type it in",
@@ -311,6 +314,7 @@ const CARD_BUTTON: Record<Proposal["kind"], string> = {
   email: "Send it",
   "rtr-expiry": "Save it",
   address: "Change it",
+  remove: "Yes, action it",
 };
 /* The consequence, spelled out. Somebody pressing a button in a chat bubble
    deserves to know it reaches Rightmove. */
@@ -324,6 +328,7 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   email: "Sends from YOUR Microsoft mailbox, so it is in your Sent Items and their reply threads onto it. BCC'd to REX so it shows on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
   "rtr-expiry": "Saves on the let, beside the right to rent check. The office gets a reminder when the follow-up check is due. Nothing is sent to anyone.",
   address: "Changes the home's address in the OS, shown on its listing and Portfolio pages. Nothing is sent to anyone.",
+  remove: "This takes it away for good. Nothing else is touched.",
 };
 
 /* Not inside the iPhone app (James, 2 Oct 2026): the app's floating nav bar
@@ -939,12 +944,19 @@ function Dock() {
    * watch. Their press is the say-so; the never rule is checked again on
    * every control at the moment it is touched (lib/screen-controls).
    */
-  async function runPlan(line: Line, chain = 0) {
+  async function runPlan(line: Line, chain = 0, sure = false) {
     if (!line.plan || line.planState) return;
+    /* A plan that deletes asks first, every time (James, 23 Oct 2026: "it
+       100% asks for confirmation ... 'Are you sure that you want to action
+       this step?'"). runSteps checks the answer again at the press. */
+    if (line.plan.deletes?.length && !sure) {
+      setLines((all) => all.map((x) => (x.plan === line.plan ? { ...x, askSure: true } : x)));
+      return;
+    }
     const mark = (state: string) => setLines((all) => all.map((x) => (x.plan === line.plan ? { ...x, planState: state } : x)));
     mark("running");
     setMood("thinking");
-    const res = await runSteps(line.plan.steps, path).catch(() => ({ ok: false, done: 0, message: "Something stopped me part way. Have a look and tell me what's left." }));
+    const res = await runSteps(line.plan.steps, path, { deleteConfirmed: sure }).catch(() => ({ ok: false, done: 0, message: "Something stopped me part way. Have a look and tell me what's left." }));
     mark(res.ok ? "done" : "stopped");
     /* The steps opened what the rest of the job needs: he looks at the new
        screen and finishes it. Four hops at most, so a plan can never chase
@@ -1001,7 +1013,9 @@ function Dock() {
     if (!sending.length && lastSteve?.plan && !lastSteve.planState && YES.test(text)) {
       setDraft("");
       setLines((l) => [...l, { role: "agent", text }]);
-      void runPlan(lastSteve);
+      /* A first yes to a plan that deletes only brings up the question; a
+         yes once it is asked is the answer to it. */
+      void runPlan(lastSteve, 0, Boolean(lastSteve.askSure));
       return;
     }
     /* "Yes" to "Shall I save it?" / "Shall I change it?" on a record card
@@ -1508,7 +1522,32 @@ function Dock() {
                                   <li key={k}>{st.says}</li>
                                 ))}
                               </ol>
-                              {!l.planState ? (
+                              {!l.planState && l.askSure ? (
+                                <div className="mt-2 rounded-lg border border-accent-dark/40 bg-accent-soft/60 p-2.5">
+                                  <p className="text-[12px] font-semibold text-accent-dark">Are you sure that you want to action this step?</p>
+                                  <ul className="mt-1 space-y-0.5 text-[11.5px] text-ink/85">
+                                    {(l.plan.deletes ?? []).map((d, k) => (
+                                      <li key={k}>{d} - this deletes it for good.</li>
+                                    ))}
+                                  </ul>
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void runPlan(l, 0, true)}
+                                      className="rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
+                                    >
+                                      Yes, action it
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setLines((all) => all.map((x) => (x === l ? { ...x, planState: "left", askSure: false } : x)))}
+                                      className="rounded-full px-2.5 py-1.5 text-[11.5px] text-muted hover:text-ink"
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : !l.planState ? (
                                 <div className="mt-2 flex items-center gap-2">
                                   <button
                                     type="button"

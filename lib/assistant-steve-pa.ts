@@ -4,7 +4,7 @@ import { upsertKnowledge, listKnowledge } from "@/lib/business/knowledge-store";
 import { searchEverything } from "@/lib/search";
 import { hasDb, q } from "@/lib/db";
 import { noDashes } from "@/lib/no-dashes";
-import { DELETE_WORDS, neverPress, type ScreenPlan, type ScreenStep } from "@/lib/steve-never";
+import { DELETE_WORDS, deleteStepsOf, neverPress, type ScreenPlan, type ScreenStep } from "@/lib/steve-never";
 import { changeJob, jobsFor, nextRun, scheduleWords, MAX_JOBS_EACH, type Every } from "@/lib/steve-jobs";
 import { dayFacts, setBriefOff } from "@/lib/steve-brief";
 
@@ -105,9 +105,13 @@ const doOnScreen: AssistantTool = {
       steps,
       ...(input.then_look_again === true ? { carryOn: true } : {}),
     };
+    const deletes = deleteStepsOf(steps);
+    if (deletes.length) plan.deletes = deletes;
     return {
       __screen: plan,
-      note: "A card with these steps is on their screen. Nothing has happened yet - it runs when they press Do it, and they watch each step. Say in one line what it will do. Never say it is done.",
+      note: deletes.length
+        ? 'A card with these steps is on their screen. One of them deletes, so the card asks "Are you sure that you want to action this step?" and nothing runs until they say yes to that. Say in one line what will be deleted. Never say it is done.'
+        : "A card with these steps is on their screen. Nothing has happened yet - it runs when they press Do it, and they watch each step. Say in one line what it will do. Never say it is done.",
     };
   },
 };
@@ -329,8 +333,20 @@ const stopJob: AssistantTool = {
     if (!ctx.me?.id) return { error: "I can't tell who you are." };
     const change = str(input.change) as "pause" | "resume" | "delete";
     if (!["pause", "resume", "delete"].includes(change)) return { error: "change is pause, resume or delete." };
+    /* Stopping for good deletes it, so it is never done from here (James,
+       23 Oct 2026): a card asks "Are you sure that you want to action this
+       step?" and their press stops it. Pause and restart are not deletes. */
+    if (change === "delete") {
+      const job = (await jobsFor(ctx.me.id).catch(() => [])).find((j) => j.id === str(input.id));
+      if (!job) return { error: "No job of theirs with that id - call my_jobs." };
+      return {
+        __proposal: { kind: "remove", listingId: null, address: null, what: "job", jobId: job.id, title: "Stop this job for good?", text: job.title },
+        done: false,
+        note: 'Nothing is stopped yet. They have a card asking "Are you sure that you want to action this step?" - name the job in one line and say it waits for their press. Pausing it instead needs no card.',
+      };
+    }
     const ok = await changeJob(ctx.me.id, str(input.id), change);
-    return ok ? { ok: change === "delete" ? "Stopped for good." : change === "pause" ? "Paused." : "Running again." } : { error: "No job of theirs with that id - call my_jobs." };
+    return ok ? { ok: change === "pause" ? "Paused." : "Running again." } : { error: "No job of theirs with that id - call my_jobs." };
   },
 };
 

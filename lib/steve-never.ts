@@ -64,4 +64,12 @@ export interface ScreenPlan {
   /** These steps open what the rest of the job needs (a tab, a form, a
    *  drawer): once they have run he is shown the new screen and carries on. */
   carryOn?: boolean;
+  /** A step presses something that deletes (only ever a test file - see
+   *  neverPress). The card asks "Are you sure that you want to action this
+   *  step?" before anything runs (James, 23 Oct 2026). */
+  deletes?: string[];
 }
+
+/** The words of any delete a plan's steps would press, for the "Are you sure" question. */
+export const deleteStepsOf = (steps: ScreenStep[]): string[] =>
+  steps.filter((s) => (s.do === "press" || s.do === "tick" || s.do === "untick") && DELETE_WORDS.test(s.says)).map((s) => s.says);

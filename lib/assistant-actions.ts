@@ -135,6 +135,20 @@ export type ActionProposal =
       text: string;
     }
   | {
+      /** Something of the person's own that Steve would take away - a
+       *  standing job, or a note he keeps about them (James, 23 Oct 2026:
+       *  "any time Steve tries to delete something ... it 100% asks for
+       *  confirmation"). Never runs from the tool; only from this card. */
+      kind: "remove";
+      listingId: null;
+      address: null;
+      what: "job" | "note";
+      jobId?: string;
+      words?: string;
+      title: string;
+      text: string;
+    }
+  | {
       kind: "email";
       listingId: string;
       address: string;
@@ -427,6 +441,18 @@ async function doRtr(p: Extract<ActionProposal, { kind: "rtr-expiry" }>, actor: 
   };
 }
 
+async function doRemove(p: Extract<ActionProposal, { kind: "remove" }>, actor: { id: string; name: string; osUserId: string | null }): Promise<ActionOutcome> {
+  if (!hasDb() || !actor.osUserId) return { ok: false, message: "I couldn't tell who you are, so nothing was removed." };
+  if (p.what === "job") {
+    const { changeJob } = await import("@/lib/steve-jobs");
+    const ok = await changeJob(actor.osUserId, String(p.jobId ?? ""), "delete").catch(() => false);
+    return ok ? { ok: true, message: "Stopped for good." } : { ok: false, message: "That job wasn't there any more, so nothing changed." };
+  }
+  const { forgetNotes } = await import("@/lib/assistant-steve-more");
+  const n = await forgetNotes(actor.osUserId, String(p.words ?? ""));
+  return n ? { ok: true, message: n === 1 ? "Forgotten." : `Forgotten - ${n} notes.` } : { ok: false, message: "Nothing matched, so nothing was forgotten." };
+}
+
 async function doAddress(p: Extract<ActionProposal, { kind: "address" }>, scope: Scope, actor: { id: string; name: string; osUserId: string | null }): Promise<ActionOutcome> {
   if (!hasDb()) return { ok: false, message: "There's no database on this environment, so there's nowhere to save it." };
   const { findUserById } = await import("@/lib/users");
@@ -530,6 +556,8 @@ export async function perform(
       return doRtr(proposal, actor);
     case "address":
       return doAddress(proposal, scope, actor);
+    case "remove":
+      return doRemove(proposal, actor);
     case "email":
       return doEmail(
         proposal,

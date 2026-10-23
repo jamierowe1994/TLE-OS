@@ -1,6 +1,6 @@
 "use client";
 
-import { neverPress, type ScreenControl, type ScreenControlKind, type ScreenSnapshot, type ScreenStep } from "@/lib/steve-never";
+import { DELETE_WORDS, neverPress, type ScreenControl, type ScreenControlKind, type ScreenSnapshot, type ScreenStep } from "@/lib/steve-never";
 
 /**
  * STEVE'S EYES AND HANDS ON THE PAGE (James, 2 Oct 2026): "a literal personal
@@ -201,7 +201,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Do the plan, one step at a time, where they can watch it happen. Each control
  * is scrolled to and lit before it is touched. Returns what happened in words.
  */
-export async function runSteps(steps: ScreenStep[], path: string): Promise<{ ok: boolean; done: number; message: string }> {
+export async function runSteps(steps: ScreenStep[], path: string, opts: { deleteConfirmed?: boolean } = {}): Promise<{ ok: boolean; done: number; message: string }> {
   let done = 0;
   for (const s of steps) {
     const el = refs.get(s.ref);
@@ -213,6 +213,12 @@ export async function runSteps(steps: ScreenStep[], path: string): Promise<{ ok:
     if (s.do === "press" || s.do === "tick" || s.do === "untick") {
       if (el.closest("[data-steve-never]") || neverPress(labelOf(el), path)) {
         return { ok: false, done, message: `"${labelOf(el)}" is yours to press, never mine. Everything before it is done.` };
+      }
+      /* A delete only after they have answered "Are you sure that you want
+         to action this step?" (James, 23 Oct 2026) - checked here too, on the
+         button's words at the moment of pressing, whatever the card said. */
+      if (DELETE_WORDS.test(labelOf(el)) && !opts.deleteConfirmed) {
+        return { ok: false, done, message: `"${labelOf(el)}" deletes something, and you haven't said you're sure. Everything before it is done.` };
       }
     }
     el.scrollIntoView({ block: "center", behavior: "smooth" });
