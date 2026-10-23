@@ -48,6 +48,8 @@ export interface Me {
   subject?: { name: string; email: string } | null;
   isOwner?: boolean;
   canAdmin?: boolean;
+  /** Owners and the named team admins (lib/team-admins): the team page under Admin. */
+  teamAdmin?: boolean;
   role?: string | null;
   subjectRole?: string | null;
   anyUsers?: boolean;

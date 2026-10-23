@@ -105,6 +105,13 @@ export const ROLE_LABEL: Record<Role, string> = {
   agent: "Agent",
 };
 
+/**
+ * The roles a team admin may give (James, 23 Oct 2026: Kirstie adds people so
+ * it isn't all on him). Never owner, super admin or developer, and a team
+ * admin can't change anybody who already holds one of those.
+ */
+export const TEAM_ROLES: Role[] = ["agent", "pretenancy", "compliance", "marketing", "support"];
+
 export const ROLE_BLURB: Record<Role, string> = {
   owner: "Everything, including who gets which role. The wiring and the switches are theirs alone.",
   super_admin: "Company figures, plus a short admin: people, permissions (read-only), invites and tickets.",

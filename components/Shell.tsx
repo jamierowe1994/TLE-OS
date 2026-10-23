@@ -178,6 +178,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
      rest of the time. See railFor in lib/nav for why this is separate from
      the role above, which is still what decides permission. */
   const [subjectRole, setSubjectRole] = useState<string | null>(null);
+  /* A team admin with no Admin of their own still gets the team page (Kirstie, 23 Oct 2026). */
+  const [teamAdmin, setTeamAdmin] = useState(false);
   const [me, setMe] = useState<{ name?: string; email?: string; photo?: string | null } | null>(null);
 
   useEffect(() => {
@@ -185,6 +187,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       .then((j) => {
         setRole(j?.role ?? null);
         setSubjectRole(j?.subjectRole ?? null);
+        setTeamAdmin(Boolean(j?.teamAdmin) && !j?.subjectRole);
         /* The SUBJECT, not the actor — while viewing as somebody, the foot
            should show whose screen you are looking at, which is the whole
            point of the red banner above it agreeing. */
@@ -196,7 +199,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   /* Empty until /api/auth/me answers, so nothing is drawn optimistically and
      then taken away — which reads as a glitch to everyone and as a demotion to
      the person it happens to. */
-  const mine = role === undefined ? [] : railFor(role, subjectRole);
+  const rail = role === undefined ? [] : railFor(role, subjectRole);
+  const mine = teamAdmin && !rail.some((w) => w.href === "/admin") ? [...rail, { href: "/admin/team", label: "People", icon: "user" }] : rail;
 
   useEffect(() => {
     /* The accent picker is gone (11 Sep 2026): the OS runs the house clay

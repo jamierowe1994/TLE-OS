@@ -3,6 +3,7 @@ import { countUsers, touchSeen } from "@/lib/users";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
+import { isTeamAdmin } from "@/lib/team-admins";
 import { keepRexAlive } from "@/lib/rex-user";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
@@ -76,6 +77,9 @@ export async function GET(req: NextRequest) {
     /* What the sidebar actually needs: may they open admin at all. Roles beyond
        owner now hold that too — support and developer among them. */
     canAdmin: can(actor?.role, "admin:open"),
+    /* May add people, reset passwords and set roles from the team page
+       (lib/team-admins): owners and a named few, Kirstie first. */
+    teamAdmin: await isTeamAdmin(actor).catch(() => false),
     role: actor?.role ?? null,
     /* What the SUBJECT is, so the rail can be drawn as theirs while an owner
        views as them (lib/nav railFor). Null when nobody is being viewed, so

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import WorkspaceRail from "@/components/WorkspaceRail";
 import { workspacesFor } from "@/lib/nav";
 import { can, type Capability } from "@/lib/roles";
@@ -69,6 +69,10 @@ const GROUPS: Array<{
          use is Tracking; their reports were always Tickets too. The old
          addresses redirect (next.config.ts). */
       { href: "/admin/people", label: "People", also: ["/admin/permissions"], needs: "see:people" },
+      /* The team page (James, 23 Oct 2026): what Kirstie gets - everybody,
+         a password reset, their role, and add a person. Here so an owner can
+         see exactly what she sees. */
+      { href: "/admin/team", label: "Team", needs: "manage:people" },
       /* ONE entry, not four.
          Onboarding, Tenant passport and PLC handover each had their own line
          here, which was three rail entries for one idea - "show me the thing I
@@ -200,12 +204,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
      the person it happens to. Every hook here sits ABOVE the early return
      below — there is no ESLint in this repo to catch it if they drift. */
   const [role, setRole] = useState<string | null | undefined>(undefined);
+  /* A team admin without Admin of their own (Kirstie, 23 Oct 2026, lib/team-admins)
+     gets this layout with one entry, People, and nothing else. */
+  const [teamOnly, setTeamOnly] = useState(false);
+  const pathname = usePathname() ?? "";
 
   useEffect(() => {
     let gone = false;
     fetchMe()
       .then((j) => {
-        if (!gone) setRole(j?.role ?? null);
+        if (gone) return;
+        setTeamOnly(Boolean(j?.teamAdmin) && !can(j?.role, "admin:open"));
+        setRole(j?.role ?? null);
       })
       .catch(() => {
         if (!gone) setRole(null);
@@ -217,10 +227,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const groups = useMemo(() => {
     if (role === undefined) return [];
+    if (teamOnly) return [{ title: null, items: [{ href: "/admin/team", label: "People", needs: "staff:internal" as Capability }] }];
     return GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => can(role, i.needs)) })).filter(
       (g) => g.items.length > 0
     );
-  }, [role]);
+  }, [role, teamOnly]);
 
   /**
    * The admin area is the OWNER'S, and this is the last line that says so.
@@ -236,11 +247,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
    */
   useEffect(() => {
     if (role === undefined || can(role, "admin:open")) return;
+    if (teamOnly) {
+      if (!pathname.startsWith("/admin/team")) router.replace("/admin/team");
+      return;
+    }
     const mine = workspacesFor(role)[0]?.href;
     router.replace(mine ?? "/dashboard");
-  }, [role, router]);
+  }, [role, router, teamOnly, pathname]);
 
-  if (role !== undefined && !can(role, "admin:open")) {
+  if (role !== undefined && !can(role, "admin:open") && !(teamOnly && pathname.startsWith("/admin/team"))) {
     return (
       <div className="admin-scope py-10 text-center">
         <p className="text-[13px] text-muted">Taking you to your own screen…</p>
