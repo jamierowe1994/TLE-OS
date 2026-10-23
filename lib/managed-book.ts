@@ -7,7 +7,7 @@ import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
 import { attach, payPropPeople, personKey } from "@/lib/business/payprop-tenant-contacts";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty } from "@/lib/rex-tenants";
-import { addrOf, parseAddress, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
+import { addrOf, parseAddress, postcodeOf, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
 import { q } from "@/lib/db";
 import { introOnlyIds } from "@/lib/intro-only";
 import { tidyAddressLine } from "@/lib/address-tidy";
@@ -104,6 +104,109 @@ function photosOf(r: Row): { image: string | null; images: string[] } {
   const images = ordered.map((i) => thumb(i, "800x600")).filter((u): u is string => !!u);
   const image = ordered[0] ? thumb(ordered[0], "400x300") : null;
   return { image, images };
+}
+
+/**
+ * PHOTOS FROM THE HOME'S OTHER LISTINGS (James, 23 Oct 2026). Lianna
+ * Denholm's Portfolio showed photos on 4 of her 35 homes, though REX held
+ * them for 7 more: a home's photos were only ever its let listing's, and a
+ * home REX PM brings into the book has no let listing at all (6 Ruskin
+ * Place's 10 photos sit on its current listing, 5 Douglas Gardens Mews' 16
+ * on another). So a home with none takes the photos of the newest REX
+ * listing for the same property that has any, whatever its state. Read
+ * only, and only for homes with a REX property and no photos.
+ */
+export async function fillPhotosFromOtherListings(properties: ManagedProperty[]): Promise<void> {
+  const noPhotos = properties.filter((p) => !p.images.length && !p.image && !p.test);
+  /* The REX property each home's photos are looked for under: its own, or for
+     a home the OS holds with no REX link, the one REX property at the same
+     door (Upper Grove Place 17/7 is REX's "Flat 7, 17 Upper Grove Place",
+     which lib/address-parse does not see as one door). */
+  const source = new Map<ManagedProperty, string>();
+  for (const p of noPhotos) if (p.propertyId && /^\d+$/.test(p.propertyId)) source.set(p, p.propertyId);
+  const held = new Set(properties.map((p) => p.propertyId).filter(Boolean) as string[]);
+  const unlinked = noPhotos.filter((p) => !source.has(p) && postcodeOf(p.address || p.name));
+  await eachLimited(unlinked, 3, async (p) => {
+    const id = await rexDoorFor(p.address || p.name);
+    if (id && !held.has(id)) source.set(p, id);
+  });
+  const bare = [...source.keys()];
+  const ids = [...new Set(source.values())];
+  const best = new Map<string, { at: number; photos: { image: string | null; images: string[] } }>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const res = await rexCall("Listings", "search", {
+        criteria: [{ name: "property_id", type: "in", value: chunk.map(Number) }],
+        limit: PAGE,
+        offset: page * PAGE,
+        extra_options: { extra_fields: ["related.listing_images"] },
+      });
+      if (!res.ok) throw new Error(res.error ?? `REX refused the listing photos (HTTP ${res.status}).`);
+      const batch = rexRows(res.result) as Row[];
+      for (const r of batch) {
+        const photos = photosOf(r);
+        if (!photos.images.length) continue;
+        const prop = (r.property ?? null) as Row | null;
+        const pid = String(prop?.id ?? r.property_id ?? "");
+        const at = Number(r.system_ctime ?? 0);
+        const had = best.get(pid);
+        if (pid && (!had || at > had.at)) best.set(pid, { at, photos });
+      }
+      if (batch.length < PAGE) break;
+    }
+  }
+  for (const p of bare) {
+    const got = best.get(source.get(p)!);
+    if (got) {
+      p.image = got.photos.image;
+      p.images = got.photos.images;
+    }
+  }
+}
+
+/** The numbers in an address line, postcode left out, sorted: "17/7" and "Flat 7, 17" both read 17,7. */
+const doorNumbers = (line: string, postcode: string) =>
+  (line.toUpperCase().replace(postcode.toUpperCase(), " ").match(/\d+/g) ?? []).map(Number).sort((a, b) => a - b).join(",");
+const streetWords = (line: string) => line.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !/^(flat|the|edinburgh|glasgow|london)$/.test(w));
+
+/**
+ * The one REX property at this door, for photos only: the same postcode, the
+ * same numbers and a street word in common, and nothing else at the postcode
+ * that also fits. Null on any doubt - a wrong home's photos are worse than none.
+ */
+const doorCache = new Map<string, { id: string | null; at: number }>();
+/* A day: REX properties at a door don't come and go, and the book is rebuilt often. */
+const DOOR_TTL_MS = 24 * 3600 * 1000;
+async function rexDoorFor(address: string): Promise<string | null> {
+  const kept = doorCache.get(address);
+  if (kept && Date.now() - kept.at < DOOR_TTL_MS) return kept.id;
+  const id = await rexDoorLookup(address);
+  doorCache.set(address, { id, at: Date.now() });
+  return id;
+}
+async function rexDoorLookup(address: string): Promise<string | null> {
+  const postcode = postcodeOf(address);
+  if (!postcode) return null;
+  const nums = doorNumbers(address, postcode);
+  if (!nums) return null;
+  const words = new Set(streetWords(address.toUpperCase().replace(postcode.toUpperCase(), " ")));
+  const res = await rexCall("Properties", "search", { criteria: [{ name: "property.adr_postcode", value: postcode }], limit: 100 });
+  if (!res.ok) return null;
+  const hits = (rexRows(res.result) as Row[]).filter((r) => {
+    const s = (v: unknown) => (v == null ? "" : String(v).trim());
+    const line = [s(r.adr_unit_number), s(r.adr_street_number), s(r.adr_street_name)].filter(Boolean).join(" ");
+    return doorNumbers(line, postcode) === nums && streetWords(line).some((w) => words.has(w));
+  });
+  return hits.length === 1 ? String(hits[0].id) : null;
+}
+
+/** A few at a time: REX is the team's live system. */
+async function eachLimited<T>(items: T[], n: number, fn: (t: T) => Promise<void>) {
+  const queue = [...items];
+  await Promise.all(Array.from({ length: n }, async () => {
+    while (queue.length) await fn(queue.shift()!);
+  }));
 }
 
 function addressOf(p: Row | null): {
@@ -675,6 +778,8 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       if (who) p.agent = known.get(plain(who)) ?? { id: `name:${who}`, name: who };
     }
   }
+  /* Not caught past the log: a failed photo read leaves homes as they were. */
+  await fillPhotosFromOtherListings(properties).catch((e) => console.error("[managed-book] photos from other listings", e));
   /* Landlords' homes and rent from each home's latest let only, or a landlord
      whose flat was re-let twice "owns" three. */
   const landlords = landlordsOf(currentLets(properties));
