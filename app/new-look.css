@@ -783,3 +783,9 @@
 .nl-terms-people { margin: 0; }
 .nl-field > small.is-bad { color: var(--accent-dark); }
 .nl-ct p, .nl-ct li { overflow-wrap: anywhere; }
+
+/* The page's side margins, as the design has them (measured against the prototype, 23 Oct 2026):
+   an even 56px either side at every desktop width, 18px on a phone. The old frame's 40px left /
+   84px right made room for the old Steve ball and left the page sitting off-centre. */
+[data-nav-look="new"] main[data-os-content] { padding-left: 56px; padding-right: 56px; }
+@media (max-width: 760px) { [data-nav-look="new"] main[data-os-content] { padding-left: 18px; padding-right: 18px; } }

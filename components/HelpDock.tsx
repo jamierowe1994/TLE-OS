@@ -1937,7 +1937,7 @@ function Dock() {
         <button
           type="button"
           onClick={rec.stop}
-          className={`os-toast-lift fixed bottom-6 ${lookNew ? "right-[124px]" : "right-[96px]"} z-[191] flex items-center gap-2 rounded-full bg-[#C4412F] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]`}
+          className={`os-toast-lift fixed bottom-6 ${lookNew ? "right-[100px]" : "right-[96px]"} z-[191] flex items-center gap-2 rounded-full bg-[#C4412F] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]`}
         >
           <span aria-hidden className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
           Recording {clockFace(rec.seconds)} · Stop
@@ -1956,10 +1956,11 @@ function Dock() {
         data-hide-from-shot
         data-os-steve
         data-steve-dock
-        className="os-toast-lift fixed bottom-2 right-3 z-[190] text-ink hover:scale-105 active:scale-95"
+        className={`os-toast-lift fixed z-[190] text-ink hover:scale-105 active:scale-95 ${lookNew ? "bottom-[10px] right-[18px]" : "bottom-2 right-3"}`}
       >
         <span ref={landing} className="block origin-bottom" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("os-steve-land"); }}>
-          <AssistantCharacter mood={mood} size={lookNew ? 100 : 76} loop={performing} />
+          {/* New look: 56px of Steve, 26px in and 18px up, as the design has him (23 Oct 2026). The face is 78% of this box. */}
+          <AssistantCharacter mood={mood} size={lookNew ? 72 : 76} loop={performing} />
         </span>
         {/* Something to carry. The dot is only ever there because there is
             genuinely something unread — see the note on `unseen`. */}
@@ -1995,7 +1996,7 @@ function Dock() {
               void toggle();
             }
           }}
-          className="os-toast-lift fade-up fixed bottom-[116px] right-4 z-[190] w-[min(420px,calc(100vw-2rem))] sm:right-6"
+          className="os-toast-lift fade-up fixed bottom-[86px] right-4 z-[190] w-[min(420px,calc(100vw-2rem))] sm:right-[26px]"
         >
           <div ref={bubbleRef} className="nl-steve-bubble nl-st-bubble relative">
             {/* The tail, over his head. */}

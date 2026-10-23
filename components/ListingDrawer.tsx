@@ -1757,7 +1757,7 @@ function ListingDrawerBody({
       <div className={`fixed inset-0 z-[130] ${panelTab ? "" : "pointer-events-none"}`} aria-hidden={!panelTab}>
         <button type="button" aria-label="Close" tabIndex={panelTab ? 0 : -1} onClick={() => setPanelTab(null)} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${panelTab ? "opacity-100" : "opacity-0"}`} />
         <aside
-          className={`absolute inset-y-0 right-0 w-full max-w-[460px] overflow-hidden bg-card shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[380ms] sm:rounded-l-2xl ${panelTab ? "translate-x-0" : "translate-x-full"}`}
+          className={`absolute inset-y-0 right-0 w-full max-w-[460px] overflow-hidden bg-card transition-transform duration-[380ms] sm:rounded-l-2xl ${panelTab ? "translate-x-0 shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)]" : "translate-x-full"}`}
           style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
         >
           {panelTab && (
