@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Bricolage_Grotesque, Inter, JetBrains_Mono, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import "./new-look.css";
+import "./book-viewing.css";
 
 /**
  * THE TYPE, from 11 Sep 2026 (James): Manrope for headings and figures, set

@@ -20,6 +20,8 @@ import PreSendOffer from "@/components/appraisal/PreSendOffer";
 import type { PreOnBooking } from "@/lib/pre-send-time";
 import AccessNow from "@/components/viewings/AccessNow";
 import { searchMatches } from "@/lib/search-match";
+import { useNewLook } from "@/lib/use-new-look";
+import BookViewingWindow from "@/components/viewings/BookViewingWindow";
 
 /** What the record did with a booking, told back to the booker's done screen. */
 export type BookedResult = {
@@ -130,7 +132,22 @@ export type Person = {
   lng?: number;
 };
 
-export default function ViewingBooker({
+/**
+ * THE NEW BOOK A VIEWING (James's Claude Design, 24 Oct 2026), behind the "Book
+ * a viewing" switch in Admin > Switches. Every place a viewing is booked comes
+ * through here - the tenant's lead, a listing, Viewings, Enquiries - so one
+ * switch turns them all over together (James: if it clashes with booking on
+ * another page, all the bookings go live). Change time, appraisals and take-ons
+ * stay on the booker below. Starting from nobody (no lead yet) does too.
+ */
+export type ViewingBookerProps = Parameters<typeof ClassicViewingBooker>[0];
+export default function ViewingBooker(props: ViewingBookerProps) {
+  const fresh = useNewLook("booking") === true;
+  if (fresh && (props.mode ?? "viewing") === "viewing" && !props.editing && props.lead) return <BookViewingWindow {...props} />;
+  return <ClassicViewingBooker {...props} />;
+}
+
+function ClassicViewingBooker({
   open,
   onClose,
   lead,

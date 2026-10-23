@@ -54,6 +54,8 @@ export const LOOK_SCREENS = [
   { id: "advert", label: "Edit advert", what: "The advert editor on a listing." },
   { id: "help", label: "Help", what: "Guides and help." },
   { id: "admin", label: "Admin", what: "Admin's home, People and the admin tools." },
+  /* Not a reskin: a new way of working (James, 24 Oct 2026), so it carries its own warning. */
+  { id: "booking", label: "Book a viewing (tenants)", what: "The new five-step booking window: home, time, access, messages, book. On, every place a tenant viewing is booked opens it - the lead, the listing, Viewings and Enquiries - and the landlord's email, the tenant's notice and the access record go out from it when the agent presses Book." },
 ] as const;
 
 export type LookScreen = (typeof LOOK_SCREENS)[number]["id"];
