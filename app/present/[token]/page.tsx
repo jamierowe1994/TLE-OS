@@ -5,7 +5,9 @@ import StylePicker from "@/components/StylePicker";
 import PresentDeck from "@/components/PresentDeck";
 import PreAppraisalBrochure from "@/components/PreAppraisalBrochure";
 import { brochureCount } from "@/lib/brochure";
-import { getRecording, mp4UrlFor } from "@/lib/flow-video";
+import { withPlayableVideo } from "@/lib/present-video";
+import { canBePack } from "@/lib/pre-pack";
+import { redirect } from "next/navigation";
 
 /**
  * The landlord's copy.
@@ -77,6 +79,7 @@ export default async function PresentPage({
     /* THE PRE-APPRAISAL IS THE BROCHURE (James, 7 Oct 2026), here as on a
        real link. The before-and-after harness (?embed=1) still frames the
        slide deck, which is the only thing it knows how to step through. */
+    if (asked === "pre-appraisal" && !frame && canBePack(deck)) redirect("/present/sample/pack");
     if (asked === "pre-appraisal" && !frame) {
       return (
         <>
@@ -111,41 +114,19 @@ export default async function PresentPage({
     return <Expired agent={row.authorName} />;
   }
 
-  /* The welcome video, only when a landlord can actually watch it. On 17 Sep
-     2026 Flow's player sent everyone who was not signed in to its login
-     page, then played an iPhone recording Chrome could not decode, so a
-     button here opened a blank box. Asked once per open. */
-  let deck = row.deck;
-  const video = deck.welcomeVideo;
-  if (video?.status === "ready" && video.recordingId) {
-    /* Our own player plays the MP4 itself (James, 17 Sep 2026), so that is
-       what is asked for: two bytes of it, following Flow's redirect to the
-       file. Until Flow has converted the recording there is no file, and the
-       deck goes without the button rather than with a player that will not
-       play. The shape is asked for alongside when it was not saved, so a
-       portrait video opens in a portrait frame instead of changing shape. */
-    const videoUrl = video.videoUrl || mp4UrlFor(video.recordingId);
-    const [playable, shape] = await Promise.all([
-      fetch(videoUrl, { method: "GET", headers: { range: "bytes=0-1" }, cache: "no-store", signal: AbortSignal.timeout(5000) })
-        .then(async (r) => {
-          await r.body?.cancel().catch(() => {});
-          return r.status === 200 || r.status === 206;
-        })
-        .catch(() => false),
-      video.width && video.height
-        ? Promise.resolve({ width: video.width, height: video.height })
-        : getRecording(video.recordingId)
-            .then(({ recording }) => ({ width: recording?.width ?? null, height: recording?.height ?? null }))
-            .catch(() => ({ width: null, height: null })),
-    ]);
-    deck = playable ? { ...deck, welcomeVideo: { ...video, videoUrl, ...shape } } : { ...deck, welcomeVideo: null };
-  }
+  /* The welcome video, only when a landlord can actually watch it (lib/present-video). */
+  let deck = await withPlayableVideo(row.deck);
 
   /* The builder's own ticks are for the builder; the landlord's page has no use for them. */
   deck = { ...deck, builder: null, terms: deck.terms ? { ...deck.terms, signUrl: null } : deck.terms };
   /* The pre-appraisal goes out as the brochure (James, 7 Oct 2026), except a
      deck pinned to the look it was already sent as - see PresentDeck.look.
      The two long decks are still the slide deck. */
+  /* The pre-appraisal is the pack (Claude Design, 23 Oct 2026) whenever a time
+     is booked - every one of its slides is built round the visit. A deck
+     without a time keeps the brochure, as does one pinned to the look it was
+     sent as. */
+  if (deckKind(deck) === "pre-appraisal" && deck.look !== "house" && canBePack(deck)) redirect(`/present/${encodeURIComponent(row.token)}/pack`);
   if (deckKind(deck) === "pre-appraisal" && deck.look !== "house") return <PreAppraisalBrochure token={row.token} deck={deck} />;
   return <PresentDeck token={row.token} deck={deck} slides={slidesFor(deck)} />;
 }
