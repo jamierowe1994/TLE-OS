@@ -93,6 +93,8 @@ type OsRow = {
     amount?: number; offeredAmount?: number; moveIn?: string; recordedBy?: { name?: string }; source?: string; via?: string;
     movingIn?: string[]; adults?: number; children?: number; pets?: boolean; petsNote?: string; works?: unknown[]; note?: string; householdIncome?: number;
     passport?: { guarantor?: boolean; applicantType?: string; workHours?: string; phone?: string; mobile?: string };
+    /* The offer link and application form keep each adult's own answers. */
+    applicants?: { phone?: string; isPrimary?: boolean }[];
   };
   created_at: Date;
 };
@@ -215,7 +217,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         detail: {
           parts: toOfferParts(partsBy.get(r.id) ?? [], r.name || ""),
           email: r.email || null,
-          phone: p.passport?.mobile || p.passport?.phone || null,
+          /* An offer link's number is the lead applicant's own (23 Oct 2026). */
+          phone: p.passport?.mobile || p.passport?.phone || (p.applicants?.find((x) => x.isPrimary) ?? p.applicants?.[0])?.phone || null,
           people: (p.movingIn?.length ? p.movingIn : [r.name || r.email]).filter(Boolean),
           adults: typeof p.adults === "number" ? p.adults : null,
           children: typeof p.children === "number" ? p.children : null,

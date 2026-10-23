@@ -104,6 +104,54 @@ export async function recordTenantDocument(d: {
   return shape(rows[0]);
 }
 
+/**
+ * Everything one tenant has sent, whatever it was sent against, for the
+ * agent's side (23 Oct 2026). Read by email because the agent knows the
+ * tenant by their lead and passport, not their portal account.
+ *
+ * documentsForDeal alone missed almost all of it: on 23 Oct every one of the
+ * 24 files tenants had sent was out of sight. 17 went in before there was a
+ * deal (Oluwabusayo Okeleye's ID, share code and bank statements for 6 Ruskin
+ * Place; Joel Bowen's reference and payslips for 74 Anlaby Park Road North),
+ * and 7 were on a sitting tenant's home, which no deal screen reads.
+ */
+export async function documentsForEmail(email: string): Promise<TenantDocument[]> {
+  const e = email.trim().toLowerCase();
+  if (!hasDb() || !e) return [];
+  const rows = await q<Row>(
+    `SELECT d.${COLS.split(", ").join(", d.")}
+       FROM os_tenant_documents d
+       JOIN os_portal_accounts a ON a.id = d.account_id AND a.kind = 'tenant'
+      WHERE LOWER(a.email) = $1
+      ORDER BY d.uploaded_at DESC`,
+    [e]
+  ).catch(() => [] as Row[]);
+  return rows.map(shape);
+}
+
+/**
+ * Files tenants sent in the last `days`, one row per tenant, for the bell of
+ * the agent who sent them their passport (23 Oct 2026). A file arriving is a
+ * thing to act on, and nobody was told.
+ */
+export async function recentTenantSends(agentId: string, days = 7): Promise<{ email: string; name: string; files: number; last: string; leadId: string | null }[]> {
+  if (!hasDb() || !agentId) return [];
+  const rows = await q<{ email: string; name: string | null; files: string; last: Date; lead_id: string | null }>(
+    `SELECT t.email, t.name, t.files, t.last,
+            (SELECT l.id FROM os_leads l WHERE LOWER(l.email) = t.email ORDER BY l.received_at DESC NULLS LAST LIMIT 1) AS lead_id
+       FROM (SELECT LOWER(a.email) AS email, MAX(COALESCE(NULLIF(a.name, ''), p.name)) AS name,
+                    COUNT(DISTINCT d.id)::text AS files, MAX(d.uploaded_at) AS last
+               FROM os_tenant_documents d
+               JOIN os_portal_accounts a ON a.id = d.account_id AND a.kind = 'tenant'
+               JOIN os_tenant_passports p ON LOWER(p.email) = LOWER(a.email) AND p.agent_id = $1
+              WHERE d.uploaded_at > NOW() - make_interval(days => $2)
+              GROUP BY LOWER(a.email)) t
+      ORDER BY t.last DESC LIMIT 20`,
+    [agentId, days]
+  ).catch(() => []);
+  return rows.map((r) => ({ email: r.email, name: r.name || r.email, files: Number(r.files) || 0, last: new Date(r.last).toISOString(), leadId: r.lead_id }));
+}
+
 /** What one deal's tenants have sent, for the agent's side of the file. */
 export async function documentsForDeal(dealId: string): Promise<(TenantDocument & { who: string })[]> {
   if (!hasDb() || !dealId) return [];

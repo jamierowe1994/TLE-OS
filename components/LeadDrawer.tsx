@@ -1271,6 +1271,15 @@ function LeadDrawerBody({
   const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
   /* Their passport as a list of answers (8 Oct 2026), not the tenant's own form. */
   const [answersOpen, setAnswersOpen] = useState(false);
+  /* ?passport=1 from the bell's "Files in" (23 Oct 2026): open their passport,
+     where what they sent is listed. Once, then off the address. */
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (!lead?.id || u.searchParams.get("passport") !== "1") return;
+    setAnswersOpen(true);
+    u.searchParams.delete("passport");
+    window.history.replaceState(null, "", u.toString());
+  }, [lead?.id]);
   /* The tenant passport, sent by hand. There is an automatic send off a booked
      viewing; James, 9 Sep: an agent must also be able to send it whenever they
      like, see whether it already went, and copy the link to paste anywhere. */

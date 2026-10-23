@@ -5,6 +5,7 @@ import { can } from "@/lib/roles";
 import { findDonePassportByEmail, findPassportByEmail, getPassport } from "@/lib/passport";
 import { householdIncome } from "@/lib/passport-shape";
 import { forScreen, passportRules } from "@/lib/passport-scotland";
+import { documentsForEmail } from "@/lib/tenant-documents";
 
 /**
  * GET /api/tenant/passport/answers?email= -> the tenant's passport, every answer
@@ -49,8 +50,12 @@ export async function GET(req: NextRequest) {
           .catch(() => ownRec);
   if (!rec) return NextResponse.json({ ok: false, error: "There's no passport for them yet." }, { status: 404 });
   const rules = await passportRules(rec, req.nextUrl.searchParams.get("home"));
+  /* What they sent in from their tenant area (23 Oct 2026): their ID, share
+     code, payslips, references. It reached no agent's screen until now. */
+  const documents = (await documentsForEmail(rec.email || email)).map((d) => ({ id: d.id, kind: d.kind, name: d.name, r2Key: d.r2Key, uploadedAt: d.uploadedAt }));
 
   return NextResponse.json({
+    documents,
     ok: true,
     name: rec.data.legalName || rec.name,
     email: rec.email,

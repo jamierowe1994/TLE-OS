@@ -223,6 +223,15 @@ export async function POST(req: NextRequest) {
     "Put it to the landlord, and reply to them either way.",
   ];
 
+  /* Kept first, emailed second (23 Oct 2026). The other way round, a save
+     that failed after the email left gave the agent a link to an offer that
+     was never kept, and the tenant a page that said it hadn't gone. */
+  await q(
+    `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
+     VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,'not_sent')`,
+    [id, lead.email, lead.name, String(home.id), address, JSON.stringify(payload), home.agentEmail]
+  );
+
   /* Staff mail, so not behind the customer switch: an application sitting in
      a table nobody reads is the failure here. */
   let outcome = "not_sent";
@@ -233,13 +242,8 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       outcome = `failed: ${publicError(e, "send failed")}`.slice(0, 300);
     }
+    await q(`UPDATE os_tenant_viewing_responses SET outcome = $2 WHERE id = $1`, [id, outcome]).catch(() => null);
   }
-
-  await q(
-    `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
-     VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,$8)`,
-    [id, lead.email, lead.name, String(home.id), address, JSON.stringify(payload), home.agentEmail, outcome]
-  );
   const on = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
   await noteOnLeads({ email: lead.email, name: lead.name, phone: lead.phone, address, line: `${on}: ${subject}.${outcome === "sent" ? ` Emailed to ${home.agentEmail}.` : ""}` }).catch(() => null);
 

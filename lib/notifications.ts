@@ -15,6 +15,8 @@ import { newBookingsFor } from "@/lib/rex-viewings";
 import { decisionsFor, waitingOnDesk } from "@/lib/section-notices";
 import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
 import { gapsForBell } from "@/lib/propoly-mail";
+import { bookFor } from "@/lib/listings-cache";
+import { recentTenantSends } from "@/lib/tenant-documents";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -53,7 +55,13 @@ import { gapsForBell } from "@/lib/propoly-mail";
  *                            offer on (the tenant, a colleague, the office) -
  *                            not their own, never a test file's. The last
  *                            week, read from the offer itself (Howard, ticket
- *                            0268fdcc, 15 Oct 2026)
+ *                            0268fdcc, 15 Oct 2026). Matched by the
+ *                            listing being on their book as well as by the
+ *                            address the offer email went to (23 Oct 2026)
+ *   files in                 the agent who sent the tenant their passport,
+ *                            when the tenant sends ID, references or
+ *                            payslips from their tenant area (23 Oct 2026),
+ *                            for a week
  *   still looking            the agent who sent "it's been let", when that
  *                            person pressed Show Me Other Homes (lib/let-
  *                            notice, 22 Oct 2026), for a week
@@ -189,14 +197,23 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
      15 Oct 2026). sent_to is the listing's agent each offer path wrote to;
      the agent's own offers carry recordedBy with their email. Test offers
      live on the test file, not here, so a test listing never rings. */
+  /* sent_to alone missed offers (23 Oct 2026): it is the agent's email as
+     REX holds it, which is not always their sign-in (Bernadine's REX address
+     is bernadine@thepropertyexperts.co.uk), and it is empty when REX could
+     not be read as the offer came in. So a listing on their own book counts
+     too - the same book their Listings board and Offers tab are read from. */
+  const myListings = me.rexUserId
+    ? ((await bookFor(me.rexUserId).catch(() => null))?.listings ?? []).map((l) => String(l.id))
+    : [];
   const offersIn = await q<{ id: string; name: string; email: string; address: string | null; listing_id: string; amount: string | null; created_at: Date }>(
     `SELECT id, name, email, address, listing_id, payload->>'amount' AS amount, created_at FROM os_tenant_viewing_responses
       WHERE kind = 'offer' AND listing_id IS NOT NULL AND created_at > NOW() - INTERVAL '7 days'
-        AND LOWER(sent_to) = LOWER($1)
+        AND (LOWER(sent_to) = LOWER($1) OR listing_id = ANY($2::text[]))
         AND LOWER(COALESCE(payload->'recordedBy'->>'email', '')) <> LOWER($1)
       ORDER BY created_at DESC LIMIT 20`,
-    [me.email]
+    [me.email, myListings]
   ).catch(() => []);
+  const filesIn = await recentTenantSends(me.id).catch(() => []);
 
   /* Still looking (22 Oct 2026): somebody told a home was let pressed Show
      Me Other Homes in the agent's email (lib/let-notice recordAsked). The
@@ -218,6 +235,17 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       title: `Still looking: ${who}`,
       body: `Told ${s.address || "a home"} is let, they pressed Show Me Other Homes. Worth a call.`,
       href: s.lead_id ? `/leads?open=${encodeURIComponent(s.lead_id)}` : `/listings/${encodeURIComponent(s.listing_id)}?tab=enquiries`,
+      tone: "warn",
+    });
+  }
+  for (const f of filesIn) {
+    out.push({
+      id: `files-in:${f.email}:${f.last}`,
+      kind: "lead",
+      at: f.last,
+      title: `Files in: ${f.name}`,
+      body: `${f.files === 1 ? "A file" : `${f.files} files`} sent from their tenant area. They're on their passport.`,
+      href: f.leadId ? `/leads?open=${encodeURIComponent(f.leadId)}&passport=1` : null,
       tone: "warn",
     });
   }

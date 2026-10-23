@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import PassportScene from "@/components/PassportScene";
 import { PassportRulesContext } from "@/components/PassportBook";
 import { EMPTY_PASSPORT, isEmployed, isTrading, otherAdultCount, otherCredit, otherName, type PassportData, type PassportRules } from "@/lib/passport-shape";
+import { tenantDocLabel } from "@/lib/tenant-documents-kinds";
 
 /**
  * A TENANT'S PASSPORT, AS A LIST (James, 8 Oct 2026).
@@ -19,7 +20,8 @@ import { EMPTY_PASSPORT, isEmployed, isTrading, otherAdultCount, otherCredit, ot
  * agent reads a file. Read only, from GET /api/tenant/passport/answers.
  */
 
-type Answer = { ok?: boolean; error?: string; name?: string; email?: string; submittedAt?: string | null; updatedAt?: string; householdIncome?: number | null; data?: PassportData; rules?: PassportRules };
+type SentIn = { id: string; kind: string; name: string; r2Key: string; uploadedAt: string };
+type Answer = { ok?: boolean; error?: string; name?: string; email?: string; submittedAt?: string | null; updatedAt?: string; householdIncome?: number | null; data?: PassportData; rules?: PassportRules; documents?: SentIn[] };
 
 const yn = (b: boolean | null | undefined) => (b == null ? null : b ? "Yes" : "No");
 const money = (s: string | number | null | undefined) => {
@@ -186,6 +188,33 @@ export default function PassportAnswers({ email, name, home, onClose }: {
             <p className="rounded-xl bg-[#fdefec] px-3.5 py-2.5 text-[12.5px] text-[#9d4340]">{a.error ?? "The passport didn't load."}</p>
           ) : (
             <>
+              {/* What they sent in from their tenant area (23 Oct 2026): first,
+                  because a file arriving is a thing to act on. Their ID,
+                  references and payslips reached nobody's screen before. */}
+              {a.documents?.length ? (
+                <section className="mb-5">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Sent in by them</p>
+                  <ul className="mt-2 overflow-hidden rounded-2xl border border-line/60 bg-white">
+                    {a.documents.map((f) => (
+                      <li key={f.id} className="flex items-center justify-between gap-3 border-b border-line/40 px-4 py-2.5 last:border-b-0">
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] font-semibold">{f.name}</span>
+                          <span className="block text-[12px] text-muted">{tenantDocLabel(f.kind)} · {day(f.uploadedAt)}</span>
+                        </span>
+                        <a
+                          href={`/api/r2/file?key=${encodeURIComponent(f.r2Key)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0 rounded-full border border-line/80 px-3 py-1.5 text-[11.5px] font-semibold transition-colors hover:border-ink"
+                        >
+                          Open
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
               {/* The card, front and back: drag it or tap it to turn it over. */}
               <div className="h-[300px]">
                 <PassportRulesContext.Provider value={a.rules ?? {}}>
