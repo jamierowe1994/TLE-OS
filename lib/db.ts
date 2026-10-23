@@ -2100,6 +2100,15 @@ CREATE TABLE IF NOT EXISTS os_presentations (
 );
 CREATE INDEX IF NOT EXISTS os_presentations_ref ON os_presentations (ref, created_at DESC);
 
+-- The landlord's answers to the pre-appraisal pack's four quick questions
+-- (lib/pre-pack, 23 Oct 2026), one row per presentation, the latest send
+-- winning. The agent hears about them in the bell and takes them to the visit.
+CREATE TABLE IF NOT EXISTS os_present_answers (
+  token       TEXT PRIMARY KEY REFERENCES os_presentations(token) ON DELETE CASCADE,
+  answers     JSONB NOT NULL,
+  answered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Terms of business sent for signature, watched.
 --
 -- REX owns the request; this table exists ONLY so we can tell when one

@@ -446,6 +446,28 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       });
     }
   }
+  /* The landlord's answers to the pre-appraisal pack's quick questions
+     (lib/pre-pack, 23 Oct 2026), to the agent who sent the pack, for a
+     fortnight: the four answers in the line, opening the appraisal. */
+  const packAnswers = await q<{ token: string; ref: string; recipient: string; answers: { q: string; a: string }[]; answered_at: Date }>(
+    `SELECT p.token, p.ref, p.deck->>'recipientName' AS recipient, a.answers, a.answered_at
+       FROM os_present_answers a JOIN os_presentations p ON p.token = a.token
+      WHERE p.author_id = $1 AND a.answered_at > NOW() - INTERVAL '14 days'
+      ORDER BY a.answered_at DESC LIMIT 10`,
+    [me.id]
+  ).catch(() => []);
+  for (const r of packAnswers) {
+    const who = (r.recipient || "Your landlord").trim().split(/\s+/)[0];
+    out.push({
+      id: `pack-answers:${r.token}:${new Date(r.answered_at).getTime()}`,
+      kind: "lead",
+      at: new Date(r.answered_at).toISOString(),
+      title: `${who} answered your pre-appraisal questions`,
+      body: (r.answers ?? []).map((x) => `${x.q.replace(/\?$/, "")}: ${x.a}`).join(" · "),
+      href: r.ref ? `/market-appraisals/${encodeURIComponent(r.ref)}` : "/market-appraisals",
+      tone: "ok",
+    });
+  }
   /* Terms of Business sent from the OS (lib/terms, 23 Oct 2026), to the
      agent who sent them: your part still to sign, an email that didn't go,
      each landlord as they sign, and all signed. Two weeks, then gone. */
