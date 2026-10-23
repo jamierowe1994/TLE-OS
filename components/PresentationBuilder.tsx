@@ -24,7 +24,11 @@ import RmGuidePanel from "@/components/RmGuidePanel";
 import type { RmGuide } from "@/lib/rm-guide";
 import {
   SECTIONS,
+  MAX_FIXES,
+  MAX_LOVES,
   STANDARD_FEES,
+  checkFigure,
+  cleanNotes,
   deckKind,
   defaultBio,
   firstNameOf,
@@ -35,6 +39,8 @@ import {
   type SlideId,
   type PresentAgent,
   type PresentDeck as Deck,
+  type PresentFigure,
+  type PresentNote,
 } from "@/lib/present";
 import { SERVICE_LEVELS, type MarketAppraisal } from "@/lib/market-appraisal";
 import { Pill } from "@/components/Wire";
@@ -182,6 +188,15 @@ export default function PresentationBuilder({
   const [previewAt, setPreviewAt] = useState(0);
   /* A Rightmove Best Price Guide in place of the comparables (lib/rm-guide). */
   const [rmGuide, setRmGuide] = useState<RmGuide | null>(null);
+  /* THE APPRAISAL DECK'S OWN WORDS (James, 23 Oct 2026): the figure, three
+     "what tenants will love" and up to two "worth doing before we list",
+     typed here before the deck is made. Appraisal deck only; blank leaves
+     that part of the deck out. Checked the same way the server checks it. */
+  const [figure, setFigure] = useState<FigureDraft>(NO_FIGURE);
+  const [loves, setLoves] = useState<PresentNote[]>(() => blankNotes(MAX_LOVES));
+  const [fixes, setFixes] = useState<PresentNote[]>(() => blankNotes(MAX_FIXES));
+  const words = kind === "appraisal";
+  const figureCheck = words ? checkFigure(figure) : { figure: null, error: null };
   const [making, setMaking] = useState(false);
   /* THE PRESENTATION THIS APPRAISAL ALREADY HAS, if any (James, 17 Sep 2026:
      "rather than saying create presentation, it should always be update
@@ -371,6 +386,7 @@ export default function PresentationBuilder({
       rmGuide,
       hidden,
       market: marketPayload(),
+      ...(words ? { figure: figureCheck.figure, loves: cleanNotes(loves, MAX_LOVES), fixes: cleanNotes(fixes, MAX_FIXES) } : {}),
       /* WHAT THE AGENT PICKED ON THE AVAILABLE STEP, snapshotted with its
          photographs. Until now the wizard let somebody choose these and
          then threw the choice away at send: the slide existed, the type
@@ -425,11 +441,24 @@ export default function PresentationBuilder({
   async function create() {
     const body = deckBody();
     if (!body) return;
+    /* A figure typed but wrong goes back to the agent, never to the landlord. */
+    if (figureCheck.error) {
+      setStep(BUILD_STEPS.length - 1);
+      setError(figureCheck.error);
+      return;
+    }
     setMaking(true);
     setError(null);
     setProgress("building");
     setUpdatingRun(Boolean(existing));
-    const builder = { comparables: chosen, listings: pickedNearby, market: marketSel, hidden, rmGuide };
+    const builder = {
+      comparables: chosen,
+      listings: pickedNearby,
+      market: marketSel,
+      hidden,
+      rmGuide,
+      ...(words ? { figure: figureCheck.figure, loves: cleanNotes(loves, MAX_LOVES), fixes: cleanNotes(fixes, MAX_FIXES) } : {}),
+    };
     try {
       const res = await fetch("/api/presentations", {
         method: "POST",
@@ -486,6 +515,14 @@ export default function PresentationBuilder({
     if (b.market) setMarketSel({ area: b.market.area, blocks: b.market.blocks as MarketBlockId[] });
     setHidden(b.hidden);
     setRmGuide(b.rmGuide ?? null);
+    /* Only the appraisal deck's own: a post-appraisal inheriting the visit's picks starts without them. */
+    if (words && existing?.builder) {
+      const f = existing.builder.figure;
+      if (f) setFigure({ ask: String(f.ask), low: String(f.low), high: String(f.high), weeks: f.weeks });
+      setLoves(padNotes(existing.builder.loves, MAX_LOVES));
+      setFixes(padNotes(existing.builder.fixes, MAX_FIXES));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d, existing, inherited]);
 
   const opened = useRef(false);
@@ -1558,7 +1595,8 @@ export default function PresentationBuilder({
         <button
           type="button"
           onClick={create}
-          disabled={making || !d || existing === undefined}
+          disabled={making || !d || existing === undefined || Boolean(figureCheck.error)}
+          title={figureCheck.error ?? undefined}
           className="rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
         >
           {existing ? "Update presentation" : "Create presentation"}
@@ -2331,6 +2369,18 @@ export default function PresentationBuilder({
             </div>
           )}
 
+          {here === "review" && words && (
+            <AppraisalWords
+              figure={figure}
+              onFigure={setFigure}
+              figureError={figureCheck.error}
+              loves={loves}
+              onLoves={setLoves}
+              fixes={fixes}
+              onFixes={setFixes}
+            />
+          )}
+
           {here === "review" && (
             /* A QUARTER FOR THE LIST, THE REST FOR THE PREVIEW. James, 11 Sep
                2026: "we've got no preview, so they can't see what it would
@@ -2715,8 +2765,146 @@ function DeckPreview({
 type SavedDeck = {
   token: string;
   url: string;
-  builder: { comparables: string[]; listings: string[]; market: { area: string; blocks: string[] } | null; hidden: SlideId[]; rmGuide?: RmGuide | null } | null;
+  builder: {
+    comparables: string[];
+    listings: string[];
+    market: { area: string; blocks: string[] } | null;
+    hidden: SlideId[];
+    rmGuide?: RmGuide | null;
+    figure?: PresentFigure | null;
+    loves?: PresentNote[] | null;
+    fixes?: PresentNote[] | null;
+  } | null;
 };
+
+/* ── the appraisal deck's figure, loves and fixes (23 Oct 2026) ── */
+
+type FigureDraft = { ask: string; low: string; high: string; weeks: string };
+const NO_FIGURE: FigureDraft = { ask: "", low: "", high: "", weeks: "" };
+const blankNotes = (n: number): PresentNote[] => Array.from({ length: n }, () => ({ title: "", line: "" }));
+const padNotes = (have: PresentNote[] | null | undefined, n: number): PresentNote[] =>
+  [...(have ?? []), ...blankNotes(n)].slice(0, n);
+
+const inputCls = "mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[13px] text-ink";
+
+/**
+ * What the agent writes for the appraisal deck, on the Review step: the figure
+ * (asking rent, its range and time to let), three things tenants will love and
+ * up to two worth doing before we list. All optional - a blank part is left
+ * out of the deck - but a figure typed in has to add up before it goes.
+ */
+function AppraisalWords({
+  figure,
+  onFigure,
+  figureError,
+  loves,
+  onLoves,
+  fixes,
+  onFixes,
+}: {
+  figure: FigureDraft;
+  onFigure: (f: FigureDraft) => void;
+  figureError: string | null;
+  loves: PresentNote[];
+  onLoves: (l: PresentNote[]) => void;
+  fixes: PresentNote[];
+  onFixes: (l: PresentNote[]) => void;
+}) {
+  const typed = Object.values(figure).some((v) => v.trim());
+  const money = (k: keyof FigureDraft, label: string) => (
+    <label className="block text-[11.5px] text-muted">
+      {label}
+      <span className="relative mt-1 block">
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[13px] text-muted">£</span>
+        <input
+          inputMode="numeric"
+          value={figure[k]}
+          onChange={(e) => onFigure({ ...figure, [k]: e.target.value.replace(/[^\d,.]/g, "") })}
+          placeholder="0"
+          aria-label={`${label}, pounds a month`}
+          data-words={`figure-${k}`}
+          className={`${inputCls} mt-0 pl-6`}
+        />
+      </span>
+    </label>
+  );
+  const notes = (list: PresentNote[], set: (l: PresentNote[]) => void, what: string, key: string) => (
+    <ol className="mt-2 space-y-2.5">
+      {list.map((n, k) => (
+        <li key={k} className="grid gap-1.5">
+          <input
+            value={n.title}
+            maxLength={80}
+            onChange={(e) => set(list.map((x, j) => (j === k ? { ...x, title: e.target.value } : x)))}
+            placeholder={`${what} ${k + 1}`}
+            aria-label={`${what} ${k + 1}, title`}
+            data-words={`${key}-${k}-title`}
+            className={`${inputCls} mt-0 font-semibold`}
+          />
+          <input
+            value={n.line}
+            maxLength={160}
+            onChange={(e) => set(list.map((x, j) => (j === k ? { ...x, line: e.target.value } : x)))}
+            placeholder="One line on why"
+            aria-label={`${what} ${k + 1}, one line`}
+            data-words={`${key}-${k}-line`}
+            className={`${inputCls} mt-0`}
+          />
+        </li>
+      ))}
+    </ol>
+  );
+  return (
+    <section className="mb-5 rounded-2xl border border-line/70 bg-card p-4" aria-label="For the presentation">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">For the presentation</p>
+        <p className="text-[11px] text-muted">Leave any part blank to leave it out of the deck.</p>
+      </div>
+      <div className="mt-3 grid gap-5 lg:grid-cols-3">
+        <div>
+          <p className="text-[13px] font-semibold">The Figure</p>
+          <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">What you&apos;d advertise at, and the range around it. Deposit, holding fee and a year&apos;s rent are worked out from it.</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {money("low", "Low")}
+            {money("ask", "Asking rent")}
+            {money("high", "High")}
+          </div>
+          <label className="mt-2 block text-[11.5px] text-muted">
+            Time to let
+            <input
+              value={figure.weeks}
+              maxLength={40}
+              onChange={(e) => onFigure({ ...figure, weeks: e.target.value })}
+              placeholder="2 to 3 weeks"
+              data-words="figure-weeks"
+              className={inputCls}
+            />
+          </label>
+          {typed && figureError && (
+            <p className="mt-2 text-[11.5px] leading-relaxed text-accent-dark" role="alert">
+              {figureError}
+            </p>
+          )}
+          {typed && !figureError && (
+            <button type="button" onClick={() => onFigure(NO_FIGURE)} className="mt-2 text-[11.5px] text-muted hover:text-ink">
+              Clear the figure
+            </button>
+          )}
+        </div>
+        <div>
+          <p className="text-[13px] font-semibold">What Tenants Will Love</p>
+          <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">Three things about this home, a title and one line each.</p>
+          {notes(loves, onLoves, "Love", "love")}
+        </div>
+        <div>
+          <p className="text-[13px] font-semibold">Worth Doing Before We List</p>
+          <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">Up to two jobs for the landlord before the photos.</p>
+          {notes(fixes, onFixes, "Job", "fix")}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 /** "Send presentation to my email" - the builder's header and the build screen both use it. */
 function SendToMe({ token, appraisalId, compact = false }: { token: string; appraisalId: string | null; compact?: boolean }) {

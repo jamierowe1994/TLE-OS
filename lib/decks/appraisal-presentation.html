@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your Market Appraisal - The Letting Experts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: a full-screen 16:9 stage on white. Two slides split with a grey panel (the cover and the figure);
+   the rest change rhythm: centred, side by side, a full-width header row, staggered cards. Cards are TLE OS greys
+   on white, white on grey. A real-looking iPhone carries the cover and the contact slide. A thin progress rail runs down the left edge.
+   Single light look by choice. On a phone held upright the slides stack into one scrolling page. */
+:root {
+  --paper: #ffffff; --taupe: #f6f6f5; --grey: #f6f6f5; --card: #ffffff; --card-2: #f6f6f5; --well: #f0f0ee;
+  --ink: #141413; --muted: #63625b; --faint: #8f8e87; --line: rgba(20, 20, 19, .12); --line-2: rgba(20, 20, 19, .22);
+  --coral: #eb8c6d; --clay: #aa4a2b; --sage: #66785b; --sage-soft: #e3e3d3; --forest: #2e3829; --manilla: #f5e3c7; --gold: #e9c46a;
+  --f-title: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --f-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --u: min(1vw, 1.7778vh);
+  --pad: calc(var(--u) * 6.6);
+  --fs-title: calc(var(--u) * 5); --fs-hero: calc(var(--u) * 6.2); --fs-lead: calc(var(--u) * 1.2); --fs-body: calc(var(--u) * 1.02); --fs-small: calc(var(--u) * .86);
+  --r: calc(var(--u) * 2); --r-sm: calc(var(--u) * 1.3);
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { margin: 0; background: #e9e9e6; color: var(--ink); font-family: var(--f-ui); overflow: hidden; -webkit-font-smoothing: antialiased; }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
+
+/* ---------- stage ---------- */
+.deck { position: fixed; inset: 0; display: grid; place-items: center; }
+.stage { position: relative; width: calc(var(--u) * 100); height: calc(var(--u) * 56.25); background: var(--paper); overflow: hidden; }
+.slide { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: calc(var(--u) * 9.5) var(--pad) calc(var(--u) * 7.4) calc(var(--pad) + var(--u) * 1); visibility: hidden; opacity: 0; transition: opacity .6s var(--ease), visibility 0s .7s; }
+.slide.split { display: grid; grid-template-columns: 54% 46%; padding: 0; }
+.slide.is-on { visibility: visible; opacity: 1; transition: opacity .7s var(--ease) .08s, visibility 0s; }
+.L { position: relative; display: flex; flex-direction: column; justify-content: center; padding: calc(var(--u) * 8) calc(var(--u) * 5) calc(var(--u) * 7.4) calc(var(--pad) + var(--u) * 1); min-width: 0; }
+.R { position: relative; background: var(--taupe); display: flex; align-items: center; justify-content: center; padding: calc(var(--u) * 6) calc(var(--u) * 4.4); min-width: 0; }
+.slide .in { opacity: 0; transform: translateY(calc(var(--u) * 1.4)); filter: blur(4px); }
+.slide.is-on .in { animation: rise 1s var(--ease) both; animation-delay: calc(.18s + var(--i, 0) * .075s); }
+.slide .R .in { transform: translateY(calc(var(--u) * 2.2)) scale(.985); }
+@keyframes rise { to { opacity: 1; transform: none; filter: none; } }
+
+/* frame: brand top left, a note top right, page at the foot, the rail down the left */
+.brand { position: absolute; top: calc(var(--u) * 3.2); left: calc(var(--pad) + var(--u) * 1); display: flex; align-items: center; gap: calc(var(--u) * .9); font-size: calc(var(--u) * 1); font-weight: 500; z-index: 3; }
+.brand img { height: calc(var(--u) * 1.5); width: auto; display: block; }
+.bar [hidden] { display: none !important; }
+/* TLE OS (23 Oct 2026): the agent's headshot wherever the design drew initials, photographs over the drawn houses */
+.av.ph, .tabbar .me.ph { overflow: hidden; padding: 0; } .av.ph img, .tabbar .me.ph img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; display: block; }
+.av.xs { width: calc(var(--u) * 2.6); height: calc(var(--u) * 2.6); border-radius: 50%; font-size: calc(var(--u) * .8); }
+.pic .pic-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.a-hero.fig .a-chip { top: auto; bottom: calc(var(--u) * .8); max-width: calc(100% - var(--u) * 1.6); }
+.a-chip { max-width: 55%; } .a-chip svg { flex: none; } .a-chip .tx { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.a-list .copyable .tx { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.agent-card2 .reach2 { grid-template-columns: auto minmax(0, 1fr); column-gap: calc(var(--u) * 3); }
+.agent-card2 .rv { font-size: var(--fs-body); overflow-wrap: anywhere; } .agent-card2 .rv a { color: inherit; text-decoration: none; }
+.who-pills { display: flex; flex-wrap: wrap; gap: calc(var(--u) * .5); align-items: center; } .who-pills .pill { white-space: normal; }
+.mside .val.xl { font-size: calc(var(--u) * 3.2); }
+.market-s .mgrid { margin-top: calc(var(--u) * 2.4); }
+.chart .bbar { fill: var(--ink); transform-box: fill-box; transform-origin: 50% 100%; } .chart .bbar.mine { fill: var(--coral); }
+.slide.is-on .chart .bbar { animation: barup 1.2s var(--ease) .5s both; } @keyframes barup { from { transform: scaleY(0); } }
+.chart .barv { fill: var(--ink); font-family: var(--f-ui); font-size: 14px; font-weight: 500; } .chart .barl { fill: var(--muted); font-family: var(--f-ui); font-size: 12px; } .chart .barn { fill: var(--faint); font-family: var(--f-mono); font-size: 10.5px; }
+.stackbar { display: flex; gap: 2px; height: calc(var(--u) * .7); border-radius: 999px; overflow: hidden; margin: calc(var(--u) * .6) 0 calc(var(--u) * .2); } .stackbar i { display: block; height: 100%; }
+a.btn { text-decoration: none; color: inherit; } a.btn.dark { color: var(--ink); }
+.cta-say { margin: calc(var(--u) * 1.4) 0 0; max-width: 34em; min-height: 1.4em; } .cta-say.err { color: var(--clay); } .cta-say a { color: var(--clay); }
+.sample-tag { font-family: var(--f-mono); font-size: 11px; color: var(--clay); background: var(--manilla); border-radius: 999px; padding: 4px 10px; }
+@media (max-width: 700px) { .brand img { height: 18px; } .btns { flex-wrap: wrap; } .btn { white-space: nowrap; } .rules-head { flex-wrap: wrap; } }
+.note { position: absolute; top: calc(var(--u) * 3); right: var(--pad); display: flex; align-items: center; gap: calc(var(--u) * .9); font-size: var(--fs-small); color: var(--muted); line-height: 1.35; z-index: 3; text-align: left; }
+.note b { color: var(--ink); font-weight: 600; }
+.note .x { width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); border-radius: 50%; border: 1px solid var(--line-2); display: grid; place-items: center; flex: none; }
+.note .x svg { width: 60%; height: 60%; }
+.pg { position: absolute; bottom: calc(var(--u) * 3); left: calc(var(--pad) + var(--u) * 1); font-family: var(--f-mono); font-size: var(--fs-small); color: var(--faint); z-index: 3; }
+.pg b { color: var(--ink); font-weight: 400; }
+.rail { position: absolute; left: calc(var(--u) * 3); top: calc(var(--u) * 9); bottom: calc(var(--u) * 9); width: 1px; background: var(--line); z-index: 4; pointer-events: none; }
+.rail i { position: absolute; left: 50%; width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); margin: calc(var(--u) * -.75) 0 0 calc(var(--u) * -.75); border-radius: 50%; border: 1px solid var(--line-2); background: var(--paper); display: grid; place-items: center; transition: top .9s var(--ease); }
+.rail i::after { content: ""; width: 34%; height: 34%; border-radius: 50%; background: var(--coral); }
+.rail .fill { position: absolute; left: 0; width: 1px; top: 0; background: var(--ink); transition: height .9s var(--ease); }
+
+/* ---------- type ---------- */
+.eyebrow { font-size: calc(var(--u) * 1.15); color: var(--ink); margin: 0 0 calc(var(--u) * 1.4); }
+.eyebrow sup, .title sup, .val sup { font-size: .42em; vertical-align: top; position: relative; top: .35em; margin-left: .15em; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.title { font-family: var(--f-title); font-weight: 300; font-size: var(--fs-title); line-height: 1.02; letter-spacing: -.035em; margin: 0; text-wrap: balance; }
+.title.hero { font-size: var(--fs-hero); }
+.title .soft { color: var(--faint); }
+.slide:not(.split) .title { font-size: calc(var(--u) * 4.4); }
+.lead { font-size: var(--fs-lead); line-height: 1.6; color: var(--muted); margin: calc(var(--u) * 2) 0 0; max-width: 36em; }
+.small { font-size: var(--fs-small); color: var(--muted); line-height: 1.45; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* the ruled list */
+.rl { list-style: none; margin: calc(var(--u) * 3.4) 0 0; padding: 0 0 0 calc(var(--u) * 3); border-left: 1px solid var(--line-2); display: flex; flex-direction: column; gap: calc(var(--u) * 2); max-width: calc(var(--u) * 40); }
+.rl li h4 { margin: 0 0 calc(var(--u) * .6); font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.6); letter-spacing: -.02em; }
+.rl li p { margin: 0; font-size: var(--fs-body); line-height: 1.65; color: var(--muted); }
+.rl li.fade { opacity: .42; }
+.rl.go li { cursor: pointer; transition: opacity .3s, transform .4s var(--ease); }
+.rl.go li:hover { opacity: 1; transform: translateX(calc(var(--u) * .4)); }
+
+/* buttons */
+.btns { display: flex; gap: calc(var(--u) * .8); margin-top: calc(var(--u) * 4.2); }
+.btn { display: inline-flex; align-items: center; gap: calc(var(--u) * 1); border-radius: calc(var(--u) * 1.7); padding: calc(var(--u) * 1.7) calc(var(--u) * 2.8); font-size: calc(var(--u) * 1.15); font-weight: 400; cursor: pointer; border: 1px solid var(--line-2); background: transparent; transition: background .3s var(--ease), gap .35s var(--ease), border-color .3s, color .3s; }
+.btn.dark { background: var(--coral); color: var(--ink); border-color: var(--coral); font-weight: 500; }
+.btn.dark:hover { gap: calc(var(--u) * 1.6); background: var(--clay); border-color: var(--clay); color: #fff; }
+.btn:not(.dark):hover { border-color: var(--sage); background: var(--sage); color: #fff; }
+.btn svg, .btn .ic { width: calc(var(--u) * 1.4); height: calc(var(--u) * 1.4); color: inherit; }
+.arrow .ic, .phone .ic { color: inherit; }
+
+/* ---------- floating cards ---------- */
+.ui { background: var(--grey); border-radius: var(--r); padding: calc(var(--u) * 1.6) calc(var(--u) * 1.8); display: flex; flex-direction: column; gap: calc(var(--u) * .5); min-width: 0; }
+.ui.soft { background: var(--card-2); } .ui.well { background: var(--well); } .ui.dark { background: var(--ink); color: #fff; } .ui.forest { background: var(--forest); color: #faf9f5; }
+.ui.man { background: var(--manilla); } .ui.sage { background: var(--sage-soft); } .ui.coral { background: var(--coral); } .ui.coral .lab { color: rgba(20, 20, 19, .72); }
+/* who we are: the figures and the two promises run the full height of the words beside them */
+.cols.who-cols { align-items: stretch; } .who-wrap { position: relative; } .who-b { position: absolute; inset: 0; } .who-b .ui { justify-content: space-between; overflow: hidden; }
+.who-b .ui .row { align-items: center; } .who-b .val.xl { margin-top: 0 !important; font-size: calc(var(--u) * 3.6); }
+.who-say { font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.9); letter-spacing: -.02em; line-height: 1.1; }
+@media (max-aspect-ratio: 4/5), (max-width: 700px) { .who-b { position: static; grid-template-rows: none !important; } .who-b .ui .row { flex-wrap: wrap; } }
+.lab { font-size: var(--fs-small); color: var(--muted); line-height: 1.35; }
+.ui.dark .lab, .ui.forest .lab { color: rgba(250, 249, 245, .62); }
+.val { font-family: var(--f-title); font-weight: 300; font-size: calc(var(--u) * 3); line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.val.xl { font-size: calc(var(--u) * 4.4); }
+.ui .row { display: flex; justify-content: space-between; align-items: flex-start; gap: calc(var(--u) * 1); }
+.ic { width: calc(var(--u) * 2.4); height: calc(var(--u) * 2.4); color: inherit; flex: none; }
+.ui.dark .ic, .ui.forest .ic { color: #faf9f5; }
+.badge { width: calc(var(--u) * 1.3); height: calc(var(--u) * 1.3); border-radius: calc(var(--u) * .35); background: var(--gold); display: grid; place-items: center; }
+.badge::after { content: ""; width: 34%; height: 34%; border-radius: 50%; background: var(--ink); }
+.pill { display: inline-flex; align-items: center; gap: calc(var(--u) * .5); font-size: var(--fs-small); padding: calc(var(--u) * .45) calc(var(--u) * 1); border-radius: 999px; background: var(--well); white-space: nowrap; }
+.pill.on { background: var(--ink); color: #fff; } .pill.sage { background: var(--sage-soft); color: #4d5e43; }
+.toggle { width: calc(var(--u) * 2.8); height: calc(var(--u) * 1.6); border-radius: 999px; background: var(--ink); position: relative; flex: none; }
+.toggle::after { content: ""; position: absolute; top: 15%; right: 8%; height: 70%; aspect-ratio: 1; border-radius: 50%; background: #fff; }
+.toggle.off { background: var(--well); } .toggle.off::after { right: auto; left: 8%; }
+.dots { display: flex; gap: calc(var(--u) * .35); justify-content: center; }
+.dots i { width: calc(var(--u) * .45); height: calc(var(--u) * .45); border-radius: 50%; background: var(--line-2); } .dots i.on { background: var(--ink); }
+
+/* the house picture used where a photo would go */
+.pic { position: relative; border-radius: var(--r-sm); overflow: hidden; background: linear-gradient(160deg, #3b4735 0%, var(--forest) 70%); }
+.pic svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pic .sun { fill: var(--coral); } .pic .ln { fill: none; stroke: #faf9f5; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.pic .win { fill: var(--manilla); opacity: .85; } .pic .door { fill: var(--coral); } .pic .body { fill: var(--forest); }
+.pic .grain { position: absolute; inset: 0; opacity: .12; mix-blend-mode: soft-light; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+.slide.is-on .pic .ln { stroke-dasharray: 900; stroke-dashoffset: 900; animation: draw 2.4s var(--ease) .5s forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+/* ---------- 1 cover: the plan, as a phone screen ---------- */
+.phone { width: calc(var(--u) * 24); height: calc(var(--u) * 46); background: var(--card); border-radius: calc(var(--u) * 3.2); padding: calc(var(--u) * 2.2) calc(var(--u) * 1); display: flex; flex-direction: column; gap: calc(var(--u) * .8); }
+.phone .top { display: flex; justify-content: space-between; align-items: center; padding: 0 calc(var(--u) * 1.2); }
+.phone .top svg { width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); }
+.phone .hi { font-family: var(--f-title); font-weight: 300; font-size: calc(var(--u) * 1.8); line-height: 1.15; letter-spacing: -.03em; padding: calc(var(--u) * .8) calc(var(--u) * 1.2) calc(var(--u) * .2); }
+.phone > .pic { min-height: calc(var(--u) * 8); }
+.phone .hi span { color: var(--faint); }
+.phone .ui { border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 1.2); }
+.phone .t2 { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * .6); }
+.phone .pic { flex: 1; border-radius: calc(var(--u) * 1.4); }
+.phone .nav { display: flex; justify-content: space-around; align-items: center; padding-top: calc(var(--u) * .6); }
+.phone .nav span { width: calc(var(--u) * 2.8); height: calc(var(--u) * 2.8); border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
+.phone .nav span.on { background: var(--well); color: var(--ink); }
+.phone .nav svg { width: 46%; height: 46%; }
+.phone .nav .me { background: var(--sage-soft); color: #4d5e43; font-size: calc(var(--u) * .8); font-weight: 600; }
+
+/* bento layouts on the right */
+.bento { display: grid; gap: calc(var(--u) * 1); width: 100%; }
+.b2 { grid-template-columns: 1fr 1fr; }
+.span2 { grid-column: span 2; }
+.agent-card { width: 100%; display: flex; flex-direction: column; gap: calc(var(--u) * 1); }
+.av { width: calc(var(--u) * 6); height: calc(var(--u) * 6); border-radius: calc(var(--u) * 1.6); background: var(--sage-soft); color: #4d5e43; display: grid; place-items: center; font-family: var(--f-title); font-size: calc(var(--u) * 2); font-weight: 400; flex: none; }
+.av.sm { width: calc(var(--u) * 4); height: calc(var(--u) * 4); border-radius: 50%; font-size: calc(var(--u) * 1.3); }
+.ring { width: calc(var(--u) * 9); height: calc(var(--u) * 9); }
+.ring circle { fill: none; stroke-width: 6; } .ring .bg { stroke: var(--well); } .ring .fg { stroke: var(--sage); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
+.slide.is-on .ring .fg { animation: ring 1.6s var(--ease) .6s both; }
+@keyframes ring { from { stroke-dashoffset: var(--len); } }
+.stars { display: flex; gap: 2px; } .stars i { width: calc(var(--u) * .9); height: calc(var(--u) * .9); background: var(--gold); clip-path: polygon(50% 0, 62% 35%, 100% 38%, 70% 60%, 80% 100%, 50% 77%, 20% 100%, 30% 60%, 0 38%, 38% 35%); }
+.chk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--u) * .9); }
+.chk li { display: flex; gap: calc(var(--u) * .8); font-size: var(--fs-body); line-height: 1.5; }
+.chk li::before { content: ""; width: calc(var(--u) * .55); height: calc(var(--u) * .55); border-radius: 50%; background: var(--clay); margin-top: calc(var(--u) * .62); flex: none; }
+.chk small { display: block; color: var(--muted); font-size: var(--fs-small); }
+
+/* chart */
+.chart svg { width: 100%; height: auto; overflow: visible; }
+.chart .grid line { stroke: var(--line); }
+.chart .axis text { fill: var(--faint); font-family: var(--f-mono); font-size: 12px; }
+.chart .lineP { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1200; stroke-dashoffset: 1200; }
+.slide.is-on .chart .lineP { animation: draw 2s var(--ease) .55s forwards; }
+.chart .endpt { fill: var(--coral); } .chart .endlab { fill: var(--ink); font-family: var(--f-ui); font-size: 14px; font-weight: 500; }
+
+/* gauge for the figure */
+.gauge > svg { width: 100%; height: auto; overflow: visible; }
+.gauge .tk { stroke: var(--faint); stroke-width: 1.2; } .gauge .tk.in { stroke: var(--ink); stroke-width: 1.6; }
+.gauge text { font-family: var(--f-ui); font-size: 12px; fill: var(--muted); }
+.gauge .needle { stroke: var(--coral); stroke-width: 2.4; stroke-linecap: round; transform-origin: 150px 150px; }
+.slide.is-on .gauge .needle { animation: needle 1.6s var(--ease) .6s both; }
+@keyframes needle { from { transform: rotate(-80deg); } }
+.gauge .hub { fill: var(--coral); }
+
+/* comparables: offset cards like a carousel */
+.comps { display: grid; grid-template-columns: var(--cc, 1fr 1.25fr 1fr 1fr); gap: calc(var(--u) * 1.4); align-items: center; margin-top: calc(var(--u) * 3.6); }
+.comp { display: flex; flex-direction: column; gap: calc(var(--u) * .6); }
+.comp:nth-child(odd) { transform: translateY(calc(var(--u) * 2)); }
+.comp:nth-child(even) { transform: translateY(calc(var(--u) * -1.4)); }
+.comp .pic { height: calc(var(--u) * 7.5); }
+.comp.feat .pic { height: calc(var(--u) * 11); }
+.comp .meta { display: flex; justify-content: space-between; align-items: flex-end; gap: calc(var(--u) * 1); }
+.comp b { font-weight: 500; font-size: var(--fs-body); }
+.comp.feat { background: var(--grey); border-radius: var(--r); padding: calc(var(--u) * 1.2); }
+.arrows { display: flex; gap: calc(var(--u) * .8); }
+.arrow { width: calc(var(--u) * 3.4); height: calc(var(--u) * 3.4); border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; border: 0; }
+.arrow svg { width: 42%; height: 42%; }
+.rangebar { margin-top: calc(var(--u) * 4.4); display: grid; grid-template-columns: auto 1fr auto; gap: calc(var(--u) * 2); align-items: center; }
+.rangebar .track { position: relative; height: calc(var(--u) * 3); }
+.rangebar .track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line-2); }
+.rangebar .band { position: absolute; top: calc(50% - var(--u) * .4); height: calc(var(--u) * .8); border-radius: 999px; background: var(--ink); }
+.rangebar .mk { position: absolute; top: 50%; width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1); margin: calc(var(--u) * -.55) 0 0 calc(var(--u) * -.55); border-radius: 50%; background: var(--paper); border: 1px solid var(--ink); }
+.rangebar .mk.ours { background: var(--coral); border-color: var(--coral); width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); margin: calc(var(--u) * -.75) 0 0 calc(var(--u) * -.75); }
+.rangebar .tag { position: absolute; top: calc(var(--u) * -1.8); transform: translateX(-50%); font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
+
+/* services */
+.svcs { display: grid; grid-template-columns: repeat(var(--sc, 3), minmax(0, 1fr)); gap: calc(var(--u) * 1.2); margin-top: calc(var(--u) * 3.4); }
+.svc { background: var(--grey); border-radius: var(--r); padding: calc(var(--u) * 1.8) calc(var(--u) * 2.2); display: flex; flex-direction: column; gap: calc(var(--u) * .7); }
+.svc.pick { background: var(--coral); color: var(--ink); }
+.svc h3 { margin: 0; font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.6); letter-spacing: -.02em; }
+.svc .val { font-size: calc(var(--u) * 2.6); margin-top: calc(var(--u) * .6); }
+.svc .lab { margin-bottom: calc(var(--u) * .6); }
+.svc.pick .lab, .svc.pick .no { color: rgba(20, 20, 19, .6); }
+.feats { list-style: none; margin: 0; padding: calc(var(--u) * 1.2) 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: calc(var(--u) * .7); font-size: var(--fs-small); }
+.svc.pick .feats { border-color: rgba(20, 20, 19, .16); }
+.feats li { display: flex; gap: calc(var(--u) * .7); align-items: center; }
+.feats li::before { content: ""; width: calc(var(--u) * .9); height: calc(var(--u) * .9); border-radius: 50%; background: var(--ink); flex: none; }
+.svc.pick .feats li::before { background: var(--ink); }
+.feats li.no { color: var(--faint); } .feats li.no::before { background: transparent; border: 1px solid var(--line-2); }
+.svc.pick .feats li.no::before { border-color: rgba(20, 20, 19, .3); }
+.tagline { font-size: var(--fs-small); color: var(--coral); min-height: 1.3em; } .svc.pick .tagline { color: var(--ink); }
+
+/* timeline */
+.tl { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(var(--u) * 1.2); margin-top: calc(var(--u) * 5); }
+.tl::before { content: ""; position: absolute; left: 0; right: 0; top: calc(var(--u) * .7); height: 1px; background: var(--line-2); }
+.tl .tl-bar { position: absolute; left: 0; right: 0; top: calc(var(--u) * .7); height: 1px; background: var(--ink); transform-origin: left; transform: scaleX(0); }
+.slide.is-on .tl .tl-bar { animation: grow 2.4s var(--ease) .45s forwards; }
+@keyframes grow { to { transform: scaleX(1); } }
+.ts { position: relative; padding-top: calc(var(--u) * 3); display: flex; flex-direction: column; gap: calc(var(--u) * .6); }
+.ts::before { content: ""; position: absolute; top: 0; left: 0; width: calc(var(--u) * 1.4); height: calc(var(--u) * 1.4); border-radius: 50%; background: var(--paper); border: 1px solid var(--ink); }
+.ts:first-child::before { background: var(--coral); border-color: var(--coral); } .ts:last-child::before { background: var(--ink); }
+.ts .when { font-size: var(--fs-small); color: var(--muted); }
+.ts h4 { margin: 0; font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.55); letter-spacing: -.02em; }
+.ts .ui { margin-top: calc(var(--u) * .6); padding: calc(var(--u) * 1.1) calc(var(--u) * 1.2); border-radius: var(--r-sm); font-size: var(--fs-small); color: var(--muted); line-height: 1.5; }
+.endnote { margin-top: calc(var(--u) * 4); display: flex; justify-content: space-between; align-items: flex-end; gap: calc(var(--u) * 3); }
+.copyable { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 1); font-size: var(--fs-body); }
+.copyable button { background: none; border: 0; padding: 0; font-size: var(--fs-small); color: var(--clay); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+
+/* ---------- v4 layouts ---------- */
+.R .ui:not(.dark), .R .svc { background: var(--card); }
+.pill.w { background: var(--card); }
+.center { text-align: center; display: flex; flex-direction: column; align-items: center; }
+.center .title { max-width: 18em; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 6); align-items: center; }
+.cols.rev { grid-template-columns: 1.1fr 1fr; }
+.hrow { display: flex; justify-content: space-between; align-items: flex-end; gap: calc(var(--u) * 4); }
+.hrow .lead { max-width: 24em; margin: 0; }
+.hrow .title { max-width: 14em; }
+.agenda4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(var(--u) * 1.2); margin-top: calc(var(--u) * 4); }
+.ag { position: relative; text-align: left; border: 0; background: var(--grey); border-radius: var(--r); padding: calc(var(--u) * 2) calc(var(--u) * 2); min-height: calc(var(--u) * 17); display: flex; flex-direction: column; gap: calc(var(--u) * .7); cursor: pointer; transition: transform .45s var(--ease), background .3s; }
+.ag:hover { transform: translateY(calc(var(--u) * -.5)); background: var(--well); }
+.ag.dark { background: var(--ink); color: #fff; } .ag.dark:hover { background: #000; } .ag.dark p { color: rgba(255, 255, 255, .62); }
+.ag-n { font-family: var(--f-mono); font-size: var(--fs-small); color: var(--faint); margin-bottom: calc(var(--u) * 2.6); }
+.ag h4 { margin: 0; font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.6); letter-spacing: -.02em; }
+.ag p { margin: 0; font-size: var(--fs-small); color: var(--muted); line-height: 1.5; }
+.ag-go { position: absolute; right: calc(var(--u) * 1.6); top: calc(var(--u) * 1.6); width: calc(var(--u) * 2.6); height: calc(var(--u) * 2.6); border-radius: 50%; background: var(--card); color: var(--ink); display: grid; place-items: center; }
+.ag-go svg { width: 46%; height: 46%; } .ag.dark .ag-go { background: var(--coral); }
+.agent-strip { margin: calc(var(--u) * 3) auto 0; display: flex; align-items: center; gap: calc(var(--u) * 1.4); padding: calc(var(--u) * .8) calc(var(--u) * .8) calc(var(--u) * .8) calc(var(--u) * .8); border: 1px solid var(--line); border-radius: 999px; }
+.agent-strip b { display: block; font-weight: 500; font-size: var(--fs-body); }
+.agent-strip .pill { margin-left: calc(var(--u) * 1.4); } .pill svg { width: 1.1em; height: 1.1em; }
+.mgrid { display: grid; grid-template-columns: 2.2fr 1fr; gap: calc(var(--u) * 1.2); margin-top: calc(var(--u) * 3.2); align-items: stretch; }
+.mside { display: flex; flex-direction: column; gap: calc(var(--u) * 1.2); justify-content: space-between; }
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(var(--u) * 1.2); margin-top: calc(var(--u) * 3.4); align-items: stretch; }
+.steps .ui { padding: calc(var(--u) * 2); gap: calc(var(--u) * .7); min-height: calc(var(--u) * 19); }
+
+.steps .ui b { font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.55); letter-spacing: -.02em; margin-top: calc(var(--u) * 1.2); min-height: 2.3em; display: flex; align-items: flex-end; line-height: 1.15; }
+.steps .ui > .lab { min-height: 3em; }
+.st-n { font-family: var(--f-mono); font-size: var(--fs-small); color: var(--faint); margin-bottom: calc(var(--u) * 1.2); }
+.ui.dark .st-n { color: rgba(255, 255, 255, .5); }
+.st-foot { margin-top: auto; padding-top: calc(var(--u) * 1.4); min-height: calc(var(--u) * 4.4); display: flex; flex-wrap: nowrap; gap: calc(var(--u) * .4); align-items: center; justify-content: space-between; }
+.st-foot .pill { padding: calc(var(--u) * .4) calc(var(--u) * .75); font-size: calc(var(--u) * .78); }
+.st-foot.pills { justify-content: flex-start; }
+.checkrow { margin-top: calc(var(--u) * 4.4); display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * .6); }
+.checkrow .lab { margin-right: calc(var(--u) * .8); }
+.rules2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: calc(var(--u) * 5); }
+.rules2 > .row { padding: calc(var(--u) * 1.15) 0; border-top: 1px solid var(--line); }
+
+/* ---------- the iPhone ---------- */
+.iphone { --w: calc(var(--u) * 22); position: relative; width: var(--w); height: calc(var(--w) * 2.07); padding: calc(var(--u) * .55); border-radius: calc(var(--u) * 4.4); background: linear-gradient(145deg, #4a4a4c, #1b1b1d 40%, #2c2c2e 75%, #4a4a4c); box-shadow: 0 0 0 1px #0d0d0e inset, 0 calc(var(--u) * 3) calc(var(--u) * 6) rgba(20, 20, 19, .16), 0 calc(var(--u) * .6) calc(var(--u) * 1.4) rgba(20, 20, 19, .12); }
+.iphone::before { content: ""; position: absolute; inset: calc(var(--u) * .25); border-radius: calc(var(--u) * 4.15); background: #0b0b0c; }
+.hw { position: absolute; width: calc(var(--u) * .32); border-radius: 2px; background: linear-gradient(90deg, #2a2a2c, #5a5a5c); }
+.hw.act { left: calc(var(--u) * -.26); top: 17%; height: 5%; } .hw.vu { left: calc(var(--u) * -.26); top: 25%; height: 8.5%; } .hw.vd { left: calc(var(--u) * -.26); top: 35.5%; height: 8.5%; }
+.hw.pw { right: calc(var(--u) * -.26); top: 28%; height: 13%; background: linear-gradient(270deg, #2a2a2c, #5a5a5c); }
+.screen { position: relative; z-index: 1; height: 100%; border-radius: calc(var(--u) * 3.85); background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+.status { position: relative; height: calc(var(--u) * 4); flex: none; display: grid; grid-template-columns: 1fr calc(var(--u) * 6.4) 1fr; align-items: center; justify-items: center; padding: calc(var(--u) * .25) calc(var(--u) * .6) 0; font-family: -apple-system, "SF Pro Text", Inter, sans-serif; }
+.status .time { grid-column: 1; font-size: calc(var(--u) * .9); font-weight: 600; letter-spacing: -.01em; }
+.island { position: absolute; left: 50%; top: calc(var(--u) * .95); width: calc(var(--u) * 6.4); height: calc(var(--u) * 1.95); margin-left: calc(var(--u) * -3.2); border-radius: 999px; background: #000; }
+.island::after { content: ""; position: absolute; right: calc(var(--u) * .75); top: 50%; width: calc(var(--u) * .7); height: calc(var(--u) * .7); margin-top: calc(var(--u) * -.35); border-radius: 50%; background: radial-gradient(circle at 35% 35%, #2b3a5a, #0a0d14 70%); }
+.sicons { grid-column: 3; display: flex; align-items: center; gap: calc(var(--u) * .3); color: var(--ink); }
+.sicons svg { height: calc(var(--u) * .62); width: auto; fill: currentColor; }
+.sicons svg:last-child { height: calc(var(--u) * .7); }
+.app { flex: 1; min-height: 0; padding: calc(var(--u) * .6) calc(var(--u) * 1.2) 0; display: flex; flex-direction: column; gap: calc(var(--u) * .75); overflow: hidden; }
+.a-head { display: flex; justify-content: space-between; align-items: center; padding: 0 calc(var(--u) * .4); }
+.a-brand { display: flex; align-items: center; gap: calc(var(--u) * .5); font-size: calc(var(--u) * .85); } .a-brand svg { width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); } .a-brand b { font-weight: 500; }
+.a-bell { position: relative; width: calc(var(--u) * 2.4); height: calc(var(--u) * 2.4); border-radius: 50%; background: #f2f2f7; display: grid; place-items: center; }
+.a-bell svg { width: 50%; height: 50%; } .a-bell i { position: absolute; top: 22%; right: 24%; width: calc(var(--u) * .45); height: calc(var(--u) * .45); border-radius: 50%; background: var(--coral); }
+.a-hi { font-family: var(--f-title); font-weight: 300; font-size: calc(var(--u) * 1.75); line-height: 1.12; letter-spacing: -.03em; padding: calc(var(--u) * .4) calc(var(--u) * .4) calc(var(--u) * .2); }
+.a-hi span { color: var(--faint); }
+.a-hero { position: relative; height: calc(var(--u) * 12.6); flex: none; border-radius: calc(var(--u) * 1.6); overflow: hidden; }
+.a-hero .pic { position: absolute; inset: 0; border-radius: 0; }
+.a-hero .pic svg { inset: 18% 0 0 0; height: 82%; }
+.a-chip { position: absolute; left: calc(var(--u) * .8); top: calc(var(--u) * .8); display: inline-flex; align-items: center; gap: calc(var(--u) * .35); padding: calc(var(--u) * .35) calc(var(--u) * .75); border-radius: 999px; font-size: calc(var(--u) * .72); color: #fff; background: rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.a-chip svg { width: 1.1em; height: 1.1em; }
+.a-over { position: absolute; right: calc(var(--u) * .8); top: calc(var(--u) * .8); text-align: right; color: #fff; display: flex; flex-direction: column; }
+.a-over > span { font-size: calc(var(--u) * .7); opacity: .72; } .a-over b { font-family: var(--f-title); font-weight: 300; font-size: calc(var(--u) * 1.9); letter-spacing: -.03em; line-height: 1.1; }
+.a-over sup { font-size: .4em; vertical-align: top; margin-left: .2em; position: relative; top: .3em; }
+.a-dots { position: absolute; left: 0; right: 0; bottom: calc(var(--u) * .6); display: flex; gap: calc(var(--u) * .3); justify-content: center; }
+.a-dots i { width: calc(var(--u) * .4); height: calc(var(--u) * .4); border-radius: 50%; background: rgba(255, 255, 255, .45); } .a-dots i.on { background: #fff; width: calc(var(--u) * 1.1); border-radius: 999px; }
+.a-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * .6); }
+.a-tile, .a-row { background: #f2f2f7; border-radius: calc(var(--u) * 1.3); padding: calc(var(--u) * .85) calc(var(--u) * 1); display: flex; flex-direction: column; gap: calc(var(--u) * .2); }
+.a-tile .ic { width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); margin-bottom: calc(var(--u) * .5); }
+.a-tile .row { display: flex; justify-content: space-between; align-items: center; } .a-tile .row .ic { margin-bottom: 0; } .a-tile .row { margin-bottom: calc(var(--u) * .5); }
+.a-tile > span:not(.badge), .a-row > div > span { font-size: calc(var(--u) * .72); color: var(--muted); }
+.a-tile b, .a-row b { font-family: var(--f-title); font-weight: 300; font-size: calc(var(--u) * 1.7); letter-spacing: -.03em; line-height: 1.1; }
+.a-row { flex-direction: row; align-items: center; justify-content: space-between; }
+.a-row > div { display: flex; flex-direction: column; } .a-row b { font-size: calc(var(--u) * 1.35); }
+.a-bars { display: flex; gap: calc(var(--u) * .25); align-items: flex-end; }
+.a-bars i { width: calc(var(--u) * .45); height: calc(var(--u) * 1.5); border-radius: 2px; background: #dcdce1; } .a-bars i.on { background: var(--ink); }
+.a-row .pill { font-size: calc(var(--u) * .72); }
+.tabbar { flex: none; display: flex; justify-content: space-around; padding: calc(var(--u) * .9) calc(var(--u) * .6) calc(var(--u) * 2.2); border-top: 1px solid #ececf0; background: rgba(255, 255, 255, .96); }
+.tabbar > span { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * .25); color: #9a9aa1; min-width: calc(var(--u) * 3.6); }
+.tabbar > span.on { color: var(--ink); }
+.tabbar svg { width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); }
+.tabbar b { font-weight: 500; font-size: calc(var(--u) * .6); }
+.tabbar .me { width: calc(var(--u) * 1.7); height: calc(var(--u) * 1.7); border-radius: 50%; background: var(--sage-soft); color: #4d5e43; font-style: normal; font-size: calc(var(--u) * .55); font-weight: 600; display: grid; place-items: center; }
+.tabbar > span.on .me { background: var(--ink); color: #fff; }
+.homeind { position: absolute; left: 50%; bottom: calc(var(--u) * .7); width: 36%; height: calc(var(--u) * .4); margin-left: -18%; border-radius: 999px; background: var(--ink); }
+.a-contact { display: flex; flex-direction: column; align-items: center; text-align: center; gap: calc(var(--u) * .3); padding: calc(var(--u) * 1.4) 0 calc(var(--u) * .4); }
+.a-contact .av { width: calc(var(--u) * 6); height: calc(var(--u) * 6); border-radius: 50%; margin-bottom: calc(var(--u) * .6); }
+.a-contact b { font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.7); letter-spacing: -.02em; }
+.a-contact > .sub { font-size: calc(var(--u) * .75); color: var(--muted); }
+.a-acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(var(--u) * .5); width: 100%; margin-top: calc(var(--u) * 1.2); }
+.a-acts span { font-size: inherit; background: #f2f2f7; border-radius: calc(var(--u) * 1.1); padding: calc(var(--u) * .8) 0 calc(var(--u) * .6); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * .3); color: var(--ink); }
+.a-acts svg { width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); } .a-acts i { font-style: normal; font-size: calc(var(--u) * .65); }
+.a-acts span:first-child { background: var(--ink); color: #fff; }
+.a-list { background: #f2f2f7; border-radius: calc(var(--u) * 1.3); padding: 0 calc(var(--u) * 1); }
+.a-list .copyable { padding: calc(var(--u) * .8) 0; font-size: calc(var(--u) * .82); } .a-list .copyable + .copyable { border-top: 1px solid #e3e3e8; }
+.a-list .copyable > span { display: flex; flex-direction: column; min-width: 0; overflow: hidden; text-overflow: ellipsis; } .a-list i { font-style: normal; font-size: calc(var(--u) * .65); color: var(--muted); }
+.a-list button { font-size: calc(var(--u) * .7); }
+
+
+/* today: tinted agenda, the home and the agent */
+.ag { min-height: calc(var(--u) * 10.4); padding: calc(var(--u) * 1.6) calc(var(--u) * 1.8); }
+.ag .ag-n { margin-bottom: calc(var(--u) * 1.2); }
+.today-s .title { font-size: calc(var(--u) * 3.9) !important; }
+.slide.today-s { padding-top: calc(var(--u) * 8); padding-bottom: calc(var(--u) * 6.4); }
+.agent-card2 .row { display: flex; justify-content: space-between; gap: calc(var(--u) * 1); }
+.ag.sage { background: var(--sage-soft); } .ag.man { background: var(--manilla); } .ag.oat { background: #e3dacc; }
+.ag.sage:hover { background: #d8d9c5; } .ag.man:hover { background: #f0d9b5; } .ag.oat:hover { background: #dacfbe; }
+.ag.sage p, .ag.man p, .ag.oat p { color: var(--ink); opacity: .7; }
+.ag.sage .ag-n, .ag.man .ag-n, .ag.oat .ag-n { color: var(--muted); }
+.agenda4 { margin-top: calc(var(--u) * 2.4); }
+.agent-band { display: grid; grid-template-columns: 1fr 1.6fr; gap: calc(var(--u) * 1.2); margin-top: calc(var(--u) * 1.2); }
+/* the home they're showing us round (James, 23 Oct 2026: in place of the video, which belongs to the pre-appraisal pack) */
+.home-card { position: relative; overflow: hidden; border-radius: var(--r); min-height: calc(var(--u) * 13); background: radial-gradient(120% 140% at 80% 0%, #7d8f71 0%, var(--sage) 45%, #4f5f45 100%); color: #fff; }
+.home-card .pic { position: absolute; inset: 0; border-radius: 0; background: none; }
+.home-card .pic svg { left: 38%; width: 62%; top: 8%; height: 92%; }
+.home-card .pic .body { fill: #4f5f45; }
+.home-card.ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20, 20, 19, .72) 0%, rgba(20, 20, 19, .35) 55%, rgba(20, 20, 19, 0) 100%); }
+.hc-txt { position: absolute; z-index: 1; left: calc(var(--u) * 1.8); bottom: calc(var(--u) * 1.6); max-width: 48%; display: flex; flex-direction: column; gap: calc(var(--u) * .25); }
+.hc-txt .lab { color: rgba(255, 255, 255, .72); }
+.hc-txt b { font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.8); letter-spacing: -.02em; line-height: 1.1; }
+.hc-pin { position: absolute; z-index: 1; left: calc(var(--u) * 1.8); top: calc(var(--u) * 1.6); display: inline-flex; align-items: center; gap: calc(var(--u) * .4); font-size: var(--fs-small); background: rgba(255, 255, 255, .16); padding: calc(var(--u) * .35) calc(var(--u) * .8); border-radius: 999px; }
+.hc-pin svg { width: 1.1em; height: 1.1em; }
+.agent-card2 { background: var(--grey); border-radius: var(--r); padding: calc(var(--u) * 1.6) calc(var(--u) * 2); display: flex; flex-direction: column; }
+.agent-card2 b { display: block; font-weight: 500; font-size: var(--fs-body); }
+.astats { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(var(--u) * 1); margin-top: auto; padding-top: calc(var(--u) * .9); border-top: 1px solid var(--line); }
+.astats > div { display: flex; flex-direction: column; gap: calc(var(--u) * .2); } .astats .val { font-size: calc(var(--u) * 2); }
+@media (max-aspect-ratio: 4/5), (max-width: 700px) { .agent-band { grid-template-columns: 1fr; } }
+/* cover */
+.R.cover-r { padding-top: calc(var(--u) * 9); padding-bottom: calc(var(--u) * 2.6); }
+.R.cover-r .iphone { --w: calc(var(--u) * 20); }
+.R.cover-r .a-hero { height: calc(var(--u) * 9.4); } .R.cover-r .a-tile { padding: calc(var(--u) * .7) calc(var(--u) * .9); } .R.cover-r .a-hi { font-size: calc(var(--u) * 1.6); }
+/* the plan: a flowing line */
+.flow { position: relative; height: calc(var(--u) * 26); margin-top: calc(var(--u) * 4); }
+.flow-line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.flow-line path { fill: none; stroke-linecap: round; }
+.fl-bg { stroke: var(--line); stroke-width: 2; }
+.fl-fg { stroke: var(--ink); stroke-width: 2; }
+/* Revealed left to right rather than dash-drawn: with a non-scaling stroke Chrome measures the dash on screen, so a dash of pathLength 1 never covered the whole line. */
+.fl-clip { transform-box: fill-box; transform-origin: 0 50%; transform: scaleX(0); }
+/* The title is in by about 1.2s; the line starts half a second after (James, 23 Oct 2026). */
+.slide.is-on .fl-clip { animation: flowreveal 3s linear 1.7s forwards; }
+@keyframes flowreveal { to { transform: scaleX(1); } }
+.stop { position: absolute; width: 0; height: 0; }
+.stop i { position: absolute; left: calc(var(--u) * -.8); top: calc(var(--u) * -.8); width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); border-radius: 50%; background: var(--paper); border: 1.5px solid var(--ink); transform: scale(0); }
+.slide.is-on .stop i { animation: dotpop .6s var(--ease) var(--d) forwards; }
+.stop.first i { background: var(--coral); border-color: var(--coral); } .stop.last i { background: var(--ink); width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2); left: calc(var(--u) * -1.1); top: calc(var(--u) * -1.1); box-shadow: 0 0 0 calc(var(--u) * .6) rgba(20, 20, 19, .08); }
+@keyframes dotpop { to { transform: scale(1); } }
+.stop-card { position: absolute; left: calc(var(--u) * -1.4); width: calc(var(--u) * 15); display: flex; flex-direction: column; gap: calc(var(--u) * .35); opacity: 0; transform: translateY(calc(var(--u) * .8)); }
+.slide.is-on .stop-card { animation: rise .8s var(--ease) calc(var(--d) + .1s) forwards; }
+.stop.up .stop-card { bottom: calc(var(--u) * 1.8); } .stop.down .stop-card { top: calc(var(--u) * 1.8); }
+.stop.last .stop-card { background: var(--ink); color: #fff; border-radius: var(--r-sm); padding: calc(var(--u) * 1.2) calc(var(--u) * 1.4); } .stop.last .lab, .stop.last .when { color: rgba(255, 255, 255, .62); }
+.stop-card .when { font-size: var(--fs-small); color: var(--clay); }
+.stop-card h4 { margin: 0; font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 1.55); letter-spacing: -.02em; }
+.stop.last .stop-card { left: auto; right: calc(var(--u) * -1.4); }
+@media (max-aspect-ratio: 4/5), (max-width: 700px) {
+  .flow { height: auto; padding-left: 28px; border-left: 1px solid var(--line-2); margin-left: 7px; display: flex; flex-direction: column; gap: 20px; }
+  .flow-line { display: none; } .stop { position: relative; left: auto !important; top: auto !important; width: auto; height: auto; }
+  .stop i { left: -36px; top: 2px; transform: none; animation: none !important; } .stop-card, .stop.last .stop-card { position: static; width: auto; opacity: 1; transform: none; animation: none !important; }
+}
+@media (prefers-reduced-motion: reduce) { .fl-clip { transform: none; animation: none !important; } .stop i, .stop-card { transform: none; opacity: 1; animation: none !important; } }
+
+/* ---------- presenter chrome ---------- */
+.bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; padding: 12px max(18px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); transition: opacity .5s var(--ease), transform .5s var(--ease); }
+body.idle .bar { opacity: 0; transform: translateY(8px); pointer-events: none; } body.idle { cursor: none; }
+.bar-in { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, .92); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 999px; padding: 6px 8px 6px 16px; margin: 0 auto; max-width: 100%; }
+.count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); min-width: 44px; text-align: center; }
+.ib { width: 34px; height: 34px; border-radius: 50%; border: 0; background: transparent; color: var(--ink); display: grid; place-items: center; cursor: pointer; transition: background .2s; flex: none; }
+.ib:hover { background: var(--well); } .ib[aria-pressed="true"] { background: var(--manilla); color: var(--clay); } .ib:disabled { opacity: .3; cursor: default; } .ib svg { width: 17px; height: 17px; }
+.sep { width: 1px; height: 18px; background: var(--line); }
+body.fields .v { background: rgba(235, 140, 109, .22); box-shadow: inset 0 -2px 0 var(--coral); border-radius: 3px; cursor: help; }
+body.fields .v[data-sample] { background: rgba(102, 120, 91, .22); box-shadow: inset 0 -2px 0 var(--sage); }
+.legend { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 20; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; font-size: 12px; color: var(--muted); display: none; gap: 14px; align-items: center; white-space: nowrap; }
+body.fields .legend { display: flex; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.ov { position: fixed; inset: 0; z-index: 30; background: rgba(20, 20, 19, .62); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); display: none; overflow: auto; padding: 48px max(24px, env(safe-area-inset-right, 0px)) 48px max(24px, env(safe-area-inset-left, 0px)); }
+.ov.open { display: block; animation: fade .35s var(--ease); } @keyframes fade { from { opacity: 0; } }
+.ov-grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.ov-card { aspect-ratio: 16 / 9; max-width: 100%; border: 0; border-radius: 16px; background: var(--paper); text-align: left; padding: 16px 18px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; animation: rise .5s var(--ease) both; animation-delay: calc(var(--i) * .03s); opacity: 0; transform: translateY(10px); outline: 2px solid transparent; outline-offset: 3px; transition: outline-color .2s; }
+.ov-card.split { background: linear-gradient(90deg, var(--paper) 54%, var(--grey) 54%); } .ov-card { border: 0; }
+.ov-card:hover, .ov-card.on { outline-color: var(--coral); }
+.ov-card span { font-family: var(--f-mono); font-size: 11px; color: var(--faint); }
+.ov-card b { font-family: var(--f-title); font-size: 20px; font-weight: 300; letter-spacing: -.02em; color: var(--ink); max-width: 54%; }
+.ov-top { max-width: 1180px; margin: 0 auto 18px; display: flex; justify-content: space-between; align-items: center; color: #faf9f5; font-family: var(--f-title); font-size: 22px; font-weight: 300; }
+.ov-top button { background: rgba(250, 249, 245, .14); color: #faf9f5; }
+
+/* ---------- phone held upright ---------- */
+@media (max-aspect-ratio: 4/5), (max-width: 700px) {
+  :root { --u: 8.6px; --pad: max(20px, env(safe-area-inset-left, 0px)); --fs-title: 38px; --fs-hero: 44px; --fs-lead: 16px; --fs-body: 15px; --fs-small: 12.5px; }
+  body { overflow: auto; background: var(--paper); }
+  .deck { position: static; display: block; } .stage { width: 100%; height: auto; overflow: visible; }
+  .slide, .slide.split { position: relative; inset: auto; visibility: visible; opacity: 1; display: block; padding: 56px max(20px, env(safe-area-inset-right, 0px)) 40px max(20px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); }
+  .slide.split { padding: 0; }
+  .cols, .cols.rev, .mgrid, .steps, .agenda4, .rules2 { grid-template-columns: 1fr !important; gap: 22px; } .hrow { display: block; } .hrow .lead { margin-top: 12px; } .steps .ui { transform: none !important; }
+  .iphone { transform: scale(.9); transform-origin: top center; }
+  .slide .in, .slide .R .in { opacity: 1; transform: none; filter: none; animation: none !important; }
+  .L { padding: 64px max(20px, env(safe-area-inset-right, 0px)) 40px max(20px, env(safe-area-inset-left, 0px)); }
+  .R { padding: 36px max(20px, env(safe-area-inset-right, 0px)) 36px max(20px, env(safe-area-inset-left, 0px)); }
+  .brand { top: 20px; left: max(20px, env(safe-area-inset-left, 0px)); } .note, .rail { display: none; } .pg { position: static; margin-top: 24px; }
+  .phone { width: 100%; max-width: 320px; height: 560px; }
+  .comps, .svcs { grid-template-columns: 1fr; } .comp, .comp:nth-child(odd), .comp:nth-child(even) { transform: none; }
+  .tl { grid-template-columns: 1fr; gap: 18px; padding-left: 28px; } .tl::before { left: 6px; right: auto; top: 0; bottom: 0; width: 1px; height: auto; } .tl .tl-bar { display: none; }
+  .ts { padding-top: 0; } .ts::before { left: -28px; top: 2px; width: 14px; height: 14px; }
+  .endnote, .rangebar { display: block; } .rangebar .track { margin: 30px 0 12px; }
+  .bar .prog, #fsBtn { display: none; }
+  .pic .ln { stroke-dashoffset: 0 !important; animation: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide, .slide.is-on { transition: opacity .2s linear, visibility 0s; }
+  .slide .in, .slide.is-on .in { animation: none; opacity: 1; transform: none; filter: none; }
+  .pic .ln, .chart .lineP { stroke-dashoffset: 0 !important; animation: none !important; }
+  .ring .fg, .gauge .needle, .tl .tl-bar { animation: none !important; transform: none; } .ring .fg { transform: rotate(-90deg); }
+  .rail i, .rail .fill { transition: none; }
+}
+</style>
+</head>
+<body>
+
+
+<div class="legend" aria-hidden="true"><span><i style="background:rgba(235,140,109,.5)"></i>Filled in from the appraisal</span><span><i style="background:rgba(102,120,91,.5)"></i>Company figures, set once</span></div>
+<main class="deck" aria-roledescription="presentation"><div class="stage" id="stage"></div></main>
+<nav class="bar" aria-label="Presentation controls"><div class="bar-in">
+  <span class="count num" id="count">1 / 12</span><span class="sep"></span>
+  <button class="ib" id="prev" aria-label="Previous slide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+  <button class="ib" id="next" aria-label="Next slide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+  <span class="sep"></span>
+  <button class="ib" id="ovBtn" aria-label="All slides (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></button>
+  <button class="ib" id="fieldsBtn" hidden aria-label="Show the fields TLE OS fills in (V)" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></button>
+  <button class="ib" id="fsBtn" hidden aria-label="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+</div></nav>
+<div class="ov" id="ov" role="dialog" aria-label="All slides"><div class="ov-top"><span>All slides</span><button class="ib" id="ovClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="ov-grid" id="ovGrid"></div></div>
+
+<script>window.D = /*__DECK_DATA__*/null;</script>
+<script>
+/* ============================================================
+   Everything TLE OS fills in comes in as window.D, built from the
+   appraisal deck by lib/appraisal-deck.ts (23 Oct 2026). Company
+   figures on "Who we are" are live; anything that couldn't be read
+   is left out rather than shown as a number.
+   ============================================================ */
+
+/* ---------- helpers ---------- */
+const money = n => '£' + Math.round(n).toLocaleString('en-GB');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const PATHS = {
+  arrow: 'M5 12h14M13 6l6 6-6 6', left: 'M19 12H5M11 6l-6 6 6 6', bell: 'M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9zM10 20a2 2 0 0 0 4 0',
+  home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z', doc: 'M7 3h10v18H7zM10 8h4M10 12h4M10 16h2', pin: 'M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  bed: 'M3 18V7M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5M7 12a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z', bath: 'M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM6 12V6a2 2 0 0 1 4 0M7 19l-1 2M17 19l1 2',
+  sofa: 'M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M2 12a2 2 0 0 1 4 0v2h12v-2a2 2 0 0 1 4 0v5H2zM5 17v2M19 17v2', leaf: 'M5 19c8 0 14-6 14-14C11 5 5 11 5 19zM5 19l7-7',
+  bolt: 'M13 3 5 14h6l-1 7 8-11h-6z', camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', screen: 'M4 5h16v11H4zM9 20h6M12 16v4',
+  pass: 'M5 4h14v16H5zM9 9h6M9 13h6M9 17h3', key: 'M14 10a4 4 0 1 0-3.9 4H11l1.5 1.5L14 14l1.5 1.5L17 14l2 2v-3l-5-3z', x: 'M7 7l10 10M17 7 7 17',
+  phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z', grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z', chat: 'M5 19l1.2-3.6A7.5 7.5 0 1 1 9 18.6z', play: 'M8 5.5v13l10.5-6.5z', mail: 'M4 6h16v12H4zM4 7l8 6 8-6',
+  ruler: 'M3 17 17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2'
+};
+const ic = (k, cls) => `<svg class="${cls === undefined ? 'ic' : cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${PATHS[k]}"/></svg>`;
+const arrowR = ic('arrow', ''), arrowL = ic('left', '');
+let n = 0; const i = css => `style="--i:${n++};${css || ''}"`;
+var D = window.D;
+const P = D.property, L = D.landlord, A = D.agent, M = D.market, F = D.firm, FIG = D.figure, C = D.comps || [];
+const deposit = FIG ? Math.floor(FIG.ask * 12 / 52 * 5) : 0, holding = FIG ? Math.floor(FIG.ask * 12 / 52) : 0;
+/* Where the home is, in words: the area, else the town, else the market's postcode area. */
+const PLACE = P.area || P.town || (M && M.area) || P.district || '';
+const homeWords = [P.beds ? P.beds + ' bedroom' : '', P.type ? P.type.toLowerCase() : 'home'].filter(Boolean).join(' ');
+const placeLine = [P.area, [P.town, P.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+const RTR = !D.scottish;
+
+/* the agent's face in a small circle: their headshot, or their initials */
+function face(size) { return A.photo ? `<span class="av ${size || ''} ph"><img src="${esc(A.photo)}" alt="" data-face></span>` : `<span class="av ${size || ''}">${esc(A.initials)}</span>`; }
+
+/* the house picture, used wherever a photo would go; a real photograph laid over it when there is one */
+/* A detached house: hipped roof, bay window, a tree. The terrace is used all through the deck; this one is for the home itself (James, 23 Oct 2026). */
+const HOUSE = `<path class="ln body" d="M84 200V96h132v104z"/><path class="ln body" d="M70 98l34-40h92l34 40z"/>
+    <path class="ln" d="M182 58V40h14v18M96 200v-46l6-8h40l6 8v46"/>
+    <rect class="win" x="104" y="156" width="36" height="26" rx="2"/><rect class="win" x="100" y="108" width="30" height="24" rx="2"/><rect class="win" x="170" y="108" width="30" height="24" rx="2"/>
+    <path class="ln" d="M172 168a14 14 0 0 1 28 0M115 108v24M185 108v24M256 200v-34M256 168c-15 0-22-12-15-22-5-13 9-22 18-15 11-6 23 4 17 14 8 11 0 23-20 23zM20 200h264"/>
+    <rect class="door" x="172" y="168" width="28" height="32" rx="2"/>`;
+function pic(cls, style, sun, img, art) {
+  return `<div class="pic ${cls || ''}" style="${style || ''}"><svg viewBox="0 0 300 200" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+    ${sun === false ? '' : '<circle class="sun" cx="212" cy="78" r="42"/>'}
+    ${art === 'house' ? HOUSE : `    <path class="ln body" d="M70 200V100l34-34 34 34v100zM138 200V100l34-34 34 34v100zM206 200V100l34-34 34 34v100z"/>
+    <rect class="win" x="86" y="140" width="36" height="28" rx="2"/><rect class="win" x="222" y="140" width="36" height="28" rx="2"/>
+    <path class="ln" d="M84 168v-24a20 20 0 0 1 40 0v24zM152 168v-24a20 20 0 0 1 40 0v24zM220 168v-24a20 20 0 0 1 40 0v24zM94 112h20M162 112h20M230 112h20M94 76v-22h10v12M162 76v-22h10v12M230 76v-22h10v12M20 200h280"/>
+    <rect class="door" x="165" y="176" width="14" height="24" rx="2"/>`}</svg><span class="grain"></span>${img ? `<img class="pic-img" src="${esc(img)}" alt="" loading="lazy" data-drop>` : ''}</div>`;
+}
+
+/* Which slides this deck has. The figure, the market and the homes like yours only come when there is something true to show. */
+const HAS = { market: Boolean(M), comps: C.length >= 2, figure: Boolean(FIG), fees: D.services.length > 0 };
+const ORDER = ['cover', 'today', 'who', 'home', HAS.market && 'market', HAS.comps && 'comps', HAS.figure && 'figure', 'finding', HAS.fees && 'fees', 'rules', 'plan', 'next'].filter(Boolean);
+const at = id => ORDER.indexOf(id), nn = id => String(at(id) + 1).padStart(2, '0');
+const SLIDES = [];
+function slide(id, title, html, o) { SLIDES.push(Object.assign({ id, title, html }, o || {})); }
+
+/* a real-looking iPhone: titanium frame, side buttons, Dynamic Island, status bar, tab bar, home indicator */
+const SIG = '<svg viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>';
+const WIFI = '<svg viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.4 6.8a6.5 6.5 0 0 1 9.2 0l-1.5 1.5a4.4 4.4 0 0 0-6.2 0zM1.1 4.5a9.8 9.8 0 0 1 13.8 0l-1.4 1.4a7.8 7.8 0 0 0-11 0z"/></svg>';
+const BATT = '<svg viewBox="0 0 27 12" aria-hidden="true"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="18" height="8" rx="2"/><path d="M25 4v4a2 2 0 0 0 0-4z" opacity=".45"/></svg>';
+const meIcon = () => A.photo ? `<i class="me ph"><img src="${esc(A.photo)}" alt="" data-face></i>` : `<i class="me">${esc(A.initials)}</i>`;
+function iphone(screen, tabs, active) {
+  return `<div class="iphone">
+    <span class="hw act"></span><span class="hw vu"></span><span class="hw vd"></span><span class="hw pw"></span>
+    <div class="screen">
+      <div class="status"><span class="time">9:41</span><span class="island"></span><span class="sicons">${SIG}${WIFI}${BATT}</span></div>
+      <div class="app">${screen}</div>
+      <nav class="tabbar">${tabs.map((t, k) => `<span class="${k === active ? 'on' : ''}">${t[0] === 'me' ? meIcon() : ic(t[0], '')}<b>${t[1]}</b></span>`).join('')}</nav>
+      <span class="homeind"></span>
+    </div>
+  </div>`;
+}
+const TABS = [['home', 'Plan'], ['doc', 'Documents'], ['chat', 'Messages'], ['me', 'Expert']];
+
+/* 1 cover: one of only two split slides */
+const coverTiles = [
+  P.beds != null && `<div class="a-tile">${ic('bed')}<span>Bedrooms</span><b>${esc(P.beds)}</b></div>`,
+  P.epc && `<div class="a-tile"><div class="row">${ic('leaf')}<span class="badge"></span></div><span>Energy</span><b>EPC ${esc(P.epc)}</b></div>`,
+  P.baths != null && `<div class="a-tile">${ic('bath')}<span>Bathrooms</span><b>${esc(P.baths)}</b></div>`,
+  P.tax && `<div class="a-tile">${ic('doc')}<span>Council tax</span><b>${esc(P.tax.replace(/^Band\s+/i, ''))}</b></div>`
+].filter(Boolean).slice(0, 2);
+n = 0; slide('cover', 'Cover', `
+  <div class="L">
+    <p class="eyebrow in" ${i()}>A plan for</p>
+    <h1 class="title hero in" ${i()}>${esc(P.street)}.</h1>
+    <ul class="rl in" ${i()}>
+      <li>${placeLine ? `<h4>${esc(placeLine)}</h4>` : ''}<p>${FIG ? `What your ${esc(homeWords)} could let for, what’s letting nearby, and how we’d get it let.` : `What’s letting near your ${esc(homeWords)}, and how we’d get it let.`}</p></li>
+    </ul>
+    <div class="btns in" ${i()}><button class="btn dark" data-go="1">See the plan ${arrowR}</button><button class="btn" data-ov>Contents</button></div>
+  </div>
+  <div class="R cover-r">
+    <div class="in" ${i()}>${iphone(`
+      <div class="a-head"><span class="a-brand">${ic('home', '')}<b>Your plan</b></span><span class="a-bell">${ic('bell', '')}<i></i></span></div>
+      <div class="a-hi">Hi ${esc(L.first || 'there')},<br><span>your plan is ready.</span></div>
+      <div class="a-hero${FIG ? ' fig' : ''}">${pic('', '', true, P.image)}<span class="a-chip">${ic('pin', '')}<span class="tx">${esc(P.street)}</span></span>
+        ${FIG ? `<div class="a-over"><span>Suggested rent</span><b>${money(FIG.ask)}<sup>pcm</sup></b></div>` : ''}${FIG ? '' : '<div class="a-dots"><i class="on"></i><i></i><i></i></div>'}</div>
+      ${coverTiles.length ? `<div class="a-tiles"${coverTiles.length === 1 ? ' style="grid-template-columns:1fr"' : ''}>${coverTiles.join('')}</div>` : ''}
+      ${FIG ? `<div class="a-row"><div><span>Time to let</span><b>${esc(FIG.weeks)}</b></div><span class="a-bars">${[1, 1, 1, 0, 0].map(x => `<i class="${x ? 'on' : ''}"></i>`).join('')}</span></div>`
+        : `<div class="a-row"><div><span>Your expert</span><b>${esc(A.name)}</b></div>${face('xs')}</div>`}`, TABS, 0)}</div>
+  </div>`, { split: true });
+
+/* 2 today: centred, agenda as a row of cards */
+const AG = [];
+AG.push(['home', HAS.market || HAS.comps ? 'Your home and the market' : 'Your home', (D.loves.length ? 'What tenants will love' : 'What we noted at the visit') + (HAS.market || HAS.comps ? ', and what’s on the market' + (PLACE ? ' in ' + esc(PLACE) : ' nearby') + '.' : '.')]);
+if (HAS.figure) AG.push(['figure', 'The figure', 'What we’d advertise at, and why.']);
+else if (HAS.comps) AG.push(['comps', 'Homes like yours', 'What similar homes nearby are asking.']);
+AG.push(['finding', 'Finding your tenant', 'How we market it and choose the right person.']);
+AG.push(HAS.fees ? ['fees', 'Your service and the plan', 'How much you’d like us to do, and the dates to move-in.'] : ['plan', 'The plan', 'The dates from today to move-in.']);
+const homeSub = [P.beds != null ? P.beds + ' bed' : '', P.type ? P.type.toLowerCase() : ''].filter(Boolean).join(' ');
+const homeCard = `<div class="home-card${P.image ? ' ph' : ''} in" ${i()}>${pic('', '', false, P.image, 'house')}
+      <span class="hc-pin">${ic('pin', '')}${esc(PLACE || 'Your home')}</span>
+      <span class="hc-txt"><span class="lab">Today we’re looking round</span><b>${esc(P.street)}</b>${homeSub ? `<span class="lab">${esc(homeSub.charAt(0).toUpperCase() + homeSub.slice(1))}</span>` : ''}</span></div>`;
+const reach = [D.visit.date && ['Your appraisal', esc(D.visit.date)], A.email && ['Email', `<a href="mailto:${esc(A.email)}">${esc(A.email)}</a>`]].filter(Boolean);
+n = 0; slide('today', 'Today', `
+  <div class="center">
+    <p class="eyebrow in" ${i()}>Today</p>
+    <h2 class="title in" ${i()}>Hello${L.first ? ', ' + esc(L.first) : ''}. <span class="soft">Here’s the plan.</span></h2>
+  </div>
+  <div class="agenda4"${AG.length !== 4 ? ` style="grid-template-columns:repeat(${AG.length},minmax(0,1fr))"` : ''}>
+    ${AG.map((a, k) => `<button class="ag ${['dark', 'sage', 'man', 'oat'][k]} in" ${i()} data-go="${at(a[0])}"><span class="ag-n">${nn(a[0])}</span><h4>${a[1]}</h4><p>${a[2]}</p><span class="ag-go">${arrowR}</span></button>`).join('')}
+  </div>
+  <div class="agent-band">
+    ${homeCard}
+    <div class="agent-card2 in" ${i()}>
+      <div class="row" style="align-items:center"><div class="row" style="justify-content:flex-start;align-items:center;gap:calc(var(--u)*1.1)">${face('sm')}<div><b>${esc(A.name)}</b><span class="lab">${esc(A.role)} · your one contact until move-in</span></div></div>${A.phone ? `<span class="pill w">${ic('phone', '')}${esc(A.phone)}</span>` : ''}</div>
+      <p class="small" style="margin:calc(var(--u)*.8) 0 calc(var(--u)*.9);font-size:var(--fs-body)">${esc(A.bio)}</p>
+      ${reach.length ? `<div class="astats reach2" style="grid-template-columns:${reach.length === 2 ? 'auto minmax(0,1fr)' : '1fr'}">${reach.map(r => `<div><span class="lab">${r[0]}</span><span class="rv">${r[1]}</span></div>`).join('')}</div>` : ''}
+    </div>
+  </div>`, { cls: 'today-s' });
+
+/* 3 who we are: words left, the live book and two promises right. The days-to-let tile came out (James, 24 Oct 2026): it showed in 2 of 16 areas, and its ten weeks contradicted the plan's move-in around week 5. */
+const FT = [];
+if (F.homes) FT.push(['ui', `<div class="row">${ic('home')}<span class="pill w">Today</span></div><span class="val xl" style="margin-top:calc(var(--u)*2)">${F.homes.toLocaleString('en-GB')}</span><span class="lab">homes we look after for landlords</span>`]);
+n = 0; slide('who', 'Who We Are', `
+  <div class="cols who-cols">
+    <div>
+      <p class="eyebrow in" ${i()}>Who we are</p>
+      <h2 class="title in" ${i()}>A local team that only does lettings.</h2>
+      <ul class="rl in" ${i()}>
+        <li><h4>One person to call</h4><p>The same expert from today until your tenant moves in. No call centres, no passing you around.</p></li>
+        <li><h4>Every tenant checked</h4><p>${RTR ? 'References, right to rent and affordability' : 'References and affordability'}, all done before you say yes.</p></li>
+        <li class="fade"><h4>No surprises</h4><p>Every fee on one page, and you see it before you sign.</p></li>
+      </ul>
+    </div>
+    <div class="who-wrap"><div class="bento b2 who-b" style="grid-template-rows:${FT.length ? 'minmax(0,1.6fr) ' : ''}minmax(0,1fr) minmax(0,1fr)">
+      ${FT.map(t => `<div class="${t[0]}${FT.length === 1 ? ' span2' : ''} in" ${i()}>${t[1]}</div>`).join('')}
+      <div class="ui sage span2 in" ${i()}><div class="row"><span class="who-say">You have one point of contact.</span><span class="pill w">Today to move-in</span></div><span class="lab">The same Letting Expert from this visit until your tenant has the keys.</span></div>
+      <div class="ui coral span2 in" ${i()}><div class="row"><span class="who-say">Every certificate checked.</span><span class="pill w">Our own team</span></div><span class="lab">Gas, electrics and the energy rating, checked by our compliance team before move-in.</span></div>
+    </div></div>
+  </div>`);
+
+/* 4 your home: the cards lead, words on the right */
+const short = s => String(s).split('·').map(x => x.trim()).filter(Boolean).find(x => /sq\s*ft/i.test(x)) || String(s).split('·')[0].trim();
+const HF = [
+  P.beds != null && ['bed', 'Bedrooms', String(P.beds)],
+  P.baths != null && ['bath', 'Bathrooms', String(P.baths)],
+  P.floor && ['ruler', 'Floor area', short(P.floor)],
+  P.tenure && ['key', 'Tenure', P.tenure]
+].filter(Boolean).slice(0, 3);
+const used = l => HF.some(h => h[1] === l);
+const homeLine = [P.tenure && !used('Tenure') ? P.tenure : '', P.floor && !used('Floor area') ? short(P.floor) : '', P.tax ? 'Council tax ' + P.tax : ''].filter(Boolean).join(' · ');
+n = 0; slide('home', 'Your Home', `
+  <div class="cols rev">
+    <div class="bento" style="grid-template-columns:1fr 1fr 1fr">
+      ${HF.map((h, k) => `<div class="ui in" ${i(k === HF.length - 1 && HF.length < 3 ? 'grid-column:span ' + (4 - HF.length) : '')}>${ic(h[0])}<span class="lab" style="margin-top:calc(var(--u)*1.4)">${h[1]}</span><span class="val"${h[2].length > 4 ? ' style="font-size:calc(var(--u)*1.9)"' : ''}>${esc(h[2])}</span></div>`).join('')}
+      <div class="ui dark in" ${i('grid-column:span 2')}><div class="row"><span class="lab">The home</span>${P.epc ? `<span class="pill on" style="background:#2a2a28">EPC ${esc(P.epc)}</span>` : ''}</div><span class="val" style="font-size:calc(var(--u)*2.2);margin-top:calc(var(--u)*1)">${esc(P.type || P.street)}</span>${homeLine ? `<span class="lab">${esc(homeLine)}</span>` : ''}</div>
+      ${pic('in', '--i:' + (n++) + ';min-height:calc(var(--u)*9);border-radius:var(--r)', false, P.image, 'house')}
+      ${D.fixes.length ? `<div class="ui man in" ${i('grid-column:span 3')}><div class="row"><span class="lab" style="color:var(--clay);font-weight:500">Worth doing before we list</span><span class="badge"></span></div><ul class="chk" style="margin-top:calc(var(--u)*.6)">${D.fixes.map(f => `<li><div>${esc(f[0])}${f[1] ? `<small>${esc(f[1])}</small>` : ''}</div></li>`).join('')}</ul></div>` : ''}
+    </div>
+    <div>
+      <p class="eyebrow in" ${i()}>Your home</p>
+      ${D.loves.length
+        ? `<h2 class="title in" ${i()}>What tenants will love.</h2>
+      <ul class="rl in" ${i()}>${D.loves.map((l, k) => `<li${k === 2 ? ' class="fade"' : ''}><h4>${esc(l[0])}</h4>${l[1] ? `<p>${esc(l[1])}</p>` : ''}</li>`).join('')}</ul>`
+        : `<h2 class="title in" ${i()}>Your home, as we have it.</h2>
+      <p class="lead in" ${i()}>If anything here isn’t right, tell ${esc(A.first)} and it’s changed before we list.</p>`}
+    </div>
+  </div>`);
+
+/* 5 market: what's advertised near them, from the figures the agent ticked. No trend line, no enquiries, no tenant types: we don't hold them. */
+function nice(max) { const raw = max / 4, mag = Math.pow(10, Math.floor(Math.log10(raw))), s = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => x >= raw); return s; }
+function bedSvg(rows, mine) {
+  const W = 720, H = 210, l = 58, r = 16, t = 26, b = 40;
+  const step = nice(Math.max(...rows.map(x => x.rent))), top = Math.ceil(Math.max(...rows.map(x => x.rent)) / step) * step;
+  const y = p => t + (top - p) * (H - t - b) / top, slot = (W - l - r) / rows.length, bw = Math.min(68, slot * .46);
+  const ticks = []; for (let p = 0; p <= top + 1; p += step) ticks.push(p);
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Typical asking rent by bedrooms in ${esc(M.area)}: ${rows.map(x => x.label + ' ' + money(x.rent)).join(', ')}">
+    <g class="grid">${ticks.map(p => `<line x1="${l}" x2="${W - r}" y1="${y(p)}" y2="${y(p)}"/>`).join('')}</g>
+    <g class="axis">${ticks.map(p => `<text x="${l - 10}" y="${y(p) + 4}" text-anchor="end">${money(p)}</text>`).join('')}</g>
+    ${rows.map((x, k) => { const cx = l + slot * k + slot / 2, me = x === mine; return `<rect class="bbar${me ? ' mine' : ''}" x="${(cx - bw / 2).toFixed(1)}" y="${y(x.rent).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y(0) - y(x.rent)).toFixed(1)}" rx="6"/>
+      <text class="barv" x="${cx.toFixed(1)}" y="${(y(x.rent) - 8).toFixed(1)}" text-anchor="middle">${money(x.rent)}</text>
+      <text class="barl" x="${cx.toFixed(1)}" y="${H - 20}" text-anchor="middle">${esc(x.label)}</text><text class="barn" x="${cx.toFixed(1)}" y="${H - 5}" text-anchor="middle">${x.n} ${x.n === 1 ? 'home' : 'homes'}</text>`; }).join('')}</svg>`;
+}
+if (HAS.market) {
+  const rows = M.rentByBed, mine = rows.find(x => P.beds && (x.label === P.beds + ' bed' || (P.beds >= 5 && /^5\+/.test(x.label)))) || null;
+  const B = M.bands || [], bt = B.reduce((s, x) => s + x.n, 0), under4 = (B[0] ? B[0].n : 0) + (B[1] ? B[1].n : 0);
+  const SEG = ['var(--coral)', 'var(--manilla)', 'var(--sage-soft)', 'rgba(255,255,255,.22)'];
+  const bandCard = bt ? `<div class="ui dark in" ${i()}><span class="lab">Advertised for under four weeks</span><span class="val xl">${under4}<sup>of ${bt}</sup></span>
+      <span class="stackbar" aria-hidden="true">${B.map((x, k) => x.n ? `<i style="flex:${x.n};background:${SEG[k] || SEG[3]}"></i>` : '').join('')}</span>
+      <span class="lab">${B.length === 4 ? `${B[2].n} up for one to three months, ${B[3].n} for longer` : B.map(x => x.n + ' ' + esc(x.label.toLowerCase())).join(', ')}</span></div>` : '';
+  const agents = (M.agents || []).slice(0, 3);
+  const pills = agents.length ? `<div class="who-pills" style="margin-top:calc(var(--u)*.7)"><span class="lab" style="width:100%">Advertising the most here</span>${agents.map(a => `<span class="pill w${a.ours ? ' on' : ''}">${esc(a.agent)} · ${a.n}</span>`).join('')}</div>` : '';
+  const advCard = M.advertised || pills ? `<div class="ui in" ${i()}>${M.advertised ? `<span class="lab">On the market nearby</span><span class="val xl">${M.advertised}</span><span class="lab">homes advertised in ${esc(M.area)}${M.reduced ? `, ${M.reduced} with a cut in rent` : ''}</span>` : ''}${pills}</div>` : '';
+  const chart = rows.length ? `<div class="ui chart in" ${i('padding:calc(var(--u)*2)')}><div class="row"><div><span class="lab">${mine ? `Typical asking rent, ${esc(mine.label)} homes in ${esc(M.area)}` : `Typical asking rent by bedrooms, ${esc(M.area)}`}</span>${mine || M.medianRent ? `<span class="val" style="display:block;margin-top:calc(var(--u)*.6)">${money(mine ? mine.rent : M.medianRent)}<sup> pcm</sup></span>` : ''}</div><span class="pill w">By bedrooms</span></div>${bedSvg(rows, mine)}</div>` : '';
+  n = 0; slide('market', 'The Market', `
+  <div class="hrow in" ${i()}><div><p class="eyebrow">The local market</p><h2 class="title">What’s on the market in ${esc(M.area)}.</h2></div><p class="lead">${M.advertised ? `${M.advertised} homes were advertised here when we looked${M.pulled ? ' on ' + esc(M.pulled) : ''}. ` : ''}Here’s what they’re asking, and how long they’ve been up.</p></div>
+  ${chart ? `<div class="mgrid">${chart}<div class="mside">${bandCard}${advCard}</div></div>`
+    : `<div class="bento b2" style="margin-top:calc(var(--u)*3.2)">${bandCard}${advCard}</div>`}`, { cls: 'market-s' });
+}
+
+/* 6 homes like yours: the carousel, from the homes the agent picked */
+if (HAS.comps) {
+  const rents = C.map(c => c.rent).filter(x => x != null).sort((a, b) => a - b);
+  const ref = FIG ? FIG.ask : (rents.length ? rents[Math.floor(rents.length / 2)] : null);
+  const featK = ref == null ? 0 : C.reduce((b, c, k) => c.rent != null && (C[b].rent == null || Math.abs(c.rent - ref) < Math.abs(C[b].rent - ref)) ? k : b, 0);
+  const rest = C.map((_, k) => k).filter(k => k !== featK), order = [rest[0], featK].concat(rest.slice(1));
+  const cols = { 2: '1fr 1.25fr', 3: '1fr 1.25fr 1fr', 4: '1fr 1.25fr 1fr 1fr' }[C.length];
+  const vals = rents.concat(FIG ? [FIG.low, FIG.high] : []);
+  const mn = Math.min(...vals), mx = Math.max(...vals), pad = Math.max(25, (mx - mn) * .15);
+  const lo = Math.floor((mn - pad) / 25) * 25, hi = Math.ceil((mx + pad) / 25) * 25, pos = p => ((p - lo) / (hi - lo) * 100).toFixed(1) + '%';
+  const STATUS = { 'let agreed': 'Let agreed', 'on market': 'On the market', listed: 'Listed' };
+  const featNote = c => FIG ? 'The closest in rent to the figure we’d advertise at.' : [c.beds ? c.beds + ' bed' : '', c.type].filter(Boolean).join(' ');
+  n = 0; slide('comps', 'Homes Like Yours', `
+  <div class="hrow in" ${i()}><div><p class="eyebrow">Homes like yours</p><h2 class="title">What similar homes nearby are asking.</h2></div><p class="lead">${D.compsFrom === 'comparables' ? 'Homes on our books near you' : 'Homes advertised near you'}, picked by ${esc(A.first)} as the closest to yours.</p></div>
+  <div class="comps" style="--cc:${cols}">${order.map(k => { const c = C[k], f = k === featK, note = f ? featNote(c) : ''; return `<div class="comp${f ? ' feat' : ''} in" ${i()}>${pic('', '', f, c.image)}<div class="meta"><div><b>${esc(c.addr)}</b><div class="lab">${c.status === 'on market' && c.days != null ? 'On for ' + c.days + ' days' : esc(c.locality)}</div></div><div style="text-align:right"><span class="lab">${STATUS[c.status] || ''}</span><div class="val" style="font-size:calc(var(--u)*${f ? 2.4 : 1.9})">${c.rent != null ? money(c.rent) : esc(c.rentText)}</div></div></div>${note ? `<p class="small" style="margin:calc(var(--u)*.4) 0 0">${esc(note)}</p>` : ''}</div>`; }).join('')}</div>
+  ${vals.length >= 2 ? `<div class="rangebar in" ${i()}><span class="lab">${money(lo)}</span><div class="track">
+    ${FIG ? `<span class="band" style="left:${pos(FIG.low)};width:calc(${pos(FIG.high)} - ${pos(FIG.low)})"></span>` : ''}
+    ${C.filter(c => c.rent != null).map(c => `<span class="mk" style="left:${pos(c.rent)}"></span>`).join('')}${FIG ? `<span class="mk ours" style="left:${pos(FIG.ask)}"></span><span class="tag" style="left:${pos(FIG.ask)}">Our range ${money(FIG.low)} to ${money(FIG.high)}</span>` : `<span class="tag" style="left:${pos((mn + mx) / 2)}">Asking ${money(mn)} to ${money(mx)}</span>`}
+  </div><span class="lab">${money(hi)}</span></div>` : ''}`);
+}
+
+/* 7 the figure: the second split slide, only when the agent has put one in */
+function gaugeSvg() {
+  const pad = Math.max(50, Math.round((FIG.high - FIG.low) * 1.5)), g0 = FIG.low - pad, g1 = FIG.high + pad, cx = 150, cy = 150, R = 118;
+  const ang = p => Math.PI * (1 - (p - g0) / (g1 - g0)); const pt = (p, r) => [cx + r * Math.cos(ang(p)), cy - r * Math.sin(ang(p))];
+  let ticks = ''; for (let k = 0; k <= 40; k++) { const p = g0 + (g1 - g0) * k / 40, inR = p >= FIG.low && p <= FIG.high, a = pt(p, R), b = pt(p, R - (k % 5 ? 9 : 16)); ticks += `<line class="tk${inR ? ' in' : ''}" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>`; }
+  const nd = pt(FIG.ask, R - 30), lL = pt(FIG.low, R + 16), lH = pt(FIG.high, R + 16);
+  return `<svg viewBox="0 0 300 172" role="img" aria-label="Suggested range ${money(FIG.low)} to ${money(FIG.high)}, advertised at ${money(FIG.ask)}">${ticks}
+    ${FIG.low === FIG.high ? '' : `<text x="${lL[0]}" y="${lL[1]}" text-anchor="end">${money(FIG.low)}</text><text x="${lH[0]}" y="${lH[1]}" text-anchor="start">${money(FIG.high)}</text>`}
+    <line class="needle" x1="${cx}" y1="${cy}" x2="${nd[0].toFixed(1)}" y2="${nd[1].toFixed(1)}"/><circle class="hub" cx="${cx}" cy="${cy}" r="6"/></svg>`;
+}
+if (HAS.figure) {
+  n = 0; slide('figure', 'The Figure', `
+  <div class="L">
+    <p class="eyebrow in" ${i()}>The figure</p>
+    <h2 class="title in" ${i()}>We’d advertise at</h2>
+    <div class="title in" ${i('font-size:calc(var(--u)*8.4);margin-top:calc(var(--u)*.8)')}>${money(FIG.ask)}<sup>pcm</sup></div>
+    <ul class="rl in" ${i()}><li><h4>Priced to move</h4><p>Pitched to bring in plenty of good applicants in the first weeks.${FIG.low !== FIG.high ? ` Our range runs from ${money(FIG.low)} to ${money(FIG.high)}.` : ''}</p></li></ul>
+  </div>
+  <div class="R">
+    <div class="bento b2">
+      <div class="ui gauge in" ${i('grid-column:span 2;padding:calc(var(--u)*2)')}><div class="row"><div class="row" style="justify-content:flex-start;align-items:center">${ic('home')}<div><b style="font-weight:500">Our range</b><div class="lab">${esc(A.first)}’s range for your home</div></div></div><span class="pill on">${money(FIG.ask)}</span></div>${gaugeSvg()}</div>
+      <div class="ui in" ${i()}><span class="lab">A year’s rent</span><span class="val">${money(FIG.ask * 12)}</span></div>
+      ${D.scottish ? '' : `<div class="ui in" ${i()}><span class="lab">Deposit<sup> 5 weeks</sup></span><span class="val">${money(deposit)}</span></div>
+      <div class="ui in" ${i()}><span class="lab">Holding fee<sup> 1 week</sup></span><span class="val">${money(holding)}</span></div>`}
+      <div class="ui dark in" ${i()}><span class="lab">Time to let</span><span class="val">${esc(FIG.weeks)}</span></div>
+    </div>
+  </div>`, { split: true });
+}
+
+/* 8 finding the tenant: four steps as a staggered row of TLE OS cards */
+n = 0; slide('finding', 'Finding Your Tenant', `
+  <div class="hrow in" ${i()}><div><p class="eyebrow">Finding your tenant</p><h2 class="title">Lots of interest, then the right person.</h2></div><p class="lead">From the photos to the right tenant, we do every step, and ${esc(A.first)} keeps you posted.</p></div>
+  <div class="steps">
+    <div class="ui in" ${i()}><span class="st-n">01 · Day 3</span>${ic('camera')}<b>Photos and floor plan</b><span class="lab">A professional photographer, at a time that suits you.</span><div class="st-foot pills"><span class="pill w">Photos</span><span class="pill w">Floor plan</span></div></div>
+    <div class="ui in" ${i()}><span class="st-n">02 · Day 4</span>${ic('screen')}<b>Live on the portals</b><span class="lab">Your advert goes up everywhere tenants look.</span><div class="st-foot pills"><span class="pill on">Rightmove</span><span class="pill on">Zoopla</span><span class="pill on">OnTheMarket</span></div></div>
+    <div class="ui in" ${i()}><span class="st-n">03 · Week 1</span><div class="row">${ic('pass')}<span class="badge"></span></div><b>A tenant passport each</b><span class="lab">Every applicant fills in a tenant passport, so you see who they are.</span><div class="st-foot"><span class="val" style="font-size:calc(var(--u)*2.2)">Done</span><span class="toggle"></span></div></div>
+    <div class="ui dark in" ${i()}><span class="st-n">04 · Week 1 to 2</span>${ic('key')}<b>We show every viewing</b><span class="lab">You don’t need to be there. Feedback the same day.</span><div class="st-foot"><span class="val" style="font-size:calc(var(--u)*2.2)">Booked</span></div></div>
+  </div>
+  <div class="checkrow in" ${i()}><span class="lab">Before anyone moves in</span>${['Full references', RTR && 'Right to rent', 'Affordability', 'Pre-let checks by our compliance team', 'Deposit protected'].filter(Boolean).map(c => `<span class="pill">${c}</span>`).join('')}</div>`);
+
+/* 9 services: the deck's own fee schedule */
+if (HAS.fees) {
+  const S = D.services;
+  n = 0; slide('fees', 'Choose Your Service', `
+  <div class="hrow in" ${i()}><div><p class="eyebrow">Your service</p><h2 class="title">Choose how much you’d like us to do.</h2></div>${D.feesNote ? `<p class="lead">${esc(D.feesNote)}</p>` : ''}</div>
+  <div class="svcs" style="--sc:${S.length}">${S.map(s => `<div class="svc${s.id === D.recommended ? ' pick' : ''} in" ${i()}>
+    <span class="tagline">${s.id === D.recommended ? 'What we’d suggest for this home' : '&nbsp;'}</span>
+    <h3>${esc(s.name)}</h3><span class="val">${esc(s.price)}</span><span class="lab">${[esc(s.unit), esc(s.note || s.blurb)].filter(Boolean).join(' · ')}</span>
+    ${s.feats.length ? `<ul class="feats">${D.featNames.map((f, j) => `<li class="${s.feats[j] ? '' : 'no'}">${esc(f)}</li>`).join('')}</ul>` : ''}</div>`).join('')}</div>`);
+}
+
+/* 10 compliance: centred, one wide card of switches */
+const managed = D.services.find(s => s.id === 'managed');
+const rules = [['Gas safety check', 'Every year, by a Gas Safe engineer'], ['Electrical safety (EICR)', 'At least every five years'], ['Energy rating (EPC)', D.scottish ? 'A current certificate before it’s let' : 'Band E or better to let'], ['Smoke and CO alarms', 'Tested on move-in day'], ['Deposit protection', 'Registered with a government scheme'], RTR && ['Right to rent', 'Checked for every adult'], RTR && ['How to Rent guide', 'The current version, given at signing'], ['Law changes', 'We update your paperwork when rules change']].filter(Boolean);
+n = 0; slide('rules', 'Staying Compliant', `
+  <div class="center">
+    <p class="eyebrow in" ${i()}>Staying compliant</p>
+    <h2 class="title in" ${i()}>The rules are long. <span class="soft">We keep track.</span></h2>
+  </div>
+  <div class="ui in" ${i('margin-top:calc(var(--u)*3.4);padding:calc(var(--u)*1.4) calc(var(--u)*2.6)')}>
+    <div class="row rules-head" style="align-items:center;padding:calc(var(--u)*.8) 0 calc(var(--u)*1.2)"><b style="font-weight:400;font-family:var(--f-title);font-size:calc(var(--u)*1.7);letter-spacing:-.02em">Compliance<sup class="small"> ${rules.length} checks</sup></b><span class="lab">On ${esc(managed ? managed.name : 'full management')} we book, renew and remind you, before anything runs out.</span><span class="pill sage">All handled</span></div>
+    <div class="rules2">${rules.map(r => `<div class="row" style="align-items:center"><div><b style="font-weight:500;font-size:var(--fs-body)">${r[0]}</b><div class="lab">${r[1]}</div></div><span class="toggle"></span></div>`).join('')}</div>
+  </div>`);
+
+/* 11 timeline: a soft line that flows through the six stops */
+const TLY = [58, 30, 56, 26, 64, 42];
+const TLX = D.timeline.map((_, k) => 6 + k * 17.6);
+function flowPath() {
+  const pts = [[-2, TLY[0] + 6]].concat(TLX.map((x, k) => [x, TLY[k]])).concat([[102, TLY[TLY.length - 1] - 8]]).map(p => [p[0] * 10, p[1]]);
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let k = 0; k < pts.length - 1; k++) { const p0 = pts[k - 1] || pts[k], p1 = pts[k], p2 = pts[k + 1], p3 = pts[k + 2] || p2;
+    d += ` C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0]},${p2[1]}`; }
+  return d;
+}
+n = 0; slide('plan', 'From Today to Move-in', `
+  <div class="hrow in" ${i()}><div><p class="eyebrow">The plan</p><h2 class="title">From today to your tenant moving in.</h2></div><p class="lead">Sign this week, and a tenant could be in by ${esc(D.moveIn)}.</p></div>
+  <div class="flow">
+    <svg class="flow-line" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><path class="fl-bg" d="${flowPath()}" vector-effect="non-scaling-stroke"/><clipPath id="flClip"><rect class="fl-clip" x="-30" y="-100" width="1060" height="300"/></clipPath><path class="fl-fg" d="${flowPath()}" clip-path="url(#flClip)" vector-effect="non-scaling-stroke"/></svg>
+    ${D.timeline.map((t, k) => `<div class="stop ${TLY[k] > 45 && k !== D.timeline.length - 1 ? 'down' : 'up'}${k === 0 ? ' first' : ''}${k === D.timeline.length - 1 ? ' last' : ''}" style="left:${TLX[k]}%;top:${TLY[k]}%;--d:${(1.6 + 3 * (TLX[k] * 10 + 30) / 1060).toFixed(2)}s"><i></i><div class="stop-card"><span class="when">${esc(t[0])}</span><h4>${esc(t[1])}</h4><span class="lab">${esc(t[2])}</span></div></div>`).join('')}
+  </div>`);
+
+/* 12 next steps: words left, the phone right. Staff presenting send the terms from here; anyone else gets the agent's contact. */
+const tel = A.phone ? A.phone.replace(/\s+/g, '') : '';
+const ctaBtns = D.cta
+  ? `<button class="btn dark" id="ctaBtn">Let’s get it on the market ${arrowR}</button><button class="btn" data-go="0">Start again</button>`
+  : `${tel ? `<a class="btn dark" href="tel:${esc(tel)}">${ic('phone', '')}<span>Call ${esc(A.first)}</span></a>` : ''}${A.email ? `<a class="btn${tel ? '' : ' dark'}" href="mailto:${esc(A.email)}">${ic('mail', '')}<span>Email ${esc(A.first)}</span></a>` : ''}<button class="btn" data-go="0">Start again</button>`;
+n = 0; slide('next', 'Next Steps', `
+  <div class="cols" style="grid-template-columns:1.2fr 1fr">
+    <div>
+      <p class="eyebrow in" ${i()}>Next steps</p>
+      <h2 class="title in" ${i()}>Ready when you are${L.first ? ', ' + esc(L.first) : ''}.</h2>
+      <ul class="rl in" ${i()}>
+        <li><h4>Sign the Terms of Business</h4><p>We email them to you, and you can sign them on your phone.</p></li>
+        <li><h4>Send your ID and proof of ownership</h4><p>A passport or driving licence, and a mortgage statement or the title.</p></li>
+        <li class="fade"><h4>Pick a time for the photos</h4><p>Our photographer comes at a time that suits you.</p></li>
+      </ul>
+      <div class="btns in" ${i()}>${ctaBtns}</div>
+      ${D.cta ? `<p class="lab cta-say" id="ctaSay" role="status"></p>` : ''}
+    </div>
+    <div class="in" ${i('display:flex;justify-content:center')}>${iphone(`
+      <div class="a-head"><span class="a-brand">${ic('home', '')}<b>Your expert</b></span><span class="a-bell">${ic('bell', '')}<i></i></span></div>
+      <div class="a-contact">${face('')}<b>${esc(A.name)}</b><span class="sub">${esc(A.role)}, The Letting Experts</span>
+        <div class="a-acts"><span>${ic('phone', '')}<i>Call</i></span><span>${ic('chat', '')}<i>Message</i></span><span>${ic('mail', '')}<i>Email</i></span></div></div>
+      ${A.phone || A.email ? `<div class="a-list">${A.phone ? `<span class="copyable"><span><i>Mobile</i><span class="tx">${esc(A.phone)}</span></span><button data-copy="${esc(A.phone)}">Copy</button></span>` : ''}${A.email ? `<span class="copyable"><span><i>Email</i><span class="tx">${esc(A.email)}</span></span><button data-copy="${esc(A.email)}">Copy</button></span>` : ''}</div>` : ''}
+      <div class="a-row"><div><span>Terms of Business</span><b>To sign</b></div><span class="pill on">Sign</span></div>`, TABS, 3)}</div>
+  </div>`);
+
+/* ---------- render ---------- */
+const stage = document.getElementById('stage');
+const tot = String(SLIDES.length).padStart(2, '0');
+stage.innerHTML = SLIDES.map((s, k) => `<section class="slide${s.split ? ' split' : ''}${s.cls ? ' ' + s.cls : ''}" id="s${k + 1}" aria-label="${k + 1} of ${SLIDES.length}: ${esc(s.title)}"${k ? ' aria-hidden="true"' : ''}>
+  <div class="brand"><img src="/brand/tle-logo-line.png" alt="The Letting Experts"></div>
+  ${s.html}
+  <div class="pg"><b>${String(k + 1).padStart(2, '0')}</b> / ${tot} · ${esc(P.street)}</div>
+</section>`).join('') + '<div class="rail" aria-hidden="true"><span class="fill"></span><i></i></div>';
+const els = [...stage.querySelectorAll('.slide')];
+document.getElementById('ovGrid').innerHTML = SLIDES.map((s, k) => `<button class="ov-card${s.split ? ' split' : ''}" style="--i:${k}" data-k="${k}"><span>${String(k + 1).padStart(2, '0')}</span><b>${esc(s.title)}</b></button>`).join('');
+const rail = stage.querySelector('.rail'), dot = rail.querySelector('i'), rfill = rail.querySelector('.fill');
+if (D.sample) { const t = document.createElement('span'); t.className = 'sample-tag'; t.textContent = 'Sample'; const bi = document.querySelector('.bar-in'); bi.insertBefore(t, bi.firstChild); }
+
+const stacked = () => matchMedia('(max-aspect-ratio: 4/5), (max-width: 700px)').matches;
+let cur = 0;
+function go(k, instant) {
+  k = Math.max(0, Math.min(SLIDES.length - 1, k));
+  if (stacked()) els[k].scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'start' });
+  els.forEach((el, j) => { el.classList.toggle('is-on', j === k); el.setAttribute('aria-hidden', j === k ? 'false' : 'true'); });
+  cur = k;
+  const pc = (k / (SLIDES.length - 1) * 100) + '%'; dot.style.top = pc; rfill.style.height = pc;
+  document.getElementById('count').textContent = (k + 1) + ' / ' + SLIDES.length;
+  document.getElementById('prev').disabled = k === 0; document.getElementById('next').disabled = k === SLIDES.length - 1;
+  try { history.replaceState(null, '', '#s' + (k + 1)); } catch (e) {}
+}
+const start = /^#s(\d+)$/.exec(location.hash); go(start ? +start[1] - 1 : 0, true);
+document.getElementById('prev').onclick = () => go(cur - 1);
+document.getElementById('next').onclick = () => go(cur + 1);
+const ov = document.getElementById('ov');
+function overview(open) { ov.classList.toggle('open', open); if (open) [...ov.querySelectorAll('.ov-card')].forEach((c, j) => c.classList.toggle('on', j === cur)); }
+
+stage.addEventListener('click', e => {
+  const g = e.target.closest('[data-go]'); if (g) go(+g.dataset.go);
+  if (e.target.closest('[data-ov]')) overview(true);
+  const c = e.target.closest('[data-copy]'); if (c) { const txt = c.dataset.copy; try { navigator.clipboard.writeText(txt).then(() => { c.textContent = 'Copied'; }, () => { c.textContent = txt; }); } catch (x) { c.textContent = txt; } }
+});
+document.getElementById('ovBtn').onclick = () => overview(true);
+document.getElementById('ovClose').onclick = () => overview(false);
+ov.onclick = e => { const c = e.target.closest('.ov-card'); if (c) { overview(false); go(+c.dataset.k); } else if (e.target === ov) overview(false); };
+document.addEventListener('keydown', e => {
+  const k = e.key;
+  if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (k === 'ArrowRight' || k === 'PageDown' || (k === ' ' && !stacked())) { e.preventDefault(); go(cur + 1); }
+  else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(cur - 1); }
+  else if (k === 'Home') go(0); else if (k === 'End') go(SLIDES.length - 1);
+  else if (k === 'g' || k === 'G') overview(!ov.classList.contains('open'));
+  else if (k === 'Escape') overview(false);
+});
+let tx = null; stage.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+stage.addEventListener('touchend', e => { if (tx === null || stacked()) return; const d = e.changedTouches[0].clientX - tx; if (Math.abs(d) > 50) go(cur + (d < 0 ? 1 : -1)); tx = null; });
+let idleT; function wake() { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (!ov.classList.contains('open') && !stacked()) document.body.classList.add('idle'); }, 2800); }
+['mousemove', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, wake, { passive: true })); wake();
+const io = new IntersectionObserver(es => { if (!stacked()) return; es.forEach(en => { if (en.isIntersecting) { cur = els.indexOf(en.target); document.getElementById('count').textContent = (cur + 1) + ' / ' + SLIDES.length; } }); }, { threshold: .5 });
+els.forEach(el => io.observe(el));
+
+/* a photograph that won't load: the drawn house stays; a headshot falls back to initials */
+stage.querySelectorAll('img[data-drop]').forEach(img => img.addEventListener('error', () => img.remove()));
+stage.querySelectorAll('img[data-face]').forEach(img => img.addEventListener('error', () => { const p = img.parentElement; if (!p) return; p.classList.remove('ph'); p.textContent = A.initials; }));
+
+/* "Let's get it on the market": the Terms of Business, the same way the appraisal page sends them.
+   Read first (who has signed, who has been sent it); then either open the terms to prepare and sign,
+   or ask once more before emailing them. Nothing is sent on the first press. */
+(function () {
+  const btn = document.getElementById('ctaBtn'); if (!btn) return;
+  const say = document.getElementById('ctaSay');
+  const idv = D.cta && D.cta.appraisalId, base = idv ? '/api/appraisals/' + encodeURIComponent(idv) : '';
+  const prepUrl = idv ? '/market-appraisals/' + encodeURIComponent(idv) + '/send' : '';
+  const label = t => { btn.innerHTML = t + ' ' + arrowR; };
+  const tell = (h, err) => { say.innerHTML = h; say.classList.toggle('err', Boolean(err)); };
+  const day = iso => { try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Europe/London' }); } catch (x) { return ''; } };
+  const openLink = t => `<a href="${esc(prepUrl)}" target="_blank" rel="noopener">${t}</a>`;
+  let st = null, armed = false, busy = false;
+  const read = () => fetch(base + '/terms', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.json()).catch(() => ({ ok: false, error: 'Couldn’t read the terms just now.' }));
+  const ready = idv && !D.sample ? read().then(j => { st = j; return j; }) : Promise.resolve(null);
+  function decide() {
+    if (!st || st.ok === false) { tell(esc((st && st.error) || 'Couldn’t read the terms just now.') + ' ' + openLink('Open the terms'), true); return; }
+    const ps = st.parties || [], ll = ps.find(p => p.role === 'landlord'), ag = ps.find(p => p.role === 'agent');
+    if (ll && ll.completedAt) { label('Signed'); tell(`${esc(ll.name || L.full || 'They')} signed the terms on ${day(ll.completedAt)}.`); return; }
+    if (ll && ll.sentAt) { tell(`The terms went to ${esc(ll.email)} on ${day(ll.sentAt)}, and are waiting to be signed. ${openLink('Open the contract')}`); return; }
+    if (!st.connected || !ll || !ag || !ag.completedAt) {
+      const w = window.open(prepUrl, '_blank', 'noopener');
+      tell(w ? 'The terms are open in a new tab: check them, sign your half, then send them from there.' : `The terms need preparing and your signature first. ${openLink('Open the terms')}`);
+      return;
+    }
+    if (st.sendUnlocked === false) { tell('Sending is switched off on this environment, so nothing can go from here.', true); return; }
+    armed = true; label('Send the terms to ' + esc(ll.email)); tell(`Press again to email the presentation and the terms to ${esc(ll.email)} now.`);
+  }
+  function send() {
+    busy = true; label('Sending…');
+    fetch(base + '/terms', { method: 'POST', credentials: 'same-origin' }).then(r => r.json()).then(j => {
+      busy = false; armed = false;
+      if (j && j.ok) { label('Sent'); btn.disabled = true; tell(esc(j.message || 'Sent.')); }
+      else { label('Let’s get it on the market'); tell(esc((j && j.error) || 'Couldn’t send it just now.'), true); }
+    }).catch(() => { busy = false; armed = false; label('Let’s get it on the market'); tell('Couldn’t send it just now. Try again in a moment.', true); });
+  }
+  btn.onclick = () => {
+    if (busy) return;
+    if (D.sample) { tell('This is the sample, so nothing is sent. On a real presentation this sends the Terms of Business.'); return; }
+    if (!idv) { tell('This presentation isn’t linked to an appraisal, so the terms can’t be sent from here.', true); return; }
+    if (armed) { send(); return; }
+    if (!st) { tell('Checking the terms…'); ready.then(decide); return; }
+    decide();
+  };
+})();
+
+if (D.token) fetch('/api/present/opened', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: D.token }), keepalive: true }).catch(() => {});
+</script>
+
+</body>
+</html>

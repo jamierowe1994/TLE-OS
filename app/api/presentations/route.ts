@@ -7,6 +7,10 @@ import {
   DECK_KINDS,
   SLIDES,
   STANDARD_FEES,
+  MAX_FIXES,
+  MAX_LOVES,
+  checkFigure,
+  cleanNotes,
   firstNameOf,
   type DeckKind,
   type PresentComparables,
@@ -78,6 +82,10 @@ type Body = {
   hidden?: string[] | null;
   /** Overrides the agent's profile headshot for this deck only. */
   agentPhoto?: string | null;
+  /** Appraisal deck only: the agent's figure, and what tenants will love / worth doing (23 Oct 2026). */
+  figure?: { ask?: unknown; low?: unknown; high?: unknown; weeks?: unknown } | null;
+  loves?: unknown;
+  fixes?: unknown;
   recipientName?: string;
   address?: string;
   postcode?: string;
@@ -150,6 +158,13 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  /* The appraisal deck's figure, checked here as well as in the builder: a
+     range the asking rent sits outside of is refused, never patched up. */
+  const fig = kind === "appraisal" ? checkFigure(body.figure) : { figure: null, error: null };
+  if (fig.error) return NextResponse.json({ ok: false, error: fig.error }, { status: 400 });
+  const loves = kind === "appraisal" ? cleanNotes(body.loves, MAX_LOVES) : [];
+  const fixes = kind === "appraisal" ? cleanNotes(body.fixes, MAX_FIXES) : [];
 
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const me = userId ? await findUserById(userId) : null;
@@ -258,6 +273,11 @@ export async function POST(req: NextRequest) {
       ? SLIDES.filter((sl) => sl.removable && body.hidden!.includes(sl.id)).map((sl): SlideId => sl.id)
       : null,
     builder: pickedIn(body.builder),
+    /* The appraisal deck's own words and figure (Claude Design deck, 23 Oct
+       2026). Absent rather than empty, so an older reader sees nothing new. */
+    ...(fig.figure ? { figure: fig.figure } : {}),
+    ...(loves.length ? { loves } : {}),
+    ...(fixes.length ? { fixes } : {}),
     createdAt: new Date().toISOString(),
   };
 
@@ -312,5 +332,9 @@ function pickedIn(b: PresentBuilderPicks | null | undefined): PresentBuilderPick
     market: b.market && typeof b.market.area === "string" ? { area: b.market.area, blocks: strs(b.market.blocks) } : null,
     hidden: SLIDES.filter((sl) => sl.removable && strs(b.hidden).includes(sl.id)).map((sl): SlideId => sl.id),
     rmGuide: guideIn(b.rmGuide),
+    /* Kept only when they would pass on the deck itself. */
+    figure: checkFigure(b.figure).figure,
+    loves: cleanNotes(b.loves, MAX_LOVES),
+    fixes: cleanNotes(b.fixes, MAX_FIXES),
   };
 }

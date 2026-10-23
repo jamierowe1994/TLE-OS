@@ -80,6 +80,9 @@ export default async function PresentPage({
        real link. The before-and-after harness (?embed=1) still frames the
        slide deck, which is the only thing it knows how to step through. */
     if (asked === "pre-appraisal" && !frame && canBePack(deck)) redirect("/present/sample/pack");
+    /* THE APPRAISAL DECK IS JAMES'S CLAUDE DESIGN DECK (23 Oct 2026), here as
+       on a real link. The before-and-after harness still frames the old one. */
+    if (asked === "appraisal" && !frame) redirect("/present/sample/deck");
     if (asked === "pre-appraisal" && !frame) {
       return (
         <>
@@ -128,6 +131,9 @@ export default async function PresentPage({
      sent as. */
   if (deckKind(deck) === "pre-appraisal" && deck.look !== "house" && canBePack(deck)) redirect(`/present/${encodeURIComponent(row.token)}/pack`);
   if (deckKind(deck) === "pre-appraisal" && deck.look !== "house") return <PreAppraisalBrochure token={row.token} deck={deck} />;
+  /* The appraisal deck is James's twelve-slide design (Claude Design, 23 Oct
+     2026), served as its own page like the pack. Post-appraisal is untouched. */
+  if (deckKind(deck) === "appraisal") redirect(`/present/${encodeURIComponent(row.token)}/deck`);
   return <PresentDeck token={row.token} deck={deck} slides={slidesFor(deck)} />;
 }
 

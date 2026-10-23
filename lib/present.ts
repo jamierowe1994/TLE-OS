@@ -395,7 +395,75 @@ export type PresentDeck = {
    * the changed ones.
    */
   figuresUpdatedAt?: string | null;
+  /**
+   * THE FIGURE, typed by the agent in the builder before the appraisal deck is
+   * made (James, 23 Oct 2026). The design's figure slide and the cover's
+   * suggested-rent chip are drawn from it; deposit, holding fee and a year's
+   * rent are worked out from `ask` on the page. Absent on every deck made
+   * before then, and the deck then leaves those parts out. Appraisal deck only.
+   */
+  figure?: PresentFigure | null;
+  /** "What tenants will love": up to three, the agent's own words. Empty hides that part of the slide. */
+  loves?: PresentNote[] | null;
+  /** "Worth doing before we list": up to two, the agent's own words. */
+  fixes?: PresentNote[] | null;
 };
+
+/** The agent's figure: asking rent, its range (low ≤ ask ≤ high), all £ pcm, and time to let in words. */
+export type PresentFigure = { ask: number; low: number; high: number; weeks: string };
+
+/** One "love" or "fix": a title and one line under it. */
+export type PresentNote = { title: string; line: string };
+
+export const MAX_LOVES = 3;
+export const MAX_FIXES = 2;
+
+const asPounds = (v: unknown): number | null => {
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[£,\s]/g, "")) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+};
+const tidy = (v: unknown, max: number) =>
+  typeof v === "string"
+    ? v
+        .replace(/[—―]/g, " - ")
+        .replace(/(\S)–(\S)/g, "$1-$2")
+        .replace(/–/g, " - ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, max)
+    : "";
+
+/**
+ * The figure as typed, checked. Nothing typed is `null` (the deck leaves the
+ * figure out); something typed but wrong is an error to show the agent, never
+ * a figure quietly patched up. Used by the builder and again by the server.
+ */
+export function checkFigure(raw: { ask?: unknown; low?: unknown; high?: unknown; weeks?: unknown } | null | undefined):
+  | { figure: PresentFigure | null; error: null }
+  | { figure: null; error: string } {
+  if (!raw) return { figure: null, error: null };
+  const typed = [raw.ask, raw.low, raw.high, raw.weeks].some((x) => (typeof x === "number" ? true : typeof x === "string" && x.trim() !== ""));
+  if (!typed) return { figure: null, error: null };
+  const ask = asPounds(raw.ask);
+  const low = asPounds(raw.low);
+  const high = asPounds(raw.high);
+  const weeks = tidy(raw.weeks, 40);
+  if (ask == null) return { figure: null, error: "Put in the asking rent, in pounds a month." };
+  if (low == null || high == null) return { figure: null, error: "Put in the low and the high end of the range." };
+  if (low > ask || ask > high) return { figure: null, error: "The asking rent has to sit inside the range: low, then asking, then high." };
+  if (high > ask * 3) return { figure: null, error: "That range looks too wide. Check the figures." };
+  if (!weeks) return { figure: null, error: "Say how long it should take to let, for example 2 to 3 weeks." };
+  return { figure: { ask, low, high, weeks }, error: null };
+}
+
+/** The loves or fixes as typed: blank rows dropped, a title needed, no em dashes, at most `max`. */
+export function cleanNotes(raw: unknown, max: number): PresentNote[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => ({ title: tidy((r as PresentNote)?.title, 80), line: tidy((r as PresentNote)?.line, 160) }))
+    .filter((r) => r.title)
+    .slice(0, max);
+}
 
 export type PresentBuilderPicks = {
   comparables: string[];
@@ -404,6 +472,10 @@ export type PresentBuilderPicks = {
   hidden: SlideId[];
   /** The attached Rightmove guide, so Update opens with it. lib/rm-guide. */
   rmGuide?: import("./rm-guide").RmGuide | null;
+  /** The appraisal deck's figure, loves and fixes, so Update opens with them typed in. */
+  figure?: PresentFigure | null;
+  loves?: PresentNote[] | null;
+  fixes?: PresentNote[] | null;
 };
 
 /* ───────────────────────── the words ───────────────────────── */
