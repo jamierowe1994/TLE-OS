@@ -30,7 +30,8 @@ import { isGif, previewOf, TEAM_GIFS } from "@/lib/chat-gif";
 type Face = { id: string; name: string; photo: string | null };
 type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number; faces: Face[]; archived: boolean };
 type Thread = { key: string; kind: "landlord" | "tenant"; name: string; about: string; last: { body: string; from: "customer" | "agent"; at: string }; unread: number; archived: boolean };
-type TeamMsg = { id: string; authorId: string; author: string; photo: string | null; body: string; question: boolean; at: string; replies: number };
+type Quote = { id: string; authorId: string; author: string; body: string };
+type TeamMsg = { id: string; authorId: string; author: string; photo: string | null; body: string; question: boolean; at: string; replies: number; quote?: Quote | null };
 type CustomerMsg = { id: string; from: "customer" | "agent"; body: string; at: string; seen?: boolean };
 type Person = { id: string; name: string; photo: string | null; town: string | null; miles: number | null };
 type Tab = "team" | "customers";
@@ -722,6 +723,9 @@ function RoomPane({
   const [otherRead, setOtherRead] = useState<string | null>(null);
   /* Who else is writing right now (the bubble that rises from the bottom). */
   const [typing, setTyping] = useState<string[]>([]);
+  /* The message being replied to, shown above the box until sent or dropped. */
+  const [replying, setReplying] = useState<TeamMsg | null>(null);
+  useEffect(() => setReplying(null), [id, thread]);
 
   const url = `/api/m/rooms/${encodeURIComponent(id)}${thread ? `?thread=${encodeURIComponent(thread)}` : ""}`;
   const load = useCallback(
@@ -794,11 +798,12 @@ function RoomPane({
     const j = (await fetch(`/api/m/rooms/${encodeURIComponent(id)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, question: !thread && asQuestion, replyTo: thread }),
+      body: JSON.stringify({ text, question: !thread && asQuestion, replyTo: thread, quoteOf: replying?.id ?? null }),
     })
       .then((r) => r.json())
       .catch(() => ({ ok: false, error: "No connection. Your message was not sent." }))) as { ok?: boolean; error?: string; message?: TeamMsg };
     if (!j.ok || !j.message) return j.error ?? "Your message was not sent.";
+    setReplying(null);
     setData((d) => (d ? { ...d, messages: [...d.messages, j.message!] } : d));
     onRead();
     return null;
@@ -971,6 +976,8 @@ function RoomPane({
               question: m.question && !thread ? { replies: m.replies, open: () => onOpenThread(m.id) } : undefined,
               /* Ticks only between two people. */
               tick: otherRead && m.authorId === data.me ? (m.at <= otherRead ? "seen" : "sent") : undefined,
+              quote: m.quote ? { id: m.quote.id, who: m.quote.authorId === data.me ? "You" : m.quote.author, body: m.quote.body } : undefined,
+              onReply: () => setReplying(m),
             }))}
             typing={typing.length ? { names: typing, pair: Boolean(otherRead), face: otherRead ? data.members.find((x) => x.id !== data.me) ?? null : null } : null}
             empty={thread ? "No answers yet. Be the first." : general ? "Nobody has said anything yet. Start it off." : "Say hello to your huddle."}
@@ -982,8 +989,10 @@ function RoomPane({
         <Composer
           key={`${id}|${thread ?? ""}`}
           placeholder={thread ? "Write an answer..." : general ? "Say something to everyone..." : `Message ${data.room.name}...`}
-          canAsk={general && !thread}
+          canAsk={general && !thread && !replying}
           gifs
+          replying={replying ? { who: replying.authorId === data.me ? "yourself" : replying.author, body: replying.body } : null}
+          onCancelReply={() => setReplying(null)}
           onSend={(text, q) => {
             lastPing.current = 0;
             return send(text, q);
@@ -1101,7 +1110,31 @@ type Item = {
   question?: { replies: number; open: () => void };
   /** My message in a chat of two: sent, or seen by them (WhatsApp's ticks). */
   tick?: "sent" | "seen";
+  /** The message this one replies to, greyed above it in the bubble. */
+  quote?: { id: string; who: string; body: string };
+  /** Hovering offers Reply; absent where replying to one message is not a thing. */
+  onReply?: () => void;
 };
+
+/** What a quote shows of a message: a GIF is a word, not a link. */
+const quoteText = (body: string) => (isGif(body) ? "GIF" : body);
+
+/** Bring the quoted message into view and flash it, as WhatsApp does. */
+function jumpTo(id: string) {
+  const el = document.getElementById(`msg-${id}`);
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.animate([{ backgroundColor: "rgba(0,0,0,0.07)" }, { backgroundColor: "rgba(0,0,0,0)" }], { duration: 1400, delay: 250, easing: "ease-out" });
+}
+
+function ReplyIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.5 8 5 12.5 9.5 17" />
+      <path d="M5.5 12.5H14a5 5 0 0 1 5 5V19" />
+    </svg>
+  );
+}
 
 /** One grey tick sent, two blue ticks seen - WhatsApp's own shapes and blue. */
 function Ticks({ seen }: { seen: boolean }) {
@@ -1190,19 +1223,37 @@ function Bubbles({ items, empty, typing = null }: { items: Item[]; empty: string
           );
         const { m, head, tail } = r;
         const gif = isGif(m.body);
+        const quote = m.quote && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              jumpTo(m.quote!.id);
+            }}
+            className={`mb-1.5 block w-full min-w-[140px] rounded-lg border-l-[3px] px-2.5 py-1.5 text-left text-[12.5px] leading-snug transition-opacity hover:opacity-80 ${
+              m.mine && !gif ? "border-white/60 bg-white/15 text-white/80" : "border-accent-dark/60 bg-black/[0.05] text-muted"
+            }`}
+          >
+            <span className={`block text-[11.5px] font-semibold ${m.mine && !gif ? "text-white/90" : "text-accent-dark"}`}>{m.quote.who}</span>
+            <span className="line-clamp-2 whitespace-pre-wrap break-words">{quoteText(m.quote.body)}</span>
+          </button>
+        );
         const bubble = `max-w-[min(74%,680px)] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-left text-[14.5px] leading-relaxed ${
           m.mine ? "rounded-br-md bg-accent-dark text-white" : "rounded-bl-md bg-[var(--hud-them)] text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
         }`;
         const content = gif ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={m.body.trim()}
-            alt="GIF"
-            className="block max-h-[220px] max-w-[260px] rounded-2xl bg-panel object-contain"
-            /* A picture arriving after the scroll to the newest pushes it out of
-               view; one of the last few keeps the bottom in view as it lands. */
-            onLoad={() => items.slice(-3).some((x) => x.id === m.id) && end.current?.scrollIntoView({ block: "end" })}
-          />
+          <div className="flex max-w-[260px] flex-col">
+            {quote}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={m.body.trim()}
+              alt="GIF"
+              className="block max-h-[220px] max-w-[260px] rounded-2xl bg-panel object-contain"
+              /* A picture arriving after the scroll to the newest pushes it out of
+                 view; one of the last few keeps the bottom in view as it lands. */
+              onLoad={() => items.slice(-3).some((x) => x.id === m.id) && end.current?.scrollIntoView({ block: "end" })}
+            />
+          </div>
         ) : m.question ? (
           <button type="button" onClick={m.question.open} className={`${bubble} transition-opacity hover:opacity-90`}>
             {m.body}
@@ -1211,14 +1262,29 @@ function Bubbles({ items, empty, typing = null }: { items: Item[]; empty: string
             </span>
           </button>
         ) : (
-          <div className={bubble}>{m.body}</div>
+          <div className={bubble}>
+            {quote}
+            {m.body}
+          </div>
         );
         return (
-          <li key={m.id} className={`flex flex-col ${m.mine ? "items-end" : "items-start"} ${head ? "mt-2" : ""}`}>
+          <li key={m.id} id={`msg-${m.id}`} className={`group flex flex-col rounded-xl ${m.mine ? "items-end" : "items-start"} ${head ? "mt-2" : ""}`}>
             {!m.mine && head && <span className="mb-1 ml-11 text-[11.5px] font-medium text-muted">{m.who}</span>}
             <div className={`flex max-w-full items-end gap-2 ${m.mine ? "flex-row-reverse" : ""}`}>
               {!m.mine && (tail ? <Avatar name={m.who} photo={m.photo} size={28} tone={m.tone ?? toneOf(m.whoId)} /> : <span className="w-7 shrink-0" />)}
               {content}
+              {m.onReply && (
+                /* Shown on hover; always faintly there on a touch screen, which has no hover. */
+                <button
+                  type="button"
+                  onClick={m.onReply}
+                  aria-label={`Reply to ${m.mine ? "your message" : m.who}`}
+                  title="Reply"
+                  className="flex h-7 w-7 shrink-0 self-center items-center justify-center rounded-full text-muted opacity-0 transition-opacity hover:bg-[var(--hud-them)] hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-60"
+                >
+                  <ReplyIcon />
+                </button>
+              )}
             </div>
             {tail && (
               <span className={`mt-0.5 flex items-center text-[10.5px] text-muted ${m.mine ? "mr-2" : "ml-11"}`}>
@@ -1258,6 +1324,8 @@ function Composer({
   gifs = false,
   foot,
   footWarn = false,
+  replying = null,
+  onCancelReply,
   onSend,
   onTyping,
 }: {
@@ -1266,6 +1334,9 @@ function Composer({
   gifs?: boolean;
   foot?: string;
   footWarn?: boolean;
+  /** The message being replied to, held above the box until sent or dropped. */
+  replying?: { who: string; body: string } | null;
+  onCancelReply?: () => void;
   onSend: (text: string, asQuestion?: boolean) => Promise<string | null>;
   /** Told when the box goes from empty to written in, and back. */
   onTyping?: (hasText: boolean) => void;
@@ -1278,6 +1349,11 @@ function Composer({
   const box = useRef<HTMLTextAreaElement | null>(null);
   const wrap = useRef<HTMLFormElement | null>(null);
   useEffect(() => box.current?.focus(), []);
+  /* Pressing Reply puts you in the box, ready to write. */
+  const replyKey = replying ? `${replying.who}|${replying.body}` : "";
+  useEffect(() => {
+    if (replyKey) box.current?.focus();
+  }, [replyKey]);
 
   /* A click anywhere else closes the emoji or GIF tray. */
   useEffect(() => {
@@ -1331,6 +1407,28 @@ function Composer({
       {pop === "emoji" && <EmojiTray onPick={addEmoji} />}
       {pop === "gif" && <GifTray busy={busy} onPick={(url) => void send(url)} />}
       {err && <p className="mx-auto mb-2 max-w-[1040px] text-[12px] text-accent-dark">{err}</p>}
+      {replying && (
+        <div className="mx-auto mb-2 flex max-w-[1040px] items-start gap-2 rounded-xl border-l-[3px] border-accent-dark/60 bg-black/[0.04] py-1.5 pl-2.5 pr-1.5">
+          <span className="mt-0.5 shrink-0 text-muted">
+            <ReplyIcon size={14} />
+          </span>
+          <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-muted">
+            <span className="block text-[11.5px] font-semibold text-accent-dark">Replying to {replying.who}</span>
+            <span className="line-clamp-2 whitespace-pre-wrap break-words">{quoteText(replying.body)}</span>
+          </span>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Stop replying"
+            title="Stop replying"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-panel hover:text-ink"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+      )}
       <div className="mx-auto flex max-w-[1040px] items-end gap-1.5 rounded-2xl border border-[var(--hud-line-strong)] bg-[var(--hud-input)] p-1.5 pl-2 focus-within:border-ink/40">
         <button
           type="button"
@@ -1368,6 +1466,8 @@ function Composer({
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               void send();
+            } else if (e.key === "Escape" && replying && !pop) {
+              onCancelReply?.();
             }
           }}
           rows={1}

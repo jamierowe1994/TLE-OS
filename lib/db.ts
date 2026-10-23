@@ -4443,6 +4443,9 @@ CREATE TABLE IF NOT EXISTS os_team_messages (
 );
 CREATE INDEX IF NOT EXISTS os_team_messages_room
   ON os_team_messages (room_id, created_at);
+-- quote_of: the message this one replies to, shown above it as WhatsApp does
+-- (James, 23 Oct 2026). Not reply_to, which is an answer in a question's thread.
+ALTER TABLE os_team_messages ADD COLUMN IF NOT EXISTS quote_of TEXT;
 CREATE INDEX IF NOT EXISTS os_team_messages_reply
   ON os_team_messages (reply_to) WHERE reply_to IS NOT NULL;
 

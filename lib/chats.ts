@@ -125,8 +125,13 @@ export async function workThreads(me: OsUser): Promise<WorkThread[]> {
   const appraisals = await Promise.all(landlord.map((r) => getAppraisal(r.appraisal_id).catch(() => null)));
   landlord.forEach((r, i) => {
     const ma = appraisals[i];
-    const nobodys = !ma?.agent?.trim();
-    if (!r.to_me && !same(ma?.agent, me.name) && !(owner && nobodys)) return;
+    /* No appraisal, no thread: landlordThread cannot open one whose file was
+       deleted (the test files cleared on 14 Oct), so listing it only led to
+       "not one of yours" - and a missing file read as nobody's, which put
+       Howard's test landlord in an owner's list (James, 23 Oct 2026). */
+    if (!ma) return;
+    const nobodys = !ma.agent?.trim();
+    if (!r.to_me && !same(ma.agent, me.name) && !(owner && nobodys)) return;
     const key = `landlord:${r.appraisal_id}`;
     const at = iso(r.sent_at)!;
     const st = states.get(key);
@@ -134,8 +139,8 @@ export async function workThreads(me: OsUser): Promise<WorkThread[]> {
     out.push({
       key,
       kind: "landlord",
-      name: r.name || ma?.landlord || "A landlord",
-      about: ma?.address ?? "",
+      name: r.name || ma.landlord || "A landlord",
+      about: ma.address ?? "",
       last: { body: r.body, from: r.direction === "agent" ? "agent" : "customer", at },
       unread: r.unread,
       archived: Boolean(st?.archived),
@@ -367,7 +372,11 @@ export interface TeamMessage {
   question: boolean;
   at: string;
   replies: number;
+  /** The message this one replies to, drawn greyed above it. */
+  quote: TeamQuote | null;
 }
+
+export type TeamQuote = { id: string; authorId: string; author: string; body: string };
 
 /**
  * WHO RUNS A GROUP CHAT (James, 18 Oct 2026: "let's say Susan and I are both
@@ -436,11 +445,13 @@ export async function deleteRoomForEveryone(roomId: string): Promise<void> {
 }
 
 export async function roomMessages(me: OsUser, roomId: string, replyTo: string | null, peek = false): Promise<TeamMessage[]> {
-  const rows = await q<{ id: string; author_id: string; author_name: string; photo: string | null; body: string; question: boolean; created_at: Date; replies: number }>(
+  const rows = await q<{ id: string; author_id: string; author_name: string; photo: string | null; body: string; question: boolean; created_at: Date; replies: number; q_id: string | null; q_author_id: string | null; q_author: string | null; q_body: string | null }>(
     `SELECT m.id, m.author_id, m.author_name, ${FACE_SQL("u")} AS photo, m.body, m.question, m.created_at,
-            (SELECT count(*)::int FROM os_team_messages r WHERE r.reply_to = m.id) AS replies
+            (SELECT count(*)::int FROM os_team_messages r WHERE r.reply_to = m.id) AS replies,
+            qm.id AS q_id, qm.author_id AS q_author_id, qm.author_name AS q_author, qm.body AS q_body
        FROM os_team_messages m
        LEFT JOIN os_users u ON u.id = m.author_id
+       LEFT JOIN os_team_messages qm ON qm.id = m.quote_of AND qm.room_id = m.room_id
       WHERE m.room_id = $1 AND ${replyTo ? "(m.reply_to = $2 OR m.id = $2)" : "m.reply_to IS NULL"}
         AND m.created_at > COALESCE((SELECT cleared_at FROM os_chat_state c WHERE c.user_id = $${replyTo ? 3 : 2} AND c.chat_key = 'room:' || m.room_id), 'epoch')
       ORDER BY m.created_at DESC
@@ -455,18 +466,45 @@ export async function roomMessages(me: OsUser, roomId: string, replyTo: string |
      ON CONFLICT (room_id, user_id) DO UPDATE SET read_at = NOW()`,
     [roomId, me.id]
   ).catch(() => null);
-  return rows.reverse().map((r) => ({ id: r.id, authorId: r.author_id, author: r.author_name, photo: r.photo, body: r.body, question: r.question, at: iso(r.created_at)!, replies: r.replies }));
+  return rows.reverse().map((r) => ({
+    id: r.id,
+    authorId: r.author_id,
+    author: r.author_name,
+    photo: r.photo,
+    body: r.body,
+    question: r.question,
+    at: iso(r.created_at)!,
+    replies: r.replies,
+    quote: r.q_id ? { id: r.q_id, authorId: r.q_author_id ?? "", author: r.q_author ?? "", body: r.q_body ?? "" } : null,
+  }));
 }
 
-export async function postMessage(me: OsUser, roomId: string, body: string, question: boolean, replyTo: string | null): Promise<TeamMessage> {
+/**
+ * Say something. `quoteOf` is a message being replied to: it is kept only if
+ * it is in the same room, so a reply can never quote a chat you are not in.
+ */
+export async function postMessage(me: OsUser, roomId: string, body: string, question: boolean, replyTo: string | null, quoteOf: string | null = null): Promise<TeamMessage> {
+  const quoted = quoteOf
+    ? (await q<{ id: string; author_id: string; author_name: string; body: string }>(`SELECT id, author_id, author_name, body FROM os_team_messages WHERE id = $1 AND room_id = $2`, [quoteOf, roomId]).catch(() => []))[0] ?? null
+    : null;
   const rows = await q<{ id: string; created_at: Date }>(
-    `INSERT INTO os_team_messages (id, room_id, author_id, author_name, body, question, reply_to)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at`,
-    [uid(), roomId, me.id, me.name, body, question && !replyTo, replyTo]
+    `INSERT INTO os_team_messages (id, room_id, author_id, author_name, body, question, reply_to, quote_of)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`,
+    [uid(), roomId, me.id, me.name, body, question && !replyTo, replyTo, quoted?.id ?? null]
   );
   await q(`UPDATE os_team_rooms SET last_at = NOW() WHERE id = $1`, [roomId]).catch(() => null);
   const face = await q<{ photo: string | null }>(`SELECT ${FACE_SQL("u")} AS photo FROM os_users u WHERE u.id = $1`, [me.id]).catch(() => []);
-  return { id: rows[0]!.id, authorId: me.id, author: me.name, photo: face[0]?.photo ?? null, body, question: question && !replyTo, at: iso(rows[0]!.created_at)!, replies: 0 };
+  return {
+    id: rows[0]!.id,
+    authorId: me.id,
+    author: me.name,
+    photo: face[0]?.photo ?? null,
+    body,
+    question: question && !replyTo,
+    at: iso(rows[0]!.created_at)!,
+    replies: 0,
+    quote: quoted ? { id: quoted.id, authorId: quoted.author_id, author: quoted.author_name, body: quoted.body } : null,
+  };
 }
 
 export async function createHuddle(me: OsUser, name: string, userIds: string[]): Promise<string> {

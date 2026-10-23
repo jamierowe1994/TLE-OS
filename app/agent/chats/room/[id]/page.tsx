@@ -16,7 +16,7 @@ import { Bubbles, ChatHead, ChatShell, Composer, Face, type Bubble } from "../..
  *             Invite more (from Find Your Local Agents) and Leave.
  */
 
-type Msg = { id: string; authorId: string; author: string; photo?: string | null; body: string; question: boolean; at: string; replies: number };
+type Msg = { id: string; authorId: string; author: string; photo?: string | null; body: string; question: boolean; at: string; replies: number; quote?: { authorId: string; author: string; body: string } | null };
 
 export default function PhoneRoom() {
   const params = useParams<{ id: string }>();
@@ -138,6 +138,7 @@ export default function PhoneRoom() {
     onTap: m.question && !thread ? () => open(m.id) : undefined,
     /* Ticks only between two people. */
     tick: otherRead && m.authorId === data?.me ? (m.at <= otherRead ? "seen" : "sent") : undefined,
+    quote: m.quote ? { who: m.quote.authorId === data?.me ? "You" : m.quote.author, body: m.quote.body } : undefined,
   }));
   const other = otherRead ? data?.members.find((x) => x.id !== data.me) ?? null : null;
 

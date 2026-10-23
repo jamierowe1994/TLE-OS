@@ -53,6 +53,8 @@ export interface Bubble {
   onTap?: () => void;
   /** My message in a chat of two: sent, or seen by them (WhatsApp's ticks, as in the OS's Huddles). */
   tick?: "sent" | "seen";
+  /** The message this one replies to (a reply made in the OS's Huddles), greyed above it. */
+  quote?: { who: string; body: string };
 }
 
 /** One grey tick sent, two blue ticks seen - WhatsApp's shapes and blue. */
@@ -116,8 +118,17 @@ export function Bubbles({ items, empty, typing = null }: { items: Bubble[]; empt
                   : { background: "var(--m-card)", borderBottomLeftRadius: 8 }
               }
             >
+              {b.quote && (
+                <span
+                  className={`mb-1.5 block rounded-xl border-l-[3px] px-2.5 py-1.5 text-[13.5px] leading-snug ${b.mine ? "border-white/60 bg-white/15 text-white/80" : "bg-black/[0.05] text-muted"}`}
+                  style={b.mine ? undefined : { borderColor: "var(--m-coral)" }}
+                >
+                  <span className={`block text-[12.5px] font-semibold ${b.mine ? "text-white/90" : ""}`} style={b.mine ? undefined : { color: "var(--m-coral)" }}>{b.quote.who}</span>
+                  <span className="line-clamp-2">{isGif(b.quote.body) ? "GIF" : b.quote.body}</span>
+                </span>
+              )}
               {b.body}
-              {b.foot && <span className={`mt-1.5 block text-[12.5px] font-semibold ${b.mine ? "text-white/85" : ""}`} style={b.mine ? undefined : { color: "var(--m-coral)" }}>{b.foot}</span>}
+              {b.foot &&<span className={`mt-1.5 block text-[12.5px] font-semibold ${b.mine ? "text-white/85" : ""}`} style={b.mine ? undefined : { color: "var(--m-coral)" }}>{b.foot}</span>}
             </button>
             )}
             <span className={`mt-1 flex items-center text-[11.5px] text-muted ${b.mine ? "mr-2" : "ml-3"}`}>

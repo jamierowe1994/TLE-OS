@@ -5,7 +5,8 @@ import { canSee, deleteRoomForEveryone, leaveRoom, pairReadAt, postMessage, rena
 /**
  * One room of the team's chat (3 Oct 2026): General or a huddle.
  *   GET ?thread=<id>                        the room (or one question and its answers), marked read
- *   POST { text, question?, replyTo? }      say something; a question in General, or an answer to one
+ *   POST { text, question?, replyTo?, quoteOf? }  say something; a question in General, or an answer to one;
+ *                                           quoteOf replies to one message, shown above it
  *   PATCH  { name }                         rename a huddle (admins only)
  *   DELETE ?everyone=1                      leave a huddle, or delete it for all of its people (admins only)
  * Read as the person themselves, never as someone viewed-as.
@@ -38,10 +39,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (viewingAs) return NextResponse.json({ ok: false, error: "You are viewing as someone else." }, { status: 423 });
   const room = await canSee(actor, id);
   if (!room) return NextResponse.json({ ok: false, error: "That chat is not one you are in." }, { status: 404 });
-  const b = (await req.json().catch(() => ({}))) as { text?: string; question?: boolean; replyTo?: string };
+  const b = (await req.json().catch(() => ({}))) as { text?: string; question?: boolean; replyTo?: string; quoteOf?: string };
   const text = String(b.text ?? "").trim().slice(0, 4000);
   if (!text) return NextResponse.json({ ok: false, error: "Write something first." }, { status: 400 });
-  const message = await postMessage(actor, id, text, Boolean(b.question), b.replyTo ? String(b.replyTo) : null);
+  const message = await postMessage(actor, id, text, Boolean(b.question), b.replyTo ? String(b.replyTo) : null, b.quoteOf ? String(b.quoteOf) : null);
   await setTyping(actor, `room:${id}`, false);
   return NextResponse.json({ ok: true, message });
 }
