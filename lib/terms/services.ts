@@ -11,6 +11,9 @@ import type { Country } from "@/lib/terms/types";
  * October 2026 has no plain Full Management column any more: Rent Collection
  * now carries the 12% and management is the Experts Management Service at
  * 14%. December 2024's four options are gone from the drawer with it.
+ *
+ * England's October 2026 table carries the same three services at the same
+ * fees, so both countries share the one list until either table changes.
  */
 export interface ServiceOption {
   id: string;
@@ -19,14 +22,16 @@ export interface ServiceOption {
   managementFee: string;
 }
 
-const SCOTLAND: ServiceOption[] = [
+const OCT26: ServiceOption[] = [
   { id: "tenant-find", label: "Tenant Find", setUpFee: "75% of the first month's rent + VAT (minimum £500 + VAT)", managementFee: "Not applicable - Tenant Find" },
   { id: "rent-collection", label: "Rent Collection", setUpFee: "50% of the first month's rent + VAT (minimum £500 + VAT)", managementFee: "12% + VAT (14.4% inc VAT) of the rent each month" },
   { id: "experts-management", label: "Experts Management Service", setUpFee: "50% of the first month's rent + VAT (minimum £500 + VAT)", managementFee: "14% + VAT (16.8% inc VAT) of the rent each month" },
 ];
 
+const BY_COUNTRY: Record<Country, ServiceOption[]> = { scotland: OCT26, england: OCT26 };
+
 export function servicesFor(country: Country): ServiceOption[] {
-  return country === "scotland" ? SCOTLAND : SCOTLAND;
+  return BY_COUNTRY[country];
 }
 
 /**

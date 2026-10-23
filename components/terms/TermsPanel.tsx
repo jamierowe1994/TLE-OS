@@ -67,6 +67,7 @@ export default function TermsPanel({
   landlords = [],
   agentLarn = null,
   serviceOnRecord = null,
+  scottish = null,
   onChanged,
   more,
 }: {
@@ -78,6 +79,8 @@ export default function TermsPanel({
   landlords?: Array<{ name?: string | null; email?: string | null; phone?: string | null }>;
   agentLarn?: string | null;
   serviceOnRecord?: string | null;
+  /** What the home's own record says (its Scotland flag); null to go by the address alone. */
+  scottish?: boolean | null;
   onChanged?: () => void;
   /** Beside the button while nothing has gone (the listing's "Upload a signed copy"). */
   more?: React.ReactNode;
@@ -266,6 +269,7 @@ export default function TermsPanel({
           landlords={landlords}
           agentLarn={agentLarn}
           serviceOnRecord={serviceOnRecord}
+          scottish={scottish}
           editions={editions}
           preview={preview}
           onClose={() => setSending(false)}
@@ -292,6 +296,7 @@ function SendDrawer({
   landlords,
   agentLarn,
   serviceOnRecord,
+  scottish,
   editions,
   preview,
   onClose,
@@ -304,13 +309,23 @@ function SendDrawer({
   landlords: Array<{ name?: string | null; email?: string | null; phone?: string | null }>;
   agentLarn: string | null;
   serviceOnRecord: string | null;
+  scottish: boolean | null;
   editions: Editions;
   preview: boolean;
   onClose: () => void;
   onMade: (t: StaffTerms) => void;
 }) {
-  const [country, setCountry] = useState<Country>(isScottish(propertyAddress) || !editions.england ? "scotland" : "england");
+  /* WHICH TERMS FOLLOWS THE ADDRESS (James, 23 Oct 2026): "If it is in
+     Scotland, we'll offer them Scottish terms, and if they're anywhere else in
+     the UK, we'll offer the English terms." Scottish by the home's own record,
+     or by the postcode in the address as it's typed here; everything else is
+     England. The agent can still pick the other one (a border postcode), and
+     from then on it stays where they put it. */
   const [address, setAddress] = useState(propertyAddress);
+  const [chosen, setChosen] = useState<Country | null>(null);
+  const byAddress: Country = (address.trim() === propertyAddress.trim() && scottish != null ? scottish : isScottish(address)) ? "scotland" : "england";
+  const country: Country = chosen ?? (editions[byAddress] ? byAddress : byAddress === "scotland" ? "england" : "scotland");
+  const setCountry = (c: Country) => setChosen(c);
   const known = landlords.filter((l) => l.name || l.email).map((l) => ({ name: l.name ?? "", email: l.email ?? "", phone: l.phone ?? "" }));
   const [people, setPeople] = useState<Person[]>(known.length ? known : [{ name: "", email: "", phone: "" }]);
   const start = guessService(country, serviceOnRecord);
@@ -372,6 +387,7 @@ function SendDrawer({
         <div className="nl-drawer-body">
           <div className="nl-field">
             <span>Which terms</span>
+            <small>{chosen ? "You picked these." : byAddress === "scotland" ? "Scotland, from the property's address." : "England, from the property's address. Anywhere outside Scotland gets the England terms."}</small>
             <div className="nl-choice-row">
               <button type="button" className={`nl-choice${country === "scotland" ? " is-on" : ""}`} onClick={() => setCountry("scotland")} disabled={!editions.scotland}>
                 <span className="font-medium">Scotland</span>
@@ -379,7 +395,7 @@ function SendDrawer({
               </button>
               <button type="button" className={`nl-choice${country === "england" ? " is-on" : ""}${editions.england ? "" : " opacity-60"}`} onClick={() => editions.england && setCountry("england")} aria-disabled={!editions.england}>
                 <span className="font-medium">England</span>
-                <small>{editions.england ? `${editions.england} wording` : "Coming soon"}</small>
+                <small>{editions.england ? `${editions.england} wording` : "Not in the OS yet"}</small>
               </button>
             </div>
           </div>

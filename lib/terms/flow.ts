@@ -83,7 +83,7 @@ export interface NewTerms {
 /** Make the contract and the agent's signing link. Nobody is emailed yet. */
 export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agentEmbedSrc: string }> {
   const doc = editionFor(n.country);
-  if (!doc) throw new TermsRefused(n.country === "england" ? "England's terms aren't in the OS yet. Scotland's are." : "There are no terms for that country yet.");
+  if (!doc) throw new TermsRefused("There are no terms for that country yet.");
   const people = n.people
     .map((p) => ({ name: p.name.trim(), email: p.email.trim(), phone: (p.phone ?? "").trim() }))
     .filter((p) => p.name || p.email);
