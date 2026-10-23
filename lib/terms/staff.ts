@@ -12,6 +12,7 @@ export function forStaff(t: TermsRow, origin: string) {
   const asked = (edition(t.version)?.details ?? []).filter((f) => f.required).map((f) => f.key);
   return {
     ...t,
+    country: edition(t.version)?.country ?? "scotland",
     parties: t.parties.map((p) => ({
       key: p.key,
       name: p.name,

@@ -78,6 +78,8 @@ export interface NewTerms {
   managementFee: string;
   additionalFees?: string | null;
   people: Array<{ name: string; email: string; phone?: string | null }>;
+  /** Adjust contract: the set out now, which this one replaces once the agent signs it. */
+  replaces?: string | null;
 }
 
 /** Make the contract and the agent's signing link. Nobody is emailed yet. */
@@ -96,6 +98,12 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
   if (!n.propertyAddress.trim()) throw new TermsRefused("The terms need the property's address.");
   if (!n.serviceLevel.trim() || !n.setUpFee.trim() || !n.managementFee.trim()) throw new TermsRefused("Fill in the service and both fees before it goes.");
   if (!docusealConfigured() && !previewAllowed()) throw new TermsRefused("DocuSeal isn't connected, so terms can't be signed here.");
+  if (n.replaces) {
+    const old = await getTerms(n.replaces);
+    if (!old || old.status === "cancelled") throw new TermsRefused("The contract you're adjusting has already been withdrawn. Send a fresh one instead.");
+    if (old.status === "signed") throw new TermsRefused("Those terms are already signed, so there's nothing to adjust.");
+    if (old.agentId !== n.me.id && n.me.role !== "owner" && n.me.role !== "super_admin") throw new TermsRefused("Only the agent who sent these can adjust them.");
+  }
 
   const values: TermsValues = {
     agentName: n.me.name || n.me.email,
@@ -167,6 +175,7 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
     agentSubmitterId,
     agentEmbedSrc,
     status: "agent",
+    replaces: n.replaces ?? null,
   });
   return { terms: (await getTerms(id))!, agentEmbedSrc };
 }
@@ -214,6 +223,8 @@ export async function agentSigned(id: string, origin: string, me?: OsUser | null
     const agent = me ?? (await findUserById(t.agentId));
     if (agent) await emailParties(t, agent, origin, t.parties.map((p) => p.key));
     await markSent(id);
+    /* Adjust contract: the new one is out, so the old one's links stop now. */
+    if (t.replaces) await cancelTerms(t.replaces).catch(() => null);
   }
   return (await getTerms(id))!;
 }

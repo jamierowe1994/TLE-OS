@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
       managementFee: str("managementFee"),
       additionalFees: str("additionalFees") || null,
       people: Array.isArray(b.people) ? (b.people as Array<{ name: string; email: string; phone?: string }>) : [],
+      replaces: str("replaces") || null,
     });
     return NextResponse.json({ ok: true, terms: forStaff(made.terms, publicOrigin(req)), agentEmbedSrc: made.agentEmbedSrc });
   } catch (e) {
