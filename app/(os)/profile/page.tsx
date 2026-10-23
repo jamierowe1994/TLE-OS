@@ -22,6 +22,8 @@ import {
   THEME_LOCKED,
 } from "@/lib/theme";
 import { fetchMe, invalidateMe } from "@/lib/me";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Ico, Mast, Tabs } from "@/components/new-look/Parts";
 
 /**
  * The profile: who this agent is, how their OS looks, what keeps THEM legal,
@@ -237,6 +239,8 @@ function ConnectionTile({
 
 export default function ProfilePage() {
   const [tab, setTab] = useState<TabKey>("info");
+  /* The new look (lib/new-look "settings", 23 Oct 2026). */
+  const look = useNewLook("settings");
   /* ?tab=connections lands on that tab - the launch checklist's REX and
      email links (12 Oct 2026). */
   useEffect(() => {
@@ -419,10 +423,315 @@ export default function ProfilePage() {
     applyTheme(t);
   }
 
+  /** A headshot picked from disk: scaled, squeezed under the cap, saved at once. */
+  function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      /* Up to 1200px on the long side, uncropped (17 Sep
+         2026). It was a 256px square, and the landlord's
+         deck shows this photo 500px wide - so on a sharp
+         screen it was drawn four times its size and looked
+         fuzzy. Avatars crop it themselves with object-cover. */
+      const long = Math.max(img.width, img.height);
+      const s = Math.min(1, 1200 / long);
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * s);
+      c.height = Math.round(img.height * s);
+      const ctx = c.getContext("2d")!;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      /* Under the server's cap. A busy 1200px photo
+         can run past it at 0.86, and the server refuses it
+         where nobody sees - so step the quality down until
+         it fits rather than send something that bounces. */
+      let photo = c.toDataURL("image/jpeg", 0.86);
+      for (const quality of [0.8, 0.72, 0.64, 0.56]) {
+        if (photo.length <= PHOTO_MAX_CHARS) break;
+        photo = c.toDataURL("image/jpeg", quality);
+      }
+      save({ ...profile, photo }, true);
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+  }
+
+  /** The Team Hub's address, accepted: placed on the map so the booker can use it. */
+  async function acceptHubHome() {
+    if (!hubHome) return;
+    setPlacing(true);
+    try {
+      const r = await fetch(
+        `/api/address?geocode=${encodeURIComponent(hubHome)}`,
+        { cache: "no-store" }
+      );
+      const j = await r.json();
+      // Saved either way — a home address we can't place is
+      // still their address, and they can correct it.
+      save({
+        ...profile,
+        base: j.address ?? hubHome,
+        baseLat: j.lat ?? null,
+        baseLng: j.lng ?? null,
+      }, true);
+    } catch {
+      save({ ...profile, base: hubHome, baseLat: null, baseLng: null }, true);
+    } finally {
+      setPlacing(false);
+    }
+  }
+
   const initials = profile.name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase() || "TLE";
   const field =
     "w-full rounded-xl border border-line/80 bg-transparent px-3.5 py-2.5 text-[13.5px] outline-none transition-colors focus:border-ink";
   const label = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted";
+
+  /* ── THE NEW LOOK (lib/new-look "settings", 23 Oct 2026) ─────────────────
+     The same profile, saves and tabs, drawn the new way: a type-only header,
+     text tabs, the form beside how landlords see you, and each tab's own
+     section in the new colours. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening your profile…</p>;
+  }
+  if (look) {
+    return (
+      <div data-look="new" className="nl-page nl-rise">
+        <Mast
+          title="Your Profile"
+          blurb="Who you are on every email and listing, how your OS looks, and the paperwork that keeps you compliant, not just the properties."
+        />
+        <Tabs label="Your profile" value={tab} onChange={setTab} items={TABS.map((t) => ({ id: t.key, label: t.label }))} className="mb-8" />
+
+        <div key={tab} className="nl-pane pb-16">
+          {tab === "info" && (
+            <div className="nl-profile-grid">
+              <div className="nl-form">
+                <div className="nl-form-row">
+                  <label className="nl-field">
+                    <span>Name</span>
+                    <input value={profile.name} onChange={(e) => save({ ...profile, name: e.target.value })} />
+                  </label>
+                  <div className="nl-field">
+                    <span>Email</span>
+                    <div className="nl-locked">
+                      <Ico name="lock" size={14} />
+                      <span>{email ?? "Loading…"}</span>
+                    </div>
+                    <small>Your sign-in. It can&apos;t be changed here.</small>
+                  </div>
+                </div>
+                <div className="nl-form-row">
+                  <label className="nl-field">
+                    <span>Phone</span>
+                    <input value={profile.phone} onChange={(e) => save({ ...profile, phone: e.target.value })} />
+                  </label>
+                  <label className="nl-field">
+                    <span>Your patch</span>
+                    <input value={profile.patch} onChange={(e) => save({ ...profile, patch: e.target.value })} />
+                  </label>
+                </div>
+                <div className="nl-field">
+                  <span>Home address</span>
+                  <AddressField
+                    value={profile.base ?? ""}
+                    onChange={(v) => save({ ...profile, base: v, baseLat: null, baseLng: null })}
+                    onResolved={(a) => save({ ...profile, base: a.address, baseLat: a.lat, baseLng: a.lng }, true)}
+                  />
+                  <small>
+                    Only used to work out your drive to the first appointment of the day, so the booker can offer you a buffer. Never shown to landlords or tenants, and never on a deck or an email.
+                  </small>
+                  {hubHome && !profile.base && (
+                    <div className="nl-card mt-1 p-4">
+                      <p className="m-0 text-[13px] leading-relaxed">
+                        The Team Hub has this for you: <span className="font-medium">{hubHome}</span>
+                      </p>
+                      <button type="button" disabled={placing} onClick={() => void acceptHubHome()} className="nl-btn nl-btn--secondary nl-btn--sm mt-3">
+                        {placing ? "Placing it on the map…" : "Use this address"}
+                      </button>
+                    </div>
+                  )}
+                  {profile.base && profile.baseLat == null && (
+                    <small className="text-accent-dark">
+                      Pick one of the suggestions as you type so we can place it on the map. Typed text on its own has no coordinates, so travel time from home stays unavailable.
+                    </small>
+                  )}
+                  {profile.baseLat != null && <small>Placed on the map. The booker can measure your drive from here.</small>}
+                </div>
+                <label className="nl-field">
+                  <span>Bio</span>
+                  <textarea
+                    value={profile.bio}
+                    onChange={(e) => save({ ...profile, bio: e.target.value })}
+                    rows={4}
+                    placeholder="A couple of sentences landlords and tenants will see: who you are, how long you've been letting, what you're known for."
+                  />
+                  <small>Shows on your listings, your emails and the landlord review pages.</small>
+                </label>
+                <div className="min-h-[22px]">
+                  {saved && (
+                    <span className="nl-saved">
+                      <i /> {prefsHome.signedIn ? "Saved to your account." : "Saved in this browser."}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <aside className="nl-preview">
+                <span className="nl-eyebrow">How landlords see you</span>
+                <div className="nl-preview-card">
+                  <label className="nl-photo-pick self-start" title="Change your photo">
+                    <span className="nl-avatar nl-avatar--lg">
+                      {profile.photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={profile.photo} alt="" />
+                      ) : (
+                        initials
+                      )}
+                    </span>
+                    <span className="nl-photo-over">
+                      <Ico name="camera" size={22} />
+                    </span>
+                    <input type="file" accept="image/*" className="hidden" onChange={onPhoto} />
+                  </label>
+                  <div className="nl-preview-name">{profile.name || "Your name"}</div>
+                  <div className="nl-meta">The Letting Experts{profile.patch ? ` · ${profile.patch}` : ""}</div>
+                  <p className={`nl-preview-bio${profile.bio ? "" : " is-empty"}`}>{profile.bio || "Your bio will appear here as you type."}</p>
+                  {profile.phone && (
+                    <span className="nl-preview-contact">
+                      <Ico name="phone" size={14} /> {profile.phone}
+                    </span>
+                  )}
+                </div>
+                {pkg && (
+                  <button type="button" onClick={() => setTab("ads")} className="nl-link self-start" title="What your package includes">
+                    {pkg} package{pkg !== "Pro" ? " · upgrade" : ""}
+                  </button>
+                )}
+                <span className="nl-meta">Click the photo to change it.</span>
+              </aside>
+            </div>
+          )}
+
+          {tab === "appearance" && (
+            <div className="max-w-2xl">
+              <h2 className="nl-block-title">Light or Dark</h2>
+              <p className="nl-meta mb-4 mt-1">
+                {THEME_LOCKED ? "TLE OS is in Light for everybody for now. Dark and Auto are coming soon." : "Dark mode lives here and nowhere else. Automatic follows the clock: the screen softens from 7pm to 7am."}
+              </p>
+              <div className="nl-choice-row" role="radiogroup" aria-label="Theme">
+                {(
+                  [
+                    { id: "light", label: "Light", sub: "White pages", icon: "sun" },
+                    { id: "dark", label: "Dark", sub: "Charcoal, easy at night", icon: "moon" },
+                    { id: "auto", label: "Automatic", sub: "Dark from 7pm to 7am", icon: "auto" },
+                  ] as const
+                ).map((c) => {
+                  const lockedOut = THEME_LOCKED && c.id !== "light";
+                  const on = THEME_LOCKED ? c.id === "light" : theme === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      aria-disabled={lockedOut}
+                      onClick={() => (lockedOut ? setSoon(true) : pickTheme(c.id))}
+                      className={`nl-choice${on ? " is-on" : ""}${lockedOut ? " opacity-60" : ""}`}
+                    >
+                      <Ico name={lockedOut ? "lock" : c.icon} size={18} />
+                      <span className="font-medium">{c.label}</span>
+                      <small>{lockedOut ? "Coming soon" : c.sub}</small>
+                    </button>
+                  );
+                })}
+              </div>
+              {soon && THEME_LOCKED && <p className="nl-meta mt-3">Dark and Auto are coming soon. For now TLE OS is in Light for everybody.</p>}
+            </div>
+          )}
+
+          {tab === "custom" && <div className="nl-holder max-w-[1100px]"><CustomAttributes /></div>}
+          {tab === "automations" && <Automations look="new" />}
+          {tab === "compliance" && <PersonalCompliance look="new" />}
+
+          {tab === "connections" && (
+            <div className="max-w-3xl">
+              <p className="nl-blurb mt-0 mb-6 text-[16px] leading-[24px]">
+                The accounts and calendars that are yours rather than the agency&apos;s. Everything else the OS talks to is connected once for the whole business, so there is nothing for you to do about it.
+              </p>
+              <ul className="nl-lines nl-conn">
+                <li>
+                  <span className="nl-conn-icon"><Ico name="mail" size={17} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="nl-strong block">Microsoft 365</span>
+                    <span className="nl-meta block">Your diary and email. The calendar is yours and sends really go out.</span>
+                  </span>
+                  {setup === null ? (
+                    <span className="nl-meta">Checking…</span>
+                  ) : setup.emailConnected ? (
+                    <>
+                      <Badge tone="good" bare>Live</Badge>
+                      <button
+                        type="button"
+                        className="nl-link"
+                        onClick={async () => {
+                          await fetch("/api/auth/microsoft/disconnect", { method: "POST" }).catch(() => null);
+                          loadSetup();
+                        }}
+                      >
+                        Disconnect
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => { window.location.href = "/api/auth/microsoft/start?from=profile"; }} className="nl-btn nl-btn--primary nl-btn--sm">
+                      Connect
+                    </button>
+                  )}
+                </li>
+                <li>
+                  <span className="nl-conn-icon"><Ico name="phone" size={17} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="nl-strong block">WhatsApp Business</span>
+                    <span className="nl-meta block">Message applicants where they actually reply. Not switched on yet; when it is, you connect your own number here.</span>
+                  </span>
+                  <Badge tone="neutral" bare>Not connected</Badge>
+                </li>
+              </ul>
+              <div className="nl-holder mt-6">
+                {setup?.emailConnected === true && <MailboxTest defaultTo={setup?.email ?? ""} />}
+                {setup?.emailConnected === true && <EmailFooterSetup mailbox={setup?.email ?? ""} />}
+                <PersonalCalendar />
+                <RexSignIn onChange={loadSetup} />
+              </div>
+            </div>
+          )}
+
+          {tab === "ads" && (
+            <div className="max-w-2xl">
+              <h2 className="nl-section-title">Put your homes in front of everyone scrolling</h2>
+              <p className="nl-blurb">
+                Pro runs Facebook and Instagram campaigns for your listings and your landlord offers: built, targeted and reported without you touching an ads manager.
+              </p>
+              <ul className="nl-lines my-6">
+                <li>A campaign for every new listing</li>
+                <li>A landlord-switch ad always running</li>
+                <li>The cost per lead on your dashboard</li>
+              </ul>
+              <button type="button" onClick={() => setAskedPro(true)} className="nl-btn nl-btn--primary">
+                Upgrade to Pro
+              </button>
+              {askedPro && (
+                <p className="nl-cell nl-cell--manilla mt-4 text-[14px] leading-relaxed">
+                  Pro sits on your licence rather than in here, so it is Susan who turns it on. Ask her and it is live on your next sign-in.
+                </p>
+              )}
+              <p className="nl-meta mt-4">Pro sits on top of your monthly licence.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -491,38 +800,7 @@ export default function ProfilePage() {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const img = new Image();
-                    img.onload = () => {
-                      /* Up to 1200px on the long side, uncropped (17 Sep
-                         2026). It was a 256px square, and the landlord's
-                         deck shows this photo 500px wide - so on a sharp
-                         screen it was drawn four times its size and looked
-                         fuzzy. Avatars crop it themselves with object-cover. */
-                      const long = Math.max(img.width, img.height);
-                      const s = Math.min(1, 1200 / long);
-                      const c = document.createElement("canvas");
-                      c.width = Math.round(img.width * s);
-                      c.height = Math.round(img.height * s);
-                      const ctx = c.getContext("2d")!;
-                      ctx.imageSmoothingQuality = "high";
-                      ctx.drawImage(img, 0, 0, c.width, c.height);
-                      /* Under the server's cap. A busy 1200px photo
-                         can run past it at 0.86, and the server refuses it
-                         where nobody sees - so step the quality down until
-                         it fits rather than send something that bounces. */
-                      let photo = c.toDataURL("image/jpeg", 0.86);
-                      for (const quality of [0.8, 0.72, 0.64, 0.56]) {
-                        if (photo.length <= PHOTO_MAX_CHARS) break;
-                        photo = c.toDataURL("image/jpeg", quality);
-                      }
-                      save({ ...profile, photo }, true);
-                      URL.revokeObjectURL(img.src);
-                    };
-                    img.src = URL.createObjectURL(file);
-                  }}
+                  onChange={onPhoto}
                 />
               </label>
               <div className="min-w-0">
@@ -627,28 +905,7 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     disabled={placing}
-                    onClick={async () => {
-                      setPlacing(true);
-                      try {
-                        const r = await fetch(
-                          `/api/address?geocode=${encodeURIComponent(hubHome)}`,
-                          { cache: "no-store" }
-                        );
-                        const j = await r.json();
-                        // Saved either way — a home address we can't place is
-                        // still their address, and they can correct it.
-                        save({
-                          ...profile,
-                          base: j.address ?? hubHome,
-                          baseLat: j.lat ?? null,
-                          baseLng: j.lng ?? null,
-                        }, true);
-                      } catch {
-                        save({ ...profile, base: hubHome, baseLat: null, baseLng: null }, true);
-                      } finally {
-                        setPlacing(false);
-                      }
-                    }}
+                    onClick={() => void acceptHubHome()}
                     className="hand mt-2 rounded-full border border-accent-dark px-3.5 py-1.5 text-[12px] text-accent-dark transition-colors hover:bg-accent-soft/40 disabled:opacity-50"
                   >
                     {placing ? "Placing it on the map…" : "Use this address"}

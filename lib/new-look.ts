@@ -1,0 +1,43 @@
+/**
+ * The new look (Claude Design, 23 Oct 2026), brought in one screen at a time.
+ *
+ * James: "What I don't want to do is overhaul everything in one go and have
+ * everyone freak out." So each reskinned screen has its own switch in Admin >
+ * Switches, and the old screen stays in the code underneath until the new one
+ * has bedded in. Nothing here changes data, permissions or what a button does -
+ * only the markup and the paint around them.
+ *
+ * Positions run from nobody to everybody: off, owners (James and Susan, to
+ * look at it on real data), testers (the area testers list), everyone.
+ *
+ * The scoped colours and type live in app/new-look.css under [data-look="new"],
+ * so a reskinned screen repaints itself and whatever older pieces sit inside it,
+ * and nothing outside it moves.
+ */
+
+export type LookLevel = "off" | "owners" | "testers" | "everyone";
+
+export const LOOK_LEVELS: { id: LookLevel; label: string; says: string }[] = [
+  { id: "off", label: "Off", says: "Everybody sees the screen as it is today." },
+  { id: "owners", label: "Owners", says: "James and Susan see the new look. Nobody else does." },
+  { id: "testers", label: "Testers", says: "Owners and the testers on the list above see it." },
+  { id: "everyone", label: "Everyone", says: "Live for the whole team." },
+];
+
+export const LOOK_SCREENS = [
+  { id: "nav", label: "Sidebar and frame", what: "The sidebar as the design has it: flat, full height, one straight line down to a white page, no rounded panel. Every screen sits in it." },
+  { id: "steve", label: "Steve", what: "The new Steve character in the corner, and his bubble cut down to the chat with a Report button." },
+  { id: "listings", label: "Listings board", what: "The Listings page: type-only header, the filter row, text tabs and the new cards." },
+  { id: "listing", label: "Listing page", what: "One listing: the head with its two jobs, the big photo beside The Details, the progress line and the tabs." },
+  { id: "settings", label: "Settings", what: "Your Profile, every tab: the form with the landlord's preview, appearance, connections, automations and the rest." },
+] as const;
+
+export type LookScreen = (typeof LOOK_SCREENS)[number]["id"];
+
+export const isLookLevel = (v: unknown): v is LookLevel => LOOK_LEVELS.some((l) => l.id === v);
+export const isLookScreen = (v: unknown): v is LookScreen => LOOK_SCREENS.some((s) => s.id === v);
+
+/** Who is on, screen by screen. */
+export type LookOn = Record<LookScreen, boolean>;
+
+export const ALL_OFF: LookOn = { nav: false, steve: false, listings: false, listing: false, settings: false };

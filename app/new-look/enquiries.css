@@ -1,0 +1,88 @@
+/* New look: enquiries (lib/new-look). Scoped under [data-look="new"]. */
+
+/* components/listing/ListingEnquiries look="new": a list bar, then rows on
+   hairlines. The section is its own container, so the row folds to the room
+   the listing gives it rather than to the window. */
+[data-look="new"] .nl-enq { container-type: inline-size; }
+
+/* ── the list bar ───────────────────────────────────────────────────────── */
+[data-look="new"] .nl-enq-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; }
+[data-look="new"] .nl-enq-sum { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+[data-look="new"] .nl-enq-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-left: auto; }
+
+/* The on/off switch with its words beside it. */
+[data-look="new"] .nl-enq-switch {
+  font: inherit; font-size: 13px; color: var(--ink); display: inline-flex; align-items: center; gap: 10px;
+  background: none; border: 0; padding: 0; cursor: pointer;
+}
+[data-look="new"] .nl-enq-switch:disabled { opacity: 0.5; cursor: default; }
+[data-look="new"] .nl-enq-switch:focus-visible { outline: none; }
+[data-look="new"] .nl-enq-switch:focus-visible .nl-enq-track { outline: 2px solid var(--ink); outline-offset: 2px; }
+[data-look="new"] .nl-enq-track { position: relative; width: 44px; height: 26px; border-radius: 13px; background: var(--box); flex: none; transition: background-color 0.35s var(--nl-ease); }
+[data-look="new"] .nl-enq-track i { position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--page); transition: transform 0.45s var(--nl-ease); }
+[data-look="new"] .nl-enq-track.is-on { background: var(--primary); }
+[data-look="new"] .nl-enq-track.is-on i { transform: translateX(18px); }
+
+/* Lines under the bar: the automatic note, a failed save, the send results. */
+[data-look="new"] .nl-enq-note { margin: 0 0 10px; font-size: 12px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-enq-note.is-warn { color: var(--accent-dark); }
+[data-look="new"] .nl-enq-results { margin: 0 0 12px; padding: 12px 16px; border-radius: 14px; background: var(--panel); font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-enq-results p { margin: 0; }
+[data-look="new"] .nl-enq-results-bad { color: var(--accent-dark); }
+
+/* ── the rows ───────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-enq-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-enq-row {
+  display: flex; align-items: center; gap: 18px; padding: 14px 6px; border-bottom: 1px solid var(--line);
+  transition: background-color 0.25s;
+}
+[data-look="new"] .nl-enq-row:hover, [data-look="new"] .nl-enq-row.is-picked { background: var(--panel); }
+
+[data-look="new"] .nl-enq-check {
+  width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--line-strong); padding: 0; flex: none;
+  display: inline-grid; place-items: center; background: transparent; color: var(--page); cursor: pointer;
+  transition: background-color 0.2s var(--nl-ease), border-color 0.2s var(--nl-ease);
+}
+[data-look="new"] .nl-enq-check.is-on { background: var(--ink); border-color: var(--ink); }
+[data-look="new"] .nl-enq-check:disabled { opacity: 0.35; cursor: default; }
+[data-look="new"] .nl-enq-check:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+[data-look="new"] .nl-enq-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; color: inherit; text-decoration: none; cursor: pointer; }
+[data-look="new"] .nl-enq-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+[data-look="new"] .nl-enq-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+[data-look="new"] .nl-enq-main:hover .nl-enq-name-text { text-decoration-line: underline; }
+[data-look="new"] .nl-enq-main:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 6px; }
+[data-look="new"] .nl-enq-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+[data-look="new"] .nl-enq-src { flex: none; font-size: 12px; line-height: 16px; color: var(--muted); padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
+[data-look="new"] .nl-enq-age { flex: none; min-width: 56px; text-align: right; white-space: nowrap; }
+[data-look="new"] .nl-enq-status { flex: none; display: inline-flex; justify-content: flex-end; min-width: 104px; }
+[data-look="new"] .nl-enq-statusbtn { font: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+[data-look="new"] .nl-enq-statusbtn .nl-badge { text-underline-offset: 3px; }
+[data-look="new"] .nl-enq-statusbtn:hover .nl-badge { text-decoration: underline; }
+[data-look="new"] .nl-enq-statusbtn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
+[data-look="new"] .nl-enq-book { flex: none; }
+
+/* The small turning ring while passports or a lead are being read. */
+[data-look="new"] .nl-enq-spin {
+  display: inline-block; width: 12px; height: 12px; flex: none; border-radius: 50%;
+  border: 1.5px solid var(--line-strong); border-top-color: var(--ink); animation: nl-enq-spin 0.8s linear infinite;
+}
+@keyframes nl-enq-spin { to { transform: rotate(360deg); } }
+
+/* Narrower: the source and the age go first, then the row takes two lines. */
+@container (max-width: 720px) {
+  [data-look="new"] .nl-enq-src, [data-look="new"] .nl-enq-age { display: none; }
+}
+@container (max-width: 480px) {
+  [data-look="new"] .nl-enq-row { flex-wrap: wrap; row-gap: 6px; gap: 6px 14px; }
+  [data-look="new"] .nl-enq-main { flex-basis: calc(100% - 32px); }
+  [data-look="new"] .nl-enq-status { margin-left: 32px; min-width: 0; justify-content: flex-start; }
+  [data-look="new"] .nl-enq-book { margin-left: auto; }
+  [data-look="new"] .nl-enq-acts { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-enq-track, [data-look="new"] .nl-enq-track i, [data-look="new"] .nl-enq-row, [data-look="new"] .nl-enq-check { transition: none !important; }
+  [data-look="new"] .nl-enq-spin { animation-duration: 2.4s; }
+}

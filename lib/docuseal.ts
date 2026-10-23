@@ -732,3 +732,99 @@ export async function openTermsSigning(
     submissionId: agent.submission_id ?? null,
   };
 }
+
+/* ===========================================================================
+   TERMS WRITTEN BY THE OS (lib/terms, 23 Oct 2026).
+
+   The contract is our own HTML, rendered by DocuSeal into the document that is
+   signed (POST /submissions/html), so the words come from code and England
+   and Scotland are two files rather than two hand-placed PDF templates.
+   DocuSeal still owns every signature, the audit trail and the certificate.
+
+   `send_email` is false on every submitter: the OS sends its own branded
+   email from the agent's mailbox (lib/terms/send), and only once the agent
+   has signed their part. DocuSeal emailing a landlord on creation would be
+   exactly the accident the header warns about.
+=========================================================================== */
+
+export interface HtmlSigner {
+  role: string;
+  name: string;
+  email: string;
+  /** 0 signs first. Same number, same group. */
+  order: number;
+  values?: Record<string, string>;
+}
+
+export interface HtmlSubmitter {
+  id: number;
+  role: string;
+  slug: string;
+  embedSrc: string;
+  status: string;
+}
+
+export async function createHtmlSubmission(p: {
+  name: string;
+  html: string;
+  footer?: string;
+  externalId: string;
+  signers: HtmlSigner[];
+}): Promise<{ submissionId: number; submitters: HtmlSubmitter[] }> {
+  for (const s of p.signers) {
+    const email = s.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new DocusealBlocked(`"${s.email || "(blank)"}" isn't an email address.`);
+    if (email.endsWith(`@${SANDBOX_EMAIL_DOMAIN}`)) throw new DocusealBlocked("That's a sandbox address - sandbox records can't be sent contracts.");
+  }
+  const raw = await ds<{ id?: number; submitters?: Array<{ id?: number; role?: string; slug?: string; embed_src?: string; status?: string }> }>("/submissions/html", {
+    method: "POST",
+    body: {
+      name: p.name,
+      send_email: false,
+      send_sms: false,
+      order: "preserved",
+      documents: [{ name: p.name, html: p.html, ...(p.footer ? { html_footer: p.footer } : {}), size: "A4" }],
+      submitters: p.signers.map((s) => ({
+        role: s.role,
+        name: s.name,
+        email: s.email.trim(),
+        order: s.order,
+        external_id: p.externalId,
+        send_email: false,
+        ...(s.values ? { values: s.values } : {}),
+      })),
+    },
+  });
+  const base = signingBase(baseUrl() ?? "");
+  const submitters = (raw?.submitters ?? []).map((s) => ({
+    id: Number(s.id),
+    role: s.role ?? "",
+    slug: s.slug ?? "",
+    embedSrc: s.embed_src || (s.slug ? `${base}/s/${s.slug}` : ""),
+    status: s.status ?? "awaiting",
+  }));
+  if (!raw?.id || submitters.some((s) => !s.id || !s.slug)) throw new DocusealBlocked("DocuSeal made the contract without every signer on it.");
+  return { submissionId: Number(raw.id), submitters };
+}
+
+/** Put what a landlord told us into their boxes before they sign. */
+export async function setSubmitterValues(submitterId: number, values: Record<string, string>): Promise<void> {
+  await ds(`/submitters/${submitterId}`, { method: "PUT", body: { send_email: false, values } });
+}
+
+/** One signer, as DocuSeal has them now. */
+export async function submitterState(submitterId: number): Promise<{ status: string; completedAt: string | null; openedAt: string | null }> {
+  const s = await ds<{ status?: string; completed_at?: string | null; opened_at?: string | null }>(`/submitters/${submitterId}`);
+  return { status: s?.status ?? "", completedAt: s?.completed_at ?? null, openedAt: s?.opened_at ?? null };
+}
+
+/** The finished document, every signature on it, as a short-lived URL. */
+export async function signedDocumentUrl(submissionId: number): Promise<string | null> {
+  const j = await ds<{ documents?: Array<{ url?: string }> }>(`/submissions/${submissionId}/documents?merge=true`);
+  return j?.documents?.[0]?.url ?? null;
+}
+
+/** Withdraw one: its links stop working. */
+export async function archiveSubmission(submissionId: number): Promise<void> {
+  await ds(`/submissions/${submissionId}`, { method: "DELETE" });
+}

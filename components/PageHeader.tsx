@@ -524,7 +524,7 @@ export default function PageHeader({
           {/* pr-1: the count badge sits -1 past the button, and flush against the
               right edge it pushed the page 3px wide on the Marketing Hub (Rig
               run 4, P-049). */}
-          <span className="hidden lg:block lg:pr-1">
+          <span data-page-bell className="hidden lg:block lg:pr-1">
             <NotificationBell compact />
           </span>
         </div>

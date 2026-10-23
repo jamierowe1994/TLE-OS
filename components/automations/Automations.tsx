@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import AutomationEditor, { StepIcon, type Pickers } from "@/components/automations/AutomationEditor";
-import { actionDef, blank, triggerDef, type AutomationDef } from "@/lib/automations/catalogue";
+import { actionDef, actionWords, blank, conditionWords, triggerDef, triggerWords, waitWords, type AutomationDef } from "@/lib/automations/catalogue";
+import SteveFace from "@/components/SteveFace";
+import { Badge } from "@/components/new-look/Parts";
 import type { Automation, Run } from "@/lib/automations/store";
 
 /**
@@ -67,7 +69,7 @@ const RUN_TONE: Record<string, string> = {
 };
 const RUN_WORD: Record<string, string> = { done: "Done", preview: "Waiting for you", waiting: "Waiting", working: "Working", held: "Held", skipped: "Skipped", cancelled: "Cancelled", failed: "Failed" };
 
-export default function Automations() {
+export default function Automations({ look }: { look?: "new" } = {}) {
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [all, setAll] = useState(false);
@@ -76,6 +78,8 @@ export default function Automations() {
   const [ask, setAsk] = useState("");
   const [thinking, setThinking] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  /* The new look's "Build one" card, shut until New automation. */
+  const [building, setBuilding] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -173,6 +177,181 @@ export default function Automations() {
           onToggle={editing.id ? async (on) => { const a = data?.automations.find((x) => x.id === editing.id); if (a) await toggle(a, on); } : undefined}
           onClose={() => { setEditing(null); void load(); }}
         />
+      </div>
+    );
+  }
+
+  /* ── THE NEW LOOK (lib/new-look "settings", 23 Oct 2026) ─────────────────
+     Claude Design's Automations: one line each, read as a sentence, with
+     Change and a switch; New automation opens Steve's "Build one" card in
+     place. The same automations, saves, previews and run log as below. */
+  if (look === "new") {
+    const on = (data?.automations ?? []).filter((a) => a.enabled).length;
+    const ranThisMonth = (data?.automations ?? []).reduce((n, a) => n + (a.runsThisMonth ?? 0), 0);
+    const stateWord = (a: Automation) =>
+      !a.enabled ? (a.offBy ? `Switched off by ${a.offBy}` : "Off") : a.state !== "live" ? "On · checking the first send with you" : a.lastRunAt ? `Ran ${a.runsThisMonth ?? 0} ${a.runsThisMonth === 1 ? "time" : "times"} this month · last ${fmt(a.lastRunAt)}` : "On · not run yet";
+    return (
+      <div className="pb-16">
+        <div className="nl-listbar">
+          <div>
+            <h3 className="nl-block-title">{all ? "Everyone's Automations" : "Your Automations"}</h3>
+            <span className="nl-meta">{data ? `${on} on · ran ${ranThisMonth} ${ranThisMonth === 1 ? "time" : "times"} this month` : "Reading…"}</span>
+          </div>
+          <span className="flex-1" />
+          {data?.me.owner && (
+            <span className="nl-toggle" role="group" aria-label="Whose">
+              <button type="button" className={!all ? "is-on" : ""} onClick={() => setAll(false)}>Mine</button>
+              <button type="button" className={all ? "is-on" : ""} onClick={() => setAll(true)}>Everyone&apos;s</button>
+            </span>
+          )}
+          <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" aria-expanded={building} onClick={() => setBuilding((b) => !b)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
+            New automation
+          </button>
+        </div>
+
+        {data && !data.switches.automations && (
+          <p className="nl-auto-hold">Automations aren&apos;t running for anyone yet. You can build them, try them and send yourself a test. Nothing goes to a customer until James switches on Agent automations.</p>
+        )}
+
+        {/* Steve builds one from what you say; or start from scratch. */}
+        <div className={`nl-collapse${building ? " is-open" : ""}`}>
+          <div>
+            <section className="nl-auto-build">
+              <div className="flex items-center gap-2.5"><SteveFace size={26} /><b>Build one</b></div>
+              {turns.length === 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {EXAMPLES.map((x) => (
+                    <button key={x} type="button" className="nl-auto-pill" onClick={() => setAsk(x)}>{x}</button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {turns.map((t, i) => (
+                    <div key={i} className={t.role === "user" ? "nl-auto-me" : "nl-auto-steve"}>
+                      <p>{t.text}</p>
+                      {t.draft && (
+                        <div className="nl-auto-draft">
+                          <span className="nl-strong block">{t.draft.name || "New Automation"}</span>
+                          <Sentence def={t.draft.def} />
+                          {t.draft.problems.length > 0 && <p className="nl-meta text-[var(--warning)]">{t.draft.problems[0]}</p>}
+                          {t.draft.cant.length > 0 && <p className="nl-meta">Can&apos;t do yet: {t.draft.cant.join(", ")}.</p>}
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => setEditing({ id: null, def: t.draft!.def, name: t.draft!.name, askedFor: turns.filter((x) => x.role === "user").map((x) => x.text).join(" / "), enabled: false })}>
+                              Check it and turn it on
+                            </button>
+                            <span className="nl-meta">Nothing runs until you switch it on.</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {thinking && <p className="nl-meta flex items-center gap-2"><SteveFace size={18} mood="thinking" /> Putting it together…</p>}
+                </div>
+              )}
+              <div className="nl-auto-ask">
+                <textarea
+                  value={ask}
+                  onChange={(e) => setAsk(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+                  rows={2}
+                  placeholder={turns.length ? "Change anything: \"make it 3 days\", \"text them instead\"…" : "When something happens, what should Steve do for you?"}
+                  aria-label="Tell Steve what you'd like to happen"
+                />
+                <button type="button" className="nl-btn nl-btn--primary nl-btn--sm self-end" disabled={!ask.trim() || thinking} onClick={() => void send()}>Build it</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <button type="button" className="nl-link" onClick={() => setEditing({ id: null, def: blank(), name: "", enabled: false })}>Or start from scratch</button>
+                <button type="button" className="nl-link" onClick={() => { setBuilding(false); setTurns([]); setAsk(""); }}>Cancel</button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        {/* The first time one reaches a customer, they see it first. */}
+        {previews.map((r) => (
+          <section key={r.id} id={`preview-${r.id}`} className="nl-auto-check">
+            <span className="nl-eyebrow">Check before it sends</span>
+            <h3 className="nl-block-title">{r.automationName}</h3>
+            <p className="nl-meta">The first time it runs, you see it first. {r.subject.what}.</p>
+            {(r.preview ?? []).map((x, i) => (
+              <div key={i} className="nl-card p-3">
+                <p className="nl-meta">{x.action} to <span className="text-ink">{x.to}</span>{x.subject ? ` · ${x.subject}` : ""}</p>
+                {x.html && <iframe title={x.subject ?? "Email"} srcDoc={x.html} sandbox="" className="mt-2 h-80 w-full rounded-lg border border-[var(--line)] bg-white" />}
+                {x.text && <p className="mt-2 whitespace-pre-wrap text-[14px]">{x.text}</p>}
+                {x.note && !x.html && <p className="mt-2 text-[14px]">{x.note}</p>}
+              </div>
+            ))}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={busy === r.id} onClick={() => void answer(r, true)}>Send it, and run on its own from now</button>
+              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" disabled={busy === r.id} onClick={() => void answer(r, false)}>Don&apos;t send this one</button>
+            </div>
+          </section>
+        ))}
+
+        {err && <p className="nl-meta my-3 text-[var(--accent-dark)]">{err}</p>}
+
+        {!data && !err ? (
+          <p className="nl-meta py-8">Loading your automations…</p>
+        ) : data && data.automations.length === 0 ? (
+          <p className="nl-empty">None yet. Press New automation and tell Steve what you&apos;d like done.</p>
+        ) : (
+          <ul className="nl-autolist">
+            {data?.automations.map((a) => (
+              <li key={a.id} className={a.enabled ? "is-on" : ""}>
+                <div className="min-w-0">
+                  <Sentence def={a.def} />
+                  <span className="nl-meta block">
+                    {all && a.userName ? `${a.userName} · ` : ""}
+                    {stateWord(a)}
+                    {(a.waiting ?? 0) > 0 ? ` · ${a.waiting} waiting` : ""}
+                  </span>
+                </div>
+                <span className="flex items-center gap-4">
+                  {mine(a) && <button type="button" className="nl-link" onClick={() => setEditing({ id: a.id, def: a.def, name: a.name, dailyCap: a.dailyCap, askedFor: a.askedFor, enabled: a.enabled })}>Change</button>}
+                  {mine(a) && <button type="button" className="nl-link nl-auto-del" onClick={() => void remove(a)}>Delete</button>}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={a.enabled}
+                    aria-label={a.name}
+                    className={`nl-switch${a.enabled ? " is-on" : ""}`}
+                    disabled={busy === a.id || (!mine(a) && !a.enabled)}
+                    title={!mine(a) ? (a.enabled ? `Switch ${a.userName}'s off` : "Only they can switch it on") : a.enabled ? "Switch off" : "Switch on"}
+                    onClick={() => void toggle(a, !a.enabled)}
+                  >
+                    <i />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Every run: who, what it sent and to where. */}
+        <h3 className="nl-block-title mb-2.5 mt-12">Every Run</h3>
+        {data && data.runs.length === 0 && <p className="nl-meta">Nothing has run yet. Each time one does, it&apos;s written here.</p>}
+        {data && data.runs.length > 0 && (
+          <ul className="nl-runlist">
+            {data.runs.map((r) => (
+              <li key={r.id}>
+                <span className="nl-mono">{fmt(r.finishedAt ?? (r.state === "waiting" ? r.dueAt : r.createdAt))}{r.state === "waiting" ? " · due" : ""}</span>
+                <span className="min-w-0">
+                  <span className="nl-strong block">{r.automationName}{all && r.userName ? <span className="nl-meta"> · {r.userName}</span> : null}</span>
+                  <span className="nl-meta block">
+                    {[r.subject.name, r.subject.what].filter(Boolean).join(" · ")}
+                    {r.outcomes.length
+                      ? ` · ${r.outcomes.map((o) => `${o.action}${o.to && o.to !== "-" ? ` to ${o.toId && o.toId === data.me.id ? "you" : o.to}` : ""}`).join(", ")}`
+                      : r.detail
+                        ? ` · ${r.detail}`
+                        : ""}
+                  </span>
+                </span>
+                <Badge tone={r.state === "done" ? "good" : r.state === "failed" ? "accent" : r.state === "preview" || r.state === "held" ? "warning" : "neutral"}>{RUN_WORD[r.state] ?? r.state}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     );
   }
@@ -401,4 +580,24 @@ function Arrow() {
 
 function LineIconMagic() {
   return <StepIcon name="magic-wand" size={16} />;
+}
+
+/**
+ * The automation as the new look reads it: one sentence in the serif, the
+ * parts that change in bold. "When a viewing has happened, wait 1 day, then
+ * text them to ask how it went."
+ */
+function Sentence({ def }: { def: AutomationDef }) {
+  const start = triggerWords(def.trigger);
+  const sched = def.trigger.key === "schedule";
+  const acts = def.actions.map(actionWords);
+  const joined = acts.length > 1 ? `${acts.slice(0, -1).join(", ")} and ${acts[acts.length - 1]}` : acts[0];
+  return (
+    <p className="nl-auto-sentence">
+      {sched ? <b>{start.charAt(0).toUpperCase() + start.slice(1)}</b> : <>When <b>{start}</b></>}
+      {def.waitHours ? <>, wait <b>{waitWords(def.waitHours)}</b></> : null}
+      {def.conditions.length ? <>, and if <b>{def.conditions.map(conditionWords).join(" and ")}</b></> : null}
+      {joined ? <>, {sched && !def.waitHours && !def.conditions.length ? "" : "then "}<b>{joined}</b>.</> : <>, then do nothing yet.</>}
+    </p>
+  );
 }

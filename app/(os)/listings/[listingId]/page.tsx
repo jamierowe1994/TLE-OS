@@ -7,6 +7,7 @@ import ListingDrawer, { type Listing } from "@/components/ListingDrawer";
 import { peekJson, readJson } from "@/lib/page-cache";
 import { listingOrder } from "@/lib/listing-order";
 import type { ArchiveReason } from "@/lib/listing-archive";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * One listing, the whole of it, on one page.
@@ -86,6 +87,8 @@ export default function ListingPage() {
   }, [listingId]);
 
   /* Filing a draft away, or bringing it back - the board's call, made here. */
+  /* The new look (lib/new-look "listing"): asked before the page draws, so it never swaps under somebody. */
+  const look = useNewLook("listing");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const move = useCallback(async (id: string, action: "archive" | "restore") => {
@@ -122,7 +125,7 @@ export default function ListingPage() {
     [at, order, router]
   );
 
-  if (found.state === "loading") {
+  if (found.state === "loading" || look === null) {
     return (
       <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted">
         <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
@@ -150,6 +153,7 @@ export default function ListingPage() {
         initialOffer={initialOffer}
         onArchive={(id, action) => void move(id, action)}
         archiveBusy={busy}
+        newLook={look}
       />
     </>
   );

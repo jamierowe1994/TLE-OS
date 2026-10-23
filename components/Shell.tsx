@@ -9,6 +9,7 @@ import SignedOutWatch from "@/components/SignedOutWatch";
 import SearchPalette, { OPEN_SEARCH } from "@/components/SearchPalette";
 import DoodleIcon from "@/components/DoodleIcon";
 import LaunchNav from "@/components/LaunchNav";
+import { useNewLook } from "@/lib/use-new-look";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
 import { AREA_DEFS, areaForPage, canAct, canSee, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
@@ -164,6 +165,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     });
   }, [pathname]);
   const [collapsed, setCollapsed] = useState(false);
+  /* The new look's sidebar and frame (lib/new-look "nav", 23 Oct 2026): flat,
+     full height, one straight line down to a white page - no rounded window. */
+  const navLook = useNewLook("nav") === true;
   const [theme, setTheme] = useState<ThemeChoice>("auto");
   /* The one extra screen this person holds, if any — James gets Admin, Susan
      gets Company figures, Kirstie Pre-tenancy, Francesca Marketing, an agent
@@ -275,24 +279,26 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     /* os-type: the agents' own title face, Bricolage Grotesque (11 Sep) - see globals.css. */
-    <div className="os-type flex min-h-screen lg:bg-[var(--shell-bg)]">
+    <div data-nav-look={navLook ? "new" : undefined} className={`os-type flex min-h-screen ${navLook ? "bg-[var(--nv-page)]" : "lg:bg-[var(--shell-bg)]"}`}>
       {/* The grey round the page: a clear rounded window over the content,
           grey everywhere outside it. The window still scrolls as before, so
           nothing that scrolls the page or sticks to it changes; content just
           passes under the 8px margin, as it would inside a scrolling panel. */}
-      <div
+      {!navLook && <div
         data-os-frame
         aria-hidden
         className="pointer-events-none fixed z-[45] hidden rounded-[18px] lg:block"
         style={{ top: 8, right: 8, bottom: 8, left: frameLeft, boxShadow: "0 0 0 100vmax var(--shell-bg), inset 0 0 0 1px var(--shell-rim)" }}
-      />
+      />}
       {/* Tagged so /admin can hide it — an owner in the admin centre is not
           doing an agent's job, and the rail invites them to wander into the
           business-wide book by accident. See app/(os)/admin/layout.tsx. */}
       <aside
         ref={sideRef}
         data-os-sidebar
-        className={`sticky top-[calc(12px+var(--os-band-h,0px))] z-[50] mb-3 ml-2 mt-3 hidden h-[calc(100vh-24px-var(--os-band-h,0px))] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
+        className={navLook
+          ? `nl-nav sticky top-[var(--os-band-h,0px)] z-[50] hidden h-[calc(100vh-var(--os-band-h,0px))] shrink-0 flex-col overflow-hidden transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${collapsed ? "w-[72px]" : "w-[264px]"}`
+          : `sticky top-[calc(12px+var(--os-band-h,0px))] z-[50] mb-3 ml-2 mt-3 hidden h-[calc(100vh-24px-var(--os-band-h,0px))] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
           collapsed ? "w-[72px]" : "w-60"
         }`}
       >
@@ -311,13 +317,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           onSignOut={signOut}
           menuOpen={profileOpen}
           onMenu={setProfileOpen}
+          look={navLook ? "new" : undefined}
         />
       </aside>
 
       {/* Mobile: a simple top bar; the wireframe is a desktop pitch first. */}
-      <div className="flex min-w-0 flex-1 flex-col bg-card lg:ml-2 lg:bg-[var(--shell-panel)]">
+      <div className={navLook ? "flex min-w-0 flex-1 flex-col bg-[var(--nv-page)] lg:border-l lg:border-[var(--nv-line)]" : "flex min-w-0 flex-1 flex-col bg-card lg:ml-2 lg:bg-[var(--shell-panel)]"}>
         <header className="flex items-center justify-between border-b border-line/70 px-5 py-4 lg:hidden">
-          <span className="hand text-2xl">TLE OS</span>
+          {navLook ? <span className="nl-nav-logo">TLE OS</span> : <span className="hand text-2xl">TLE OS</span>}
           <span className="flex items-center gap-2">
             {/* Search rides it too (15 Oct 2026): below lg the sidebar and
                 its Search are hidden, and a phone has no ⌘K, so Search for

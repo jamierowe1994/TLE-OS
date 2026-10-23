@@ -87,6 +87,8 @@ import {
   LANDLORD_TERMS_ONLY,
   LANDLORD_QUESTIONS_CHASE,
   LANDLORD_CONTRACT_NUDGE,
+  LANDLORD_TERMS_REQUEST,
+  LANDLORD_TERMS_SIGNED,
   LANDLORD_MESSAGE_REPLY,
   LANDLORD_DOCS_NUDGE,
   VIEWING_CANCELLED,
@@ -791,6 +793,47 @@ export const TLE_EMAILS: CatalogEntry[] = [
           preview: "Yes, Thursday works - I'll bring the keys.",
           bodyHtml: "Yes, Thursday works - I'll bring the keys.",
           link: `${SITE}/landlord/enter?token=example&next=/landlord/messages`,
+        })
+      )(),
+  },
+  {
+    id: "landlord-terms-request",
+    group: "Market appraisals",
+    name: "Your Terms of Business to Sign",
+    audience: "landlord",
+    trigger: "The agent sends Terms of Business from the home's Compliance tab and signs their part",
+    fires: "Wired 23 Oct 2026. Compliance > Send Terms of Business -> lib/terms/flow.ts, from the agent's own mailbox, once per person who signs, behind the customer email switch.",
+    to: "Each landlord named on the terms",
+    summary:
+      "James, 23 Oct: send terms fast, with or without an appraisal, to everyone who owns the home. Each gets their own link to the contract written out in full; anything missing is asked before they sign.",
+    doc: LANDLORD_TERMS_REQUEST,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_TERMS_REQUEST, {
+          firstName: "Raj",
+          address: "14 Whittagreen Court, Motherwell ML1 5SN",
+          agentFirst: "Margaret",
+          link: `${SITE}/sign/example`,
+        })
+      )(),
+  },
+  {
+    id: "landlord-terms-signed",
+    group: "Market appraisals",
+    name: "Terms of Business Signed",
+    audience: "landlord",
+    trigger: "The last person signs the terms",
+    fires: "Wired 23 Oct 2026. lib/terms/flow.ts complete(), from the agent's own mailbox, to every landlord on the terms.",
+    to: "Every landlord on the terms",
+    summary: "Says it is all signed and links to their copy.",
+    doc: LANDLORD_TERMS_SIGNED,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_TERMS_SIGNED, {
+          firstName: "Raj",
+          address: "14 Whittagreen Court, Motherwell ML1 5SN",
+          agentFirst: "Margaret",
+          link: `${SITE}/sign/example`,
         })
       )(),
   },

@@ -10,6 +10,7 @@ import SendOfferToLandlord from "@/components/offers/SendOfferToLandlord";
 import { CounterForm, NegotiationHistory } from "@/components/offers/OfferNegotiation";
 import type { OfferCounter } from "@/lib/offer-counters";
 import DeclineOtherOffers from "@/components/offers/DeclineOtherOffers";
+import { Badge, Ico, type Tone } from "@/components/new-look/Parts";
 
 /**
  * THE OFFERS ON ONE HOME (7 Oct 2026).
@@ -75,6 +76,48 @@ const gbp = (n: number) => `£${n.toLocaleString("en-GB", { maximumFractionDigit
 
 const ORDER = { open: 0, accepted: 1, declined: 2 } as const;
 
+/** NEW LOOK (23 Oct 2026): this screen never names REX. The same words, its name taken out. */
+function unRex(s: string): string {
+  return s
+    .replace(/\s*-\s*REX not updated yet/gi, "")
+    .replace(/^\s*In REX\s*$/i, "")
+    .replace(/\s+in REX\b/gi, "")
+    .replace(/\bREX'?s?\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+const lower = (s: string) => (s ? s[0].toLowerCase() + s.slice(1) : s);
+
+/** The new look's status word and tone, held ones included. */
+function statusOf(o: ListingOffer, taken: ListingOffer | null): { word: string; tone: Tone } {
+  if (o.status === "accepted") return { word: "Accepted", tone: "good" };
+  if (o.status === "declined") return { word: "Declined", tone: "neutral" };
+  if (taken) return { word: "Held", tone: "neutral" };
+  if (countered(o)) return { word: "Negotiating", tone: "info" };
+  if (o.landlordSent) return { word: "Landlord review", tone: "warning" };
+  return { word: "Open", tone: "info" };
+}
+
+/** Everything an opened offer says, label and value, for either look. */
+function offerFacts(o: ListingOffer, asking: number | null): Array<[string, string]> {
+  const d = o.detail;
+  const facts: Array<[string, string]> = [];
+  /* Countered: the figure on the table, or the one agreed (16 Oct 2026). */
+  const label = !countered(o) ? "Offer" : o.status === "accepted" ? "Agreed rent" : o.status === "open" ? "On the table" : "Last figure";
+  if (o.amount != null) facts.push([label, `${gbp(o.amount)} a month${asking ? (o.amount >= asking ? " · the asking rent" : ` · ${gbp(asking - o.amount)} under the asking ${gbp(asking)}`) : ""}`]);
+  if (o.moveIn) facts.push(["Moving in", short(o.moveIn)]);
+  if (d?.people.length) facts.push(["Who would live there", d.people.join(", ")]);
+  if (d && (d.adults != null || d.children != null)) facts.push(["Household", [d.adults != null ? `${d.adults} adult${d.adults === 1 ? "" : "s"}` : null, d.children ? `${d.children} child${d.children === 1 ? "" : "ren"}` : null].filter(Boolean).join(", ") || "-"]);
+  if (d?.pets != null) facts.push(["Pets", d.pets ? d.petsNote || "Yes" : "None"]);
+  if (d?.work) facts.push(["Work", d.work]);
+  if (d?.income) facts.push(["Household income", `${gbp(d.income)} a year`]);
+  if (d?.affordability) facts.push(["Affordability", `Rent is ${Math.round(d.affordability)}% of income`]);
+  if (d?.guarantor != null) facts.push(["Guarantor", d.guarantor ? "Available" : "None"]);
+  if (d?.email) facts.push(["Email", d.email]);
+  if (d?.phone) facts.push(["Phone", d.phone]);
+  return facts;
+}
+
 /** The application an accepted offer became: a REX one by its own id, an OS one as "os:<offer id>". */
 function appHref(ref: string): string {
   return `/applications?open=${encodeURIComponent(ref.startsWith("rex:") ? ref.slice(4) : ref)}`;
@@ -89,6 +132,8 @@ export default function ListingOffers({
   listingId = null,
   initialOpen = null,
   rexUnread = false,
+  look,
+  className = "",
 }: {
   offers: ListingOffer[] | null;
   canOffer: boolean;
@@ -103,6 +148,10 @@ export default function ListingOffers({
   initialOpen?: string | null;
   /** The applications from REX couldn't be read just now (22 Oct 2026). */
   rexUnread?: boolean;
+  /** "new": the new look's Offers card (lib/new-look); otherwise as it always was. */
+  look?: "new";
+  /** For the parent to place the new look's card. */
+  className?: string;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -167,6 +216,228 @@ export default function ListingOffers({
     } finally {
       setBusy(null);
     }
+  }
+
+  /* THE NEW LOOK (23 Oct 2026): one card, rows on hairlines, the same
+     decisions, confirmations, counter, held offers and opened offer. */
+  if (look === "new") {
+    const heldNew = taken && taken.kind !== "test" ? sorted.filter((o) => o.status === "open" && o.kind !== "test") : [];
+
+    const decideNew = (o: ListingOffer, big = false) => {
+      const sm = big ? "" : " nl-btn--sm";
+      if (o.status === "open") {
+        return (
+          <span className="nl-off-acts">
+            {/* One accepted at a time: undo or decline that one first. */}
+            {!taken && (
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void act(o, "accepted")}
+                onBlur={() => confirming === `acc:${o.ref}` && setConfirming(null)}
+                className={`nl-btn nl-btn--primary${sm}`}
+              >
+                {busy === o.ref
+                  ? "Saving…"
+                  : countered(o) && o.amount != null
+                    ? confirming === `acc:${o.ref}` ? `Yes, agree ${gbp(o.amount)}` : `Agree ${gbp(o.amount)}`
+                    : confirming === `acc:${o.ref}` ? "Yes, the landlord accepts" : "Accept"}
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void act(o, "declined")}
+              onBlur={() => confirming === o.ref && setConfirming(null)}
+              className={`nl-btn ${confirming === o.ref ? "nl-btn--danger" : "nl-btn--secondary"}${sm}`}
+            >
+              {confirming === o.ref ? "Yes, decline it" : "Decline"}
+            </button>
+            {/* The back-and-forth (16 Oct 2026): opens the offer with the form. */}
+            {!taken && (
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => { setConfirming(null); setOpenRef(o.ref); setCountering(o.ref); }}
+                aria-pressed={countering === o.ref}
+                className={`nl-btn nl-btn--quiet${sm}`}
+              >
+                Counter
+              </button>
+            )}
+          </span>
+        );
+      }
+      if (o.undoable) {
+        return (
+          <span className="nl-off-acts">
+            <button type="button" disabled={busy !== null} onClick={() => void act(o, "undo")} className={`nl-btn nl-btn--quiet${sm}`}>
+              {busy === o.ref ? "Saving…" : "Undo"}
+            </button>
+          </span>
+        );
+      }
+      return <span className="nl-off-acts" />;
+    };
+
+    const notesNew = (o: ListingOffer) => {
+      const lines: React.ReactNode[] = [];
+      if (o.status === "accepted" && o.kind !== "test") {
+        lines.push(
+          <p key="app" className="nl-meta">
+            On Applications now.{" "}
+            <a href={appHref(o.ref)} className="nl-link">
+              Open the application and Push to Propoly <Ico name="arrow" size={13} />
+            </a>
+          </p>
+        );
+      }
+      if (confirming === `acc:${o.ref}`) {
+        lines.push(
+          <p key="acc" className="nl-meta">
+            {countered(o) && o.amount != null
+              ? <>Both sides agree {gbp(o.amount)} a month? It goes onto Applications at that rent, ready to push to Propoly. The other offers are held until the holding fee is paid.</>
+              : <>Accept {o.name}&apos;s offer on the landlord&apos;s behalf? It goes onto Applications, ready to push to Propoly. The other offers are held until the holding fee is paid.</>}
+          </p>
+        );
+      }
+      if (o.status === "open" && taken) {
+        lines.push(
+          <p key="held" className="nl-meta">
+            Held until {taken.name}&apos;s holding fee is paid. The home keeps taking viewings meanwhile.
+          </p>
+        );
+      }
+      if (err?.ref === o.ref) lines.push(<p key="err" className="nl-off-err" role="alert">{unRex(err.text) || "That didn't save. Try again."}</p>);
+      return lines.length ? <div className="nl-off-sub">{lines}</div> : null;
+    };
+
+    const notice = rexUnread ? (
+      <p role="status" className="nl-off-note">
+        The application forms couldn&apos;t be read just now, so some offers may be missing. Try again in a minute.
+      </p>
+    ) : null;
+
+    return (
+      <section className={`nl-cell nl-off-card ${className}`.trim()}>
+        <h3 className="nl-block-title">Offers</h3>
+        {notice}
+        {offers === null ? (
+          <p className="nl-off-wait nl-meta">
+            <span aria-hidden className="nl-off-spin" />
+            Reading the offers&hellip;
+          </p>
+        ) : !offers.length ? (
+          !rexUnread && (
+            <p className="nl-meta">
+              No offers on this home yet.{canOffer ? " Press Make New Offer to put one forward, or share the offer link." : ""}
+            </p>
+          )
+        ) : (
+          <>
+            {/* Held offers on a home with one accepted: let them go from here (22 Oct 2026). */}
+            {heldNew.length > 0 && listingId && !open && (
+              <div className="nl-off-held">
+                <span className="nl-meta">
+                  <span className="nl-strong" style={{ fontSize: 12 }}>{taken!.name}&apos;s offer is accepted.</span>{" "}
+                  {heldNew.length} other {heldNew.length === 1 ? "offer is" : "offers are"} still open on this home.
+                </span>
+                <button type="button" onClick={() => setDeclining(true)} className="nl-btn nl-btn--secondary nl-btn--sm">
+                  <Ico name="mail" size={14} />
+                  Decline Other Offers
+                </button>
+              </div>
+            )}
+            <div className="nl-off-slide">
+              <div className={`nl-off-track${open ? " is-open" : ""}`}>
+                <div aria-hidden={Boolean(open)} inert={open ? true : undefined}>
+                  <ul className="nl-off-rows">
+                    {sorted.map((o) => {
+                      const last = o.counters?.[o.counters.length - 1] ?? null;
+                      const made = o.at ? `Made ${short(o.at)}` : "";
+                      const meta = [
+                        made,
+                        o.moveIn ? `moving in ${short(o.moveIn)}` : "",
+                        o.decided ? unRex(o.decided) : "",
+                        o.landlordSent ? `sent to the landlord ${short(o.landlordSent.at)}` : "",
+                        unRex(o.via),
+                      ].filter(Boolean).map((x, i) => (i === 0 ? x[0].toUpperCase() + x.slice(1) : lower(x))).join(" · ");
+                      const talk = last && o.status === "open" ? `${last.side === "landlord" ? "Landlord" : "Tenant"} countered${o.offered != null ? `, first offer ${gbp(o.offered)}` : ""}` : null;
+                      const st = statusOf(o, taken);
+                      return (
+                        <li key={o.ref} className={o.status === "declined" ? "is-faded" : undefined}>
+                          <div className="nl-off-row">
+                            <button type="button" className="nl-off-main" title="Open the offer" onClick={() => { setConfirming(null); setOpenRef(o.ref); }}>
+                              <span className="nl-strong">{o.name}</span>
+                              {meta && <span className="nl-meta" title={meta}>{meta}</span>}
+                              {talk && <span className="nl-off-talk">{talk}</span>}
+                            </button>
+                            <span className="nl-off-rent nl-strong">{o.amount != null ? `${gbp(o.amount)} pcm` : ""}</span>
+                            <Badge tone={st.tone} bare>{st.word}</Badge>
+                            {decideNew(o)}
+                          </div>
+                          {notesNew(o)}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+
+                <div aria-hidden={!open} inert={open ? undefined : true}>
+                  {open && (
+                    <OfferOpenedNew
+                      o={open}
+                      asking={asking}
+                      status={statusOf(open, taken)}
+                      onBack={() => { setConfirming(null); setOpenRef(null); setCountering(null); }}
+                      decide={decideNew(open, true)}
+                      notes={notesNew(open)}
+                      negotiation={
+                        <>
+                          <NegotiationHistory o={open} canTakeBack={open.status === "open" && !taken && countering !== open.ref} onChanged={onChanged} />
+                          {countering === open.ref && open.status === "open" && (
+                            <CounterForm
+                              key={`${open.ref}:${open.counters?.length ?? 0}`}
+                              o={open}
+                              asking={asking}
+                              onCancel={() => setCountering(null)}
+                              onSaved={() => { setCountering(null); onChanged(); }}
+                            />
+                          )}
+                        </>
+                      }
+                      onSendToLandlord={listingId && open.status !== "declined" ? () => setToLandlord(open) : null}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {toLandlord && listingId && (
+          <SendOfferToLandlord
+            offerRef={toLandlord.ref}
+            listingId={listingId}
+            name={toLandlord.name}
+            onClose={() => setToLandlord(null)}
+            onSent={onChanged}
+          />
+        )}
+
+        {declining && listingId && taken && (
+          <DeclineOtherOffers listingId={listingId} home={home} acceptedName={taken.name} onClose={() => setDeclining(false)} onDone={onChanged} />
+        )}
+
+        {won && (
+          <OfferWon
+            o={won}
+            home={home}
+            onStay={() => { setWon(null); setOpenRef(null); onChanged(); }}
+          />
+        )}
+      </section>
+    );
   }
 
   if (offers === null) {
@@ -425,20 +696,7 @@ function OfferOpened({
   onSendToLandlord: (() => void) | null;
 }) {
   const d = o.detail;
-  const facts: Array<[string, string]> = [];
-  /* Countered: the figure on the table, or the one agreed (16 Oct 2026). */
-  const label = !countered(o) ? "Offer" : o.status === "accepted" ? "Agreed rent" : o.status === "open" ? "On the table" : "Last figure";
-  if (o.amount != null) facts.push([label, `${gbp(o.amount)} a month${asking ? (o.amount >= asking ? " · the asking rent" : ` · ${gbp(asking - o.amount)} under the asking ${gbp(asking)}`) : ""}`]);
-  if (o.moveIn) facts.push(["Moving in", short(o.moveIn)]);
-  if (d?.people.length) facts.push(["Who would live there", d.people.join(", ")]);
-  if (d && (d.adults != null || d.children != null)) facts.push(["Household", [d.adults != null ? `${d.adults} adult${d.adults === 1 ? "" : "s"}` : null, d.children ? `${d.children} child${d.children === 1 ? "" : "ren"}` : null].filter(Boolean).join(", ") || "-"]);
-  if (d?.pets != null) facts.push(["Pets", d.pets ? d.petsNote || "Yes" : "None"]);
-  if (d?.work) facts.push(["Work", d.work]);
-  if (d?.income) facts.push(["Household income", `${gbp(d.income)} a year`]);
-  if (d?.affordability) facts.push(["Affordability", `Rent is ${Math.round(d.affordability)}% of income`]);
-  if (d?.guarantor != null) facts.push(["Guarantor", d.guarantor ? "Available" : "None"]);
-  if (d?.email) facts.push(["Email", d.email]);
-  if (d?.phone) facts.push(["Phone", d.phone]);
+  const facts = offerFacts(o, asking);
   return (
     <div>
       <button type="button" onClick={onBack} className="-ml-1 flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-semibold text-muted transition-colors hover:bg-page hover:text-ink">
@@ -496,6 +754,92 @@ function OfferOpened({
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         {decide}
         <a href={o.href} className="text-[11.5px] text-muted underline-offset-2 hover:text-ink hover:underline">Open the full record ›</a>
+      </div>
+      {notes}
+    </div>
+  );
+}
+
+/** One offer, opened, in the new look: the same facts and actions as OfferOpened. */
+function OfferOpenedNew({
+  o,
+  asking,
+  status,
+  onBack,
+  decide,
+  notes,
+  onSendToLandlord,
+  negotiation,
+}: {
+  o: ListingOffer;
+  asking: number | null;
+  status: { word: string; tone: Tone };
+  onBack: () => void;
+  decide: React.ReactNode;
+  notes: React.ReactNode;
+  negotiation?: React.ReactNode;
+  onSendToLandlord: (() => void) | null;
+}) {
+  const d = o.detail;
+  const facts = offerFacts(o, asking);
+  const made = [unRex(o.via), o.at ? `made ${short(o.at)}` : ""].filter(Boolean).join(" · ");
+  const decided = o.decided ? unRex(o.decided) : "";
+  return (
+    <div>
+      <button type="button" onClick={onBack} className="nl-link">
+        <Ico name="back" size={14} />
+        All offers
+      </button>
+      <div className="nl-off-ohead">
+        <div className="min-w-0">
+          <h3 className="nl-off-oname">{o.name}</h3>
+          {made && <p className="nl-meta">{made[0].toUpperCase() + made.slice(1)}</p>}
+          {decided && <p className="nl-meta">{decided}</p>}
+        </div>
+        <Badge tone={status.tone}>{status.word}</Badge>
+      </div>
+      {facts.length > 0 && (
+        <dl className="nl-off-facts">
+          {facts.map(([k, v]) => (
+            <div key={k}>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {negotiation}
+      {d?.parts?.length ? <OfferPartsList parts={d.parts} /> : null}
+      {d?.works.length ? (
+        <div className="nl-off-box">
+          <p className="nl-off-eyebrow">Asked for before moving in</p>
+          <ul>{d.works.map((w) => <li key={w}>{w}</li>)}</ul>
+        </div>
+      ) : null}
+      {d?.note && (
+        <div className="nl-off-box">
+          <p className="nl-off-eyebrow">In their words</p>
+          <p className="whitespace-pre-line">{d.note}</p>
+        </div>
+      )}
+      {onSendToLandlord && (
+        <div className="nl-off-box nl-off-send">
+          <span className="nl-meta">
+            {o.landlordSent
+              ? `Sent to the landlord ${short(o.landlordSent.at)} by ${o.landlordSent.by}.`
+              : "The landlord hasn't been told about this offer by email yet."}
+          </span>
+          <button type="button" onClick={onSendToLandlord} className="nl-btn nl-btn--secondary nl-btn--sm">
+            <Ico name="mail" size={14} />
+            {o.landlordSent ? "Send again" : "Send to the landlord"}
+          </button>
+        </div>
+      )}
+      <div className="nl-off-ofoot">
+        {decide}
+        <a href={o.href} className="nl-link" style={{ fontSize: 12 }}>
+          Open the full record <Ico name="arrow" size={13} />
+        </a>
       </div>
       {notes}
     </div>

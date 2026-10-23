@@ -7,6 +7,7 @@ import { PressButton } from "@/components/Bits";
 import { Tag } from "@/components/ListingTags";
 import PassportAnswers from "@/components/passport/PassportAnswers";
 import NotifyEnquiries from "@/components/listing/NotifyEnquiries";
+import { Badge, Ico } from "@/components/new-look/Parts";
 import dynamic from "next/dynamic";
 import { readJson } from "@/lib/page-cache";
 import type { Lead } from "@/lib/leads-sample";
@@ -74,8 +75,31 @@ function StatusPill({ s, auto, onOpen }: { s: Status | undefined; auto?: boolean
 
 type Auto = { on: boolean; by: string | null; mine: boolean; since: string | null };
 
-export default function ListingEnquiries({ enquiries, home, listingId, propertyId = null, letDone = false }: {
+/* The new look's age: worked out from when it came in, so it never goes stale on an open page. */
+function ageOf(e: Enquiry): string {
+  const t = e.receivedAt ? Date.parse(e.receivedAt) : NaN;
+  if (Number.isNaN(t)) return e.received.replace(/[\u2013\u2014]/g, "-");
+  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+/* Where it came from, without the word REX: "REX diary" reads "Diary". */
+function sourceLabel(s: string): string {
+  const raw = s.trim();
+  if (!raw) return "";
+  const t = raw.replace(/\bREX\b/gi, "").replace(/\s+/g, " ").trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Diary";
+}
+
+export default function ListingEnquiries({ enquiries, home, listingId, propertyId = null, letDone = false, look, onBookViewing }: {
   enquiries: Enquiry[];
+  /** "new": the new look's list (lib/new-look). Without it, the list as it has always been. */
+  look?: "new";
+  /** The new look's Book viewing link on each row. Without it the link is not shown. */
+  onBookViewing?: (e: Enquiry) => void;
   /** The listing's property, for its viewings (who has already viewed). */
   propertyId?: string | null;
   /** Let or let agreed: Notify Enquiries shows (22 Oct 2026). */
@@ -227,10 +251,9 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
     if (next) void openEnquirer(next);
   }
 
-  async function openReview() {
+  async function openReview(first: Enquiry | undefined = recipients[0]) {
     setReviewing(true);
     setPreview(null);
-    const first = recipients[0];
     const j = await fetch("/api/tenant/passport/invite", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -269,6 +292,333 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
   }
 
   const sentCount = results?.filter((r) => r.ok).length ?? 0;
+
+  /* The pop-ups, shared by both looks: they portal to the page, so they keep their own styling. */
+  const overlays = (
+    <>
+      {/* Read it, then send: who it goes to and the email they will get. */}
+      {reviewing &&
+        createPortal(
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" data-steve-never>
+            <button aria-label="Close" onClick={() => !sending && setReviewing(false)} className="absolute inset-0 cursor-default bg-ink/45" />
+            <div className="fade-up relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+              <div className="shrink-0 border-b border-line/70 px-6 py-4">
+                <h2 className="text-[19px] leading-tight">Send Passports to {recipients.length} {recipients.length === 1 ? "Person" : "People"}</h2>
+                <p className="mt-0.5 text-[12px] text-muted">Each gets their own email and their own passport link, from you.</p>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Going to</p>
+                <ul className="mt-2 overflow-hidden rounded-2xl border border-line/60 bg-white">
+                  {recipients.map((e) => {
+                    const r = results?.find((x) => x.email === e.email);
+                    return (
+                      <li key={e.email} className="flex items-center gap-3 border-b border-line/40 px-4 py-2 last:border-b-0">
+                        <span className="min-w-0 flex-1 truncate text-[12.5px]">
+                          <span className="font-semibold">{e.name}</span> <span className="text-muted">{e.email}</span>
+                        </span>
+                        {r ? <span className={`text-[11.5px] font-semibold ${r.ok ? "text-[#56634a]" : "text-accent-dark"}`}>{r.ok ? "✓ Sent" : r.said}</span> : sending ? <span className="text-[11px] text-muted">Waiting…</span> : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">The email{recipients[0] ? `, as ${recipients[0].name.split(/\s+/)[0]} will get it` : ""}</p>
+                {preview ? (
+                  <>
+                    <p className="mt-2 text-[12.5px]"><span className="text-muted">Subject:</span> <span className="font-semibold">{preview.subject}</span></p>
+                    <iframe title="The passport email" srcDoc={preview.html} sandbox="" className="mt-2 h-[420px] w-full rounded-2xl border border-line/60 bg-white" />
+                  </>
+                ) : (
+                  <p className="mt-2 text-[12px] text-muted">Getting the email ready…</p>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
+                <button type="button" disabled={sending} onClick={() => setReviewing(false)} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-50">
+                  Back
+                </button>
+                <PressButton
+                  onClick={() => void sendAll()}
+                  disabled={sending || !preview}
+                  className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${!sending && preview ? "bg-accent-dark text-white" : "cursor-not-allowed bg-ink/30 text-page/60"}`}
+                >
+                  {sending ? `Sending ${results?.length ?? 0} of ${recipients.length}…` : `Send to ${recipients.length}`}
+                </PressButton>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Turning it on: what happens, and the reminder as a tenant will get it. */}
+      {autoAsk &&
+        createPortal(
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" data-steve-never>
+            <button aria-label="Close" onClick={() => !autoBusy && setAutoAsk(false)} className="absolute inset-0 cursor-default bg-ink/45" />
+            <div className="fade-up relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+              <div className="shrink-0 border-b border-line/70 px-6 py-4">
+                <h2 className="text-[19px] leading-tight">Automate Passport</h2>
+                <p className="mt-0.5 text-[12px] text-muted">For this home only. Turn it off here any time.</p>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <ul className="space-y-2 text-[12.5px] leading-relaxed">
+                  <li className="flex gap-2.5">
+                    <DoodleIcon name="user" size={14} className="mt-0.5 shrink-0 text-accent-dark" />
+                    <span>Every <strong>new</strong> enquiry from now on gets the passport within five minutes, from you. The same email as Send passports. Nobody who has already enquired is sent one.</span>
+                  </li>
+                  <li className="flex gap-2.5">
+                    <DoodleIcon name="clock" size={14} className="mt-0.5 shrink-0 text-accent-dark" />
+                    <span>If they haven&apos;t finished it a day later, <strong>one</strong> reminder goes, also from you. If they finish first, it doesn&apos;t.</span>
+                  </li>
+                </ul>
+                <p className="mt-5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">The reminder</p>
+                {reminder ? (
+                  <>
+                    <p className="mt-2 text-[12.5px]"><span className="text-muted">Subject:</span> <span className="font-semibold">{reminder.subject}</span></p>
+                    <iframe title="The passport reminder" srcDoc={reminder.html} sandbox="" className="mt-2 h-[380px] w-full rounded-2xl border border-line/60 bg-white" />
+                  </>
+                ) : (
+                  <p className="mt-2 text-[12px] text-muted">Getting the email ready…</p>
+                )}
+                {autoNote && <p className="mt-3 text-[12px] text-accent-dark">{autoNote}</p>}
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
+                <button type="button" disabled={autoBusy} onClick={() => setAutoAsk(false)} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-50">
+                  Back
+                </button>
+                <span className="flex flex-wrap items-center gap-3">
+                  <button type="button" disabled={autoBusy} onClick={() => void reminderToMe()} className="text-[12.5px] font-semibold text-accent-dark hover:underline disabled:opacity-50">
+                    Send the reminder to me
+                  </button>
+                  <PressButton
+                    onClick={() => void turnAuto(true)}
+                    disabled={autoBusy}
+                    className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${!autoBusy ? "bg-accent-dark text-white" : "cursor-not-allowed bg-ink/30 text-page/60"}`}
+                  >
+                    {autoBusy ? "One moment…" : "Turn on"}
+                  </PressButton>
+                </span>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {notifying && listingId != null && (
+        <NotifyEnquiries listingId={String(listingId)} propertyId={propertyId} address={home ?? "This home"} onClose={() => setNotifying(false)} />
+      )}
+
+      <PassportAnswers email={viewing?.email ?? null} name={viewing?.name} home={home} onClose={() => setViewing(null)} />
+
+      {/* Over the listing's own panels (z-130), in a layer of its own - and
+          UNDER every pop-up the lead's file opens (z-140 and up: WhatsApp,
+          the passport answers, the viewing booker). Those are portalled to
+          the page, so at z-160 this layer hid them: WhatsApp and Passport
+          "did nothing", the sheet sat behind the file and went when it
+          closed (Sean McMahon, Dan Richards, 21-22 Oct 2026). */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <div className="relative z-[135]">
+            <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onStep={stepEnquirer} />
+          </div>,
+          document.body
+        )}
+    </>
+  );
+
+  /* ── THE NEW LOOK (lib/new-look, 23 Oct 2026) ───────────────────────────
+     The same list, read and sent the same way, drawn as rows on hairlines:
+     a list bar with the passport counts, the automatic switch and one send
+     button; a tick on every row that can still be sent one. Ticking turns
+     "Send all unsent" into "Send N passports"; both go through the same
+     review-before-send pop-up as the old look. */
+  if (look === "new") {
+    const keyOf = (e: Enquiry) => e.email.trim().toLowerCase();
+    const picked = recipients.length;
+    const summary =
+      statuses === null
+        ? null
+        : [
+            counts.done && `${counts.done} passport${counts.done === 1 ? "" : "s"} done`,
+            counts.started && `${counts.started} filling in`,
+            counts.sent && `${counts.sent} sent`,
+            counts.none && `${counts.none} not sent`,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+    const sendUnsent = () => {
+      if (!notSent.length) return;
+      setResults(null);
+      setChosen(new Set(notSent.map(keyOf)));
+      void openReview(notSent[0]);
+    };
+    const sendPicked = () => {
+      if (!picked) return;
+      setResults(null);
+      void openReview(recipients[0]);
+    };
+
+    return (
+      <section className="nl-enq" data-steve="listing.enquiries">
+        <div className="nl-enq-bar">
+          <span className="nl-enq-sum nl-meta">
+            {people.length === 0 ? null : statuses === null ? (
+              <>
+                <span className="nl-enq-spin" aria-hidden />
+                Checking their passports…
+              </>
+            ) : (
+              <span>
+                {summary}
+                {enquiries.length > people.length && ` · ${enquiries.length} enquiries from ${people.length} people`}
+              </span>
+            )}
+          </span>
+          <span className="nl-enq-acts">
+            {auto && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={auto.on}
+                disabled={autoBusy}
+                onClick={() => (auto.on ? void turnAuto(false) : void askAuto())}
+                title={auto.on ? "Every new enquiry gets the passport automatically. Press to stop." : "Send every new enquiry the passport automatically"}
+                className="nl-enq-switch"
+                data-steve="listing.enquiries.auto"
+              >
+                <span className={`nl-enq-track${auto.on ? " is-on" : ""}`} aria-hidden>
+                  <i />
+                </span>
+                Send passports automatically
+              </button>
+            )}
+            {letDone && listingId != null && /^\d+$/.test(String(listingId)) && (
+              <button type="button" onClick={() => setNotifying(true)} className="nl-btn nl-btn--secondary nl-btn--sm" data-steve="listing.enquiries.notify">
+                <Ico name="mail" size={14} />
+                Notify enquiries
+              </button>
+            )}
+            {picked > 0 && (
+              <button type="button" onClick={() => setChosen(new Set())} className="nl-btn nl-btn--quiet nl-btn--sm">
+                Clear
+              </button>
+            )}
+            {people.length > 0 &&
+              (picked > 0 ? (
+                <button type="button" onClick={sendPicked} className="nl-btn nl-btn--primary nl-btn--sm">
+                  Send {picked} passport{picked === 1 ? "" : "s"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={sendUnsent}
+                  disabled={statuses === null || !notSent.length}
+                  title={statuses !== null && !notSent.length ? "Everyone with an email has been sent one" : undefined}
+                  className="nl-btn nl-btn--secondary nl-btn--sm"
+                >
+                  Send all unsent
+                </button>
+              ))}
+          </span>
+        </div>
+
+        {auto?.on && (
+          <p className="nl-enq-note">
+            New enquiries get the passport automatically{auto.mine ? ", from you" : auto.by ? `, from ${auto.by}` : ""}
+            {auto.since ? `, since ${short(auto.since)}` : ""}. One friendly reminder a day later if it isn&apos;t finished.
+          </p>
+        )}
+        {autoNote && !autoAsk && <p className="nl-enq-note is-warn">{autoNote}</p>}
+
+        {results && (
+          <div className="nl-enq-results" role="status">
+            <p className="nl-strong">
+              {sentCount} passport{sentCount === 1 ? "" : "s"} sent{results.length > sentCount ? `, ${results.length - sentCount} didn't go` : ""}.
+            </p>
+            {results.filter((r) => !r.ok).map((r) => (
+              <p key={r.email} className="nl-enq-results-bad">
+                {r.name}: {r.said}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {people.length ? (
+          <ul className="nl-enq-rows">
+            {people.map((e) => {
+              const k = keyOf(e);
+              const can = sendable(e);
+              const on = can && chosen.has(k);
+              const s = statusOf(e);
+              const src = sourceLabel(e.source);
+              const openAnswers = () => setViewing({ email: e.email.trim(), name: e.name });
+              return (
+                <li key={e.id} className={`nl-enq-row${on ? " is-picked" : ""}`}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    aria-label={`Send ${e.name} a passport`}
+                    disabled={!can}
+                    title={can ? undefined : !emailOk(e.email) ? "No email to send it to" : "Already sent one"}
+                    onClick={() => toggle(k)}
+                    className={`nl-enq-check${on ? " is-on" : ""}`}
+                  >
+                    {on && <Ico name="check" size={12} />}
+                  </button>
+                  <a
+                    href={`/leads?open=${encodeURIComponent(e.id)}`}
+                    onClick={(ev) => {
+                      if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
+                      ev.preventDefault();
+                      void openEnquirer(e);
+                    }}
+                    aria-busy={opening === e.id}
+                    title={[e.phone, e.email].filter(Boolean).join(" · ") || "No contact details"}
+                    className="nl-enq-main"
+                  >
+                    <span className="nl-enq-name nl-strong">
+                      <span className="nl-enq-name-text">{e.name}</span>
+                      {opening === e.id && <span className="nl-enq-spin" aria-hidden />}
+                    </span>
+                    <span className="nl-enq-msg nl-meta">{e.message || "No message"}</span>
+                  </a>
+                  {src && <span className="nl-enq-src">{src}</span>}
+                  <span className="nl-enq-age nl-mono">{ageOf(e)}</span>
+                  <span className="nl-enq-status">
+                    {!emailOk(e.email) ? (
+                      <Badge tone="neutral" bare>No email</Badge>
+                    ) : statuses === null ? (
+                      <span className="nl-enq-spin" aria-label="Checking the passport" />
+                    ) : !s || s.state === "none" ? (
+                      <Badge tone="neutral" bare>Not sent</Badge>
+                    ) : s.state === "sent" ? (
+                      <Badge tone="info" bare title={`${autoSent.has(k) ? "Sent automatically" : "Sent"}${s.invitedAt ? ` ${short(s.invitedAt)}` : ""}`}>
+                        {autoSent.has(k) ? "Auto sent" : "Passport sent"}
+                      </Badge>
+                    ) : (
+                      <button type="button" onClick={openAnswers} className="nl-enq-statusbtn" title={s.state === "done" ? "Open their answers" : "Open what they have filled in so far"}>
+                        <Badge tone={s.state === "done" ? "good" : "warning"} bare>
+                          {s.state === "done" ? "Passport done" : "Filling in"}
+                        </Badge>
+                      </button>
+                    )}
+                  </span>
+                  {onBookViewing && (
+                    <button type="button" onClick={() => onBookViewing(e)} className="nl-enq-book nl-btn nl-btn--quiet nl-btn--sm">
+                      Book viewing
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="nl-empty">No enquiries on this listing yet.</p>
+        )}
+
+        {overlays}
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-[22px] border border-line/50 bg-white p-5" data-steve="listing.enquiries">
@@ -440,131 +790,7 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
         </div>
       )}
 
-      {/* Read it, then send: who it goes to and the email they will get. */}
-      {reviewing &&
-        createPortal(
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" data-steve-never>
-            <button aria-label="Close" onClick={() => !sending && setReviewing(false)} className="absolute inset-0 cursor-default bg-ink/45" />
-            <div className="fade-up relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
-              <div className="shrink-0 border-b border-line/70 px-6 py-4">
-                <h2 className="text-[19px] leading-tight">Send Passports to {recipients.length} {recipients.length === 1 ? "Person" : "People"}</h2>
-                <p className="mt-0.5 text-[12px] text-muted">Each gets their own email and their own passport link, from you.</p>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Going to</p>
-                <ul className="mt-2 overflow-hidden rounded-2xl border border-line/60 bg-white">
-                  {recipients.map((e) => {
-                    const r = results?.find((x) => x.email === e.email);
-                    return (
-                      <li key={e.email} className="flex items-center gap-3 border-b border-line/40 px-4 py-2 last:border-b-0">
-                        <span className="min-w-0 flex-1 truncate text-[12.5px]">
-                          <span className="font-semibold">{e.name}</span> <span className="text-muted">{e.email}</span>
-                        </span>
-                        {r ? <span className={`text-[11.5px] font-semibold ${r.ok ? "text-[#56634a]" : "text-accent-dark"}`}>{r.ok ? "✓ Sent" : r.said}</span> : sending ? <span className="text-[11px] text-muted">Waiting…</span> : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-                <p className="mt-5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">The email{recipients[0] ? `, as ${recipients[0].name.split(/\s+/)[0]} will get it` : ""}</p>
-                {preview ? (
-                  <>
-                    <p className="mt-2 text-[12.5px]"><span className="text-muted">Subject:</span> <span className="font-semibold">{preview.subject}</span></p>
-                    <iframe title="The passport email" srcDoc={preview.html} sandbox="" className="mt-2 h-[420px] w-full rounded-2xl border border-line/60 bg-white" />
-                  </>
-                ) : (
-                  <p className="mt-2 text-[12px] text-muted">Getting the email ready…</p>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
-                <button type="button" disabled={sending} onClick={() => setReviewing(false)} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-50">
-                  Back
-                </button>
-                <PressButton
-                  onClick={() => void sendAll()}
-                  disabled={sending || !preview}
-                  className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${!sending && preview ? "bg-accent-dark text-white" : "cursor-not-allowed bg-ink/30 text-page/60"}`}
-                >
-                  {sending ? `Sending ${results?.length ?? 0} of ${recipients.length}…` : `Send to ${recipients.length}`}
-                </PressButton>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      {/* Turning it on: what happens, and the reminder as a tenant will get it. */}
-      {autoAsk &&
-        createPortal(
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" data-steve-never>
-            <button aria-label="Close" onClick={() => !autoBusy && setAutoAsk(false)} className="absolute inset-0 cursor-default bg-ink/45" />
-            <div className="fade-up relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
-              <div className="shrink-0 border-b border-line/70 px-6 py-4">
-                <h2 className="text-[19px] leading-tight">Automate Passport</h2>
-                <p className="mt-0.5 text-[12px] text-muted">For this home only. Turn it off here any time.</p>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                <ul className="space-y-2 text-[12.5px] leading-relaxed">
-                  <li className="flex gap-2.5">
-                    <DoodleIcon name="user" size={14} className="mt-0.5 shrink-0 text-accent-dark" />
-                    <span>Every <strong>new</strong> enquiry from now on gets the passport within five minutes, from you. The same email as Send passports. Nobody who has already enquired is sent one.</span>
-                  </li>
-                  <li className="flex gap-2.5">
-                    <DoodleIcon name="clock" size={14} className="mt-0.5 shrink-0 text-accent-dark" />
-                    <span>If they haven&apos;t finished it a day later, <strong>one</strong> reminder goes, also from you. If they finish first, it doesn&apos;t.</span>
-                  </li>
-                </ul>
-                <p className="mt-5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">The reminder</p>
-                {reminder ? (
-                  <>
-                    <p className="mt-2 text-[12.5px]"><span className="text-muted">Subject:</span> <span className="font-semibold">{reminder.subject}</span></p>
-                    <iframe title="The passport reminder" srcDoc={reminder.html} sandbox="" className="mt-2 h-[380px] w-full rounded-2xl border border-line/60 bg-white" />
-                  </>
-                ) : (
-                  <p className="mt-2 text-[12px] text-muted">Getting the email ready…</p>
-                )}
-                {autoNote && <p className="mt-3 text-[12px] text-accent-dark">{autoNote}</p>}
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
-                <button type="button" disabled={autoBusy} onClick={() => setAutoAsk(false)} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-50">
-                  Back
-                </button>
-                <span className="flex flex-wrap items-center gap-3">
-                  <button type="button" disabled={autoBusy} onClick={() => void reminderToMe()} className="text-[12.5px] font-semibold text-accent-dark hover:underline disabled:opacity-50">
-                    Send the reminder to me
-                  </button>
-                  <PressButton
-                    onClick={() => void turnAuto(true)}
-                    disabled={autoBusy}
-                    className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${!autoBusy ? "bg-accent-dark text-white" : "cursor-not-allowed bg-ink/30 text-page/60"}`}
-                  >
-                    {autoBusy ? "One moment…" : "Turn on"}
-                  </PressButton>
-                </span>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      {notifying && listingId != null && (
-        <NotifyEnquiries listingId={String(listingId)} propertyId={propertyId} address={home ?? "This home"} onClose={() => setNotifying(false)} />
-      )}
-
-      <PassportAnswers email={viewing?.email ?? null} name={viewing?.name} home={home} onClose={() => setViewing(null)} />
-
-      {/* Over the listing's own panels (z-130), in a layer of its own - and
-          UNDER every pop-up the lead's file opens (z-140 and up: WhatsApp,
-          the passport answers, the viewing booker). Those are portalled to
-          the page, so at z-160 this layer hid them: WhatsApp and Passport
-          "did nothing", the sheet sat behind the file and went when it
-          closed (Sean McMahon, Dan Richards, 21-22 Oct 2026). */}
-      {typeof document !== "undefined" &&
-        createPortal(
-          <div className="relative z-[135]">
-            <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onStep={stepEnquirer} />
-          </div>,
-          document.body
-        )}
+      {overlays}
     </section>
   );
 }

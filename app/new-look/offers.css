@@ -1,0 +1,114 @@
+/* New look: offers (lib/new-look). Scoped under [data-look="new"]. */
+
+/* ── the Offers card (components/listing/ListingOffers, look="new") ─────── */
+[data-look="new"] .nl-off-card { gap: 14px; }
+[data-look="new"] .nl-off-spin {
+  width: 12px; height: 12px; flex: none; border-radius: 50%;
+  border: 1.5px solid var(--line-strong); border-top-color: var(--ink);
+  animation: nl-off-spin 0.8s linear infinite;
+}
+@keyframes nl-off-spin { to { transform: rotate(360deg); } }
+[data-look="new"] .nl-off-wait { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+
+/* A notice in the card: the forms couldn't be read, the others are held. */
+[data-look="new"] .nl-off-note {
+  font-size: 12px; line-height: 18px; padding: 10px 14px; border-radius: 12px;
+  background: var(--warning-soft); color: var(--warning);
+}
+[data-look="new"] .nl-off-held {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 12px 14px; border-radius: 14px; background: var(--panel);
+}
+[data-look="new"] .nl-off-held > span { flex: 1 1 220px; min-width: 0; }
+
+/* Rows on hairlines, no boxes. The list is the container, so the row folds
+   to two lines when the card is narrow, whatever the page width. */
+[data-look="new"] .nl-off-rows { list-style: none; margin: 0; padding: 0; container-type: inline-size; }
+[data-look="new"] .nl-off-rows > li { padding: 14px 6px; border-bottom: 1px solid var(--line); transition: background-color 0.25s, opacity 0.25s; }
+[data-look="new"] .nl-off-rows > li:hover { background: var(--panel); }
+[data-look="new"] .nl-off-rows > li.is-faded { opacity: 0.6; }
+[data-look="new"] .nl-off-row {
+  display: grid; align-items: center; gap: 10px 18px;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "main rent status acts";
+}
+@container (max-width: 600px) {
+  [data-look="new"] .nl-off-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "main rent" "status acts";
+  }
+  [data-look="new"] .nl-off-row > .nl-off-acts { justify-content: flex-end; }
+}
+@container (max-width: 380px) {
+  [data-look="new"] .nl-off-row { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "rent" "status" "acts"; }
+  [data-look="new"] .nl-off-row > .nl-off-acts { justify-content: flex-start; }
+}
+[data-look="new"] .nl-off-main {
+  grid-area: main; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 0; cursor: pointer;
+}
+[data-look="new"] .nl-off-main:hover .nl-strong { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+[data-look="new"] .nl-off-main:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 6px; }
+[data-look="new"] .nl-off-main .nl-strong,
+[data-look="new"] .nl-off-main .nl-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-off-talk { font-size: 12px; line-height: 18px; color: var(--accent-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-off-rent { grid-area: rent; white-space: nowrap; }
+[data-look="new"] .nl-off-row > .nl-badge { grid-area: status; justify-self: start; }
+[data-look="new"] .nl-off-acts { grid-area: acts; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+[data-look="new"] .nl-off-sub { margin-top: 8px; }
+[data-look="new"] .nl-off-sub .nl-link { font-size: 12px; }
+[data-look="new"] .nl-off-err { font-size: 12px; line-height: 18px; color: var(--accent-dark); margin-top: 8px; }
+
+/* The list and one offer side by side, sliding (as the old look). */
+[data-look="new"] .nl-off-slide { overflow: hidden; }
+[data-look="new"] .nl-off-track { display: flex; width: 200%; align-items: flex-start; transition: transform 0.3s var(--nl-ease); }
+[data-look="new"] .nl-off-track.is-open { transform: translateX(-50%); }
+[data-look="new"] .nl-off-track > div { width: 50%; min-width: 0; }
+[data-look="new"] .nl-off-track > div:first-child { padding-right: 4px; }
+[data-look="new"] .nl-off-track > div:last-child { padding-left: 4px; }
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-off-track { transition: none; } [data-look="new"] .nl-off-spin { animation-duration: 2s; } }
+
+/* One offer, opened. */
+[data-look="new"] .nl-off-ohead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 14px; }
+[data-look="new"] .nl-off-oname { font-family: var(--font-heading); font-weight: 600; font-size: 20px; line-height: 26px; letter-spacing: -0.2px; margin: 0 0 2px; color: var(--ink); }
+[data-look="new"] .nl-off-facts { margin: 16px 0 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-off-facts > div { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-off-facts dt { width: 150px; flex: none; color: var(--muted); }
+[data-look="new"] .nl-off-facts dd { margin: 0; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+@media (max-width: 760px) { [data-look="new"] .nl-off-facts dt { width: 110px; } }
+[data-look="new"] .nl-off-box { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--panel); font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-off-eyebrow { font-size: 12px; font-weight: 500; line-height: 16px; color: var(--muted); margin: 0 0 6px; }
+[data-look="new"] .nl-off-box ul { margin: 0; padding-left: 18px; list-style: disc; }
+[data-look="new"] .nl-off-send { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+[data-look="new"] .nl-off-send > span { flex: 1 1 200px; min-width: 0; }
+[data-look="new"] .nl-off-ofoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+
+/* ── the Offer Link card (components/listing/ApplicationFormCard, look="new") */
+[data-look="new"] .nl-off-linkcard { gap: 14px; }
+[data-look="new"] .nl-off-linkbox {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 14px; border: 1px dashed var(--line-strong); border-radius: 12px;
+  font-family: var(--nl-mono); font-size: 12px; letter-spacing: 0;
+}
+[data-look="new"] .nl-off-linkbox > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+[data-look="new"] .nl-off-linkbox .nl-link { font-family: var(--nl-mono); font-size: 12px; flex: none; }
+[data-look="new"] .nl-off-linkacts { display: flex; align-items: center; gap: 12px; flex: none; }
+[data-look="new"] .nl-off-sendbtn { width: 100%; justify-content: flex-start; padding: 8px 14px; font-size: 13px; border-radius: 10px; }
+[data-look="new"] .nl-off-compose { padding: 14px; border-radius: 14px; background: var(--panel); }
+[data-look="new"] .nl-off-label { display: block; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--muted); margin-bottom: 6px; }
+[data-look="new"] .nl-off-to {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 10px;
+  border: 1px solid var(--line-strong); border-radius: 12px; background: var(--page);
+  transition: border-color 0.2s;
+}
+[data-look="new"] .nl-off-to:focus-within { border-color: var(--ink); }
+[data-look="new"] .nl-off-to input { flex: 1; min-width: 140px; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; line-height: 20px; color: var(--ink); padding: 2px 0; }
+[data-look="new"] .nl-off-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 9px; border-radius: 8px; background: var(--box); font-size: 12px; line-height: 16px; max-width: 100%; }
+[data-look="new"] .nl-off-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-off-chip.is-bad { background: var(--warning-soft); color: var(--warning); }
+[data-look="new"] .nl-off-chip button { display: inline-grid; place-items: center; width: 16px; height: 16px; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; padding: 0; }
+[data-look="new"] .nl-off-chip button:hover { color: var(--ink); }
+[data-look="new"] .nl-off-results { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+[data-look="new"] .nl-off-results li { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 18px; }
+[data-look="new"] .nl-off-results li > svg { flex: none; margin-top: 1px; color: var(--sage-ink); }
+[data-look="new"] .nl-off-results .is-not { flex: none; color: var(--warning); font-weight: 500; }

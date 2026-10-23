@@ -1355,6 +1355,37 @@ CREATE INDEX IF NOT EXISTS os_listing_capture_letagreed_idx
 --
 -- submitter_id is the PRIMARY KEY because webhooks retry. Two deliveries of
 -- the same completion must produce one document, not two.
+-- Terms of Business sent from the OS itself (lib/terms, 23 Oct 2026): one
+-- row per contract. The words live in code by version; what was filled in,
+-- who signs and where each of them is lives here. DocuSeal stays the record
+-- of each signature; parties[] mirrors it so the page can answer without a
+-- call per person.
+CREATE TABLE IF NOT EXISTS os_terms (
+  id                 TEXT PRIMARY KEY,
+  version            TEXT NOT NULL,
+  listing_id         TEXT,
+  property_id        TEXT,
+  appraisal_id       TEXT,
+  property_address   TEXT NOT NULL DEFAULT '',
+  terms_values       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  parties            JSONB NOT NULL DEFAULT '[]'::jsonb,
+  agent_id           TEXT NOT NULL DEFAULT '',
+  agent_name         TEXT NOT NULL DEFAULT '',
+  agent_email        TEXT NOT NULL DEFAULT '',
+  submission_id      BIGINT,
+  agent_submitter_id BIGINT,
+  agent_embed_src    TEXT,
+  agent_signed_at    TIMESTAMPTZ,
+  status             TEXT NOT NULL DEFAULT 'agent',
+  signed_r2_key      TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at            TIMESTAMPTZ,
+  completed_at       TIMESTAMPTZ,
+  cancelled_at       TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_terms_listing ON os_terms (listing_id);
+CREATE INDEX IF NOT EXISTS os_terms_property ON os_terms (property_id);
+
 CREATE TABLE IF NOT EXISTS os_signed_documents (
   submitter_id   BIGINT PRIMARY KEY,
   submission_id  BIGINT,

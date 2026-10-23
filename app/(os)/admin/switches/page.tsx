@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import AreaSwitches from "@/components/AreaSwitches";
+import NewLookSwitches from "@/components/NewLookSwitches";
 
 /**
  * What's armed — the page that turns sending on and off.
@@ -108,6 +109,8 @@ export default function AdminSwitches() {
       />
 
       <AreaSwitches />
+
+      <NewLookSwitches />
 
       {locked && (
         <p className="fade-up mt-6 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px] leading-relaxed">

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Inter, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Inter, JetBrains_Mono, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
+import "./new-look.css";
 
 /**
  * THE TYPE, from 11 Sep 2026 (James): Manrope for headings and figures, set
@@ -110,6 +111,28 @@ const inter = Inter({
   display: "swap",
 });
 
+/**
+ * The new look's two extra faces (lib/new-look, 23 Oct 2026): Source Serif 4
+ * for figures, blurbs and Steve's answers, JetBrains Mono for times and
+ * references. Only screens switched to the new look draw them, so neither is
+ * preloaded.
+ */
+const serif4 = Source_Serif_4({
+  subsets: ["latin"],
+  weight: ["400", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-serif4",
+  display: "swap",
+  preload: false,
+});
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-jbmono",
+  display: "swap",
+  preload: false,
+});
+
 export const metadata: Metadata = {
   title: "TLE OS",
   description: "The Letting Experts — operations overlay (internal preview)",
@@ -142,7 +165,7 @@ export default function RootLayout({
       /* The theme is put on <html> before React hydrates (ThemeGate), so its
          attributes legitimately differ. */
       suppressHydrationWarning
-      className={`${manrope.variable} ${inter.variable} ${bricolage.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
+      className={`${manrope.variable} ${inter.variable} ${bricolage.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable} ${serif4.variable} ${mono.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>

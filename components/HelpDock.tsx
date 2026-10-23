@@ -15,6 +15,9 @@ import { fetchMe } from "@/lib/me";
 import { openGuide } from "@/lib/guide-sheet";
 import { TOAST_LIFT_EVENT, type ToastLift } from "@/lib/toast";
 import SteveTasks from "@/components/SteveTasks";
+import SteveFace from "@/components/SteveFace";
+import { Ico } from "@/components/new-look/Parts";
+import { useNewLook } from "@/lib/use-new-look";
 import { readScreen, runSteps } from "@/lib/screen-controls";
 import type { ScreenPlan } from "@/lib/steve-never";
 
@@ -366,6 +369,14 @@ function Dock() {
     setNaming(false);
   }
   const [tab, setTab] = useState<Tab>("help");
+  /* The new look (lib/new-look "steve", James 23 Oct 2026): "get rid of the
+     guides, news and tasks ... just the normal chat function, with a little
+     button to click reports in". The strip goes; Report is a button in his
+     head line; anything that asks for one of the three lands on the chat. */
+  const lookNew = useNewLook("steve") === true;
+  useEffect(() => {
+    if (lookNew && (tab === "guides" || tab === "news" || tab === "tasks")) setTab("help");
+  }, [lookNew, tab]);
   /* The shelf: every guide, built or written - see /api/knowledge/guides. Read
      when the tab is opened, so the panel costs nothing on screens where nobody
      looks at it. */
@@ -491,6 +502,46 @@ function Dock() {
   const scroller = useRef<HTMLDivElement | null>(null);
   /** Whether we've already dropped to the bottom since the panel opened. */
   const landed = useRef(false);
+
+  /* ── The new look: every opening starts on an empty thread ─────────────────
+     James, 23 Oct 2026: the previous conversation is not put back on the
+     screen when he opens. The server keeps all of it, and so does `lines`;
+     `mark` is where this opening's conversation starts, and only lines from
+     there on are drawn. Set to the length of what is already there each time
+     he opens, and by loadHistory once the history has arrived. The morning
+     brief and the bell's ?steve=chat open him on what is new (`revealing`),
+     so that is the one case where something from before shows. */
+  const [mark, setMark] = useState(0);
+  const linesRef = useRef<Line[]>([]);
+  linesRef.current = lines;
+  const revealing = useRef(false);
+  useEffect(() => {
+    if (open && !revealing.current) setMark(linesRef.current.length);
+    revealing.current = false;
+  }, [open]);
+  /* Whether the server has said if he can answer on his own yet: until it
+     has, the "I can't answer" line is not said. */
+  const [liveKnown, setLiveKnown] = useState(false);
+  /* A file dragged over the composer. */
+  const [chatDrag, setChatDrag] = useState(false);
+  const shownCount = lookNew ? Math.max(0, lines.length - mark) : lines.length;
+  const talking = lookNew && (shownCount > 0 || busy);
+  /* The panel grows with the conversation to half as tall again as it
+     opened, and no further: measured while it is empty (head, composer and
+     the three suggestions), and applied as the most the card may be. */
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [chatMax, setChatMax] = useState(0);
+  useEffect(() => {
+    if (!open || !lookNew || tab === "feedback" || talking) return;
+    const b = bubbleRef.current;
+    const n = innerRef.current;
+    if (!b || !n || !b.offsetHeight) return;
+    const whole = b.offsetHeight;
+    setChatMax(Math.round(whole * 1.5 - (whole - n.offsetHeight)));
+  }, [open, lookNew, tab, talking, stage, liveKnown, live]);
+  /* Before it has been measured: about what an empty card comes to. */
+  const chatCap = chatMax || 470;
 
   useEffect(() => {
     fetchMe()
@@ -761,7 +812,7 @@ function Dock() {
   const briefAsked = useRef(false);
   /* Set below the early return, where loadHistory lives; read by the effects
      above it. */
-  const loadHistoryRef = useRef<(() => Promise<void>) | null>(null);
+  const loadHistoryRef = useRef<((reveal?: "latest") => Promise<void>) | null>(null);
   useEffect(() => {
     if (!signedIn || briefAsked.current) return;
     briefAsked.current = true;
@@ -782,7 +833,7 @@ function Dock() {
       if (!r?.fresh || gone) return;
       /* The brief is already in his chat (the server logged it), so loading
          the conversation brings it in at the bottom. */
-      await loadHistoryRef.current?.();
+      await loadHistoryRef.current?.("latest");
       setTab("help");
       setOpen(true);
       react("wave", 2200);
@@ -803,7 +854,7 @@ function Dock() {
        report is in his chat. */
     setTab(want === "tasks" ? "tasks" : "help");
     setOpen(true);
-    if (want === "chat") void loadHistoryRef.current?.();
+    if (want === "chat") void loadHistoryRef.current?.("latest");
     sp.delete("steve");
     const rest = sp.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
@@ -830,12 +881,16 @@ function Dock() {
     await loadHistory();
   }
 
-  /** Their conversation so far, onto the screen. */
-  async function loadHistory() {
+  /** Their conversation so far, onto the screen. `reveal` (the morning brief,
+   *  the bell's ?steve=chat) opens the new look on the latest of it rather
+   *  than on an empty thread. */
+  async function loadHistory(reveal?: "latest") {
+    if (reveal) revealing.current = true;
     const r = await fetch("/api/assistant/ask", { cache: "no-store" })
       .then((x) => (x.ok ? x.json() : null))
       .catch(() => null);
     setLive(Boolean(r?.live));
+    setLiveKnown(Boolean(r));
     setScreens(Array.isArray(r?.screens) ? r.screens : []);
     const history: Line[] = (r?.history ?? []).map((h: Line) => ({ role: h.role, text: h.text }));
 
@@ -850,6 +905,20 @@ function Dock() {
           : [{ role: "assistant", text: "Hello again. What can I help you with?" }]
       );
     }
+    /* Where the new look's thread starts (only the new look reads it; set
+       whatever the look, so a look that answers late cannot leave the old
+       conversation on screen). The brief and the bell: everything since they
+       last said something, three lines at most. Otherwise none of it, and
+       not the "Hello again" either - the empty composer is the greeting -
+       but the introduction, when it is due, is shown. */
+    const lastAsked = history.map((h) => h.role).lastIndexOf("agent");
+    setMark(
+      reveal
+        ? Math.max(0, lastAsked + 1, history.length - 3)
+        : r && !r.onboarded
+          ? history.length
+          : Math.max(history.length, 1)
+    );
   }
 
   loadHistoryRef.current = loadHistory;
@@ -897,7 +966,7 @@ function Dock() {
    * if it failed. Nothing about the message is blocked by a failed upload: the
    * question still sends, with whatever did arrive.
    */
-  async function attach(chosen: FileList | null) {
+  async function attach(chosen: FileList | File[] | null) {
     if (!chosen?.length) return;
     /* Four is the cap the server enforces too. This is a question, not a
        submission. */
@@ -1007,8 +1076,9 @@ function Dock() {
     const uploading = files.some((f) => !f.key && !f.error);
     const sending = files.filter((f) => f.key);
     if ((!text && !sending.length) || busy || uploading) return;
-    /* "Yes" to his offer to open a file: open it, no model needed. */
-    const lastSteve = [...lines].reverse().find((l) => l.role === "assistant");
+    /* "Yes" to his offer to open a file: open it, no model needed. In the new
+       look only an offer on screen in this opening can be said yes to. */
+    const lastSteve = [...(lookNew ? lines.slice(mark) : lines)].reverse().find((l) => l.role === "assistant");
     /* "Yes" / "do it" to a plan on the screen: run it, the same as the button. */
     if (!sending.length && lastSteve?.plan && !lastSteve.planState && YES.test(text)) {
       setDraft("");
@@ -1192,6 +1262,14 @@ function Dock() {
       ]);
       return;
     }
+    if (lookNew) {
+      /* The new look's empty thread is the greeting: the composer asks. */
+      setLines([]);
+      setMark(0);
+      setStage("ask");
+      landed.current = false;
+      return;
+    }
     setLines([{ role: "assistant", text: "Cleared. What can I help you with?" }]);
     setStage("ask");
     /* So the next scroll is a jump rather than a crawl down a list of one. */
@@ -1312,6 +1390,544 @@ function Dock() {
   const uploading = files.some((f) => !f.key && !f.error);
   const canSend = !busy && !uploading && (Boolean(draft.trim()) || files.some((f) => f.key));
 
+  /* Pieces drawn by both looks. The old look renders them exactly as it
+     always has; the new look (lib/new-look "steve") lays them out its own
+     way around a composer box. */
+  const namingView = (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <input
+        value={nameDraft}
+        onChange={(e) => setNameDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") void saveName(nameDraft); if (e.key === "Escape") setNaming(false); }}
+        autoFocus
+        maxLength={20}
+        aria-label="What you call him"
+        className="w-28 rounded-full border border-line/80 bg-white px-2.5 py-0.5 text-[11.5px] outline-none focus:border-ink/40"
+      />
+      {nameDraft.trim().toLowerCase() !== "hamish" && (
+        <button type="button" onClick={() => void saveName("Hamish")} className="rounded-full border border-line/80 px-2 py-0.5 text-[11px] hover:border-ink/40">Hamish</button>
+      )}
+      <button type="button" onClick={() => void saveName(nameDraft)} className="rounded-full bg-ink px-2.5 py-0.5 text-[11px] font-semibold text-page">Save</button>
+      <button type="button" onClick={() => setNaming(false)} className="text-[11px] text-muted hover:text-ink">Cancel</button>
+      {nameErr && <span className="text-[11px] text-accent-dark">{nameErr}</span>}
+    </span>
+  );
+
+  const lineView = (l: Line, i: number) =>
+    l.role === "agent" ? (lookNew ? (
+      <div key={i} className="nl-st-me">
+        {l.text && <p>{l.text}</p>}
+        {l.files && l.files.length > 0 && (
+          <div className="nl-st-sent">
+            {l.files.map((f) => (
+              <a
+                key={f.key}
+                href={`/api/r2/file?key=${encodeURIComponent(f.key ?? "")}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <DoodleIcon name="doc" size={11} />
+                <span>{f.name}</span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    ) : (
+      <div key={i} className="ml-8">
+        {l.text && (
+          <p className="rounded-2xl rounded-br-md bg-accent-soft px-3 py-2 text-[12.5px] text-accent-dark">
+            {l.text}
+          </p>
+        )}
+        {/* What they sent, still openable afterwards. A file
+            that vanishes the moment it is sent leaves nobody
+            able to check what actually went. */}
+        {l.files && l.files.length > 0 && (
+          <div className="mt-1 flex flex-wrap justify-end gap-1.5">
+            {l.files.map((f) => (
+              <a
+                key={f.key}
+                href={`/api/r2/file?key=${encodeURIComponent(f.key ?? "")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex max-w-full items-center gap-1.5 rounded-full border border-accent-dark/30 bg-accent-soft/60 px-2.5 py-1 text-[10.5px] text-accent-dark transition-colors hover:border-accent-dark"
+              >
+                <DoodleIcon name="doc" size={11} />
+                <span className="truncate">{f.name}</span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    )) : (
+      <div key={i} className={lookNew ? "nl-st-says" : undefined}>
+        <AssistantSays text={l.text} screens={screens} />
+        {/* What he actually read. An assistant that quotes
+            a rent should be able to show where it came
+            from — and when he says he could not find
+            something, this is the difference between
+            "he looked" and "he could not be bothered". */}
+        {l.steps && l.steps.length > 0 && (
+          <p className="mt-1 pl-1 text-[10px] leading-relaxed text-muted">
+            {l.steps.join(" · ")}
+          </p>
+        )}
+        {l.downloads && l.downloads.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {l.downloads.map((f) => (
+              <a
+                key={f.href}
+                href={f.href}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-accent-dark/40 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-accent-dark transition-colors hover:border-accent-dark"
+              >
+                <DoodleIcon name="upload" size={11} className="rotate-180" />
+                <span className="truncate">{f.name}</span>
+              </a>
+            ))}
+          </div>
+        )}
+        {/* His plan for their screen (2 Oct 2026): every step
+            in words before anything is touched, and one
+            press runs it while they watch. */}
+        {l.plan && (
+          <div className="mt-2 rounded-xl border border-line bg-box/60 p-2.5">
+            <p className="text-[10px] uppercase tracking-[0.08em] text-muted">On your screen</p>
+            <p className="mt-1 text-[12px] font-semibold">{l.plan.summary}</p>
+            <ol className="mt-1.5 space-y-0.5 pl-4 text-[11.5px] leading-snug text-ink/85 [list-style:decimal]">
+              {l.plan.steps.map((st, k) => (
+                <li key={k}>{st.says}</li>
+              ))}
+            </ol>
+            {!l.planState && l.askSure ? (
+              <div className="mt-2 rounded-lg border border-accent-dark/40 bg-accent-soft/60 p-2.5">
+                <p className="text-[12px] font-semibold text-accent-dark">Are you sure that you want to action this step?</p>
+                <ul className="mt-1 space-y-0.5 text-[11.5px] text-ink/85">
+                  {(l.plan.deletes ?? []).map((d, k) => (
+                    <li key={k}>{d} - this deletes it for good.</li>
+                  ))}
+                </ul>
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void runPlan(l, 0, true)}
+                    className="rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
+                  >
+                    Yes, action it
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLines((all) => all.map((x) => (x === l ? { ...x, planState: "left", askSure: false } : x)))}
+                    className="rounded-full px-2.5 py-1.5 text-[11.5px] text-muted hover:text-ink"
+                  >
+                    No
+                  </button>
+                </div>
+              </div>
+            ) : !l.planState ? (
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void runPlan(l)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
+                >
+                  <DoodleIcon name="magic-wand" size={12} />
+                  Do it
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLines((all) => all.map((x) => (x === l ? { ...x, planState: "left" } : x)))}
+                  className="rounded-full px-2.5 py-1.5 text-[11.5px] text-muted hover:text-ink"
+                >
+                  Not now
+                </button>
+              </div>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted">
+                {l.planState === "running" ? "Doing it now…" : l.planState === "done" ? "Done." : l.planState === "left" ? "Left as it was." : "Stopped part way."}
+              </p>
+            )}
+          </div>
+        )}
+        {/* His offer to open the file (2 Oct 2026). One press,
+            or a typed yes - see say(). */}
+        {l.offer && !l.offerTaken && (
+          <button
+            type="button"
+            onClick={() => {
+              const offer = l.offer!;
+              setLines((all) => [
+                ...all.map((x) => (x === l ? { ...x, offerTaken: true } : x)),
+                { role: "assistant", text: `Opening ${offer.label} for you now.` },
+              ]);
+              react("happy", 1400);
+              openFile(offer);
+            }}
+            className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
+          >
+            <DoodleIcon name="folder" size={12} />
+            Yes, open it
+          </button>
+        )}
+        {/* THE CARD. Everything that is about to happen, in
+            full, before it happens — the recipient, the whole
+            text, and what pressing it will cause. A summary
+            here would defeat the point of asking. */}
+        {l.card && (
+          <div className="mt-2 rounded-xl border border-line bg-box/60 p-2.5">
+            <p className="text-[10px] uppercase tracking-[0.08em] text-muted">
+              {CARD_TITLE[l.card.kind] ?? "Ready"}
+              {l.card.address ? ` · ${l.card.address}` : ""}
+            </p>
+            {l.card.kind === "email" && (
+              <p className="mt-1 text-[11.5px]">
+                To <span className="font-semibold">{l.card.toName}</span>{" "}
+                <span className="text-muted">{l.card.toEmail}</span>
+              </p>
+            )}
+            {l.card.kind === "reminder" && l.card.startsAt && (
+              <p className="mt-1 text-[11.5px] text-muted">
+                {new Date(l.card.startsAt).toLocaleString("en-GB", {
+                  weekday: "short", day: "numeric", month: "short",
+                  hour: "2-digit", minute: "2-digit",
+                })}
+              </p>
+            )}
+            {l.card.kind === "tasks" && l.card.items && (
+              <>
+                <p className="mt-1 text-[11.5px] text-muted">For {l.card.assigneeName ?? "you"}</p>
+                <ul className="mt-1.5 space-y-1">
+                  {l.card.items.map((it, n) => (
+                    <li key={n} className="flex items-start gap-2 text-[11.5px]">
+                      <span className="mt-[3px] h-3 w-3 shrink-0 rounded-[3px] border border-line" />
+                      <span className="min-w-0">
+                        <span className="font-semibold">{it.title}</span>
+                        {it.due ? <span className="text-muted"> · by {new Date(`${it.due}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span> : null}
+                        {it.detail ? <span className="block text-muted">{it.detail}</span> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {(l.card.subject || l.card.heading || l.card.title) && (
+              <p className="mt-1 text-[12px] font-semibold">
+                {l.card.subject ?? l.card.heading ?? l.card.title}
+              </p>
+            )}
+            {(l.card.body || l.card.text) && (
+              <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted">
+                {l.card.body ?? l.card.text}
+              </p>
+            )}
+            <p className="mt-2 text-[10px] leading-relaxed text-muted">
+              {CARD_EFFECT[l.card.kind]}
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => confirm(i)}
+                disabled={Boolean(l.settled) || busy}
+                className="rounded-lg bg-accent-dark px-3 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-40"
+              >
+                {l.settled === "done"
+                  ? l.card.kind === "email"
+                    ? "Sent"
+                    : "Done"
+                  : l.settled === "failed"
+                    ? "Didn't go"
+                    : l.settled
+                      ? "…"
+                      : CARD_BUTTON[l.card.kind]}
+              </button>
+              {!l.settled && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLines((ls) =>
+                      ls.map((x, j) => (j === i ? { ...x, settled: "cancelled" } : x))
+                    )
+                  }
+                  className="text-[11.5px] text-muted underline underline-offset-2"
+                >
+                  No thanks
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  ;
+
+  const filesView =
+    files.length > 0 && (
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {files.map((f, i) =>
+          f.error ? (
+            <div
+              key={`${f.name}-${i}`}
+              className="flex w-full items-start gap-1.5 rounded-xl border border-red-400/50 bg-red-500/[0.07] px-2.5 py-1.5 text-[10.5px] text-red-600 dark:text-red-400"
+            >
+              <DoodleIcon name="info" size={11} className="mt-[1px] shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block break-words font-semibold">{f.name}</span>
+                <span className="mt-0.5 block leading-relaxed opacity-90">{f.error}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}
+                aria-label={`Remove ${f.name}`}
+                className="mt-[1px] shrink-0 transition-colors hover:text-ink"
+              >
+                <DoodleIcon name="cross" size={8} />
+              </button>
+            </div>
+          ) : (
+            <span
+              key={`${f.name}-${i}`}
+              className="flex max-w-full items-center gap-1.5 rounded-full border border-line/80 bg-box px-2.5 py-1 text-[10.5px] text-muted"
+            >
+              <DoodleIcon name="doc" size={11} className="shrink-0" />
+              <span className="truncate">{f.name}</span>
+              <span className="shrink-0 opacity-70">{f.key ? weigh(f.size) : "sending…"}</span>
+              <button
+                type="button"
+                onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}
+                aria-label={`Remove ${f.name}`}
+                className="shrink-0 transition-colors hover:text-ink"
+              >
+                <DoodleIcon name="cross" size={8} />
+              </button>
+            </span>
+          )
+        )}
+      </div>
+    )
+  ;
+
+  const reportView =
+    sent ? (
+    <p className="py-5 text-center text-[13px]">
+      {lost || "Thanks - that's logged."}
+    </p>
+  ) : (
+    /* The whole form takes a dropped screenshot, and a pasted one
+       wherever the cursor is in it, not only in the text box. */
+    <div
+      className="relative"
+      onDragEnter={(e) => {
+        if (!carriesFiles(e)) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragOver={(e) => {
+        if (!carriesFiles(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = busy || pics.length >= 4 ? "none" : "copy";
+        if (!dragging) setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        if (!carriesFiles(e)) return;
+        e.preventDefault();
+        setDragging(false);
+        if (!busy) addPics(e.dataTransfer.files);
+      }}
+      onPaste={(e) => {
+        /* A screenshot taken with the keyboard lands on the
+           clipboard, so pasting it here is the shortest road. */
+        const pasted = [...e.clipboardData.files];
+        if (pasted.some((f) => f.type.startsWith("image/"))) {
+          e.preventDefault();
+          /* The browser calls every pasted picture "image.png". */
+          if (!busy) addPics(pasted.map((f) => (f.name === "image.png" ? new File([f], "Pasted screenshot.png", { type: f.type }) : f)));
+        }
+      }}
+    >
+      {dragging && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-accent-dark bg-panel/95 text-[12.5px] font-semibold text-accent-dark"
+        >
+          <DoodleIcon name="camera" size={18} />
+          {pics.length >= 4 ? "Four pictures is the most" : "Drop your screenshot here"}
+        </div>
+      )}
+      <p className="mt-3 text-[13.5px]">Tell us what happened</p>
+      <p className="mt-1 text-[11px] text-muted">
+        On {path}. We take a picture of the page when you send, so no need to describe it.
+      </p>
+      {/* Three kinds, not one. A pilot produces far more "confusing"
+          than "broken", and collapsing them means the most useful
+          signal — where people get lost — arrives disguised as a
+          defect and gets closed as "works as designed".
+
+          The same sliding control as the tabs above: a choice of
+          three is a choice of three wherever it appears. */}
+      <Segmented
+        className="mt-3 w-full"
+        options={[
+          { id: "bug", label: "Broken" },
+          { id: "confusing", label: "Confusing" },
+          { id: "idea", label: "Idea" },
+        ]}
+        value={kind}
+        onChange={setKind}
+      />
+      <textarea
+        value={fb}
+        onChange={(e) => setFb(e.target.value)}
+        rows={4}
+        placeholder="What were you doing, and what happened?"
+        className="mt-3 w-full rounded-2xl border border-line/80 bg-box p-3 text-[12.5px] outline-none transition-colors focus:border-ink"
+      />
+
+      {/* Show us, as well as tell us. A recording for anything
+          that only goes wrong while you are doing it; a picture
+          for anything the automatic one would miss. */}
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {rec.supported && (
+          <button
+            type="button"
+            disabled={busy || Boolean(rec.clip)}
+            onClick={record}
+            className="flex items-center justify-center gap-1.5 rounded-full border border-line/80 bg-box py-2 text-[11.5px] font-semibold transition-colors hover:border-ink disabled:opacity-40"
+          >
+            <span aria-hidden className="h-2 w-2 rounded-full bg-[#C4412F]" />
+            Record my screen
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={busy || pics.length >= 4}
+          onClick={() => shotPicker.current?.click()}
+          className={`flex items-center justify-center gap-1.5 rounded-full border border-line/80 bg-box py-2 text-[11.5px] font-semibold transition-colors hover:border-ink disabled:opacity-40 ${rec.supported ? "" : "col-span-2"}`}
+        >
+          <DoodleIcon name="camera" size={13} />
+          Add a screenshot
+        </button>
+        <input
+          ref={shotPicker}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          hidden
+          onChange={(e) => {
+            addPics(e.target.files ?? []);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      {rec.supported && !rec.clip && (
+        <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] text-muted">
+          <input
+            type="checkbox"
+            checked={voice}
+            onChange={(e) => setVoice(e.target.checked)}
+            className="h-3.5 w-3.5 accent-[var(--color-accent-dark)]"
+          />
+          Record my voice too, so I can talk it through
+        </label>
+      )}
+      <p className="mt-1.5 text-[10.5px] leading-relaxed text-muted">
+        {rec.supported
+          ? `Recording: this box closes, you show us what goes wrong, then press Stop. Up to ${MAX_SECONDS / 60} minutes. ${addHint}`
+          : addHint}
+      </p>
+      {picNote && <p className="mt-1.5 text-[11px] text-[#C4412F]">{picNote}</p>}
+      {rec.problem && <p className="mt-1.5 text-[11px] text-[#C4412F]">{rec.problem}</p>}
+
+      {(rec.clip || pics.length > 0) && (
+        <ul className="mt-2 space-y-1.5">
+          {rec.clip && (
+            <li className="flex items-center gap-2 rounded-xl border border-line/80 bg-box px-3 py-2 text-[11.5px]">
+              <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#C4412F]" />
+              <span className="min-w-0 flex-1 truncate">
+                Screen recording · {clockFace(rec.clip.seconds)} · {weigh(rec.clip.file.size)}
+              </span>
+              <button type="button" onClick={rec.clear} className="text-muted underline underline-offset-2 hover:text-ink">
+                Remove
+              </button>
+            </li>
+          )}
+          {pics.map((f, i) => (
+            <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-xl border border-line/80 bg-box px-3 py-2 text-[11.5px]">
+              <DoodleIcon name="camera" size={12} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{f.name || "Pasted screenshot"} · {weigh(f.size)}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPics((p) => p.filter((_, n) => n !== i));
+                  setPicNote("");
+                }}
+                className="text-muted underline underline-offset-2 hover:text-ink"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <button
+        type="button"
+        disabled={busy || !(fb.trim() || rec.clip || pics.length)}
+        onClick={sendFeedback}
+        className="mt-2 w-full rounded-full bg-accent-dark py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
+      >
+        {busy ? sending || "Sending…" : "Send it"}
+      </button>
+
+      {/* Where the earlier ones have got to. Closed by default:
+          the form is what somebody came for, and a tester with
+          thirty reports should not have to scroll past them. */}
+      {mine && mine.length > 0 && (
+        <div className="mt-3 border-t border-line/70 pt-2.5">
+          <button
+            type="button"
+            onClick={() => setShowMine((v) => !v)}
+            aria-expanded={showMine}
+            className="flex w-full items-center justify-between text-[11.5px] font-semibold"
+          >
+            <span>Your reports ({mine.length})</span>
+            <span className="text-[11px] font-normal text-muted">
+              {mine.filter((r) => r.status === "fixed").length} fixed ·{" "}
+              {mine.filter((r) => r.status !== "fixed" && r.status !== "closed" && r.status !== "not-a-fault").length} open
+            </span>
+          </button>
+          {showMine && (
+            <ul className="mt-2 max-h-[190px] space-y-1.5 overflow-y-auto pr-1">
+              {mine.map((r) => (
+                <li key={r.id} className="rounded-xl border border-line/70 bg-box px-3 py-2">
+                  <p className="text-[11.5px] leading-snug">{r.body}</p>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[10.5px] text-muted">
+                    <span
+                      className={`rounded-full px-2 py-[1px] font-semibold ${
+                        r.status === "fixed"
+                          ? "bg-[#DCE8D2] text-[#2F4A22]"
+                          : r.status === "logged"
+                            ? "bg-line/60 text-ink"
+                            : "bg-accent/25 text-accent-dark"
+                      }`}
+                    >
+                      {REPORT_STATUS[r.status] ?? "Logged"}
+                    </span>
+                    <span>{r.path}</span>
+                    <span>{whenAgo(r.at)}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+)
+  ;
+
   return (
     <>
       {/* While a recording runs this is the only thing of ours on the screen,
@@ -1321,7 +1937,7 @@ function Dock() {
         <button
           type="button"
           onClick={rec.stop}
-          className="os-toast-lift fixed bottom-6 right-[96px] z-[191] flex items-center gap-2 rounded-full bg-[#C4412F] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]"
+          className={`os-toast-lift fixed bottom-6 ${lookNew ? "right-[124px]" : "right-[96px]"} z-[191] flex items-center gap-2 rounded-full bg-[#C4412F] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]`}
         >
           <span aria-hidden className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
           Recording {clockFace(rec.seconds)} · Stop
@@ -1334,8 +1950,8 @@ function Dock() {
       <button
         type="button"
         onClick={toggle}
-        title={`${aName} - help, guides and news`}
-        aria-label={`${aName} - help, guides and news`}
+        title={lookNew ? `${aName} - ask me anything` : `${aName} - help, guides and news`}
+        aria-label={lookNew ? `${aName} - ask me anything` : `${aName} - help, guides and news`}
         aria-expanded={open}
         data-hide-from-shot
         data-os-steve
@@ -1343,11 +1959,11 @@ function Dock() {
         className="os-toast-lift fixed bottom-2 right-3 z-[190] text-ink hover:scale-105 active:scale-95"
       >
         <span ref={landing} className="block origin-bottom" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("os-steve-land"); }}>
-          <AssistantCharacter mood={mood} size={76} loop={performing} />
+          <AssistantCharacter mood={mood} size={lookNew ? 100 : 76} loop={performing} />
         </span>
         {/* Something to carry. The dot is only ever there because there is
             genuinely something unread — see the note on `unseen`. */}
-        {unseen > 0 && !open && (
+        {unseen > 0 && !open && !lookNew && (
           <span
             aria-hidden
             className="absolute right-2 top-3 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-accent-dark px-1 text-[10.5px] font-semibold text-white shadow-[0_2px_6px_rgba(0,0,0,0.25)]"
@@ -1358,7 +1974,238 @@ function Dock() {
         <span className="sr-only">{unseen > 0 ? `${unseen} unread` : ""}</span>
       </button>
 
-      {open && (
+      {open && (lookNew ? (
+        /* ── The new look (lib/new-look "steve", James 23 Oct 2026) ─────────
+           One card: his head line, then whatever has been said in THIS
+           opening, then the composer box, then three things to press until
+           somebody has asked something. Report swaps the composer area for
+           the report form. Styles in app/new-look/steve.css (nl-st-*). */
+        <div
+          data-hide-from-shot
+          data-os-steve-bubble
+          data-steve-dock
+          data-look="new"
+          role="dialog"
+          aria-label={`Ask ${aName}`}
+          onKeyDown={(e) => {
+            /* Esc closes him. Renaming has its own Esc, which only ends the
+               renaming. */
+            if (e.key === "Escape" && !naming) {
+              e.stopPropagation();
+              void toggle();
+            }
+          }}
+          className="os-toast-lift fade-up fixed bottom-[116px] right-4 z-[190] w-[min(420px,calc(100vw-2rem))] sm:right-6"
+        >
+          <div ref={bubbleRef} className="nl-steve-bubble nl-st-bubble relative">
+            {/* The tail, over his head. */}
+            <span className="absolute -bottom-[9px] right-[34px] h-4 w-4 rotate-45 border-b border-r border-[var(--line-strong)] bg-card" />
+            <span className="absolute -bottom-[1px] right-[34px] h-4 w-4 rotate-45 bg-card" />
+
+            <div
+              ref={innerRef}
+              className="nl-st-inner relative"
+              /* The chat grows with the conversation up to half as tall again
+                 as it opened, then the conversation scrolls. Never past the
+                 top of a short screen. */
+              style={{ maxHeight: tab === "feedback" ? "calc(100dvh - 140px)" : `min(${chatCap}px, calc(100dvh - 140px))` }}
+            >
+              <div className={`nl-st-head${talking ? " is-talking" : ""}`}>
+                <SteveFace size={28} mood={busy ? "thinking" : tab === "feedback" ? "idle" : "happy"} />
+                {naming ? (
+                  namingView
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setNameDraft(aName === "Steve" ? "" : aName); setNaming(true); setNameErr(null); }}
+                      title="Call him something else"
+                      className="nl-st-name"
+                    >
+                      {aName}
+                    </button>
+                    <span className="nl-st-role">Your assistant</span>
+                  </>
+                )}
+                <span className="nl-st-tools">
+                  {!naming && tab !== "feedback" && shownCount > 0 && !busy && (
+                    <button
+                      type="button"
+                      onClick={clear}
+                      title="Start this conversation again. Your questions are still kept."
+                      className="nl-st-clear"
+                    >
+                      {cleared ? "Cleared" : "Clear"}
+                    </button>
+                  )}
+                  {!naming && (
+                    <button
+                      type="button"
+                      data-steve-report
+                      onClick={() => setTab(tab === "feedback" ? "help" : "feedback")}
+                      className="nl-btn nl-btn--secondary nl-btn--sm"
+                    >
+                      {tab === "feedback" ? "Back to chat" : "Report"}
+                    </button>
+                  )}
+                  <button type="button" onClick={toggle} aria-label="Close" className="nl-st-x">
+                    <Ico name="plus" size={18} />
+                  </button>
+                </span>
+              </div>
+
+              {tab === "feedback" ? (
+                <div className="nl-st-scroll nl-st-report">{reportView}</div>
+              ) : (
+                <>
+                  {/* This opening's conversation only: what was said before
+                      is still kept on the server, it is just not put back on
+                      the screen (see `mark`). Newest at the bottom. */}
+                  {talking && (
+                    <div ref={scroller} className="nl-st-thread" aria-live="polite">
+                      {lines.slice(mark).map((l, k) => lineView(l, mark + k))}
+                      {busy && (
+                        <p className="nl-st-thinking">
+                          {/* He may be doing several lookups, which takes
+                              seconds. A still line for that long reads as a
+                              hang. */}
+                          <span>Having a look</span>
+                          <span aria-hidden className="nl-st-dots">
+                            <i />
+                            <i />
+                            <i />
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* What he is, said once, when it is true. */}
+                  {liveKnown && !live && (
+                    <p className="nl-st-note">
+                      I can&apos;t answer on my own just now. Everything you ask goes to James, and the answers
+                      become the guides.
+                    </p>
+                  )}
+
+                  {/* The composer. A screenshot can be pasted into it or a file
+                      dropped on it, as well as chosen with Attach; each goes
+                      straight up, the same as a chosen file. */}
+                  <div
+                    className={`nl-st-ask${talking ? " is-talking" : ""}${chatDrag ? " is-drag" : ""}`}
+                    onDragEnter={(e) => {
+                      if (!carriesFiles(e) || stage !== "ask") return;
+                      e.preventDefault();
+                      setChatDrag(true);
+                    }}
+                    onDragOver={(e) => {
+                      if (!carriesFiles(e) || stage !== "ask") return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = files.length >= 4 ? "none" : "copy";
+                      if (!chatDrag) setChatDrag(true);
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setChatDrag(false);
+                    }}
+                    onDrop={(e) => {
+                      if (!carriesFiles(e)) return;
+                      e.preventDefault();
+                      setChatDrag(false);
+                      if (stage === "ask") void attach([...e.dataTransfer.files]);
+                    }}
+                    onPaste={(e) => {
+                      const pasted = [...e.clipboardData.files];
+                      if (!pasted.length || stage !== "ask") return;
+                      e.preventDefault();
+                      /* The browser calls every pasted picture "image.png". */
+                      void attach(pasted.map((f) => (f.name === "image.png" ? new File([f], "Pasted screenshot.png", { type: f.type }) : f)));
+                    }}
+                  >
+                    <input
+                      ref={picker}
+                      type="file"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.txt,.csv,.doc,.docx,.xls,.xlsx"
+                      onChange={(e) => {
+                        attach(e.target.files);
+                        e.target.value = "";
+                      }}
+                      className="hidden"
+                    />
+                    <textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        /* Enter sends, Shift+Enter is a new line. */
+                        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          void say();
+                        }
+                      }}
+                      autoFocus
+                      rows={talking ? 1 : 3}
+                      aria-label={`Ask ${aName}`}
+                      placeholder={
+                        stage === "onboarding-name"
+                          ? "Your name"
+                          : stage === "onboarding-help"
+                            ? "What you'd like a hand with"
+                            : talking
+                              ? `Ask ${aName} anything…`
+                              : `How can I help? Try "${OPENERS[1].text}"`
+                      }
+                      className="nl-st-input"
+                    />
+                    {filesView}
+                    {chatDrag && (
+                      <p aria-hidden className="nl-st-drop">
+                        {files.length >= 4 ? "Four files is the limit for one question" : "Drop it here to attach it"}
+                      </p>
+                    )}
+                    <div className="nl-st-bar">
+                      <button
+                        type="button"
+                        onClick={() => picker.current?.click()}
+                        disabled={stage !== "ask" || files.length >= 4}
+                        title={
+                          files.length >= 4
+                            ? "Four files is the limit for one question"
+                            : `Attach a document or a photograph${pasteKeys ? `, or paste a screenshot with ${pasteKeys}` : ""}`
+                        }
+                        className="nl-btn nl-btn--quiet nl-btn--sm nl-st-attach"
+                      >
+                        <Ico name="plus" size={15} />
+                        Attach
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void say()}
+                        disabled={!canSend}
+                        aria-label="Send"
+                        title={uploading ? "Waiting for the file" : "Send"}
+                        className="nl-st-send"
+                      >
+                        <Ico name="arrow" size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Three things to press, until the conversation is real. */}
+                  {stage === "ask" && !talking && (
+                    <div className="nl-st-pills">
+                      {OPENERS.map((o) => (
+                        <button key={o.text} type="button" onClick={() => void say(o.text)}>
+                          {o.text}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
         <div
           /* Shifted left of the character so the tail lands on his head rather
              than beside it, and so the bubble does not sit directly over him. */
@@ -1383,23 +2230,7 @@ function Dock() {
                   at, these change something. */}
               <div className="flex items-center gap-2">
                 {naming ? (
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <input
-                      value={nameDraft}
-                      onChange={(e) => setNameDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") void saveName(nameDraft); if (e.key === "Escape") setNaming(false); }}
-                      autoFocus
-                      maxLength={20}
-                      aria-label="What you call him"
-                      className="w-28 rounded-full border border-line/80 bg-white px-2.5 py-0.5 text-[11.5px] outline-none focus:border-ink/40"
-                    />
-                    {nameDraft.trim().toLowerCase() !== "hamish" && (
-                      <button type="button" onClick={() => void saveName("Hamish")} className="rounded-full border border-line/80 px-2 py-0.5 text-[11px] hover:border-ink/40">Hamish</button>
-                    )}
-                    <button type="button" onClick={() => void saveName(nameDraft)} className="rounded-full bg-ink px-2.5 py-0.5 text-[11px] font-semibold text-page">Save</button>
-                    <button type="button" onClick={() => setNaming(false)} className="text-[11px] text-muted hover:text-ink">Cancel</button>
-                    {nameErr && <span className="text-[11px] text-accent-dark">{nameErr}</span>}
-                  </span>
+                  namingView
                 ) : (
                   <button
                     type="button"
@@ -1455,233 +2286,7 @@ function Dock() {
                         the answers become the guides.
                       </p>
                     )}
-                    {lines.map((l, i) =>
-                      l.role === "agent" ? (
-                        <div key={i} className="ml-8">
-                          {l.text && (
-                            <p className="rounded-2xl rounded-br-md bg-accent-soft px-3 py-2 text-[12.5px] text-accent-dark">
-                              {l.text}
-                            </p>
-                          )}
-                          {/* What they sent, still openable afterwards. A file
-                              that vanishes the moment it is sent leaves nobody
-                              able to check what actually went. */}
-                          {l.files && l.files.length > 0 && (
-                            <div className="mt-1 flex flex-wrap justify-end gap-1.5">
-                              {l.files.map((f) => (
-                                <a
-                                  key={f.key}
-                                  href={`/api/r2/file?key=${encodeURIComponent(f.key ?? "")}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex max-w-full items-center gap-1.5 rounded-full border border-accent-dark/30 bg-accent-soft/60 px-2.5 py-1 text-[10.5px] text-accent-dark transition-colors hover:border-accent-dark"
-                                >
-                                  <DoodleIcon name="doc" size={11} />
-                                  <span className="truncate">{f.name}</span>
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div key={i}>
-                          <AssistantSays text={l.text} screens={screens} />
-                          {/* What he actually read. An assistant that quotes
-                              a rent should be able to show where it came
-                              from — and when he says he could not find
-                              something, this is the difference between
-                              "he looked" and "he could not be bothered". */}
-                          {l.steps && l.steps.length > 0 && (
-                            <p className="mt-1 pl-1 text-[10px] leading-relaxed text-muted">
-                              {l.steps.join(" · ")}
-                            </p>
-                          )}
-                          {l.downloads && l.downloads.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {l.downloads.map((f) => (
-                                <a
-                                  key={f.href}
-                                  href={f.href}
-                                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-accent-dark/40 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-accent-dark transition-colors hover:border-accent-dark"
-                                >
-                                  <DoodleIcon name="upload" size={11} className="rotate-180" />
-                                  <span className="truncate">{f.name}</span>
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                          {/* His plan for their screen (2 Oct 2026): every step
-                              in words before anything is touched, and one
-                              press runs it while they watch. */}
-                          {l.plan && (
-                            <div className="mt-2 rounded-xl border border-line bg-box/60 p-2.5">
-                              <p className="text-[10px] uppercase tracking-[0.08em] text-muted">On your screen</p>
-                              <p className="mt-1 text-[12px] font-semibold">{l.plan.summary}</p>
-                              <ol className="mt-1.5 space-y-0.5 pl-4 text-[11.5px] leading-snug text-ink/85 [list-style:decimal]">
-                                {l.plan.steps.map((st, k) => (
-                                  <li key={k}>{st.says}</li>
-                                ))}
-                              </ol>
-                              {!l.planState && l.askSure ? (
-                                <div className="mt-2 rounded-lg border border-accent-dark/40 bg-accent-soft/60 p-2.5">
-                                  <p className="text-[12px] font-semibold text-accent-dark">Are you sure that you want to action this step?</p>
-                                  <ul className="mt-1 space-y-0.5 text-[11.5px] text-ink/85">
-                                    {(l.plan.deletes ?? []).map((d, k) => (
-                                      <li key={k}>{d} - this deletes it for good.</li>
-                                    ))}
-                                  </ul>
-                                  <div className="mt-2 flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => void runPlan(l, 0, true)}
-                                      className="rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
-                                    >
-                                      Yes, action it
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setLines((all) => all.map((x) => (x === l ? { ...x, planState: "left", askSure: false } : x)))}
-                                      className="rounded-full px-2.5 py-1.5 text-[11.5px] text-muted hover:text-ink"
-                                    >
-                                      No
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : !l.planState ? (
-                                <div className="mt-2 flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => void runPlan(l)}
-                                    className="inline-flex items-center gap-1.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
-                                  >
-                                    <DoodleIcon name="magic-wand" size={12} />
-                                    Do it
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setLines((all) => all.map((x) => (x === l ? { ...x, planState: "left" } : x)))}
-                                    className="rounded-full px-2.5 py-1.5 text-[11.5px] text-muted hover:text-ink"
-                                  >
-                                    Not now
-                                  </button>
-                                </div>
-                              ) : (
-                                <p className="mt-2 text-[11px] text-muted">
-                                  {l.planState === "running" ? "Doing it now…" : l.planState === "done" ? "Done." : l.planState === "left" ? "Left as it was." : "Stopped part way."}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {/* His offer to open the file (2 Oct 2026). One press,
-                              or a typed yes - see say(). */}
-                          {l.offer && !l.offerTaken && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const offer = l.offer!;
-                                setLines((all) => [
-                                  ...all.map((x) => (x === l ? { ...x, offerTaken: true } : x)),
-                                  { role: "assistant", text: `Opening ${offer.label} for you now.` },
-                                ]);
-                                react("happy", 1400);
-                                openFile(offer);
-                              }}
-                              className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
-                            >
-                              <DoodleIcon name="folder" size={12} />
-                              Yes, open it
-                            </button>
-                          )}
-                          {/* THE CARD. Everything that is about to happen, in
-                              full, before it happens — the recipient, the whole
-                              text, and what pressing it will cause. A summary
-                              here would defeat the point of asking. */}
-                          {l.card && (
-                            <div className="mt-2 rounded-xl border border-line bg-box/60 p-2.5">
-                              <p className="text-[10px] uppercase tracking-[0.08em] text-muted">
-                                {CARD_TITLE[l.card.kind] ?? "Ready"}
-                                {l.card.address ? ` · ${l.card.address}` : ""}
-                              </p>
-                              {l.card.kind === "email" && (
-                                <p className="mt-1 text-[11.5px]">
-                                  To <span className="font-semibold">{l.card.toName}</span>{" "}
-                                  <span className="text-muted">{l.card.toEmail}</span>
-                                </p>
-                              )}
-                              {l.card.kind === "reminder" && l.card.startsAt && (
-                                <p className="mt-1 text-[11.5px] text-muted">
-                                  {new Date(l.card.startsAt).toLocaleString("en-GB", {
-                                    weekday: "short", day: "numeric", month: "short",
-                                    hour: "2-digit", minute: "2-digit",
-                                  })}
-                                </p>
-                              )}
-                              {l.card.kind === "tasks" && l.card.items && (
-                                <>
-                                  <p className="mt-1 text-[11.5px] text-muted">For {l.card.assigneeName ?? "you"}</p>
-                                  <ul className="mt-1.5 space-y-1">
-                                    {l.card.items.map((it, n) => (
-                                      <li key={n} className="flex items-start gap-2 text-[11.5px]">
-                                        <span className="mt-[3px] h-3 w-3 shrink-0 rounded-[3px] border border-line" />
-                                        <span className="min-w-0">
-                                          <span className="font-semibold">{it.title}</span>
-                                          {it.due ? <span className="text-muted"> · by {new Date(`${it.due}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span> : null}
-                                          {it.detail ? <span className="block text-muted">{it.detail}</span> : null}
-                                        </span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </>
-                              )}
-                              {(l.card.subject || l.card.heading || l.card.title) && (
-                                <p className="mt-1 text-[12px] font-semibold">
-                                  {l.card.subject ?? l.card.heading ?? l.card.title}
-                                </p>
-                              )}
-                              {(l.card.body || l.card.text) && (
-                                <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted">
-                                  {l.card.body ?? l.card.text}
-                                </p>
-                              )}
-                              <p className="mt-2 text-[10px] leading-relaxed text-muted">
-                                {CARD_EFFECT[l.card.kind]}
-                              </p>
-                              <div className="mt-2 flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => confirm(i)}
-                                  disabled={Boolean(l.settled) || busy}
-                                  className="rounded-lg bg-accent-dark px-3 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-40"
-                                >
-                                  {l.settled === "done"
-                                    ? l.card.kind === "email"
-                                      ? "Sent"
-                                      : "Done"
-                                    : l.settled === "failed"
-                                      ? "Didn't go"
-                                      : l.settled
-                                        ? "…"
-                                        : CARD_BUTTON[l.card.kind]}
-                                </button>
-                                {!l.settled && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setLines((ls) =>
-                                        ls.map((x, j) => (j === i ? { ...x, settled: "cancelled" } : x))
-                                      )
-                                    }
-                                    className="text-[11.5px] text-muted underline underline-offset-2"
-                                  >
-                                    No thanks
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    )}
+                    {lines.map(lineView)}
                     {busy && (
                       <p className="mr-6 rounded-2xl rounded-bl-md bg-box px-3 py-2 text-[12.5px] text-muted">
                         {/* He may be doing several lookups now, which takes
@@ -1720,49 +2325,7 @@ function Dock() {
                       environment", the name truncates to "Gas saf…" - and
                       which file failed is the one thing the person needs to
                       know. */}
-                  {files.length > 0 && (
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {files.map((f, i) =>
-                        f.error ? (
-                          <div
-                            key={`${f.name}-${i}`}
-                            className="flex w-full items-start gap-1.5 rounded-xl border border-red-400/50 bg-red-500/[0.07] px-2.5 py-1.5 text-[10.5px] text-red-600 dark:text-red-400"
-                          >
-                            <DoodleIcon name="info" size={11} className="mt-[1px] shrink-0" />
-                            <span className="min-w-0 flex-1">
-                              <span className="block break-words font-semibold">{f.name}</span>
-                              <span className="mt-0.5 block leading-relaxed opacity-90">{f.error}</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}
-                              aria-label={`Remove ${f.name}`}
-                              className="mt-[1px] shrink-0 transition-colors hover:text-ink"
-                            >
-                              <DoodleIcon name="cross" size={8} />
-                            </button>
-                          </div>
-                        ) : (
-                          <span
-                            key={`${f.name}-${i}`}
-                            className="flex max-w-full items-center gap-1.5 rounded-full border border-line/80 bg-box px-2.5 py-1 text-[10.5px] text-muted"
-                          >
-                            <DoodleIcon name="doc" size={11} className="shrink-0" />
-                            <span className="truncate">{f.name}</span>
-                            <span className="shrink-0 opacity-70">{f.key ? weigh(f.size) : "sending…"}</span>
-                            <button
-                              type="button"
-                              onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}
-                              aria-label={`Remove ${f.name}`}
-                              className="shrink-0 transition-colors hover:text-ink"
-                            >
-                              <DoodleIcon name="cross" size={8} />
-                            </button>
-                          </span>
-                        )
-                      )}
-                    </div>
-                  )}
+                  {filesView}
 
                   {/* ── The line ────────────────────────────────────────────
                       One control: attach on the left, send on the right, both
@@ -2014,229 +2577,13 @@ function Dock() {
                     )}
                   </div>
                 </div>
-              ) : sent ? (
-                <p className="py-5 text-center text-[13px]">
-                  {lost || "Thanks - that's logged."}
-                </p>
               ) : (
-                /* The whole form takes a dropped screenshot, and a pasted one
-                   wherever the cursor is in it, not only in the text box. */
-                <div
-                  className="relative"
-                  onDragEnter={(e) => {
-                    if (!carriesFiles(e)) return;
-                    e.preventDefault();
-                    setDragging(true);
-                  }}
-                  onDragOver={(e) => {
-                    if (!carriesFiles(e)) return;
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = busy || pics.length >= 4 ? "none" : "copy";
-                    if (!dragging) setDragging(true);
-                  }}
-                  onDragLeave={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
-                  }}
-                  onDrop={(e) => {
-                    if (!carriesFiles(e)) return;
-                    e.preventDefault();
-                    setDragging(false);
-                    if (!busy) addPics(e.dataTransfer.files);
-                  }}
-                  onPaste={(e) => {
-                    /* A screenshot taken with the keyboard lands on the
-                       clipboard, so pasting it here is the shortest road. */
-                    const pasted = [...e.clipboardData.files];
-                    if (pasted.some((f) => f.type.startsWith("image/"))) {
-                      e.preventDefault();
-                      /* The browser calls every pasted picture "image.png". */
-                      if (!busy) addPics(pasted.map((f) => (f.name === "image.png" ? new File([f], "Pasted screenshot.png", { type: f.type }) : f)));
-                    }
-                  }}
-                >
-                  {dragging && (
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-accent-dark bg-panel/95 text-[12.5px] font-semibold text-accent-dark"
-                    >
-                      <DoodleIcon name="camera" size={18} />
-                      {pics.length >= 4 ? "Four pictures is the most" : "Drop your screenshot here"}
-                    </div>
-                  )}
-                  <p className="mt-3 text-[13.5px]">Tell us what happened</p>
-                  <p className="mt-1 text-[11px] text-muted">
-                    On {path}. We take a picture of the page when you send, so no need to describe it.
-                  </p>
-                  {/* Three kinds, not one. A pilot produces far more "confusing"
-                      than "broken", and collapsing them means the most useful
-                      signal — where people get lost — arrives disguised as a
-                      defect and gets closed as "works as designed".
-
-                      The same sliding control as the tabs above: a choice of
-                      three is a choice of three wherever it appears. */}
-                  <Segmented
-                    className="mt-3 w-full"
-                    options={[
-                      { id: "bug", label: "Broken" },
-                      { id: "confusing", label: "Confusing" },
-                      { id: "idea", label: "Idea" },
-                    ]}
-                    value={kind}
-                    onChange={setKind}
-                  />
-                  <textarea
-                    value={fb}
-                    onChange={(e) => setFb(e.target.value)}
-                    rows={4}
-                    placeholder="What were you doing, and what happened?"
-                    className="mt-3 w-full rounded-2xl border border-line/80 bg-box p-3 text-[12.5px] outline-none transition-colors focus:border-ink"
-                  />
-
-                  {/* Show us, as well as tell us. A recording for anything
-                      that only goes wrong while you are doing it; a picture
-                      for anything the automatic one would miss. */}
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {rec.supported && (
-                      <button
-                        type="button"
-                        disabled={busy || Boolean(rec.clip)}
-                        onClick={record}
-                        className="flex items-center justify-center gap-1.5 rounded-full border border-line/80 bg-box py-2 text-[11.5px] font-semibold transition-colors hover:border-ink disabled:opacity-40"
-                      >
-                        <span aria-hidden className="h-2 w-2 rounded-full bg-[#C4412F]" />
-                        Record my screen
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={busy || pics.length >= 4}
-                      onClick={() => shotPicker.current?.click()}
-                      className={`flex items-center justify-center gap-1.5 rounded-full border border-line/80 bg-box py-2 text-[11.5px] font-semibold transition-colors hover:border-ink disabled:opacity-40 ${rec.supported ? "" : "col-span-2"}`}
-                    >
-                      <DoodleIcon name="camera" size={13} />
-                      Add a screenshot
-                    </button>
-                    <input
-                      ref={shotPicker}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      multiple
-                      hidden
-                      onChange={(e) => {
-                        addPics(e.target.files ?? []);
-                        e.target.value = "";
-                      }}
-                    />
-                  </div>
-                  {rec.supported && !rec.clip && (
-                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] text-muted">
-                      <input
-                        type="checkbox"
-                        checked={voice}
-                        onChange={(e) => setVoice(e.target.checked)}
-                        className="h-3.5 w-3.5 accent-[var(--color-accent-dark)]"
-                      />
-                      Record my voice too, so I can talk it through
-                    </label>
-                  )}
-                  <p className="mt-1.5 text-[10.5px] leading-relaxed text-muted">
-                    {rec.supported
-                      ? `Recording: this box closes, you show us what goes wrong, then press Stop. Up to ${MAX_SECONDS / 60} minutes. ${addHint}`
-                      : addHint}
-                  </p>
-                  {picNote && <p className="mt-1.5 text-[11px] text-[#C4412F]">{picNote}</p>}
-                  {rec.problem && <p className="mt-1.5 text-[11px] text-[#C4412F]">{rec.problem}</p>}
-
-                  {(rec.clip || pics.length > 0) && (
-                    <ul className="mt-2 space-y-1.5">
-                      {rec.clip && (
-                        <li className="flex items-center gap-2 rounded-xl border border-line/80 bg-box px-3 py-2 text-[11.5px]">
-                          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#C4412F]" />
-                          <span className="min-w-0 flex-1 truncate">
-                            Screen recording · {clockFace(rec.clip.seconds)} · {weigh(rec.clip.file.size)}
-                          </span>
-                          <button type="button" onClick={rec.clear} className="text-muted underline underline-offset-2 hover:text-ink">
-                            Remove
-                          </button>
-                        </li>
-                      )}
-                      {pics.map((f, i) => (
-                        <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-xl border border-line/80 bg-box px-3 py-2 text-[11.5px]">
-                          <DoodleIcon name="camera" size={12} className="shrink-0" />
-                          <span className="min-w-0 flex-1 truncate">{f.name || "Pasted screenshot"} · {weigh(f.size)}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPics((p) => p.filter((_, n) => n !== i));
-                              setPicNote("");
-                            }}
-                            className="text-muted underline underline-offset-2 hover:text-ink"
-                          >
-                            Remove
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={busy || !(fb.trim() || rec.clip || pics.length)}
-                    onClick={sendFeedback}
-                    className="mt-2 w-full rounded-full bg-accent-dark py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
-                  >
-                    {busy ? sending || "Sending…" : "Send it"}
-                  </button>
-
-                  {/* Where the earlier ones have got to. Closed by default:
-                      the form is what somebody came for, and a tester with
-                      thirty reports should not have to scroll past them. */}
-                  {mine && mine.length > 0 && (
-                    <div className="mt-3 border-t border-line/70 pt-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setShowMine((v) => !v)}
-                        aria-expanded={showMine}
-                        className="flex w-full items-center justify-between text-[11.5px] font-semibold"
-                      >
-                        <span>Your reports ({mine.length})</span>
-                        <span className="text-[11px] font-normal text-muted">
-                          {mine.filter((r) => r.status === "fixed").length} fixed ·{" "}
-                          {mine.filter((r) => r.status !== "fixed" && r.status !== "closed" && r.status !== "not-a-fault").length} open
-                        </span>
-                      </button>
-                      {showMine && (
-                        <ul className="mt-2 max-h-[190px] space-y-1.5 overflow-y-auto pr-1">
-                          {mine.map((r) => (
-                            <li key={r.id} className="rounded-xl border border-line/70 bg-box px-3 py-2">
-                              <p className="text-[11.5px] leading-snug">{r.body}</p>
-                              <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[10.5px] text-muted">
-                                <span
-                                  className={`rounded-full px-2 py-[1px] font-semibold ${
-                                    r.status === "fixed"
-                                      ? "bg-[#DCE8D2] text-[#2F4A22]"
-                                      : r.status === "logged"
-                                        ? "bg-line/60 text-ink"
-                                        : "bg-accent/25 text-accent-dark"
-                                  }`}
-                                >
-                                  {REPORT_STATUS[r.status] ?? "Logged"}
-                                </span>
-                                <span>{r.path}</span>
-                                <span>{whenAgo(r.at)}</span>
-                              </p>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                </div>
+                reportView
               )}
             </div>
           </div>
         </div>
-      )}
+      ))}
     </>
   );
 }

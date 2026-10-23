@@ -58,6 +58,8 @@ export type AuditKind =
   /* Somebody made a tester, or stopped being one. A tester can act where
      every other agent can only look. */
   | "area_tester_changed"
+  /* A screen moved in or out of the new look (lib/new-look, 23 Oct 2026). */
+  | "look_changed"
   /* A listing put on the portals, taken off them, or put back (15 Sep 2026).
      It is the one button in Listings that reaches the public, and REX's own
      log will only say the OS did it. */

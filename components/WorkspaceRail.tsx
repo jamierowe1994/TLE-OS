@@ -5,6 +5,7 @@ import Wordmark from "@/components/Wordmark";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LineIcon from "@/components/LineIcon";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * The rail every workspace uses. One frame, whoever you are.
@@ -79,6 +80,8 @@ export default function WorkspaceRail({
      renders wide and then jumps narrow is worse than one that starts wide. */
   const key = `os-workspace-collapsed:${label.toLowerCase()}`;
   const [collapsed, setCollapsed] = useState(false);
+  /* The new look's sidebar (lib/new-look "nav"): flush to the left, full height, a line down its edge. */
+  const look = useNewLook("nav") === true;
   useEffect(() => {
     try {
       setCollapsed(window.localStorage.getItem(key) === "1");
@@ -105,7 +108,7 @@ export default function WorkspaceRail({
            routes already used it - `w-[72px]` lives in the agent shell's sheet
            and is simply absent from this workspace's, so the class applied and
            did nothing (14 Sep 2026). A number cannot go missing. */
-        style={{ width: collapsed ? 72 : 240 }}
+        style={{ width: look ? (collapsed ? 72 : 264) : collapsed ? 72 : 240 }}
         /* From lg it sits on the shell's grey at the window's left, flat like
            the agent sidebar, and the page's white panel starts after it
            (components/Shell frame, 10 Oct 2026). The spacer below holds its
@@ -116,22 +119,24 @@ export default function WorkspaceRail({
            quiet section names, the page you are on as a soft fill. From lg it
            sits on the shell's grey at the window's left and the page's white
            panel starts after it; the spacer below holds its place. */
-        className="sticky top-[calc(12px+var(--os-band-h,0px))] mb-3 hidden h-[calc(100vh-24px-var(--os-band-h,0px))] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-200 md:flex lg:fixed lg:left-2 lg:z-[50] lg:mb-0"
+        className={look
+          ? "nl-nav sticky top-[var(--os-band-h,0px)] mb-3 hidden h-[calc(100vh-var(--os-band-h,0px))] shrink-0 flex-col overflow-hidden border-r border-[var(--nv-line)] transition-[width] duration-200 md:flex lg:fixed lg:left-0 lg:z-[50] lg:mb-0"
+          : "sticky top-[calc(12px+var(--os-band-h,0px))] mb-3 hidden h-[calc(100vh-24px-var(--os-band-h,0px))] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-200 md:flex lg:fixed lg:left-2 lg:z-[50] lg:mb-0"}
       >
-        <div className={`flex h-9 items-center ${collapsed ? "justify-center" : "gap-2 px-2"}`}>
-          <Wordmark collapsed={collapsed} size={21} />
+        <div className={look ? `nl-nav-head${collapsed ? " is-tight" : ""}` : `flex h-9 items-center ${collapsed ? "justify-center" : "gap-2 px-2"}`}>
+          {look ? <span className="nl-nav-logo">{collapsed ? "OS" : "TLE OS"}</span> : <Wordmark collapsed={collapsed} size={21} />}
           {!collapsed && (
             <>
-              <span className="truncate text-[12px] text-[var(--launch-icon)]">{label}</span>
+              <span className={look ? "ml-2 truncate text-[12px] text-[var(--nv-muted)]" : "truncate text-[12px] text-[var(--launch-icon)]"}>{label}</span>
               <span className="flex-1" />
               <button
                 type="button"
                 onClick={fold}
                 title="Collapse"
                 aria-label="Collapse the menu"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--launch-icon)] hover:bg-[var(--launch-hover)] hover:text-ink"
+                className={look ? "nl-nav-icon" : "flex h-7 w-7 items-center justify-center rounded-md text-[var(--launch-icon)] hover:bg-[var(--launch-hover)] hover:text-ink"}
               >
-                <LineIcon name="panel" size={15} />
+                <LineIcon name="panel" size={look ? 17 : 15} />
               </button>
             </>
           )}
@@ -148,13 +153,13 @@ export default function WorkspaceRail({
           </button>
         )}
 
-        <div className="mx-auto mt-3 w-4/5 border-t border-[var(--launch-guide)]" />
+        {!look && <div className="mx-auto mt-3 w-4/5 border-t border-[var(--launch-guide)]" />}
 
-        <nav aria-label={label} className="mt-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2">
+        <nav aria-label={label} className={look ? "nl-nav-list" : "mt-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2"}>
           {groups.map((g, i) => (
-            <div key={g.title ?? `group-${i}`} className={i === 0 ? "" : "mt-4"}>
+            <div key={g.title ?? `group-${i}`} className={look ? "" : i === 0 ? "" : "mt-4"}>
               {g.title && !collapsed && (
-                <p className="mb-0.5 flex h-6 items-center px-2 text-[11.5px] font-medium text-[var(--launch-icon)]">{g.title}</p>
+                <p className={look ? "nl-nav-label" : "mb-0.5 flex h-6 items-center px-2 text-[11.5px] font-medium text-[var(--launch-icon)]"}>{g.title}</p>
               )}
               {g.title && collapsed && <div className="mx-auto mb-2 w-5 border-t border-[var(--launch-guide)]" />}
               <ul className="space-y-px">
@@ -166,12 +171,12 @@ export default function WorkspaceRail({
                         href={t.href}
                         data-admin-nav={t.href}
                         title={collapsed ? t.label : undefined}
-                        className={`group flex h-8 items-center rounded-md text-[13px] transition-colors ${collapsed ? "justify-center px-0" : "gap-2.5 px-2"} ${
+                        className={look ? `nl-nav-item${on ? " is-on" : ""}${collapsed ? " is-tight" : ""}` : `group flex h-8 items-center rounded-md text-[13px] transition-colors ${collapsed ? "justify-center px-0" : "gap-2.5 px-2"} ${
                           on ? "bg-[var(--launch-active)] text-ink" : "text-[var(--launch-text)] hover:bg-[var(--launch-hover)] hover:text-ink"
                         }`}
                       >
                         {t.icon ? (
-                          <LineIcon name={t.icon} className={on ? "text-ink" : "text-[var(--launch-icon)] group-hover:text-ink"} />
+                          <LineIcon name={t.icon} size={look ? 17 : undefined} className={look ? "" : on ? "text-ink" : "text-[var(--launch-icon)] group-hover:text-ink"} />
                         ) : collapsed ? (
                           <span className="text-[11px] font-semibold">{t.label.slice(0, 2)}</span>
                         ) : null}
@@ -187,12 +192,12 @@ export default function WorkspaceRail({
 
         {footer && !collapsed ? (
           <>
-            <div className="mx-auto my-2 w-4/5 border-t border-[var(--launch-guide)]" />
-            <div>{footer}</div>
+            {!look && <div className="mx-auto my-2 w-4/5 border-t border-[var(--launch-guide)]" />}
+            <div className={look ? "nl-nav-foot" : undefined}>{footer}</div>
           </>
         ) : null}
       </aside>
-      <div aria-hidden className="hidden shrink-0 lg:block" style={{ width: (collapsed ? 72 : 240) - 12 }} />
+      <div aria-hidden className="hidden shrink-0 lg:block" style={{ width: look ? (collapsed ? 72 : 264) - 16 : (collapsed ? 72 : 240) - 12 }} />
 
       {/* On a phone the rail becomes a scrolling strip — a 240px column beside
           content on a 375px screen leaves neither of them usable.

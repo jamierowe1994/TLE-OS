@@ -4,6 +4,8 @@ import { putInstructionInRex } from "@/lib/rex-instruct";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { fetchSigned, store, pushToRex } from "@/lib/signed-documents";
 import { whoHasSigned } from "@/lib/docuseal";
+import { fromWebhook } from "@/lib/terms/flow";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * A signed contract coming back from DocuSeal.
@@ -103,6 +105,19 @@ export async function POST(req: NextRequest) {
   }
 
   const d = body.data ?? {};
+
+  /* Terms written by the OS (lib/terms, 23 Oct 2026) carry our own id, t_...,
+     and are finished by lib/terms/flow: the agent's signature sends the
+     landlords their emails, the last landlord's completes and files it. */
+  const ext = (d.external_id ?? "").trim();
+  if (/^t_[0-9a-f]{20}$/.test(ext)) {
+    try {
+      await fromWebhook(ext, (d as { role?: string }).role ?? "", publicOrigin(req));
+      return NextResponse.json({ ok: true, terms: ext });
+    } catch (e) {
+      return NextResponse.json({ error: publicError(e, "The terms didn't update.") }, { status: 503 });
+    }
+  }
 
   /* ONE SIGNATURE IS NOT A SIGNED CONTRACT (14 Sep 2026).
      The terms went to two submitters - the agent signs, then the landlord -

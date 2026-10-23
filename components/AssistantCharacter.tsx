@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import SteveFace, { type SteveMood } from "@/components/SteveFace";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * The assistant: a circle with a face, two jointed arms and a scribbled shadow.
@@ -444,7 +446,47 @@ function Mouth({ mood, still }: { mood: Mood; still: boolean }) {
   return <path d="M55.5 60.8C57.4 64.6 62.6 64.6 64.5 60.8" {...c} />;
 }
 
-export default function AssistantCharacter({
+/**
+ * Which Steve: the ink one below, or the coral character of the new look
+ * (components/SteveFace) once Admin > Switches puts Steve in it. Every place
+ * that draws him comes through here, so the swap is one switch. Until the
+ * switch has answered nothing is drawn, rather than one Steve and then the
+ * other.
+ */
+export default function AssistantCharacter(props: Parameters<typeof InkSteve>[0]) {
+  const look = useNewLook("steve");
+  if (look === null) return <span aria-hidden className={props.className} style={{ display: "inline-block", width: props.size ?? 64, height: props.size ?? 64 }} />;
+  if (!look) return <InkSteve {...props} />;
+  const size = props.size ?? 64;
+  return (
+    <span className={props.className} style={{ display: "inline-grid", placeItems: "center", width: size, height: size }}>
+      <SteveFace size={Math.round(size * 0.78)} mood={FACE_OF[props.mood ?? "idle"]} track={props.track ?? true} />
+    </span>
+  );
+}
+
+/* The ink Steve's sixteen moods onto the character's six. Idle is left to
+   him: the time of day, a smile under the pointer, the odd wink. */
+const FACE_OF: Record<Mood, SteveMood | undefined> = {
+  idle: undefined,
+  wave: "happy",
+  thinking: "thinking",
+  talking: "thinking",
+  happy: "happy",
+  sorry: "surprised",
+  surprised: "surprised",
+  texting: "thinking",
+  flex: "happy",
+  asleep: "sleepy",
+  sad: "surprised",
+  confused: "surprised",
+  idea: "happy",
+  bored: "sleepy",
+  yawn: "sleepy",
+  nod: "happy",
+};
+
+function InkSteve({
   mood = "idle",
   size = 64,
   track = true,

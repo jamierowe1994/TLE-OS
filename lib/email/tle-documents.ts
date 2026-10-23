@@ -1387,6 +1387,52 @@ export const LANDLORD_DOCS_NUDGE = {
  * button signs them in and opens the contract on their file; sent by hand from
  * the appraisal and on its own two, five and nine days after the terms went.
  */
+/**
+ * Landlord: terms of business sent straight from the OS (lib/terms, 23 Oct
+ * 2026). James: "These will land in these guys' inbox, and they can just sign
+ * them. It can be a branded email that just goes out." One per person who
+ * signs, each with their own link, from the agent's own mailbox.
+ */
+export const LANDLORD_TERMS_REQUEST = {
+  subject: "Your terms of business for {{address}}",
+  preheader: "{{agentFirst}} has signed. About five minutes to read and sign yours.",
+  mode: "blocks",
+  blocks: [
+    H("ltr1", "Your Terms of Business"),
+    T(
+      "ltr2",
+      "Hi {{firstName}},<br><br>Thank you for choosing The Letting Experts for <strong>{{address}}</strong>. Your terms of business are ready, and {{agentFirst}} has already signed for us."
+    ),
+    T("ltr3", "The button opens them in full. If there's anything we don't have yet, like your landlord registration or the account for your rent, it asks you first, then you sign."),
+    BTN("ltr4", "Read and sign", "{{link}}"),
+    SP("ltr5", 8),
+    T("ltr6", "Any questions at all, just reply to this email and it comes straight to {{agentFirst}}."),
+    T("ltr7", "The Letting Experts"),
+    FOOT("ltr8", "You're getting this because {{agentFirst}} at The Letting Experts sent you your terms of business to sign."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** Landlord: everybody has signed - their copy (lib/terms, 23 Oct 2026). */
+export const LANDLORD_TERMS_SIGNED = {
+  subject: "Signed: your terms of business for {{address}}",
+  preheader: "Everyone has signed. Your copy is here whenever you need it.",
+  mode: "blocks",
+  blocks: [
+    H("lts1", "All Signed"),
+    T(
+      "lts2",
+      "Hi {{firstName}},<br><br>Everyone has now signed the terms of business for <strong>{{address}}</strong>, so we're ready to get started."
+    ),
+    BTN("lts3", "Your signed copy", "{{link}}"),
+    SP("lts4", 8),
+    T("lts5", "{{agentFirst}} will be in touch about what happens next. Any questions, just reply to this email."),
+    T("lts6", "The Letting Experts"),
+    FOOT("lts7", "You're getting this because you signed terms of business with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 export const LANDLORD_CONTRACT_NUDGE = {
   subject: "A reminder: your contract for {{address}}",
   preheader: "It's ready and waiting - about two minutes to sign.",

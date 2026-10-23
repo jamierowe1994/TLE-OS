@@ -1,0 +1,142 @@
+/* New look: compliance (lib/new-look). Scoped under [data-look="new"]. */
+
+/* ── the listing's Compliance tab (components/listing/ListingCompliance, look="new") ── */
+[data-look="new"] .nl-cmp { display: flex; flex-direction: column; min-width: 0; }
+
+[data-look="new"] .nl-cmp-spin {
+  display: inline-block; width: 12px; height: 12px; flex: none; border-radius: 50%;
+  border: 1.5px solid var(--line-strong); border-top-color: var(--ink);
+  animation: nl-cmp-spin 0.8s linear infinite;
+}
+@keyframes nl-cmp-spin { to { transform: rotate(360deg); } }
+[data-look="new"] .nl-cmp-wait { display: inline-flex; align-items: center; gap: 8px; }
+[data-look="new"] .nl-cmp-loading { display: flex; padding: 18px 6px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-cmp-err { color: var(--warning); }
+
+/* Let only / marketing only: said once, quietly. */
+[data-look="new"] .nl-cmp-note { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 16px; font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-cmp-note svg { flex: none; margin-top: 2px; color: var(--ink); }
+
+/* The Terms of Business banner. */
+[data-look="new"] .nl-cmp-tob {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 20px 24px; margin-bottom: 30px; border-radius: 24px; background: var(--accent-soft);
+  transition: background-color 0.5s var(--nl-ease);
+  animation: nl-in 0.5s var(--nl-ease) both;
+}
+[data-look="new"] .nl-cmp-tob.is-signed { background: var(--sage-soft); }
+[data-look="new"] .nl-cmp-tob.is-loading { background: var(--panel); }
+[data-look="new"] .nl-cmp-tob-ic {
+  width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: var(--card); color: var(--accent-dark);
+}
+[data-look="new"] .nl-cmp-tob.is-signed .nl-cmp-tob-ic { color: var(--sage-ink); }
+[data-look="new"] .nl-cmp-tob.is-loading .nl-cmp-tob-ic { color: var(--muted); }
+[data-look="new"] .nl-cmp-tob-main { flex: 1 1 260px; min-width: 0; }
+[data-look="new"] .nl-cmp-tob-main p { margin: 4px 0 0; }
+[data-look="new"] .nl-cmp-tob-act { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+[data-look="new"] .nl-cmp-tob-act .nl-badge { background: transparent; }
+[data-look="new"] .nl-cmp-signed { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--sage-ink); }
+
+/* The list: a title, the count and a ring, rows on hairlines. */
+[data-look="new"] .nl-cmp-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+[data-look="new"] .nl-cmp-bar > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+[data-look="new"] .nl-cmp-ring {
+  --p: 0; width: 22px; height: 22px; flex: none; border-radius: 50%;
+  background: conic-gradient(var(--sage-deep) calc(var(--p) * 360deg), var(--box) 0);
+  -webkit-mask: radial-gradient(circle, transparent 7px, #000 7.5px);
+  mask: radial-gradient(circle, transparent 7px, #000 7.5px);
+}
+[data-look="new"] .nl-cmp-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); container-type: inline-size; }
+[data-look="new"] .nl-cmp-list > li { border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-cmp-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 18px; align-items: center;
+  padding: 14px 6px; transition: background-color 0.25s;
+}
+[data-look="new"] .nl-cmp-row:hover { background: var(--panel); }
+[data-look="new"] .nl-cmp-ic {
+  width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: var(--box); color: var(--muted);
+  transition: background-color 0.4s var(--nl-ease), color 0.4s;
+}
+[data-look="new"] .nl-cmp-ic.is-ok { background: var(--sage-soft); color: var(--sage-ink); }
+[data-look="new"] .nl-cmp-ic.is-warn { background: var(--warning-soft); color: var(--warning); }
+[data-look="new"] .nl-cmp-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+[data-look="new"] .nl-cmp-main .nl-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-cmp-file {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-strong);
+}
+[data-look="new"] .nl-cmp-file:hover { color: var(--ink); text-decoration-color: currentColor; }
+[data-look="new"] .nl-cmp-act { display: flex; justify-content: flex-end; min-width: 92px; }
+@container (max-width: 520px) {
+  [data-look="new"] .nl-cmp-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; }
+  [data-look="new"] .nl-cmp-row > .nl-badge { display: none; }
+  [data-look="new"] .nl-cmp-act { min-width: 0; }
+}
+
+/* Filing a certificate, in place under its row. */
+[data-look="new"] .nl-cmp-filer {
+  display: flex; flex-direction: column; gap: 12px;
+  margin: 0 6px 14px 52px; padding: 16px 18px; border-radius: 16px; background: var(--panel);
+  animation: nl-fade 0.3s ease both;
+}
+[data-look="new"] .nl-cmp-filer > p { margin: 0; }
+[data-look="new"] .nl-cmp-filer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+[data-look="new"] .nl-cmp-filer-grid .nl-cmp-span { grid-column: 1 / -1; }
+[data-look="new"] .nl-cmp-filer .nl-field > span:first-child { font-size: 12px; }
+[data-look="new"] .nl-cmp-filer .nl-field input:not([type="file"]) { font-size: 14px; padding: 9px 12px; }
+[data-look="new"] .nl-cmp-select {
+  font: inherit; font-size: 14px; line-height: 21px; width: 100%; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line-strong); border-radius: 12px; padding: 9px 12px; outline: 0;
+}
+[data-look="new"] .nl-cmp-select:focus { border-color: var(--primary); }
+[data-look="new"] .nl-cmp-filer-acts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+@container (max-width: 620px) {
+  [data-look="new"] .nl-cmp-filer { margin-left: 6px; }
+  [data-look="new"] .nl-cmp-filer-grid { grid-template-columns: 1fr; }
+}
+/* The form when the row it belongs to is not on the list. */
+[data-look="new"] .nl-cmp-docs > .nl-cmp-filer { margin: 14px 0 0; }
+
+[data-look="new"] .nl-cmp-said { display: flex; align-items: flex-start; gap: 12px; margin: 12px 0 0; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-cmp-said > span { flex: 1; min-width: 0; }
+[data-look="new"] .nl-cmp-said .nl-link { font-size: 12px; color: var(--muted); }
+
+/* One drop space. */
+[data-look="new"] .nl-cmp-drop {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  margin-top: 20px; padding: 22px 24px; border: 1.5px dashed var(--line-strong); border-radius: 20px;
+  color: var(--muted); font-size: 14px; line-height: 20px; cursor: pointer;
+  transition: border-color 0.25s, background-color 0.25s, color 0.25s;
+}
+[data-look="new"] .nl-cmp-drop b { color: var(--ink); font-weight: 600; }
+[data-look="new"] .nl-cmp-drop:hover, [data-look="new"] .nl-cmp-drop.is-over { border-color: var(--sage-deep); background: var(--sage-soft); color: var(--ink); }
+[data-look="new"] .nl-cmp-drop:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-cmp-drop input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+[data-look="new"] .nl-cmp-drop-ic {
+  width: 38px; height: 38px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: var(--card); color: var(--sage-ink);
+}
+[data-look="new"] .nl-cmp-queue { margin-top: 14px; }
+
+/* The quiet line under it, and what it opens. */
+[data-look="new"] .nl-cmp-more { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 18px; }
+[data-look="new"] .nl-cmp-more .nl-link { color: var(--muted); }
+[data-look="new"] .nl-cmp-more .nl-link:hover, [data-look="new"] .nl-cmp-more .nl-link[aria-expanded="true"] { color: var(--ink); }
+[data-look="new"] .nl-cmp-sub { margin-top: 14px; animation: nl-fade 0.3s ease both; }
+[data-look="new"] .nl-cmp-fold {
+  margin-top: 14px; padding: 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--card);
+  animation: nl-fade 0.3s ease both;
+}
+[data-look="new"] .nl-cmp-fold[hidden] { display: none; }
+[data-look="new"] .nl-cmp-record { margin-top: 18px; }
+[data-look="new"] .nl-cmp-record > p { margin: 0 0 8px; }
+
+@media (max-width: 760px) {
+  [data-look="new"] .nl-cmp-tob { padding: 18px; gap: 14px; }
+  [data-look="new"] .nl-cmp-drop { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-cmp-tob, [data-look="new"] .nl-cmp-filer, [data-look="new"] .nl-cmp-sub, [data-look="new"] .nl-cmp-fold { animation: none; }
+}

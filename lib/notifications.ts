@@ -17,6 +17,7 @@ import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
 import { gapsForBell } from "@/lib/propoly-mail";
 import { bookFor } from "@/lib/listings-cache";
 import { recentTenantSends } from "@/lib/tenant-documents";
+import { termsForAgent } from "@/lib/terms/store";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -443,6 +444,29 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
         href: "/admin/propoly",
         tone: "warn",
       });
+    }
+  }
+  /* Terms of Business sent from the OS (lib/terms, 23 Oct 2026), to the
+     agent who sent them: your part still to sign, an email that didn't go,
+     each landlord as they sign, and all signed. Two weeks, then gone. */
+  const recentTerms = await termsForAgent(me.id, 20).catch(() => []);
+  const fortnight = Date.now() - 14 * 86400000;
+  for (const t of recentTerms) {
+    const href = t.listingId ? `/listings/${t.listingId}?tab=compliance` : "/listings";
+    const street = t.propertyAddress.split(",")[0] || t.propertyAddress;
+    if (t.status === "agent" && Date.parse(t.createdAt) > fortnight) {
+      out.push({ id: `terms-agent:${t.id}`, kind: "lead", at: t.createdAt, title: `Sign your part of the terms for ${street}`, body: "Nothing goes to the landlord until you do.", href, tone: "warn" });
+    }
+    for (const p of t.parties) {
+      if (p.emailError && !p.emailedAt && !p.signedAt) {
+        out.push({ id: `terms-email:${t.id}:${p.key}`, kind: "lead", at: t.sentAt ?? t.createdAt, title: `The terms email to ${p.name} didn't go`, body: `${p.emailError.replace(/[.\s]+$/, "")}. Copy their link from the Compliance tab, or send again.`, href, tone: "warn" });
+      }
+      if (p.signedAt && Date.parse(p.signedAt) > fortnight && t.status !== "signed") {
+        out.push({ id: `terms-signed:${t.id}:${p.key}`, kind: "lead", at: p.signedAt, title: `${p.name} signed the terms for ${street}`, body: `${t.parties.filter((x) => !x.signedAt).length} still to sign.`, href, tone: "ok" });
+      }
+    }
+    if (t.status === "signed" && t.completedAt && Date.parse(t.completedAt) > fortnight) {
+      out.push({ id: `terms-done:${t.id}`, kind: "lead", at: t.completedAt, title: `Terms signed for ${street}`, body: "Everyone has signed. The copy is on the Compliance tab.", href, tone: "ok" });
     }
   }
   for (const t of tasks) {

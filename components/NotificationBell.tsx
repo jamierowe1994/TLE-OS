@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
+import LineIcon from "@/components/LineIcon";
 import { NOTICE_ICON, type Notice } from "@/lib/notices";
 import { whenAgo } from "@/lib/lead-spine";
 
@@ -24,7 +25,7 @@ import { whenAgo } from "@/lib/lead-spine";
 
 const REFRESH_MS = 60_000;
 
-export default function NotificationBell({ compact = false }: { compact?: boolean }) {
+export default function NotificationBell({ compact = false, inSidebar = false }: { compact?: boolean; /** The new look's sidebar header: a quiet icon, the panel opening to the right. */ inSidebar?: boolean }) {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -36,10 +37,10 @@ export default function NotificationBell({ compact = false }: { compact?: boolea
      is its own stacking context, and a later sibling paints over an earlier
      one whatever z-index the header asks for. The body has no such siblings. */
   const bell = useRef<HTMLButtonElement | null>(null);
-  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  const [anchor, setAnchor] = useState<{ top: number; right?: number; left?: number } | null>(null);
   const place = useCallback(() => {
     const r = bell.current?.getBoundingClientRect();
-    if (r) setAnchor({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+    if (r) setAnchor(inSidebar ? { top: r.bottom + 8, left: Math.max(8, r.left - 6) } : { top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -112,35 +113,11 @@ export default function NotificationBell({ compact = false }: { compact?: boolea
   }, [open]);
 
   const size = compact ? "h-9 w-9" : "h-10 w-10";
-
-  return (
-    /* Below lg the page header's bell hides and the mobile top bar's shows -
-       one bell per screen, never two. */
-    <div className={compact ? "relative" : "absolute right-0 top-0 z-30 hidden lg:block"}>
-      <button
-        ref={bell}
-        type="button"
-        onClick={() => void toggle()}
-        className={`relative flex ${size} shrink-0 items-center justify-center rounded-full border border-line/80 bg-page transition-colors hover:border-ink/40`}
-        title={unread ? `${unread} new` : "Notifications"}
-        aria-label={unread ? `Notifications, ${unread} new` : "Notifications"}
-      >
-        <DoodleIcon name="bell" size={17} className="text-ink" />
-        {unread > 0 && (
-          <span className="figures absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
-            {unread > 99 ? "99+" : unread}
-          </span>
-        )}
-      </button>
-
-      {open &&
-        anchor &&
-        typeof document !== "undefined" &&
-        createPortal(
+  const panel = (
         <>
           <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-[150] cursor-default" />
           <div
-            style={{ top: anchor.top, right: anchor.right }}
+            style={{ top: anchor?.top, right: anchor?.right, left: anchor?.left }}
             className="fade-up fixed z-[160] w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-line/80 bg-card shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)]"
           >
             <div className="flex items-center justify-between gap-3 border-b border-line/60 px-4 py-3">
@@ -196,8 +173,44 @@ export default function NotificationBell({ compact = false }: { compact?: boolea
               })}
             </ul>
           </div>
-        </>,
-        document.body
+        </>
+  );
+
+  if (inSidebar)
+    return (
+      <div className="relative">
+        <button ref={bell} type="button" onClick={() => void toggle()} className="nl-nav-icon" title={unread ? `${unread} new` : "Notifications"} aria-label={unread ? `Notifications, ${unread} new` : "Notifications"}>
+          <LineIcon name="bell" size={17} />
+          {unread > 0 && <i className="nl-nav-dot" aria-hidden />}
+        </button>
+        {open && anchor && typeof document !== "undefined" && createPortal(panel, document.body)}
+      </div>
+    );
+
+  return (
+    /* Below lg the page header's bell hides and the mobile top bar's shows -
+       one bell per screen, never two. */
+    <div data-page-bell={compact ? undefined : ""} className={compact ? "relative" : "absolute right-0 top-0 z-30 hidden lg:block"}>
+      <button
+        ref={bell}
+        type="button"
+        onClick={() => void toggle()}
+        className={`relative flex ${size} shrink-0 items-center justify-center rounded-full border border-line/80 bg-page transition-colors hover:border-ink/40`}
+        title={unread ? `${unread} new` : "Notifications"}
+        aria-label={unread ? `Notifications, ${unread} new` : "Notifications"}
+      >
+        <DoodleIcon name="bell" size={17} className="text-ink" />
+        {unread > 0 && (
+          <span className="figures absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+
+      {open &&
+        anchor &&
+        typeof document !== "undefined" &&
+        createPortal(panel, document.body
       )}
     </div>
   );

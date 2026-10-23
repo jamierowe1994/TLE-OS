@@ -35,7 +35,7 @@ export type ConvItem = {
   matched?: { on: "reference" | "postcode"; ref: string; home: string } | { on: "email" };
 };
 
-export type NoteRow = { id: string; author: string; when: string; text: string; badge?: string | null };
+export type NoteRow = { id: string; author: string; when: string; text: string; badge?: string | null; /** ISO, where the caller has it - the new look's Activity orders by it. */ at?: string };
 
 type FullEmail = {
   subject: string;

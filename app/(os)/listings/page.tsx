@@ -22,6 +22,8 @@ import { DIARY } from "@/lib/diary";
 import { Readiness, Tag, boardGaps, readiness, statusOf, type PublishCheck } from "@/components/ListingTags";
 import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
 import rexSample from "@/lib/rex-sample.json";
+import { useNewLook } from "@/lib/use-new-look";
+import { Badge, Ico, Mast, Tabs } from "@/components/new-look/Parts";
 
 /**
  * Listings, as CARDS — each house gets the attention it deserves: a proper
@@ -493,6 +495,9 @@ export default function Listings() {
   const [period, setPeriod] = useState<PeriodId>("any");
   /* Tiles by default, like Market Appraisals (James, 11 Sep 2026). */
   const [view, setView] = useState<"list" | "tiles">("tiles");
+  /* The new look's filter row keeps the everyday two out and the rest under More filters. */
+  const [moreOpen, setMoreOpen] = useState(false);
+  const look = useNewLook("listings");
 
   /* ── The real book. NOTHING stands in for it (18 Sep 2026). A saved export
         from 6 August used to show while the book loaded, when it failed, and
@@ -800,6 +805,312 @@ export default function Listings() {
       }
     })();
   }, [board, book.live]);
+
+  /* ── THE NEW LOOK (lib/new-look "listings", 23 Oct 2026) ─────────────────
+     The same book, tabs, filters and moves as the board below, drawn the new
+     way: a type-only header, one filter row, text tabs, cards on a white page.
+     The old board stays underneath until the switch has bedded in. */
+  if (look === null) {
+    return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening Listings…</p>;
+  }
+  if (look) {
+    const stageTabs = [
+      { id: "Available" as const, label: "Available", count: byStage.Available ?? 0, blurb: "Published, and not let agreed. What you can put somebody in now." },
+      { id: "Draft" as const, label: "Draft", count: byStage.Draft ?? 0, blurb: `Not on the portals yet. Drafted in the last ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months.` },
+      { id: "offers" as const, label: "Offers in", count: offerRows === null ? null : offerRows.length, blurb: "Every offer waiting on a decision. The home keeps taking viewings until one is accepted." },
+      { id: "all" as const, label: "All listings", count: WORKING.filter((l) => !l.test).length - (byStage["Let agreed"] ?? 0), blurb: "Everything still being marketed. Let agreed has its own tab." },
+      { id: "Let agreed" as const, label: "Let agreed", count: byStage["Let agreed"] ?? 0, blurb: "Taken, and working through to a tenancy." },
+      { id: "photos" as const, label: "Missing photos", count: WORKING.filter((l) => l.imageCount === 0).length, blurb: "No photographs on the listing yet." },
+      { id: "compliance" as const, label: "Needs compliance", count: WORKING.filter((l) => l.epcExpiry == null).length, blurb: "No EPC filed." },
+    ];
+    const here = stageTabs.find((t) => t.id === stage);
+    const moreSet = [svc, sort].filter(Boolean).length + (period === "any" ? 0 : 1);
+    const anySet = Boolean(rentBand || loc || moreSet || q.trim());
+    const toneOf = (label: string) => (label === "Available" ? "good" : label === "Let agreed" ? "accent" : "neutral") as "good" | "accent" | "neutral";
+    const shownCount = eachOffer ? shownOffers?.length ?? null : board.length;
+    const tags = (l: SampleListing) => {
+      const st = statusOf(l);
+      const n = openOffers?.[String(l.id)] ?? 0;
+      return (
+        <>
+          <Badge tone={l.archived ? "neutral" : toneOf(st.label)}>{l.archived ? archiveLabel(l.archiveReason ?? null) : st.label}</Badge>
+          {l.introOnly && <Badge tone="info">Marketing only</Badge>}
+          {!l.archived && l.offline && (l.stillOnPortals ? <Badge tone="accent">Still on the portals</Badge> : <Badge tone="neutral">Offline</Badge>)}
+          {!l.archived && !l.letAgreed && !l.offline && l.taken && <Badge tone="accent">Still advertised</Badge>}
+          {!l.archived && !l.letAgreed && !l.taken && l.fellThrough && <Badge tone="accent">Fell through</Badge>}
+          {l.tenant && <Badge tone="info">Tenanted</Badge>}
+          {!l.archived && n > 0 && <Badge tone="warning">{n === 1 ? "1 offer" : `${n} offers`}</Badge>}
+          {!l.archived && l.imageCount === 0 && <Badge tone="accent">No photos</Badge>}
+          {!l.archived && l.epcExpiry == null && <Badge tone="neutral">EPC not filed</Badge>}
+        </>
+      );
+    };
+    const why = (l: SampleListing) =>
+      !l.archived && l.offline && l.stillOnPortals
+        ? "Marked offline, but Rightmove, OnTheMarket and Zoopla still show it. Open it and take it off the portals."
+        : !l.archived && !l.letAgreed && !l.offline && (l.taken ?? l.fellThrough)
+          ? `${(l.taken ?? l.fellThrough)!.why}${l.taken ? ". Take the advert down." : ". Relist it if it's back on the market."}`
+          : null;
+    const photo = (l: SampleListing, cls: string) =>
+      l.image ? (
+        <PropertyPhoto src={l.image} className={cls} />
+      ) : (
+        <span className="absolute inset-0 grid place-items-center text-muted" aria-hidden>
+          <svg width="56" height="44" viewBox="0 0 56 44" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><path d="M4 42h48M10 42V20L28 6l18 14v22M23 42V30h10v12" /></svg>
+        </span>
+      );
+    return (
+      <div data-look="new" className="nl-page nl-rise">
+        <Mast
+          title="Listings"
+          blurb={
+            book.loading
+              ? "Fetching the rental book…"
+              : book.live
+                ? `${C.currentRentals} current rentals: ${byStage.Available ?? 0} available, ${byStage["Let agreed"] ?? 0} let agreed and ${byStage.Draft ?? 0} drafts on the go${archivedInBook ? `, with ${archivedInBook} older drafts filed away` : ""}.`
+                : book.reason ?? "Your homes on the market and their marketing."
+          }
+          actions={
+            <button type="button" data-steve="listings.new" onClick={() => setAdding(true)} className="nl-btn nl-btn--primary">
+              <Ico name="plus" /> New listing
+            </button>
+          }
+        />
+
+        <div>
+          <div className="nl-filters">
+            <label className="nl-fsearch">
+              <Ico name="search" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={eachOffer ? "Search offers" : "Search addresses"} aria-label="Search listings" />
+            </label>
+            <span className={`nl-fsel${rentBand ? " is-set" : ""}`}>
+              <select aria-label="Rent" value={rentBand ?? ""} onChange={(e) => setRentBand(e.target.value || null)}>
+                <option value="">Any rent</option>
+                {RENT_BANDS.map((b) => <option key={b.id} value={b.id}>{b.label.replace("–", "to")}</option>)}
+              </select>
+            </span>
+            <span className={`nl-fsel${loc ? " is-set" : ""}`}>
+              <select aria-label="Location" value={loc ?? ""} onChange={(e) => setLoc(e.target.value || null)}>
+                <option value="">Anywhere</option>
+                {localities.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select>
+            </span>
+            <button type="button" className="nl-fmore" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+              <Ico name="filter" size={15} />
+              {moreOpen ? "Fewer filters" : moreSet ? `More filters · ${moreSet}` : "More filters"}
+            </button>
+            {anySet && (
+              <button type="button" className="nl-fmore" onClick={() => { setQ(""); setSort(null); setRentBand(null); setLoc(null); setSvc(null); setPeriod("any"); }}>
+                Clear
+              </button>
+            )}
+            <span className="nl-fcount">{shownCount == null ? "" : `${shownCount} ${eachOffer ? (shownCount === 1 ? "offer" : "offers") : shownCount === 1 ? "home" : "homes"}`}</span>
+            <span className="nl-toggle" role="group" aria-label="Show as">
+              <button type="button" className={view === "tiles" ? "is-on" : ""} aria-pressed={view === "tiles"} onClick={() => setView("tiles")}>Cards</button>
+              <button type="button" className={view === "list" ? "is-on" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>List</button>
+            </span>
+          </div>
+          <div className={`nl-collapse${moreOpen ? " is-open" : ""}`}>
+            <div>
+              <div className="nl-filters pt-2.5">
+                <span className={`nl-fsel${sort ? " is-set" : ""}`}>
+                  <select aria-label="Sort by" value={sort ?? ""} onChange={(e) => setSort(e.target.value || null)}>
+                    <option value="">Most recent</option>
+                    {SORTS.filter((x) => x.id !== "recent").map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                  </select>
+                </span>
+                <span className={`nl-fsel${svc ? " is-set" : ""}`}>
+                  <select aria-label="Service" value={svc ?? ""} onChange={(e) => setSvc(e.target.value || null)}>
+                    <option value="">Any service</option>
+                    <option value="intro_only">Marketing only</option>
+                    <option value="other">Every other service</option>
+                  </select>
+                </span>
+                <span className={`nl-fsel${period !== "any" ? " is-set" : ""}`}>
+                  <select aria-label="Date listed" value={period} onChange={(e) => setPeriod(e.target.value as PeriodId)}>
+                    {PERIODS.map((x) => <option key={x.id} value={x.id}>{x.id === "any" ? "Any date listed" : x.label}</option>)}
+                  </select>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <Tabs
+            label="Listing statuses"
+            value={stage === "archived" ? "all" : stage}
+            onChange={(id) => setStage(id === stage && id !== "Available" ? "Available" : id)}
+            items={stageTabs.map((t) => ({ id: t.id, label: t.label, count: t.count }))}
+          />
+          {here && !q.trim() && <p className="nl-meta mt-3">{here.blurb}</p>}
+        </div>
+
+        <div className="mt-7">
+          {stage === "offers" && (
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <p className="nl-meta min-w-0 flex-1 basis-[240px]">
+                {offersBy === "offer"
+                  ? "Newest first. Open one to accept or decline it, or send it to the landlord."
+                  : "The homes with an offer waiting. Open one and go to Offers."}
+              </p>
+              <span className="nl-toggle" role="group" aria-label="Offers by">
+                <button type="button" className={offersBy === "offer" ? "is-on" : ""} onClick={() => setOffersBy("offer")}>Each offer</button>
+                <button type="button" className={offersBy === "home" ? "is-on" : ""} onClick={() => setOffersBy("home")}>By home</button>
+              </span>
+            </div>
+          )}
+          {eachOffer && (
+            <OffersInList
+              rows={shownOffers}
+              error={offersError}
+              homes={offerHomes}
+              onRetry={loadOffers}
+              onOpen={(r) => {
+                rememberListingOrder([r.listingId]);
+                router.push(offerHref(r));
+              }}
+            />
+          )}
+          {archiveNote && <p className="mb-4 rounded-xl bg-accent-soft px-4 py-3 text-[13px] font-medium text-accent-dark">{archiveNote}</p>}
+          {!eachOffer && book.loading && <BoardSkeleton kind="cards" label="Fetching your listings…" count={6} />}
+          {!eachOffer && !book.loading && !book.live && book.listings.length === 0 && (
+            <div className="py-10" role={book.failed ? "alert" : "status"}>
+              <p className="nl-block-title">{book.failed ? "Your listings didn't load" : "No listings to show yet"}</p>
+              <p className="nl-meta mt-1.5 max-w-md">{book.reason}</p>
+              {book.failed && (
+                <button type="button" onClick={() => void loadBook()} className="nl-btn nl-btn--secondary nl-btn--sm mt-4">Try again</button>
+              )}
+            </div>
+          )}
+          {!eachOffer && board.length === 0 && (book.live || book.listings.length > 0) && (
+            <p className="nl-empty">Nothing matches{period === "any" ? "" : " in that window"}. Widen the rent or clear the filters.</p>
+          )}
+
+          {!eachOffer && board.length > 0 && view === "tiles" && (
+            <div className="nl-cards">
+              {board.map((l) => {
+                const busy = busyId === String(l.id);
+                const canRestore = l.archived === true && l.archiveReason !== "withdrawn";
+                const canRelist = !l.archived && !l.letAgreed && !l.taken && Boolean(l.fellThrough);
+                const w = why(l);
+                return (
+                  <div key={l.id} className="relative">
+                    <button type="button" data-steve-row="" onClick={() => openListing(String(l.id))} className="nl-prop h-full" aria-label={`Open ${l.name}`}>
+                      <span className="nl-prop-photo">
+                        {photo(l, "absolute inset-0 h-full w-full object-cover")}
+                        <span className="nl-prop-tags">{tags(l)}</span>
+                      </span>
+                      <span className="nl-prop-body">
+                        <span className="nl-price">
+                          {l.rent == null ? "Rent not set" : `£${l.rent.toLocaleString("en-GB")}`}
+                          {l.rent != null && <small>{rentPeriodLabel(l)}</small>}
+                        </span>
+                        <span className="nl-strong">{l.name}</span>
+                        <span className="nl-meta">{l.locality}</span>
+                        {w && <span className="nl-prop-why">{w}</span>}
+                        <span className={`nl-prop-foot${canRelist || canRestore ? " pr-[150px]" : ""}`}>
+                          <span>Available <b>{shortDate(l.availableFrom)}</b></span>
+                          <span><b>{l.imageCount}</b> {l.imageCount === 1 ? "photo" : "photos"}</span>
+                          {!l.archived ? (
+                            <span className="ml-auto min-w-0">
+                              <Readiness r={readiness(l, checks[`${l.id}:${l.modifiedAt ?? l.lastUpdated ?? ""}`])} pill />
+                            </span>
+                          ) : (
+                            <span className="basis-full">{archiveWhy({ archived: true, reason: l.archiveReason ?? null, since: l.archivedSince ?? null, ageDays: l.archiveAgeDays ?? null })}</span>
+                          )}
+                        </span>
+                      </span>
+                    </button>
+                    {canRelist && (
+                      <button type="button" disabled={busy} onClick={() => void relistOne(String(l.id))} title="The deal fell through: count it as available again" className="nl-btn nl-btn--sage nl-btn--sm absolute bottom-4 right-4 z-10">
+                        {busy ? "Relisting…" : "Relist"}
+                      </button>
+                    )}
+                    {canRestore && (
+                      <button type="button" disabled={busy} onClick={() => void move(String(l.id), "restore")} title={`Put it back on the board for another ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months`} className="nl-btn nl-btn--sage nl-btn--sm absolute bottom-4 right-4 z-10">
+                        {busy ? "Bringing it back…" : "Bring back to drafts"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!eachOffer && board.length > 0 && view === "list" && (
+            <div className="nl-rows">
+              {board.map((l) => {
+                const busy = busyId === String(l.id);
+                const canRestore = l.archived === true && l.archiveReason !== "withdrawn";
+                const canRelist = !l.archived && !l.letAgreed && !l.taken && Boolean(l.fellThrough);
+                const w = why(l);
+                return (
+                  <div key={l.id} className="relative">
+                    <button type="button" data-steve-row="" onClick={() => openListing(String(l.id))} className="nl-row" aria-label={`Open ${l.name}`}>
+                      <span className="nl-row-photo">{photo(l, "absolute inset-0 h-full w-full object-cover")}</span>
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap gap-1.5">{tags(l)}</span>
+                        <span className="nl-strong mt-1.5 block truncate">{l.name}</span>
+                        <span className="nl-meta block truncate">{l.locality}</span>
+                        {w && <span className="nl-prop-why block">{w}</span>}
+                      </span>
+                      <span className="nl-row-fact">
+                        <span className="nl-price">{l.rent == null ? "Not set" : `£${l.rent.toLocaleString("en-GB")}`}</span>
+                        <span className="nl-meta">{l.rent == null ? "rent" : rentPeriodLabel(l)}</span>
+                      </span>
+                      <span className="nl-row-fact nl-hide-sm">
+                        <span className="nl-meta">Available</span>
+                        <b>{shortDate(l.availableFrom)}</b>
+                      </span>
+                      <span className="nl-row-fact nl-hide-sm">
+                        <span className="nl-meta">Photos</span>
+                        <b>{l.imageCount}</b>
+                      </span>
+                      <span className="nl-hide-sm flex justify-end">
+                        {l.archived ? (
+                          <span className="nl-meta text-right">{archiveWhy({ archived: true, reason: l.archiveReason ?? null, since: l.archivedSince ?? null, ageDays: l.archiveAgeDays ?? null })}</span>
+                        ) : !(canRelist || canRestore) ? (
+                          <Readiness r={readiness(l, checks[`${l.id}:${l.modifiedAt ?? l.lastUpdated ?? ""}`])} pill />
+                        ) : null}
+                      </span>
+                    </button>
+                    {canRelist && (
+                      <button type="button" disabled={busy} onClick={() => void relistOne(String(l.id))} title="The deal fell through: count it as available again" className="nl-btn nl-btn--sage nl-btn--sm absolute right-2 top-1/2 z-10 -translate-y-1/2">
+                        {busy ? "Relisting…" : "Relist"}
+                      </button>
+                    )}
+                    {canRestore && (
+                      <button type="button" disabled={busy} onClick={() => void move(String(l.id), "restore")} className="nl-btn nl-btn--sage nl-btn--sm absolute right-2 top-1/2 z-10 -translate-y-1/2">
+                        {busy ? "Bringing it back…" : "Bring back to drafts"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!eachOffer && board.length > 0 && (
+            <p className="nl-meta mt-8">
+              Showing {board.length} of {WORKING.length} listings still moving
+              {C.draftsAll != null && C.draftsAll !== byStage.Draft && <> ({C.draftsAll} of the {C.currentRentals} current rentals have never been published; {archivedInBook} are filed away)</>}.
+            </p>
+          )}
+        </div>
+
+        {adding && (
+          <NewListingWizard
+            onClose={() => setAdding(false)}
+            onCreated={(id) => {
+              setAdding(false);
+              void loadBook().then(() => openListing(id, "marketing"));
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <>

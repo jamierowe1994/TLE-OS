@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
+import { Ico } from "@/components/new-look/Parts";
 
 /**
  * The listing's OFFER LINK, to copy or to send (7 Oct 2026, Howard: "could
@@ -22,7 +23,17 @@ import { PressButton } from "@/components/Bits";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function ApplicationFormCard({ listingId }: { listingId: string }) {
+export default function ApplicationFormCard({
+  listingId,
+  look,
+  className = "",
+}: {
+  listingId: string;
+  /** "new": the new look's Offer Link card (lib/new-look); otherwise as it always was. */
+  look?: "new";
+  /** For the parent to place the new look's card. */
+  className?: string;
+}) {
   const [info, setInfo] = useState<{ url: string | null; onMarket: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
@@ -64,8 +75,9 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
       await navigator.clipboard.writeText(info.url);
     } catch {
       /* Older browsers: select it for them to copy by hand. */
-      const el = document.getElementById("apply-link") as HTMLInputElement | null;
-      el?.select();
+      const el = document.getElementById("apply-link");
+      if (el instanceof HTMLInputElement) el.select();
+      else if (el) window.getSelection()?.selectAllChildren(el);
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
@@ -99,6 +111,141 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
     } finally {
       setBusy(false);
     }
+  }
+
+  /* THE NEW LOOK (23 Oct 2026): the link in a dashed box, Copy beside it,
+     Send the link opening the same send-to box. */
+  if (look === "new") {
+    const canSend = busy || (!emails.length && !typed.trim()) ? false : true;
+    return (
+      <section className={`nl-cell nl-off-linkcard ${className}`.trim()} data-steve="listing.application-form">
+        <h3 className="nl-block-title">Offer Link</h3>
+        <p className="nl-meta">Tenants make their offer themselves, no account needed. Each adult fills in their own part.</p>
+
+        {info === null ? (
+          <p className="nl-off-wait nl-meta">
+            <span aria-hidden className="nl-off-spin" />
+            Reading the link&hellip;
+          </p>
+        ) : !info.url ? (
+          <p className="nl-meta">This listing has no offer link yet.</p>
+        ) : (
+          <>
+            <div className="nl-off-linkbox">
+              <span id="apply-link" title={info.url}>{info.url.replace(/^https?:\/\//, "")}</span>
+              <span className="nl-off-linkacts">
+                <button type="button" className="nl-link" onClick={() => void copy()} aria-live="polite">
+                  {copied ? "Copied" : "Copy"}
+                </button>
+                <a href={info.url} target="_blank" rel="noreferrer" className="nl-link">
+                  Open
+                </a>
+              </span>
+            </div>
+            {!info.onMarket && (
+              <p className="nl-meta" style={{ color: "var(--warning)" }}>
+                This home isn&apos;t on the market, so the link says it isn&apos;t taking offers. It opens when the listing goes live.
+              </p>
+            )}
+
+            {!open ? (
+              <button type="button" onClick={() => setOpen(true)} disabled={!info.onMarket} className="nl-btn nl-btn--secondary nl-off-sendbtn">
+                <Ico name="mail" size={15} />
+                Send the link
+              </button>
+            ) : (
+              <div className="nl-off-compose">
+                <label htmlFor="apply-to" className="nl-off-label">
+                  Send it to
+                </label>
+                <div className="nl-off-to">
+                  {emails.map((e) => (
+                    <span key={e} className={`nl-off-chip${EMAIL.test(e) ? "" : " is-bad"}`}>
+                      <span>{e}</span>
+                      <button type="button" aria-label={`Remove ${e}`} onClick={() => setEmails((cur) => cur.filter((x) => x !== e))}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden>
+                          <path d="M6 6l12 12M18 6L6 18" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    id="apply-to"
+                    autoFocus
+                    value={typed}
+                    inputMode="email"
+                    placeholder={emails.length ? "Another address" : "name@example.com"}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (/[\s,;]$/.test(v)) {
+                        take(v);
+                        setTyped("");
+                      } else setTyped(v);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (typed.trim()) {
+                          take(typed);
+                          setTyped("");
+                        } else void send();
+                      } else if (e.key === "Backspace" && !typed && emails.length) {
+                        setEmails((cur) => cur.slice(0, -1));
+                      }
+                    }}
+                    onBlur={() => {
+                      if (typed.trim()) {
+                        take(typed);
+                        setTyped("");
+                      }
+                    }}
+                    onPaste={(e) => {
+                      const text = e.clipboardData.getData("text");
+                      if (/[\s,;]/.test(text.trim())) {
+                        e.preventDefault();
+                        take(text);
+                      }
+                    }}
+                  />
+                </div>
+                <p className="nl-meta" style={{ marginTop: 6 }}>One or more. Each gets their own email with the link to make an offer on this home.</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => void send()} disabled={!canSend} className="nl-btn nl-btn--primary nl-btn--sm">
+                    <Ico name="mail" size={14} />
+                    {busy ? "Sending…" : `Send${emails.length > 1 ? ` to ${emails.length}` : ""}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      setProblem(null);
+                      setResults(null);
+                    }}
+                    className="nl-btn nl-btn--quiet nl-btn--sm"
+                  >
+                    Close
+                  </button>
+                </div>
+                {problem && <p className="nl-off-note" role="alert" style={{ marginTop: 10 }}>{problem}</p>}
+                {results && (
+                  <ul className="nl-off-results">
+                    {results.map((r) => (
+                      <li key={r.email}>
+                        {r.sent ? <Ico name="check" size={14} /> : <span className="is-not">Not sent</span>}
+                        <span className="min-w-0">
+                          <span className="font-medium">{r.email}</span>
+                          <span className="text-muted"> - {r.sent ? "sent." : ""} {r.detail}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    );
   }
 
   return (

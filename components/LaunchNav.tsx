@@ -5,6 +5,7 @@ import Link from "next/link";
 import { OPEN_SEARCH } from "@/components/SearchPalette";
 import LineIcon from "@/components/LineIcon";
 import Wordmark from "@/components/Wordmark";
+import NotificationBell from "@/components/NotificationBell";
 import { warmRoute } from "@/lib/route-warm";
 import type { NavItem } from "@/lib/nav";
 
@@ -35,12 +36,16 @@ function initials(me: Me): string {
 }
 
 /** One row of the sidebar. Exported so Bond's rail (components/BondNav) is drawn in the same hand. */
+/** The new look's row (lib/new-look "nav"): 14px, a 12px corner, the page you are on lifted to white. */
+const rowNew = (active: boolean, collapsed: boolean) => `group nl-nav-item${active ? " is-on" : ""}${collapsed ? " is-tight" : ""}`;
+
 export const row = (active: boolean, collapsed: boolean) =>
   `group flex h-8 w-full items-center rounded-md text-[13px] transition-colors ${collapsed ? "justify-center px-0" : "gap-2.5 px-2"} ${
     active ? "bg-[var(--launch-active)] text-ink" : "text-[var(--launch-text)] hover:bg-[var(--launch-hover)] hover:text-ink"
   }`;
 
-function Item({ item, pathname, currentHref, collapsed, go, counts }: { item: NavItem; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void; counts?: Record<string, number> }) {
+function Item({ item, pathname, currentHref, collapsed, go, counts, look }: { item: NavItem; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void; counts?: Record<string, number>; look?: "new" }) {
+  const r = look ? rowNew : row;
   const count = counts?.[item.href] ?? 0;
   const kids = item.children ?? [];
   /* A child page lights its group too: Maintenance, Compliance and the rest
@@ -67,15 +72,15 @@ function Item({ item, pathname, currentHref, collapsed, go, counts }: { item: Na
             e.preventDefault();
             go(item.href);
           }}
-          className={`${row(active && !childOn, collapsed)} ${childOn ? "text-ink" : ""}`}
+          className={`${r(active && !childOn, collapsed)} ${childOn ? "text-ink" : ""}`}
         >
           <span className="relative flex">
-            <LineIcon name={item.icon} className={active ? "text-ink" : "text-[var(--launch-icon)] group-hover:text-ink"} />
+            <LineIcon name={item.icon} size={look ? 17 : undefined} className={look ? "" : active ? "text-ink" : "text-[var(--launch-icon)] group-hover:text-ink"} />
             {collapsed && count > 0 && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent-dark" />}
           </span>
           {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
           {!collapsed && count > 0 && (
-            <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent-dark px-1 text-[10.5px] font-semibold text-white">{count > 99 ? "99+" : count}</span>
+            <span className={look ? "nl-nav-count" : "flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent-dark px-1 text-[10.5px] font-semibold text-white"}>{count > 99 ? "99+" : count}</span>
           )}
         </a>
         {kids.length > 0 && !collapsed && (
@@ -104,7 +109,7 @@ function Item({ item, pathname, currentHref, collapsed, go, counts }: { item: Na
                     e.preventDefault();
                     go(c.href);
                   }}
-                  className={`flex h-7 items-center rounded-md px-2 text-[12.5px] transition-colors ${on ? "bg-[var(--launch-active)] text-ink" : "text-[var(--launch-text)] hover:bg-[var(--launch-hover)] hover:text-ink"}`}
+                  className={look ? `nl-nav-sub${on ? " is-on" : ""}` : `flex h-7 items-center rounded-md px-2 text-[12.5px] transition-colors ${on ? "bg-[var(--launch-active)] text-ink" : "text-[var(--launch-text)] hover:bg-[var(--launch-hover)] hover:text-ink"}`}
                 >
                   <span className="truncate">{c.label}</span>
                 </a>
@@ -117,16 +122,16 @@ function Item({ item, pathname, currentHref, collapsed, go, counts }: { item: Na
   );
 }
 
-function Section({ title, items, collapsed, ...rest }: { title: string | null; items: NavItem[]; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void; counts?: Record<string, number> }) {
+function Section({ title, items, collapsed, ...rest }: { title: string | null; items: NavItem[]; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void; counts?: Record<string, number>; look?: "new" }) {
   const [shut, setShut] = useState(false);
   if (!items.length) return null;
   return (
-    <div className="mt-4 first:mt-0">
+    <div className={rest.look ? "" : "mt-4 first:mt-0"}>
       {title && !collapsed && (
         <button
           type="button"
           onClick={() => setShut((s) => !s)}
-          className="group mb-0.5 flex h-6 w-full items-center gap-1 rounded-md px-2 text-left text-[11.5px] font-medium text-[var(--launch-icon)] hover:text-ink"
+          className={rest.look ? "group nl-nav-label" : "group mb-0.5 flex h-6 w-full items-center gap-1 rounded-md px-2 text-left text-[11.5px] font-medium text-[var(--launch-icon)] hover:text-ink"}
         >
           {title}
           <LineIcon name={shut ? "chevron-right" : "chevron-down"} size={12} className="opacity-0 transition-opacity group-hover:opacity-100" />
@@ -157,6 +162,7 @@ export default function LaunchNav({
   onSignOut,
   menuOpen,
   onMenu,
+  look,
 }: {
   front: NavItem[];
   back: NavItem[];
@@ -171,6 +177,8 @@ export default function LaunchNav({
   /* The shell holds the profile menu's state, so a guide or the tour can open it. */
   menuOpen?: boolean;
   onMenu?: (open: boolean) => void;
+  /** The new look's sidebar (lib/new-look "nav"). */
+  look?: "new";
 }) {
   const [ownMenu, setOwnMenu] = useState(false);
   const menu = menuOpen ?? ownMenu;
@@ -221,13 +229,29 @@ export default function LaunchNav({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const common = { pathname, currentHref, collapsed, go, counts: { "/huddles": huddleUnread } as Record<string, number> };
+  const common = { pathname, currentHref, collapsed, go, counts: { "/huddles": huddleUnread } as Record<string, number>, look };
+  const r = look ? rowNew : row;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* The workspace, and the collapse. */}
       {/* Just the wordmark, no box round it (James, 11 Oct 2026). Collapsed,
           it is the OS on its own, as the old rail did. */}
+      {look ? (
+        /* The design's head: the wordmark in small capitals, the bell and the collapse. */
+        <div className={`nl-nav-head${collapsed ? " is-tight" : ""}`}>
+          <span className="nl-nav-logo" aria-label="TLE OS">{collapsed ? "OS" : "TLE OS"}</span>
+          {!collapsed && (
+            <>
+              <span className="flex-1" />
+              <NotificationBell inSidebar />
+              <button type="button" onClick={onToggleCollapse} title="Collapse" aria-label="Collapse sidebar" className="nl-nav-icon">
+                <LineIcon name="panel" size={17} />
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
       <div className={`flex h-9 items-center ${collapsed ? "justify-center" : "gap-2 px-2"}`}>
         <Wordmark collapsed={collapsed} size={21} />
         {!collapsed && (
@@ -239,6 +263,7 @@ export default function LaunchNav({
           </>
         )}
       </div>
+      )}
       {collapsed && (
         <button type="button" onClick={onToggleCollapse} title="Expand" className="mx-auto mt-2 flex h-7 w-7 items-center justify-center rounded-md text-[var(--launch-icon)] hover:bg-[var(--launch-hover)] hover:text-ink">
           <LineIcon name="panel" size={15} />
@@ -246,61 +271,61 @@ export default function LaunchNav({
       )}
 
       {/* Search, as a row: it opens the page's own search. */}
-      <button type="button" data-os-search onClick={focusSearch} title={collapsed ? "Search (⌘K)" : undefined} className={`mt-3 ${row(false, collapsed)}`}>
-        <LineIcon name="search" className="text-[var(--launch-icon)] group-hover:text-ink" />
+      <button type="button" data-os-search onClick={focusSearch} title={collapsed ? "Search (⌘K)" : undefined} className={look ? `nl-nav-search${collapsed ? " is-tight" : ""}` : `mt-3 ${row(false, collapsed)}`}>
+        <LineIcon name="search" size={look ? 16 : undefined} className={look ? "" : "text-[var(--launch-icon)] group-hover:text-ink"} />
         {!collapsed && (
           <>
             <span className="flex-1 text-left">Search</span>
-            <kbd className="rounded border border-[var(--launch-guide)] px-1.5 font-sans text-[10.5px] text-[var(--launch-icon)]">⌘K</kbd>
+            <kbd className={look ? "nl-nav-kbd" : "rounded border border-[var(--launch-guide)] px-1.5 font-sans text-[10.5px] text-[var(--launch-icon)]"}>⌘K</kbd>
           </>
         )}
       </button>
 
       {/* A short rule under Search, and room before Dashboard (James, 11 Oct 2026). */}
-      <div className="mx-auto mt-3 w-4/5 border-t border-[var(--launch-guide)]" />
-      <nav className="mt-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2">
+      {!look && <div className="mx-auto mt-3 w-4/5 border-t border-[var(--launch-guide)]" />}
+      <nav className={look ? "nl-nav-list" : "mt-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2"}>
         <Section title={null} items={home} {...common} />
         <Section title="Lettings" items={lettings} {...common} />
         <Section title="Back office" items={back} {...common} />
         <Section title="Your workspaces" items={mine} {...common} />
       </nav>
 
-      <ul className="space-y-px pt-2">
+      <ul className={look ? "nl-nav-foot" : "space-y-px pt-2"}>
         <li>
-          <Link href="/guides" data-os-help title={collapsed ? "Help" : undefined} className={row(pathname.startsWith("/guides"), collapsed)}>
-            <LineIcon name="help" className="text-[var(--launch-icon)] group-hover:text-ink" />
+          <Link href="/guides" data-os-help title={collapsed ? "Help" : undefined} className={r(pathname.startsWith("/guides"), collapsed)}>
+            <LineIcon name="help" size={look ? 17 : undefined} className={look ? "" : "text-[var(--launch-icon)] group-hover:text-ink"} />
             {!collapsed && <span>Help</span>}
           </Link>
         </li>
         <li>
-          <Link href="/profile" data-os-settings title={collapsed ? "Settings" : undefined} className={row(pathname.startsWith("/profile"), collapsed)}>
-            <LineIcon name="setting" className="text-[var(--launch-icon)] group-hover:text-ink" />
+          <Link href="/profile" data-os-settings title={collapsed ? "Settings" : undefined} className={r(pathname.startsWith("/profile"), collapsed)}>
+            <LineIcon name="setting" size={look ? 17 : undefined} className={look ? "" : "text-[var(--launch-icon)] group-hover:text-ink"} />
             {!collapsed && <span>Settings</span>}
           </Link>
         </li>
       </ul>
 
       {/* You, at the foot, set off by a short rule. */}
-      <div className="mx-auto my-2 w-4/5 border-t border-[var(--launch-guide)]" />
+      {!look && <div className="mx-auto my-2 w-4/5 border-t border-[var(--launch-guide)]" />}
       <div className="relative">
         {menu && !collapsed && (
           <div data-os-profile-menu className="absolute bottom-full left-0 right-0 mb-1 rounded-lg border border-[var(--launch-guide)] bg-[var(--shell-panel)] p-1 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.3)]">
-            <Link href="/profile" onClick={() => setMenu(false)} className={row(false, false)}>
+            <Link href="/profile" onClick={() => setMenu(false)} className={r(false, false)}>
               <LineIcon name="user" className="text-[var(--launch-icon)]" />
               Your profile
             </Link>
-            <button type="button" onClick={onSignOut} className={row(false, false)}>
+            <button type="button" onClick={onSignOut} className={r(false, false)}>
               <LineIcon name="logout" className="text-[var(--launch-icon)]" />
               Sign out
             </button>
           </div>
         )}
-        <button type="button" data-os-profile onClick={() => (collapsed ? onToggleCollapse() : setMenu((m) => !m))} className={row(false, collapsed)}>
+        <button type="button" data-os-profile onClick={() => (collapsed ? onToggleCollapse() : setMenu((m) => !m))} className={look ? `nl-nav-item nl-nav-me${collapsed ? " is-tight" : ""}` : row(false, collapsed)}>
           {me?.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={me.photo} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+            <img src={me.photo} alt="" className={look ? "nl-nav-avatar object-cover" : "h-5 w-5 shrink-0 rounded-full object-cover"} />
           ) : (
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[9px] font-semibold text-accent-dark">{initials(me)}</span>
+            <span className={look ? "nl-nav-avatar" : "flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[9px] font-semibold text-accent-dark"}>{initials(me)}</span>
           )}
           {!collapsed && (
             <>

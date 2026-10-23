@@ -1,0 +1,136 @@
+/* New look: steve (lib/new-look). Scoped under [data-look="new"].
+
+   His speech bubble in the new look (components/HelpDock, lookNew): the head
+   line, this opening's conversation, the composer box and the three starter
+   pills. Card, hairlines and tone only, no shadows. */
+
+/* The card is a column, so the conversation is the part that gives way when
+   the card reaches its most (a max-height set inline: half as tall again as
+   it opened). */
+[data-look="new"] .nl-st-inner { display: flex; flex-direction: column; min-height: 0; }
+
+/* ── head ───────────────────────────────────────────────────────────────── */
+[data-look="new"] .nl-st-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-width: 0; flex: none; }
+[data-look="new"] .nl-st-name {
+  font: inherit; font-size: 15px; font-weight: 600; line-height: 20px; color: var(--ink);
+  background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap;
+}
+[data-look="new"] .nl-st-name:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+[data-look="new"] .nl-st-role { font-size: 13px; line-height: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+[data-look="new"] .nl-st-tools { margin-left: auto; display: flex; align-items: center; gap: 4px; flex: none; }
+[data-look="new"] .nl-st-clear {
+  font: inherit; font-size: 12.5px; color: var(--muted); background: none; border: 0; padding: 4px 6px; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong);
+  transition: color 0.2s, text-decoration-color 0.2s;
+}
+[data-look="new"] .nl-st-clear:hover { color: var(--ink); text-decoration-color: currentColor; }
+[data-look="new"] .nl-st-x {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; border: 0;
+  background: transparent; color: var(--muted); cursor: pointer; transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-st-x svg { transform: rotate(45deg); }
+[data-look="new"] .nl-st-x:hover { background: var(--box); color: var(--ink); }
+[data-look="new"] .nl-st-x:focus-visible,
+[data-look="new"] .nl-st-clear:focus-visible,
+[data-look="new"] .nl-st-name:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── the conversation ───────────────────────────────────────────────────── */
+[data-look="new"] .nl-st-thread {
+  display: flex; flex-direction: column; gap: 10px;
+  flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  margin: 0 -4px 12px; padding: 0 4px;
+}
+/* What they said: their own words, quietly, on the right. */
+[data-look="new"] .nl-st-me { align-self: flex-end; max-width: 86%; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+[data-look="new"] .nl-st-me > p {
+  margin: 0; padding: 9px 13px; border-radius: 16px 16px 4px 16px; background: var(--box); color: var(--ink);
+  font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+[data-look="new"] .nl-st-sent { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+[data-look="new"] .nl-st-sent a {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 10px;
+  border: 1px solid var(--line-strong); border-radius: 10px; font-size: 12px; color: var(--muted);
+}
+[data-look="new"] .nl-st-sent a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-st-sent a:hover { color: var(--ink); border-color: var(--faint); }
+
+/* What he said: the serif, on manilla (the design's voice). The first child
+   is AssistantSays' own box, recoloured here rather than in that component. */
+[data-look="new"] .nl-st-says { align-self: stretch; min-width: 0; }
+[data-look="new"] .nl-st-says > div:first-child {
+  margin-right: 0; padding: 12px 15px; border-radius: 16px 16px 16px 4px; background: var(--accent-soft);
+}
+[data-look="new"] .nl-st-says > div:first-child > p {
+  font-family: var(--nl-serif); font-size: 16px; line-height: 24px; color: var(--ink); overflow-wrap: anywhere;
+}
+[data-look="new"] .nl-st-says > div:first-child button {
+  background: var(--card); border: 1px solid var(--line-strong); color: var(--ink);
+  border-radius: 10px; padding: 4px 11px; font-size: 12.5px;
+}
+[data-look="new"] .nl-st-says > div:first-child button:hover { background: var(--page); border-color: var(--ink); color: var(--ink); }
+
+/* Thinking, in the conversation where the answer will land. */
+[data-look="new"] .nl-st-thinking {
+  align-self: flex-start; display: inline-flex; align-items: baseline; gap: 2px; margin: 0;
+  padding: 10px 15px; border-radius: 16px 16px 16px 4px; background: var(--accent-soft);
+  font-family: var(--nl-serif); font-size: 16px; line-height: 24px; color: var(--muted);
+}
+[data-look="new"] .nl-st-dots { display: inline-flex; gap: 3px; margin-left: 2px; }
+[data-look="new"] .nl-st-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: nl-st-dot 1.1s ease-in-out infinite; }
+[data-look="new"] .nl-st-dots i:nth-child(2) { animation-delay: 0.15s; }
+[data-look="new"] .nl-st-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes nl-st-dot { 0%, 100% { opacity: 0.3; transform: none; } 50% { opacity: 1; transform: translateY(-2px); } }
+
+[data-look="new"] .nl-st-note { flex: none; margin: 0 0 10px; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+
+/* ── the composer ───────────────────────────────────────────────────────── */
+[data-look="new"] .nl-st-ask {
+  position: relative; flex: none; background: var(--card); border: 1px solid var(--line-strong); border-radius: 24px;
+  padding: 16px 12px 10px 20px; transition: border-color 0.2s;
+}
+[data-look="new"] .nl-st-ask:focus-within { border-color: var(--faint); }
+[data-look="new"] .nl-st-ask.is-drag { border-color: var(--primary); border-style: dashed; }
+[data-look="new"] .nl-st-input {
+  display: block; width: 100%; margin: 0; padding: 0 8px 0 0; border: 0; outline: none; resize: none; background: transparent;
+  font-family: var(--nl-serif); font-size: 19px; line-height: 28px; color: var(--ink);
+  min-height: 84px; max-height: 168px; overflow-y: auto; field-sizing: content;
+}
+[data-look="new"] .nl-st-ask.is-talking .nl-st-input { min-height: 28px; }
+[data-look="new"] .nl-st-input::placeholder { color: var(--faint); opacity: 1; }
+[data-look="new"] .nl-st-drop { margin: 6px 0 0; font-size: 12.5px; color: var(--accent-dark); }
+[data-look="new"] .nl-st-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+[data-look="new"] .nl-st-attach { margin-left: -6px; gap: 6px; }
+[data-look="new"] .nl-st-send {
+  display: grid; place-items: center; flex: none; width: 36px; height: 36px; border: 0; border-radius: 10px;
+  background: var(--primary); color: var(--on-primary); cursor: pointer; transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-st-send:hover:not(:disabled) { background: var(--accent-dark); color: #fff; }
+[data-look="new"] .nl-st-send:disabled { background: var(--box); color: var(--faint); cursor: default; }
+[data-look="new"] .nl-st-send:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── the starter questions ──────────────────────────────────────────────── */
+[data-look="new"] .nl-st-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; flex: none; }
+[data-look="new"] .nl-st-pills button {
+  font: inherit; font-size: 13.5px; line-height: 18px; text-align: left; color: var(--ink);
+  background: transparent; border: 1px solid var(--line-strong); border-radius: 12px; padding: 7px 13px; cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+[data-look="new"] .nl-st-pills button:hover { background: var(--page); border-color: var(--faint); }
+[data-look="new"] .nl-st-pills button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── the report form, in place of the composer ──────────────────────────── */
+[data-look="new"] .nl-st-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px 2px; }
+[data-look="new"] .nl-st-report > div > p:first-of-type,
+[data-look="new"] .nl-st-report > div > p.mt-3:first-child { margin-top: 0; }
+
+/* A phone: the head keeps Clear, Report and close on one line. */
+@media (max-width: 420px) {
+  [data-look="new"] .nl-st-head.is-talking .nl-st-role { display: none; }
+  [data-look="new"] .nl-st-input { font-size: 18px; line-height: 26px; min-height: 78px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-st-dots i { animation: none; opacity: 0.6; }
+  [data-look="new"] .nl-st-ask, [data-look="new"] .nl-st-send, [data-look="new"] .nl-st-pills button,
+  [data-look="new"] .nl-st-x, [data-look="new"] .nl-st-clear { transition: none; }
+}
