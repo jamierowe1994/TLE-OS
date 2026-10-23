@@ -47,6 +47,9 @@ export type PresentAgent = {
   phone: string;
   /** REX `settings.profile_image`, absolutised. Null → monogram initials. */
   photo: string | null;
+  /** How far the headshot is moved down in the pre-appraisal pack's big box, as a percentage of the box
+   *  (the agent drags it there, 23 Oct 2026). Absent: the agent's own default, then a touch. */
+  photoY?: number | null;
   /**
    * Written in the OS, not in REX. REX has a `profile_bio` field and it is
    * empty for every single user, so treating it as the source would have

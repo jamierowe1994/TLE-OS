@@ -2,6 +2,7 @@ import "server-only";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { icsFor } from "@/lib/appraisal-email";
+import { hasDb, q } from "@/lib/db";
 import { firstNameOf, type PresentDeck } from "@/lib/present";
 
 /**
@@ -24,6 +25,8 @@ import { firstNameOf, type PresentDeck } from "@/lib/present";
 export type PackData = {
   /** The presentation token: for the answers and the open count. Null on the sample. */
   token: string | null;
+  /** Staff opening their own pack: the headshot can be dragged and saved (app/api/present/frame). */
+  frame: boolean;
   /** Slide 2's style. James chose "headshot" on 23 Oct 2026: the headshot always in the big box, the video behind Watch my video. "video" (the video in the box) is kept for the record. */
   meet: "video" | "headshot";
   /** The calendar file for Add to calendar. Null hides the button. */
@@ -39,6 +42,8 @@ export type PackData = {
     phone: string;
     email: string;
     photo: string;
+    /** The headshot moved down in its box, percent of the box. */
+    photoY: number;
     note: string;
     video: { length: string; link: string | null; src: string } | null;
   };
@@ -133,7 +138,15 @@ const mmss = (secs: number | null | undefined) => (secs && secs > 0 ? `${Math.fl
 export const canBePack = (deck: Pick<PresentDeck, "startsAt">) => Boolean(deck.startsAt && !Number.isNaN(new Date(deck.startsAt).valueOf()));
 
 /** The pack's `D` from a deck. `deck.welcomeVideo` must already be checked as playable (lib/present-video). */
-export function packData(deck: PresentDeck, token: string | null, meet: PackData["meet"] = "headshot"): PackData {
+/** "A touch" down (James, 23 Oct 2026), until an agent drags their own. */
+export const DEFAULT_PHOTO_Y = 6;
+
+export function packData(
+  deck: PresentDeck,
+  token: string | null,
+  opts: { meet?: PackData["meet"]; agentPhotoY?: number | null; frame?: boolean } = {}
+): PackData {
+  const meet = opts.meet ?? "headshot";
   const start = new Date(deck.startsAt as string);
   const minutes = deck.minutes > 0 ? deck.minutes : 45;
   const end = new Date(start.valueOf() + minutes * 60_000);
@@ -145,6 +158,7 @@ export function packData(deck: PresentDeck, token: string | null, meet: PackData
   return {
     token,
     meet,
+    frame: Boolean(opts.frame && token),
     ics: icsFor(
       { landlordName: deck.recipientName, address: deck.property.address, whenPretty: deck.whenPretty, startsAt: deck.startsAt, minutes, agentName: a.name, agentPhone: a.phone },
       deck.createdAt
@@ -170,6 +184,7 @@ export function packData(deck: PresentDeck, token: string | null, meet: PackData
       phone: a.phone ?? "",
       email: a.email ?? "",
       photo: a.photo ?? "",
+      photoY: a.photoY ?? opts.agentPhotoY ?? DEFAULT_PHOTO_Y,
       note: a.bio?.trim() ? a.bio.trim().replace(/\s*\n+\s*/g, " ") : NOTE,
       video: src ? { length: mmss(v?.durationSecs), link: null, src } : null,
     },
@@ -183,10 +198,32 @@ export function packData(deck: PresentDeck, token: string | null, meet: PackData
 let page: string | null = null;
 /** The design's page with this pack's data in it. `<` is escaped so no value can close the script. */
 export function packHtml(d: PackData): string {
-  page ??= readFileSync(path.join(process.cwd(), "lib/decks/pre-appraisal-pack.html"), "utf8");
+  /* Read once in production; afresh while developing, so an edit to the page shows on reload. */
+  if (!page || process.env.NODE_ENV !== "production") page = readFileSync(path.join(process.cwd(), "lib/decks/pre-appraisal-pack.html"), "utf8");
   const json = JSON.stringify(d)
     .replace(/</g, "\\u003c")
     .split(String.fromCharCode(0x2028)).join("\\u2028")
     .split(String.fromCharCode(0x2029)).join("\\u2029");
   return page.replace("/*__PACK_DATA__*/null", () => json);
+}
+
+/* ── Where each agent's headshot sits (23 Oct 2026) ── */
+const frameKey = (userId: string) => `photo_frame:${userId}`;
+
+/** The agent's own default for moving their headshot down, if they have saved one. */
+export async function agentPhotoY(userId: string | null | undefined): Promise<number | null> {
+  if (!userId || !hasDb()) return null;
+  const rows = await q<{ value: { y?: number } }>(`SELECT value FROM os_settings WHERE key = $1`, [frameKey(userId)]).catch(() => []);
+  const y = rows[0]?.value?.y;
+  return typeof y === "number" && Number.isFinite(y) ? y : null;
+}
+
+/** Saves a dragged position onto one pack and as the agent's default for the next. */
+export async function savePhotoY(token: string, authorId: string, y: number, by: string): Promise<void> {
+  await q(`UPDATE os_presentations SET deck = jsonb_set(deck, '{agent,photoY}', to_jsonb($2::numeric)) WHERE token = $1`, [token, y]);
+  await q(
+    `INSERT INTO os_settings (key, value, updated_at, updated_by) VALUES ($1, $2::jsonb, NOW(), $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
+    [frameKey(authorId), JSON.stringify({ y }), by]
+  );
 }

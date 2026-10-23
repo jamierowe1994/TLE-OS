@@ -55,7 +55,12 @@ button { font: inherit; color: inherit; }
 .bv-playc { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: calc(var(--u) * .8); padding: calc(var(--u) * 1.1) calc(var(--u) * 2) calc(var(--u) * 1.1) calc(var(--u) * 1.4); border-radius: 999px; background: var(--coral); color: var(--ink); font-size: calc(var(--u) * 1.15); font-weight: 500; transition: transform .3s var(--ease); }
 .bv-playc svg { width: calc(var(--u) * 1.4); height: calc(var(--u) * 1.4); fill: currentColor; }
 .bigvid:hover .bv-playc { transform: translate(-50%, -50%) scale(1.05); }
-.bigvid.hs::after { background: linear-gradient(180deg, transparent 70%, rgba(0, 0, 0, .12)); }
+.bigvid.hs { background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.bigvid.hs::after { background: none; }
+.bigvid.hs img.bv-img { object-position: 50% 0%; transform: translateY(var(--py, 0%)); }
+.frame-ui { position: absolute; z-index: 3; left: 50%; bottom: calc(var(--u) * 1.4); transform: translateX(-50%); display: flex; align-items: center; gap: calc(var(--u) * .6); padding: calc(var(--u) * .5) calc(var(--u) * .5) calc(var(--u) * .5) calc(var(--u) * 1.1); border-radius: 999px; background: rgba(20, 20, 19, .78); color: #fff; font-size: calc(var(--u) * .78); white-space: nowrap; }
+.frame-ui button { border: 0; border-radius: 999px; padding: calc(var(--u) * .45) calc(var(--u) * 1); background: var(--coral); color: var(--ink); font: inherit; font-weight: 500; cursor: pointer; }
+.bigvid.hs.framing { cursor: ns-resize; touch-action: none; }
 .bw-back { position: absolute; inset: 0; border-radius: calc(var(--u) * 2.4); background: var(--sage-soft, #e3e3d3); transform: rotate(-3.5deg) translate(calc(var(--u) * -1), calc(var(--u) * .8)); }
 .bigwrap .bigvid { position: relative; z-index: 1; width: 100%; }
 .sign.plain { gap: 0; }
@@ -521,7 +526,16 @@ button { font: inherit; color: inherit; }
 .tk-back.b2 { background: var(--sage-soft); transform: rotate(6deg) translate(calc(var(--u) * 2.6), calc(var(--u) * .8)); }
 .slide.is-on .tk-back.b1 { animation: fanL 1.1s var(--ease) .35s both; } .slide.is-on .tk-back.b2 { animation: fanR 1.1s var(--ease) .42s both; }
 @keyframes fanL { from { transform: rotate(0) translate(0, 0); } } @keyframes fanR { from { transform: rotate(0) translate(0, 0); } }
-.ticket2 { position: relative; width: calc(var(--u) * 30); background: var(--paper); border-radius: calc(var(--u) * 2.6); box-shadow: 0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(20, 20, 19, .10), 0 0 0 1px var(--line); }
+.tk-shadow { position: relative; width: calc(var(--u) * 30); filter: drop-shadow(0 calc(var(--u) * 1.6) calc(var(--u) * 2.4) rgba(20, 20, 19, .10)); }
+/* The two notches are really cut out of the ticket (James, 23 Oct 2026): the cards behind show through, and the
+   outline (drawn just inside the edge) stops at each notch and starts again after it. --cy is set from the
+   dashed line's position once the ticket is drawn. */
+.ticket2 { --cr: calc(var(--u) * 1.2); --cy: 50%; position: relative; width: 100%; background: var(--paper); border-radius: calc(var(--u) * 2.6); box-shadow: inset 0 0 0 1px var(--line);
+  -webkit-mask: radial-gradient(circle at 0 var(--cy), transparent var(--cr), #000 calc(var(--cr) + .5px)), radial-gradient(circle at 100% var(--cy), transparent var(--cr), #000 calc(var(--cr) + .5px));
+  -webkit-mask-composite: source-in;
+  mask: radial-gradient(circle at 0 var(--cy), transparent var(--cr), #000 calc(var(--cr) + .5px)), radial-gradient(circle at 100% var(--cy), transparent var(--cr), #000 calc(var(--cr) + .5px));
+  mask-composite: intersect; }
+.tk-stage .tk-cut i { visibility: hidden; }
 .tk-top { display: grid; grid-template-columns: 1fr auto; gap: calc(var(--u) * 1); padding: calc(var(--u) * 2.4) calc(var(--u) * 2.4) calc(var(--u) * 1.8); align-items: end; }
 .tk-date { display: flex; flex-direction: column; }
 .tk-date b { font-family: var(--f-title); font-weight: 300; font-size: calc(var(--u) * 10); line-height: .9; letter-spacing: -.06em; color: var(--sage); margin: calc(var(--u) * .3) 0 calc(var(--u) * .5); }
@@ -531,7 +545,8 @@ button { font: inherit; color: inherit; }
 .tk-cut { display: flex; align-items: center; } .tk-cut span { flex: 1; border-top: 2px dashed var(--line-2); }
 .tk-cut i { width: calc(var(--u) * 2.4); height: calc(var(--u) * 2.4); border-radius: 50%; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); flex: none; }
 .tk-cut i:first-child { margin-left: calc(var(--u) * -1.2); clip-path: inset(0 0 0 50%); } .tk-cut i:last-child { margin-right: calc(var(--u) * -1.2); clip-path: inset(0 50% 0 0); }
-.tk-stage .tk-cut i { background: var(--paper); }
+.tk-stage .tk-cut i { box-shadow: none; }
+.tk-stage .tk-cut i:first-child { background: var(--coral); } .tk-stage .tk-cut i:last-child { background: var(--sage-soft); }
 .tk-bot { padding: calc(var(--u) * 1.8) calc(var(--u) * 2.4) calc(var(--u) * 2.2); display: flex; flex-direction: column; gap: calc(var(--u) * .3); }
 .tk-addr { font-family: var(--f-title); font-weight: 400; font-size: calc(var(--u) * 2.2); letter-spacing: -.03em; }
 .tk-foot { display: flex; align-items: center; gap: calc(var(--u) * .9); margin-top: calc(var(--u) * 1.6); padding-top: calc(var(--u) * 1.4); border-top: 1px solid var(--line); }
@@ -563,7 +578,7 @@ button { font: inherit; color: inherit; }
 .vo-link { display: flex; align-items: center; gap: 10px; background: var(--grey); border-radius: 999px; padding: 6px 6px 6px 14px; font-family: var(--f-mono); font-size: 12px; color: var(--muted); min-width: 0; }
 .vo-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vo-link button { border: 0; background: var(--paper); border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-@media (max-aspect-ratio: 4/5), (max-width: 700px) { .cover2 { grid-template-columns: 1fr; } .tk-stage { padding: 28px 0 8px; } .ticket2 { width: 100%; max-width: 320px; } .tk-back { width: 80%; max-width: 300px; height: 360px; } }
+@media (max-aspect-ratio: 4/5), (max-width: 700px) { .cover2 { grid-template-columns: 1fr; } .tk-stage { padding: 28px 0 8px; } .tk-shadow { width: 100%; max-width: 320px; } .tk-back { width: 80%; max-width: 300px; height: 360px; } }
 
 /* ---------- presenter chrome ---------- */
 .bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; padding: 12px max(18px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); transition: opacity .5s var(--ease), transform .5s var(--ease); }
@@ -700,7 +715,7 @@ n = 0; slide('Your Visit', `
     </div>
     <div class="tk-stage in" ${i()}>
       <span class="tk-back b2"></span><span class="tk-back b1"></span>
-      <div class="ticket2">
+      <div class="tk-shadow"><div class="ticket2">
         <div class="tk-top">
           <div class="tk-date"><span class="lab">${v('visit.weekday')}</span><b class="num">${v('visit.day')}</b><span>${v('visit.month')}</span></div>
           <div class="tk-time"><span class="lab">Arriving</span><b class="num">${v('visit.start')}</b><span class="pill sage">${v('visit.minutes')} minutes</span></div>
@@ -712,7 +727,7 @@ n = 0; slide('Your Visit', `
           <span class="lab">${[P.area ? v('property.area') : '', P.town ? v('property.town') : ''].filter(Boolean).join(', ')} ${v('property.postcode')}</span>
           <div class="tk-foot">${face('xs')}<span><b>${v('agent.name')}</b><span class="lab">${v('agent.role')}</span></span><span class="tk-code" aria-hidden="true">${Array.from({ length: 22 }, (_, k) => `<i style="width:${[1, 2, 1, 3, 1, 1, 2][k % 7]}px"></i>`).join('')}</span></div>
         </div>
-      </div>
+      </div></div>
     </div>
   </div>`, { note: 'Sent on', noteB: V.sent });
 
@@ -727,7 +742,7 @@ const BOXVID = MEET === 'video' && VID;
 n = 0; slide('Meet ' + A.first, `
   <div class="cols" style="grid-template-columns:1.25fr 1fr">
     <div class="bigwrap in" ${i()}>${MEET === 'headshot' ? '<span class="bw-back" aria-hidden="true"></span>' : ''}<button class="bigvid${BOXVID ? '' : ' photo'}${MEET === 'headshot' ? ' hs' : ''}" ${BOXVID ? 'data-video' : 'tabindex="-1"'} aria-label="${BOXVID ? 'Play the video from ' + esc(A.name) : esc(A.name)}">
-      ${BOXVID && VID.src ? `<video class="bv-img" src="${esc(VID.src)}#t=0.5" muted playsinline preload="metadata"${A.photo ? ` poster="${esc(A.photo)}"` : ''} aria-hidden="true" tabindex="-1"></video>` : A.photo ? `<img class="bv-img" src="${esc(A.photo)}" alt="" data-fallback="">` : `<span class="bv-face">${v('agent.initials')}</span>`}
+      ${BOXVID && VID.src ? `<video class="bv-img" src="${esc(VID.src)}#t=0.5" muted playsinline preload="metadata"${A.photo ? ` poster="${esc(A.photo)}"` : ''} aria-hidden="true" tabindex="-1"></video>` : A.photo ? `<img class="bv-img" src="${esc(A.photo)}" alt="" data-fallback="" style="--py:${MEET === 'headshot' ? +(A.photoY || 0) : 0}%" draggable="false">` : `<span class="bv-face">${v('agent.initials')}</span>`}
       ${BOXVID ? `<span class="bv-playc">${ic('play', '')}<span>Play me</span></span>${VID.length ? `<span class="bv-len">${v('agent.video.length', VID.length)}</span>` : ''}` : ''}
     </button></div>
     <div>
@@ -900,6 +915,23 @@ let idleT; function wake() { document.body.classList.remove('idle'); clearTimeou
 ['mousemove', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, wake, { passive: true })); wake();
 const io = new IntersectionObserver(es => { if (!stacked()) return; es.forEach(en => { if (en.isIntersecting) { cur = els.indexOf(en.target); document.getElementById('count').textContent = (cur + 1) + ' / ' + SLIDES.length; } }); }, { threshold: .5 });
 els.forEach(el => io.observe(el));
+/* where the ticket's notches go: level with its dashed line */
+function placeCuts() { stage.querySelectorAll('.ticket2').forEach(t => { const c = t.querySelector('.tk-cut'); if (c) t.style.setProperty('--cy', (c.offsetTop + c.offsetHeight / 2) + 'px'); }); }
+placeCuts(); addEventListener('resize', placeCuts); if (document.fonts) document.fonts.ready.then(placeCuts);
+/* Staff only (D.frame): drag the headshot up or down in its box, then Save - for this pack and as the agent's default. */
+(function () {
+  const box = D.frame && A.photo ? stage.querySelector('.bigvid.hs') : null; if (!box) return;
+  const img = box.querySelector('img.bv-img'); if (!img) return;
+  let y = +(A.photoY || 0), from = null;
+  box.classList.add('framing');
+  const ui = document.createElement('div'); ui.className = 'frame-ui'; ui.innerHTML = '<span>Drag to move your photo</span><button type="button">Save</button>'; box.appendChild(ui);
+  const btn = ui.querySelector('button');
+  const paint = () => img.style.setProperty('--py', y.toFixed(1) + '%');
+  box.addEventListener('pointerdown', e => { if (e.target === btn) return; from = { y0: y, p0: e.clientY, h: box.getBoundingClientRect().height }; try { box.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); });
+  box.addEventListener('pointermove', e => { if (!from) return; y = Math.max(-10, Math.min(45, from.y0 + (e.clientY - from.p0) / from.h * 100)); paint(); btn.textContent = 'Save'; });
+  box.addEventListener('pointerup', () => { from = null; });
+  btn.addEventListener('click', e => { e.stopPropagation(); btn.textContent = 'Saving…'; fetch('/api/present/frame', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: D.token, y: Math.round(y * 10) / 10 }) }).then(r => r.json()).then(j => { btn.textContent = j && j.ok ? 'Saved' : 'Try again'; }).catch(() => { btn.textContent = 'Try again'; }); });
+})();
 stage.querySelectorAll('img[data-fallback]').forEach(img => img.addEventListener('error', () => { const f = img.dataset.fallback; if (f && img.src.indexOf(f) < 0) img.src = f; else img.remove(); }));
 if (D.token) fetch('/api/present/opened', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: D.token }), keepalive: true }).catch(() => {});
 </script>

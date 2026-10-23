@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { q } from "@/lib/db";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { findUserById } from "@/lib/users";
 import { readPresentation, presentationExpiry } from "@/lib/present-store";
 import { SAMPLE_DECK, deckKind } from "@/lib/present";
-import { canBePack, packData, packHtml } from "@/lib/pre-pack";
+import { agentPhotoY, canBePack, packData, packHtml } from "@/lib/pre-pack";
 import { withPlayableVideo } from "@/lib/present-video";
 
 /**
@@ -25,7 +28,7 @@ const HEADERS = {
   "referrer-policy": "no-referrer",
 };
 
-export async function GET(req: Request, ctx: { params: Promise<{ token: string }> }) {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
   const back = new URL(`/present/${encodeURIComponent(token)}`, req.url);
 
@@ -44,5 +47,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
   /* Slide 2's thumbnail is a frame of the video itself (Flow's "thumbnail" is a
      still of the screen recording, not the camera). */
   const deck = await withPlayableVideo(row.deck);
-  return new NextResponse(packHtml(packData(deck, row.token)), { headers: HEADERS });
+  /* The agent who sent it (or an owner) opening it can drag their headshot into place; a landlord never sees that. */
+  const author = (await q<{ author_id: string | null }>(`SELECT author_id FROM os_presentations WHERE token = $1`, [row.token]).catch(() => []))[0]?.author_id ?? null;
+  const viewer = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  const me = viewer ? await findUserById(viewer).catch(() => null) : null;
+  const frame = Boolean(me && (me.id === author || me.role === "owner" || me.role === "super_admin"));
+  return new NextResponse(packHtml(packData(deck, row.token, { agentPhotoY: await agentPhotoY(author), frame })), { headers: HEADERS });
 }
