@@ -7,7 +7,7 @@
  * has bedded in. Nothing here changes data, permissions or what a button does -
  * only the markup and the paint around them.
  *
- * Positions run from nobody to everybody: off, owners (James and Susan, to
+ * Positions run from nobody to everybody: off, only me (whoever set it), owners (James and Susan, to
  * look at it on real data), testers (the area testers list), everyone.
  *
  * The scoped colours and type live in app/new-look.css under [data-look="new"],
@@ -15,10 +15,13 @@
  * and nothing outside it moves.
  */
 
-export type LookLevel = "off" | "owners" | "testers" | "everyone";
+export type LookLevel = "off" | "me" | "owners" | "testers" | "everyone";
 
 export const LOOK_LEVELS: { id: LookLevel; label: string; says: string }[] = [
   { id: "off", label: "Off", says: "Everybody sees the screen as it is today." },
+  /* James, 23 Oct 2026: "push this so only I can see it". Owners is four people
+     (James, Susan, Sean, Howard), so this is narrower: whoever set it, alone. */
+  { id: "me", label: "Only me", says: "Only the person who set it sees the new look - it says who underneath." },
   { id: "owners", label: "Owners", says: "James and Susan see the new look. Nobody else does." },
   { id: "testers", label: "Testers", says: "Owners and the testers on the list above see it." },
   { id: "everyone", label: "Everyone", says: "Live for the whole team." },

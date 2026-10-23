@@ -64,7 +64,12 @@ export async function lookFor(user: Pick<OsUser, "email" | "role"> | null): Prom
   const tester = needTesters ? (await areaTesters()).some((t) => t.email === me) : false;
   const on = { ...ALL_OFF };
   for (const r of rows) {
-    on[r.id] = r.level === "everyone" || (r.level === "testers" && (owner || tester)) || (r.level === "owners" && owner);
+    on[r.id] =
+      r.level === "everyone" ||
+      (r.level === "testers" && (owner || tester)) ||
+      (r.level === "owners" && owner) ||
+      /* Only me: the one person who set it, by the address they set it with. */
+      (r.level === "me" && (r.changedBy ?? "").trim().toLowerCase() === me);
   }
   return on;
 }
