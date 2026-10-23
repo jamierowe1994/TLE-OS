@@ -113,26 +113,63 @@ function photosOf(r: Row): { image: string | null; images: string[] } {
  * home REX PM brings into the book has no let listing at all (6 Ruskin
  * Place's 10 photos sit on its current listing, 5 Douglas Gardens Mews' 16
  * on another). So a home with none takes the photos of the newest REX
- * listing for the same property that has any, whatever its state. Read
- * only, and only for homes with a REX property and no photos.
+ * listing for the same property that has any, whatever its state.
+ *
+ * Then the same door (James, 23 Oct 2026, Sean's and Rhiannon's books): a
+ * home with no REX link, or whose own REX record has no photos, takes them
+ * from the one other REX record at its door - the 19 Sep sync made new REX
+ * records beside older ones that held the photos (8/95 Springthorpe Green,
+ * 5 Reeves Close), and Sean's New Bells Court and St Triduanas Rest flats are
+ * in REX under addresses lib/address-parse does not see as theirs. Never a
+ * record another home in the book stands on. Read only.
  */
 export async function fillPhotosFromOtherListings(properties: ManagedProperty[]): Promise<void> {
   const noPhotos = properties.filter((p) => !p.images.length && !p.image && !p.test);
-  /* The REX property each home's photos are looked for under: its own, or for
-     a home the OS holds with no REX link, the one REX property at the same
-     door (Upper Grove Place 17/7 is REX's "Flat 7, 17 Upper Grove Place",
-     which lib/address-parse does not see as one door). */
-  const source = new Map<ManagedProperty, string>();
-  for (const p of noPhotos) if (p.propertyId && /^\d+$/.test(p.propertyId)) source.set(p, p.propertyId);
   const held = new Set(properties.map((p) => p.propertyId).filter(Boolean) as string[]);
-  const unlinked = noPhotos.filter((p) => !source.has(p) && postcodeOf(p.address || p.name));
-  await eachLimited(unlinked, 3, async (p) => {
-    const id = await rexDoorFor(p.address || p.name);
-    if (id && !held.has(id)) source.set(p, id);
-  });
-  const bare = [...source.keys()];
-  const ids = [...new Set(source.values())];
+  const rexId = (p: ManagedProperty) => (p.propertyId && /^\d+$/.test(p.propertyId) ? p.propertyId : null);
   const best = new Map<string, { at: number; photos: { image: string | null; images: string[] } }>();
+  const give = (p: ManagedProperty, id: string) => {
+    const got = best.get(id);
+    if (!got) return;
+    p.image = got.photos.image;
+    p.images = got.photos.images;
+  };
+
+  const own = noPhotos.filter((p) => rexId(p));
+  await readListingPhotos([...new Set(own.map((p) => rexId(p)!))], best);
+  for (const p of own) give(p, rexId(p)!);
+
+  /* A home typed without its postcode borrows the one every other home on its
+     street in the book has ("Newbells Court, Flat 5, 1, Edinburgh" beside
+     Sean's other New Bells Court flats, all EH6 6RY). Two postcodes on the
+     street, or none, and it is left alone. */
+  const streetPostcodes = new Map<string, Set<string>>();
+  for (const p of properties) {
+    const line = p.address || p.name;
+    const pc = postcodeOf(line);
+    const key = pc ? streetKey(line, pc) : "";
+    if (!key) continue;
+    if (!streetPostcodes.has(key)) streetPostcodes.set(key, new Set());
+    streetPostcodes.get(key)!.add(pc!);
+  }
+  const postcodeFor = (line: string): string | null => {
+    const own = postcodeOf(line);
+    if (own) return own;
+    const seen = streetPostcodes.get(streetKey(line, null));
+    return seen?.size === 1 ? [...seen][0] : null;
+  };
+  const door = new Map<ManagedProperty, string>();
+  const still = noPhotos.filter((p) => !p.images.length && postcodeFor(p.address || p.name));
+  await eachLimited(still, 3, async (p) => {
+    const id = await rexDoorFor(p.address || p.name, rexId(p), postcodeFor(p.address || p.name)!);
+    if (id && !held.has(id)) door.set(p, id);
+  });
+  await readListingPhotos([...new Set(door.values())], best);
+  for (const [p, id] of door) give(p, id);
+}
+
+/** The newest listing with photos for each REX property, into `best`. */
+async function readListingPhotos(ids: string[], best: Map<string, { at: number; photos: { image: string | null; images: string[] } }>): Promise<void> {
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -156,47 +193,71 @@ export async function fillPhotosFromOtherListings(properties: ManagedProperty[])
       if (batch.length < PAGE) break;
     }
   }
-  for (const p of bare) {
-    const got = best.get(source.get(p)!);
-    if (got) {
-      p.image = got.photos.image;
-      p.images = got.photos.images;
-    }
-  }
 }
 
-/** The numbers in an address line, postcode left out, sorted: "17/7" and "Flat 7, 17" both read 17,7. */
+/**
+ * The door's numbers, postcode left out, sorted: "17/7" and "Flat 7, 17" both
+ * read 7,17. Letters and Scottish floor-flat stay on their number (23 Oct
+ * 2026: 283 and 283a Lichfield Road, 39a and 39b Lerowe Road read as one door).
+ */
 const doorNumbers = (line: string, postcode: string) =>
-  (line.toUpperCase().replace(postcode.toUpperCase(), " ").match(/\d+/g) ?? []).map(Number).sort((a, b) => a - b).join(",");
-const streetWords = (line: string) => line.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !/^(flat|the|edinburgh|glasgow|london)$/.test(w));
+  (line.toUpperCase().replace(postcode, " ").replace(postcode.replace(" ", ""), " ").match(/\d+(?:F\d+|[A-Z](?![A-Z]))?/g) ?? [])
+    .map((n) => n.toLowerCase())
+    .sort()
+    .join(",");
+/* A street's own name, for borrowing a postcode: "New Bell's Court" and
+   "Newbells Court" are both "newbells". Street types and the big towns are
+   left out, so "Court" alone never ties two streets together. */
+const STREET_TYPES = /^(street|road|place|lane|avenue|gardens|close|drive|terrace|crescent|court|way|house|flat|rest|park|grove|square|row|mews|hill|green|view|walk|edinburgh|glasgow|london|city|the|and|room)$/;
+const streetKey = (line: string, postcode: string | null) =>
+  (postcode ? line.toUpperCase().replace(postcode, " ") : line)
+    .toLowerCase()
+    .replace(/'/g, "")
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STREET_TYPES.test(w))
+    .join("");
+const streetWords = (line: string) => line.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !/^(flat|the|room|edinburgh|glasgow|london)$/.test(w));
+/* "Flat 5, 3 Lang Rigg" is flat 5 at number 3. Sorted numbers can't tell it
+   from REX's Flat 3 at number 5, so where both sides say which is which,
+   they must agree (23 Oct 2026). */
+const flatAt = (address: string) => {
+  const m = address.match(/\bflat\s*(\d+[a-z]?)\s*,?\s*(\d+[a-z]?)\b/i);
+  return m ? { flat: m[1].toLowerCase(), at: m[2].toLowerCase() } : null;
+};
 
 /**
- * The one REX property at this door, for photos only: the same postcode, the
- * same numbers and a street word in common, and nothing else at the postcode
- * that also fits. Null on any doubt - a wrong home's photos are worse than none.
+ * The one other REX property at this door, for photos only: the same
+ * postcode, the same numbers and a street word in common, and nothing else at
+ * the postcode that also fits. Null on any doubt - a wrong home's photos are
+ * worse than none.
  */
 const doorCache = new Map<string, { id: string | null; at: number }>();
 /* A day: REX properties at a door don't come and go, and the book is rebuilt often. */
 const DOOR_TTL_MS = 24 * 3600 * 1000;
-async function rexDoorFor(address: string): Promise<string | null> {
-  const kept = doorCache.get(address);
+async function rexDoorFor(address: string, ownId: string | null, postcode: string): Promise<string | null> {
+  const key = `${address}|${ownId ?? ""}|${postcode}`;
+  const kept = doorCache.get(key);
   if (kept && Date.now() - kept.at < DOOR_TTL_MS) return kept.id;
-  const id = await rexDoorLookup(address);
-  doorCache.set(address, { id, at: Date.now() });
+  const id = await rexDoorLookup(address, ownId, postcode);
+  doorCache.set(key, { id, at: Date.now() });
   return id;
 }
-async function rexDoorLookup(address: string): Promise<string | null> {
-  const postcode = postcodeOf(address);
-  if (!postcode) return null;
+async function rexDoorLookup(address: string, ownId: string | null, postcode: string): Promise<string | null> {
   const nums = doorNumbers(address, postcode);
   if (!nums) return null;
-  const words = new Set(streetWords(address.toUpperCase().replace(postcode.toUpperCase(), " ")));
+  const words = new Set(streetWords(address.toUpperCase().replace(postcode, " ")));
+  const named = flatAt(address);
   const res = await rexCall("Properties", "search", { criteria: [{ name: "property.adr_postcode", value: postcode }], limit: 100 });
   if (!res.ok) return null;
   const hits = (rexRows(res.result) as Row[]).filter((r) => {
+    if (String(r.id) === ownId) return false;
     const s = (v: unknown) => (v == null ? "" : String(v).trim());
     const line = [s(r.adr_unit_number), s(r.adr_street_number), s(r.adr_street_name)].filter(Boolean).join(" ");
-    return doorNumbers(line, postcode) === nums && streetWords(line).some((w) => words.has(w));
+    if (doorNumbers(line, postcode) !== nums || !streetWords(line).some((w) => words.has(w))) return false;
+    const unit = s(r.adr_unit_number).match(/^(?:flat\s*)?(\d+[a-z]?)$/i)?.[1]?.toLowerCase();
+    const number = s(r.adr_street_number).match(/^(\d+[a-z]?)$/i)?.[1]?.toLowerCase();
+    return !(named && unit && number) || (named.flat === unit && named.at === number);
   });
   return hits.length === 1 ? String(hits[0].id) : null;
 }
