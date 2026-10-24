@@ -9,6 +9,7 @@ import { can, type Capability } from "@/lib/roles";
 import { fetchMe } from "@/lib/me";
 import { useNewLook } from "@/lib/use-new-look";
 import { areasFor, whereIs } from "@/components/new-look/admin/areas";
+import AdminTabsHead from "@/components/new-look/admin/AdminTabsHead";
 import { Ico } from "@/components/new-look/Parts";
 
 /**
@@ -251,10 +252,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
      the Admin Centre itself or on People, which the design draws without one;
      a person's file or the Invites tab goes back to People instead. */
   const back = useMemo(() => {
-    if (!look || teamOnly || pathname === "/admin" || pathname === "/admin/people") return null;
+    if (!look || teamOnly || pathname === "/admin") return null;
     const at = whereIs(pathname);
     if (!at) return { href: "/admin", label: "Admin Centre" };
-    if (pathname !== at.tool.href && pathname.startsWith(`${at.tool.href}/`)) return { href: at.tool.href, label: at.tool.label };
+    /* A screen below a tab (a person's file, a tracking section) goes back to its tab. */
+    const tab = at.tab;
+    if (tab && pathname !== tab.href && !tab.also?.some((a) => pathname === a)) return { href: tab.href, label: tab.label };
     return { href: `/admin?area=${at.area.id}`, label: at.area.name };
   }, [look, teamOnly, pathname]);
 
@@ -336,6 +339,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </Link>
               </div>
             )}
+            {!teamOnly && <AdminTabsHead path={pathname} role={role ?? null} />}
             {children}
           </div>
         ) : (

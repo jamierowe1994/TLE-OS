@@ -14,7 +14,6 @@ import { fetchMe } from "@/lib/me";
 import { searchMatches } from "@/lib/search-match";
 import { useNewLook } from "@/lib/use-new-look";
 import { Mast, Badge, Ico } from "@/components/new-look/Parts";
-import PeopleTabsNew from "@/components/new-look/admin/PeopleTabsNew";
 
 /**
  * The list, filtered and ordered. Pure, so the rules are readable in one
@@ -281,7 +280,6 @@ export default function AdminPeople() {
     return (
       <div data-look="new" className="nl-page nl-rise nl-adm">
         <Mast title="People" blurb="Everyone in REX, joined to who's actually got in. Set their role, send a password reset, or see the OS as they do." />
-        <PeopleTabsNew />
 
         <div className={`nl-adm-pcards${mayInvite ? "" : " is-one"}`}>
           {mayInvite && (
