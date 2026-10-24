@@ -716,6 +716,10 @@
 [data-nav-look="new"] [data-os-profile-menu] { border-color: var(--nv-line); border-radius: 14px; box-shadow: none; background: var(--nv-page); }
 /* One bell: with the sidebar's own, the page headers' copy goes. */
 [data-nav-look="new"] [data-page-bell] { display: none !important; }
+/* Warm page, trial (James, 24 Oct 2026): "switch from a white background to
+   #f8f7f4 ... let's just start with the dashboard". Only while the new
+   dashboard is on screen; light only, dark keeps its own page. */
+:root:not([data-theme="dark"]) [data-nav-look="new"]:has(.nl-dash) { --nv-page: #f8f7f4; }
 
 /* ── Terms of Business: the signing sheet and the send drawer (lib/terms) ── */
 .nl-signsheet { position: fixed; inset: 0; z-index: 420; display: flex; align-items: flex-end; justify-content: center; }
