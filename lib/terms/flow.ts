@@ -15,6 +15,7 @@ import {
 } from "@/lib/docuseal";
 import { edition, editionFor } from "@/lib/terms/catalogue";
 import { agentPhone } from "@/lib/agent-phone";
+import { markTermsSent } from "@/lib/appraisal-store";
 import { cleanSignature, keepAgentSignature, saveSignature, signaturesFor } from "@/lib/terms/signatures";
 import { contractFooter, contractHtml, detailField, roleOf } from "@/lib/terms/render-html";
 import type { Country, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
@@ -226,6 +227,8 @@ export async function agentSigned(id: string, origin: string, me?: OsUser | null
     const agent = me ?? (await findUserById(t.agentId));
     if (agent) await emailParties(t, agent, origin, t.parties.map((p) => p.key));
     await markSent(id);
+    /* The appraisal's Next up, At a glance and stage read this stamp, as they did for the old DocuSeal send. */
+    if (t.appraisalId) await markTermsSent(t.appraisalId).catch(() => null);
     /* Adjust contract: the new one is out, so the old one's links stop now. */
     if (t.replaces) await cancelTerms(t.replaces).catch(() => null);
   }

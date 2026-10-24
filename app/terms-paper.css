@@ -49,6 +49,9 @@
   .tsp .t-title { font-size: 30px; margin-top: 24px; }
   .tsp .t-tbl > div { grid-template-columns: 1fr; gap: 0; } .tsp .t-sigs { grid-template-columns: 1fr; }
   .tsp .t-cool { padding: 2px 16px 12px; }
+  /* The reference goes under the logo on a phone, never beside it. */
+  .tsp .t-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .tsp .t-ref { word-break: break-all; }
 }
 
 
