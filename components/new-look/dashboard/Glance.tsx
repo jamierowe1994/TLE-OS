@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   applicationsSlot,
+  appraisalsSlot,
   daysSince,
   leadsSlot,
   listingsSlot,
@@ -10,19 +11,20 @@ import {
   openOffersOf,
   sameDay,
   useAccepted,
-  useManagedBook,
   useShared,
 } from "@/components/widgets";
 import { stageCounts, type StageListing } from "@/lib/listing-stages";
 import type { Lead } from "@/lib/leads-sample";
 import type { Application } from "@/lib/applications";
 import type { OsListing } from "@/lib/rex-listings";
+import type { MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
  * The four figures across the dashboard (new look, lib/new-look "dashboard").
  *
- * The same four the old board opened on - leads today, on the market, offers
- * open, homes we manage - read through the very same shared reads as those
+ * Leads today, on the market, offers open and valuations booked - the front
+ * office's four. Homes we manage was the fourth until the PM Dashboard took the
+ * managed book (James, 24 Oct 2026); valuations is the landlord side's figure. Read through the very same shared reads as those
  * tiles (components/widgets), so the two looks can never disagree and a visit
  * that has both only asks once. Each opens its own screen, as the tiles did.
  *
@@ -56,11 +58,17 @@ export default function Glance() {
   const offers = useShared<{ applications: Application[] }>(applicationsSlot, "/api/applications?limit=300&tests=0", (j) =>
     Array.isArray(j.applications) && !j.error ? { applications: j.applications as Application[] } : null
   );
-  const managed = useManagedBook();
+  const appraisals = useShared<{ appraisals: MarketAppraisal[] }>(appraisalsSlot, "/api/appraisals", (j) =>
+    Array.isArray(j.appraisals) && !j.error ? { appraisals: j.appraisals as MarketAppraisal[] } : null
+  );
   const accepted = useAccepted();
 
   const now = new Date();
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  /* The month in London, worked out now, so it rolls over on its own. */
+  const londonMonth = (d: Date) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit" }).format(d);
+  const thisMonth = londonMonth(now);
+  const booked = (appraisals.data?.appraisals ?? []).filter((a) => !a.cancelledAt && !a.archivedAt && a.createdAt && londonMonth(new Date(a.createdAt)) === thisMonth);
+  const toCome = (appraisals.data?.appraisals ?? []).filter((a) => !a.cancelledAt && !a.archivedAt && a.appointmentAt && new Date(a.appointmentAt) > now).length;
 
   const leadList = leads.data?.leads ?? [];
   const open = offers.data ? openOffersOf(offers.data.applications) : [];
@@ -95,12 +103,12 @@ export default function Glance() {
       failed: offers.data ? null : failedOf(offers),
     },
     {
-      label: "Homes we manage",
-      href: "/portfolio",
-      value: managed.book ? (managed.book.counts.homes ?? managed.book.counts.properties) : null,
-      sub: managed.book ? `${managed.book.properties.filter((p) => p.letSince?.startsWith(thisMonth)).length} let this month` : null,
-      loading: managed.loading,
-      failed: managed.book ? null : managed.unlinked ? SAY_UNLINKED : managed.loading ? null : SAY_FAILED,
+      label: "Valuations booked",
+      href: "/market-appraisals",
+      value: appraisals.data ? booked.length : null,
+      sub: appraisals.data ? `this month · ${toCome} visit${toCome === 1 ? "" : "s"} still to come` : null,
+      loading: appraisals.loading,
+      failed: appraisals.data ? null : failedOf(appraisals),
     },
   ];
 

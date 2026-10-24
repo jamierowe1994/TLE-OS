@@ -1114,6 +1114,8 @@ export function useShared<T>(
 export const leadsSlot: Slot = { p: null };
 export const listingsSlot: Slot = { p: null };
 export const applicationsSlot: Slot = { p: null };
+/* Market appraisals, for the front dashboard's valuations figure (24 Oct 2026). */
+export const appraisalsSlot: Slot = { p: null };
 
 export const sameDay = (iso: string | undefined, d: Date) => {
   if (!iso) return false;
