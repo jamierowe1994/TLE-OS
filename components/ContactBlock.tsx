@@ -46,6 +46,7 @@ export default function ContactBlock({
   home,
   about,
   saver,
+  fixed = false,
 }: {
   person: Person;
   personRef: string | null;
@@ -71,11 +72,15 @@ export default function ContactBlock({
    *  holds, 20 Oct 2026): the screen saves them its own way. Makes the block
    *  editable without a personRef. */
   saver?: (field: "name" | "email" | "phone", value: string) => Promise<{ ok: boolean; error?: string; detail?: string }>;
+  /** Shown, never changed here: the new-look appraisal's landlord card, whose
+   *  changes are made behind its pencil (James, 24 Oct 2026). The WhatsApp,
+   *  Email and copy buttons stay; the home address and opt-out read only. */
+  fixed?: boolean;
 }) {
   const [p, setP] = useState<Person>(person);
   const [note, setNote] = useState<{ tone: "ok" | "bad" | "busy"; text: string } | null>(null);
   useEffect(() => setP(person), [person.name, person.email, person.phone]); // eslint-disable-line react-hooks/exhaustive-deps
-  const editable = Boolean(personRef || saver);
+  const editable = !fixed && Boolean(personRef || saver);
   /* REX refused for want of a name (needsName): the name box shows even on a
      card that hides it, and the change that was refused goes with the name
      (Kayleigh, let 39522, 22 Oct 2026: "no name field opens"). */
@@ -189,10 +194,10 @@ export default function ContactBlock({
           </EmailPerson>
         ))}
         {home && (
-          <LandlordHomeAddress email={p.email} personRef={personRef} name={p.name} propertyAddress={home.propertyAddress ?? null} />
+          <LandlordHomeAddress email={p.email} personRef={personRef} name={p.name} propertyAddress={home.propertyAddress ?? null} readOnly={fixed} />
         )}
         {/* The landlord's zero deposit opt-out (21 Oct 2026): agent-recorded, quiet. */}
-        {home && <ZeroDepositOptOut email={p.email} personRef={personRef} name={p.name} />}
+        {home && <ZeroDepositOptOut email={p.email} personRef={personRef} name={p.name} readOnly={fixed} />}
       </div>
       {note && (
         <p className={`mt-1.5 text-[11.5px] leading-snug ${note.tone === "bad" ? "text-accent-dark" : "text-muted"}`}>
