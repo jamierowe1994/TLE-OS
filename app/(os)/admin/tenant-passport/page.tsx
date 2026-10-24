@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import CopyLink from "@/app/(os)/admin/onboarding/CopyLink";
+import { useNewLook } from "@/lib/use-new-look";
+import TenantPassportNew from "@/components/new-look/admin/TenantPassportNew";
+import { LookLoading } from "@/components/new-look/admin/ScreenBits";
 
 /**
  * Tenant passport, for demonstrating.
@@ -50,6 +53,8 @@ export default function TenantPassportDemoPage() {
   const [db, setDb] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +92,9 @@ export default function TenantPassportDemoPage() {
     }).catch(() => null);
     await load();
   }
+
+  if (look === null) return <LookLoading what="Looking for demo passports" />;
+  if (look) return <TenantPassportNew rows={rows} db={db} busy={busy} error={error} make={() => void make()} remove={(t) => void remove(t)} when={when} />;
 
   return (
     <>

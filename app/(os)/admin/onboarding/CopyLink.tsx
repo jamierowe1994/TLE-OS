@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * A share link, shown in full and copyable in one press.
@@ -17,6 +18,8 @@ import { useEffect, useState } from "react";
 export default function CopyLink({ path }: { path: string }) {
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
+  /* The new look (lib/new-look "admin", 24 Oct 2026): the same link and buttons in its kit. */
+  const look = useNewLook("admin");
 
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -31,6 +34,20 @@ export default function CopyLink({ path }: { path: string }) {
       /* Clipboard refused (it needs a secure context). The link is on screen
          anyway, which is why it is shown in full rather than hidden. */
     }
+  }
+
+  if (look) {
+    return (
+      <div className="nl-adm-copy">
+        <code title={url}>{url}</code>
+        <button type="button" onClick={copy} className="nl-btn nl-btn--primary nl-btn--sm">
+          {copied ? "Copied" : "Copy Link"}
+        </button>
+        <a href={path} target="_blank" rel="noreferrer" className="nl-btn nl-btn--secondary nl-btn--sm">
+          Open
+        </a>
+      </div>
+    );
   }
 
   return (

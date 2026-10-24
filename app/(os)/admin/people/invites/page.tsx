@@ -4,9 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import { ROLES, ROLE_LABEL } from "@/lib/roles";
-import { londonDayOffset, londonHHMM } from "@/lib/london-time";
+import { APP_KIND, CHECKS, SOURCE_LABEL, at, readyCount, type Board, type Person } from "@/components/admin/invites-shared";
 import PeopleTabs from "@/components/admin/PeopleTabs";
 import MailboxesCard from "@/components/admin/MailboxesCard";
+import { useNewLook } from "@/lib/use-new-look";
+import InvitesNew from "@/components/new-look/admin/InvitesNew";
+import { LookLoading } from "@/components/new-look/admin/ScreenBits";
 
 /**
  * Admin > People > Invites (15 Oct 2026). This was Admin > Launch (James,
@@ -24,81 +27,13 @@ import MailboxesCard from "@/components/admin/MailboxesCard";
  * again, its usage list is Admin > Tracking, and its reports are Tickets.
  */
 
-type Person = {
-  email: string;
-  name: string;
-  emails: string[];
-  rexId: string | null;
-  role: string;
-  sources: string[];
-  custom: boolean;
-  included: boolean;
-  sendable: boolean;
-  sentAt: string | null;
-  lastError: string | null;
-  linkExpiresAt: string | null;
-};
-type Ready = {
-  photo: boolean;
-  rex: "live" | "lapsed" | "none";
-  email: boolean;
-  setup: boolean;
-  tour: boolean;
-  app: { kind: "ios" | "homescreen" | "browser" | "alerts"; at: string } | null;
-  lastSeenAt: string | null;
-};
-
-const APP_KIND: Record<string, string> = {
-  ios: "the iPhone app",
-  homescreen: "the app on their home screen",
-  browser: "the app in a phone browser",
-  alerts: "phone alerts on",
-};
-type On = { userId: string; name: string; email: string; role: string; createdAt: string | null; ready: Ready };
-type Board = {
-  ok: boolean;
-  error?: string;
-  toInvite: Person[];
-  on: On[];
-  launchedAt: string | null;
-  tourUrl: string;
-  linkDays: number;
-};
-
 const ROLE_OPTIONS = ROLES.map((r) => (
   <option key={r} value={r}>
     {ROLE_LABEL[r]}
   </option>
 ));
 
-const SOURCE_LABEL: Record<string, string> = {
-  rex: "REX",
-  hub: "Team Hub",
-  website: "Website",
-  added: "Added by you",
-  invite: "Invite list",
-  departed: "Team Hub says they've left",
-};
-
-/** "11:31 today", "11:31 tomorrow", or a date - London time. */
-function at(iso: string): string {
-  const d = londonDayOffset(iso);
-  if (d === 0) return `${londonHHMM(iso)} today`;
-  if (d === 1) return `${londonHHMM(iso)} tomorrow`;
-  if (d === -1) return `${londonHHMM(iso)} yesterday`;
-  return new Date(iso).toLocaleString("en-GB", {
-    timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-  });
-}
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Photo, REX, email, setup, tour, phone app. */
-const CHECKS = 6;
-
-function readyCount(r: Ready): number {
-  return [r.photo, r.rex === "live", r.email, r.setup, r.tour, Boolean(r.app)].filter(Boolean).length;
-}
 
 export default function InvitesPage() {
   const [d, setD] = useState<Board | null>(null);
@@ -111,6 +46,8 @@ export default function InvitesPage() {
   const [manual, setManual] = useState({ name: "", email: "", role: "agent" });
   const [onlyNotReady, setOnlyNotReady] = useState(false);
   const [magic, setMagic] = useState<{ email: string; url: string } | null>(null);
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
 
   const load = useCallback(() => {
     fetch("/api/admin/launch", { cache: "no-store" })
@@ -259,7 +196,8 @@ export default function InvitesPage() {
     setFlash(j.ok ? (j.message ?? "Test sent.") : (j.error ?? "That didn't send."));
   }
 
-  if (failed && !d) {
+  if (look === null) return <LookLoading what="Loading the invite list" />;
+  if (failed && !d && !look) {
     return (
       <div className="py-16 text-center">
         <p className="text-[13px] text-accent-dark">{failed}</p>
@@ -274,6 +212,43 @@ export default function InvitesPage() {
   const invited = d ? d.toInvite.filter((p) => p.sentAt) : [];
   const fullyReady = d ? d.on.filter((o) => readyCount(o.ready) === CHECKS) : [];
   const onShown = d ? (onlyNotReady ? d.on.filter((o) => readyCount(o.ready) < CHECKS) : d.on) : [];
+
+  if (look) {
+    return (
+      <InvitesNew
+        d={d}
+        failed={failed}
+        load={load}
+        flash={flash}
+        busy={busy}
+        confirming={confirming}
+        setConfirming={setConfirming}
+        progress={progress}
+        sending={sending}
+        queue={queue}
+        invited={invited}
+        fullyReady={fullyReady.length}
+        onShown={onShown}
+        preview={preview}
+        setPreview={setPreview}
+        manual={manual}
+        setManual={setManual}
+        onlyNotReady={onlyNotReady}
+        setOnlyNotReady={setOnlyNotReady}
+        magic={magic}
+        setMagic={setMagic}
+        launch={() => void launch()}
+        sendTest={() => void sendTest()}
+        toggle={(p, v) => void toggle(p, v)}
+        setAll={(v) => void setAll(v)}
+        setRole={(p, r) => void setRole(p, r)}
+        addManual={() => void addManual()}
+        remove={(p) => void remove(p)}
+        resend={(p) => void resend(p)}
+        copyLink={(p) => void copyLink(p)}
+      />
+    );
+  }
 
   return (
     <>
