@@ -58,7 +58,9 @@ export const LOOK_SCREENS = [
   /* The fade between screens in place of the fold-and-drop (James, 24 Oct 2026): every screen, so its own switch. */
   { id: "fade", label: "Page transitions", what: "Moving between screens: a slow fade out and a slow fade in, in place of the page folding and dropping away." },
   /* The warm page (James, 24 Oct 2026): tried on the dashboard first, then "Push it" for every screen. */
-  { id: "warm", label: "Warm page", what: "Every screen's page in warm off-white (#f8f7f4) in place of white, inside the new sidebar. Needs the Sidebar and frame switch on. Light mode only." },
+  { id: "warm", label: "Warm page", what: "Every screen's page in the website's warm ground (#f8f7f4) in place of white, with the sidebar a shade deeper in the website's card tone (#efede8). Needs the Sidebar and frame switch on. Light mode only." },
+  /* The other way round, to compare (James, 24 Oct 2026): "put the nav bar into that colour and then change the background to white". */
+  { id: "warmnav", label: "Warm sidebar", what: "The sidebar in the website's warm ground (#f8f7f4) and every page white. Needs the Sidebar and frame switch on. Where Warm page is on too, this wins. Light mode only." },
   { id: "terms", label: "Send the terms (signed on our page)", what: "The new Send the Terms screen: the contract on the left, check, sign and send down the right, signed on our page and sealed by DocuSeal. Off, agents send from the drawer and sign in DocuSeal's own box. Landlords sign on our page either way." },
   { id: "builder", label: "Build the presentation", what: "The four-step builder: the home, comparables with the radius map, the figure with the local market cards, then the real deck live. Off, the five-step builder as before." },
   /* The tenant passport as a book (James's design, 24 Oct 2026). A customer screen: anonymous tenants only ever see it at Everyone (app/tenant/(public)/passport). */

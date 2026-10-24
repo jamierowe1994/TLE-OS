@@ -716,10 +716,20 @@
 [data-nav-look="new"] [data-os-profile-menu] { border-color: var(--nv-line); border-radius: 14px; box-shadow: none; background: var(--nv-page); }
 /* One bell: with the sidebar's own, the page headers' copy goes. */
 [data-nav-look="new"] [data-page-bell] { display: none !important; }
-/* Warm page (James, 24 Oct 2026): "switch from a white background to
-   #f8f7f4". Tried on the dashboard, now every screen behind its own switch
-   (lib/new-look "warm"). Light only; dark keeps its own page. */
-:root:not([data-theme="dark"]) [data-nav-look="new"][data-warm] { --nv-page: #f8f7f4; }
+/* The website's warm palette in the OS (James, 24 Oct 2026: "this is the
+   colour that we've used for the website"), two ways to compare, each its
+   own switch (lib/new-look "warm" and "warmnav"). Colours are the website's
+   own tokens: ground #f8f7f4, card #efede8, panel #fbfbfa, lines #ecebe6 and
+   #e3e1db. Light only; dark keeps its own. */
+/* Warm page: the page in the ground, the sidebar a shade deeper in the card tone. */
+:root:not([data-theme="dark"]) [data-nav-look="new"][data-warm="page"] {
+  --nv-page: #f8f7f4; --nv-bg: #efede8; --nv-line: #e3e1db; --nv-on: #fbfbfa; --nv-hover: rgba(62, 47, 44, .05);
+}
+:root:not([data-theme="dark"]) [data-warm="page"] [data-look="new"].nl-hud { --page: #f8f7f4; }
+/* Warm sidebar: the sidebar in the ground, every page white. */
+:root:not([data-theme="dark"]) [data-nav-look="new"][data-warm="nav"] {
+  --nv-bg: #f8f7f4; --nv-page: #ffffff; --nv-line: #ecebe6; --nv-on: #ffffff;
+}
 
 /* ── Terms of Business: the signing sheet and the send drawer (lib/terms) ── */
 .nl-signsheet { position: fixed; inset: 0; z-index: 420; display: flex; align-items: flex-end; justify-content: center; }
