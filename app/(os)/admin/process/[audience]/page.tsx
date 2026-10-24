@@ -29,7 +29,7 @@ export default async function ProcessAudiencePage({ params }: { params: Promise<
     <AdminLookSplit
       what="Opening the map"
       fresh={
-        <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+        <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
           <div className="nl-adm-block-head">
             <div>
               <h2 className="nl-section-title">{map.title}</h2>
@@ -39,7 +39,7 @@ export default async function ProcessAudiencePage({ params }: { params: Promise<
               The screens and emails as a list <Ico name="arrow" size={14} />
             </Link>
           </div>
-          <div className="nl-adm-after">{mapView}</div>
+          <div className="nl-adm-p-after">{mapView}</div>
         </div>
       }
       old={

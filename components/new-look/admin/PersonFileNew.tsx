@@ -90,7 +90,7 @@ export default function PersonFileNew(props: {
     .toUpperCase();
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <header className="nl-adm-phead">
         <span className="nl-avatar" aria-hidden>
           {p.photo ? (
@@ -216,7 +216,7 @@ export default function PersonFileNew(props: {
             <NlLoading what="Reading the log" />
           ) : (
             <>
-              <ul className="nl-adm-figs">
+              <ul className="nl-adm-p-figs">
                 <NlFig label="Last hour" value={n(reading.openedHour)} />
                 <NlFig label="Last 24 hours" value={n(reading.openedDay)} />
                 <NlFig label="Last 7 days" value={n(reading.openedWeek)} />
@@ -226,7 +226,7 @@ export default function PersonFileNew(props: {
               {reading.recent.length === 0 ? (
                 <p className="nl-empty">Nothing opened since the log started on 10 October 2026.</p>
               ) : (
-                <ul className="nl-adm-log nl-adm-after">
+                <ul className="nl-adm-log nl-adm-p-after">
                   {(props.showAll ? reading.recent : reading.recent.slice(0, 40)).map((r, i) => (
                     <li key={`${r.at}-${i}`}>
                       <span className="nl-mono">{when(r.at)}</span>
@@ -241,7 +241,7 @@ export default function PersonFileNew(props: {
                 </ul>
               )}
               {!props.showAll && reading.recent.length > 40 && (
-                <p className="nl-adm-after">
+                <p className="nl-adm-p-after">
                   <button type="button" onClick={() => props.setShowAll(true)} className="nl-link">
                     Show the last {reading.recent.length}
                   </button>
@@ -270,7 +270,7 @@ export default function PersonFileNew(props: {
               <h2 className="nl-section-title">Their Book</h2>
               <span className="nl-meta">Live from REX</span>
             </div>
-            <ul className="nl-adm-figs">
+            <ul className="nl-adm-p-figs">
               <BookFig label="On the market" c={d.book.onMarket} />
               <BookFig label="Let and managed" c={d.book.managed} />
               <BookFig label="Listings, all time" c={d.book.listings} />

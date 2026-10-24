@@ -35,7 +35,7 @@ export function PeriodBarNew({ t, set, label, personName }: { t: TrackingQuery; 
             </button>
           </div>
         )}
-        <label className="nl-adm-check">
+        <label className="nl-adm-p-check">
           <input type="checkbox" checked={t.owners} onChange={(e) => set({ owners: e.target.checked })} />
           Count the owners too
         </label>

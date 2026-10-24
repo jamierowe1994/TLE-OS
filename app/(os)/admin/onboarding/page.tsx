@@ -47,7 +47,7 @@ export default function AdminOnboardingPage() {
      Tenant passport and PLC handover now, so the old "other things you demo"
      links are not repeated here. */
   const fresh = (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">What a new agent walks through, and a link you can send to somebody without an account.</p>
 
       <div className="nl-adm-pcards">

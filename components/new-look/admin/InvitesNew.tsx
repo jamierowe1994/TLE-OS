@@ -59,7 +59,7 @@ export default function InvitesNew(props: {
   const { d, failed, flash, busy, confirming, progress, sending, queue, manual, magic } = props;
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">Invite new starters, then watch them get set up. The role somebody joins as is chosen here, with their invite.</p>
 
       {flash && (
@@ -74,7 +74,7 @@ export default function InvitesNew(props: {
         <NlLoading what="Loading the invite list" />
       ) : (
         <>
-          <ul className="nl-adm-figs">
+          <ul className="nl-adm-p-figs">
             <NlFig label="Ready to invite" value={queue.length} />
             <NlFig label="Invited, not in yet" value={props.invited.length} />
             <NlFig label="On the OS" value={d.on.length} href="#signed-up" />
@@ -114,7 +114,7 @@ export default function InvitesNew(props: {
               </div>
 
               {progress && (
-                <div className="nl-adm-after" role="status">
+                <div className="nl-adm-p-after" role="status">
                   <p className="nl-strong">{sending ? `Sending ${progress.done + 1} of ${progress.total}… keep this page open.` : `Done: ${progress.total - progress.failed.length} of ${progress.total} sent.`}</p>
                   <div className="nl-adm-progress">
                     <i style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
@@ -184,7 +184,7 @@ export default function InvitesNew(props: {
 
             <div className="nl-adm-card">
               <h3 className="nl-block-title">Add Someone</h3>
-              <div className="nl-filters nl-adm-after">
+              <div className="nl-filters nl-adm-p-after">
                 <input value={manual.name} onChange={(e) => props.setManual((m) => ({ ...m, name: e.target.value }))} placeholder="Name" aria-label="Name" className="nl-input nl-adm-in-name" />
                 <input value={manual.email} onChange={(e) => props.setManual((m) => ({ ...m, email: e.target.value }))} placeholder="name@thelettingexperts.co.uk" aria-label="Email" className="nl-input nl-adm-in-mail" />
                 <span className="nl-fsel">
@@ -201,13 +201,13 @@ export default function InvitesNew(props: {
             {d.toInvite.length === 0 ? (
               <p className="nl-empty">Everybody has an account.</p>
             ) : (
-              <ul className="nl-adm-people nl-adm-after">
+              <ul className="nl-adm-people nl-adm-p-after">
                 {d.toInvite.map((p) => {
                   const linkLive = p.linkExpiresAt && Date.parse(p.linkExpiresAt) > Date.now();
                   const on = p.included && p.sendable;
                   return (
                     <li key={p.email}>
-                      <label className="nl-adm-who nl-adm-check is-top">
+                      <label className="nl-adm-who nl-adm-p-check is-top">
                         <input type="checkbox" checked={on} disabled={!p.sendable || sending} onChange={(e) => props.toggle(p, e.target.checked)} />
                         <span className="min-w-0 nl-adm-lines2">
                           <span className={`nl-strong${p.included ? "" : " nl-adm-muted"}`}>
@@ -275,7 +275,7 @@ export default function InvitesNew(props: {
                 </h2>
                 <p className="nl-meta">Everybody with an account, and the six things that make them live: photo, REX, email, setup, the tour and the phone app. Each one is also on their own dashboard until it&apos;s done.</p>
               </div>
-              <label className="nl-adm-check">
+              <label className="nl-adm-p-check">
                 <input type="checkbox" checked={props.onlyNotReady} onChange={(e) => props.setOnlyNotReady(e.target.checked)} />
                 Only people not ready
               </label>

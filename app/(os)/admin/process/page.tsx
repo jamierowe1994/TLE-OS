@@ -20,7 +20,7 @@ export default function ProcessPage() {
   /* The new look (lib/new-look "admin", 24 Oct 2026): the same four, as lines
      on hairlines under the frame's tabs. */
   const fresh = (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">How the product treats each person, step by step: the screens they meet, the emails that go to them, and what happens when they stall. Open one for the map, the links and the emails, and to change it.</p>
       <ul className="nl-adm-plist">
         {PORTAL_FOLDERS.map((f) => {

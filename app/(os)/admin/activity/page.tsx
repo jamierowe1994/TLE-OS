@@ -60,7 +60,7 @@ export default function AdminActivity() {
   if (look) {
     if (!d) {
       return (
-        <div data-look="new" className="nl-page nl-adm nl-adm-tab">
+        <div data-look="new" className="nl-page nl-adm nl-adm-p-tab">
           <NlLoading what="Reading the log" />
         </div>
       );

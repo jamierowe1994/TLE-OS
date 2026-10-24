@@ -47,7 +47,7 @@ export default function TrackingSectionNew({
   reload: () => void;
 }) {
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <div className="nl-adm-block-head">
         <div>
           <h2 className="nl-section-title">{title}</h2>
@@ -57,7 +57,7 @@ export default function TrackingSectionNew({
           All parts, same period <Ico name="arrow" size={14} />
         </Link>
       </div>
-      <div className="nl-adm-after">{t && periodLabel && <PeriodBarNew t={t} set={set} label={periodLabel} personName={personName} />}</div>
+      <div className="nl-adm-p-after">{t && periodLabel && <PeriodBarNew t={t} set={set} label={periodLabel} personName={personName} />}</div>
 
       {loading || !t ? (
         <NlLoading what="Reading the figures" />
@@ -89,7 +89,7 @@ function SectionView({ d, t, set }: { d: Section; t: TrackingQuery; set: (c: Par
     <>
       <SourceErrorsNew sources={d.sources} />
 
-      <ul className="nl-adm-figs">
+      <ul className="nl-adm-p-figs">
         <NlFig label="People" value={n(active.length)} />
         {d.section.hasPages && <NlFig label="Opens" value={n(opens)} />}
         {d.section.hasPages && <NlFig label="Average stay" value={timed ? duration(seconds / timed) : "-"} />}
@@ -160,7 +160,7 @@ function SectionView({ d, t, set }: { d: Section; t: TrackingQuery; set: (c: Par
           </table>
         </div>
         {d.teams.length > 1 && (
-          <ul className="nl-adm-log nl-adm-after">
+          <ul className="nl-adm-log nl-adm-p-after">
             {d.teams.map((tm) => (
               <li key={tm.team}>
                 <span className="nl-strong">{tm.team}</span>
@@ -287,7 +287,7 @@ function PassportView({ p, set, opensSince, from }: { p: NonNullable<Section["pa
           <p className="nl-meta">
             Passports sent in this period, and how far their tenants got. Overall, <span className="nl-strong">{pct(f.finished, f.sent)}</span> finished.
           </p>
-          <div className="nl-adm-after">
+          <div className="nl-adm-p-after">
             <HBarsNew
               of={f.sent}
               rows={[
@@ -307,7 +307,7 @@ function PassportView({ p, set, opensSince, from }: { p: NonNullable<Section["pa
         <section className="nl-adm-card">
           <h2 className="nl-adm-card-title">Where Tenants Stop</h2>
           <p className="nl-meta">The {n(unfinished)} not finished, by the first question still unanswered - in the order the passport asks them.</p>
-          <div className="nl-adm-after">
+          <div className="nl-adm-p-after">
             {p.drops.length ? <HBarsNew of={Math.max(...p.drops.map((x) => x.count))} rows={p.drops.map((x) => ({ label: x.at, value: x.count }))} /> : <p className="nl-empty">Everybody sent one finished it.</p>}
           </div>
         </section>
@@ -408,7 +408,7 @@ function PassportView({ p, set, opensSince, from }: { p: NonNullable<Section["pa
           </table>
         </div>
         {filtered.length > LIST_FIRST && (
-          <p className="nl-adm-after">
+          <p className="nl-adm-p-after">
             <button type="button" onClick={() => setAll((v) => !v)} className="nl-btn nl-btn--secondary nl-btn--sm">
               {all ? "Show Fewer" : `Show All ${n(filtered.length)}`}
             </button>
@@ -481,7 +481,7 @@ function TopList({ title, rows, empty }: { title: string; rows: Array<{ key: str
     <section className="nl-adm-card">
       <h3 className="nl-block-title">{title}</h3>
       {rows.length === 0 ? (
-        <p className="nl-meta nl-adm-after">{empty}</p>
+        <p className="nl-meta nl-adm-p-after">{empty}</p>
       ) : (
         <ul className="nl-adm-part-top">
           {rows.map((r) => (

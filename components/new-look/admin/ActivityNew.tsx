@@ -32,7 +32,7 @@ const n = (v: number) => v.toLocaleString("en-GB");
 
 export default function ActivityNew({ d, readers, readersErr }: { d: AdminData; readers: Reader[] | null; readersErr: string | null }) {
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">
         The audit trail: who&apos;s been reading the book, and who did what. How much each person uses the OS is on{" "}
         <Link href="/admin/tracking" className="nl-link">

@@ -107,7 +107,7 @@ export default function PeopleNew(props: {
   };
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">Everyone in REX, joined to who has an account. Change a role, send a password reset, or see the OS as they do.</p>
 
       {/* Re-pull the TEG Team Hub. James fills bios and headshots in there by

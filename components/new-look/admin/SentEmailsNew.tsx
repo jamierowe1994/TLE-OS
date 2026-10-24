@@ -23,7 +23,7 @@ export default function SentEmailsNew({ s }: { s: SentEmails }) {
   }, [open, close]);
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">
         Every email the OS sent, newest first. Open one to see it exactly as it was received, not as the template looks today. Sign-in links are removed from the stored copy, so the button is there but cannot be used.
       </p>

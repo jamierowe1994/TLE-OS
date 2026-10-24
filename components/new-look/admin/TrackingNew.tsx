@@ -40,7 +40,7 @@ export default function TrackingNew({
   const link = (key: string) => `/admin/tracking/${key}?${qs}`;
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">Which parts of the OS are used, by whom, and how much. Open any part to see it by person, by day and record by record.</p>
 
       {t && periodLabel && <PeriodBarNew t={t} set={set} label={periodLabel} personName={personName} />}
@@ -54,7 +54,7 @@ export default function TrackingNew({
           <SourceErrorsNew sources={d.sources} />
 
           {/* ── the headlines ── */}
-          <ul className="nl-adm-figs">
+          <ul className="nl-adm-p-figs">
             <NlFig
               label="People using it"
               value={`${n(d.highlights.active)} of ${n(d.highlights.accounts)}`}

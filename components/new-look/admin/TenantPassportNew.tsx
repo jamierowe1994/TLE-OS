@@ -31,7 +31,7 @@ export default function TenantPassportNew({
   when: (iso: string) => string;
 }) {
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">The form a tenant fills in once and reuses. Make a throwaway to show somebody, or to send them.</p>
 
       <section className="nl-adm-card">

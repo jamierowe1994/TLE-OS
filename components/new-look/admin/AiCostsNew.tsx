@@ -41,7 +41,7 @@ export default function AiCostsNew({
   modelName: (id: string) => string;
 }) {
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">
         Every call the OS makes to Claude, added up by feature for {thisMonth} so far and for {lastMonth}. The model column is what each feature uses right now. Costs are in US dollars, as Anthropic bills them.
       </p>
@@ -52,13 +52,13 @@ export default function AiCostsNew({
         <NlLoading what="Adding up this month" />
       ) : (
         <>
-          <ul className="nl-adm-figs">
+          <ul className="nl-adm-p-figs">
             <NlFig label={`${thisMonth} so far`} value={dollars(all.cost)} />
             <NlFig label={`All of ${lastMonth}`} value={lastMeasured ? dollars(allLast.cost) : "Not recorded"} word={!lastMeasured} />
             <NlFig label={`Calls in ${thisMonth}`} value={all.calls.toLocaleString("en-GB")} />
             <NlFig label="Declined by the model" value={all.refused.toLocaleString("en-GB")} />
           </ul>
-          <p className="nl-meta nl-adm-after">
+          <p className="nl-meta nl-adm-p-after">
             {since
               ? `Recording since ${new Date(since).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" })}. Anything earlier was not measured.`
               : "Nothing recorded yet. The first call to Claude will appear here."}

@@ -22,7 +22,7 @@ export type Door = {
 
 export default function PlcDemoNew({ doors, token }: { doors: Door[]; token: string }) {
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">The moment an accepted application becomes compliance&apos;s problem. Here are the doors, in the order you would open them.</p>
 
       <div className="nl-adm-pcards">
@@ -35,14 +35,14 @@ export default function PlcDemoNew({ doors, token }: { doors: Door[]; token: str
         </section>
         <section className="nl-adm-card">
           <h2 className="nl-adm-card-title">The Rule Worth Saying Out Loud</h2>
-          <p className="nl-adm-say nl-adm-after">The scan never decides. It reads the documents and produces findings; a person presses the button. A case cannot leave review without somebody putting their name to it.</p>
-          <p className="nl-meta nl-adm-after">That is the whole design, and it is the thing to lead with. Everything else on this page is the machinery underneath it.</p>
+          <p className="nl-adm-say nl-adm-p-after">The scan never decides. It reads the documents and produces findings; a person presses the button. A case cannot leave review without somebody putting their name to it.</p>
+          <p className="nl-meta nl-adm-p-after">That is the whole design, and it is the thing to lead with. Everything else on this page is the machinery underneath it.</p>
         </section>
       </div>
 
       <section className="nl-adm-block">
         <h2 className="nl-section-title">The Doors</h2>
-        <ol className="nl-adm-steps nl-adm-after">
+        <ol className="nl-adm-p-steps nl-adm-p-after">
           {doors.map((d, i) => (
             <li key={d.href}>
               <span className="nl-adm-num">{String(i + 1).padStart(2, "0")}</span>

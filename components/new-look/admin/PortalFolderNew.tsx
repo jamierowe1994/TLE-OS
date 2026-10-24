@@ -11,7 +11,7 @@ import type { PortalFolder } from "@/lib/portals";
  */
 export default function PortalFolderNew({ f, hrefOf, mapHref }: { f: PortalFolder; hrefOf: (h: string) => string; mapHref?: string }) {
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <div className="nl-adm-block-head">
         <div>
           <h2 className="nl-section-title">{f.name}</h2>
@@ -25,7 +25,7 @@ export default function PortalFolderNew({ f, hrefOf, mapHref }: { f: PortalFolde
       </div>
 
       {/* Numbered, because the order is the point. */}
-      <ol className="nl-adm-steps nl-adm-after">
+      <ol className="nl-adm-p-steps nl-adm-p-after">
         {f.items.map((item, i) => (
           <li key={item.id}>
             <span className="nl-adm-num">{String(i + 1).padStart(2, "0")}</span>

@@ -55,7 +55,7 @@ export default function TrackingSection({ params }: { params: Promise<{ section:
   if (look === null) return <LookLoading what="Reading the figures" />;
   if (look && !isPages && !def) {
     return (
-      <div data-look="new" className="nl-page nl-adm nl-adm-tab">
+      <div data-look="new" className="nl-page nl-adm nl-adm-p-tab">
         <p className="nl-empty">There&apos;s no such part of the OS.</p>
         <Link href="/admin/tracking" className="nl-link">
           Back to Tracking

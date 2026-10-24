@@ -28,7 +28,7 @@ export default function PermissionsNew({
   const stray = d.people.filter((p) => !known.has(p.role));
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-tab">
+    <div data-look="new" className="nl-page nl-rise nl-adm nl-adm-p-tab">
       <p className="nl-adm-lead">
         What each role means, and who holds it.{" "}
         {d.mayEdit ? (

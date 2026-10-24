@@ -154,7 +154,7 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
   if (look === null) return <LookLoading what="Loading their file" />;
   if (look && (err || !d)) {
     return (
-      <div data-look="new" className="nl-page nl-adm nl-adm-tab">
+      <div data-look="new" className="nl-page nl-adm nl-adm-p-tab">
         {err ? (
           <p className="nl-adm-flash is-bad is-first" role="alert">
             {err}
