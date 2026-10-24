@@ -206,7 +206,8 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const needsHome = llHome.state !== "loading" && !homeAddress && !withoutHome;
   const missing = [
     needsHome && "add their home address",
-    !read && "open the presentation",
+    /* Not "open the presentation" (James, 24 Oct 2026): "They can send a contract at any point... they might
+       know the person." Looking through it is offered, never required. */
     !checked && "tick the details",
     !signed && "sign your half",
   ].filter((x): x is string => Boolean(x));
@@ -301,7 +302,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
           longest email on the file and pushed the steps off the screen. */}
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
         <ol className="space-y-6 rounded-[20px] border border-line/60 bg-white p-6">
-          {step(1, read, "Look through it", <p className="text-[12px] leading-relaxed text-muted">{read ? "Opened. Look through as much as you like." : "Open the booklet above. You don't have to read to the end."}</p>)}
+          {step(1, read, "Look through it", <p className="text-[12px] leading-relaxed text-muted">{read ? "Opened. Look through as much as you like." : "Optional. Open the booklet above if you want to check it first."}</p>)}
 
           {step(
             2,

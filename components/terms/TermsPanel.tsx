@@ -59,6 +59,20 @@ type StaffTerms = {
 /** Which wording each country sends now ("October 2026"), or null where there is none yet. */
 type Editions = { scotland: string | null; england: string | null };
 
+/** One tick sent, two ticks read (James, 24 Oct 2026: "one tick next to it for Sent and two ticks for Read, just so the guys know"). */
+function Ticks({ read, when }: { read: boolean; when?: string }) {
+  return (
+    <span className={`nl-tob-ticks${read ? " is-read" : ""}`} title={read ? "Opened" : "Sent, not opened yet"}>
+      <svg viewBox="0 0 28 16" width="22" height="13" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M2 8.5l4 4 8.5-9" />
+        {read ? <path d="M12 12.5l8.5-9" /> : null}
+      </svg>
+      {read ? "Read" : "Sent"}
+      {when ? ` ${when}` : ""}
+    </span>
+  );
+}
+
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
 const names = (ps: { name: string }[]) => (ps.length < 2 ? ps[0]?.name ?? "" : `${ps.slice(0, -1).map((p) => p.name).join(", ")} and ${ps[ps.length - 1].name}`);
 
@@ -71,6 +85,7 @@ export default function TermsPanel({
   agentLarn = null,
   serviceOnRecord = null,
   scottish = null,
+  feesOnRecord = null,
   onChanged,
   more,
 }: {
@@ -84,6 +99,8 @@ export default function TermsPanel({
   serviceOnRecord?: string | null;
   /** What the home's own record says (its Scotland flag); null to go by the address alone. */
   scottish?: boolean | null;
+  /** Fees already agreed (the appraisal's), in the contract's words, to start the drawer from instead of the standard ones. */
+  feesOnRecord?: { setUpFee?: string | null; managementFee?: string | null } | null;
   onChanged?: () => void;
   /** Beside the button while nothing has gone (the listing's "Upload a signed copy"). */
   more?: React.ReactNode;
@@ -206,7 +223,7 @@ export default function TermsPanel({
           </button>
         ) : live.status === "sent" ? (
           <span className="nl-terms-acts">
-            <Badge tone="info">Sent</Badge>
+            <Ticks read={live.parties.every((p) => p.openedAt || p.signedAt)} />
             {remindAsk ? (
               <>
                 <button
@@ -253,9 +270,9 @@ export default function TermsPanel({
               ) : p.emailError && !p.emailedAt ? (
                 <Badge tone="warning">Email didn&apos;t go</Badge>
               ) : p.openedAt ? (
-                <Badge tone="info">Opened {day(p.openedAt)}</Badge>
+                <Ticks read when={day(p.openedAt)} />
               ) : (
-                <Badge tone="neutral">Emailed {day(p.emailedAt)}</Badge>
+                <Ticks read={false} when={day(p.emailedAt)} />
               )}
               {!p.signedAt && <button type="button" className="nl-link" onClick={() => copy(p)}>{copied === p.key ? "Copied" : "Copy their link"}</button>}
             </li>
@@ -306,6 +323,7 @@ export default function TermsPanel({
           landlords={landlords}
           agentLarn={agentLarn}
           serviceOnRecord={serviceOnRecord}
+          feesOnRecord={feesOnRecord}
           scottish={scottish}
           editions={editions}
           preview={preview}
@@ -339,6 +357,7 @@ function SendDrawer({
   landlords,
   agentLarn,
   serviceOnRecord,
+  feesOnRecord,
   scottish,
   editions,
   preview,
@@ -356,6 +375,7 @@ function SendDrawer({
   landlords: Array<{ name?: string | null; email?: string | null; phone?: string | null }>;
   agentLarn: string | null;
   serviceOnRecord: string | null;
+  feesOnRecord?: { setUpFee?: string | null; managementFee?: string | null } | null;
   scottish: boolean | null;
   editions: Editions;
   preview: boolean;
@@ -381,8 +401,8 @@ function SendDrawer({
   );
   const start = (from && servicesFor(country).find((o) => o.label === from.values.serviceLevel)) || guessService(country, from?.values.serviceLevel ?? serviceOnRecord);
   const [service, setService] = useState(start.id);
-  const [setUpFee, setSetUpFee] = useState(from?.values.setUpFee ?? start.setUpFee);
-  const [managementFee, setManagementFee] = useState(from?.values.managementFee ?? start.managementFee);
+  const [setUpFee, setSetUpFee] = useState(from?.values.setUpFee ?? feesOnRecord?.setUpFee ?? start.setUpFee);
+  const [managementFee, setManagementFee] = useState(from?.values.managementFee ?? feesOnRecord?.managementFee ?? start.managementFee);
   const [additional, setAdditional] = useState(from && from.values.additionalFees !== "None" ? from.values.additionalFees : "");
   const [larn, setLarn] = useState(from && from.values.agentLarn !== "Not recorded" ? from.values.agentLarn : agentLarn ?? "");
   const [withdrawAsk, setWithdrawAsk] = useState(false);

@@ -49,6 +49,7 @@ export default function NextUp({
   onSaved,
   onDecksChanged,
   onAttach,
+  onTerms,
   look,
 }: {
   ma: MarketAppraisal;
@@ -62,6 +63,8 @@ export default function NextUp({
   onAttach?: () => void;
   /** "new": drawn as the new look's big sage card (lib/new-look "appraisal"). Same steps, same buttons. */
   look?: "new";
+  /** The new look sends the terms from its Documents tab (James, 24 Oct 2026); this takes the agent there. */
+  onTerms?: () => void;
 }) {
   const refId = ma.leadId ?? ma.id;
   const [error, setError] = useState<string | null>(null);
@@ -307,20 +310,32 @@ export default function NextUp({
        straight into a signing panel with no sight of what the landlord would
        be reading. James, 15 Sep 2026: "it will say Prepare presentation and
        sign ... they would then prepare everything". */
+    const sendHere = look === "new" && Boolean(onTerms);
     card = {
       icon: "file-contract",
-      title: (
+      title: sendHere ? (
+        <>
+          Send the Terms
+          <br />
+          of Business
+        </>
+      ) : (
         <>
           Prepare the presentation
           <br />
           and sign
         </>
       ),
-      sub:
-        post.opens > 0
+      sub: sendHere
+        ? "They can go whenever you're ready. Sign your part and each landlord gets their own link."
+        : post.opens > 0
           ? `The post-appraisal deck has been opened ${post.opens} time${post.opens === 1 ? "" : "s"}.`
           : "Check it through as they will see it, sign your half, then send it.",
-      body: (
+      body: look === "new" && onTerms ? (
+        <button type="button" onClick={onTerms} className={primary}>
+          Send the Terms of Business <span aria-hidden>→</span>
+        </button>
+      ) : (
         <TermsCard
           appraisalId={ma.id}
           landlord={ma.landlord}

@@ -32,7 +32,7 @@ import HomeLandlords from "@/components/HomeLandlords";
 import AppraisalLandlord from "@/components/new-look/AppraisalLandlord";
 import { LandlordOnFile } from "@/components/LandlordHomeAddress";
 import FileDocuments from "@/components/FileDocuments";
-import TermsBanner from "@/components/appraisal/TermsBanner";
+import AppraisalTerms from "@/components/appraisal/AppraisalTerms";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Ico, Menu, Tabs, type Tone } from "@/components/new-look/Parts";
 
@@ -411,6 +411,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             <div className="nl-appr-next">
               <NextUp
                 look="new"
+                onTerms={() => goTab("documents")}
                 ma={ma}
                 decks={decks}
                 onSaved={saved}
@@ -663,7 +664,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
               <section id="documents" className="scroll-mt-6">
                 {/* The terms first, as the listing's Documents has them (24 Oct 2026, new look only). */}
                 <div className="mb-6">
-                  <TermsBanner ma={ma} onChanged={(next) => (next ? saved(next) : reload())} />
+                  <AppraisalTerms ma={ma} onChanged={(next) => (next ? saved(next) : reload())} />
                 </div>
                 <FileDocuments
                   address={ma.postcode && !ma.address.toUpperCase().includes(ma.postcode.toUpperCase()) ? `${ma.address}, ${ma.postcode}` : ma.address}
