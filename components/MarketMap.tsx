@@ -72,6 +72,11 @@ export default function MarketMap({
   onOpen,
   radiusMiles = 0,
   controls,
+  look,
+  keyFor,
+  tone,
+  highlight = null,
+  onHover,
 }: {
   listings: MarketListing[];
   centre: { lat: number; lon: number } | null;
@@ -90,6 +95,20 @@ export default function MarketMap({
    * what they are — it is a surface, not a form.
    */
   controls?: React.ReactNode;
+  /**
+   * THE FOUR-STEP BUILDER'S PINS (James, 24 Oct 2026). Its price pins are
+   * styled by the builder's own sheet (.pbx .mm-pin), clicking one picks it
+   * straight away rather than opening the card, and the ring frames the map.
+   * Everything below is optional, so the old builder's map is unchanged.
+   */
+  look?: "builder";
+  /** The pin's identity, when the caller's keys aren't listingKey (ours have no listing id). */
+  keyFor?: (l: MarketListing) => string;
+  /** Which kind of pin: let agreed, ours, or a plain advertised one. */
+  tone?: (l: MarketListing) => "let" | "ours" | null;
+  /** The card the agent's pointer is on, so its pin stands out. */
+  highlight?: string | null;
+  onHover?: (key: string | null) => void;
 }) {
   const holder = useRef<HTMLDivElement | null>(null);
   const map = useRef<google.maps.Map | null>(null);
@@ -112,7 +131,7 @@ export default function MarketMap({
 
   const points = listings.filter((l) => l.lat != null && l.lon != null);
   /* The same identity the cards use — see listingKey. */
-  const keyOf = listingKey;
+  const keyOf = keyFor ?? listingKey;
 
   /** Recompute every pixel position from the current projection. */
   const project = useCallback(() => {
@@ -130,7 +149,7 @@ export default function MarketMap({
              at all, a ticked property stopped going red on the map, and
              clicking a pin stopped bringing its card to the top. Three
              behaviours, one string, no error anywhere. */
-          return { key: listingKey(l), x: q?.x ?? -9999, y: q?.y ?? -9999, l };
+          return { key: keyOf(l), x: q?.x ?? -9999, y: q?.y ?? -9999, l };
         })
     );
     if (centre) {
@@ -139,7 +158,14 @@ export default function MarketMap({
     } else {
       setSubject(null);
     }
+    // keyOf is the caller's, stable for the life of the map.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listings, centre]);
+  /* Google keeps the draw and bounds handlers it was given at creation, so
+     they call through a ref: the first render's project would redraw the
+     first list's pins on every pan once the list had changed. */
+  const projectRef = useRef(project);
+  projectRef.current = project;
 
   useEffect(() => {
     let dead = false;
@@ -207,10 +233,10 @@ export default function MarketMap({
           ov.onRemove = () => {};
           /* draw() runs on every pan, zoom and resize — exactly when a pixel
              position stops being true. */
-          ov.draw = () => project();
+          ov.draw = () => projectRef.current();
           ov.setMap(map.current);
           overlay.current = ov;
-          map.current.addListener("bounds_changed", () => project());
+          map.current.addListener("bounds_changed", () => projectRef.current());
         }
         setReady(true);
       })
@@ -229,6 +255,14 @@ export default function MarketMap({
     const b = new google.maps.LatLngBounds();
     points.forEach((l) => b.extend({ lat: l.lat!, lng: l.lon! }));
     if (centre) b.extend({ lat: centre.lat, lng: centre.lon });
+    /* The builder frames its ring too, so the radius the agent chose is the
+       map they see, not just the pins that happen to be inside it. */
+    if (look === "builder" && centre && radiusMiles > 0) {
+      const dLat = radiusMiles / 69;
+      const dLon = radiusMiles / (69 * Math.cos((centre.lat * Math.PI) / 180));
+      b.extend({ lat: centre.lat + dLat, lng: centre.lon + dLon });
+      b.extend({ lat: centre.lat - dLat, lng: centre.lon - dLon });
+    }
     if (!b.isEmpty()) {
       map.current.fitBounds(b, 70);
       /* fitBounds dives too close when everything sits on one street. */
@@ -237,7 +271,7 @@ export default function MarketMap({
     }
     project();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, listings, centre]);
+  }, [ready, listings, centre, look === "builder" ? radiusMiles : 0]);
 
   /* The radius ring, drawn by Google so it stays true at every zoom — a ring
      in pixels would lie the moment somebody zoomed out. */
@@ -246,18 +280,19 @@ export default function MarketMap({
     circle.current?.setMap(null);
     circle.current = null;
     if (!centre || radiusMiles <= 0) return;
+    const ink = look === "builder" ? "#eb8c6d" : "#56423e";
     circle.current = new google.maps.Circle({
       map: map.current,
       center: { lat: centre.lat, lng: centre.lon },
       radius: radiusMiles * 1609.34,
-      strokeColor: "#56423e",
-      strokeOpacity: 0.55,
+      strokeColor: ink,
+      strokeOpacity: look === "builder" ? 0.9 : 0.55,
       strokeWeight: 1.5,
-      fillColor: "#56423e",
+      fillColor: ink,
       fillOpacity: 0.06,
       clickable: false,
     });
-  }, [ready, centre, radiusMiles]);
+  }, [ready, centre, radiusMiles, look]);
 
   const money = (n: number | null) =>
     n == null ? "—" : `£${Math.round(n).toLocaleString("en-GB")}`;
@@ -335,7 +370,15 @@ export default function MarketMap({
 
         {/* The subject: a dot, not a label. It is the one property on this map
             nobody needs telling about. */}
-        {ready && subject && (
+        {ready && subject && look === "builder" && (
+          <span className="mm-home" style={{ left: subject.x, top: subject.y }} aria-hidden>
+            <svg viewBox="-16 -16 32 32" width="32" height="32">
+              <circle r="16" fill="#141413" />
+              <path d="M-7 3 L0 -5 L7 3 V9 H-7z" fill="#fff" />
+            </svg>
+          </span>
+        )}
+        {ready && subject && look !== "builder" && (
           <span
             className="pointer-events-none absolute z-[2] h-3.5 w-3.5 rounded-full border-[2.5px] border-white bg-brown shadow"
             style={{ left: subject.x, top: subject.y, transform: "translate(-50%,-50%)" }}
@@ -344,7 +387,30 @@ export default function MarketMap({
 
         {/* Price pills. Three states, because open and ticked are different
             things: dark is the card you are reading, red is going in the deck. */}
+        {/* The builder's pins: a tap picks, a hover lights the card. */}
         {ready &&
+          look === "builder" &&
+          pts.map(({ key, x, y, l }) => {
+            const t = tone?.(l);
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onSelect?.(key)}
+                onMouseEnter={() => onHover?.(key)}
+                onMouseLeave={() => onHover?.(null)}
+                aria-pressed={selected.includes(key)}
+                aria-label={`${money(l.rent)} pcm, ${l.address}`}
+                className={`mm-pin${t ? ` ${t}` : ""}${selected.includes(key) ? " picked" : ""}${highlight === key ? " hl" : ""}`}
+                style={{ left: x, top: y }}
+              >
+                {money(l.rent)}
+              </button>
+            );
+          })}
+
+        {ready &&
+          look !== "builder" &&
           pts.map(({ key, x, y, l }) => {
             const isOpen = open != null && keyOf(open) === key;
             const on = selected.includes(key);

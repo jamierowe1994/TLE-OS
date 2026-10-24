@@ -874,6 +874,13 @@ export interface Comparable {
   epcRating: string | null;
   /** How near: same sector (L34 5), same district (L34), or same area (L). */
   nearness: "sector" | "district" | "area";
+  /** Where it is, what it is and its lead photo, when our book holds them -
+   *  the four-step builder plots ours on its map and scores them by distance
+   *  (24 Oct 2026). Optional: older readers ignore them. */
+  lat?: number | null;
+  lon?: number | null;
+  type?: string | null;
+  image?: string | null;
 }
 
 /**
@@ -1129,6 +1136,10 @@ export async function getResearch(
         letAgreed: l.letAgreed,
         epcRating: l.epcRating,
         nearness,
+        lat: l.lat,
+        lon: l.lng,
+        type: l.propertyType,
+        image: l.image,
       });
     }
   } catch {
