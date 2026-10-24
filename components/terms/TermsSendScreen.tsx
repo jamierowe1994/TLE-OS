@@ -151,9 +151,11 @@ async function typedSignature(name: string): Promise<string | null> {
   return c.toDataURL("image/png");
 }
 
-/** Which terms the address gets: the home's own record where it is the home's address, else the postcode. */
+/** Which terms the address gets: the postcode decides (James, 24 Oct 2026); the home's own record only where there is no postcode to go by. */
 function countryFor(addr: string, propertyAddress: string, scottish: boolean | null): Country {
-  return (addr.trim() === propertyAddress.trim() && scottish != null ? scottish : isScottish(addr)) ? "scotland" : "england";
+  const hasPostcode = /\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i.test(addr);
+  if (hasPostcode) return isScottish(addr) ? "scotland" : "england";
+  return addr.trim() === propertyAddress.trim() && scottish ? "scotland" : isScottish(addr) ? "scotland" : "england";
 }
 
 export default function TermsSendScreen({
@@ -204,16 +206,11 @@ export default function TermsSendScreen({
   const startAddress = signing?.propertyAddress ?? from?.propertyAddress ?? propertyAddress;
   const [address, setAddress] = useState(startAddress);
   const byAddress = countryFor(address, propertyAddress, scottish);
-  /* WHICH TERMS FOLLOWS THE ADDRESS (James, 23 Oct 2026): Scotland gets the
-     Scottish terms, anywhere else the English. The agent can pick the other
-     (a border postcode), and from then on it stays where they put it.
-     Adjusting keeps the country it went on only where it was picked against
-     the address; a contract already made keeps its own. */
-  const [chosen, setChosen] = useState<Country | null>(() => {
-    if (signing) return signing.country;
-    if (from) return from.country !== countryFor(from.propertyAddress, propertyAddress, scottish) ? from.country : null;
-    return null;
-  });
+  /* WHICH TERMS FOLLOWS THE POSTCODE (James, 24 Oct 2026): "If the property
+     is a Scottish property based on postcode, then it's under Scottish law, so
+     they shouldn't have to click between the two." No choice for the agent;
+     a contract already made keeps its own. */
+  const [chosen] = useState<Country | null>(() => (signing ? signing.country : null));
   const country: Country = chosen ?? (editions[byAddress] ? byAddress : byAddress === "scotland" ? "england" : "scotland");
 
   const [people, setPeople] = useState<Person[]>(() => {
@@ -676,7 +673,7 @@ export default function TermsSendScreen({
         <span>Terms</span>
         <b>
           {country === "scotland" ? "Scotland" : "England"} · {editionLine(country)}
-          {chg("country")}
+          <small className="by">From the postcode</small>
         </b>
         <span>Service</span>
         <b>
@@ -746,29 +743,6 @@ export default function TermsSendScreen({
             The property
             <div className="ac"><input value={address} onChange={(e) => setAddress(e.target.value)} onKeyDown={(e) => e.key === "Enter" && address.trim() && setEditing(null)} /></div>
           </label>
-        </div>
-      )}
-
-      {editing === "country" && (
-        <div className="edit-box">
-          <span className="fl">
-            Which terms
-            <small>{chosen ? "You picked these." : byAddress === "scotland" ? "Scotland, from the property's address." : "England, from the property's address. Anywhere outside Scotland gets the England terms."}</small>
-          </span>
-          <div className="seg">
-            {(["england", "scotland"] as Country[]).map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={country === c ? "on" : ""}
-                aria-disabled={!editions[c]}
-                onClick={() => editions[c] && setChosen(c)}
-              >
-                {c === "scotland" ? "Scotland" : "England"}
-                <small>{editionLine(c)}</small>
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
