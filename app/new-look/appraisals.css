@@ -192,3 +192,12 @@
   [data-look="new"] .nl-appr-decks > li { grid-template-columns: auto minmax(0, 1fr); }
   [data-look="new"] .nl-appr-deck-acts { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* The landlord card: fixed, with its pencil; each other person under a line (James, 24 Oct 2026). */
+[data-look="new"] .nl-appr-person { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+[data-look="new"] .nl-appr-person-sub + .nl-appr-person-sub { border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 4px; }
+[data-look="new"] .nl-appr-person.is-off .nl-eyebrow { text-decoration: line-through; }
+[data-look="new"] .nl-appr-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+[data-look="new"] .nl-appr-problems { border-radius: 12px; background: var(--accent-soft); color: var(--accent-dark); padding: 10px 12px; font-size: 13px; line-height: 19px; display: flex; flex-direction: column; gap: 4px; }
+[data-look="new"] .nl-appr-problems p { margin: 0; }
+[data-look="new"] .nl-appr-edit-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }

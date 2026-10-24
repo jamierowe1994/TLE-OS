@@ -29,6 +29,7 @@ import {
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import ContactBlock from "@/components/ContactBlock";
 import HomeLandlords from "@/components/HomeLandlords";
+import AppraisalLandlord from "@/components/new-look/AppraisalLandlord";
 import { LandlordOnFile } from "@/components/LandlordHomeAddress";
 import FileDocuments from "@/components/FileDocuments";
 import TermsBanner from "@/components/appraisal/TermsBanner";
@@ -520,15 +521,15 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                   </p>
                 </section>
 
-                {/* The landlord, changeable here and back to the record. */}
+                {/* The landlord, fixed until the pencil (James, 24 Oct 2026): no
+                    add buttons under it; the pencil opens the changes, the
+                    additional landlords and the points of contact in one go. */}
                 <section className="nl-cell">
-                  <h3 className="nl-block-title">The Landlord</h3>
-                  <ContactBlock
-                    className="pb-2"
-                    role="landlord"
-                    person={{ name: ma.landlord, email: ma.landlordEmail ?? null, phone: ma.landlordMobile ?? null }}
-                    personRef={ma.landlordRef ?? null}
-                    home={{ propertyAddress: homeLine }}
+                  <AppraisalLandlord
+                    landlord={{ name: ma.landlord, email: ma.landlordEmail ?? null, phone: ma.landlordMobile ?? null }}
+                    landlordRef={ma.landlordRef ?? null}
+                    homeKey={ma.rexPropertyId ?? `appraisal:${ma.id}`}
+                    address={homeLine}
                     onSaved={() => reload()}
                     onWhatsAppSent={
                       ma.leadId
@@ -552,14 +553,6 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                           }
                         : undefined
                     }
-                  />
-                  <HomeLandlords
-                    className="mb-2"
-                    heading={null}
-                    homeKey={ma.rexPropertyId ?? `appraisal:${ma.id}`}
-                    address={homeLine}
-                    main={[]}
-                    requireOne={false}
                   />
                   <LandlordOnFile
                     className="pb-2"

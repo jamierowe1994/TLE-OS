@@ -95,6 +95,7 @@ export default function LandlordHomeAddress({
   name,
   propertyAddress,
   className = "",
+  readOnly = false,
 }: {
   email?: string | null;
   personRef?: string | null;
@@ -102,8 +103,11 @@ export default function LandlordHomeAddress({
   /** The let, for "Same as the let property". */
   propertyAddress?: string | null;
   className?: string;
+  /** Shown, not changed: a card whose changes are made behind its pencil (24 Oct 2026). */
+  readOnly?: boolean;
 }) {
-  const { home, state, note, save, canSave } = useLandlordHome({ email, personRef, name, propertyAddress });
+  const { home, state, note, save, canSave: canWrite } = useLandlordHome({ email, personRef, name, propertyAddress });
+  const canSave = canWrite && !readOnly;
   const value = home?.address ?? "";
   const offered = home && !home.saved;
 

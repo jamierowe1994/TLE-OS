@@ -24,11 +24,14 @@ export default function ZeroDepositOptOut({
   personRef,
   name,
   className = "",
+  readOnly = false,
 }: {
   email?: string | null;
   personRef?: string | null;
   name?: string | null;
   className?: string;
+  /** Shown, not changed: said only when they have opted out (24 Oct 2026). */
+  readOnly?: boolean;
 }) {
   const e = (email ?? "").trim();
   const ref = (personRef ?? "").trim();
@@ -82,6 +85,19 @@ export default function ZeroDepositOptOut({
   /* Nothing to keep it against, and nothing recorded: say nothing at all. */
   if (!canSave) return null;
   if (state === "loading") return null;
+  /* Read only: an opt-out is worth seeing, an empty box is not. */
+  if (readOnly) {
+    if (!optOut) return null;
+    return (
+      <div className={`py-2 ${className}`} data-steve="landlord.zero-deposit-optout">
+        <span className="block text-[12px] leading-snug text-ink">Opted out of zero deposit (Flatfair)</span>
+        <span className="mt-0.5 block text-[11px] leading-snug text-muted">
+          Ticked by {optOut.by}, {day(optOut.at)}
+          {optOut.reason ? `  •  ${optOut.reason}` : ""}
+        </span>
+      </div>
+    );
+  }
 
   const ticked = Boolean(optOut) || asking === "out";
   return (
