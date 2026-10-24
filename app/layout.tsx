@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Inter, JetBrains_Mono, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans, Source_Serif_4 } from "next/font/google";
+import { Bricolage_Grotesque, Caveat, Inter, JetBrains_Mono, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import "./new-look.css";
 import "./book-viewing.css";
+import "./terms-paper.css";
+import "./terms-send.css";
+import "./terms-sign.css";
 
 /**
  * THE TYPE, from 11 Sep 2026 (James): Manrope for headings and figures, set
@@ -78,6 +81,9 @@ const shantell = Shantell_Sans({
  * Used ONLY for a single display word. A script at body size is unreadable,
  * and at any size it is a decoration rather than a typeface.
  */
+/* The hand a typed signature is set in (the signing pages, 24 Oct 2026). Only loaded where it is drawn. */
+const caveat = Caveat({ subsets: ["latin"], weight: "500", variable: "--font-hand", display: "swap", preload: false });
+
 const msMadi = Ms_Madi({
   subsets: ["latin"],
   weight: "400",
@@ -166,7 +172,7 @@ export default function RootLayout({
       /* The theme is put on <html> before React hydrates (ThemeGate), so its
          attributes legitimately differ. */
       suppressHydrationWarning
-      className={`${manrope.variable} ${inter.variable} ${bricolage.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable} ${serif4.variable} ${mono.variable}`}
+      className={`${manrope.variable} ${inter.variable} ${bricolage.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${caveat.variable} ${lora.variable} ${serif4.variable} ${mono.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>

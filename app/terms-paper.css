@@ -1,0 +1,64 @@
+/* Generated from James's Claude Design files (24 Oct 2026) and scoped, so nothing outside the signing screens moves. */
+.tsp {
+  --paper: #ffffff; --grey: #f6f6f5; --well: #f0f0ee; --ink: #141413; --muted: #63625b; --faint: #8f8e87;
+  --line: rgba(20, 20, 19, .09); --line-2: rgba(20, 20, 19, .18);
+  --coral: #eb8c6d; --coral-soft: #f9e2d9; --clay: #aa4a2b; --sage: #66785b; --sage-soft: #e3e3d3; --manilla: #f5e3c7; --oat: #e3dacc; --forest: #2e3829;
+  --f-title: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --f-ui: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: var(--font-jbmono), ui-monospace, monospace;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  color-scheme: light;
+}
+/* ---------- the terms: words on a page ---------- */
+.tsp .terms { max-width: 680px; margin: 0 auto; background: #fff; padding: 52px 60px 40px; border-radius: 4px; box-shadow: 0 1px 2px rgba(20, 20, 19, .05), 0 14px 40px rgba(20, 20, 19, .06); font-size: 14.5px; line-height: 1.7; color: #34332f; }
+.tsp .t-head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 18px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.tsp .t-brand { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--ink); } .tsp .t-brand svg { width: 22px; height: 22px; color: var(--clay); }
+.tsp .t-ref { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; }
+.tsp .t-title { font-family: var(--f-title); font-weight: 300; font-size: 36px; letter-spacing: -.035em; line-height: 1.05; color: var(--ink); margin: 34px 0 14px; }
+.tsp .t-title span { display: block; color: var(--faint); }
+.tsp .t-lede { font-size: 15.5px; color: #4a4943; }
+.tsp .terms h2 { display: flex; align-items: baseline; gap: 12px; font-family: var(--f-title); font-weight: 400; font-size: 19px; letter-spacing: -.02em; color: var(--clay); margin: 34px 0 8px; scroll-margin: 110px; }
+.tsp .terms h2 i { font-style: normal; font-family: var(--f-mono); font-size: 12px; color: var(--faint); min-width: 16px; }
+.tsp .terms p { margin: 0 0 10px; }
+.tsp .terms ul { margin: 0; padding-left: 20px; } .tsp .terms li { margin-bottom: 4px; }
+.tsp .t-tbl { margin: 6px 0 12px; border-top: 1px solid var(--line); }
+.tsp .t-tbl > div { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.tsp .t-tbl dt { color: var(--muted); font-size: 13.5px; } .tsp .t-tbl dd { margin: 0; color: var(--ink); font-weight: 500; }
+.tsp .t-tbl.dim dd { border-bottom: 1px dotted var(--line-2); }
+.tsp .blank { display: inline-block; font-weight: 400; font-style: italic; color: var(--clay); background: repeating-linear-gradient(135deg, var(--coral-soft) 0 6px, #fdf0ea 6px 12px); border-radius: 4px; padding: 0 6px; }
+.tsp .fld { border-radius: 4px; transition: background .5s, box-shadow .4s; scroll-margin: 120px; }
+.tsp .fld.flash { background: var(--coral-soft); box-shadow: 0 0 0 4px var(--coral-soft); }
+.tsp .t-cool { margin-top: 30px; padding: 4px 22px 14px; border-radius: 14px; background: var(--grey); scroll-margin: 110px; }
+.tsp .t-cool h2 { margin-top: 18px; }
+.tsp .t-choice b { color: var(--ink); font-weight: 500; }
+.tsp .t-sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 12px; }
+.tsp .t-sig { border: 1px dashed var(--line-2); border-radius: 12px; padding: 14px 16px 6px; scroll-margin: 120px; transition: border-color .3s, background .3s; }
+.tsp .t-sig.you { border-color: var(--coral); background: #fffaf7; }
+.tsp .t-sig.done { border-style: solid; border-color: var(--line); background: #fff; }
+.tsp .t-sig small { display: block; font-size: 12px; color: var(--clay); }
+.tsp .t-sig .ink { min-height: 74px; display: flex; align-items: center; }
+.tsp .t-sig .ink img { height: 60px; max-width: 100%; animation: tsp-ink .9s var(--ease); }
+@keyframes tsp-ink { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.tsp .t-sig .ink em { font-style: normal; color: var(--faint); font-size: 13px; }
+.tsp .t-sig .t-tbl { margin: 0; } .tsp .t-sig .t-tbl > div { grid-template-columns: 50px 1fr; padding: 6px 0; font-size: 13px; } .tsp .t-sig .t-tbl > div:last-child { border-bottom: 0; }
+.tsp .t-sched { margin-top: 34px; padding-top: 6px; border-top: 1px dashed var(--line-2); font-size: 13px; color: var(--muted); }
+.tsp .t-sched h2 { font-size: 16px; color: var(--muted); }
+.tsp .t-foot { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
+@media (max-width: 700px) {
+  .tsp .terms { padding: 26px 18px 24px; border-radius: 0; box-shadow: none; font-size: 15px; }
+  .tsp .t-title { font-size: 30px; margin-top: 24px; }
+  .tsp .t-tbl > div { grid-template-columns: 1fr; gap: 0; } .tsp .t-sigs { grid-template-columns: 1fr; }
+  .tsp .t-cool { padding: 2px 16px 12px; }
+}
+
+
+/* TLE OS additions (24 Oct 2026): the pieces our real contract has that the design's sample didn't. */
+.tsp .t-logo { height: 20px; width: auto; display: block; }
+.tsp .t-sub { font-family: var(--f-title); font-weight: 500; font-size: 15px; color: var(--ink); margin: 18px 0 6px; letter-spacing: -.01em; }
+.tsp .t-grid { overflow-x: auto; margin: 8px 0 14px; }
+.tsp .t-grid table { width: 100%; border-collapse: collapse; font-size: 12.5px; line-height: 1.4; }
+.tsp .t-grid th, .tsp .t-grid td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: center; vertical-align: top; }
+.tsp .t-grid th { font-weight: 500; color: var(--muted); font-size: 12px; }
+.tsp .t-grid td:first-child, .tsp .t-grid th:first-child { text-align: left; padding-left: 0; }
+.tsp .t-yes { color: var(--sage); font-weight: 600; }
+.tsp .t-sigs { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }

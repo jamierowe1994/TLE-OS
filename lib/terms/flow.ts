@@ -6,6 +6,7 @@ import { findUserById, type OsUser } from "@/lib/users";
 import { fetchSigned, store } from "@/lib/signed-documents";
 import {
   archiveSubmission,
+  completeSubmitter,
   createHtmlSubmission,
   docusealConfigured,
   setSubmitterValues,
@@ -13,6 +14,8 @@ import {
   submitterState,
 } from "@/lib/docuseal";
 import { edition, editionFor } from "@/lib/terms/catalogue";
+import { agentPhone } from "@/lib/agent-phone";
+import { cleanSignature, keepAgentSignature, saveSignature, signaturesFor } from "@/lib/terms/signatures";
 import { contractFooter, contractHtml, detailField, roleOf } from "@/lib/terms/render-html";
 import type { Country, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
 import {
@@ -77,7 +80,7 @@ export interface NewTerms {
   setUpFee: string;
   managementFee: string;
   additionalFees?: string | null;
-  people: Array<{ name: string; email: string; phone?: string | null }>;
+  people: Array<{ name: string; email: string; phone?: string | null; address?: string | null }>;
   /** Adjust contract: the set out now, which this one replaces once the agent signs it. */
   replaces?: string | null;
 }
@@ -87,7 +90,7 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
   const doc = editionFor(n.country);
   if (!doc) throw new TermsRefused("There are no terms for that country yet.");
   const people = n.people
-    .map((p) => ({ name: p.name.trim(), email: p.email.trim(), phone: (p.phone ?? "").trim() }))
+    .map((p) => ({ name: p.name.trim(), email: p.email.trim(), phone: (p.phone ?? "").trim(), address: (p.address ?? "").trim() }))
     .filter((p) => p.name || p.email);
   if (!people.length) throw new TermsRefused("Add the person who signs.");
   for (const p of people) {
@@ -122,7 +125,7 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
     email: p.email,
     phone: p.phone,
     token: newToken(),
-    details: { name: p.name, email: p.email, phone: p.phone },
+    details: { name: p.name, email: p.email, phone: p.phone, ...(p.address ? { address: p.address } : {}) },
     submitterId: null,
     embedSrc: null,
     status: "waiting",
@@ -268,10 +271,14 @@ export async function landlordView(token: string) {
     const parties = terms.parties.map((p) => (p.token === token ? { ...p, openedAt: new Date().toISOString(), status: p.status === "signed" ? p.status : ("opened" as const) } : p));
     await saveParties(terms.id, parties).catch(() => null);
   }
+  const [phone, sigs] = await Promise.all([agentPhone(terms.agentId).catch(() => ""), signaturesFor(terms.id)]);
   return {
     doc,
+    termsId: terms.id,
     values: terms.values,
     status: terms.status,
+    agent: { name: terms.agentName, email: terms.agentEmail, phone, signedAt: terms.agentSignedAt, signature: sigs.agent?.image ?? null },
+    mine: sigs[party.key] ? { signature: sigs[party.key].image, startNow: sigs[party.key].startNow ?? null } : null,
     agentSigned: Boolean(terms.agentSignedAt),
     completedAt: terms.completedAt,
     hasCopy: Boolean(terms.signedR2Key),
@@ -394,4 +401,67 @@ export async function fromWebhook(externalId: string, role: string, origin: stri
     await saveParties(t.id, parties);
   }
   await completeIfAll(t.id, origin);
+}
+
+/* ── Signing on our own page (James, 24 Oct 2026) ───────────────────────────
+   The person signs on the OS's page; the image and what they answered go to
+   DocuSeal by API and DocuSeal completes them, so the sealed copy and its
+   certificate are DocuSeal's as before. Without DocuSeal (a laptop) the same
+   path runs in preview and nothing is sealed. */
+
+export interface SignMeta {
+  ip: string | null;
+  userAgent: string | null;
+}
+
+/** The agent signs their part on the send screen, then every landlord is emailed. */
+export async function agentSign(id: string, me: OsUser, image: unknown, origin: string, meta: SignMeta, keep: boolean): Promise<TermsRow> {
+  const t = await getTerms(id);
+  if (!t) throw new TermsRefused("Those terms aren't on file.");
+  if (t.status === "cancelled") throw new TermsRefused("Those terms were withdrawn.");
+  if (t.agentId !== me.id) throw new TermsRefused("Only the agent who made these can sign them.");
+  const sig = cleanSignature(image);
+  if (!sig) throw new TermsRefused("Sign in the box first.");
+  if (!t.agentSignedAt) {
+    if (t.agentSubmitterId && docusealConfigured()) {
+      await completeSubmitter(t.agentSubmitterId, { "Agent Signature": sig, "Agent Date": ukShort() });
+    } else if (!inPreview()) {
+      throw new TermsRefused("DocuSeal isn't connected, so terms can't be signed here.");
+    }
+    await saveSignature(id, "agent", { image: sig, at: new Date().toISOString(), ip: meta.ip, userAgent: meta.userAgent }, me.email);
+  }
+  if (keep) await keepAgentSignature(me.id, sig).catch(() => null);
+  return agentSigned(id, origin, me);
+}
+
+/** A landlord signs on their page: their details, their choice about starting, their signature. */
+export async function landlordSign(token: string, image: unknown, startNow: boolean | null, origin: string, meta: SignMeta): Promise<{ done: boolean }> {
+  const hit = await byToken(token);
+  if (!hit) throw new TermsRefused("This link isn't recognised.");
+  const { terms, party } = hit;
+  if (terms.status === "cancelled") throw new TermsRefused("These terms were withdrawn. Your agent will send new ones.");
+  if (!terms.agentSignedAt) throw new TermsRefused("Your agent hasn't finished their part yet.");
+  if (party.signedAt) return { done: await completeIfAll(terms.id, origin) };
+  const sig = cleanSignature(image);
+  if (!sig) throw new TermsRefused("Sign in the box first.");
+  const doc = edition(terms.version);
+  if (!doc) throw new TermsRefused("These terms can't be signed just now.");
+  for (const f of doc.details) {
+    if (f.required && !String(party.details[f.key] ?? "").trim()) throw new TermsRefused(`${f.label} is needed before you sign.`);
+  }
+  const hasWaiver = doc.sections.some((s) => s.blocks.some((b) => b.kind === "waiver"));
+  if (hasWaiver && startNow == null) throw new TermsRefused("Choose when we start before you sign.");
+  const i = terms.parties.findIndex((p) => p.token === token);
+  const role = roleOf(i);
+  if (party.submitterId && docusealConfigured()) {
+    await completeSubmitter(party.submitterId, {
+      ...detailValues(doc, i, party.details),
+      [`${role} Signature`]: sig,
+      ...(hasWaiver ? { [`${role} Start Now`]: Boolean(startNow) } : {}),
+    });
+  } else if (!inPreview()) {
+    throw new TermsRefused("Signing isn't available just now. Try again in a moment.");
+  }
+  await saveSignature(terms.id, party.key, { image: sig, at: new Date().toISOString(), ip: meta.ip, userAgent: meta.userAgent, startNow }, party.email);
+  return landlordSigned(token, origin, party.name);
 }

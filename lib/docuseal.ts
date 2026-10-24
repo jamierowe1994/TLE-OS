@@ -812,6 +812,16 @@ export async function setSubmitterValues(submitterId: number, values: Record<str
   await ds(`/submitters/${submitterId}`, { method: "PUT", body: { send_email: false, values } });
 }
 
+/**
+ * Sign for somebody who signed on our own page (James, 24 Oct 2026: they sign
+ * on the OS's page and DocuSeal seals it). Their signature image and every box
+ * they answered go in, and DocuSeal marks them complete: the signed copy and
+ * its audit certificate are still DocuSeal's.
+ */
+export async function completeSubmitter(submitterId: number, values: Record<string, string | boolean>): Promise<void> {
+  await ds(`/submitters/${submitterId}`, { method: "PUT", body: { send_email: false, completed: true, values } });
+}
+
 /** One signer, as DocuSeal has them now. */
 export async function submitterState(submitterId: number): Promise<{ status: string; completedAt: string | null; openedAt: string | null }> {
   const s = await ds<{ status?: string; completed_at?: string | null; opened_at?: string | null }>(`/submitters/${submitterId}`);
