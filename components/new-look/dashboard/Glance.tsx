@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Stat } from "@/components/new-look/backoffice/Bits";
 import {
   applicationsSlot,
   appraisalsSlot,
@@ -112,20 +112,20 @@ export default function Glance() {
     },
   ];
 
+  /* In boxes, the PM Dashboard's own (components/new-look/backoffice Stat), so
+     the front and back office dashboards read as a pair (James, 24 Oct 2026):
+     label, the figure, and what it means underneath. */
   return (
-    <section className="nl-dash-glance" aria-label="Your figures">
+    <section className="nl-bo-stats nl-dash-stats" aria-label="Your figures">
       {items.map((g) => (
-        <Link key={g.label} href={g.href} className="nl-dash-glance-item">
-          <span className="nl-eyebrow">{g.label}</span>
-          {g.loading ? (
-            <span className="nl-dash-skel" aria-label="Loading">
-              <i />
-            </span>
-          ) : (
-            <span className="nl-dash-fig">{g.value == null ? "-" : g.value.toLocaleString("en-GB")}</span>
-          )}
-          <span className={`nl-meta${g.failed ? " nl-dash-warn" : ""}`}>{g.loading ? "Reading…" : (g.failed ?? g.sub ?? "")}</span>
-        </Link>
+        <Stat
+          key={g.label}
+          label={g.label}
+          href={g.href}
+          value={g.loading ? null : g.value == null ? "-" : g.value.toLocaleString("en-GB")}
+          error={g.loading ? null : g.failed}
+          note={g.sub ?? undefined}
+        />
       ))}
     </section>
   );

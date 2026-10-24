@@ -218,3 +218,6 @@
   [data-look="new"] .nl-dash-glance-item, [data-look="new"] .nl-dash-agenda > li, [data-look="new"] .nl-dash-needs > li, [data-look="new"] .nl-dash-says { animation: none; }
   [data-look="new"] .nl-dash-skel i, [data-look="new"] .nl-dash-spin { animation-duration: 3s; }
 }
+
+/* The figures in boxes, as on the PM Dashboard (24 Oct 2026). */
+[data-look="new"] .nl-bo-stats.nl-dash-stats { margin: 12px 0 36px; }
