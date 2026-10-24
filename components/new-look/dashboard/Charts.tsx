@@ -210,7 +210,11 @@ export function Steps({ steps, Link }: { steps: StepRow[]; Link: (p: { href: str
     <ol className="nl-dash-steps">
       {steps.map((s, k) => {
         const prev = k ? steps[k - 1].value : null;
-        const cv = k && s.value != null && prev != null && prev > 0 ? s.value / prev : null;
+        /* Each step is counted over the same days, not one group followed through, so a
+           later step can outnumber the one before it. A "% on" above 100 means nothing,
+           so it is only shown where it is a real drop-off. */
+        const ratio = k && s.value != null && prev != null && prev > 0 ? s.value / prev : null;
+        const cv = ratio != null && ratio <= 1 ? ratio : null;
         const warn = cv != null && cv < 0.4;
         const w = s.value != null && first ? Math.min(100, Math.max(1.5, (s.value / first) * 100)) : 0;
         return (

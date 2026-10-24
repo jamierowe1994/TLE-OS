@@ -29,6 +29,9 @@ import {
   type SourceBucket,
 } from "@/lib/front-dash";
 
+/** E-sign requests in REX older than this are abandoned, not out for signature. */
+const ESIGN_STALE_MS = 60 * 86_400_000;
+
 /**
  * GET /api/dashboard/front - the front dashboard's figures, chart and
  * pipeline (new look, 24 Oct 2026), over the last 180 London days, so the page
@@ -349,7 +352,11 @@ async function readTerms(req: NextRequest, who: Who): Promise<FrontTerms> {
   const rows: FrontTerm[] = [
     ...page.map((r) => row(r.sent_at ? new Date(r.sent_at).toISOString() : null, "page")),
     ...docuseal.map((r) => row(r.sent, "docuseal")),
-    ...esign.filter((r) => everything || r.sentById === rexUserId).map((r) => row(r.sentAt, "esign")),
+    /* An e-sign request older than 60 days is one nobody is chasing: REX still holds
+       ones from 2023 as outstanding, and counting them read "44 out, 43 late". */
+    ...esign
+      .filter((r) => (everything || r.sentById === rexUserId) && Boolean(r.sentAt) && Date.now() - new Date(r.sentAt as string).getTime() <= ESIGN_STALE_MS)
+      .map((r) => row(r.sentAt, "esign")),
   ];
   return { rows, lateAfterDays };
 }
