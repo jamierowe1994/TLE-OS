@@ -262,6 +262,22 @@ export async function submitPassport(token: string): Promise<PassportRecord | nu
   return rows[0] ? toRecord(rows[0]) : null;
 }
 
+/**
+ * The home they enquired about, for the passport book's cover: the newest
+ * lead with an address for this email (the same read the reminder makes,
+ * lib/passport-reminder). Null when there is none - the cover then leaves it
+ * out rather than guessing.
+ */
+export async function enquiredHome(email: string): Promise<string | null> {
+  if (!hasDb() || !email.includes("@")) return null;
+  const rows = await q<{ address: string | null }>(
+    `SELECT address FROM os_leads WHERE lower(email) = lower($1) AND COALESCE(address, '') <> ''
+      ORDER BY COALESCE(received_at, first_seen) DESC LIMIT 1`,
+    [email.trim()]
+  );
+  return rows[0]?.address?.trim() || null;
+}
+
 /** This passport was sent for a home in Scotland. Sticky: never set back. */
 export async function markScottishHome(token: string): Promise<void> {
   if (!hasDb() || !token) return;

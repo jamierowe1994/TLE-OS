@@ -1,5 +1,9 @@
+import { cookies } from "next/headers";
 import PassportForm from "@/components/PassportForm";
-import { getPassport } from "@/lib/passport";
+import PassportBookForm from "@/components/passport-book/PassportBookForm";
+import { enquiredHome, getPassport } from "@/lib/passport";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { lookFor, lookRows } from "@/lib/new-look-store";
 import { passportQuestions, valuesFor } from "@/lib/attributes";
 import { findUserById } from "@/lib/users";
 import { tenantAccountByEmail } from "@/lib/tenant-account";
@@ -20,11 +24,36 @@ import { forScreen, passportRules } from "@/lib/passport-scotland";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ at?: string }> }) {
+/**
+ * Which passport this visitor gets: the book (James's design, 24 Oct 2026,
+ * components/passport-book) or today's form, by the "passport" switch in
+ * Admin > Switches (lib/new-look).
+ *
+ *  - ?look=new or ?look=old decides outright, for checking either one.
+ *  - At Everyone, everybody gets the book, tenants included.
+ *  - Below that, only a signed-in member of staff the level covers gets it.
+ *    A tenant is never signed in to the OS, so lookFor(null) would say off
+ *    for every row; the Everyone row is read here for that reason.
+ *  - Anything else, or a database that does not answer, is today's form.
+ */
+async function showBook(look: string | undefined): Promise<boolean> {
+  if (look === "new") return true;
+  if (look === "old") return false;
+  const row = (await lookRows().catch(() => [])).find((r) => r.id === "passport");
+  if (!row || row.level === "off") return false;
+  if (row.level === "everyone") return true;
+  const id = verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value);
+  const me = id ? await findUserById(id).catch(() => null) : null;
+  if (!me || me.locked) return false;
+  return (await lookFor(me).catch(() => null))?.passport === true;
+}
+
+export default async function Page({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ at?: string; look?: string }> }) {
   const { token } = await params;
+  const sp = await searchParams;
   /* The reminder's button (lib/passport-reminder): open on the first page
      still to answer, not the first page. */
-  const resume = (await searchParams).at === "resume";
+  const resume = sp.at === "resume";
   const record = await getPassport(token).catch(() => null);
 
   if (!record) {
@@ -65,6 +94,25 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     /* Scotland: no nationality or Right to rent asked or shown (lib/passport-scotland). */
     passportRules(record),
   ]);
+
+  if (await showBook(sp.look)) {
+    /* The home on the cover: their newest lead with an address. Left off when there is none. */
+    const home = email.includes("@") ? await enquiredHome(email).catch(() => null) : null;
+    return (
+      <PassportBookForm
+        token={record.token}
+        initial={forScreen(record.data, rules)}
+        rules={rules}
+        submittedAt={record.submittedAt}
+        questions={questions}
+        initialAnswers={answers}
+        accountExists={Boolean(account?.activatedAt)}
+        resume={resume}
+        agentName={(agent?.name ?? "").trim().split(/\s+/)[0] ?? ""}
+        home={home}
+      />
+    );
+  }
 
   return (
     <main>

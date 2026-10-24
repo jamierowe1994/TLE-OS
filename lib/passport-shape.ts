@@ -113,6 +113,31 @@ export interface PassportData {
   pets: boolean | null;
   petsNote: string;
   smoker: boolean | null;
+
+  /* ── The passport book (James's design, 24 Oct 2026; components/passport-book) ──
+     Asked only by the new passport, so all optional to everything else: they
+     are left out of SECTIONS, passportComplete and the bar in answered(), or a
+     tenant on today's passport, which never asks them, could never finish.
+     The book itself requires the ones the design marks required (bookDone). */
+  /** When they'd like to move: one of MOVE_WHEN. */
+  moveWhen: string;
+  /** Their budget a month, as typed ("1,100"). Read with money(). */
+  budget: string;
+  /** Where they live now: one of LIVING_NOW. */
+  livingNow: string;
+  /** When the adverse credit was: one of ISSUES. Set together with
+   *  adverseCredit ("No" = false, either Yes = true), never instead of it. */
+  issues: string;
+  /** Who smokes and where: one of SMOKING. Set together with smoker
+   *  ("No" = false, the other two = true). */
+  smoking: string;
+  /** "Everything here is true, as far as I know." */
+  declaredTrue: boolean;
+  /** "If I apply for a home, The Letting Experts can use this to start my
+   *  references and credit check." */
+  consentChecks: boolean;
+  /** Their full name, typed as a signature. */
+  signature: string;
 }
 
 export const EMPTY_PASSPORT: PassportData = {
@@ -125,7 +150,20 @@ export const EMPTY_PASSPORT: PassportData = {
   currentAddress: "", movedIn: "", livedThreeYears: null, previousAddress: "",
   adverseCredit: null, adverseCreditNote: "", guarantor: null,
   pets: null, petsNote: "", smoker: null,
+  moveWhen: "", budget: "", livingNow: "", issues: "", smoking: "",
+  declaredTrue: false, consentChecks: false, signature: "",
 };
+
+/* The passport book's choices (components/passport-book). Stored as the words shown. */
+export const MOVE_WHEN = ["As soon as I can", "Within a month", "In 1 to 3 months", "Just looking"] as const;
+export const LIVING_NOW = ["Renting", "With family or friends", "In my own home", "Student halls"] as const;
+export const ISSUES = ["No", "Yes, in the past", "Yes, now"] as const;
+export const SMOKING = ["No", "Outside only", "Yes"] as const;
+
+/** The book's own last page: both ticks and a typed signature. */
+export function bookSigned(d: Pick<PassportData, "declaredTrue" | "consentChecks" | "signature">): boolean {
+  return d.declaredTrue === true && d.consentChecks === true && Boolean((d.signature ?? "").trim());
+}
 
 /** How they described themselves. REX collapses Student, Benefits and Pension
  *  into "unemployed", which is why these are kept separate HERE and mapped on
@@ -401,6 +439,8 @@ export function answered(d: PassportData, rules?: PassportRules): { done: number
     "adverseCreditNote", "petsNote", "rentOnTime", "landlordRef", "numChildren",
     /* Only asked of some people, by what they do. */
     "onProbation", "zeroHours", "workHours", "tradingFor",
+    /* The passport book's own questions: today's passport never asks them. */
+    "moveWhen", "budget", "livingNow", "issues", "smoking", "declaredTrue", "consentChecks", "signature",
   ]);
   const keys = (Object.keys(EMPTY_PASSPORT) as (keyof PassportData)[]).filter((k) => !optional.has(k));
   const filled = keys.filter((k) => {

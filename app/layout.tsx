@@ -6,6 +6,7 @@ import "./book-viewing.css";
 import "./terms-paper.css";
 import "./terms-send.css";
 import "./terms-sign.css";
+import "./tenant-passport.css";
 import "./presentation-builder.css";
 
 /**
