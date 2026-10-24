@@ -85,6 +85,23 @@ type Known = { name?: string | null; email?: string | null; phone?: string | nul
 type Home = "unset" | "set" | "skip";
 type Person = { name: string; email: string; phone: string; home: string; homeIs: Home };
 
+/**
+ * A home address typed in rather than picked (James, 24 Oct 2026: "if they can't find the
+ * address, they can't move on ... just make sure it has the number or house name, town and
+ * postcode"). Null when it will do; otherwise what it still needs.
+ */
+const POSTCODE = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/i;
+function typedHomeProblem(text: string): string | null {
+  const t = text.trim();
+  if (!t) return null;
+  if (!POSTCODE.test(t)) return "Add the postcode to their home address.";
+  const parts = t.replace(POSTCODE, "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
+  const first = parts[0] ?? "";
+  if (!/\d/.test(first) && first.split(/\s+/).length < 2) return "Start their home address with the house number or name.";
+  if (parts.length < 2) return "Add the town to their home address, after a comma.";
+  return null;
+}
+
 type Tick = { label: string; state: "" | "go" | "ok" | "skip" | "warn" };
 
 /* The design's line icons (send-the-terms.html PATHS), the few this screen draws. */
@@ -440,8 +457,9 @@ export default function TermsSendScreen({
         : !editionFor(country)
           ? "There are no terms for that country yet."
           : (() => {
-              const p = people.find((x) => x.homeIs === "unset");
-              return p ? `Add ${people.length > 1 ? `${firstOf(p.name)}'s` : "their"} home address, or send without it.` : null;
+              /* Not required: blank means they add it when they sign; typed means it has to be whole. */
+              for (const x of people) if (x.homeIs === "unset") { const why = typedHomeProblem(x.home); if (why) return why; }
+              return null;
             })());
 
   const setPerson = (i: number, patch: Partial<Person>) => setPeople((ps) => ps.map((p, j) => (j === i ? { ...p, ...patch } : p)));
@@ -456,6 +474,8 @@ export default function TermsSendScreen({
 
   function detailsRight() {
     if (detailsProblem && !fixed) return;
+    /* A home address still open: typed in full goes on the contract; blank, they add it when they sign. */
+    if (!fixed) setPeople((ps) => ps.map((x) => (x.homeIs !== "unset" ? x : x.home.trim() ? { ...x, home: x.home.trim(), homeIs: "set" } : { ...x, homeIs: "skip" })));
     setEditing(null);
     setOkDetails(true);
     setStep(sig ? 2 : 1);
@@ -794,10 +814,11 @@ export default function TermsSendScreen({
             </div>
           ) : (
             <>
-              <p>It goes on the contract. If you don&apos;t have it, they add it before they sign.</p>
+              <p>It goes on the contract. Pick it from the list, or type it in full: number or house name, street, town and postcode. Not required: left blank, they add it before they sign.</p>
               <HomeSearch
                 id={`tsa-home-${i}`}
                 start={p.home}
+                onType={(home) => setPerson(i, { home })}
                 onSet={(home) => {
                   setPerson(i, { home, homeIs: "set" });
                   flash(`ts-home-l${i + 1}`);
@@ -1139,7 +1160,7 @@ export default function TermsSendScreen({
  * Homesearch then Google, the same lookup every address field in the OS uses),
  * or press Enter to use it as written.
  */
-function HomeSearch({ id, start, onSet }: { id: string; start: string; onSet: (address: string) => void }) {
+function HomeSearch({ id, start, onSet, onType }: { id: string; start: string; onSet: (address: string) => void; onType?: (address: string) => void }) {
   const [q, setQ] = useState(start);
   const [list, setList] = useState<{ id: string; label: string }[] | null>(null);
   const [open, setOpen] = useState(false);
@@ -1184,11 +1205,12 @@ function HomeSearch({ id, start, onSet }: { id: string; start: string; onSet: (a
         onChange={(e) => {
           typed.current = true;
           setQ(e.target.value);
+          onType?.(e.target.value);
         }}
         onFocus={() => list && setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && q.trim().length > 6) {
+          if (e.key === "Enter" && q.trim().length > 6 && !typedHomeProblem(q)) {
             e.preventDefault();
             onSet(q.trim());
           }
@@ -1203,7 +1225,7 @@ function HomeSearch({ id, start, onSet }: { id: string; start: string; onSet: (a
               </li>
             ))
           ) : (
-            <li style={{ color: "var(--faint)", cursor: "default" }}>No match. Keep typing, or press Enter to use it as written.</li>
+            <li style={{ color: "var(--faint)", cursor: "default" }}>No match. Type it in full (number or house name, street, town, postcode) and carry on.</li>
           )}
         </ul>
       )}

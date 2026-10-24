@@ -17,7 +17,7 @@ import { ensureRexLink, findUserByEmail, findUserByRexId, type OsUser } from "@/
 
 /** What an agent can do about missing terms, said the same way wherever it is found missing. */
 const TERMS_SENTENCE =
-  "The landlord's signed terms of business have to be on file before it can go live - send them from the Documents tab, or ask the office to add the signed copy.";
+  "The landlord's signed terms of business have to be on file before it can go live, on or off the portals. Send them from the Compliance tab (Send Terms of Business, or Reissue on New Terms), or ask the office to add the signed copy.";
 const TERMS_UNCHECKED_SENTENCE =
   "The listings system did not say in time whether the landlord's signed terms of business are on file, so it has not gone live. Try again in a minute.";
 
