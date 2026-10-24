@@ -27,13 +27,21 @@ export default function AppraisalTerms({ ma, onChanged }: { ma: MarketAppraisal;
   const [older, setOlder] = useState<boolean | null>(null);
   useEffect(() => {
     let live = true;
-    fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/terms`, { cache: "no-store" })
+    /* Terms made on our page win (Dover Close, 24 Oct 2026): sending them
+       stamps termsSentAt too, which on its own read as "the older contract
+       went", so a signed contract showed the old banner's "not sent yet". */
+    const ours = fetch(`/api/terms?appraisalId=${encodeURIComponent(ma.id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { terms?: { status: string }[] }) => (j.terms ?? []).some((t) => t.status !== "cancelled"))
+      .catch(() => false);
+    const theirs = fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/terms`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { parties?: { role: string; sentAt: string | null; completedAt: string | null }[] }) => {
         const landlord = j.parties?.find((p) => p.role === "landlord");
-        if (live) setOlder(Boolean(landlord?.sentAt || landlord?.completedAt || ma.termsSentAt));
+        return Boolean(landlord?.sentAt || landlord?.completedAt || ma.termsSentAt);
       })
-      .catch(() => live && setOlder(Boolean(ma.termsSentAt)));
+      .catch(() => Boolean(ma.termsSentAt));
+    Promise.all([ours, theirs]).then(([onOurPage, wentOlder]) => live && setOlder(!onOurPage && wentOlder));
     return () => {
       live = false;
     };
