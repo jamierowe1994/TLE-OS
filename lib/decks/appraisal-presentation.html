@@ -60,7 +60,10 @@ button { font: inherit; color: inherit; }
 .agent-card2 .rv { font-size: var(--fs-body); overflow-wrap: anywhere; } .agent-card2 .rv a { color: inherit; text-decoration: none; }
 .who-pills { display: flex; flex-wrap: wrap; gap: calc(var(--u) * .5); align-items: center; } .who-pills .pill { white-space: normal; }
 .mside .val.xl { font-size: calc(var(--u) * 3.2); }
+/* Three cards beside the chart (the builder's four defaults): tighter, so the slide keeps its clear space at the top. */
+.mside.three { gap: calc(var(--u) * .8); } .mside.three .ui { padding: calc(var(--u) * 1.1) calc(var(--u) * 1.4); } .mside.three .val.xl { font-size: calc(var(--u) * 2.4); } .mside.three .lab { font-size: calc(var(--u) * .95); }
 .market-s .mgrid { margin-top: calc(var(--u) * 2.4); }
+.market-s .mgrid:has(.mside.three) { margin-top: calc(var(--u) * 1.6); }
 .chart .bbar { fill: var(--ink); transform-box: fill-box; transform-origin: 50% 100%; } .chart .bbar.mine { fill: var(--coral); }
 .slide.is-on .chart .bbar { animation: barup 1.2s var(--ease) .5s both; } @keyframes barup { from { transform: scaleY(0); } }
 .chart .barv { fill: var(--ink); font-family: var(--f-ui); font-size: 14px; font-weight: 500; } .chart .barl { fill: var(--muted); font-family: var(--f-ui); font-size: 12px; } .chart .barn { fill: var(--faint); font-family: var(--f-mono); font-size: 10.5px; }
@@ -712,7 +715,7 @@ if (HAS.market) {
   const lead = M.lead ? esc(M.lead) : `${M.advertised ? `${M.advertised} homes were advertised here when we looked${M.pulled ? ' on ' + esc(M.pulled) : ''}. ` : ''}Here’s what they’re asking, and how long they’ve been up.`;
   n = 0; slide('market', 'The Market', `
   <div class="hrow in" ${i()}><div><p class="eyebrow">The local market</p><h2 class="title">What’s on the market in ${esc(M.area)}.</h2></div><p class="lead">${lead}</p></div>
-  ${useChart ? `<div class="mgrid">${useChart}<div class="mside">${side.slice(0, 3).join('')}</div></div>`
+  ${useChart ? `<div class="mgrid">${useChart}<div class="mside${side.length >= 3 ? ' three' : ''}">${side.slice(0, 3).join('')}</div></div>`
     : `<div class="bento b2" style="margin-top:calc(var(--u)*3.2)">${side.slice(0, 4).join('')}</div>`}`, { cls: 'market-s' });
 }
 
@@ -729,7 +732,7 @@ if (HAS.comps) {
   const STATUS = { 'let agreed': 'Let agreed', 'on market': 'On the market', listed: 'Listed' };
   const featNote = c => FIG ? 'The closest in rent to the figure we’d advertise at.' : [c.beds ? c.beds + ' bed' : '', c.type].filter(Boolean).join(' ');
   n = 0; slide('comps', 'Homes Like Yours', `
-  <div class="hrow in" ${i()}><div><p class="eyebrow">Homes like yours</p><h2 class="title">What similar homes nearby are asking.</h2></div><p class="lead">${D.compsFrom === 'comparables' ? 'Homes on our books near you' : 'Homes advertised near you'}, picked by ${esc(A.first)} as the closest to yours.</p></div>
+  <div class="hrow in" ${i()}><div><p class="eyebrow">Homes like yours</p><h2 class="title">What similar homes nearby are asking.</h2></div><p class="lead">${C.every(c => c.status === 'let agreed') ? 'Homes near you that let recently' : C.some(c => c.status === 'let agreed') ? 'Homes near you, let recently or on the market now' : 'Homes advertised near you'}, picked by ${esc(A.first)} as the closest to yours.</p></div>
   <div class="comps" style="--cc:${cols}">${order.map(k => { const c = C[k], f = k === featK, note = f ? featNote(c) : ''; return `<div class="comp${f ? ' feat' : ''} in" ${i()}>${pic('', '', f, c.image)}<div class="meta"><div><b>${esc(c.addr)}</b><div class="lab">${c.status === 'on market' && c.days != null ? 'On for ' + c.days + ' days' : esc(c.locality)}</div></div><div style="text-align:right"><span class="lab">${STATUS[c.status] || ''}</span><div class="val" style="font-size:calc(var(--u)*${f ? 2.4 : 1.9})">${c.rent != null ? money(c.rent) : esc(c.rentText)}</div></div></div>${note ? `<p class="small" style="margin:calc(var(--u)*.4) 0 0">${esc(note)}</p>` : ''}</div>`; }).join('')}</div>
   ${vals.length >= 2 ? `<div class="rangebar in" ${i()}><span class="lab">${money(lo)}</span><div class="track">
     ${FIG ? `<span class="band" style="left:${pos(FIG.low)};width:calc(${pos(FIG.high)} - ${pos(FIG.low)})"></span>` : ''}

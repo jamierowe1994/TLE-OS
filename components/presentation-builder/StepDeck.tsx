@@ -6,6 +6,10 @@ import type { DesignSlideId, PresentNote } from "@/lib/present";
 import { Ic, Loading, SLIDE_NOTE, kindOf, type Draft, type FactKey } from "./shared";
 import type { Up } from "./Builder";
 
+/* The size the preview draws the deck at before scaling it down: the box's own 16 by 9.4. */
+const DECK_W = 1440;
+const DECK_H = Math.round((1440 * 9.4) / 16);
+
 /**
  * 4. THE DECK. The appraisal deck's twelve slides in order, Cover and Next
  * Steps fixed, the rest switchable; a slide that can't be drawn yet says what
@@ -65,6 +69,17 @@ function DeckPreview({ body, startAt }: { body: unknown; startAt: number }) {
   const [problem, setProblem] = useState<string | null>(null);
   const startRef = useRef(startAt);
   startRef.current = startAt;
+  /* The deck is drawn at a laptop's size and scaled into the box, so the
+     preview shows the presenting layout, never the deck's phone layout. */
+  const box = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.5);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setScale(el.clientWidth / DECK_W));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const ctl = new AbortController();
@@ -129,7 +144,7 @@ function DeckPreview({ body, startAt }: { body: unknown; startAt: number }) {
 
   return (
     <>
-      <div className="slide deckframe">
+      <div className="slide deckframe" ref={box}>
         {[0, 1].map((i) =>
           docs[i] ? (
             <iframe
@@ -138,6 +153,7 @@ function DeckPreview({ body, startAt }: { body: unknown; startAt: number }) {
               title={i === front ? "Presentation preview" : "Presentation preview, drawing"}
               srcDoc={docs[i] ?? undefined}
               className={i === front ? "front" : "back"}
+              style={{ width: DECK_W, height: DECK_H, transform: `scale(${scale})`, transformOrigin: "0 0" }}
               aria-hidden={i !== front}
               tabIndex={i === front ? 0 : -1}
               onLoad={() => {

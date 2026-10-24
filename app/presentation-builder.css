@@ -427,8 +427,8 @@
 .pbx .mm-home { position: absolute; transform: translate(-50%, -50%); pointer-events: none; z-index: 2; line-height: 0; }
 
 /* step 4: the live deck, two frames so it never goes blank */
-.pbx .deckframe { position: relative; }
-.pbx .deckframe iframe { position: absolute; inset: 0; transition: opacity .3s; }
+.pbx .deckframe { position: relative; overflow: hidden; }
+.pbx .deckframe iframe { position: absolute; top: 0; left: 0; transition: opacity .3s; }
 .pbx .deckframe iframe.back { opacity: 0; pointer-events: none; }
 .pbx .deck-wait { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
 .pbx .deck-state { position: absolute; right: 12px; bottom: 12px; font-size: 11.5px; background: rgba(255, 255, 255, .92); padding: 4px 10px; border-radius: 999px; color: var(--muted); }
