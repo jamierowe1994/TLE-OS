@@ -1047,6 +1047,10 @@ export default function TermsSendScreen({
               <button type="button" className={jumped === "ts-sign" ? "on" : ""} onClick={() => jump("ts-sign")}>Signatures</button>
             </span>
           </div>
+          {/* Which terms these are, at a glance in the corner (James, 24 Oct 2026). */}
+          <span className="which" aria-label={`${country === "scotland" ? "Scottish" : "English"} terms of business`}>
+            {country === "scotland" ? "Scottish Terms" : "English Terms"}
+          </span>
           {doc ? (
             <TermsPaper
               doc={doc}
