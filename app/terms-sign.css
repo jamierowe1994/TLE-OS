@@ -129,7 +129,8 @@
 .tsl .ticks li.go { color: var(--ink); } .tsl .ticks li.go i { border-color: var(--coral); border-top-color: transparent; animation: tsl-spin .8s linear infinite; }
 .tsl .ticks li.ok { color: var(--ink); } .tsl .ticks li.ok i { border-color: var(--sage); background: var(--sage); color: #fff; } .tsl .ticks li.ok i .ic { width: 11px; height: 11px; }
 @keyframes tsl-spin { to { transform: rotate(360deg); } }
-.tsl .done { max-width: 560px; margin: 0 auto; padding: 56px 24px 80px; text-align: center; }
+/* :not(.t-sig): the paper's signed boxes are "t-sig done" too, and sit inside .tsl. */
+.tsl .done:not(.t-sig) { max-width: 560px; margin: 0 auto; padding: 56px 24px 80px; text-align: center; }
 .tsl .done-tick { width: 84px; height: 84px; margin: 0 auto 22px; display: block; }
 .tsl .done-tick circle { fill: var(--sage); transform-origin: center; animation: tsl-popc .5s var(--ease); }
 .tsl .done-tick path { fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 60; stroke-dashoffset: 60; animation: tsl-draw .5s .25s var(--ease) forwards; }
@@ -161,3 +162,43 @@
   .tsl .inbox { border-radius: 0; box-shadow: none; } .tsl .mailb { padding: 22px 20px 28px; } .tsl .proto { padding: 12px 0 8px; } .tsl .reset { left: auto; right: 10px; bottom: auto; top: 72px; } .tsl .copy { flex-wrap: wrap; } .tsl .copy .btn { margin-left: 54px; }
 }
 @media (prefers-reduced-motion: reduce) { .tsl *, .tsl *::before, .tsl *::after { animation-duration: .01s !important; transition-duration: .01s !important; } }
+
+/* TLE OS additions (24 Oct 2026): the pieces the real page needs that the design's sample didn't
+   draw, in the same tokens: the logo, the Ask menu, detail boxes, a loading spinner, the calm states. */
+.tsl { min-height: 100vh; min-height: 100dvh; }
+.tsl a.btn { text-decoration: none; color: inherit; }
+.tsl .brand img { height: 20px; width: auto; display: block; }
+.tsl .ask-w { margin-left: auto; position: relative; }
+.tsl .ask-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 25; min-width: 240px; background: #fff; border-radius: 16px; padding: 6px; box-shadow: 0 14px 40px rgba(20, 20, 19, .14); border: 1px solid var(--line); animation: tsl-vin .3s var(--ease); }
+.tsl .ask-menu a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; color: var(--ink); text-decoration: none; }
+.tsl .ask-menu a:hover { background: var(--grey); }
+.tsl .ask-menu a span span { display: block; font-size: 12.5px; color: var(--muted); }
+.tsl .also { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.tsl .also b { font-weight: 500; color: var(--ink); }
+.tsl .also .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; background: var(--well); font-size: 12px; }
+.tsl .also .pill.ok { background: var(--sage-soft); color: #4d5e43; } .tsl .also .pill .ic { width: 11px; height: 11px; }
+.tsl .inp { display: block; margin: 0 0 12px; }
+.tsl .inp > span { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 5px; }
+.tsl .inp input { width: 100%; height: 46px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-2); background: #fff; font-size: 15px; outline: none; transition: border-color .2s; }
+.tsl .inp input:focus { border-color: var(--ink); }
+.tsl .inp small { display: block; font-size: 12px; color: var(--faint); margin-top: 4px; }
+.tsl .inp small.bad { color: var(--clay); }
+.tsl .mine { margin: 0 0 14px; border-top: 1px solid var(--line); }
+.tsl .mine div { display: grid; grid-template-columns: 1fr; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.tsl .mine dt { font-size: 12px; color: var(--muted); } .tsl .mine dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+.tsl .err { font-size: 13px; color: var(--clay); margin: 8px 0 0; }
+.tsl .sheet .panel { max-height: calc(100dvh - 40px); overflow-y: auto; }
+.tsl .spin { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--coral); animation: tsl-spin .8s linear infinite; }
+.tsl .loading { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 120px 24px; color: var(--muted); font-size: 14px; }
+.tsl .calm-ic { width: 84px; height: 84px; margin: 0 auto 22px; border-radius: 50%; background: var(--sage-soft); color: #4d5e43; display: grid; place-items: center; animation: tsl-popc .5s var(--ease); }
+.tsl .calm-ic .ic { width: 34px; height: 34px; }
+.tsl .done-ink { display: block; height: 64px; max-width: 100%; margin: 18px auto 0; }
+.tsl .seal .seal-err { color: var(--clay); font-size: 14px; margin: 14px auto 0; max-width: 26em; }
+.tsl .seal .seal-row { display: flex; gap: 8px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+.tsl .reread { max-width: 680px; margin: 0 auto; padding: 0 0 80px; }
+/* A drawn signature is cropped to its ink, so keep its shape in the 60px box rather than squash it. */
+.tsl .t-sig .ink img { object-fit: contain; object-position: left center; }
+@media (max-width: 999px) {
+  .tsl .ask-menu { position: fixed; left: 12px; right: 12px; top: calc(64px + env(safe-area-inset-top, 0px)); min-width: 0; }
+  .tsl .hello .also { margin-top: 6px; }
+}
