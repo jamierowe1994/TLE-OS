@@ -1003,7 +1003,10 @@ function NewLookCompliance({
   const done = terms.status === "ready" ? terms.requests.find((r) => r.status === "completed") ?? null : null;
   const doneBy = done ? signerOf(done) : null;
   const who = landlord.name || "The landlord";
-  const tobState: "loading" | "signed" | "sent" | "unsigned" = termsReading ? "loading" : termsHeld ? "signed" : waiting ? "sent" : "unsigned";
+  /* A signed copy only on the property record, and none in REX (James, 24 Oct 2026, 16 Mary Rae
+     Road): the go-live check does not count it, so the banner must not say Signed. */
+  const recordOnly = Boolean(termsHeld?.how.includes("property record")) && !(terms.status === "ready" && terms.docs[0]) && home?.terms.rex === false;
+  const tobState: "loading" | "signed" | "record" | "sent" | "unsigned" = termsReading ? "loading" : termsHeld ? (recordOnly ? "record" : "signed") : waiting ? "sent" : "unsigned";
   const signedLine = termsHeld
     ? done && doneBy?.name
       ? `Signed by ${doneBy.name}${done.completedAt ? ` on ${onDay(done.completedAt)}` : ""}.`
@@ -1135,6 +1138,15 @@ function NewLookCompliance({
                 <span className="nl-cmp-spin" aria-hidden />
                 Looking at what is already on the system…
               </span>
+            ) : tobState === "record" ? (
+              <>
+                A signed copy is on the property record, but it isn&apos;t filed in the listings system, so the home can&apos;t go live on it. Reissue new terms for {who === "The landlord" ? "the landlord" : who} to sign, or ask the office to file this copy.{" "}
+                {termsHeld?.url ? (
+                  <a href={termsHeld.url} target="_blank" rel="noopener noreferrer" className="nl-cmp-file">
+                    See the copy
+                  </a>
+                ) : null}
+              </>
             ) : tobState === "signed" ? (
               <>
                 {signedLine}{" "}
@@ -1163,7 +1175,14 @@ function NewLookCompliance({
           {chase.note && <p className="nl-meta nl-cmp-err">{chase.note}</p>}
         </div>
         <div className="nl-cmp-tob-act">
-          {tobState === "signed" ? (
+          {tobState === "record" ? (
+            <>
+              <Badge tone="warning">Not filed</Badge>
+              <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => setReissue((n) => n + 1)}>
+                Reissue on New Terms
+              </button>
+            </>
+          ) : tobState === "signed" ? (
             <>
               <span className="nl-cmp-signed">
                 <Ico name="check" size={14} />

@@ -17,7 +17,7 @@ import { ensureRexLink, findUserByEmail, findUserByRexId, type OsUser } from "@/
 
 /** What an agent can do about missing terms, said the same way wherever it is found missing. */
 const TERMS_SENTENCE =
-  "The landlord's signed terms of business have to be on file before it can go live - send them from the Documents tab, or ask the office to add the signed copy.";
+  "The landlord's signed terms of business have to be on file before it can go live, on or off the portals. Send them from the Compliance tab (Send Terms of Business, or Reissue on New Terms), or ask the office to add the signed copy.";
 const TERMS_UNCHECKED_SENTENCE =
   "The listings system did not say in time whether the landlord's signed terms of business are on file, so it has not gone live. Try again in a minute.";
 
@@ -28,6 +28,16 @@ const TERMS_UNCHECKED_SENTENCE =
  *   POST { id, action: "publish" }       → a draft goes live
  *   POST { id, action: "off" }           → off the portals, still published
  *   POST { id, action: "on" }            → back on the portals
+ *   POST { id, action: "quiet" }         → a draft goes live WITHOUT the portals
+ *
+ * Live without Portals (James, 24 Oct 2026, Sean's 68 Main Street): "push a
+ * property live without portals ... that would allow it to go to the next
+ * stage. It technically shows live, but it'll be off portals." Published in
+ * REX on the "general" channel only, the same place "off" leaves a listing,
+ * so it moves on to viewings and offers and Put back on the market takes it
+ * the rest of the way later. The channels go to "general" BEFORE the publish,
+ * so no feed is ever sent it. The terms are still needed (REX refuses a
+ * publish without them); the portals' own minimums are not.
  *
  * Built 15 Sep 2026 for the first real one, Rhiannon's relet at 4 Williams
  * Court. Until then "Push to the portals" was a ceremony with nothing behind it.
@@ -205,16 +215,17 @@ export async function POST(req: NextRequest) {
      listing then reads as live on Listings, for its tester alone. Off and on
      stay refused: a test listing has no portal feed to take it off. */
   if (isTestId(b.id)) {
-    if (b.action !== "publish") return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
+    if (b.action !== "publish" && b.action !== "quiet") return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
     const done = await publishTestListing(Number(b.id), { email: actor.email, role: actor.role });
     if (!done.ok) return NextResponse.json({ ok: false, error: done.error, test: true }, { status: done.status });
     await record({
       kind: "listing_publication",
       actorId: actor.id,
       actorEmail: actor.email,
-      detail: `${b.id}: publish (test listing, nothing sent to REX or the portals)`,
+      detail: `${b.id}: ${b.action} (test listing, nothing sent to REX or the portals)`,
     }).catch(() => {});
-    return NextResponse.json({ ok: true, id: Number(b.id), action: "publish", status: "published", channels: ALL_CHANNELS, onPortals: true, test: true });
+    const quiet = b.action === "quiet";
+    return NextResponse.json({ ok: true, id: Number(b.id), action: b.action, status: "published", channels: quiet ? OFF_CHANNELS : ALL_CHANNELS, onPortals: !quiet, test: true });
   }
 
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
@@ -229,7 +240,7 @@ export async function POST(req: NextRequest) {
   }
 
   const id = listingId(b.id);
-  const action = b.action === "publish" || b.action === "off" || b.action === "on" ? b.action : null;
+  const action = b.action === "publish" || b.action === "quiet" || b.action === "off" || b.action === "on" ? b.action : null;
   if (!id || !action) return NextResponse.json({ ok: false, error: "Which listing, and publish, off or on?" }, { status: 400 });
   /* Off and on as well as publish: taking a colleague's advert off Rightmove
      is the one that bites (18 Sep sweep, item 4). */
@@ -247,7 +258,7 @@ export async function POST(req: NextRequest) {
     let token: string | null = null;
     let as: { asActor: boolean; name: string } = { asActor: true, name: actor.name };
 
-    if (action === "publish") {
+    if (action === "publish" || action === "quiet") {
       if (was.status === "published") {
         return NextResponse.json({ ok: false, error: "It is already published. Use Put back on the portals if it has been taken off." }, { status: 409 });
       }
@@ -255,7 +266,8 @@ export async function POST(req: NextRequest) {
          rule the Marketing tab counts down - so a button pressed from a stale
          screen still cannot put a half-filled advert on Rightmove. */
       const details = await readListingDetails(id);
-      const gaps = await publishGaps(details);
+      /* Off the portals, only the terms stop it: the rest are the portals' own minimums. */
+      const gaps = (await publishGaps(details)).filter((g) => action === "publish" || g.id === "terms" || g.id === TERMS_UNCHECKED);
       if (gaps.length) {
         return NextResponse.json(
           {
@@ -274,11 +286,11 @@ export async function POST(req: NextRequest) {
          than a refusal from deep in the feed. */
       const [errs, upload] = await Promise.all([
         rexCall("ListingPublication", "getErrorsPreventingPublication", { listing_id: id }),
-        rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
+        action === "quiet" ? Promise.resolve({ ok: false } as RexResponse) : rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
       ]);
       const blockers = [...new Set([...(Array.isArray(errs.result) ? errs.result.map(String) : []), ...(upload.ok ? portalMessages(upload.result) : [])].map((m) => forAgent(actor, m, PORTAL_CHECK)))];
       if (blockers.length) {
-        return NextResponse.json({ ok: false, error: `The portals will not take it yet: ${blockers.join("; ")}`, blockers }, { status: 422 });
+        return NextResponse.json({ ok: false, error: `${action === "quiet" ? "It cannot go live yet" : "The portals will not take it yet"}: ${blockers.join("; ")}`, blockers }, { status: 422 });
       }
       /* Terms uploaded in the OS but not yet in REX go in now, or REX refuses. */
       if (details.propertyId) {
@@ -328,6 +340,18 @@ export async function POST(req: NextRequest) {
        withdrawn upload is queued, and goes again just below - proven on 6
        Ruskin Place, 22 Oct 2026, with James's yes. A refusal puts the
        channels back as they were. */
+    /* Live without Portals: the outward channels go BEFORE the publish, so no
+       feed is ever sent it. Refused, nothing has changed. */
+    if (action === "quiet") {
+      const closed = await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: OFF_CHANNELS }, token);
+      if (!closed.ok) {
+        if (token && isExpiredToken(closed)) {
+          const whose = as.asActor ? "Your REX sign-in has run out. Sign in again" : `${as.name}'s REX sign-in has run out. They sign in again on their Profile (Connect to REX)`;
+          return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
+        }
+        return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not close before going live: ${closed.error ?? "REX did not say."}` : "It could not be kept off the portals, so it has not gone live. Try again in a minute." }, { status: 502 });
+      }
+    }
     const reopen = action === "off" && !was.channels.includes("portals");
     if (reopen) {
       const opened = await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: [...was.channels, "portals"] }, token);
@@ -342,7 +366,7 @@ export async function POST(req: NextRequest) {
     let res: RexResponse =
       told && !told.ok
         ? { status: told.res.status, ok: false, result: told.res.result, error: `The portals were not told to withdraw it: ${told.detail}` }
-        : action === "publish"
+        : action === "publish" || action === "quiet"
           ? await rexCall("ListingPublication", "publish", { listing_id: id }, token)
           : await rexCall(
               "ListingPublication",
@@ -378,7 +402,7 @@ export async function POST(req: NextRequest) {
       /* REX's own terms rule (15 Oct 2026, bugs 2fb80600 and 718558c6):
          something the agent can do, so it is said as such - the same
          sentence as the go-live check - and not as the portals being down. */
-      if (action === "publish" && /terms of business is required/i.test(String(res.error ?? ""))) {
+      if ((action === "publish" || action === "quiet") && /terms of business is required/i.test(String(res.error ?? ""))) {
         return NextResponse.json({ ok: false, error: TERMS_SENTENCE, missing: ["terms"] }, { status: 422 });
       }
       return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });
@@ -403,7 +427,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, id, action, ...now });
   } catch (e) {
     if (e instanceof RexWriteBlocked) {
-      const method = e.message.match(/Refusing to call (\S+)/)?.[1] ?? (action === "publish" ? "ListingPublication/publish" : "ListingPublication/setActivePublicationChannels");
+      const method = e.message.match(/Refusing to call (\S+)/)?.[1] ?? (action === "publish" || action === "quiet" ? "ListingPublication/publish" : "ListingPublication/setActivePublicationChannels");
       return NextResponse.json(
         {
           ok: false,

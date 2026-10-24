@@ -542,6 +542,15 @@ const MACHINE_ROUTES = [
      or the cron key on GET, both checked in the route and failing shut
      without CRON_SECRET. */
   "/api/book-health/run",
+  /* The public website's read-only feed (18 Oct 2026): the published book,
+     the agents with their OS biographies, and this month's lets, for
+     thelettingexperts.co.uk to read instead of walking REX itself. Each
+     route checks a bearer WEBSITE_API_TOKEN in constant time and answers
+     503 with no token configured, 401 without a matching one - so the
+     redirect was never the guard. Named in full, per the note at the top. */
+  "/api/public/website/listings",
+  "/api/public/website/agents",
+  "/api/public/website/figures",
 ];
 
 /**

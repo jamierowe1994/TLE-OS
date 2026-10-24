@@ -540,8 +540,12 @@ function ListingDrawerBody({
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalConfirm, setPortalConfirm] = useState(false);
   const [portalNote, setPortalNote] = useState<string | null>(null);
+  /* Live without Portals (James, 24 Oct 2026): asked under the head, like taking it off. */
+  const [quietAsk, setQuietAsk] = useState(false);
+  const [quietBusy, setQuietBusy] = useState(false);
+  const [quietNote, setQuietNote] = useState<{ ok: boolean; text: string } | null>(null);
 
-  async function portalCall(action: "publish" | "off" | "on"): Promise<{ ok: boolean; error?: string; signIn?: boolean }> {
+  async function portalCall(action: "publish" | "quiet" | "off" | "on"): Promise<{ ok: boolean; error?: string; signIn?: boolean }> {
     if (!listing) return { ok: false, error: "No listing open." };
     try {
       const r = await fetch("/api/listings/publish", {
@@ -572,6 +576,18 @@ function ListingDrawerBody({
       setPushSignIn(Boolean(res.signIn));
       setPushError(res.error ?? "The portals did not take it.");
     }
+  }
+
+  async function goLiveQuietly() {
+    setQuietBusy(true);
+    setQuietNote(null);
+    const res = await portalCall("quiet");
+    setQuietBusy(false);
+    setQuietAsk(false);
+    if (res.ok) {
+      setActivityKey((k) => k + 1);
+      setQuietNote({ ok: true, text: "Live, and off the portals. It moves on to viewings and offers; Put back on the market sends it to Rightmove, OnTheMarket and Zoopla when you're ready." });
+    } else setQuietNote({ ok: false, text: res.error ?? "It did not go live." });
   }
 
   async function flipPortals(action: "off" | "on") {
@@ -2692,11 +2708,28 @@ function ListingDrawerBody({
                 ...(LISTING_BOOKER_LIVE && mainIs !== "book" && !listing.letAgreed ? [{ label: "Book a viewing", onClick: () => setChoosingBook(true) }] : []),
                 ...(LISTING_BOOKER_LIVE && !listing.letAgreed ? [{ label: "Hold a viewing slot", onClick: () => setSlotting(true) }] : []),
                 ...(canFileAway ? [{ label: archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away", disabled: archiveBusy, onClick: () => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive") }] : []),
+                ...(mainIs === "push" ? [{ label: "Live without Portals", onClick: () => (publishCanPress ? (setQuietNote(null), setQuietAsk(true)) : setPortalNote(lockedSentence(publishArea, publishLevel))) }] : []),
                 ...(isLive && pub && !publishHidden && pub.onPortals ? [{ label: "Take off the market", danger: true, onClick: () => (publishCanPress ? setPortalConfirm(true) : setPortalNote(lockedSentence(publishArea, publishLevel))) }] : []),
               ]}
             />
           </div>
         </div>
+
+        {/* Live without Portals: asked here, under the head. */}
+        {quietAsk && !isLive && (
+          <div className="nl-confirm" data-steve-never>
+            <p>
+              Put {listing.name} live without the portals? It moves on to viewings and offers, and stays off Rightmove, OnTheMarket and Zoopla until you put it on them.
+            </p>
+            <button type="button" disabled={quietBusy} onClick={() => setQuietAsk(false)} className="nl-btn nl-btn--quiet nl-btn--sm">
+              Not yet
+            </button>
+            <button type="button" disabled={quietBusy} onClick={() => void goLiveQuietly()} className="nl-btn nl-btn--sm nl-btn--sage">
+              {quietBusy ? "Going live…" : "Go live off the portals"}
+            </button>
+          </div>
+        )}
+        {quietNote && <p className={`nl-meta -mt-4 mb-6 ${quietNote.ok ? "text-[var(--sage-ink)]" : "text-[var(--accent-dark)]"}`}>{quietNote.text}</p>}
 
         {/* On and off the portals: asked here, under the head. */}
         {portalConfirm && isLive && pub && (
