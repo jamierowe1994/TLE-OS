@@ -16,13 +16,13 @@ import { TEST_FILE_SIDES, WHO_WORDS, type TestFileSide, type TestWho } from "@/l
  * which clears every tester's files and stops new ones until reopened.
  */
 
-interface FileLink {
+export interface FileLink {
   who: TestWho;
   label: string;
   href: string;
 }
 
-interface TestFile {
+export interface TestFile {
   id: string;
   side: TestFileSide;
   stage: string;
@@ -36,7 +36,7 @@ interface TestFile {
   canRelink: boolean;
 }
 
-interface Payload {
+export interface TestFilesPayload {
   ok: boolean;
   error?: string;
   files?: TestFile[];
@@ -55,8 +55,9 @@ const SIDE_TONE: Record<TestFileSide, string> = {
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-export default function TestFilesTab() {
-  const [data, setData] = useState<Payload | null>(null);
+/** The test files, read and acted on - shared with the new look (components/new-look/admin/TestFilesNew). */
+export function useTestFiles() {
+  const [data, setData] = useState<TestFilesPayload | null>(null);
   const [everyone, setEveryone] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export default function TestFilesTab() {
   const load = useCallback(async () => {
     try {
       const r = await fetch(`/api/admin/testing/files${everyone ? "?everyone=1" : ""}`, { cache: "no-store" });
-      const j = (await r.json()) as Payload;
+      const j = (await r.json()) as TestFilesPayload;
       if (!j.ok) throw new Error(j.error ?? "Could not load the test files.");
       setData(j);
       setError(null);
@@ -101,6 +102,11 @@ export default function TestFilesTab() {
 
   const files = data?.files ?? [];
   const closed = data?.closed?.closed ?? false;
+  return { data, everyone, setEveryone, busy, error, done, setDone, pick, setPick, act, files, closed };
+}
+
+export default function TestFilesTab() {
+  const { data, everyone, setEveryone, busy, error, done, setDone, pick, setPick, act, files, closed } = useTestFiles();
   const pill = "rounded-full border border-line px-3 py-1.5 text-[12px] transition hover:border-ink/40 disabled:opacity-50";
 
   return (

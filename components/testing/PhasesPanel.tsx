@@ -17,7 +17,7 @@ import DoodleIcon from "@/components/DoodleIcon";
  */
 
 type Level = string;
-type Preview = {
+export type Preview = {
   areas: { id: string; label: string; from: Level; to: Level }[];
   switches: { key: string; label: string; from: boolean; to: boolean }[];
   roster: { email: string; name: string; rexId: string; hasAccount: boolean; invitedAt: string | null; inPilot: boolean }[];
@@ -25,26 +25,27 @@ type Preview = {
   testFiles: number;
   sendingLocked: boolean;
 };
-type Phase = { id: 1 | 2 | 3 | 4; name: string; confirm: string; says: string; steps: string[]; preview: Preview };
-type State = { phase: 0 | 1 | 2 | 3; at: string | null; by: string | null };
-type Result = { phase: number; invited: string[]; inviteFailed: { email: string; why: string }[]; announced: number; filesRemoved: number };
+export type Phase = { id: 1 | 2 | 3 | 4; name: string; confirm: string; says: string; steps: string[]; preview: Preview };
+export type PhaseState = { phase: 0 | 1 | 2 | 3; at: string | null; by: string | null };
+export type PhaseResult = { phase: number; invited: string[]; inviteFailed: { email: string; why: string }[]; announced: number; filesRemoved: number };
 
-const LEVEL_WORDS: Record<string, string> = {
+export const LEVEL_WORDS: Record<string, string> = {
   hidden: "Hidden", look: "Look only", practice: "Practice", testers: "Testers", everyone: "Everyone",
 };
 
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }) : "";
 
-export default function PhasesPanel() {
-  const [data, setData] = useState<{ state: State; phases: Phase[] } | null>(null);
+/** The phases, read, and the pilot list and the press - shared with the new look (components/new-look/admin/PhasesNew). */
+export function usePhases() {
+  const [data, setData] = useState<{ state: PhaseState; phases: Phase[] } | null>(null);
   const [failed, setFailed] = useState(false);
   const [typed, setTyped] = useState<Record<number, string>>({});
   const [ticked, setTicked] = useState<Set<string> | null>(null);
   const [announce, setAnnounce] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
-  const [result, setResult] = useState<Result | null>(null);
+  const [result, setResult] = useState<PhaseResult | null>(null);
   const [savingList, setSavingList] = useState(false);
   const [showRest, setShowRest] = useState(false);
 
@@ -102,6 +103,11 @@ export default function PhasesPanel() {
     }
   }
 
+  return { data, failed, typed, setTyped, ticked, announce, setAnnounce, busy, said, result, savingList, showRest, setShowRest, savePilot, press };
+}
+
+export default function PhasesPanel() {
+  const { data, failed, typed, setTyped, ticked, announce, setAnnounce, busy, said, result, savingList, showRest, setShowRest, savePilot, press } = usePhases();
   if (failed) return <p className="mt-6 text-[12.5px] text-accent-dark">The phases could not be read. Nothing has been changed.</p>;
   if (!data) return <p className="mt-6 text-[12.5px] text-muted">Reading the switches and areas…</p>;
 

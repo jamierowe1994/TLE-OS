@@ -5,6 +5,9 @@ import Link from "next/link";
 import { Pill } from "@/components/Wire";
 import { ROLE_LABEL } from "@/lib/roles";
 import { when } from "@/lib/admin-client";
+import { useNewLook } from "@/lib/use-new-look";
+import PersonFileNew from "@/components/new-look/admin/PersonFileNew";
+import { LookLoading } from "@/components/new-look/admin/ScreenBits";
 
 /**
  * One person's file.
@@ -86,6 +89,8 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
   const [reading, setReading] = useState<Reading | null>(null);
   const [readingErr, setReadingErr] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
 
   useEffect(() => {
     fetch(`/api/admin/person/${who}`)
@@ -146,8 +151,46 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
     else setErr(j.error ?? "That didn't work.");
   }
 
+  if (look === null) return <LookLoading what="Loading their file" />;
+  if (look && (err || !d)) {
+    return (
+      <div data-look="new" className="nl-page nl-adm nl-adm-p-tab">
+        {err ? (
+          <p className="nl-adm-flash is-bad is-first" role="alert">
+            {err}
+          </p>
+        ) : (
+          <p className="nl-adm-loading" role="status">
+            <span className="nl-adm-spin" aria-hidden /> Loading their book…
+          </p>
+        )}
+      </div>
+    );
+  }
   if (err) return <p className="mt-6 text-[12.5px] text-accent-dark">{err}</p>;
   if (!d) return <p className="mt-6 text-[12.5px] text-muted">Loading their book…</p>;
+
+  if (look) {
+    return (
+      <PersonFileNew
+        d={d}
+        busy={busy}
+        viewAs={() => void viewAs()}
+        lockOpen={lockOpen}
+        setLockOpen={setLockOpen}
+        reason={reason}
+        setReason={setReason}
+        lockBusy={lockBusy}
+        lockErr={lockErr}
+        clearLockErr={() => setLockErr(null)}
+        setLock={(a) => void setLock(a)}
+        reading={reading}
+        readingErr={readingErr}
+        showAll={showAll}
+        setShowAll={setShowAll}
+      />
+    );
+  }
 
   const p = d.person;
   const first = p.name.split(" ")[0];

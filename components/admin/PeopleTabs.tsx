@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchMe } from "@/lib/me";
 import { can } from "@/lib/roles";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * People | Invites | Permissions, as tabs under one rail entry (James, 2 Oct 2026:
@@ -12,7 +13,12 @@ import { can } from "@/lib/roles";
  * page and route, guarded as before; the Permissions tab is only drawn for
  * somebody who holds see:roles, so nobody is offered a door that refuses them.
  */
+/* In the new look the Admin frame draws these tabs itself (components/new-look/admin/AdminTabsHead). */
 export default function PeopleTabs() {
+  return useNewLook("admin") === false ? <PeopleTabsOld /> : null;
+}
+
+function PeopleTabsOld() {
   const path = usePathname() ?? "";
   const [canRoles, setCanRoles] = useState(false);
   const [canInvite, setCanInvite] = useState(false);

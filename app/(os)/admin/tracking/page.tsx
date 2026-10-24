@@ -3,7 +3,10 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import LineIcon from "@/components/LineIcon";
-import type { Since } from "@/components/admin/tracking/kit";
+import type { Overview } from "@/components/admin/tracking/types";
+import { useNewLook } from "@/lib/use-new-look";
+import TrackingNew from "@/components/new-look/admin/TrackingNew";
+import { LookLoading } from "@/components/new-look/admin/ScreenBits";
 import { Failed, Loading, PeriodBar, SourceErrors, Sources, card, duration, eyebrow, n, pct, queryString, useTracking, useTrackingQuery } from "@/components/admin/tracking/kit";
 
 /**
@@ -15,37 +18,6 @@ import { Failed, Loading, PeriodBar, SourceErrors, Sources, card, duration, eyeb
  * zero included: somebody who has not opened the OS this month is a finding.
  * Every figure is read live for the period chosen (lib/tracking/report).
  */
-
-type Overview = {
-  sources: Record<string, string | null>;
-  highlights: {
-    active: number;
-    accounts: number;
-    mostUsed: { key: string; label: string; opens: number; people: number } | null;
-    leastUsed: { key: string; label: string; opens: number; people: number } | null;
-    neverOpened: string[];
-    busiest: { key: string; name: string; opens: number; actions: number } | null;
-    passport: { sent: number; finished: number } | null;
-    longestStay: { page: string; label: string; avgSeconds: number } | null;
-    timedAny: boolean;
-    outcomes: Array<{ key: string; label: string; section: string; count: number; people: number; error: string | null }>;
-  };
-  sections: Array<{
-    key: string;
-    label: string;
-    icon: string;
-    blurb: string;
-    people: number;
-    opens: number;
-    actions: number;
-    seconds: number;
-    timed: number;
-    hasPages: boolean;
-    metrics: Array<{ key: string; label: string; count: number; error: string | null }>;
-  }>;
-  people: Array<{ key: string; name: string; team: string; opens: number; actions: number; outcomes: number; days: number; seconds: number; topSection: string | null }>;
-  since: Since;
-};
 
 function Tile({ label, value, sub, href }: { label: string; value: React.ReactNode; sub?: React.ReactNode; href?: string }) {
   const body = (
@@ -69,6 +41,13 @@ export default function Tracking() {
   const { data: d, error, loading, reload } = useTracking<Overview>(t, "");
   const qs = t ? queryString(t) : "";
   const personName = t?.person ? d?.people.find((p) => p.key === t.person)?.name ?? null : null;
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
+
+  if (look === null) return <LookLoading what="Reading the figures" />;
+  if (look) {
+    return <TrackingNew t={t} set={set} periodLabel={period?.label ?? null} d={d} loading={loading} error={error} reload={reload} personName={personName} />;
+  }
 
   return (
     <>

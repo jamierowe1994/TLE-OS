@@ -1,0 +1,514 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import PageHeader from "@/components/PageHeader";
+import { PressButton } from "@/components/Bits";
+import { Pill } from "@/components/Wire";
+import { whenAgo } from "@/lib/lead-spine";
+import KnowledgeLinks from "@/components/knowledge/KnowledgeLinks";
+import MarketingKnowledge from "@/components/knowledge/MarketingKnowledge";
+
+/**
+ * The knowledge hub (item 22).
+ *
+ * One screen where Susan, Francesca, Michael and Kirstie write down how this
+ * business works, and two things happen to every entry the moment it is
+ * saved: Steve answers from it on the next question, and - if it is marked
+ * as a guide - it goes on the Guides shelf in his panel for the agents to
+ * read at their own pace.
+ *
+ * ── Plain writing ─────────────────────────────────────────────────────────
+ *
+ * No toolbar, no markup to learn. Type or paste; blank lines make paragraphs,
+ * a line starting "-" makes a list, a line starting "#" makes a heading. A
+ * .txt or .md file drops straight in. A person who can write an email can
+ * write a guide.
+ *
+ * ── The writing order ─────────────────────────────────────────────────────
+ *
+ * The list on the right is the questions agents asked Steve that he had to
+ * pass on because nothing written covered them. That list is the backlog:
+ * every one is a guide somebody needed and could not find. Press one and
+ * the editor opens with the question as the title.
+ *
+ * ── Two doors (24 Oct 2026) ───────────────────────────────────────────────
+ *
+ * The workspace route (/knowledge) and Admin's Content tab (/admin/knowledge)
+ * draw this same screen: useKnowledgeHub holds everything it reads and does,
+ * KnowledgeHubOld draws it as it always was, and the new look
+ * (components/new-look/admin/KnowledgeNew) draws it inside the Admin frame.
+ */
+
+export interface Entry {
+  id: string;
+  title: string;
+  content: string;
+  section: string;
+  guide: boolean;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface Asked {
+  id: string;
+  asked: string;
+  by: string;
+  at: string;
+}
+
+export const FIELD = "w-full rounded-xl border border-line/80 bg-transparent px-3.5 py-2.5 text-[13px] outline-none focus:border-ink";
+
+export function useKnowledgeHub() {
+  const [entries, setEntries] = useState<Entry[] | null>(null);
+  const [sections, setSections] = useState<string[]>([]);
+  const [asked, setAsked] = useState<Asked[]>([]);
+  const [denied, setDenied] = useState(false);
+  /* A read that failed is not an empty shelf (Rig run 2, P-005): it said
+     "Nothing written yet" and invited a fresh start over entries that were
+     there all along. */
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [fSection, setFSection] = useState<string | null>(null);
+
+  const [editing, setEditing] = useState<Entry | "new" | null>(null);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [section, setSection] = useState("");
+  /* Operational knowledge is what is written here; Marketing knowledge is the
+     File Store (James, 2 Oct 2026). */
+  const [view, setView] = useState<"operational" | "marketing">("operational");
+  const [feeding, setFeeding] = useState(false);
+  const [guide, setGuide] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const load = useCallback(() => {
+    setLoadError(null);
+    fetch("/api/knowledge", { cache: "no-store" })
+      .then((r) => (r.status === 403 ? Promise.reject(new Error("denied")) : r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((j: { entries?: Entry[]; sections?: string[]; unanswered?: Asked[] }) => {
+        if (!Array.isArray(j.entries)) throw new Error("failed");
+        setEntries(j.entries);
+        setSections(j.sections ?? []);
+        setAsked(j.unanswered ?? []);
+      })
+      .catch((e: Error) => {
+        if (e.message === "denied") setDenied(true);
+        else setLoadError("We couldn't read the knowledge just now. Nothing has been lost - try again in a minute.");
+      });
+  }, []);
+  useEffect(load, [load]);
+
+  function startNew(prefill?: { title?: string }) {
+    setEditing("new");
+    setTitle(prefill?.title ?? "");
+    setContent("");
+    setSection(sections[0] ?? "How we work");
+    setGuide(false);
+    setNote(null);
+  }
+
+  /* /knowledge?write=<question> opens a new entry titled with it - the
+     Trending list on Admin, Steve links here for a question he could not
+     answer (18 Sep 2026). Once, after the sections have loaded. */
+  const wrote = useRef(false);
+  useEffect(() => {
+    if (wrote.current || entries === null) return;
+    const q = new URLSearchParams(window.location.search).get("write");
+    if (!q) return;
+    wrote.current = true;
+    startNew({ title: q.replace(/[?.!]+$/, "").slice(0, 120) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries]);
+  function startEdit(e: Entry) {
+    setEditing(e);
+    setTitle(e.title);
+    setContent(e.content);
+    setSection(e.section);
+    setGuide(e.guide);
+    setNote(null);
+  }
+
+  async function save() {
+    if (!title.trim() || !content.trim() || saving) return;
+    setSaving(true);
+    setNote(null);
+    try {
+      const r = await fetch("/api/knowledge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: editing === "new" || !editing ? undefined : editing.id, title, content, section, guide }),
+      });
+      const j = (await r.json()) as { entry?: Entry; error?: string };
+      if (!r.ok || !j.entry) throw new Error(j.error ?? "Couldn't save that.");
+      setEntries((cur) => [j.entry as Entry, ...(cur ?? []).filter((e) => e.id !== (j.entry as Entry).id)]);
+      setEditing(null);
+      setNote(null);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "Couldn't save that.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(e: Entry) {
+    if (!window.confirm(`Delete "${e.title}"? Steve forgets it straight away, and it leaves the shelf.`)) return;
+    const r = await fetch(`/api/knowledge?id=${encodeURIComponent(e.id)}`, { method: "DELETE" });
+    if (r.ok) {
+      setEntries((cur) => (cur ?? []).filter((x) => x.id !== e.id));
+      if (editing && editing !== "new" && editing.id === e.id) setEditing(null);
+    }
+  }
+
+  /**
+   * An HTML guide, turned into plain writing.
+   *
+   * James's first guide arrived as an HTML artefact (10 Sep 2026: "I have
+   * actually done our first guide, which is an artefact, but we need to be
+   * making sure that we're uploading these consistently"). Pasting one of those
+   * into the box gets you a screenful of tags, so the obvious thing happened:
+   * somebody would have retyped it, and the next one would have been retyped
+   * differently.
+   *
+   * Deliberately CRUDE, and it is worth saying why. It is not a converter; it
+   * pulls out the headings, the paragraphs and the list items in the order they
+   * appear and drops everything else. The result is meant to be read and tidied
+   * by the person who wrote it, in the editor they are already looking at - not
+   * saved unseen. Style, layout and images are not carried across because the
+   * reader page has its own, and a guide that arrives carrying somebody else's
+   * design is the inconsistency this is here to remove.
+   *
+   * Done with the browser's own parser rather than regular expressions over the
+   * markup, so a comment, a script or an attribute containing angle brackets
+   * cannot become body text.
+   */
+  function fromHtml(html: string): string {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("script, style, noscript, svg, nav, footer").forEach((n) => n.remove());
+    const out: string[] = [];
+    doc.body.querySelectorAll("h1, h2, h3, h4, p, li, blockquote").forEach((el) => {
+      const text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+      const tag = el.tagName.toLowerCase();
+      if (tag === "li") out.push(`- ${text}`);
+      else if (tag.startsWith("h")) out.push(`# ${text}`);
+      else out.push(text);
+    });
+    return out.join("\n\n");
+  }
+
+  function onUpload(file: File) {
+    const isHtml = /\.(html?|htm)$/i.test(file.name);
+    if (!isHtml && !/\.(txt|md|markdown)$/i.test(file.name)) {
+      setNote("Text (.txt, .md) or a web page (.html). Paste from a PDF or Word document instead.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === "string" ? reader.result : "";
+      const text = isHtml ? fromHtml(raw) : raw;
+      if (!text.trim()) {
+        setNote("There was no readable text in that file.");
+        return;
+      }
+      setContent((cur) => (cur.trim() ? `${cur}\n\n${text}` : text));
+      if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "));
+      /* Said out loud, because the point of the note is that they read what
+         came out before they save it. */
+      setNote(isHtml ? "Pulled the words out. Read it through before you save - headings came across as # lines." : null);
+    };
+    reader.readAsText(file);
+  }
+
+  const shelves = useMemo(() => {
+    const all = entries ?? [];
+    const needle = q.trim().toLowerCase();
+    const kept = all.filter((e) => {
+      if (fSection && e.section !== fSection) return false;
+      if (needle && !`${e.title} ${e.content}`.toLowerCase().includes(needle)) return false;
+      return true;
+    });
+    const names = [...new Set([...sections, ...kept.map((e) => e.section)])];
+    return names.map((name) => ({ name, items: kept.filter((e) => e.section === name) })).filter((s) => s.items.length);
+  }, [entries, sections, q, fSection]);
+
+  const used = useMemo(() => [...new Set((entries ?? []).map((e) => e.section))], [entries]);
+
+  return { entries, sections, asked, denied, loadError, q, setQ, fSection, setFSection, editing, setEditing, title, setTitle, content, setContent, section, setSection, view, setView, feeding, setFeeding, guide, setGuide, saving, note, fileRef, load, startNew, startEdit, save, remove, onUpload, shelves, used };
+}
+
+export type KnowledgeHubState = ReturnType<typeof useKnowledgeHub>;
+
+/** The screen as it has always been drawn: /knowledge, and Admin with the new look off. */
+export function KnowledgeHubOld({ hub }: { hub: KnowledgeHubState }) {
+  const { entries, sections, asked, denied, loadError, q, setQ, fSection, setFSection, editing, setEditing, title, setTitle, content, setContent, section, setSection, view, setView, feeding, setFeeding, guide, setGuide, saving, note, fileRef, load, startNew, startEdit, save, remove, onUpload, shelves, used } = hub;
+
+  if (denied) {
+    return (
+      <>
+        <PageHeader title="Knowledge" blurb="This screen belongs to the people who write the guides." search={false} />
+        <p className="mt-8 text-[13px] text-muted">Ask James if you should have it.</p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Knowledge"
+        blurb="How this business works, written down once. Steve answers from it on the next question, and anything marked as a guide goes on his shelf for the agents."
+        /* One search per page (James, 6 Sep 2026): the header's bar searches
+           what is written, and the shelf row below is only the filters. */
+        searchValue={q}
+        onSearch={setQ}
+        searchPlaceholder="Search what is written…"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setView("operational"); setFeeding((f) => !f); }}
+              className="rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink/40"
+            >
+              Feed Steve links
+            </button>
+            <PressButton
+              onClick={() => startNew()}
+              className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
+            >
+              <span className="text-[15px] leading-none">+</span> Write something
+            </PressButton>
+          </div>
+        }
+      />
+
+      <nav aria-label="Knowledge" className="mt-6 flex gap-1.5">
+        {([
+          ["operational", "Operational knowledge"],
+          ["marketing", "Marketing knowledge"],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setView(id)}
+            aria-current={view === id ? "page" : undefined}
+            className={`rounded-full border px-4 py-1.5 text-[12.5px] transition-colors ${
+              view === id ? "border-brown bg-brown font-semibold text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {view === "operational" && feeding && <KnowledgeLinks onSaved={load} onClose={() => setFeeding(false)} />}
+      {view === "marketing" && <MarketingKnowledge q={q} />}
+
+      <div className={`mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] ${view === "operational" ? "" : "hidden"}`}>
+        {/* ── the shelves ── */}
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setFSection(null)}
+              className={`rounded-full border px-3.5 py-2 text-[12px] ${fSection === null ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark" : "border-line/80 text-muted hover:border-ink/40"}`}
+            >
+              Everything
+            </button>
+            {used.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setFSection(s === fSection ? null : s)}
+                className={`rounded-full border px-3.5 py-2 text-[12px] ${fSection === s ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark" : "border-line/80 text-muted hover:border-ink/40"}`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {loadError ? (
+            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-[12.5px] text-red-700">
+              <p>{loadError}</p>
+              <button type="button" onClick={load} className="mt-3 rounded-full border border-red-300 px-3.5 py-1.5 font-semibold transition-colors hover:bg-red-100">
+                Try again
+              </button>
+            </div>
+          ) : entries === null ? (
+            <p className="mt-8 text-[12.5px] text-muted">Reading…</p>
+          ) : !entries.length ? (
+            <div className="fade-up mt-6 rounded-2xl border border-dashed border-line/80 p-8 text-center">
+              <p className="hand text-[18px]">Nothing written yet</p>
+              <p className="mx-auto mt-2 max-w-md text-[12.5px] leading-relaxed text-muted">
+                Start with the thing agents ask most - what we charge, how a viewing is booked, what happens after an
+                offer. The questions on the right are the ones Steve could not answer.
+              </p>
+            </div>
+          ) : !shelves.length ? (
+            <p className="mt-8 text-[12.5px] text-muted">Nothing matches that.</p>
+          ) : (
+            shelves.map((shelf) => (
+              <section key={shelf.name} className="fade-up mt-6">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">{shelf.name}</p>
+                <ul className="mt-2.5 grid gap-2.5 md:grid-cols-2">
+                  {shelf.items.map((e) => (
+                    <li key={e.id} className="rounded-2xl border border-line/80 bg-panel p-4">
+                      <div className="flex items-start gap-2">
+                        <button type="button" onClick={() => startEdit(e)} className="min-w-0 flex-1 text-left">
+                          <span className="hand block text-[16px] leading-tight">{e.title}</span>
+                          <span className="mt-1 block text-[11.5px] leading-snug text-muted">
+                            {e.content.split(/\n/).find((l) => l.trim() && !/^#/.test(l))?.slice(0, 140)}
+                          </span>
+                        </button>
+                        {e.guide && <Pill tone="good">Guide</Pill>}
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-[10.5px] text-muted">
+                        <span>
+                          {e.updatedBy ? `${e.updatedBy} · ` : ""}
+                          {whenAgo(e.updatedAt)}
+                        </span>
+                        <button type="button" onClick={() => startEdit(e)} className="font-semibold hover:text-ink">
+                          Edit
+                        </button>
+                        {e.guide && (
+                          <Link href={`/knowledge/${e.id}`} className="font-semibold hover:text-ink">
+                            Read as an agent
+                          </Link>
+                        )}
+                        <button type="button" onClick={() => void remove(e)} className="ml-auto hover:text-ink">
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))
+          )}
+        </div>
+
+        {/* ── the writing order ── */}
+        <aside className="fade-up h-fit rounded-2xl border border-line/80 bg-panel p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Steve could not answer</p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+            What agents asked and nothing written covered. Press one to write it.
+          </p>
+          {!asked.length ? (
+            <p className="mt-3 text-[12px] text-muted">Nothing outstanding.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-line/50">
+              {asked.map((a) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    onClick={() => startNew({ title: a.asked.replace(/[?.!]+$/, "").slice(0, 120) })}
+                    className="block w-full py-2.5 text-left transition-colors hover:text-accent-dark"
+                  >
+                    <span className="block text-[12.5px] leading-snug">{a.asked}</span>
+                    <span className="mt-0.5 block text-[10.5px] text-muted">
+                      {a.by} · {whenAgo(a.at)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+      </div>
+
+      {/* ── the editor ── */}
+      {editing && (
+        <div className="fixed inset-0 z-[140] flex items-start justify-center overflow-y-auto bg-ink/45 p-4">
+          <button type="button" aria-label="Close" onClick={() => setEditing(null)} className="absolute inset-0 cursor-default" />
+          <div className="fade-up relative my-auto w-full max-w-3xl rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="hand text-[20px]">{editing === "new" ? "Write something down" : "Edit"}</h2>
+                <p className="mt-0.5 text-[11.5px] text-muted">
+                  {note ?? "Plain writing. Blank lines make paragraphs, a line starting with - makes a list, # makes a heading. A .txt, .md or .html file drops straight in."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditing(null)}
+                  className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-medium hover:border-ink/40"
+                >
+                  Cancel
+                </button>
+                <PressButton
+                  onClick={() => void save()}
+                  disabled={saving || !title.trim() || !content.trim()}
+                  className={`rounded-full px-5 py-2 text-[12.5px] font-semibold ${
+                    !saving && title.trim() && content.trim() ? "bg-accent-dark text-page" : "cursor-not-allowed bg-line/40 text-muted"
+                  }`}
+                >
+                  {saving ? "Saving…" : "Save"}
+                </PressButton>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_220px]">
+              <input
+                className={FIELD}
+                autoFocus
+                placeholder="What is this about - e.g. Our fees for a fully managed let"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              <input
+                className={FIELD}
+                list="knowledge-sections"
+                placeholder="Shelf"
+                value={section}
+                onChange={(e) => setSection(e.target.value)}
+              />
+              <datalist id="knowledge-sections">
+                {[...new Set([...sections, ...used])].map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </div>
+
+            <textarea
+              className={`${FIELD} mt-3 min-h-[320px] resize-y font-[inherit] leading-relaxed`}
+              placeholder="Write it the way you would explain it to somebody on their first morning."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+            />
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-[12.5px]">
+                <input type="checkbox" checked={guide} onChange={(e) => setGuide(e.target.checked)} className="h-4 w-4 accent-[var(--accent-dark)]" />
+                Put it on the Guides shelf for agents to read
+              </label>
+              <div className="flex items-center gap-3 text-[11.5px] text-muted">
+                <span className="figures">{content.length.toLocaleString("en-GB")} / 20,000</span>
+                <button type="button" onClick={() => fileRef.current?.click()} className="font-semibold hover:text-ink">
+                  Add a file
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".txt,.md,.markdown,.html,.htm"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUpload(f);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** The workspace route's screen, untouched. */
+export default function KnowledgeHub() {
+  return <KnowledgeHubOld hub={useKnowledgeHub()} />;
+}

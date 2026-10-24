@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import TestFilesTab from "@/components/testing/TestFilesTab";
 import PhasesPanel from "@/components/testing/PhasesPanel";
+import { useNewLook } from "@/lib/use-new-look";
+import TestingNew, { type KitLink, type KitRun, type Payload, type Row } from "@/components/new-look/admin/TestingNew";
 import {
   JOURNEYS,
   KITS,
@@ -50,40 +52,6 @@ const WHO_TONE: Record<TestWho, string> = {
   compliance: "border-violet-200 bg-violet-50 text-violet-900",
   office: "border-line bg-box text-muted",
 };
-
-interface Payload {
-  ok: boolean;
-  error?: string;
-  journeys?: Journey[];
-  marks?: TestMark[];
-  /** Every occasion anybody walked a step, newest first. The marks are the newest of these. */
-  runs?: TestRun[];
-  switches?: Record<string, { on: boolean; label: string }>;
-}
-
-interface KitLink {
-  who: TestWho;
-  label: string;
-  href: string;
-}
-
-interface KitRun {
-  id: string;
-  kit: KitId;
-  createdAt: string;
-  byName: string;
-  links: KitLink[];
-  said: string;
-  canRelink: boolean;
-}
-
-interface Row {
-  journey: Journey;
-  step: TestStep;
-  area: TestAreaId;
-  who: TestWho[];
-  kit?: KitId;
-}
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -361,6 +329,39 @@ export default function TestingPage() {
       setBusy(null);
     }
   };
+
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. It
+     draws the same rows from the same state and calls the same handlers. */
+  const look = useNewLook("admin");
+  if (look === null) return <p className="text-[12.5px] text-muted">Loading…</p>;
+  if (look) {
+    return (
+      <TestingNew
+        data={data}
+        error={error}
+        scope={scope}
+        setScope={setScope}
+        leftOnly={leftOnly}
+        setLeftOnly={setLeftOnly}
+        open={open}
+        setOpen={setOpen}
+        note={note}
+        setNote={setNote}
+        busy={busy}
+        journeys={journeys}
+        marks={marks}
+        runsByStep={runsByStep}
+        rows={rows}
+        kits={kits}
+        fresh={fresh}
+        latestKit={latestKit}
+        mark={mark}
+        createKit={createKit}
+        relink={relink}
+        clearAll={clearAll}
+      />
+    );
+  }
 
   const areas = TEST_AREAS.filter((a) => scope === "all" || a.core);
   const inScope = rows.filter((r) => areas.some((a) => a.id === r.area));

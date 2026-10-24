@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { mailboxProblem } from "@/lib/mailbox-outcome";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * Whose Microsoft mailbox is connected (James, 30 Aug 2026: "show whether each
@@ -36,6 +37,8 @@ export default function MailboxesCard() {
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  /* The new look (lib/new-look "admin", 24 Oct 2026): the same card, drawn in its kit. */
+  const look = useNewLook("admin");
 
   /* Coming back from Microsoft: the outcome is said out loud once, then taken
      off the address so a refresh does not repeat it. */
@@ -82,6 +85,76 @@ export default function MailboxesCard() {
     setBusy(null);
     setFlash(r?.message ?? r?.error ?? "That didn't work.");
     load();
+  }
+
+  if (look) {
+    return (
+      <section id="mailboxes" className="nl-adm-block nl-adm-anchor">
+        <div className="nl-adm-block-head">
+          <div>
+            <h2 className="nl-section-title">Email Connections</h2>
+            <p className="nl-meta nl-adm-measure">
+              An email to a landlord goes from the agent&rsquo;s own Microsoft mailbox, so it sits in their Sent Items and the reply threads onto it. It is BCC&rsquo;d to their REX dropbox, so it still shows on the contact&rsquo;s timeline. Nothing sends as somebody who is not connected.
+            </p>
+          </div>
+        </div>
+
+        {flash && (
+          <p className="nl-adm-flash is-first" role="status">
+            {flash}
+          </p>
+        )}
+        {mail && !mail.configured && (
+          <p className="nl-adm-flash is-warn is-first">
+            Microsoft isn&rsquo;t configured on this environment yet - AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_CLIENT_SECRET are all needed before anyone can connect.
+          </p>
+        )}
+
+        {failed ? (
+          <div className="nl-adm-flash is-bad is-first" role="alert">
+            <p>The connections couldn&rsquo;t be read just now.</p>
+            <button type="button" onClick={load} className="nl-btn nl-btn--secondary nl-btn--sm">
+              Try again
+            </button>
+          </div>
+        ) : !mail ? (
+          <p className="nl-adm-loading" role="status">
+            <span className="nl-adm-spin" aria-hidden /> Reading who&rsquo;s connected…
+          </p>
+        ) : mail.people.length === 0 ? (
+          <p className="nl-empty">Nobody has an account yet.</p>
+        ) : (
+          <ul className="nl-adm-people">
+            {mail.people.map((p) => (
+              <li key={p.userId} className="nl-adm-mailrow">
+                <span>
+                  <span className="nl-strong">{p.name}</span>
+                  <span className="nl-meta">
+                    {p.connected ? p.mailbox : p.email}
+                    {p.connected && !p.rexLinked && " · no REX link, so it would not reach the timeline"}
+                    {!p.connected && " · not connected"}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => (p.connected ? disconnect(p.userId, p.name) : connect())}
+                  disabled={busy === p.userId || !mail.configured}
+                  title={p.connected ? "Disconnect this mailbox" : "Only they can connect their own mailbox - this signs YOU in"}
+                  className={`nl-switch${p.connected ? " is-on" : ""}`}
+                  aria-pressed={p.connected}
+                  aria-label={p.connected ? `Disconnect ${p.name}` : `Connect ${p.name}`}
+                >
+                  <i />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="nl-meta nl-adm-foot">
+          Connecting is personal: the slider signs YOU in to Microsoft. To set somebody else up, sit with them and have them press it on their own account. Turning it off only stops us sending as them - the permission stays on their Microsoft account until they remove it.
+        </p>
+      </section>
+    );
   }
 
   return (

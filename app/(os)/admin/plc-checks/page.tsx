@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import type { ShadowStats } from "@/lib/plc-shadow";
+import { useNewLook } from "@/lib/use-new-look";
+import PlcChecksNew, { hrs, pct, prettyMonth, type Approvers as ApproversState } from "@/components/new-look/admin/PlcChecksNew";
+import { Loading } from "@/components/new-look/admin/content-bits";
 
 /**
  * PLC checks: how the scan is holding up, and how long packs are taking.
@@ -24,22 +27,8 @@ import type { ShadowStats } from "@/lib/plc-shadow";
  * agreeing with a number, and the number then measures itself.
  */
 
-const pct = (v: number | null) => (v === null ? "—" : `${v.toFixed(0)}%`);
-
-const hrs = (v: number | null) => {
-  if (v === null) return "—";
-  if (v < 1) return `${Math.round(v * 60)} min`;
-  if (v < 48) return `${v.toFixed(1)} hrs`;
-  return `${(v / 24).toFixed(1)} days`;
-};
-
-const prettyMonth = (m: string) => {
-  const [y, mo] = m.split("-");
-  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-GB", {
-    month: "short",
-    year: "numeric",
-  });
-};
+/* The formatters are shared with the new look, which says a missing figure
+   as "-" rather than a dash nobody can type. */
 
 function Panel({ title, blurb, children }: { title: string; blurb?: string; children: React.ReactNode }) {
   return (
@@ -87,7 +76,7 @@ function Big({
  * The first check is anybody on the compliance team; this list is the
  * second step. Hidden from anybody who cannot change it.
  */
-function Approvers() {
+function useApprovers(): ApproversState {
   const [emails, setEmails] = useState<string[] | null>(null);
   const [draft, setDraft] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -104,8 +93,6 @@ function Approvers() {
       })
       .catch(() => {});
   }, []);
-
-  if (!emails) return null;
 
   const save = async () => {
     setBusy(true);
@@ -127,6 +114,13 @@ function Approvers() {
       setBusy(false);
     }
   };
+
+  return { emails, draft, setDraft, msg, busy, save: () => void save() };
+}
+
+function Approvers({ ap }: { ap: ApproversState }) {
+  const { emails, draft, setDraft, msg, busy, save } = ap;
+  if (!emails) return null;
 
   return (
     <Panel
@@ -157,6 +151,10 @@ function Approvers() {
 export default function PlcChecksAdmin() {
   const [s, setS] = useState<ShadowStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* The new look (lib/new-look "admin"): the same log and the same list,
+     drawn by components/new-look/admin/PlcChecksNew. */
+  const look = useNewLook("admin");
+  const ap = useApprovers();
 
   useEffect(() => {
     fetch("/api/plc/shadow")
@@ -164,6 +162,9 @@ export default function PlcChecksAdmin() {
       .then((b) => (b.ok ? setS(b) : setError(b.error ?? "Could not read the log.")))
       .catch(() => setError("Could not read the log."));
   }, []);
+
+  if (look === null) return <Loading label="Opening PLC checks…" page />;
+  if (look) return <PlcChecksNew s={s} error={error} approvers={ap} />;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -177,7 +178,7 @@ export default function PlcChecksAdmin() {
       </p>
 
       <div className="mt-6">
-        <Approvers />
+        <Approvers ap={ap} />
       </div>
 
       {error && <p className="mt-4 text-sm text-rose-700">{error}</p>}

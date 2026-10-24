@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useNewLook } from "@/lib/use-new-look";
+import AiCostsNew from "@/components/new-look/admin/AiCostsNew";
+import { LookLoading } from "@/components/new-look/admin/ScreenBits";
 
 /**
  * What the OS spends on Claude, feature by feature (20 Oct 2026).
@@ -49,6 +52,8 @@ function total(lines: Line[], feature?: string) {
 export default function AiCosts() {
   const [data, setData] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
 
   useEffect(() => {
     (async () => {
@@ -76,6 +81,26 @@ export default function AiCosts() {
   monthStart.setHours(0, 0, 0, 0);
   const lastMeasured = Boolean(data?.since && new Date(data.since) < monthStart);
   const allLast = data ? total(data.lastMonth) : null;
+
+  if (look === null) return <LookLoading what="Adding up this month" />;
+  if (look) {
+    return (
+      <AiCostsNew
+        error={error}
+        ready={Boolean(data)}
+        rows={rows}
+        all={all}
+        allLast={allLast}
+        lastMeasured={lastMeasured}
+        since={data?.since ?? null}
+        thisMonth={monthName(0)}
+        lastMonth={monthName(1)}
+        dollars={dollars}
+        tokens={tokens}
+        modelName={modelName}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">

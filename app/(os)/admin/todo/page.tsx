@@ -4,6 +4,8 @@ import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import AdminLoadFailed from "@/components/AdminLoadFailed";
 import { useAdmin } from "@/lib/admin-client";
+import { useNewLook } from "@/lib/use-new-look";
+import TodoNew from "@/components/new-look/admin/TodoNew";
 
 /** The system tracker — kept in the product, not in a document nobody opens. */
 export default function AdminTodo() {
@@ -29,6 +31,13 @@ export default function AdminTodo() {
       body: JSON.stringify({ id, state }),
     });
     load();
+  }
+
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
+  if (look === null) return <p className="text-[12.5px] text-muted">Loading…</p>;
+  if (look) {
+    return <TodoNew todos={d?.todos ?? null} denied={denied} failed={failed} retry={load} title={title} setTitle={setTitle} busy={busy} add={add} setState={(id, st) => void setState(id, st)} />;
   }
 
   if (denied) return <div className="py-16 text-center"><p className="hand text-[20px]">Nothing here</p></div>;

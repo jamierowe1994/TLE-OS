@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Pill } from "@/components/Wire";
+import { useNewLook } from "@/lib/use-new-look";
+import TicketsNew, { LETTERS, type Bug } from "@/components/new-look/admin/TicketsNew";
 
 /**
  * Tickets: what the pilot agents raise, sorted the way James sorts it.
@@ -18,31 +20,8 @@ import { Pill } from "@/components/Wire";
  * Pre-launch: open, acknowledged, fixed (the reporter is told), won't fix.
  */
 
-type Bug = {
-  id: string;
-  reporterEmail: string;
-  body: string;
-  path: string;
-  kind: string;
-  state: string;
-  createdAt: string;
-  occurrences?: number;
-  lastSeenAt?: string | null;
-  botState?: string;
-  botNote?: string;
-  botAt?: string | null;
-  media?: number;
-  priority: "A" | "B" | "C" | null;
-};
-
 const when = (iso: string | null | undefined) =>
   !iso ? "—" : new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-
-const LETTERS: Array<{ id: "A" | "B" | "C"; label: string; sub: string }> = [
-  { id: "A", label: "A", sub: "Broken" },
-  { id: "B", label: "B", sub: "Later" },
-  { id: "C", label: "C", sub: "Recommendation" },
-];
 
 const verdict = (b: Bug) =>
   b.botState === "looking" ? "Bot is looking"
@@ -117,6 +96,11 @@ export default function Tickets() {
     await load();
   }
 
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
+  if (look === null) return <p className="mt-6 text-[12.5px] text-muted">Loading the tickets…</p>;
+  if (look && (err || !bugs)) return <TicketsNew state={err ? { err, retry: () => { setErr(null); void load(); } } : "loading"} />;
+
   if (err) return <p className="mt-6 text-[12.5px] text-accent-dark">{err}</p>;
   if (!bugs) return <p className="mt-6 text-[12.5px] text-muted">Loading the tickets…</p>;
 
@@ -132,6 +116,14 @@ export default function Tickets() {
                    B: people.filter((b) => b.priority === "B" && b.state !== "fixed" && b.state !== "wontfix").length,
                    C: people.filter((b) => b.priority === "C" && b.state !== "fixed" && b.state !== "wontfix").length,
                    none: people.filter((b) => !b.priority && b.state !== "fixed" && b.state !== "wontfix").length };
+
+  if (look) {
+    return (
+      <TicketsNew
+        state={{ people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict }}
+      />
+    );
+  }
 
   const row = (b: Bug) => (
     <li key={b.id} id={`ticket-${b.id}`} className={`rounded-xl border p-3 ${b.id === openId ? "border-accent-dark ring-2 ring-accent-dark/20" : "border-line/70"}`}>

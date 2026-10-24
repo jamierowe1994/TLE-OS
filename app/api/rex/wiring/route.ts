@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { rexCall, rexConfigured, rexRows, rexWritesLocked } from "@/lib/rex";
 import { diagnosticsBlocked } from "@/lib/diagnostics";
+import { lockTruth, rexTruth } from "@/lib/wiring-truth";
 
 /**
  * The live half of the wiring sheet: one pass over REX proving what the OS
@@ -42,16 +43,51 @@ export async function GET() {
     });
   }
 
-  const checks: Check[] = [
-    {
-      key: "lock",
-      label: "Write lock",
-      ok: rexWritesLocked(),
-      detail: rexWritesLocked()
-        ? "LOCKED — the OS cannot change anything in REX. Reads only, enforced in the client."
-        : "UNLOCKED for a supervised test. Re-lock by clearing REX_ALLOW_WRITES.",
-    },
-  ];
+  /* REX's state first, from REX status itself (lib/rex-outage, 24 Oct 2026).
+     While REX counts as down every read below would be answered from the
+     copy, and a sheet of green ticks drawn from the copy would say REX is
+     fine on the very afternoon REX status says it is not. So nothing is
+     probed: the sheet says down, why, and when REX last answered. */
+  const status = await rexTruth().catch(() => null);
+  const locks = await lockTruth().catch(() => null);
+  const REASON: Record<string, string> = { forced: "set to down on REX status", planned: "inside the planned window", detected: "it stopped answering" };
+  const statusCheck: Check = status
+    ? {
+        key: "status",
+        label: "REX status",
+        ok: !status.down,
+        detail: status.down
+          ? `Down, ${REASON[status.reason ?? ""] ?? "by REX status"}. Screens show the copy; nothing is asked of REX.${status.lastOkAt ? ` Last good answer ${new Date(status.lastOkAt).toLocaleString("en-GB", { timeZone: "Europe/London" })}.` : ""}`
+          : status.mode === "up"
+            ? "Forced up on REX status: asked live whatever the detection says."
+            : "Answering. Automatic on REX status.",
+      }
+    : { key: "status", label: "REX status", ok: false, detail: "REX status could not be read, so whether REX is up is not known." };
+
+  /* The lock, as Switches and the server hold it rather than one env var:
+     the methods REX_ALLOW_WRITES opens on the server, and the REX switches. */
+  const open = locks?.rex.serverOpen ?? [];
+  const armed = (locks?.rex.switches ?? []).filter((s) => s.on).map((s) => s.label);
+  const lockCheck: Check = {
+    key: "lock",
+    label: "Write lock",
+    ok: rexWritesLocked(),
+    detail: !open.length
+      ? "Locked on the server: REX_ALLOW_WRITES names nothing, so no write reaches REX whatever Switches say."
+      : `${open.length} ${open.length === 1 ? "write is" : "writes are"} open on the server (REX_ALLOW_WRITES). ${
+          locks?.brake
+            ? "SENDING_LOCKED holds every switch off."
+            : armed.length
+              ? `On in Switches: ${armed.join(", ")}.`
+              : "Every REX switch is off in Switches."
+        }`,
+  };
+
+  if (status?.down) {
+    return NextResponse.json({ configured: true, at: Date.now(), checks: [statusCheck, lockCheck], writesLocked: rexWritesLocked(), down: true });
+  }
+
+  const checks: Check[] = [statusCheck, lockCheck];
   checks.push(...await Promise.all([
     safe(async () => {
       const r = await rexCall("AccountUsers", "search", { limit: 1 });
