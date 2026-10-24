@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { photoPosition } from "@/components/PassportBook";
 import type { PassportData } from "@/lib/passport-shape";
-import { Ic, Mark, MARK_PATHS } from "./icons";
+import { Ic, MARK_PATHS } from "./icons";
 import { bornOn, shortAddress, type StepDef } from "./model";
 
 /**
@@ -147,25 +147,24 @@ export default function Passport({
             <span className="edge" style={{ ["--z" as string]: "3px" }} />
             <div className="pf front idp">
               <Guilloche />
-              <div className="id-band"><span>The Letting Experts</span><span>Tenant passport</span><Mark /></div>
+              <div className="id-band"><span>The Letting Experts</span></div>
               <div className="id-body">
                 <span className="id-photo">
                   {d.photo ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={d.photo} alt="" style={{ objectPosition: photoPosition(d.photoFocus) }} />
                   ) : initials ? <i>{initials}</i> : <Ic k="user" />}
-                  <span className="emb" aria-hidden="true"><Emboss ringId={ringId} /></span>
                 </span>
                 <dl className="id-f">
                   <div><dt>Surname</dt><dd className={surname ? "" : "empty"}>{surname || "Your name"}</dd></div>
                   <div><dt>Given names</dt><dd>{given || "\u00a0"}</dd></div>
                   <div className="half"><dt>Date of birth</dt><dd>{bornOn(d.dob) || "\u00a0"}</dd></div>
                   <div className="half"><dt>Moving</dt><dd>{moving || "\u00a0"}</dd></div>
-                  <div><dt>Status</dt><dd>{cleared ? "Complete" : `In progress · ${shown}%`}<span className="id-bar"><i style={{ width: `${shown}%` }} /></span></dd></div>
+                  <div><dt>Status</dt><dd>{cleared ? <span className="id-cleared">Cleared to view</span> : <>In progress · {shown}%<span className="id-bar"><i style={{ width: `${shown}%` }} /></span></>}</dd></div>
                 </dl>
               </div>
+              <span className="emb" aria-hidden="true"><Emboss ringId={ringId} /></span>
               <div className="id-mrz" aria-hidden="true"><span>{mrz[0]}</span><span>{mrz[1]}</span></div>
-              <span className="cleared">Cleared to view</span>
               <span className="glare" />
               <span className="holo" />
             </div>
@@ -235,18 +234,8 @@ function mrzLines(surname: string, given: string, dob: string, stamps: number): 
   return [pad(`P<TLE${clean(surname) || "<"}<<${clean(given)}`), pad(`TENANT<PASSPORT<<${born}<<${stamps}`)];
 }
 
-/** Security paper: fine coral guilloche, a rosette behind the details and waves across the page. */
+/** Security paper: fine coral waves across the page. */
 function Guilloche() {
-  const rose: string[] = [];
-  for (let k = 0; k < 18; k++) {
-    const pts: string[] = [];
-    for (let a = 0; a <= 360; a += 4) {
-      const t = (a * Math.PI) / 180;
-      const r = 46 + k * 2.2 + 7 * Math.sin(12 * t + k * 0.35);
-      pts.push(`${(250 + r * Math.cos(t)).toFixed(1)},${(118 + r * 0.82 * Math.sin(t)).toFixed(1)}`);
-    }
-    rose.push(`M${pts.join("L")}Z`);
-  }
   const waves: string[] = [];
   for (let k = 0; k < 14; k++) {
     const pts: string[] = [];
@@ -257,7 +246,6 @@ function Guilloche() {
     <svg className="id-guil" viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <g fill="none" strokeWidth=".45">
         <g stroke="rgba(219,112,84,.22)">{waves.map((p) => <path key={p} d={p} />)}</g>
-        <g stroke="rgba(170,74,43,.2)">{rose.map((p) => <path key={p} d={p} />)}</g>
       </g>
     </svg>
   );
