@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Badge, Ico, Tabs } from "@/components/new-look/Parts";
-import { AdmDrawer, Loading, Problem } from "@/components/new-look/admin/bits";
+import { AdmDrawer, Loading, Problem } from "@/components/new-look/admin/content-bits";
 import KnowledgeLinks from "@/components/knowledge/KnowledgeLinks";
 import MarketingKnowledge from "@/components/knowledge/MarketingKnowledge";
 import { whenAgo } from "@/lib/lead-spine";

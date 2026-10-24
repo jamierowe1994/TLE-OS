@@ -8,7 +8,7 @@ import { can } from "@/lib/roles";
 import { useNewLook } from "@/lib/use-new-look";
 import { areaForPage, canSee, type AreaAccess } from "@/lib/area-map";
 import { Badge, Ico } from "@/components/new-look/Parts";
-import { Loading } from "@/components/new-look/admin/bits";
+import { Loading } from "@/components/new-look/admin/content-bits";
 import type { HelpData } from "@/components/new-look/help/HelpLook";
 
 /**

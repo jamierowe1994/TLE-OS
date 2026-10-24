@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge, Ico } from "@/components/new-look/Parts";
-import { AdmDrawer, Loading, Problem } from "@/components/new-look/admin/bits";
+import { AdmDrawer, Loading, Problem } from "@/components/new-look/admin/content-bits";
 import { whenAgo } from "@/lib/lead-spine";
 import { KIND_HINT, KINDS, type NewsroomState } from "@/components/newsroom/NewsroomBody";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge, Ico, type Tone } from "@/components/new-look/Parts";
-import { Loading, Problem } from "@/components/new-look/admin/bits";
+import { Loading, Problem } from "@/components/new-look/admin/content-bits";
 import { Reader, type EmailCatalogue, type Row } from "@/components/admin/EmailCatalogue";
 
 /**

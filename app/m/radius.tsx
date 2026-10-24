@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { Sheet, Spinner } from "./bits";
+import { Sheet, Spinner } from "./content-bits";
 
 /**
  * SEARCH BY RADIUS (James, 18 Sep 2026): "underneath we should have the same

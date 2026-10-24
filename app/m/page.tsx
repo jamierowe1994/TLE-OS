@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Appt } from "@/lib/diary";
-import { ErrorLine, Spinner } from "./bits";
+import { ErrorLine, Spinner } from "./content-bits";
 import { DIARY_KEY, KIND_LABEL, endOf } from "./diary-bits";
 
 /**

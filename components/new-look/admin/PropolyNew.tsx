@@ -2,7 +2,7 @@
 
 import { ExpectedPackEmail, PropolyMailView } from "@/components/MoveInPack";
 import { Badge } from "@/components/new-look/Parts";
-import { Loading, Problem } from "@/components/new-look/admin/bits";
+import { Loading, Problem } from "@/components/new-look/admin/content-bits";
 import { at, day, OUTCOME, type PropolyAdmin, type Plan, type Sender } from "@/components/admin/use-propoly-admin";
 
 /**

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import SteveRepertoire from "@/components/SteveRepertoire";
 import { Badge } from "@/components/new-look/Parts";
-import { Loading, Problem } from "@/components/new-look/admin/bits";
+import { Loading, Problem } from "@/components/new-look/admin/content-bits";
 import { BRIEF_PLACEHOLDER, when, type SteveConsole } from "@/components/admin/use-steve-console";
 
 /**

@@ -2,7 +2,7 @@
 
 import type { ShadowStats } from "@/lib/plc-shadow";
 import { Badge } from "@/components/new-look/Parts";
-import { Loading, Problem } from "@/components/new-look/admin/bits";
+import { Loading, Problem } from "@/components/new-look/admin/content-bits";
 
 /**
  * PLC checks in the new look (lib/new-look "admin", 24 Oct 2026). The same
