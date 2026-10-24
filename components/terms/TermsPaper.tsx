@@ -180,7 +180,7 @@ export default function TermsPaper({
               <div key={p.key} className={`t-sig${p.signature ? " done" : ""}${p.you ? " you" : ""}`} id={`ts-sig-${p.key}`}>
                 <small>{people.length > 1 ? `Signed by landlord ${n + 1}` : "Signed by the landlord"}</small>
                 <div className="ink">
-                  {p.signature ? <img src={p.signature} alt="Signature" /> : p.you && signSlot ? signSlot : <em>{p.you ? "Your signature" : `${p.name} signs ${you === "agent" ? "after you" : "here"}`}</em>}
+                  {p.signature ? <img src={p.signature} alt="Signature" /> : p.you && signSlot ? signSlot : <em>{p.signedOn ? "Signed" : p.you ? "Your signature" : `${p.name} signs ${you === "agent" ? "after you" : "here"}`}</em>}
                 </div>
                 <dl className="t-tbl">
                   <Row dt="Name">{p.name}</Row>
