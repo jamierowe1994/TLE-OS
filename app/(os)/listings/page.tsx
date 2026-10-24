@@ -828,12 +828,30 @@ export default function Listings() {
     const anySet = Boolean(rentBand || loc || moreSet || q.trim());
     const toneOf = (label: string) => (label === "Available" ? "good" : label === "Let agreed" ? "accent" : "neutral") as "good" | "accent" | "neutral";
     const shownCount = eachOffer ? shownOffers?.length ?? null : board.length;
-    const tags = (l: SampleListing) => {
+    /* ONE TAG FOR WHERE IT IS (James, 24 Oct 2026): "could we not drop that
+       tag and then just have On portals up there instead of Available, because
+       it's the same thing?" The stage and the readiness pill that sat in the
+       foot are one tag on the photo now, so the foot keeps to one line. */
+    const where = (l: SampleListing): { label: string; tone: "good" | "accent" | "neutral"; why?: string } => {
+      if (l.archived) return { label: archiveLabel(l.archiveReason ?? null), tone: "neutral" };
       const st = statusOf(l);
+      if (st.label === "Let agreed") return { label: st.label, tone: toneOf(st.label) };
+      const r = readiness(l, checks[`${l.id}:${l.modifiedAt ?? l.lastUpdated ?? ""}`]);
+      if (st.label === "Available") {
+        return r.missing.length
+          ? { label: `On portals · ${r.missing.length} to fix`, tone: "accent", why: r.sub }
+          : { label: "On portals", tone: "good", why: r.sub };
+      }
+      if (r.title === "Ready to publish") return { label: "Ready to publish", tone: "good", why: r.sub };
+      if (r.title === "Needs attention") return { label: `Draft · ${r.missing.length} to do`, tone: "accent", why: r.sub };
+      return { label: "Draft", tone: "neutral", why: r.sub };
+    };
+    const tags = (l: SampleListing) => {
+      const w = where(l);
       const n = openOffers?.[String(l.id)] ?? 0;
       return (
         <>
-          <Badge tone={l.archived ? "neutral" : toneOf(st.label)}>{l.archived ? archiveLabel(l.archiveReason ?? null) : st.label}</Badge>
+          <Badge tone={w.tone} title={w.why}>{w.label}</Badge>
           {l.introOnly && <Badge tone="info">Marketing only</Badge>}
           {!l.archived && l.offline && (l.stillOnPortals ? <Badge tone="accent">Still on the portals</Badge> : <Badge tone="neutral">Offline</Badge>)}
           {!l.archived && !l.letAgreed && !l.offline && l.taken && <Badge tone="accent">Still advertised</Badge>}
@@ -1012,11 +1030,7 @@ export default function Listings() {
                         <span className={`nl-prop-foot${canRelist || canRestore ? " pr-[150px]" : ""}`}>
                           <span>Available <b>{shortDate(l.availableFrom)}</b></span>
                           <span><b>{l.imageCount}</b> {l.imageCount === 1 ? "photo" : "photos"}</span>
-                          {!l.archived ? (
-                            <span className="ml-auto min-w-0">
-                              <Readiness r={readiness(l, checks[`${l.id}:${l.modifiedAt ?? l.lastUpdated ?? ""}`])} pill />
-                            </span>
-                          ) : (
+                          {l.archived && (
                             <span className="basis-full">{archiveWhy({ archived: true, reason: l.archiveReason ?? null, since: l.archivedSince ?? null, ageDays: l.archiveAgeDays ?? null })}</span>
                           )}
                         </span>
@@ -1068,11 +1082,9 @@ export default function Listings() {
                         <b>{l.imageCount}</b>
                       </span>
                       <span className="nl-hide-sm flex justify-end">
-                        {l.archived ? (
+                        {l.archived && (
                           <span className="nl-meta text-right">{archiveWhy({ archived: true, reason: l.archiveReason ?? null, since: l.archivedSince ?? null, ageDays: l.archiveAgeDays ?? null })}</span>
-                        ) : !(canRelist || canRestore) ? (
-                          <Readiness r={readiness(l, checks[`${l.id}:${l.modifiedAt ?? l.lastUpdated ?? ""}`])} pill />
-                        ) : null}
+                        )}
                       </span>
                     </button>
                     {canRelist && (
