@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { getAppraisal } from "@/lib/appraisal-store";
+import { readPresentation } from "@/lib/present-store";
+import { deckKind } from "@/lib/present";
+import { canBePack } from "@/lib/pre-pack";
 
 /**
  * GET → everything we have emailed the landlord about this appraisal, newest
@@ -51,7 +54,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ).catch(() => []);
     const r = rows[0];
     if (!r) return NextResponse.json({ ok: false, error: "That email isn't on file." }, { status: 404 });
-    return NextResponse.json({ ok: true, email: { id: r.id, subject: r.subject, html: r.html, to: r.to_email, sentAt: new Date(r.sent_at).toISOString(), label: labelOf(r.subject) } });
+    /* The pre-appraisal email's whole point is the pack behind its button (James, 24 Oct 2026: "it should show
+       the pre-presentation that was sent out to that person"), so the exact one it linked to comes back with it. */
+    let deck: { href: string } | null = null;
+    const token = /^Before your valuation/i.test(r.subject) ? /\/present\/([A-Za-z0-9_-]{8,})/.exec(r.html)?.[1] ?? null : null;
+    if (token) {
+      const row = await readPresentation(token).catch(() => null);
+      if (row) deck = { href: deckKind(row.deck) === "pre-appraisal" && canBePack(row.deck) ? `/present/${token}/pack` : `/present/${token}` };
+    }
+    return NextResponse.json({ ok: true, email: { id: r.id, subject: r.subject, html: r.html, to: r.to_email, sentAt: new Date(r.sent_at).toISOString(), label: labelOf(r.subject), deck } });
   }
 
   const rows = await q<{ id: string; subject: string; sent_at: Date }>(

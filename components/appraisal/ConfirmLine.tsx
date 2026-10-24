@@ -20,7 +20,7 @@ import ConfirmSheet from "@/components/ConfirmSheet";
  */
 type Draft = { ok?: boolean; alreadySent?: { at: string }; moved?: { from: string }; blocked?: string };
 type Item = { id: string; subject: string; sentAt: string; label: string };
-type Email = Item & { html: string; to: string };
+type Email = Item & { html: string; to: string; deck?: { href: string } | null };
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
@@ -129,7 +129,7 @@ export default function ConfirmLine({ appraisalId, appointmentAt }: { appraisalI
   );
 }
 
-function Modal({ title, sub, onClose, children, wide = false }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+function Modal({ title, sub, onClose, children, wide = false, deck = false }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode; wide?: boolean; deck?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -145,7 +145,7 @@ function Modal({ title, sub, onClose, children, wide = false }: { title: string;
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`popout-in flex w-full flex-col overflow-hidden rounded-3xl border border-line bg-page shadow-2xl ${wide ? "h-full max-h-[900px] max-w-3xl" : "max-h-[80vh] max-w-lg"}`}
+        className={`popout-in flex w-full flex-col overflow-hidden rounded-3xl border border-line bg-page shadow-2xl ${deck ? "h-full max-h-[940px] max-w-6xl" : wide ? "h-full max-h-[900px] max-w-3xl" : "max-h-[80vh] max-w-lg"}`}
       >
         <div className="flex items-start gap-3 border-b border-line/70 px-5 py-4">
           <div className="min-w-0">
@@ -197,8 +197,28 @@ function SentEmail({ appraisalId, emailId, onClose }: { appraisalId: string; ema
     };
   }, [appraisalId, emailId]);
   const e = email && email !== "error" ? email : null;
+  /* A pre-appraisal email opens on the pack it sent, as the landlord sees it; the email is one tap away. */
+  const [show, setShow] = useState<"deck" | "email">("deck");
+  const deck = e?.deck && show === "deck" ? e.deck : null;
   return (
-    <Modal wide title={e?.subject ?? "The email"} sub={e ? `To ${e.to} · ${when(e.sentAt)}` : undefined} onClose={onClose}>
+    <Modal wide deck={Boolean(e?.deck)} title={e?.deck ? "The pre-presentation they were sent" : e?.subject ?? "The email"} sub={e ? `To ${e.to} · ${when(e.sentAt)}` : undefined} onClose={onClose}>
+      {e?.deck ? (
+        <div className="flex gap-1 px-5 pt-4">
+          {(["deck", "email"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setShow(k)}
+              className={`rounded-full px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${show === k ? "bg-ink text-white" : "border border-line/80 text-muted hover:text-ink"}`}
+            >
+              {k === "deck" ? "The pre-presentation" : "The email"}
+            </button>
+          ))}
+          <a href={e.deck.href} target="_blank" rel="noopener" className="ml-auto self-center text-[11.5px] font-semibold text-muted underline-offset-2 hover:text-ink hover:underline">
+            Open in a new tab
+          </a>
+        </div>
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col p-5">
         {email === null ? (
           <p className="flex flex-1 items-center justify-center gap-2 text-[12.5px] text-muted">
@@ -207,8 +227,11 @@ function SentEmail({ appraisalId, emailId, onClose }: { appraisalId: string; ema
           </p>
         ) : email === "error" ? (
           <p className="flex flex-1 items-center justify-center text-[12.5px] text-muted">Couldn&apos;t open that email.</p>
+        ) : deck ? (
+          <iframe title="The pre-presentation as they see it" src={deck.href} className="min-h-0 w-full flex-1 rounded-2xl border border-line/80 bg-white" />
         ) : (
-          <iframe title="The email as it went" srcDoc={email.html} sandbox="" className="min-h-0 w-full flex-1 rounded-2xl border border-line/80 bg-white" />
+          /* Same origin allowed, scripts still not: some browsers draw a fully sandboxed srcdoc as a blank page. */
+          <iframe title="The email as it went" srcDoc={email.html} sandbox="allow-same-origin" className="min-h-0 w-full flex-1 rounded-2xl border border-line/80 bg-white" />
         )}
       </div>
     </Modal>

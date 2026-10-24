@@ -24,8 +24,8 @@ export const runtime = "nodejs";
 const HEADERS = {
   "content-type": "text/html; charset=utf-8",
   "cache-control": "no-store",
-  /* A landlord's pack must not be framed by another site. */
-  "x-frame-options": "DENY",
+  /* A landlord's pack must not be framed by another site; the OS may show it (the sent-items viewer, 24 Oct 2026). */
+  "x-frame-options": "SAMEORIGIN",
   "referrer-policy": "no-referrer",
 };
 
