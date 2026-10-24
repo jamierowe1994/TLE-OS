@@ -350,7 +350,7 @@ function OverviewNew({ data, error, reload, open, panel }: { data: Board | null;
     <div data-look="new" className="nl-page nl-rise nl-bo">
       <Mast
         eyebrow={data?.scope ? (data.scope.whole ? "Every home across the business" : "The homes on your own book") : "Back office"}
-        title="Overview"
+        title="PM Dashboard"
         blurb="Your homes at a glance: what is late, what is coming up, and where to go next. Every figure is live from the screen it opens."
       />
 

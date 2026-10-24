@@ -149,6 +149,30 @@ function Section({ title, items, collapsed, ...rest }: { title: string | null; i
   );
 }
 
+/**
+ * The back office in the new look (James, 24 Oct 2026, his portfolio design):
+ * two dashboards that each land somewhere - Dashboard at the top for the front
+ * office (leads, valuations), and the PM Dashboard first under Back office for
+ * the managed book. Contractors stands beside Portfolio rather than inside it.
+ * Built from the list this person was already given, so a page they can't open
+ * never appears; the old sidebar keeps lib/nav's BACK as it is.
+ */
+function pmFirst(back: NavItem[]): NavItem[] {
+  const portfolio = back.find((i) => i.href === "/portfolio");
+  if (!portfolio?.children) return back;
+  const has = (href: string) => portfolio.children!.some((c) => c.href === href);
+  const children = portfolio.children.filter((c) => c.href !== "/overview" && c.href !== "/contractors");
+  const out: NavItem[] = [];
+  if (has("/overview")) out.push({ href: "/overview", label: "PM Dashboard", icon: "grid" });
+  for (const i of back) {
+    if (i === portfolio) {
+      out.push({ ...portfolio, children });
+      if (has("/contractors")) out.push({ href: "/contractors", label: "Contractors", icon: "user" });
+    } else out.push(i);
+  }
+  return out;
+}
+
 export default function LaunchNav({
   front,
   back,
@@ -286,7 +310,7 @@ export default function LaunchNav({
       <nav className={look ? "nl-nav-list" : "mt-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2"}>
         <Section title={null} items={home} {...common} />
         <Section title="Lettings" items={lettings} {...common} />
-        <Section title="Back office" items={back} {...common} />
+        <Section title="Back office" items={look ? pmFirst(back) : back} {...common} />
         <Section title="Your workspaces" items={mine} {...common} />
       </nav>
 
