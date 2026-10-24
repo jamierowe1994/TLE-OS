@@ -351,3 +351,44 @@
 }
 .tpx .meta .got { color: var(--sage); display: none; align-items: center; gap: 6px; }
 @media (max-width: 979px) { .tpx .meta { flex-direction: column; gap: 4px; } .tpx .meta .got { display: inline-flex; } }
+
+/* ---------- the front as a real passport's data page (James, 24 Oct 2026: "make it look more realistic") ----------
+   Cream security paper with a coral guilloche, a coral band, a portrait photo
+   with the seal pressed over its corner, labelled details, a ghost of the
+   photo, and the two machine-readable lines. Sized off the card itself (cqw)
+   so the phone and the laptop read the same. */
+.tpx .pf.front.idp { container-type: size; padding: 0; justify-content: flex-start; gap: 0; color: var(--ink);
+  background: linear-gradient(160deg, #fdf8f1 0%, #f8eee2 55%, #f3e3d4 100%);
+  box-shadow: 0 24px 48px rgba(120, 52, 30, .2), 0 0 0 1px rgba(170, 74, 43, .12) inset; }
+.tpx .idp .id-guil { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tpx .idp .id-band { position: relative; display: flex; align-items: center; gap: 3cqw; height: 10.5cqw; padding: 0 4.4cqw; flex: none;
+  background: radial-gradient(130% 160% at 100% 0%, #f4ab8f 0%, var(--coral) 50%, #d9775a 100%); color: rgba(20, 20, 19, .82);
+  font-size: 2.55cqw; letter-spacing: .18em; text-transform: uppercase; font-weight: 600; }
+.tpx .idp .id-band span + span { margin-left: auto; font-weight: 500; letter-spacing: .14em; }
+.tpx .idp .id-band svg { width: 5cqw; height: 5cqw; color: var(--ink); }
+.tpx .idp .id-body { position: relative; flex: 1; display: grid; grid-template-columns: 23cqw 1fr; gap: 4.2cqw; padding: 3.6cqw 4.4cqw 0; min-height: 0; }
+.tpx .idp .id-photo { position: relative; aspect-ratio: 3 / 4; border-radius: 1.2cqw; background: linear-gradient(160deg, #f3d6c6, #e2a68c); display: grid; place-items: center;
+  box-shadow: 0 0 0 .35cqw rgba(255, 255, 255, .7), 0 .6cqw 1.6cqw rgba(120, 52, 30, .18); color: rgba(20, 20, 19, .55); }
+.tpx .idp .id-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; filter: saturate(.8) contrast(1.05) sepia(.08); }
+.tpx .idp .id-photo i { font-style: normal; font-family: var(--f-title); font-size: 7cqw; letter-spacing: -.02em; color: rgba(20, 20, 19, .62); }
+.tpx .idp .id-photo .ic { width: 7cqw; height: 7cqw; }
+.tpx .idp .id-photo .emb, .tpx .pf.front.idp .id-photo .emb { width: 17cqw; height: 17cqw; right: -8cqw; bottom: -5cqw; transform: rotate(-12deg) translate(calc(var(--dx, 0) * 2px), calc(var(--dy, 0) * 2px)); opacity: .9; }
+.tpx .idp .id-f { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1.9cqw 3cqw; align-content: start; min-width: 0; }
+.tpx .idp .id-f > div { grid-column: span 2; min-width: 0; }
+.tpx .idp .id-f > div.half { grid-column: span 1; }
+.tpx .idp .id-f dt { font-size: 2.05cqw; letter-spacing: .14em; text-transform: uppercase; color: rgba(170, 74, 43, .78); font-weight: 600; line-height: 1.2; }
+.tpx .idp .id-f dd { margin: .3cqw 0 0; font-size: 3.4cqw; font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.tpx .idp .id-f > div:first-child dd { font-family: var(--f-title); font-weight: 400; font-size: 5cqw; letter-spacing: -.02em; line-height: 1.05; text-transform: uppercase; }
+.tpx .idp .id-f dd.empty { color: rgba(20, 20, 19, .3); }
+.tpx .idp .id-bar { display: block; width: 40%; height: .55cqw; margin-top: 1cqw; border-radius: 999px; background: rgba(20, 20, 19, .1); overflow: hidden; }
+.tpx .idp .id-bar i { display: block; height: 100%; background: var(--clay); border-radius: inherit; transition: width .7s var(--ease); }
+.tpx .idp .id-ghost { position: absolute; right: 4.4cqw; bottom: 0; width: 10cqw; aspect-ratio: 3 / 4; border-radius: .8cqw; overflow: hidden; display: grid; place-items: center; opacity: .16; mix-blend-mode: multiply;
+  font-family: var(--f-title); font-size: 3.4cqw; color: var(--clay); background: rgba(219, 112, 84, .25); }
+.tpx .idp .id-ghost img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.4); }
+.tpx .idp .id-mrz { position: relative; flex: none; display: flex; flex-direction: column; gap: .5cqw; padding: 2.4cqw 4.4cqw 3.4cqw; margin-top: 2cqw;
+  font-family: var(--f-mono), ui-monospace, monospace; font-size: 2.75cqw; letter-spacing: .1em; line-height: 1.1; color: rgba(20, 20, 19, .68); white-space: pre; overflow: hidden;
+  background: linear-gradient(rgba(255, 255, 255, .55), rgba(255, 255, 255, .35)); border-top: 1px solid rgba(170, 74, 43, .1); }
+.tpx .pf.front.idp .cleared { top: auto; bottom: 3.4cqw; right: 4cqw; border-color: var(--clay); color: var(--clay); font-size: 2.4cqw; border-width: .45cqw; padding: .8cqw 2cqw; mix-blend-mode: multiply; }
+.tpx .pass.done .pf.front.idp .cleared { transform: rotate(-9deg) scale(1); }
+.tpx .pf.front.idp .glare { mix-blend-mode: overlay; }
+.tpx .pf.front.idp .holo { opacity: .22; }

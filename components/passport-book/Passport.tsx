@@ -55,6 +55,12 @@ export default function Passport({
     [bornOn(d.dob) ? `Born ${bornOn(d.dob)}` : "", d.moveWhen && d.moveWhen !== "Just looking" ? `Moving ${d.moveWhen.toLowerCase()}` : ""].filter(Boolean).join(" · ") ||
     (home ? `For ${shortAddress(home)}` : "Fills in as you go");
   const shown = cleared ? 100 : pct;
+  /* The data page: surname last, as a passport prints it, and the two machine-readable lines along the bottom built from the same. */
+  const parts = name.split(/\s+/).filter(Boolean);
+  const surname = parts.length > 1 ? parts[parts.length - 1] : parts[0] ?? "";
+  const given = parts.length > 1 ? parts.slice(0, -1).join(" ") : "";
+  const moving = d.moveWhen && d.moveWhen !== "Just looking" ? d.moveWhen : home ? shortAddress(home).split(",")[0] : "";
+  const mrz = mrzLines(surname, given, d.dob, stamped.filter((k) => k > 0).length);
   const nStamps = stamped.filter((k) => k > 0).length;
 
   /* Turn it over, thud the new stamp on, turn it back; the last one spins it. */
@@ -139,25 +145,26 @@ export default function Passport({
             <span className="edge" style={{ ["--z" as string]: "0px" }} />
             <span className="edge" style={{ ["--z" as string]: "1.5px" }} />
             <span className="edge" style={{ ["--z" as string]: "3px" }} />
-            <div className="pf front">
-              <span className="emb" aria-hidden="true"><Emboss ringId={ringId} /></span>
-              <div className="pt"><span>Tenant passport</span><Mark /></div>
-              <div className="pm">
-                <span className="pph">
+            <div className="pf front idp">
+              <Guilloche />
+              <div className="id-band"><span>The Letting Experts</span><span>Tenant passport</span><Mark /></div>
+              <div className="id-body">
+                <span className="id-photo">
                   {d.photo ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={d.photo} alt="" style={{ objectPosition: photoPosition(d.photoFocus) }} />
-                  ) : initials || <Ic k="user" />}
+                  ) : initials ? <i>{initials}</i> : <Ic k="user" />}
+                  <span className="emb" aria-hidden="true"><Emboss ringId={ringId} /></span>
                 </span>
-                <span>
-                  <b className={name ? "" : "empty"}>{name || "Your name"}</b>
-                  <span>{sub}</span>
-                </span>
+                <dl className="id-f">
+                  <div><dt>Surname</dt><dd className={surname ? "" : "empty"}>{surname || "Your name"}</dd></div>
+                  <div><dt>Given names</dt><dd>{given || "\u00a0"}</dd></div>
+                  <div className="half"><dt>Date of birth</dt><dd>{bornOn(d.dob) || "\u00a0"}</dd></div>
+                  <div className="half"><dt>Moving</dt><dd>{moving || "\u00a0"}</dd></div>
+                  <div><dt>Status</dt><dd>{cleared ? "Complete" : `In progress · ${shown}%`}<span className="id-bar"><i style={{ width: `${shown}%` }} /></span></dd></div>
+                </dl>
               </div>
-              <div className="pb">
-                <span className="bar"><i style={{ width: `${shown}%` }} /></span>
-                <em>{shown}%</em>
-              </div>
+              <div className="id-mrz" aria-hidden="true"><span>{mrz[0]}</span><span>{mrz[1]}</span></div>
               <span className="cleared">Cleared to view</span>
               <span className="glare" />
               <span className="holo" />
@@ -215,6 +222,43 @@ function Emboss({ ringId }: { ringId: string }) {
       </defs>
       <g transform="translate(0 1.1)" fill="none" stroke="rgba(120,45,22,.46)" strokeWidth="1.2">{art("rgba(120,45,22,.46)", true)}</g>
       <g transform="translate(0 -.7)" fill="none" stroke="rgba(255,255,255,.72)" strokeWidth="1.2">{art("rgba(255,255,255,.72)", true)}</g>
+    </svg>
+  );
+}
+
+/** The two machine-readable lines, 32 characters each (room at the end for the cleared stamp), the way a passport's data page ends. Only what's on the page above goes into them. */
+function mrzLines(surname: string, given: string, dob: string, stamps: number): [string, string] {
+  const clean = (x: string) => x.toUpperCase().normalize("NFD").replace(/[^A-Z ]/g, "").trim().replace(/\s+/g, "<");
+  const pad = (x: string) => (x + "<".repeat(32)).slice(0, 32);
+  const m = /^(\d{2})(\d{2})-(\d{2})-(\d{2})$/.exec(dob);
+  const born = m ? `${m[2]}${m[3]}${m[4]}` : "<<<<<<";
+  return [pad(`P<TLE${clean(surname) || "<"}<<${clean(given)}`), pad(`TENANT<PASSPORT<<${born}<<${stamps}`)];
+}
+
+/** Security paper: fine coral guilloche, a rosette behind the details and waves across the page. */
+function Guilloche() {
+  const rose: string[] = [];
+  for (let k = 0; k < 18; k++) {
+    const pts: string[] = [];
+    for (let a = 0; a <= 360; a += 4) {
+      const t = (a * Math.PI) / 180;
+      const r = 46 + k * 2.2 + 7 * Math.sin(12 * t + k * 0.35);
+      pts.push(`${(250 + r * Math.cos(t)).toFixed(1)},${(118 + r * 0.82 * Math.sin(t)).toFixed(1)}`);
+    }
+    rose.push(`M${pts.join("L")}Z`);
+  }
+  const waves: string[] = [];
+  for (let k = 0; k < 14; k++) {
+    const pts: string[] = [];
+    for (let x = -10; x <= 330; x += 6) pts.push(`${x},${(30 + k * 12 + 5 * Math.sin(x / 14 + k * 0.6)).toFixed(1)}`);
+    waves.push(`M${pts.join("L")}`);
+  }
+  return (
+    <svg className="id-guil" viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g fill="none" strokeWidth=".45">
+        <g stroke="rgba(219,112,84,.22)">{waves.map((p) => <path key={p} d={p} />)}</g>
+        <g stroke="rgba(170,74,43,.2)">{rose.map((p) => <path key={p} d={p} />)}</g>
+      </g>
     </svg>
   );
 }
