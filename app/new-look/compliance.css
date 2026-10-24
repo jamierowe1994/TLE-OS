@@ -36,6 +36,9 @@
 [data-look="new"] .nl-cmp-tob-main p { margin: 4px 0 0; }
 [data-look="new"] .nl-cmp-tob-act { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 [data-look="new"] .nl-cmp-tob-act .nl-badge { background: transparent; }
+/* The terms' ticks on the appraisal (24 Oct 2026): one tick sent, two ticks read. */
+[data-look="new"] .nl-tob-ticks { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+[data-look="new"] .nl-tob-ticks.is-read { color: var(--sage-ink); }
 [data-look="new"] .nl-cmp-signed { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--sage-ink); }
 
 /* The list: a title, the count and a ring, rows on hairlines. */

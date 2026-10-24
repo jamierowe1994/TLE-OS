@@ -31,6 +31,7 @@ import ContactBlock from "@/components/ContactBlock";
 import HomeLandlords from "@/components/HomeLandlords";
 import { LandlordOnFile } from "@/components/LandlordHomeAddress";
 import FileDocuments from "@/components/FileDocuments";
+import TermsBanner from "@/components/appraisal/TermsBanner";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Ico, Menu, Tabs, type Tone } from "@/components/new-look/Parts";
 
@@ -667,6 +668,10 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
 
             {nlTab === "documents" && (
               <section id="documents" className="scroll-mt-6">
+                {/* The terms first, as the listing's Documents has them (24 Oct 2026, new look only). */}
+                <div className="mb-6">
+                  <TermsBanner ma={ma} onChanged={(next) => (next ? saved(next) : reload())} />
+                </div>
                 <FileDocuments
                   address={ma.postcode && !ma.address.toUpperCase().includes(ma.postcode.toUpperCase()) ? `${ma.address}, ${ma.postcode}` : ma.address}
                   propertyId={ma.rexPropertyId ?? null}
