@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ExpectedPackEmail, PropolyMailView, type PropolyMail } from "@/components/MoveInPack";
+import { ExpectedPackEmail, PropolyMailView } from "@/components/MoveInPack";
+import { useNewLook } from "@/lib/use-new-look";
+import { usePropolyAdmin, day, at, OUTCOME, type Sender, type Plan } from "@/components/admin/use-propoly-admin";
+import PropolyNew from "@/components/new-look/admin/PropolyNew";
+import { Loading } from "@/components/new-look/admin/bits";
 
 /**
  * PROPOLY, FROM THE OS'S SIDE (22 Oct 2026). Owners see everything; the
@@ -20,66 +23,21 @@ import { ExpectedPackEmail, PropolyMailView, type PropolyMail } from "@/componen
  *                       found in the OS and REX, Check first, then Push.
  */
 
-type Box = { email: string; readTo: string | null; lastRunAt: string | null; found: number; note: string | null; kept: number };
-type Settings = { senders: string[]; moveInWords: string; alwaysWatch: string[]; fileOnHomes: boolean; updatedBy?: string; updatedAt?: string };
-type Gap = { name: string; email: string; role: string; why: string; alwaysWatch: boolean };
-type DocPlan = { kind: string; label: string; slot: string; found: { where: string; name: string; expiry: string; expired: boolean } | null; note: string; outcome?: string };
-type Plan = { dealId: string; address: string; status: string; moveIn: string | null; propertyIds: string[]; rexNote: string | null; docs: DocPlan[] };
-type Push = { id: string; dealId: string; address: string; by: string; at: string; results: DocPlan[] };
-type Sender = { address: string; name: string; count: number; mailboxes: number; subjects: string[] };
-type Answer = {
-  ok: boolean; error?: string; owner: boolean; goLive: string; backfillFrom: string; settings: Settings; recent: PropolyMail[]; unfiled: PropolyMail[]; boxes: Box[];
-  gaps: Gap[]; total: number; onlyOneBox: number; pushes: Push[];
-};
-
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
-const at = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(",", "");
-const OUTCOME: Record<string, string> = { uploaded: "Uploaded", already: "Already there", failed: "Failed", skipped: "Not sent" };
-
-async function post(body: Record<string, unknown>) {
-  return fetch("/api/admin/propoly-mail", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
-    .then((r) => r.json())
-    .catch(() => ({ ok: false, error: "That didn't work just now. Try again in a minute." }));
-}
+/* Types, formatters and the post live in components/admin/use-propoly-admin. */
 
 function Spinner({ label }: { label: string }) {
   return <span className="inline-flex items-center gap-2 text-sm text-muted"><span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />{label}</span>;
 }
 
 export default function PropolyAdmin() {
-  const [data, setData] = useState<Answer | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [said, setSaid] = useState<string | null>(null);
-  const [senders, setSenders] = useState("");
-  const [words, setWords] = useState("");
-  const [watch, setWatch] = useState<string | null>(null);
-  const [found, setFound] = useState<Sender[] | null>(null);
-  const [open, setOpen] = useState<PropolyMail | null>(null);
-  const [fileDeal, setFileDeal] = useState<Record<string, string>>({});
-  const [deal, setDeal] = useState("");
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [kinds, setKinds] = useState<string[]>(["gas", "eicr", "epc"]);
-  const [confirming, setConfirming] = useState(false);
+  /* Everything it reads and does lives in one hook, shared with the new look
+     (lib/new-look "admin", components/new-look/admin/PropolyNew). */
+  const p = usePropolyAdmin();
+  const look = useNewLook("admin");
+  const { data, error, busy, said, senders, setSenders, words, setWords, watch, setWatch, found, setFound, open, setOpen, fileDeal, setFileDeal, deal, setDeal, plan, setPlan, kinds, setKinds, confirming, setConfirming, load, act } = p;
 
-  const load = useCallback(async () => {
-    const j = (await fetch("/api/admin/propoly-mail", { cache: "no-store" }).then((r) => r.json()).catch(() => null)) as Answer | null;
-    if (!j?.ok) { setError(j?.error ?? "Couldn't read this just now."); return; }
-    setData(j);
-    setSenders((s) => s || j.settings.senders.join(", "));
-    setWords((w) => w || j.settings.moveInWords);
-    setWatch((w) => w ?? j.settings.alwaysWatch.join(", "));
-  }, []);
-  useEffect(() => { void load(); }, [load]);
-
-  const act = async (key: string, body: Record<string, unknown>, done: (j: Record<string, unknown>) => string | void) => {
-    setBusy(key); setSaid(null); setError(null);
-    const j = await post(body);
-    setBusy(null);
-    if (!j?.ok) { setError(j?.error ?? "That didn't work."); return; }
-    const msg = done(j);
-    if (msg) setSaid(msg);
-  };
+  if (look === null) return <Loading label="Opening Propoly…" page />;
+  if (look) return <PropolyNew p={p} />;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
