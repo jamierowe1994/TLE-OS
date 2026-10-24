@@ -153,7 +153,7 @@
 .tpx .btn:not(.primary):not(.link):hover { background: var(--sage); border-color: var(--sage); color: #fff; }
 .tpx .btn[disabled] { opacity: .45; pointer-events: none; }
 .tpx .fine { margin-top: 40px; font-size: 12.5px; color: var(--faint); }
-.tpx .fine .ic { width: 13px; height: 13px; vertical-align: -2px; margin-right: 6px; }
+.tpx .fine .ic { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-right: 6px; }
 .tpx .fine a { color: inherit; }
 .tpx .fine.bad { color: var(--clay); }
 .tpx .fade { animation: tpx-fin .45s var(--ease); }
@@ -273,7 +273,7 @@
 @media (min-width: 980px) {
   .tpx .wrap { max-width: 1240px; display: grid; grid-template-columns: minmax(400px, 1fr) minmax(0, 560px); gap: clamp(48px, 6vw, 96px); align-items: start; text-align: left; padding: 32px 40px 80px; }
   .tpx.short .wrap { min-height: 0; display: grid; padding-top: 32px; }
-  .tpx .passcol { position: sticky; top: 99px; height: calc(100vh - 131px); min-height: 480px; background: var(--grey); border-radius: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; }
+  .tpx .passcol { position: sticky; top: 99px; height: calc(100vh - 131px); min-height: 480px; background: var(--grey); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; }
   .tpx .pass, .tpx.steps-on .pass { --w: min(400px, 100%); margin: 0 auto; text-align: center; }
   .tpx .top-in, .tpx .rail { max-width: 1240px; padding-left: 40px; padding-right: 40px; }
   .tpx .pm b { font-size: 25px; max-width: 250px; } .tpx .pph { width: 62px; height: 62px; font-size: 21px; } .tpx .pf { padding: 22px 24px; }
@@ -318,11 +318,36 @@
   .tpx .pass, .tpx.steps-on .pass { --w: min(440px, 100%); }
   .tpx .passcol { padding: 48px; }
 }
-/* ---------- phones: no passport, just the questions. Stamps show as dots in the header ---------- */
+/* ---------- phones (James, 24 Oct 2026: "sharper, a bit more interesting") ----------
+   The passport opens and closes it, full size on the start and the finish;
+   between, each step wears it as a slim coral strip that fills in. */
+.tpx .strip { display: none; }
 @media (max-width: 979px) {
-  .tpx .passcol { display: none; }
-  .tpx .stampdots { display: flex !important; }
-  .tpx.short .wrap { min-height: calc(100vh - 59px); }
+  .tpx.steps-on:not(.short) .passcol { display: none; }
+  .tpx .passcol { padding: 28px 0 4px; }
+  .tpx .pass, .tpx.steps-on .pass { --w: min(318px, 100%); margin-bottom: 30px; }
+  .tpx.short .wrap { min-height: calc(100vh - 59px); justify-content: flex-start; padding-top: 0; }
+  .tpx.steps-on.short .pf { padding: 18px 20px; border-radius: 20px; } .tpx.steps-on.short .pph { width: 52px; height: 52px; font-size: 18px; } .tpx.steps-on.short .pm b { font-size: 21px; max-width: 190px; }
+  .tpx .strip {
+    display: flex; align-items: center; gap: 12px; margin: 10px 16px 10px; padding: 11px 14px; border-radius: 16px; color: var(--ink);
+    background: radial-gradient(130% 140% at 100% 0%, #f4ab8f 0%, var(--coral) 50%, #dc7a5d 100%);
+    box-shadow: 0 10px 24px rgba(170, 74, 43, .18), 0 1px 0 rgba(255, 255, 255, .2) inset;
+  }
+  .tpx .sp-ph { width: 36px; height: 36px; border-radius: 50%; flex: none; display: grid; place-items: center; overflow: hidden; font-family: var(--f-title); font-size: 14px; background: linear-gradient(150deg, #f7c3ad, #e08a6c); box-shadow: inset 0 2px 3px rgba(120, 45, 22, .35), inset 0 -2px 2px rgba(255, 255, 255, .35); }
+  .tpx .sp-ph img { width: 100%; height: 100%; object-fit: cover; }
+  .tpx .sp-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+  .tpx .sp-name b { font-family: var(--f-title); font-weight: 400; font-size: 16px; letter-spacing: -.01em; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 0 rgba(255, 255, 255, .3); }
+  .tpx .sp-bar { height: 3px; border-radius: 999px; background: rgba(20, 20, 19, .14); overflow: hidden; }
+  .tpx .sp-bar i { display: block; height: 100%; background: var(--ink); border-radius: inherit; transition: width .7s var(--ease); }
+  .tpx .sp-stamps { display: flex; align-items: center; gap: 4px; flex: none; }
+  .tpx .sp-stamps i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid rgba(20, 20, 19, .35); box-sizing: border-box; transition: background .3s, border-color .3s; }
+  .tpx .sp-stamps i.on { background: var(--ink); border-color: var(--ink); }
+  .tpx .sp-stamps i.pop { animation: tpx-pop .5s var(--ease); }
+  /* The seal sits smaller and lower on a phone, clear of the name. */
+  .tpx .emb { width: 76px; height: 76px; right: 12px; bottom: 14px; }
+  .tpx .pf.front .pb { margin-right: 86px; }
+  .tpx.steps-on.short .pm b, .tpx .pm b { max-width: 168px; }
+  .tpx .sp-stamps em { font-style: normal; font-size: 11.5px; margin-left: 4px; font-variant-numeric: tabular-nums; color: rgba(20, 20, 19, .7); }
 }
 .tpx .meta .got { color: var(--sage); display: none; align-items: center; gap: 6px; }
 @media (max-width: 979px) { .tpx .meta { flex-direction: column; gap: 4px; } .tpx .meta .got { display: inline-flex; } }

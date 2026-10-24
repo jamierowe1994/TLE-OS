@@ -577,6 +577,22 @@ export default function PassportBookForm({
             ))}
           </div>
         )}
+        {at === "steps" && (
+          /* Phones only: the passport, slimmed to a strip above each step, filling in as they go (James, 24 Oct 2026). */
+          <div className="strip" aria-hidden="true">
+            <span className="sp-ph">{d.photo ? <img src={d.photo} alt="" /> : initialsOf(d.legalName) || <Ic k="user" />}</span>
+            <span className="sp-name">
+              <b>{d.legalName.trim() || "Your passport"}</b>
+              <span className="sp-bar"><i style={{ width: `${pct}%` }} /></span>
+            </span>
+            <span className="sp-stamps">
+              {steps.slice(1).map((st, i) => (
+                <i key={st.id} className={`${stamped.includes(i + 1) ? "on" : ""}${pop === i + 1 ? " pop" : ""}`} />
+              ))}
+              <em>{stamped.length}/{slots}</em>
+            </span>
+          </div>
+        )}
       </header>
       <div className="wrap">
         <Passport d={d} pct={pct} steps={steps} stamped={stamped} cleared={at === "end"} fresh={fresh} home={home} />
@@ -589,3 +605,5 @@ export default function PassportBookForm({
     </div>
   );
 }
+
+const initialsOf = (name: string) => name.trim().split(/\s+/).filter(Boolean).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
