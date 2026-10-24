@@ -187,6 +187,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   /* The new look's sidebar and frame (lib/new-look "nav", 23 Oct 2026): flat,
      full height, one straight line down to a white page - no rounded window. */
   const navLook = useNewLook("nav") === true;
+  const warmLook = useNewLook("warm") === true;
   /* With the new Leads page on, Leads opens to just Tenant and Landlord
      (James, 24 Oct 2026: "get rid of that tab where we click Add a tenant or
      Add a landlord. Just have it as a dropdown for leads"). Adding a lead is
@@ -305,7 +306,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     /* os-type: the agents' own title face, Bricolage Grotesque (11 Sep) - see globals.css. */
-    <div data-nav-look={navLook ? "new" : undefined} className={`os-type flex min-h-screen ${navLook ? "bg-[var(--nv-page)]" : "lg:bg-[var(--shell-bg)]"}`}>
+    <div data-nav-look={navLook ? "new" : undefined} data-warm={navLook && warmLook ? "" : undefined} className={`os-type flex min-h-screen ${navLook ? "bg-[var(--nv-page)]" : "lg:bg-[var(--shell-bg)]"}`}>
       {/* The grey round the page: a clear rounded window over the content,
           grey everywhere outside it. The window still scrolls as before, so
           nothing that scrolls the page or sticks to it changes; content just
