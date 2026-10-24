@@ -5,6 +5,7 @@ import { hasDb, q } from "@/lib/db";
 import { resendConfigured, resendSendUnlocked, fromAddress } from "@/lib/resend";
 import { docusealConfigured, docusealSendUnlocked } from "@/lib/docuseal";
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
+import { rexTruth } from "@/lib/wiring-truth";
 import { launchPadConfigured } from "@/lib/launchpad";
 import { propolyConfigured } from "@/lib/business/propoly";
 import { payPropConfigured } from "@/lib/payprop";
@@ -127,7 +128,16 @@ export async function GET(req: NextRequest) {
       founding: await foundingState(),
       note: "This domain emails colleagues only. Client email needs the public sending domain.",
     },
-    rex: { configured: rexConfigured(), writesLocked: rexWritesLocked() },
+    /* REX's state is REX status's (lib/rex-outage, 24 Oct 2026), so Wiring
+       and Admin > REX status can never disagree about whether REX is up.
+       Null when it could not be read, never a guess. */
+    rex: {
+      configured: rexConfigured(),
+      writesLocked: rexWritesLocked(),
+      status: await rexTruth()
+        .then((t) => ({ mode: t.mode, down: t.down, reason: t.reason, lastOkAt: t.lastOkAt }))
+        .catch(() => null),
+    },
     docuseal: { configured: docusealConfigured(), canSend: docusealSendUnlocked() },
     /* Launch Pad, which now decides who may open a PAID tool.
      *

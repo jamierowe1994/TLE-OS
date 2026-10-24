@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
+import { useNewLook } from "@/lib/use-new-look";
+import RexStatusNew, { type RexMode, type Status, type Row, type PhaseCheck, type Hand, type CatchupProgress, type Run } from "@/components/new-look/admin/RexStatusNew";
 
 /**
  * REX status (21 Oct 2026, lib/rex-outage).
@@ -13,45 +15,7 @@ import { Pill } from "@/components/Wire";
  * waiting to go to REX.
  */
 
-type Mode = "auto" | "down" | "up";
-type Status = {
-  down: boolean;
-  reason: "forced" | "planned" | "detected" | null;
-  setting: { mode: Mode; plannedFrom: string | null; plannedUntil: string | null; setBy: string; setAt: string | null };
-  copyTakenAt: string | null;
-  oldestServedAt: string | null;
-  servedCount: number;
-  missedCount: number;
-  missedWhat: Array<{ what: string; n: number }>;
-  waiting: number;
-  lastOkAt: string | null;
-  lastFailAt: string | null;
-  lastFailWhat: string | null;
-  trippedAt: string | null;
-  snapshot: { rows: number; newest: string | null; oldest: string | null; mb: number } | null;
-  lastRun: { startedAt: string; finishedAt: string | null; by: string; steps: number; failed: number; kept: number; note?: string } | null;
-};
-type Row = {
-  id: string;
-  service: string;
-  method: string;
-  actorName: string;
-  asPerson: boolean;
-  recordKind: string | null;
-  recordId: string | null;
-  summary: string;
-  state: "waiting" | "sent" | "failed" | "held" | "skipped";
-  queuedAt: string;
-  sentAt: string | null;
-  error: string | null;
-};
-type Item = { id: string; label: string; detail: string; at: string | null; href?: string };
-type PhaseCheck = { key: string; label: string; what: string; items: Item[]; error: string | null };
-type Hand = { id: string; what: string; summary: string; who: string; at: string; recordKind: string | null; recordId: string | null; href: string | null };
-type PhaseRun = { key: string; sent: number; stopped: { id: string; label: string; error: string } | null; skippedBecause?: string };
-type CatchupProgress = { running: boolean; by: string; startedAt: string | null; finishedAt: string | null; phase: string | null; results: PhaseRun[] };
-type Run = { running: boolean; planned: number; done: number; failed: number; current: string | null; lastError: string | null; deadline: string | null };
-
+type Mode = RexMode;
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }) : "-";
 
@@ -82,11 +46,15 @@ export default function RexStatusPage() {
   const [checking, setChecking] = useState(false);
   const [catchup, setCatchup] = useState<CatchupProgress | null>(null);
   const [openPhase, setOpenPhase] = useState<string | null>(null);
+  const [checkFailed, setCheckFailed] = useState(false);
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
 
   const load = useCallback(() => {
     fetch("/api/admin/rex-status", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: { status: Status; queue: Row[]; run: Run; catchup: CatchupProgress }) => {
+        setDenied(false);
         setS(j.status);
         setRows(j.queue);
         setRun(j.run);
@@ -134,8 +102,12 @@ export default function RexStatusPage() {
     setChecking(true);
     fetch("/api/admin/rex-status?catchup=1", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => j && setCheck({ since: j.since, phases: j.phases, hand: j.hand }))
-      .catch(() => {})
+      .then((j) => {
+        /* The new look says when this look failed; the old one never did. */
+        setCheckFailed(!j);
+        if (j) setCheck({ since: j.since, phases: j.phases, hand: j.hand });
+      })
+      .catch(() => setCheckFailed(true))
       .finally(() => setChecking(false));
   }, []);
 
@@ -145,6 +117,32 @@ export default function RexStatusPage() {
     if (wasRunning.current && catchup && !catchup.running) lookAgain();
     wasRunning.current = Boolean(catchup?.running);
   }, [catchup, lookAgain]);
+
+  if (look === null) return <p className="text-[12.5px] text-muted">Loading…</p>;
+  if (look) {
+    return (
+      <RexStatusNew
+        s={s}
+        denied={denied}
+        rows={rows}
+        run={run}
+        busy={busy}
+        flash={flash}
+        from={from}
+        until={until}
+        setFrom={setFrom}
+        setUntil={setUntil}
+        check={check}
+        checking={checking}
+        checkFailed={checkFailed}
+        catchup={catchup}
+        openPhase={openPhase}
+        setOpenPhase={setOpenPhase}
+        act={act}
+        lookAgain={lookAgain}
+      />
+    );
+  }
 
   if (denied) return <p className="text-[12.5px] text-muted">Only an owner can see this.</p>;
   if (!s) return <p className="text-[12.5px] text-muted">Loading…</p>;

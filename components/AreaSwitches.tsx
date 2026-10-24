@@ -12,7 +12,7 @@ import { AREA_LEVELS, type AreaLevel } from "@/lib/area-map";
  * confirmations. The scoped pilot's switch ladder says which to move, and when.
  */
 
-type Area = {
+export type Area = {
   id: string;
   label: string;
   phase: 1 | 2;
@@ -23,7 +23,7 @@ type Area = {
   changedAt: string | null;
 };
 /* What each position means for a single button rather than a whole screen. */
-const BUTTON_SAYS: Record<AreaLevel, string> = {
+export const BUTTON_SAYS: Record<AreaLevel, string> = {
   hidden: "The button is not there for agents.",
   look: "Agents see the button, and it will not press.",
   practice: "It presses on an agent's own test file, and nowhere else.",
@@ -31,9 +31,10 @@ const BUTTON_SAYS: Record<AreaLevel, string> = {
   everyone: "Live for every agent.",
 };
 
-type Tester = { email: string; addedBy: string; addedAt: string };
+export type Tester = { email: string; addedBy: string; addedAt: string };
 
-export default function AreaSwitches() {
+/** The areas and the testers, read and moved - shared with the new look's Switches (components/new-look/admin/SwitchesNew). */
+export function useAreaSwitches() {
   const [areas, setAreas] = useState<Area[] | null>(null);
   const [testers, setTesters] = useState<Tester[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,6 +72,12 @@ export default function AreaSwitches() {
       setBusy(null);
     }
   }
+
+  return { areas, testers, busy, flash, email, setEmail, call };
+}
+
+export default function AreaSwitches() {
+  const { areas, testers, busy, flash, email, setEmail, call } = useAreaSwitches();
 
   if (!areas) return <p className="mt-6 text-[12.5px] text-muted">{flash ?? "Reading the areas…"}</p>;
 

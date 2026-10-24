@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import WiringSheet from "@/components/WiringSheet";
+import { useNewLook } from "@/lib/use-new-look";
+import WiringNew, { type Health, type Truth } from "@/components/new-look/admin/WiringNew";
 
 /**
  * The switches — moved here off Profile, where an agent could see them.
@@ -11,27 +13,33 @@ import WiringSheet from "@/components/WiringSheet";
  * a token or a connection string. Safe to have open while on a call.
  */
 
-type Health = {
-  db: { connected: boolean; users?: number | null; verificationsPending?: number | null };
-  resend: { configured: boolean; canSend: boolean; from: string | null; verdict: string };
-  rex: { configured: boolean; writesLocked: boolean };
-  docuseal: { configured: boolean; canSend: boolean };
-  emailPolicy: { internalDomains: string[]; note: string };
-  /* Optional so an older deploy of the API doesn't blank the whole page. */
-  launchPad?: { configured: boolean; base: string | null; keySet: boolean };
-  propoly?: { configured: boolean; keySet?: boolean; agentSet?: boolean; seen?: string[] };
-  payProp?: { configured: boolean };
-  ghl?: { configured: boolean };
-  tegHub?: { configured: boolean };
-};
-
 export default function AdminConnections() {
   const [h, setH] = useState<Health | null>(null);
   const [err, setErr] = useState(false);
   /* Back from PayProp: the callback lands here with a word either way. */
   const [payprop, setPayprop] = useState<{ ok: boolean; detail: string } | null>(null);
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
+  /* What the other tabs own - REX status, the switches, Testing's walks -
+     read from them (lib/wiring-truth), for the new look's Wiring only. */
+  const [truth, setTruth] = useState<Truth | null>(null);
+  const [truthErr, setTruthErr] = useState(false);
+  const loadTruth = useCallback(() => {
+    setTruthErr(false);
+    fetch("/api/admin/wiring", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((j: Truth) => setTruth(j))
+      .catch(() => setTruthErr(true));
+  }, []);
   useEffect(() => {
+    if (look) loadTruth();
+  }, [look, loadTruth]);
+  const loadHealth = useCallback(() => {
+    setErr(false);
     fetch("/api/os-health").then((r) => (r.ok ? r.json() : Promise.reject(new Error()))).then(setH).catch(() => setErr(true));
+  }, []);
+  useEffect(() => {
+    loadHealth();
     try {
       const sp = new URLSearchParams(window.location.search);
       const st = sp.get("payprop");
@@ -39,7 +47,14 @@ export default function AdminConnections() {
     } catch {
       /* fine */
     }
-  }, []);
+  }, [loadHealth]);
+
+  if (look === null) {
+    return <p className="text-[12.5px] text-muted">Loading…</p>;
+  }
+  if (look) {
+    return <WiringNew h={h} healthErr={err} payprop={payprop} truth={truth} truthErr={truthErr} onRetry={() => { loadHealth(); loadTruth(); }} />;
+  }
 
   if (err) return <p className="mt-6 text-[12.5px] text-accent-dark">Couldn&apos;t read the wiring.</p>;
   if (!h) return <p className="text-[12.5px] text-muted">Loading…</p>;

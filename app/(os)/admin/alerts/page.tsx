@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
-import type { AlertRule, AlertTypeDef } from "@/lib/alert-types";
+import type { AlertRule } from "@/lib/alert-types";
+import { useNewLook } from "@/lib/use-new-look";
+import AlertsNew, { RULES, type AlertData } from "@/components/new-look/admin/AlertsNew";
 
 /**
  * Phone alerts, kind by kind (5 Oct 2026).
@@ -22,14 +24,7 @@ import type { AlertRule, AlertTypeDef } from "@/lib/alert-types";
  * is sent at all; this page says so at the top rather than looking armed.
  */
 
-type Row = AlertTypeDef & { rule: AlertRule; optedOut: number };
-type Data = { armed: boolean; people: number; phones: number; types: Row[] };
-
-const RULES: Array<{ id: AlertRule; label: string }> = [
-  { id: "off", label: "Off" },
-  { id: "on", label: "On" },
-  { id: "always", label: "Always" },
-];
+type Data = AlertData;
 
 export default function AdminAlerts() {
   const [data, setData] = useState<Data | null>(null);
@@ -73,6 +68,12 @@ export default function AdminAlerts() {
       setBusy(null);
     }
   }
+
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. It
+     carries the Phone alerts master switch itself, which leaves Switches. */
+  const look = useNewLook("admin");
+  if (look === null) return <p className="text-[12.5px] text-muted">Loading…</p>;
+  if (look) return <AlertsNew data={data} denied={denied} error={error} busy={busy} set={set} reload={load} />;
 
   if (denied) {
     return (

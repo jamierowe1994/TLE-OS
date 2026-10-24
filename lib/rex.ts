@@ -282,6 +282,18 @@ function writeIsUnlocked(service: string, method: string): boolean {
  * while refusing — true of the environment, and the opposite of what the
  * reader would conclude.
  */
+/**
+ * The writes REX_ALLOW_WRITES names, as written (24 Oct 2026). For the Wiring
+ * tab, which shows the server's lock beside the switches rather than a bare
+ * "locked" that hides which doors are open. Method names, never a secret.
+ */
+export function rexAllowedWrites(): string[] {
+  return (process.env.REX_ALLOW_WRITES ?? "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
 export function rexWritesLocked(service?: string, method?: string): boolean {
   if (service && method) return !writeIsUnlocked(service, method);
   return !(process.env.REX_ALLOW_WRITES ?? "").trim();

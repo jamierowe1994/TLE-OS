@@ -26,6 +26,13 @@ export interface WiringRow {
   item: string;
   state: WiringState;
   note: string;
+  /**
+   * The Testing steps that walk this row, as "journey/step" (lib/testing-journeys).
+   * Where there are any, the new look's Wiring says whether it is tested from
+   * the walks people actually recorded, not from `state`; `state` is kept only
+   * for rows nothing can measure, and labelled as a typed note (24 Oct 2026).
+   */
+  walks?: string[];
 }
 
 export const WIRING_STATES: Record<WiringState, { label: string; tone: string }> = {
@@ -136,6 +143,7 @@ export const WIRING: WiringRow[] = [
     system: "rex",
     area: "Listings & publishing",
     item: "Read the whole rental book (275 current rentals, photos included)",
+    walks: ["listing/capture"],
     state: "live",
     note: "Done 9 Aug — the listings page is real, 275 of them on 16 Sep 2026 with live photos, rents, EPC dates and availability. Days on market is genuine for the 105 published and honestly blank for the 170 drafts, which have never been on a portal. 23 listings quote rent WEEKLY and are labelled as such; a third of the book has no rent set at all and says so.",
   },
@@ -164,6 +172,7 @@ export const WIRING: WiringRow[] = [
     system: "rex",
     area: "Listings & publishing",
     item: "Create contacts in REX from the OS",
+    walks: ["landlord/add-by-hand"],
     state: "live",
     note: "Built 30 Aug. A contact saved in the New Lead panel is written to the OS first and REX second, and the two are reported separately — so a locked write can never lose somebody's typing. The REX half needs THREE things at once: Contacts/create named in REX_ALLOW_WRITES, the Create contacts in REX switch armed on Admin -> Switches, and the person to have linked their own REX account on Profile. There is no fallback to the office login: a contact created under the shared account would put the wrong name in REX's audit trail forever. Every contact made this way is tagged 'Added in TLE OS', so one search finds all of them if a batch ever needs undoing. LIVE: four contacts created in REX this way (last 13 Sep 2026) and eighteen edits written back, all recorded in the audit log.",
   },
@@ -213,6 +222,7 @@ export const WIRING: WiringRow[] = [
     system: "rex",
     area: "Leads",
     item: "Pull those leads into the OS leads page",
+    walks: ["tenant/enquiry"],
     state: "live",
     note: "Done 9 Aug — the leads page is real. It walks the 500 newest enquiries, keeps the lettings ones (237 at last refresh) and sets aside the sales book, saying on screen how many and why. Cached so it opens instantly. Names, numbers, the property they asked about, its photo, the agent it's assigned to, and their own message — all live.",
   },
@@ -234,6 +244,7 @@ export const WIRING: WiringRow[] = [
     system: "rex",
     area: "Compliance",
     item: "Read certificates out of REX (EICR, gas, EPC, HMO licences)",
+    walks: ["listing/certs"],
     state: "live",
     note: "Done 9 Aug — the compliance page is real: 527 certificate records across 294 homes, 212 with the document itself attached, all eight certificate types mapped. Certificates hang off the PROPERTY, not the listing — querying by listing id returns almost nothing and looks like a compliant book. The page states what it doesn't know: 257 homes with no record, and 236 with no gas record, which is unknown rather than exempt.",
   },
@@ -241,6 +252,7 @@ export const WIRING: WiringRow[] = [
     system: "rex",
     area: "Compliance",
     item: "Write certificates back into REX compliance entries",
+    walks: ["compliance/rex-write"],
     state: "live",
     note: "Live since 5 Sep 2026 and used in anger: 2,433 certificates filed by the OS, 1,962 of them written into REX as compliance entries with the document attached (the backlog run of 6 Sep). Learned the hard way — the file must go inside the type's own details block, a top-level file_uri is silently ignored, and an update will not attach a file to an entry that already exists. Gated by the Certificates into REX switch as well as the allowlist.",
   },
@@ -278,6 +290,7 @@ export const WIRING: WiringRow[] = [
     system: "payprop",
     area: "Reading the money",
     item: "UK agency — the bigger book",
+    walks: ["listing/payprop-uk"],
     state: "blocked",
     note: "No UK API key exists — not here, not in the portal. The portal runs this agency on OAuth, which two apps can't share (PayProp mints a new refresh token on every refresh, and the client has one registered redirect URL — the portal's). Unblock: the UK agency admin issues an API key at uk.payprop.com/c/settings/api, then it goes in as PAYPROP_API_KEY_UK. Beware: the last thing in that variable was the PROPOLY key by mistake — PayProp keys are 60-character padded base64, Propoly's is 40 unpadded.",
   },
@@ -285,6 +298,7 @@ export const WIRING: WiringRow[] = [
     system: "payprop",
     area: "Reading the money",
     item: "Fees & arrears widgets on real figures",
+    walks: ["listing/payprop-uk"],
     state: "proven",
     note: "The portal computes fee generation and arrears from all-payments and tenant balances today. Once a key is on this environment the Finances board swaps from sample to real.",
   },
@@ -331,6 +345,7 @@ export const WIRING: WiringRow[] = [
     system: "sends",
     area: "Getting messages out",
     item: "Email to a landlord, from the agent's own Microsoft mailbox",
+    walks: ["agent/mailbox"],
     state: "untested",
     note: "Decided 30 Aug, and it overrides the row above for anything landlord-facing. REX sends WITH an agent's address on it but never THROUGH their mailbox: the sent copy is not in their Sent Items, so the landlord's reply has nothing to thread onto and half the conversation ends up in each system. Microsoft Graph sends from the mailbox itself, and the message is BCC'd to that agent's own REX email dropbox (3517.<rexUserId>@emaildrop.uk.rexsoftware.com, asked for rather than constructed) so the timeline is kept. Ported from the working integration in TEG-Paid-Ads-platform — same Azure app, same tenant, delegated only, with Mail.Read added so the thread can be read back. Two mailboxes are connected so far (James, 10 Sep; Michael, 15 Sep) and a lead now shows that person's own emails read back from Outlook; a viewing email sent from the agent's mailbox is built and still to be seen landing in a real Sent Items. Needs the TLE OS redirect URI and Mail.Read adding to that app registration, then each person connects their own mailbox from Admin → People → Invites → Email Connections. Nothing sends as somebody who has not connected.",
   },
@@ -368,6 +383,7 @@ export const WIRING: WiringRow[] = [
     system: "foundations",
     area: "The ground floor",
     item: "Real sign-in (per-person accounts) and a database",
+    walks: ["agent/join"],
     state: "live",
     note: "Both done 9 Aug. Postgres is up and the schema builds itself; sign-in runs on it at Your account — scrypt passwords, signed 30-day sessions, first person becomes owner and further accounts are created from inside. It sits ALONGSIDE the office access code rather than replacing it, so a bad deploy can never lock the team out of their own product. Still to come: moving notes, layouts and profiles off the browser onto the account that now owns them.",
   },
@@ -382,7 +398,99 @@ export const WIRING: WiringRow[] = [
     system: "foundations",
     area: "The ground floor",
     item: "Tenant & landlord portals on real customer accounts",
+    walks: ["landlord-portal/link", "tenant-portal/account"],
     state: "blocked",
     note: "Both portals are built and walk-through-able, but run on demo people until sign-in + database exist.",
   },
 ];
+
+/* ── What the new look's Wiring reads besides this list (24 Oct 2026) ──────
+ *
+ * James asked for the overlaps between Admin's tabs to go, so that Wiring and
+ * the tab that owns a fact can never say different things:
+ *
+ *   REX            the REX status tab's own state (lib/rex-outage), not env vars
+ *   locks          the switches store (lib/switches) beside the server's own
+ *                  locks, each named for what it is
+ *   tested         Testing's recorded walks (os_test_runs), where a row maps
+ *
+ * The shapes are here so the page and /api/admin/wiring share them; the
+ * reading is in lib/wiring-truth (server only).
+ */
+
+export type RexModeWord = "auto" | "down" | "up";
+
+export interface RexTruth {
+  configured: boolean;
+  mode: RexModeWord;
+  down: boolean;
+  reason: "forced" | "planned" | "detected" | null;
+  plannedFrom: string | null;
+  plannedUntil: string | null;
+  setBy: string;
+  setAt: string | null;
+  lastOkAt: string | null;
+  lastFailAt: string | null;
+  lastFailWhat: string | null;
+  trippedAt: string | null;
+  waiting: number;
+}
+
+export interface SwitchLine {
+  key: string;
+  label: string;
+  on: boolean;
+  fromEnv: boolean;
+  legacyEnv: string;
+  changedBy: string | null;
+  changedAt: string | null;
+}
+
+export interface LockTruth {
+  /** SENDING_LOCKED: the brake on the server that holds every switch off. */
+  brake: boolean;
+  email: { configured: boolean; serverOpen: boolean; customers: SwitchLine | null };
+  docuseal: { configured: boolean; serverOpen: boolean };
+  rex: { configured: boolean; serverOpen: string[]; switches: SwitchLine[] };
+}
+
+export interface WalkLine {
+  key: string;
+  journey: string;
+  step: string;
+  light: "green" | "amber" | "red" | "grey";
+  stale: boolean;
+  result: "pass" | "fail" | null;
+  by: string | null;
+  at: string | null;
+}
+
+export type Verdict = { label: string; tone: "good" | "accent" | "info" | "warning" | "neutral"; measured: boolean; detail: string | null };
+
+/**
+ * Whether a row is tested. Measured from the walks where the row maps to any;
+ * otherwise the typed state, said to be typed. `walks` null means Testing's
+ * record could not be read, and the row says that rather than guessing.
+ */
+export function rowVerdict(row: WiringRow, walks: Record<string, WalkLine> | null, titles: Record<string, string>): Verdict {
+  if (!row.walks?.length) {
+    const s = WIRING_STATES[row.state];
+    const tone = row.state === "live" ? "good" : row.state === "blocked" ? "accent" : row.state === "untested" ? "warning" : "neutral";
+    return { label: s.label.replace(/ — /g, ", "), tone, measured: false, detail: "Typed note: nothing on Testing walks this, so it can't be measured." };
+  }
+  const named = row.walks.map((k) => titles[k] ?? k).join(", ");
+  if (!walks) return { label: "Couldn't read the walks", tone: "accent", measured: true, detail: `Walked on Testing as: ${named}.` };
+  const lines = row.walks.map((k) => walks[k]).filter(Boolean) as WalkLine[];
+  const newest = lines.filter((l) => l.at).sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""))[0];
+  const last = newest ? ` Last walked by ${newest.by ?? "somebody"}, ${new Date(newest.at!).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.` : "";
+  const detail = `Walked on Testing as: ${named}.${last}`;
+  if (lines.length < row.walks.length) return { label: "Not walked yet", tone: "warning", measured: true, detail };
+  if (lines.some((l) => l.result === "fail")) return { label: "Last walk failed", tone: "accent", measured: true, detail };
+  if (lines.every((l) => l.light === "red" || l.light === "grey")) return { label: "Can't be walked yet", tone: "neutral", measured: true, detail };
+  if (lines.some((l) => l.light === "amber")) return { label: "Not walked yet", tone: "warning", measured: true, detail };
+  if (lines.some((l) => l.stale)) return { label: "Passed, rebuilt since", tone: "warning", measured: true, detail };
+  return { label: "Walked and passed", tone: "good", measured: true, detail };
+}
+
+/** Every "journey/step" any row maps to, for the server to look up. */
+export const WALKED_STEPS: string[] = Array.from(new Set(WIRING.flatMap((r) => r.walks ?? [])));

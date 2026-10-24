@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import AreaSwitches from "@/components/AreaSwitches";
 import NewLookSwitches from "@/components/NewLookSwitches";
+import { useSwitches } from "@/lib/use-switches";
+import { useNewLook } from "@/lib/use-new-look";
+import SwitchesNew from "@/components/new-look/admin/SwitchesNew";
 
 /**
  * What's armed — the page that turns sending on and off.
@@ -34,63 +36,16 @@ import NewLookSwitches from "@/components/NewLookSwitches";
  * arm that without having read so.
  */
 
-type SwitchState = {
-  key: string;
-  label: string;
-  what: string;
-  who: string;
-  confirm: string;
-  legacyEnv: string;
-  on: boolean;
-  fromEnv: boolean;
-  changedBy: string | null;
-  changedAt: string | null;
-};
-
 export default function AdminSwitches() {
-  const [rows, setRows] = useState<SwitchState[] | null>(null);
-  const [locked, setLocked] = useState(false);
-  const [denied, setDenied] = useState(false);
-  const [arming, setArming] = useState<string | null>(null);
-  const [typed, setTyped] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [flash, setFlash] = useState<string | null>(null);
+  /* The data and the arming, shared with the new look and with the Phone
+     alerts tab (lib/use-switches). */
+  const sw = useSwitches();
+  const { rows, locked, denied, arming, setArming, typed, setTyped, busy, flash, setFlash, change } = sw;
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
 
-  const load = useCallback(() => {
-    fetch("/api/admin/switches")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
-      .then((d: { switches: SwitchState[]; locked: boolean }) => {
-        setRows(d.switches);
-        setLocked(d.locked);
-      })
-      .catch(() => setDenied(true));
-  }, []);
-  useEffect(load, [load]);
-
-  async function change(key: string, on: boolean, phrase: string) {
-    setBusy(true);
-    setFlash(null);
-    try {
-      const r = await fetch("/api/admin/switches", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ key, on, typed: phrase }),
-      });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
-      if (j.ok) {
-        setFlash(on ? "Armed." : "Turned off.");
-        setArming(null);
-        setTyped("");
-        load();
-      } else {
-        setFlash(j.error ?? "That didn't work.");
-      }
-    } catch {
-      setFlash("That didn't work.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  if (look === null) return <p className="text-[12.5px] text-muted">Loading…</p>;
+  if (look) return <SwitchesNew sw={sw} />;
 
   if (denied) {
     return (

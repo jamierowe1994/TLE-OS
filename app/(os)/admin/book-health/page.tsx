@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { HealthFinding, HealthKind, HealthReport } from "@/lib/book-health";
+import type { HealthFinding, HealthKind } from "@/lib/book-health";
+import { useNewLook } from "@/lib/use-new-look";
+import BookHealthNew, { type BookAnswer } from "@/components/new-look/admin/BookHealthNew";
 
 /**
  * The weekly book health check, in full (6 Oct 2026).
@@ -14,13 +16,7 @@ import type { HealthFinding, HealthKind, HealthReport } from "@/lib/book-health"
  * person puts right in REX, REX PM or the certificate.
  */
 
-type Answer = {
-  ok: boolean;
-  error?: string;
-  report: HealthReport | null;
-  labels: Record<HealthKind, { title: string; fix: string }>;
-  order: HealthKind[];
-};
+type Answer = BookAnswer;
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
@@ -48,6 +44,11 @@ export default function BookHealth() {
   useEffect(() => {
     void load();
   }, []);
+
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
+  if (look === null) return <p className="px-4 py-8 text-sm text-muted">Loading…</p>;
+  if (look) return <BookHealthNew data={data} error={error} running={running} open={open} setOpen={setOpen} load={load} />;
 
   const report = data?.report ?? null;
   const by = (k: HealthKind): HealthFinding[] => report?.findings.filter((f) => f.kind === k) ?? [];

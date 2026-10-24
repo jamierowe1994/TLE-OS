@@ -152,3 +152,135 @@
 .nl-adm-tabs { margin-top: 18px; }
 .nl-adm-tabs .nl-tab { text-decoration: none; }
 .nl-adm-tabs .nl-tab.is-on { box-shadow: inset 0 -2px 0 var(--ink); }
+
+/* ── System and Issues (24 Oct 2026): Wiring, Testing, Switches, REX status,
+   Phone alerts, Tickets, To do, Book health. Hairline rows, a word with a dot
+   for every state, one short line of explanation at most. ─────────────── */
+[data-look="new"] .nl-adm-tab { padding-top: 28px; padding-bottom: 64px; }
+[data-look="new"] .nl-adm-lede { margin: 0 0 32px; max-width: 640px; font-size: 13px; line-height: 20px; }
+[data-look="new"] .nl-adm-section { margin-top: 48px; min-width: 0; }
+[data-look="new"] .nl-adm-section:first-child,
+[data-look="new"] .nl-adm-lede + .nl-adm-section { margin-top: 0; }
+[data-look="new"] .nl-adm-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 12px; }
+[data-look="new"] .nl-adm-section-head .nl-section-title { margin: 0; font-weight: 600; letter-spacing: 0; }
+[data-look="new"] .nl-adm-section-head .nl-meta { margin: 0; }
+[data-look="new"] .nl-adm-section > .nl-meta { margin: -4px 0 14px; max-width: 70ch; }
+[data-look="new"] .nl-adm-sub { font-family: var(--font-heading); font-weight: 600; font-size: 16px; line-height: 22px; letter-spacing: 0; margin: 28px 0 8px; color: var(--ink); }
+
+[data-look="new"] .nl-adm-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-rows > li { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 28px; padding: 16px 4px; border-bottom: 1px solid var(--line); min-width: 0; }
+[data-look="new"] .nl-adm-rows > li.is-child { padding-left: 28px; }
+[data-look="new"] .nl-adm-rows > li.is-picked { background: var(--panel); }
+[data-look="new"] .nl-adm-row-main { flex: 1 1 340px; min-width: 0; }
+[data-look="new"] .nl-adm-row-main > .nl-meta { margin: 3px 0 0; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-row-main > .nl-meta + .nl-meta { margin-top: 2px; }
+[data-look="new"] .nl-adm-row-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
+[data-look="new"] .nl-adm-row-line .nl-strong { overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-row-side { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 10px; flex: 0 1 auto; min-width: 0; }
+[data-look="new"] .nl-adm-row-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 12px; }
+[data-look="new"] .nl-adm-row-acts a { text-decoration-line: underline; }
+[data-look="new"] .nl-adm-quote { margin: 6px 0 0; font-family: var(--nl-serif); font-size: 15px; line-height: 22px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-after { margin: 14px 0 0; }
+[data-look="new"] .nl-adm-mt { margin-top: 4px; }
+[data-look="new"] .nl-adm-warn { color: var(--warning); }
+[data-look="new"] .nl-adm-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; min-width: 0; }
+[data-look="new"] .nl-adm-gapb { margin-top: 0; margin-bottom: 20px; }
+[data-look="new"] .nl-adm-blockmeta { display: block; margin-top: 3px; }
+[data-look="new"] .nl-adm-who-to { color: var(--ink); font-weight: 500; }
+
+/* A row that opens: the head is a button, the body sits under a hairline. */
+[data-look="new"] .nl-adm-open { font: inherit; color: inherit; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 24px; width: 100%; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; }
+[data-look="new"] .nl-adm-open:hover .nl-strong { text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-adm-open:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 8px; }
+[data-look="new"] .nl-adm-open .nl-adm-row-side { flex: none; }
+[data-look="new"] .nl-adm-open-body { flex-basis: 100%; min-width: 0; padding: 14px 0 4px; }
+[data-look="new"] .nl-adm-chev { color: var(--faint); transition: transform 0.3s var(--nl-ease); }
+[data-look="new"] .nl-adm-chev.is-open { transform: rotate(90deg); }
+
+/* Quiet panels inside a row: a live strip, a confirmation, a note. */
+[data-look="new"] .nl-adm-panel { margin-top: 12px; padding: 14px 18px; border-radius: 16px; background: var(--panel); min-width: 0; }
+[data-look="new"] .nl-adm-panel.is-warn { background: var(--warning-soft); }
+[data-look="new"] .nl-adm-panel.is-bad { background: var(--accent-soft); }
+[data-look="new"] .nl-adm-panel.is-good { background: var(--sage-soft); }
+[data-look="new"] .nl-adm-panel > p { margin: 0; font-size: 13px; line-height: 20px; }
+[data-look="new"] .nl-adm-panel > p + p { margin-top: 4px; }
+[data-look="new"] .nl-adm-panel .nl-lines > li { padding: 8px 0; font-size: 13px; align-items: flex-start; }
+[data-look="new"] .nl-adm-error { margin: 0 0 20px; padding: 12px 16px; border-radius: 14px; background: var(--accent-soft); color: var(--accent-dark); font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-error .nl-link { color: inherit; margin-left: 8px; }
+
+/* The typed phrase to arm a switch or start a phase. */
+[data-look="new"] .nl-adm-arm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+[data-look="new"] .nl-adm-arm .nl-input { flex: 1 1 200px; min-width: 0; padding: 8px 12px; font-size: 14px; }
+[data-look="new"] .nl-adm-arm .nl-input.is-caps { text-transform: uppercase; }
+[data-look="new"] .nl-adm-arm .nl-input.is-caps::placeholder { text-transform: none; }
+
+/* A segmented control that keeps its place on a phone. */
+[data-look="new"] .nl-adm-seg { flex-wrap: wrap; max-width: 100%; }
+[data-look="new"] .nl-adm-seg button:disabled { opacity: 0.45; cursor: not-allowed; }
+[data-look="new"] .nl-adm-seg button.is-on { font-weight: 600; }
+
+/* A row of small figures you can press to filter (Tickets, Book health). */
+[data-look="new"] .nl-adm-figs { list-style: none; margin: 0 0 28px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-adm-figs > li { min-width: 0; }
+[data-look="new"] .nl-adm-figs > li + li { border-left: 1px solid var(--line); }
+[data-look="new"] .nl-adm-figs button { font: inherit; color: inherit; width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 16px 4px; text-align: left; background: none; border: 0; cursor: pointer; transition: background-color 0.2s; min-width: 0; }
+[data-look="new"] .nl-adm-figs > li + li button { padding-left: 16px; }
+[data-look="new"] .nl-adm-figs button:hover { background: var(--panel); }
+[data-look="new"] .nl-adm-figs button[aria-pressed="true"] { background: var(--panel); box-shadow: inset 0 -2px 0 var(--ink); }
+[data-look="new"] .nl-adm-figs b { font-family: var(--nl-serif); font-weight: 400; font-size: 28px; line-height: 32px; color: var(--ink); }
+[data-look="new"] .nl-adm-figs b.is-quiet { color: var(--muted); }
+[data-look="new"] .nl-adm-figs span { font-size: 12px; line-height: 17px; color: var(--muted); }
+
+[data-look="new"] .nl-adm-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 24px; }
+[data-look="new"] .nl-adm-bar .nl-fcount { margin-left: auto; }
+[data-look="new"] .nl-adm-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+[data-look="new"] .nl-adm-check input { width: 15px; height: 15px; accent-color: var(--sage-deep); }
+[data-look="new"] .nl-adm-dots { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+
+[data-look="new"] .nl-adm-steps { margin: 6px 0 0; padding-left: 20px; font-size: 14px; line-height: 22px; max-width: 75ch; }
+[data-look="new"] .nl-adm-steps li + li { margin-top: 4px; }
+[data-look="new"] .nl-adm-shot { display: block; width: 100%; margin-top: 12px; border-radius: 14px; border: 1px solid var(--line); }
+[data-look="new"] .nl-adm-doors { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-look="new"] .nl-adm-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border: 1px solid var(--line-strong); border-radius: 999px; font: inherit; font-size: 13px; color: var(--ink); background: transparent; text-decoration: none; cursor: pointer; transition: border-color 0.2s; max-width: 100%; min-width: 0; }
+[data-look="new"] .nl-adm-chip:hover:not(:disabled) { border-color: var(--faint); }
+[data-look="new"] .nl-adm-chip:disabled { opacity: 0.45; cursor: not-allowed; }
+[data-look="new"] .nl-adm-chip > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-adm-chip .nl-badge { padding: 2px 8px; }
+[data-look="new"] .nl-adm-add { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+[data-look="new"] .nl-adm-add button { font: inherit; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); cursor: pointer; transition: border-color 0.2s; min-width: 0; }
+[data-look="new"] .nl-adm-add button:hover:not(:disabled) { border-color: var(--line-strong); }
+[data-look="new"] .nl-adm-add button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* The phases, side by side when there is room. */
+[data-look="new"] .nl-adm-phases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+[data-look="new"] .nl-adm-phase { display: flex; flex-direction: column; min-width: 0; }
+[data-look="new"] .nl-adm-phase.is-now { border-color: var(--ink); }
+[data-look="new"] .nl-adm-phase .nl-adm-arm { margin-top: auto; padding-top: 18px; }
+[data-look="new"] .nl-adm-phase .nl-adm-arm .nl-btn { flex: 1 1 100%; }
+[data-look="new"] .nl-adm-changes { list-style: none; margin: 6px 0 0; padding: 0; }
+[data-look="new"] .nl-adm-changes li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13px; line-height: 19px; min-width: 0; }
+[data-look="new"] .nl-adm-changes li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-changes li > span:last-child { flex: none; color: var(--muted); }
+[data-look="new"] .nl-adm-changes li > span.nl-adm-hot { color: var(--accent-dark); font-weight: 500; }
+[data-look="new"] .nl-adm-roster { list-style: none; margin: 6px 0 0; padding: 0; max-height: 240px; overflow-y: auto; }
+[data-look="new"] .nl-adm-roster label { display: flex; align-items: center; gap: 10px; padding: 5px 2px; font-size: 13px; cursor: pointer; min-width: 0; }
+[data-look="new"] .nl-adm-roster label > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-adm-roster input { accent-color: var(--sage-deep); }
+
+[data-look="new"] .nl-adm-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+[data-look="new"] .nl-adm-form .nl-field { flex: 1 1 220px; }
+[data-look="new"] .nl-adm-done { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line-strong); }
+
+@media (max-width: 760px) {
+  [data-look="new"] .nl-adm-tab { padding-top: 20px; }
+  [data-look="new"] .nl-adm-row-side { flex-basis: 100%; justify-content: flex-start; }
+  [data-look="new"] .nl-adm-open .nl-adm-row-side { flex-basis: 100%; }
+  [data-look="new"] .nl-adm-stack { align-items: flex-start; text-align: left; }
+  [data-look="new"] .nl-adm-rows > li.is-child { padding-left: 14px; }
+  [data-look="new"] .nl-adm-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-look="new"] .nl-adm-figs > li { border-left: 0 !important; border-top: 1px solid var(--line); }
+  [data-look="new"] .nl-adm-figs > li:nth-child(-n + 2) { border-top: 0; }
+  [data-look="new"] .nl-adm-figs > li:nth-child(even) { border-left: 1px solid var(--line) !important; }
+  [data-look="new"] .nl-adm-figs > li button, [data-look="new"] .nl-adm-figs > li + li button { padding: 14px 12px; }
+  [data-look="new"] .nl-adm-bar .nl-fcount { margin-left: 0; flex-basis: 100%; }
+}

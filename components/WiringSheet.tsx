@@ -13,7 +13,7 @@ import { SYSTEMS, WIRING, WIRING_STATES, type SystemKey, type WiringState } from
  * out another.
  */
 
-interface LiveCheck {
+export interface LiveCheck {
   key: string;
   label: string;
   ok: boolean;
@@ -21,13 +21,13 @@ interface LiveCheck {
 }
 
 /** One system's live status, normalised from whichever endpoint shape. */
-interface LiveStatus {
+export interface LiveStatus {
   state: "loading" | "ok" | "partial" | "down" | "unconfigured" | "none";
   checks: LiveCheck[];
   note?: string;
 }
 
-function normalise(system: SystemKey, j: unknown): LiveStatus {
+export function normalise(system: SystemKey, j: unknown): LiveStatus {
   if (system === "payprop") {
     const d = j as {
       configured?: boolean;
@@ -95,9 +95,12 @@ function normalise(system: SystemKey, j: unknown): LiveStatus {
     };
   }
   // rex
-  const d = j as { configured?: boolean; note?: string; checks?: LiveCheck[] };
+  const d = j as { configured?: boolean; note?: string; checks?: LiveCheck[]; down?: boolean };
   if (!d.configured) return { state: "unconfigured", checks: [], note: d.note };
   const checks = d.checks ?? [];
+  /* REX status says down (lib/rex-outage): nothing was probed, and the sheet
+     says so rather than "partly connected". */
+  if (d.down) return { state: "down", checks };
   return { state: checks.every((c) => c.ok) ? "ok" : "partial", checks };
 }
 
@@ -110,10 +113,12 @@ const STATE_DOT: Record<LiveStatus["state"], { tone: string; label: string }> = 
   none: { tone: "#8a867f", label: "Nothing to probe" },
 };
 
-export default function WiringSheet() {
+/**
+ * Every system's live probe, shared by the old sheet and the new look's
+ * Wiring tab (components/new-look/admin/WiringNew) so both ask once, the same way.
+ */
+export function useWiringLive(): Partial<Record<SystemKey, LiveStatus>> {
   const [live, setLive] = useState<Partial<Record<SystemKey, LiveStatus>>>({});
-  const [open, setOpen] = useState<SystemKey | null>("rex");
-
   useEffect(() => {
     let gone = false;
     for (const sys of SYSTEMS) {
@@ -131,6 +136,12 @@ export default function WiringSheet() {
     }
     return () => { gone = true; };
   }, []);
+  return live;
+}
+
+export default function WiringSheet() {
+  const live = useWiringLive();
+  const [open, setOpen] = useState<SystemKey | null>("rex");
 
   return (
     <div className="max-w-3xl">

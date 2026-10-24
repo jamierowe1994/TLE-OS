@@ -9,17 +9,18 @@ import { LOOK_LEVELS, type LookLevel, type LookScreen } from "@/lib/new-look";
  * be put back the way it was with one press.
  */
 
-type Row = { id: LookScreen; label: string; what: string; level: LookLevel; changedBy: string | null; changedAt: string | null };
+export type LookRow = { id: LookScreen; label: string; what: string; level: LookLevel; changedBy: string | null; changedAt: string | null };
 
-export default function NewLookSwitches() {
-  const [rows, setRows] = useState<Row[] | null>(null);
+/** The new-look positions, read and moved - shared with the new look's own Switches tab. */
+export function useNewLookSwitches() {
+  const [rows, setRows] = useState<LookRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/admin/new-look", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
-      .then((j: { screens: Row[] }) => setRows(j.screens))
+      .then((j: { screens: LookRow[] }) => setRows(j.screens))
       .catch(() => setFlash("The new-look switches could not be read."));
   }, []);
   useEffect(load, [load]);
@@ -50,6 +51,11 @@ export default function NewLookSwitches() {
     }
   }
 
+  return { rows, busy, flash, move };
+}
+
+export default function NewLookSwitches() {
+  const { rows, busy, flash, move } = useNewLookSwitches();
   return (
     <section className="fade-up mt-8 rounded-[22px] border border-line/60 bg-white p-5">
       <h2 className="hand text-[18px]">The New Look</h2>
