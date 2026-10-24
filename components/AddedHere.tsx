@@ -55,7 +55,9 @@ const rexContactUrl = (id: string) =>
 
 const SHOWN = 10;
 
-export default function AddedHere({ refreshKey }: { refreshKey?: number }) {
+/** `blurb` says where they are when the strip is shown somewhere other than
+ *  above the Leads list (Admin's home, components/LeadsNotBackedUp). */
+export default function AddedHere({ refreshKey, blurb }: { refreshKey?: number; blurb?: string }) {
   const [rows, setRows] = useState<Contact[] | null>(null);
   const [blocked, setBlocked] = useState<{ detail: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -112,8 +114,7 @@ export default function AddedHere({ refreshKey }: { refreshKey?: number }) {
       </div>
 
       <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
-        These are saved and safe, and they are in the list below like everyone else. They
-        just have not reached the backup store yet.
+        {blurb ?? "These are saved and safe, and they are in the list below like everyone else. They just have not reached the backup store yet."}
       </p>
 
       {blocked && waiting > 0 && (

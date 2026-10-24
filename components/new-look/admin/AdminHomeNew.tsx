@@ -8,6 +8,7 @@ import { fetchMe } from "@/lib/me";
 import { can } from "@/lib/roles";
 import { AUDIT_KIND, when, type AdminData } from "@/lib/admin-client";
 import { areasFor, isAreaId, type AdminArea } from "@/components/new-look/admin/areas";
+import LeadsNotBackedUp from "@/components/LeadsNotBackedUp";
 
 /**
  * Admin's home in the new look (lib/new-look "admin"): the design's Admin
@@ -170,6 +171,9 @@ function Home({ d, tickets }: { d: AdminData | null; tickets: AdminTicket[] | nu
           })}
         </div>
       )}
+
+      {/* Leads added here that haven't reached REX (James, 24 Oct 2026). Nothing when there are none. */}
+      <LeadsNotBackedUp look="new" />
 
       {/* The census the old overview opened with, each figure going to the people it counts. */}
       <section className="nl-adm-block">

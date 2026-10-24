@@ -9,6 +9,7 @@ import { useAdmin, when, AUDIT_KIND } from "@/lib/admin-client";
 import { useEffect, useState } from "react";
 import { useNewLook } from "@/lib/use-new-look";
 import AdminHomeNew from "@/components/new-look/admin/AdminHomeNew";
+import LeadsNotBackedUp from "@/components/LeadsNotBackedUp";
 
 /**
  * The overview, in the same frame as every board in the OS (James, 12 Sep
@@ -100,6 +101,10 @@ export default function AdminOverview() {
           </Link>
         ))}
       </div>
+
+      {/* Leads added here that haven't reached REX, once the new Leads page
+          has dropped its box for them (James, 24 Oct 2026). */}
+      <LeadsNotBackedUp look="old" />
 
       {/* ── the latest activity, and the open tickets ── */}
       <div className={`mt-6 grid gap-4 ${tickets === undefined ? "" : "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"}`}>

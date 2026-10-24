@@ -17,7 +17,16 @@
 
 /* ── the board ───────────────────────────────────────────────────────────── */
 [data-look="new"] .nl-leads-filters { margin-bottom: 4px; }
-[data-look="new"] .nl-leads-added:not(:empty) { margin-bottom: 32px; }
+/* The search, taller and narrower than the shared one (James, 24 Oct 2026:
+   "a little bit taller and a little bit shorter"). */
+[data-look="new"] .nl-leads-search { flex: 0 1 260px; min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
+/* The side's one button at the end of the row, the selects' size beside them. */
+[data-look="new"] .nl-btn.nl-leads-flag { padding: 9px 16px; font-size: 13px; line-height: 18px; border-color: var(--line-strong); }
+[data-look="new"] .nl-btn.nl-leads-flag.nl-leads-on { border-color: var(--ink); }
+/* Under the list: what was read, and the way into Archived. */
+[data-look="new"] .nl-leads-foot { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-top: 28px; }
+[data-look="new"] .nl-leads-foot .nl-meta { max-width: 640px; }
+[data-look="new"] .nl-leads-foot .nl-link { font-size: 13px; margin-left: auto; }
 [data-look="new"] .nl-leads-filters .nl-fsel select { max-width: 190px; text-overflow: ellipsis; }
 [data-look="new"] .nl-leads-tabline { display: flex; align-items: flex-end; gap: 16px; margin-top: 18px; }
 [data-look="new"] .nl-leads-tabline .nl-toggle { flex: none; margin-bottom: 6px; }
@@ -78,6 +87,7 @@
   [data-look="new"] .nl-leads-src, [data-look="new"] .nl-leads-when { display: none; }
 }
 @media (max-width: 760px) {
+  [data-look="new"] .nl-leads-search { flex-basis: 100%; }
   [data-look="new"] .nl-leads-rowbtn { grid-template-columns: minmax(0, 1fr) auto 16px; gap: 12px; padding: 14px 4px; }
   [data-look="new"] .nl-leads-want { display: none; }
   [data-look="new"] .nl-leads-stage .nl-badge { max-width: 130px; }
