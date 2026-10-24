@@ -468,6 +468,7 @@
   [data-look="new"] .nl-adm-figs > li:nth-child(even) { border-left: 1px solid var(--line) !important; }
   [data-look="new"] .nl-adm-figs > li button, [data-look="new"] .nl-adm-figs > li + li button { padding: 14px 12px; }
   [data-look="new"] .nl-adm-bar .nl-fcount { margin-left: 0; flex-basis: 100%; }
+}
 /* ── Pre-let, Content and Emails (24 Oct 2026) ─────────────────────────────
    PLC checks, Propoly, Knowledge, Newsroom, Guides, Steve and Every email.
    No masthead: the frame draws the area, the title and the tabs. Titles are
