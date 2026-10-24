@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { ShadowStats } from "@/lib/plc-shadow";
 import { useNewLook } from "@/lib/use-new-look";
 import PlcChecksNew, { hrs, pct, prettyMonth, type Approvers as ApproversState } from "@/components/new-look/admin/PlcChecksNew";
-import { Loading } from "@/components/new-look/admin/bits";
+import { Loading } from "@/components/new-look/admin/content-bits";
 
 /**
  * PLC checks: how the scan is holding up, and how long packs are taking.
