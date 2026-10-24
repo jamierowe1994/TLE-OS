@@ -62,6 +62,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
    */
   const [leaving, setLeaving] = useState<string | null>(null);
   useEffect(() => { setLeaving(null); }, [currentHref]);
+  /* The fade between screens (lib/new-look "fade", James, 24 Oct 2026): "a
+     gentle fade out and then a gentle fade in... every time we click onto a
+     screen, everything fades in rather than jumping." Same `leaving` as the
+     fall, only the paint differs. Null until the switch answers, and null is
+     the fall. */
+  const fadeLook = useNewLook("fade") === true;
+  /* Which screen the fade-out started on. The fall puts its class on whatever
+     is mounted while `leaving` is set, the new screen included for the frame
+     before the effect above clears it; for a fade that frame would show the
+     new screen at full strength and then dim it. So the fade-out belongs to
+     the screen it started on, and the new one fades in from the first frame. */
+  const [leftFrom, setLeftFrom] = useState<string | null>(null);
+  const fadingOut = leaving !== null && leftFrom === currentHref;
 
   /* How far each area is switched on for this person (lib/area-map, 15 Sep
      2026). Null until it answers, and null reads as everything on - the rail
@@ -99,6 +112,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   /* Matches .page-leaving .os-mast in globals.css: the fall is 400ms, and
      navigating before it lands cut the old screen off mid-drop. */
   const EXIT_MS = 400;
+  /* Matches .page-fading in globals.css. Quicker out than in on purpose: the
+     old screen only has to get out of the way, the new one is the thing you
+     watch arrive. Nothing to wait for when motion is turned off. */
+  const FADE_OUT_MS = 280;
   const goTo = useCallback(
     (href: string) => {
       if (href === currentHref) return;
@@ -107,9 +124,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       warmRoute(href);
       router.prefetch(href);
       setLeaving(href);
-      window.setTimeout(() => router.push(href), EXIT_MS);
+      setLeftFrom(currentHref);
+      const still = fadeLook && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.setTimeout(() => router.push(href), fadeLook ? (still ? 0 : FADE_OUT_MS) : EXIT_MS);
     },
-    [currentHref, router]
+    [currentHref, router, fadeLook]
   );
   /* ── Landing one piece at a time ─────────────────────────────────────────
      James, 11 Sep 2026: "the bits on the page should flow up individually
@@ -377,7 +396,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 : `${closedArea!.label} is not switched on for you yet. It opens as testing finishes.`}
             </p>
           )}
-          <div key={pathname} ref={flowRef} className={`page-flow ${leaving ? "page-leaving" : ""}`}>
+          {/* page-fade and page-flow never sit together, so the fall's rules
+              and the stagger cannot reach a page that fades. */}
+          <div key={pathname} ref={flowRef} className={fadeLook ? `page-fade ${fadingOut ? "page-fading" : ""}` : `page-flow ${leaving ? "page-leaving" : ""}`}>
             {children}
           </div>
         </main>

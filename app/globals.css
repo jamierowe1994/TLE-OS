@@ -335,6 +335,47 @@ body {
 .page-leaving .page-flow > *:not(.os-mast-frame),
 .page-leaving > *:not(.os-mast-frame) { animation: body-fall 0.3s cubic-bezier(0.6, 0, 0.95, 0.35) both; }
 
+/* ---------------------------------------------------------------------------
+   Changing screen, as a fade (lib/new-look "fade", James, 24 Oct 2026).
+
+   "A gentle fade out and then a gentle fade in, but it's quite an exaggerated
+   fade, which makes it feel a lot more premium." Opacity only: nothing drops,
+   rises or slides, and the rail and frame stay still - only the page inside
+   them fades. Shell puts page-fade on the content in place of page-flow, so
+   none of the fall's rules above can reach it.
+
+   Out in 0.28s, gently accelerating away; Shell waits the same 280ms before
+   it navigates. In over 0.62s on a soft ease-out, so the new screen is there
+   at once but takes its time to settle - the slow end is what reads as calm.
+
+   No blur, although it was tempting: a filter, like a held transform, turns
+   the page into a containing block for anything `fixed` inside it, and the
+   drawers and the document sheet are fixed.
+
+   The fade-in fills `backwards` only, so nothing is left applied once it
+   ends; the fade-out holds at 0 (`both`) until the new screen replaces it. */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes page-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.page-fade { animation: page-fade-in 0.62s cubic-bezier(0.33, 1, 0.68, 1) backwards; }
+.page-fade.page-fading { animation: page-fade-out 0.28s cubic-bezier(0.4, 0, 0.7, 0.2) both; }
+/* One fade for the whole screen, not pieces landing one by one. The masthead
+   stays put rather than rising through its line, and the stagger and cascade
+   delays are dropped. A block that carries fade-up still fades when it
+   arrives on its own later (rows once their figures load), opacity only and
+   all at once, so nothing pops in. Doubled with .type-admin to outrank that
+   scope's own quicker fade-up further down. */
+.page-fade .os-mast,
+.page-fade .os-mast-frame { animation: none; }
+.page-fade .fade-up,
+.page-fade .type-admin .fade-up { animation: page-fade-in 0.42s cubic-bezier(0.33, 1, 0.68, 1) backwards; }
+.page-fade .cascade > * { animation-delay: 0s; }
+
 /* The short masthead (15 Sep 2026). A small laptop leaves
    about 650px inside the browser, and the full masthead spent up to 420 of it
    before the work began. From laptop width up and under 820px tall: a smaller
@@ -681,6 +722,10 @@ body {
   .deck-land,
   .fade-up,
   .page-flow,
+  .page-fade,
+  .page-fade.page-fading,
+  .page-fade .fade-up,
+  .page-fade .type-admin .fade-up,
   .os-mast,
   .os-mast-frame,
   .reveal-rise,
