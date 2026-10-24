@@ -54,6 +54,8 @@ function OnPagePanel({
   feesOnRecord = null,
   onChanged,
   more,
+  openNew = 0,
+  quiet = false,
 }: {
   listingId?: string | null;
   propertyId?: string | null;
@@ -70,6 +72,12 @@ function OnPagePanel({
   onChanged?: () => void;
   /** Beside the button while nothing has gone (the listing's "Upload a signed copy"). */
   more?: React.ReactNode;
+  /** Reissue on New Terms from the home's own signed banner (James, 24 Oct 2026): each
+   *  time this goes up, the send screen opens on a fresh set. */
+  openNew?: number;
+  /** Under a banner that already says the terms are signed: draw nothing until a new set is
+   *  under way, so the home does not read "nothing has gone yet" over signed terms. */
+  quiet?: boolean;
 }) {
   const [all, setAll] = useState<StaffTerms[] | null>(null);
   const [preview, setPreview] = useState(false);
@@ -99,6 +107,9 @@ function OnPagePanel({
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (openNew > 0) setScreen({ mode: "new" });
+  }, [openNew]);
 
   const live = (all ?? []).find((t) => t.status !== "cancelled") ?? null;
   /* While an adjusted set waits for the agent's signature, the one it replaces is still out. */
@@ -144,9 +155,12 @@ function OnPagePanel({
           : `Signed and sent, but the email to ${names(unsent)} didn't go. Copy their link below.`
       : null;
   const tone = live?.status === "signed" ? " is-signed" : "";
+  /* Quiet under a signed banner: only a reissued set on its way shows. */
+  const hideBanner = quiet && (!live || live.status === "signed") && !said;
 
   return (
     <div data-look="new" className="nl-terms-wrap">
+      {!hideBanner && (
       <section className={`nl-terms${tone}`}>
         <span className="nl-terms-ic" aria-hidden>
           {live?.status === "signed" ? <Ico name="check" size={18} /> : <Ico name="pen" size={17} />}
@@ -202,15 +216,22 @@ function OnPagePanel({
             <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setScreen({ mode: "adjust", from: live })}>Adjust contract</button>
           </span>
         ) : live.status === "signed" ? (
-          live.signedR2Key ? (
-            <a className="nl-btn nl-btn--secondary nl-btn--sm" href={`/api/terms/${live.id}/document`} target="_blank" rel="noreferrer">
-              View the signed copy
-            </a>
-          ) : (
-            <span className="nl-terms-done"><Ico name="check" size={14} /> Signed</span>
-          )
+          <span className="nl-terms-acts">
+            {live.signedR2Key ? (
+              <a className="nl-btn nl-btn--secondary nl-btn--sm" href={`/api/terms/${live.id}/document`} target="_blank" rel="noreferrer">
+                View the signed copy
+              </a>
+            ) : (
+              <span className="nl-terms-done"><Ico name="check" size={14} /> Signed</span>
+            )}
+            {/* Signed terms still have a new set behind them when the fees or the service change (James, 24 Oct 2026). */}
+            <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setScreen({ mode: "new" })}>
+              Reissue on New Terms
+            </button>
+          </span>
         ) : null}
       </section>
+      )}
 
       {(said ?? sentLine) && <p className={`nl-meta ${unsent.length && !said ? "text-[var(--accent-dark)]" : "text-[var(--sage-ink)]"}`}>{said ?? sentLine}</p>}
 
