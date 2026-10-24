@@ -82,7 +82,7 @@ type Body = {
   hidden?: string[] | null;
   /** Overrides the agent's profile headshot for this deck only. */
   agentPhoto?: string | null;
-  /** Appraisal deck only: the agent's figure, and what tenants will love / worth doing (23 Oct 2026). */
+  /** Appraisal and post-appraisal decks: the agent's figure, and what tenants will love / worth doing (23-24 Oct 2026). */
   figure?: { ask?: unknown; low?: unknown; high?: unknown; weeks?: unknown } | null;
   loves?: unknown;
   fixes?: unknown;
@@ -161,10 +161,10 @@ export async function POST(req: NextRequest) {
 
   /* The appraisal deck's figure, checked here as well as in the builder: a
      range the asking rent sits outside of is refused, never patched up. */
-  const fig = kind === "appraisal" ? checkFigure(body.figure) : { figure: null, error: null };
+  const fig = (kind === "appraisal" || kind === "post-appraisal") ? checkFigure(body.figure) : { figure: null, error: null };
   if (fig.error) return NextResponse.json({ ok: false, error: fig.error }, { status: 400 });
-  const loves = kind === "appraisal" ? cleanNotes(body.loves, MAX_LOVES) : [];
-  const fixes = kind === "appraisal" ? cleanNotes(body.fixes, MAX_FIXES) : [];
+  const loves = (kind === "appraisal" || kind === "post-appraisal") ? cleanNotes(body.loves, MAX_LOVES) : [];
+  const fixes = (kind === "appraisal" || kind === "post-appraisal") ? cleanNotes(body.fixes, MAX_FIXES) : [];
 
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const me = userId ? await findUserById(userId) : null;

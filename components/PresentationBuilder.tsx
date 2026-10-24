@@ -195,7 +195,9 @@ export default function PresentationBuilder({
   const [figure, setFigure] = useState<FigureDraft>(NO_FIGURE);
   const [loves, setLoves] = useState<PresentNote[]>(() => blankNotes(MAX_LOVES));
   const [fixes, setFixes] = useState<PresentNote[]>(() => blankNotes(MAX_FIXES));
-  const words = kind === "appraisal";
+  /* And the deck sent after the visit (24 Oct 2026): The Plan in the landlord's file is built from it, so the
+     same words go with it. Blank there, the file takes them from the appraisal deck instead. */
+  const words = kind === "appraisal" || kind === "post-appraisal";
   const figureCheck = words ? checkFigure(figure) : { figure: null, error: null };
   const [making, setMaking] = useState(false);
   /* THE PRESENTATION THIS APPRAISAL ALREADY HAS, if any (James, 17 Sep 2026:
