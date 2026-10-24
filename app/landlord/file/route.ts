@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicOrigin } from "@/lib/origin";
 import { currentLandlord } from "@/lib/landlord-account";
 import { loadLandlordHome, requiredDocsFor } from "@/lib/landlord-home-view";
 import { fileData, fileHtml } from "@/lib/landlord-file";
@@ -15,10 +16,10 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const me = await currentLandlord();
-  if (!me) return NextResponse.redirect(new URL("/landlord/sign-in", req.url));
+  if (!me) return NextResponse.redirect(new URL("/landlord/sign-in", publicOrigin(req)));
   const { view, open, first } = await loadLandlordHome(me, req.nextUrl.searchParams.get("p"));
   /* No open appraisal (only managed homes, or nothing yet): the current page handles those. */
-  if (!view || !open[0]) return NextResponse.redirect(new URL("/landlord", req.url));
+  if (!view || !open[0]) return NextResponse.redirect(new URL("/landlord", publicOrigin(req)));
   const appraisal = open[0].appraisal;
   const asked = (await requiredDocsFor(appraisal.id)).map((r) => ({ kind: String(r.kind), title: r.title }));
   /* The Plan reads the deck sent after the visit. Its figure and the agent's words come from it when it

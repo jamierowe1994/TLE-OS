@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicOrigin } from "@/lib/origin";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { readPresentation, presentationExpiry } from "@/lib/present-store";
@@ -40,7 +41,7 @@ async function staffOn(req: NextRequest): Promise<boolean> {
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
-  const back = new URL(`/present/${encodeURIComponent(token)}`, req.url);
+  const back = new URL(`/present/${encodeURIComponent(token)}`, publicOrigin(req));
 
   if (token === "sample") {
     const deck = sampleDeck();
