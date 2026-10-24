@@ -537,11 +537,13 @@ function pic(cls, style, sun, img, art) {
 }
 
 /* Which slides this deck has. The figure, the market and the homes like yours only come when there is something true to show. */
-const HAS = { market: Boolean(M), comps: C.length >= 2, figure: Boolean(FIG), fees: D.services.length > 0 };
-const ORDER = ['cover', 'today', 'who', 'home', HAS.market && 'market', HAS.comps && 'comps', HAS.figure && 'figure', 'finding', HAS.fees && 'fees', 'rules', 'plan', 'next'].filter(Boolean);
+/* Slides the agent switched off in the builder (never the cover or next steps). */
+const OFF = new Set((D.skip || []).filter(id => id !== 'cover' && id !== 'next')), on = id => !OFF.has(id);
+const HAS = { market: Boolean(M) && on('market'), comps: C.length >= 2 && on('comps'), figure: Boolean(FIG) && on('figure'), fees: D.services.length > 0 && on('fees') };
+const ORDER = ['cover', 'today', 'who', 'home', HAS.market && 'market', HAS.comps && 'comps', HAS.figure && 'figure', 'finding', HAS.fees && 'fees', 'rules', 'plan', 'next'].filter(id => id && on(id));
 const at = id => ORDER.indexOf(id), nn = id => String(at(id) + 1).padStart(2, '0');
 const SLIDES = [];
-function slide(id, title, html, o) { SLIDES.push(Object.assign({ id, title, html }, o || {})); }
+function slide(id, title, html, o) { if (!ORDER.includes(id)) return; SLIDES.push(Object.assign({ id, title, html }, o || {})); }
 
 /* a real-looking iPhone: titanium frame, side buttons, Dynamic Island, status bar, tab bar, home indicator */
 const SIG = '<svg viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>';
@@ -595,6 +597,7 @@ if (HAS.figure) AG.push(['figure', 'The figure', 'What we’d advertise at, and 
 else if (HAS.comps) AG.push(['comps', 'Homes like yours', 'What similar homes nearby are asking.']);
 AG.push(['finding', 'Finding your tenant', 'How we market it and choose the right person.']);
 AG.push(HAS.fees ? ['fees', 'Your service and the plan', 'How much you’d like us to do, and the dates to move-in.'] : ['plan', 'The plan', 'The dates from today to move-in.']);
+for (let k = AG.length - 1; k >= 0; k--) if (!ORDER.includes(AG[k][0])) AG.splice(k, 1);
 const homeSub = [P.beds != null ? P.beds + ' bed' : '', P.type ? P.type.toLowerCase() : ''].filter(Boolean).join(' ');
 const homeCard = `<div class="home-card${P.image ? ' ph' : ''} in" ${i()}>${pic('', '', false, P.image, 'house')}
       <span class="hc-pin">${ic('pin', '')}${esc(PLACE || 'Your home')}</span>
@@ -691,10 +694,26 @@ if (HAS.market) {
   const pills = agents.length ? `<div class="who-pills" style="margin-top:calc(var(--u)*.7)"><span class="lab" style="width:100%">Advertising the most here</span>${agents.map(a => `<span class="pill w${a.ours ? ' on' : ''}">${esc(a.agent)} · ${a.n}</span>`).join('')}</div>` : '';
   const advCard = M.advertised || pills ? `<div class="ui in" ${i()}>${M.advertised ? `<span class="lab">On the market nearby</span><span class="val xl">${M.advertised}</span><span class="lab">homes advertised in ${esc(M.area)}${M.reduced ? `, ${M.reduced} with a cut in rent` : ''}</span>` : ''}${pills}</div>` : '';
   const chart = rows.length ? `<div class="ui chart in" ${i('padding:calc(var(--u)*2)')}><div class="row"><div><span class="lab">${mine ? `Typical asking rent, ${esc(mine.label)} homes in ${esc(M.area)}` : `Typical asking rent by bedrooms, ${esc(M.area)}`}</span>${mine || M.medianRent ? `<span class="val" style="display:block;margin-top:calc(var(--u)*.6)">${money(mine ? mine.rent : M.medianRent)}<sup> pcm</sup></span>` : ''}</div><span class="pill w">By bedrooms</span></div>${bedSvg(rows, mine)}</div>` : '';
+  /* THE BUILDER'S CARDS (24 Oct 2026): only the ones switched on, in its order. Older decks carry no list and show what they always did. */
+  let side = [bandCard, advCard], useChart = chart;
+  if (Array.isArray(M.blocks)) {
+    const of = (x, y, lab, sub) => x != null && y ? `<div class="ui in" ${i()}><span class="lab">${lab}</span><span class="val xl">${x}<sup>of ${y}</sup></span><span class="lab">${sub}</span></div>` : '';
+    const CARD = {
+      demand: of(M.letAgreed, M.advertised, 'Already let agreed', `homes advertised in ${esc(M.area)} have a tenant agreed`),
+      pace: bandCard,
+      cuts: of(M.reduced, M.advertised, 'With a cut in rent', `homes advertised in ${esc(M.area)} have dropped their asking rent`),
+      competing: M.advertised ? `<div class="ui in" ${i()}><span class="lab">On the market nearby</span><span class="val xl">${M.advertised}</span><span class="lab">homes advertised in ${esc(M.area)}${M.mix && (M.mix.houses || M.mix.flats) ? `: ${M.mix.houses} ${M.mix.houses === 1 ? 'house' : 'houses'}, ${M.mix.flats} ${M.mix.flats === 1 ? 'flat' : 'flats'}` : ''}</span></div>` : '',
+      agents: agents.length ? `<div class="ui in" ${i()}>${pills}</div>` : '',
+    };
+    useChart = M.blocks.includes('rent') ? chart : '';
+    side = M.blocks.filter(b => b !== 'rent').map(b => CARD[b] || '');
+  }
+  side = side.filter(Boolean);
+  const lead = M.lead ? esc(M.lead) : `${M.advertised ? `${M.advertised} homes were advertised here when we looked${M.pulled ? ' on ' + esc(M.pulled) : ''}. ` : ''}Here’s what they’re asking, and how long they’ve been up.`;
   n = 0; slide('market', 'The Market', `
-  <div class="hrow in" ${i()}><div><p class="eyebrow">The local market</p><h2 class="title">What’s on the market in ${esc(M.area)}.</h2></div><p class="lead">${M.advertised ? `${M.advertised} homes were advertised here when we looked${M.pulled ? ' on ' + esc(M.pulled) : ''}. ` : ''}Here’s what they’re asking, and how long they’ve been up.</p></div>
-  ${chart ? `<div class="mgrid">${chart}<div class="mside">${bandCard}${advCard}</div></div>`
-    : `<div class="bento b2" style="margin-top:calc(var(--u)*3.2)">${bandCard}${advCard}</div>`}`, { cls: 'market-s' });
+  <div class="hrow in" ${i()}><div><p class="eyebrow">The local market</p><h2 class="title">What’s on the market in ${esc(M.area)}.</h2></div><p class="lead">${lead}</p></div>
+  ${useChart ? `<div class="mgrid">${useChart}<div class="mside">${side.slice(0, 3).join('')}</div></div>`
+    : `<div class="bento b2" style="margin-top:calc(var(--u)*3.2)">${side.slice(0, 4).join('')}</div>`}`, { cls: 'market-s' });
 }
 
 /* 6 homes like yours: the carousel, from the homes the agent picked */
@@ -850,7 +869,9 @@ function go(k, instant) {
   document.getElementById('prev').disabled = k === 0; document.getElementById('next').disabled = k === SLIDES.length - 1;
   try { history.replaceState(null, '', '#s' + (k + 1)); } catch (e) {}
 }
-const start = /^#s(\d+)$/.exec(location.hash); go(start ? +start[1] - 1 : 0, true);
+const start = /^#s(\d+)$/.exec(location.hash); go(start ? +start[1] - 1 : Math.min(D.startAt || 0, SLIDES.length - 1), true);
+/* The builder's live preview moves the deck: postMessage({ go: n }). */
+window.addEventListener('message', e => { if (e.data && Number.isInteger(e.data.go)) go(Math.max(0, Math.min(e.data.go, SLIDES.length - 1)), true); });
 document.getElementById('prev').onclick = () => go(cur - 1);
 document.getElementById('next').onclick = () => go(cur + 1);
 const ov = document.getElementById('ov');

@@ -97,6 +97,11 @@ export type DeckData = {
     bands: { label: string; n: number }[];
     agents: { agent: string; n: number; ours: boolean }[];
     reduced: number | null;
+    letAgreed: number | null;
+    mix: { houses: number; flats: number } | null;
+    /** The builder's cards, on and in order; null on older decks, which show what they always did. */
+    blocks: string[] | null;
+    lead: string;
   } | null;
   comps: DeckComp[];
   compsFrom: "comparables" | "listings" | null;
@@ -270,8 +275,9 @@ export function deckData(
   const bands = (m?.bands ?? []).map((b) => ({ label: noDashes(b.label), n: b.n }));
   const agents = m?.agents ?? [];
   const bandTotal = bands.reduce((s, b) => s + b.n, 0);
+  const blocks = Array.isArray(m?.blocks) ? m!.blocks.filter((b) => ["demand", "pace", "rent", "cuts", "competing", "agents"].includes(b)) : null;
   const market =
-    m && (rentByBed.length || bandTotal || agents.length)
+    m && (blocks ? blocks.length > 0 : rentByBed.length || bandTotal || agents.length)
       ? {
           area: m.area,
           pulled: m.pulledAt ? part(new Date(m.pulledAt), { day: "numeric", month: "long" }) : "",
@@ -281,6 +287,10 @@ export function deckData(
           bands,
           agents,
           reduced: m.reduced ?? null,
+          letAgreed: typeof m.letAgreed === "number" ? m.letAgreed : null,
+          mix: m.mix ?? null,
+          blocks,
+          lead: clean(m.lead),
         }
       : null;
 
