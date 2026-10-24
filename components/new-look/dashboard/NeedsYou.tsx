@@ -13,12 +13,26 @@ import type { Notice } from "@/lib/notices";
  * read (noticesSlot) and the same tick (/api/notifications/done), so a line
  * ticked in either look is gone from both.
  *
- * Each line opens where it is dealt with (the design's sage button), and keeps
+ * Each line opens where it is dealt with (the design's button, worded for the
+ * action where the notice says what it is: Call, Chase, Send, Sign), and keeps
  * the old tile's tick: struck through for a moment, then cleared, with a few
  * seconds of Undo. "View all" pops out the bell's full open list, as before.
  */
 
-type Row = { id: string; title: string; body: string; href: string | null; hot: boolean };
+type Row = { id: string; title: string; body: string; href: string | null; hot: boolean; tone: Notice["tone"]; act: string };
+
+/**
+ * The button's word, from what the notice is (lib/notifications names each
+ * by its id). Only where the item tells us what doing it means; otherwise Open.
+ */
+function actionFor(n: Notice): string {
+  const id = n.id;
+  if (/^(lead|still-looking|moved):/.test(id)) return "Call";
+  if (/^terms-agent:/.test(id)) return "Sign";
+  if (/^(terms-email|pre):/.test(id)) return "Send";
+  if (n.kind === "chase") return "Chase";
+  return "Open";
+}
 
 /** How many the board reads at once (the old tile's own limit). A full page
  *  means there may be more, so the count says "12+" rather than a total. */
@@ -61,6 +75,8 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
     body: n.body,
     href: n.href,
     hot: n.tone === "warn" || (data?.seenAt ? n.at > data.seenAt : true),
+    tone: n.tone,
+    act: actionFor(n),
   });
   const items = (data?.notices ?? []).filter((n) => !clearedHere.has(n.id)).map(shape);
   const allItems = everything ? everything.filter((n) => !clearedHere.has(n.id)).map(shape) : items;
@@ -120,12 +136,17 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
           {ticked && <Ico name="check" size={11} />}
         </button>
         <span className="nl-dash-line-text">
-          <span className="nl-dash-strong">{a.title}</span>
+          <span className="nl-dash-strong">
+            {/* The priority: clay for a warning, coral for new since you last
+                looked, quiet once seen. */}
+            <i className={`nl-dash-pri${a.tone === "warn" ? " is-warn" : a.hot ? " is-new" : ""}`} aria-hidden />
+            {a.title}
+          </span>
           {a.body && <span className="nl-meta">{a.body}</span>}
         </span>
         {a.href && (
           <Link href={a.href} onClick={onOpen} className="nl-dash-go">
-            Open <Ico name="arrow" size={13} />
+            {a.act} <Ico name="arrow" size={13} />
           </Link>
         )}
       </li>
@@ -144,12 +165,10 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
   ) : null;
 
   return (
-    <section className="nl-dash-col" aria-labelledby="nl-dash-needs">
-      <div className="nl-dash-sec-head">
-        <h2 id="nl-dash-needs" className="nl-dash-sec-title">
-          Needs You
-        </h2>
-        {!loading && !error && openCount > 0 && <span className="nl-count">{openCount}{more ? "+" : ""}</span>}
+    <section className="nl-dash-card nl-dash-col" aria-labelledby="nl-dash-needs">
+      <div className="nl-dash-card-h">
+        <h3 id="nl-dash-needs">Needs You</h3>
+        {!loading && !error && openCount > 0 && <span className="nl-meta">{openCount}{more ? "+" : ""} {openCount === 1 && !more ? "thing" : "things"}</span>}
       </div>
       {loading ? (
         <p className="nl-dash-wait">

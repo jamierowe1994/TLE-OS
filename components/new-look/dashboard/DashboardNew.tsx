@@ -4,17 +4,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import SteveFace from "@/components/SteveFace";
 import { Ico } from "@/components/new-look/Parts";
 import { minutesOf } from "@/lib/diary";
+import { sumRange } from "@/lib/front-dash";
 import Agenda, { useMyDay } from "./Agenda";
-import Glance from "./Glance";
+import FrontFigures, { useFront, useRange } from "./FrontFigures";
 import LaunchSet from "./LaunchSet";
 import NeedsYou from "./NeedsYou";
-import QuickPills from "./QuickPills";
+import QuickPills, { type SteveAsk } from "./QuickPills";
 
 /**
  * The Dashboard in the new look (lib/new-look "dashboard", 23 Oct 2026), after
- * the design's Dashboard: the date, the greeting with Steve, a box to ask him
- * anything, the agent's quick links, four figures on a hairline, Today and
- * Needs You side by side, and Get Set for Launch at the foot.
+ * the design's front office (24 Oct 2026): the date, the greeting with Steve, a
+ * box to ask him anything, his quick questions and the agent's quick links,
+ * then the range switch, four figures, leads per day and the pipeline
+ * (FrontFigures), Today and Needs You side by side, and Get Set for Launch at
+ * the foot. The design's back office is its own page (PM Dashboard, /overview).
  *
  * What is live and what is left out:
  *  - Steve's line under the greeting is said from their own day (the diary
@@ -23,8 +26,11 @@ import QuickPills from "./QuickPills";
  *  - The ask box sends the question to the real Steve (HelpDock, event
  *    "os-steve-ask"), who answers in his own panel. The design's canned
  *    answers are not here; nor is its attach button (attach in his panel).
- *  - The design's four sample questions are the agent's own quick links.
- *  - The figures, Today and Needs You read exactly what the old tiles read.
+ *  - The design's sample questions are Steve's chips only where the day has
+ *    something for them: calling first while leads wait, a chase while terms
+ *    are out, and the prep for the next appraisal in their own diary today, at
+ *    its real time. Then the agent's own quick links.
+ *  - Today and Needs You read exactly what the old tiles read.
  */
 
 function steveSays(
@@ -57,15 +63,38 @@ export default function DashboardNew({ title }: { title: string }) {
   const sentTimer = useRef<number | null>(null);
   useEffect(() => () => { if (sentTimer.current) window.clearTimeout(sentTimer.current); }, []);
 
-  const ask = () => {
-    const text = q.trim();
+  const front = useFront();
+  const [range, setRange] = useRange();
+
+  const send = (raw: string) => {
+    const text = raw.trim();
     if (!text) return;
     window.dispatchEvent(new CustomEvent("os-steve-ask", { detail: text }));
-    setQ("");
     setSent(true);
     if (sentTimer.current) window.clearTimeout(sentTimer.current);
     sentTimer.current = window.setTimeout(() => setSent(false), 2400);
   };
+  const ask = () => {
+    if (!q.trim()) return;
+    send(q);
+    setQ("");
+  };
+
+  /* Steve's chips, where the day gives them something to answer. */
+  const asks: SteveAsk[] = [];
+  const fresh = front.data?.leads.ok ? sumRange(front.data.leads.data.fresh, 7) : null;
+  if (fresh == null || fresh > 0) asks.push({ label: "Who should I call first?", ask: "Who should I call first?" });
+  if (front.data?.terms.ok && front.data.terms.data.rows.length > 0) {
+    asks.push({ label: "Draft a chase for unsigned terms", ask: "Draft a chase for my unsigned terms of business" });
+  }
+  const london = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+  const nextAppraisal = day.loading ? null : day.today.find((a) => a.kind === "appraisal" && !a.allDay && minutesOf(a.start) >= minutesOf(london));
+  if (nextAppraisal) {
+    asks.push({
+      label: `Prep me for the ${nextAppraisal.start} appraisal`,
+      ask: `Prep me for my ${nextAppraisal.start} appraisal today${nextAppraisal.where ? ` at ${nextAppraisal.where}` : ""}`,
+    });
+  }
 
   const date = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
   const says = steveSays(day, needs);
@@ -111,12 +140,12 @@ export default function DashboardNew({ title }: { title: string }) {
           </div>
         </form>
 
-        <QuickPills />
+        <QuickPills asks={asks} onAsk={send} />
       </section>
 
-      <Glance />
+      <FrontFigures range={range} setRange={setRange} front={front} />
 
-      <div className="nl-dash-cols">
+      <div className="nl-dash-two">
         <Agenda />
         <NeedsYou onCount={onNeeds} />
       </div>

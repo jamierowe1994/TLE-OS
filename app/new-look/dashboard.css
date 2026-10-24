@@ -58,29 +58,10 @@
 }
 [data-look="new"] .nl-dash-pick:hover { background: var(--box); }
 
-/* ── the figures ────────────────────────────────────────────────────────── */
-[data-look="new"] .nl-dash-glance {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 28px 0; margin-bottom: 72px;
-}
-[data-look="new"] .nl-dash-glance-item {
-  display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 4px 24px; border-left: 1px solid var(--line);
-  color: inherit; text-decoration: none; transition: opacity 0.2s;
-  animation: nl-in 0.6s var(--nl-ease) both;
-}
-[data-look="new"] .nl-dash-glance-item:nth-child(2) { animation-delay: 0.06s; }
-[data-look="new"] .nl-dash-glance-item:nth-child(3) { animation-delay: 0.12s; }
-[data-look="new"] .nl-dash-glance-item:nth-child(4) { animation-delay: 0.18s; }
-[data-look="new"] .nl-dash-glance-item:first-child { border-left: 0; padding-left: 0; }
-[data-look="new"] .nl-dash-glance-item:hover .nl-dash-fig { color: var(--accent-dark); }
-[data-look="new"] .nl-dash-glance-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 8px; }
-[data-look="new"] .nl-dash-fig {
-  font-family: var(--nl-serif); font-size: 44px; line-height: 48px; letter-spacing: 0; color: var(--ink);
-  font-variant-numeric: tabular-nums; transition: color 0.2s;
-}
+/* ── loading and failure, shared ─────────────────────────────────────────── */
 [data-look="new"] .nl-dash-skel { display: block; height: 48px; padding: 4px 0; }
 [data-look="new"] .nl-dash-skel i {
-  display: block; height: 40px; width: 50%; border-radius: 10px;
+  display: block; height: 36px; width: 50%; border-radius: 10px;
   background: linear-gradient(90deg, var(--box), var(--panel), var(--box)); background-size: 200% 100%;
   animation: nl-dash-shimmer 1.4s ease-in-out infinite;
 }
@@ -88,10 +69,8 @@
 [data-look="new"] .nl-dash-warn { color: var(--accent-dark); }
 
 /* ── Today and Needs You ────────────────────────────────────────────────── */
-[data-look="new"] .nl-dash-cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 72px; margin-bottom: 72px; }
+[data-look="new"] .nl-dash-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 12px; margin: 12px 0 72px; }
 [data-look="new"] .nl-dash-col { min-width: 0; }
-[data-look="new"] .nl-dash-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-[data-look="new"] .nl-dash-sec-title { font-family: var(--font-heading); font-weight: 600; font-size: 22px; line-height: 28px; letter-spacing: -0.3px; color: var(--ink); margin: 0; }
 [data-look="new"] .nl-dash-sub { font-size: 12px; font-weight: 500; color: var(--muted); margin: 22px 0 4px; }
 [data-look="new"] .nl-dash-note { font-size: 14px; line-height: 21px; color: var(--muted); margin: 10px 0 0; }
 [data-look="new"] .nl-dash-wait { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); margin: 10px 0 0; }
@@ -142,13 +121,21 @@
 }
 [data-look="new"] .nl-dash-tick:hover { border-color: var(--sage-deep); }
 [data-look="new"] .is-ticked .nl-dash-tick { background: var(--sage-deep); border-color: var(--sage-deep); }
+/* The design's calm button: an outline, sage on hover (24 Oct 2026). */
 [data-look="new"] .nl-dash-go {
   flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-  font-size: 13px; font-weight: 500; line-height: 18px; color: #fff; background: var(--sage-deep);
-  border-radius: 10px; padding: 7px 14px; text-decoration: none; transition: background-color 0.25s var(--nl-ease), gap 0.25s var(--nl-ease);
+  font-size: 13px; font-weight: 500; line-height: 18px; color: var(--ink); background: transparent;
+  border: 1px solid var(--line-strong); border-radius: 10px; padding: 6px 12px; text-decoration: none;
+  transition: background-color 0.25s var(--nl-ease), border-color 0.25s, color 0.25s, gap 0.25s var(--nl-ease);
 }
-[data-look="new"] .nl-dash-go:hover { background: var(--sage-ink); gap: 9px; }
-:root[data-theme="dark"] [data-look="new"] .nl-dash-go { color: #141413; }
+[data-look="new"] .nl-dash-go:hover { background: var(--sage-deep); border-color: var(--sage-deep); color: #fff; gap: 9px; }
+:root[data-theme="dark"] [data-look="new"] .nl-dash-go:hover { color: #141413; }
+[data-look="new"] .nl-dash-go:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-dash-pri { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); margin-right: 8px; vertical-align: 1px; }
+[data-look="new"] .nl-dash-pri.is-new { background: var(--primary); }
+[data-look="new"] .nl-dash-pri.is-warn { background: var(--accent-dark); }
+[data-look="new"] .nl-dash-card .nl-dash-needs > li { padding: 12px 0; }
+[data-look="new"] .nl-dash-card .nl-dash-strong { font-size: 14px; line-height: 21px; }
 
 /* in the old pop-outs, which sit outside the page */
 [data-look="new"].nl-dash-pop { background: transparent; }
@@ -184,14 +171,140 @@
 }
 [data-look="new"] .is-done > .nl-dash-tickmark, [data-look="new"] .nl-dash-pick.is-on > .nl-dash-tickmark { background: var(--sage-deep); border-color: var(--sage-deep); }
 
+/* ── the front office (24 Oct 2026, after the design's front office) ─────────
+   Range switch, four figures between hairlines, leads per day and the
+   pipeline in cards, then Today and Needs You as two cards. Colours are the
+   new look's own tokens: coral (--primary), clay (--accent-dark), sage
+   (--sage-deep, --sage-soft), so dark mode follows on its own. */
+[data-look="new"] .nl-dash-pill.is-ask { color: var(--muted); border-style: dashed; }
+[data-look="new"] .nl-dash-pill.is-ask:hover { color: var(--ink); border-style: solid; border-color: var(--ink); background: transparent; }
+
+[data-look="new"] .nl-dash-front { margin-bottom: 0; }
+[data-look="new"] .nl-dash-bar-h { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px 16px; margin: 0 0 18px; }
+[data-look="new"] .nl-dash-h2 { font-family: var(--font-heading); font-weight: 500; font-size: 26px; line-height: 32px; letter-spacing: 0; color: var(--ink); margin: 0; }
+[data-look="new"] .nl-dash-bar-sub { margin: 2px 0 0; font-size: 13.5px; line-height: 20px; color: var(--muted); }
+[data-look="new"] .nl-dash-seg { display: inline-flex; flex: none; background: var(--panel); border-radius: 10px; padding: 3px; }
+[data-look="new"] .nl-dash-seg button,
+[data-look="new"] .nl-dash-chips button {
+  font: inherit; font-size: 12.5px; line-height: 18px; color: var(--muted); background: transparent; border: 0; cursor: pointer;
+  padding: 5px 12px; border-radius: 8px; transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-dash-seg button:hover, [data-look="new"] .nl-dash-chips button:hover { color: var(--ink); }
+[data-look="new"] .nl-dash-seg button.is-on, [data-look="new"] .nl-dash-chips button.is-on { background: var(--sage-soft); color: var(--sage-ink); }
+[data-look="new"] .nl-dash-seg button:focus-visible, [data-look="new"] .nl-dash-chips button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* the four figures, between two hairlines */
+[data-look="new"] .nl-dash-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-dash-stat {
+  display: flex; flex-direction: column; min-width: 0; padding: 20px 22px 16px; border-left: 1px solid var(--line);
+  color: inherit; text-decoration: none; animation: nl-in 0.6s var(--nl-ease) both;
+}
+[data-look="new"] .nl-dash-stat:first-child { border-left: 0; padding-left: 0; }
+[data-look="new"] .nl-dash-stat:nth-child(2) { animation-delay: 0.06s; }
+[data-look="new"] .nl-dash-stat:nth-child(3) { animation-delay: 0.12s; }
+[data-look="new"] .nl-dash-stat:nth-child(4) { animation-delay: 0.18s; }
+[data-look="new"] .nl-dash-stat:hover .nl-dash-stat-n { color: var(--accent-dark); }
+[data-look="new"] .nl-dash-stat:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+[data-look="new"] .nl-dash-stat-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; line-height: 20px; color: var(--muted); }
+[data-look="new"] .nl-dash-badge { font-style: normal; font-size: 12px; line-height: 18px; white-space: nowrap; color: var(--faint); }
+[data-look="new"] .nl-dash-badge.is-up { color: var(--sage-deep); }
+[data-look="new"] .nl-dash-badge.is-down, [data-look="new"] .nl-dash-badge.is-warn { color: var(--accent-dark); }
+[data-look="new"] .nl-dash-stat-n {
+  display: block; font-family: var(--font-heading); font-weight: 400; font-size: 40px; line-height: 46px; letter-spacing: 0;
+  margin-top: 6px; color: var(--ink); font-variant-numeric: tabular-nums; transition: color 0.2s;
+}
+[data-look="new"] .nl-dash-stat-n.is-off { color: var(--faint); }
+[data-look="new"] .nl-dash-stat-sub { font-size: 12.5px; line-height: 18px; color: var(--faint); min-height: 18px; overflow-wrap: anywhere; }
+[data-look="new"] .nl-dash-stat .nl-dash-skel { margin-top: 6px; }
+[data-look="new"] .nl-dash-spark { display: block; width: 100%; height: 30px; margin-top: 12px; overflow: visible; }
+[data-look="new"] .nl-dash-spark-ln {
+  fill: none; stroke: var(--sage-deep); opacity: 0.55; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1; stroke-dashoffset: 1; animation: nl-dash-draw 1.4s var(--nl-ease) forwards;
+}
+[data-look="new"] .nl-dash-spark-dot { fill: var(--primary); }
+@keyframes nl-dash-draw { to { stroke-dashoffset: 0; } }
+/* Terms out has no history to draw: how many are in time and how many late. */
+[data-look="new"] .nl-dash-strip { display: flex; gap: 2px; height: 6px; margin: 24px 0 12px; border-radius: 999px; overflow: hidden; background: var(--sage-soft); }
+[data-look="new"] .nl-dash-strip i { display: block; height: 100%; flex-basis: 0; }
+[data-look="new"] .nl-dash-strip i.is-ok { background: var(--sage-deep); }
+[data-look="new"] .nl-dash-strip i.is-late { background: var(--primary); }
+
+/* the cards */
+[data-look="new"] .nl-dash-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; margin-top: 28px; }
+[data-look="new"] .nl-dash-card { position: relative; min-width: 0; border: 1px solid var(--line); border-radius: 22px; padding: 20px 22px; background: var(--page); }
+[data-look="new"] .nl-dash-card-h { display: flex; justify-content: space-between; align-items: center; gap: 8px 10px; min-height: 28px; }
+[data-look="new"] .nl-dash-card-h h3 { margin: 0; font-family: var(--font-body); font-size: 15px; font-weight: 500; line-height: 22px; letter-spacing: 0; color: var(--ink); }
+[data-look="new"] .nl-dash-card-sub { margin: 2px 0 12px; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-dash-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+[data-look="new"] .nl-dash-chips button { padding: 4px 10px; }
+
+/* leads per day */
+[data-look="new"] .nl-dash-bars { position: relative; height: 220px; margin-top: 14px; touch-action: pan-y; }
+[data-look="new"] .nl-dash-bars svg { display: block; overflow: visible; }
+[data-look="new"] .nl-dash-gl { stroke: var(--line); }
+[data-look="new"] .nl-dash-axis { font-family: var(--font-body); font-size: 11px; fill: var(--faint); }
+[data-look="new"] .nl-dash-bar {
+  fill: var(--sage-soft); transform-box: fill-box; transform-origin: bottom;
+  animation: nl-dash-grow 0.8s var(--nl-ease) both; transition: fill 0.15s;
+}
+[data-look="new"] .nl-dash-bar.is-now { fill: var(--primary); }
+[data-look="new"] .nl-dash-col.is-hover .nl-dash-bar { fill: var(--sage-deep); }
+@keyframes nl-dash-grow { from { transform: scaleY(0); } }
+[data-look="new"] .nl-dash-hit { fill: transparent; cursor: pointer; }
+[data-look="new"] .nl-dash-avg { stroke: var(--sage-deep); stroke-dasharray: 3 4; stroke-width: 1; pointer-events: none; }
+[data-look="new"] .nl-dash-tip {
+  position: absolute; z-index: 5; pointer-events: none; display: flex; flex-direction: column;
+  background: var(--ink); color: var(--page); border-radius: 10px; padding: 8px 11px; font-size: 12px; line-height: 1.45; white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 10px)); opacity: 0; transition: opacity 0.15s;
+}
+[data-look="new"] .nl-dash-tip.is-on { opacity: 1; }
+[data-look="new"] .nl-dash-tip b { font-weight: 600; }
+
+/* the pipeline */
+[data-look="new"] .nl-dash-steps { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 16px; }
+[data-look="new"] .nl-dash-step-link { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; font-size: 13px; line-height: 18px; color: inherit; text-decoration: none; border-radius: 6px; }
+[data-look="new"] .nl-dash-step-link:hover .nl-dash-step-name { color: var(--accent-dark); }
+[data-look="new"] .nl-dash-step-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+[data-look="new"] .nl-dash-step-name { color: var(--ink); transition: color 0.2s; }
+[data-look="new"] .nl-dash-step-n { font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+[data-look="new"] .nl-dash-step-n small { margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--faint); }
+[data-look="new"] .nl-dash-step.is-warn .nl-dash-step-n small { color: var(--accent-dark); }
+[data-look="new"] .nl-dash-step-off { font-weight: 400; color: var(--faint); }
+[data-look="new"] .nl-dash-step-tr { grid-column: 1 / -1; height: 4px; border-radius: 999px; background: var(--sage-soft); overflow: hidden; }
+[data-look="new"] .nl-dash-step-tr i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--sage-deep); transition: width 1.1s var(--nl-ease); }
+[data-look="new"] .nl-dash-step:last-child .nl-dash-step-tr i { background: var(--primary); }
+
+/* Today, as a timeline */
+[data-look="new"] .nl-dash-tl { list-style: none; margin: 8px 0 0; padding: 0; }
+[data-look="new"] .nl-dash-tl > li { animation: nl-in 0.6s var(--nl-ease) both; }
+[data-look="new"] .nl-dash-ev-row {
+  font: inherit; color: inherit; width: 100%; text-align: left; background: transparent; border: 0; cursor: pointer;
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 8px 0;
+}
+[data-look="new"] .nl-dash-ev-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 12px; }
+[data-look="new"] .nl-dash-ev-row time { font-size: 13px; line-height: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-dash-ev-row time.is-allday { font-size: 11.5px; }
+[data-look="new"] .nl-dash-ev-box {
+  display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+[data-look="new"] .nl-dash-ev-row:hover .nl-dash-ev-box { border-color: var(--line-strong); }
+[data-look="new"] .nl-dash-ev-what { font-size: 13.5px; line-height: 20px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+[data-look="new"] .nl-dash-ev-what .nl-dash-dot { display: inline-block; width: 6px; height: 6px; margin-right: 8px; vertical-align: 2px; transform: none; }
+[data-look="new"] .nl-dash-ev-box .nl-meta { overflow-wrap: anywhere; }
+[data-look="new"] .nl-dash-ev-row em { font-style: normal; font-size: 12px; line-height: 18px; color: var(--faint); white-space: nowrap; }
+[data-look="new"] .nl-dash-ev.is-past { opacity: 0.5; }
+[data-look="new"] .nl-dash-ev.is-next .nl-dash-ev-box { background: var(--sage-soft); border-color: transparent; }
+[data-look="new"] .nl-dash-ev.is-next em { color: var(--sage-deep); font-weight: 500; }
+[data-look="new"] .nl-dash-now { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 11.5px; line-height: 16px; font-weight: 500; color: var(--accent-dark); font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-dash-now::after { content: ""; flex: 1; height: 1.5px; background: var(--primary); opacity: 0.8; }
+
 /* ── smaller screens ────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
-  [data-look="new"] .nl-dash-cols { gap: 48px; }
-}
-@media (max-width: 900px) {
-  [data-look="new"] .nl-dash-glance { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 24px; }
-  [data-look="new"] .nl-dash-glance-item:nth-child(3) { border-left: 0; padding-left: 0; }
-  [data-look="new"] .nl-dash-cols { grid-template-columns: minmax(0, 1fr); gap: 48px; }
+  [data-look="new"] .nl-dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-look="new"] .nl-dash-stat:nth-child(3) { border-left: 0; padding-left: 0; }
+  [data-look="new"] .nl-dash-stat:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  [data-look="new"] .nl-dash-grid, [data-look="new"] .nl-dash-two { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
   [data-look="new"] .nl-dash-hello { margin: 24px auto 48px; }
@@ -199,10 +312,16 @@
   [data-look="new"] .nl-dash-says { margin-bottom: 22px; }
   [data-look="new"] .nl-dash-ask { padding: 14px 12px 10px 16px; border-radius: 20px; }
   [data-look="new"] .nl-dash-ask textarea { font-size: 17px; line-height: 25px; }
-  [data-look="new"] .nl-dash-glance { margin-bottom: 48px; padding: 22px 0; }
-  [data-look="new"] .nl-dash-glance-item { padding: 2px 16px; }
-  [data-look="new"] .nl-dash-fig { font-size: 36px; line-height: 40px; }
-  [data-look="new"] .nl-dash-cols { margin-bottom: 48px; }
+  [data-look="new"] .nl-dash-bar-h { flex-direction: column; align-items: stretch; margin-top: 8px; }
+  [data-look="new"] .nl-dash-seg { align-self: flex-start; }
+  [data-look="new"] .nl-dash-stat { padding: 16px 14px 14px; }
+  [data-look="new"] .nl-dash-stat:nth-child(odd) { padding-left: 0; }
+  [data-look="new"] .nl-dash-stat-n { font-size: 32px; line-height: 38px; }
+  [data-look="new"] .nl-dash-card { padding: 18px 16px; border-radius: 20px; }
+  [data-look="new"] .nl-dash-card-h { flex-wrap: wrap; }
+  [data-look="new"] .nl-dash-two { margin-bottom: 48px; }
+  [data-look="new"] .nl-dash-ev-row { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; }
+  [data-look="new"] .nl-dash-ev-row em { grid-column: 2; }
   [data-look="new"] .nl-dash-agenda-row { grid-template-columns: 46px 10px minmax(0, 1fr); gap: 12px; }
   [data-look="new"] .nl-dash-needs > li { flex-wrap: wrap; }
   [data-look="new"] .nl-dash-needs .nl-dash-go { margin-left: 34px; }
@@ -215,9 +334,10 @@
   [data-look="new"] .nl-dash-launch-grid { padding: 0 14px 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-look="new"] .nl-dash-glance-item, [data-look="new"] .nl-dash-agenda > li, [data-look="new"] .nl-dash-needs > li, [data-look="new"] .nl-dash-says { animation: none; }
+  [data-look="new"] .nl-dash-agenda > li, [data-look="new"] .nl-dash-needs > li, [data-look="new"] .nl-dash-says,
+  [data-look="new"] .nl-dash-stat, [data-look="new"] .nl-dash-bar, [data-look="new"] .nl-dash-spark-ln, [data-look="new"] .nl-dash-tl > li { animation: none; }
+  [data-look="new"] .nl-dash-spark-ln { stroke-dashoffset: 0; }
+  [data-look="new"] .nl-dash-step-tr i { transition: none; }
   [data-look="new"] .nl-dash-skel i, [data-look="new"] .nl-dash-spin { animation-duration: 3s; }
 }
 
-/* The figures in boxes, as on the PM Dashboard (24 Oct 2026). */
-[data-look="new"] .nl-bo-stats.nl-dash-stats { margin: 12px 0 36px; }

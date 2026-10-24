@@ -9,8 +9,10 @@ import { usePref } from "@/lib/prefs-store";
 /**
  * The agent's own quick links, as the pills under the ask box (new look).
  *
- * The design has four sample questions there; those answers were invented, so
- * the row carries the shortcuts the agent picked for themselves instead - the
+ * Steve's own questions come first (the design's chips, 24 Oct 2026), only
+ * where the day gives them something to answer - see DashboardNew - and each
+ * goes to the real Steve as the ask box does. Then the shortcuts the agent
+ * picked for themselves - the
  * same list, kept in the same setting ("tle-dash-quick-v1", see
  * components/QuickLinks) as the old dashboard's Customise row, so a link added
  * in either look is there in both. "Edit quick links" is that Customise: tick
@@ -19,7 +21,10 @@ import { usePref } from "@/lib/prefs-store";
 
 const STORE = "tle-dash-quick-v1"; // the same key as components/QuickLinks
 
-export default function QuickPills() {
+/** A question for Steve, as a chip: the short words on it and what he is asked. */
+export type SteveAsk = { label: string; ask: string };
+
+export default function QuickPills({ asks = [], onAsk }: { asks?: SteveAsk[]; onAsk?: (text: string) => void }) {
   const [chosen, setChosen, ready] = usePref<string[] | null>(STORE, null);
   const [editing, setEditing] = useState(false);
   const ids = chosen ?? [];
@@ -34,11 +39,18 @@ export default function QuickPills() {
     setChosen(next);
   };
 
-  if (!ready) return <div className="nl-dash-pills" aria-hidden />;
+  const steveChips = asks.map((a) => (
+    <button key={a.label} type="button" className="nl-dash-pill is-ask" onClick={() => onAsk?.(a.ask)} title={a.ask}>
+      {a.label}
+    </button>
+  ));
+
+  if (!ready) return <div className="nl-dash-pills">{steveChips}</div>;
 
   return (
     <div className="nl-dash-quick">
       <div className="nl-dash-pills">
+        {steveChips}
         {links.map((q) => (
           <Link key={q.id} href={q.href} className="nl-dash-pill">
             {q.label}
