@@ -164,7 +164,50 @@ export type PresentMarket = {
   reduced: number | null;
   /** When the figures were read, shown on the slide. */
   pulledAt: string;
+  /** Of `advertised`, how many are already let agreed: the demand card. */
+  letAgreed?: number | null;
+  /**
+   * Which of the builder's six market cards are switched on, in the order the
+   * slide shows them (James's builder, 24 Oct 2026). Absent on older decks,
+   * which then show what they always did.
+   */
+  blocks?: MarketBlock[] | null;
+  /** The slide's opening sentence, written by the builder from the cards that are on. */
+  lead?: string | null;
 };
+
+/** The builder's six local-market cards. Demand, pace, rent and cuts start on. */
+export type MarketBlock = "demand" | "pace" | "rent" | "cuts" | "competing" | "agents";
+export const MARKET_BLOCKS: { id: MarketBlock; label: string; on: boolean }[] = [
+  { id: "demand", label: "Demand", on: true },
+  { id: "pace", label: "Pace", on: true },
+  { id: "rent", label: "Rent by size", on: true },
+  { id: "cuts", label: "Price cuts", on: true },
+  { id: "competing", label: "What's competing", on: false },
+  { id: "agents", label: "Who's letting", on: false },
+];
+
+/**
+ * THE APPRAISAL DECK'S TWELVE SLIDES (lib/decks/appraisal-presentation.html),
+ * by the ids the page gives them. Cover and Next Steps are fixed; any other
+ * can be switched off in the builder (PresentDeck.skip). `needs` is what the
+ * slide can't be drawn without, and which builder step supplies it.
+ */
+export type DesignSlideId = "cover" | "today" | "who" | "home" | "market" | "comps" | "figure" | "finding" | "fees" | "rules" | "plan" | "next";
+export const APPRAISAL_DESIGN_SLIDES: { id: DesignSlideId; title: string; fixed: boolean; needs: null | { step: "home" | "comparables" | "figure"; why: string } }[] = [
+  { id: "cover", title: "Cover", fixed: true, needs: null },
+  { id: "today", title: "Today", fixed: false, needs: null },
+  { id: "who", title: "Who We Are", fixed: false, needs: null },
+  { id: "home", title: "Your Home", fixed: false, needs: null },
+  { id: "market", title: "The Market", fixed: false, needs: { step: "figure", why: "Switch on at least one market card." } },
+  { id: "comps", title: "Homes Like Yours", fixed: false, needs: { step: "comparables", why: "Pick three comparables and set the figure." } },
+  { id: "figure", title: "The Figure", fixed: false, needs: { step: "figure", why: "Set the figure." } },
+  { id: "finding", title: "Finding Your Tenant", fixed: false, needs: null },
+  { id: "fees", title: "Choose Your Service", fixed: false, needs: null },
+  { id: "rules", title: "Staying Compliant", fixed: false, needs: null },
+  { id: "plan", title: "From Today to Move-in", fixed: false, needs: null },
+  { id: "next", title: "Next Steps", fixed: true, needs: null },
+];
 
 /**
  * THE OFFER, in writing. Post-appraisal only.
@@ -407,6 +450,8 @@ export type PresentDeck = {
   loves?: PresentNote[] | null;
   /** "Worth doing before we list": up to two, the agent's own words. */
   fixes?: PresentNote[] | null;
+  /** Appraisal deck slides switched off in the builder, by APPRAISAL_DESIGN_SLIDES id. Cover and Next Steps can't be. */
+  skip?: DesignSlideId[] | null;
 };
 
 /** The agent's figure: asking rent, its range (low ≤ ask ≤ high), all £ pcm, and time to let in words. */
@@ -476,6 +521,8 @@ export type PresentBuilderPicks = {
   figure?: PresentFigure | null;
   loves?: PresentNote[] | null;
   fixes?: PresentNote[] | null;
+  /** The four-step builder's state (James, 24 Oct 2026), so it reopens as it was left. Only the builder reads it. */
+  v2?: Record<string, unknown> | null;
 };
 
 /* ───────────────────────── the words ───────────────────────── */

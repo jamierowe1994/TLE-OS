@@ -27,6 +27,9 @@ import {
 import { hasDb, q } from "@/lib/db";
 import { publicOrigin } from "@/lib/origin";
 import { guideIn } from "@/lib/rm-guide";
+import { APPRAISAL_DESIGN_SLIDES } from "@/lib/present";
+import { deckData, deckHtml, firmFigures } from "@/lib/appraisal-deck";
+import { getAppraisal } from "@/lib/appraisal-store";
 import { agentProfile } from "@/lib/agent-profile";
 
 /**
@@ -86,6 +89,11 @@ type Body = {
   figure?: { ask?: unknown; low?: unknown; high?: unknown; weeks?: unknown } | null;
   loves?: unknown;
   fixes?: unknown;
+  skip?: string[];
+  /** Draw the appraisal deck from this body and return the page, saving nothing (the builder's live preview). */
+  preview?: boolean;
+  /** With preview: the slide to open on, 0-based. */
+  startAt?: number;
   recipientName?: string;
   address?: string;
   postcode?: string;
@@ -278,8 +286,22 @@ export async function POST(req: NextRequest) {
     ...(fig.figure ? { figure: fig.figure } : {}),
     ...(loves.length ? { loves } : {}),
     ...(fixes.length ? { fixes } : {}),
+    /* The new builder's switched-off slides (24 Oct 2026): only real, removable ids. */
+    ...(kind === "appraisal" && Array.isArray(body.skip)
+      ? { skip: APPRAISAL_DESIGN_SLIDES.filter((sl) => !sl.fixed && body.skip!.includes(sl.id)).map((sl) => sl.id) }
+      : {}),
     createdAt: new Date().toISOString(),
   };
+
+  /* THE BUILDER'S LIVE PREVIEW (24 Oct 2026): the very deck Create would
+     save, drawn and handed back as the page. Nothing is stored. */
+  if (body.preview) {
+    if (kind !== "appraisal") return NextResponse.json({ ok: false, error: "Only the appraisal deck previews here." }, { status: 400 });
+    const ref = (body.ref ?? "").trim();
+    const [firm, appraisal] = await Promise.all([firmFigures().catch(() => ({ homes: null })), ref ? getAppraisal(ref).catch(() => null) : Promise.resolve(null)]);
+    const d = deckData(deck, null, { firm, appraisal, staff: false, startAt: Number.isInteger(body.startAt) ? body.startAt : 0 });
+    return new NextResponse(deckHtml(d), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+  }
 
   /* UPDATE PRESENTATION changes the deck behind the same link, so whatever
      the landlord or the agent already has opens the new one. Only the same
@@ -336,5 +358,7 @@ function pickedIn(b: PresentBuilderPicks | null | undefined): PresentBuilderPick
     figure: checkFigure(b.figure).figure,
     loves: cleanNotes(b.loves, MAX_LOVES),
     fixes: cleanNotes(b.fixes, MAX_FIXES),
+    /* The four-step builder's own state, so Update opens where the agent left it. Opaque here, capped in size. */
+    ...(b.v2 && typeof b.v2 === "object" && JSON.stringify(b.v2).length < 200_000 ? { v2: b.v2 } : {}),
   };
 }

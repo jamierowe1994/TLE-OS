@@ -108,6 +108,10 @@ export type DeckData = {
   timeline: [string, string, string][];
   moveIn: string;
   scottish: boolean;
+  /** Slides switched off in the builder, by the page's slide ids. */
+  skip: string[];
+  /** The slide to open on, 0-based (the builder's preview). */
+  startAt: number;
 };
 
 /* ── the company's words (the design's, trimmed to what is true) ── */
@@ -236,7 +240,7 @@ export function sampleDeck(): PresentDeck {
 export function deckData(
   deck: PresentDeck,
   token: string | null,
-  opts: { firm: DeckData["firm"]; appraisal?: MarketAppraisal | null; staff?: boolean; sample?: boolean; now?: Date }
+  opts: { firm: DeckData["firm"]; appraisal?: MarketAppraisal | null; staff?: boolean; sample?: boolean; now?: Date; startAt?: number }
 ): DeckData {
   const now = opts.now ?? new Date();
   const pc = (deck.property.postcode ?? "").trim().toUpperCase();
@@ -354,6 +358,8 @@ export function deckData(
     timeline: scottish ? TIMELINE.map((t) => (t[1] === "Offer and checks" ? [t[0], t[1], "References and affordability."] : t)) : TIMELINE,
     moveIn: moveInFrom(now),
     scottish,
+    skip: (deck.skip ?? []).filter((id) => id !== "cover" && id !== "next"),
+    startAt: Math.max(0, opts.startAt ?? 0),
   };
 }
 
