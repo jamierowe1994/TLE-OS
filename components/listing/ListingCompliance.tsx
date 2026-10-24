@@ -659,6 +659,8 @@ function NewLookCompliance({
 }) {
   const reporter = useSaveReporter();
   const [sending, setSending] = useState(false);
+  /* Reissue on New Terms (James, 24 Oct 2026): signed terms can still be replaced by a new set. */
+  const [reissue, setReissue] = useState(0);
 
   /* ── The certificates, read from the same place the property file reads them ── */
   const [cert, setCert] = useState<CertAnswer | null>(null);
@@ -1162,10 +1164,15 @@ function NewLookCompliance({
         </div>
         <div className="nl-cmp-tob-act">
           {tobState === "signed" ? (
-            <span className="nl-cmp-signed">
-              <Ico name="check" size={14} />
-              Signed
-            </span>
+            <>
+              <span className="nl-cmp-signed">
+                <Ico name="check" size={14} />
+                Signed
+              </span>
+              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setReissue((n) => n + 1)}>
+                Reissue on New Terms
+              </button>
+            </>
           ) : tobState === "sent" ? (
             <>
               <Badge tone="info">Waiting to sign</Badge>
@@ -1192,7 +1199,7 @@ function NewLookCompliance({
               <Menu
                 label="More about the terms"
                 items={[
-                  { label: "Send Terms of Business again", onClick: () => setSending(true) },
+                  { label: "Reissue on New Terms", onClick: () => setReissue((n) => n + 1) },
                   { label: "Upload a signed copy", sub: "Signed on paper or by email", onClick: () => pickPaper("terms", "terms_of_business", "") },
                 ]}
               />
@@ -1200,6 +1207,22 @@ function NewLookCompliance({
           ) : null}
         </div>
       </section>
+      )}
+      {/* A new set going out over signed (or waiting) terms: the same send screen, and its
+          progress under the banner until it is signed. Draws nothing until then. */}
+      {tobState !== "unsigned" && tobState !== "loading" && (
+        <TermsPanel
+          quiet
+          openNew={reissue}
+          listingId={listingId}
+          propertyId={propertyId}
+          propertyAddress={address}
+          landlords={landlord.name || landlord.email ? [{ name: landlord.name, email: landlord.email, phone: landlord.phone }] : []}
+          agentLarn={agentLarn}
+          serviceOnRecord={service}
+          scottish={home ? home.scotland : null}
+          onChanged={terms.reload}
+        />
       )}
 
       {/* ── Everything the home has to hold, one list ── */}
