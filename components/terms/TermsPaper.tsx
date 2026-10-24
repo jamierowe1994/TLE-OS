@@ -170,7 +170,7 @@ export default function TermsPaper({
           <div key={i} className="t-sigs" id="ts-sign">
             <div className={`t-sig${agent.signature ? " done" : ""}${you === "agent" ? " you" : ""}`} id="ts-sig-agent">
               <small>Signed for and on behalf of The Letting Experts</small>
-              <div className="ink">{agent.signature ? <img src={agent.signature} alt="Signature" /> : <em>Signature</em>}</div>
+              <div className="ink">{agent.signature ? <img src={agent.signature} alt="Signature" /> : <em>{agent.signedOn ? "Signed" : "Signature"}</em>}</div>
               <dl className="t-tbl">
                 <Row dt="Name">{values.agentName}</Row>
                 <Row dt="Date">{agent.signedOn || <Blank>When you sign</Blank>}</Row>

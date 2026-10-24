@@ -1,5 +1,7 @@
 "use client";
 
+import { useNewLook } from "@/lib/use-new-look";
+import TermsPanelClassic from "@/components/terms/TermsPanelClassic";
 import { useCallback, useEffect, useState } from "react";
 import TermsSendScreen, { type Editions, type StaffParty, type StaffTerms } from "@/components/terms/TermsSendScreen";
 import { Badge, Ico } from "@/components/new-look/Parts";
@@ -40,7 +42,7 @@ function Ticks({ read, when }: { read: boolean; when?: string }) {
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
 const names = (ps: { name: string }[]) => (ps.length < 2 ? ps[0]?.name ?? "" : `${ps.slice(0, -1).map((p) => p.name).join(", ")} and ${ps[ps.length - 1].name}`);
 
-export default function TermsPanel({
+function OnPagePanel({
   listingId = null,
   propertyId = null,
   appraisalId = null,
@@ -302,3 +304,12 @@ export default function TermsPanel({
   );
 }
 
+/**
+ * Behind the "terms" switch (James, 24 Oct 2026): on, the send screen in his
+ * design, signed on our page and sealed by DocuSeal; off, the drawer and
+ * DocuSeal's own signing box as before. The listing's Compliance tab shows this
+ * to every agent, so the new screen waits for the switch.
+ */
+export default function TermsPanel(props: Parameters<typeof OnPagePanel>[0]) {
+  return useNewLook("terms") === true ? <OnPagePanel {...props} /> : <TermsPanelClassic {...props} />;
+}
