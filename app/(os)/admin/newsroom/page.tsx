@@ -3,7 +3,7 @@
 import { useNewLook } from "@/lib/use-new-look";
 import { NewsroomOld, useNewsroom } from "@/components/newsroom/NewsroomBody";
 import NewsroomNew from "@/components/new-look/admin/NewsroomNew";
-import { Loading } from "@/components/new-look/admin/content-bits";
+import { Loading } from "@/components/new-look/admin/bits";
 
 /**
  * Admin > Content > Newsroom (24 Oct 2026): the same board as /newsroom,

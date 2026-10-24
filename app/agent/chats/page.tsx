@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ErrorLine, HomeHero, Spinner, TopBar } from "../bits";
-import { Face, ago } from "./content-bits";
+import { Face, ago } from "./bits";
 import SlideTabs from "@/components/app/SlideTabs";
 import { previewOf } from "@/lib/chat-gif";
 

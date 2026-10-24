@@ -3,7 +3,7 @@
 import { useNewLook } from "@/lib/use-new-look";
 import { EmailCatalogueOld, useEmailCatalogue } from "@/components/admin/EmailCatalogue";
 import EmailsNew from "@/components/new-look/admin/EmailsNew";
-import { Loading } from "@/components/new-look/admin/content-bits";
+import { Loading } from "@/components/new-look/admin/bits";
 
 /**
  * Admin > Emails > Every email: every email the OS sends, as the recipient

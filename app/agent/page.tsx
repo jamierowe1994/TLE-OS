@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import AlertsCard from "@/components/app/AlertsCard";
 import StandaloneHint from "@/components/app/StandaloneHint";
-import { TopBar } from "./content-bits";
+import { TopBar } from "./bits";
 import { todayLine, useHomeFigures, type Figure } from "./figures";
 import FloatSearch from "@/components/app/FloatSearch";
 import SearchResults from "./search/results";

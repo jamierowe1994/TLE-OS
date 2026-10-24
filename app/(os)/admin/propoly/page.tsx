@@ -4,7 +4,7 @@ import { ExpectedPackEmail, PropolyMailView } from "@/components/MoveInPack";
 import { useNewLook } from "@/lib/use-new-look";
 import { usePropolyAdmin, day, at, OUTCOME, type Sender, type Plan } from "@/components/admin/use-propoly-admin";
 import PropolyNew from "@/components/new-look/admin/PropolyNew";
-import { Loading } from "@/components/new-look/admin/content-bits";
+import { Loading } from "@/components/new-look/admin/bits";
 
 /**
  * PROPOLY, FROM THE OS'S SIDE (22 Oct 2026). Owners see everything; the

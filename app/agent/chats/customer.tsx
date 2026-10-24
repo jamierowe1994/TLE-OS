@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ErrorLine, Spinner, dialable, whatsappHref, WhatsAppIcon } from "../bits";
-import { Bubbles, ChatHead, ChatShell, Composer, type Bubble } from "./content-bits";
+import { Bubbles, ChatHead, ChatShell, Composer, type Bubble } from "./bits";
 
 /**
  * One customer conversation (3 Oct 2026): a landlord on their property file,

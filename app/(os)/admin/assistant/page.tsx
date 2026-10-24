@@ -9,7 +9,7 @@ import SteveRepertoire from "@/components/SteveRepertoire";
 import { useNewLook } from "@/lib/use-new-look";
 import { useSteveConsole, BRIEF_PLACEHOLDER, when } from "@/components/admin/use-steve-console";
 import SteveNew from "@/components/new-look/admin/SteveNew";
-import { Loading } from "@/components/new-look/admin/content-bits";
+import { Loading } from "@/components/new-look/admin/bits";
 
 /**
  * The assistant's console — what people have asked, and what he can answer.

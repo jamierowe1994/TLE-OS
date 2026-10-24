@@ -3,7 +3,7 @@
 import { useNewLook } from "@/lib/use-new-look";
 import { KnowledgeHubOld, useKnowledgeHub } from "@/components/knowledge/KnowledgeHubBody";
 import KnowledgeNew from "@/components/new-look/admin/KnowledgeNew";
-import { Loading } from "@/components/new-look/admin/content-bits";
+import { Loading } from "@/components/new-look/admin/bits";
 
 /**
  * Admin > Content > Knowledge (24 Oct 2026): the same hub as /knowledge,
