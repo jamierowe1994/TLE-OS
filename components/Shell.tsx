@@ -187,6 +187,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   /* The new look's sidebar and frame (lib/new-look "nav", 23 Oct 2026): flat,
      full height, one straight line down to a white page - no rounded window. */
   const navLook = useNewLook("nav") === true;
+  /* With the new Leads page on, Leads opens to just Tenant and Landlord
+     (James, 24 Oct 2026: "get rid of that tab where we click Add a tenant or
+     Add a landlord. Just have it as a dropdown for leads"). Adding a lead is
+     the page's own Add lead button. The old Leads page keeps Add new lead. */
+  const leadsLook = useNewLook("leads") === true;
+  const frontItems = (items: NavItem[]): NavItem[] =>
+    leadsLook ? items.map((i) => (i.href === "/leads" && i.children ? { ...i, children: i.children.filter((c) => c.href !== "/leads?new=1") } : i)) : items;
   const [theme, setTheme] = useState<ThemeChoice>("auto");
   /* The one extra screen this person holds, if any — James gets Admin, Susan
      gets Company figures, Kirstie Pre-tenancy, Francesca Marketing, an agent
@@ -324,7 +331,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* The sidebar (James, 11 Oct 2026: Mist and Launch Day, chosen in
             the look lab): Linear-clean, in components/LaunchNav. */}
         <LaunchNav
-          front={[...FRONT, ...(practising ? [PRACTICE_ITEM] : [])].filter(visible)}
+          front={frontItems([...FRONT, ...(practising ? [PRACTICE_ITEM] : [])]).filter(visible)}
           back={BACK.filter(visible).map(trimmed)}
           mine={mine}
           pathname={pathname}

@@ -39,7 +39,7 @@ import type { LeadViewingRow } from "@/lib/lead-viewings-shape";
 import { SAGE_INK, SAGE_WASH } from "@/components/ListingTags";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Ico, Mast, Tabs, type Tone } from "@/components/new-look/Parts";
-import { LIco, Person, TagsMenu } from "@/components/new-look/leads/LeadBits";
+import { LIco, Person } from "@/components/new-look/leads/LeadBits";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -99,6 +99,17 @@ function sourceFrom(j: LeadsAnswer): LeadSource {
     reason: j.reason ?? "We couldn't read your leads just now. Nothing is lost - try again in a minute.",
   };
 }
+
+/** The order the new look's Any stage lists the stages in: how a lead moves,
+ *  REX's words and the OS's spine words together. Anything not here sorts
+ *  after, alphabetically. */
+const STAGE_ORDER = [
+  "New", "Lead", "Contacted", "Email sent", "2nd contact", "3rd contact", "Qualified", "Waiting", "Nurture",
+  "Viewing booked", "Appraisal booked", "Not proceeding", "Closed", "Lost",
+];
+
+/** The landlord side's Passport done: the appraisal is in the diary. */
+const APPRAISAL_BOOKED = "Appraisal booked";
 
 /** The Passport filter, in the order a passport goes. */
 const PASSPORT_OPTIONS: { id: PassportState | "none"; label: string }[] = (["none", "sent", "started", "done"] as const).map((id) => ({
@@ -274,7 +285,19 @@ export default function Leads() {
   }, [drawerShut]);
   const tagsOf = useCallback((l: Lead) => savedTags[l.id] ?? defaultTags(l), [savedTags]);
   const params = useSearchParams();
-  const side = params.get("side"); // "tenant" | "landlord" | null (both)
+  /* "tenant" | "landlord" | null (both). The new look has no All (James,
+     24 Oct 2026: "we should just be able to click Leads, and that will then
+     break it down between Tenant and Landlord"), so no side in the address
+     means the tenant side. The old look still reads null as both. */
+  const side = params.get("side") ?? (look ? "tenant" : null);
+  /* ...and says so in the address, so the sidebar's Tenant lights and a
+     refresh or a copied link lands on the same tab. */
+  useEffect(() => {
+    if (look !== true || params.get("side")) return;
+    const u = new URL(window.location.href);
+    u.searchParams.set("side", "tenant");
+    window.history.replaceState(window.history.state, "", u.toString());
+  }, [look, params]);
 
   /* ── Finished passports (Kirstie, 6 Oct 2026) ──────────────────────────
      She books no viewing until the passport is in. One read for the whole
@@ -318,7 +341,10 @@ export default function Leads() {
     else u.searchParams.delete("passports");
     window.history.replaceState(null, "", u);
   };
-  const showPassports = side === "tenant" && passportsOn;
+  /* The new look has no separate Passports Done list: Passport done is a
+     filter on the rows themselves (James, 24 Oct 2026), so the dashboard
+     tile's ?passports=done turns that filter on instead - see below. */
+  const showPassports = side === "tenant" && passportsOn && look !== true;
 
   /* ── Every tenant's passport, sent or not (James, 9 Oct 2026) ──────────
      The Passport column and filter: Not sent, Sent, Started, Completed. One
@@ -399,6 +425,9 @@ export default function Leads() {
   const [fPassport, setFPassport] = useState<PassportState | "none" | null>(null);
   /* Off the landlord side the filter has nothing to filter. */
   useEffect(() => { if (!passportsWanted) setFPassport(null); }, [passportsWanted]);
+  /* New look: ?passports=done (the dashboard tile, or a refresh) is the
+     Passport done button already pressed. */
+  useEffect(() => { if (look === true && passportsParam && passportsWanted) setFPassport("done"); }, [look, passportsParam, passportsWanted]);
   /* "Add new lead" in the sidebar lands here with ?new=1 and opens the panel. */
   const wantsNew = params.get("new") === "1";
   useEffect(() => {
@@ -410,11 +439,14 @@ export default function Leads() {
   useEffect(() => {
     if (!side) return setView("list");
     if (!viewReady) return;
-    setView(savedView[side] ?? "groups");
-    // Only when the side changes or the saved choice first arrives; a save
-    // made here must not re-run this and put the view back.
+    /* The new look lands on the rows (James, 24 Oct 2026: "a little bit more
+       of a simplistic view"); Groups is still one press away. The old look
+       keeps landing on Groups. */
+    setView(savedView[side] ?? (look ? "list" : "groups"));
+    // Only when the side changes, the look is known or the saved choice first
+    // arrives; a save made here must not re-run this and put the view back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [side, viewReady]);
+  }, [side, viewReady, look]);
 
   /* ── The real book, out of REX. NOTHING stands in for it (18 Sep 2026).
         The demo book used to show while the real one loaded, when an agent had
@@ -590,6 +622,17 @@ export default function Leads() {
   const agents = useMemo(() => [...new Set(ALL.map((l) => l.agent))].sort(), [ALL]);
   const manyAgents = agents.filter((a) => a && a !== "Unassigned").length > 1;
   const stages = useMemo(() => [...new Set(ALL.map((l) => l.spineLabel ?? l.stage))], [ALL]);
+  /* New look: the stages of the side being looked at only, so Tenants offers
+     the tenant words (Viewing booked, Nurture...) and Landlords the landlord
+     spine (Email sent, 2nd contact, Appraisal booked...). Still only what the
+     book actually holds, in the order a lead moves through them. */
+  const sideStages = useMemo(() => {
+    const found = [...new Set(ALL.filter((l) => !side || leadSide(l) === side).map((l) => l.spineLabel ?? l.stage))];
+    const at = (s: string) => { const i = STAGE_ORDER.indexOf(s); return i < 0 ? STAGE_ORDER.length : i; };
+    return found.sort((a, b) => at(a) - at(b) || a.localeCompare(b, "en-GB"));
+  }, [ALL, side]);
+  /* New look: a stage picked on one side means nothing on the other. */
+  useEffect(() => { if (look === true) setFStage(null); }, [side, look]);
 
   // Tenant-side and landlord-side are different jobs with different questions,
   // so the nav splits them and the list follows. The filters stack on top.
@@ -810,28 +853,45 @@ export default function Leads() {
     );
   }
   if (look) {
-    const sideOf = (id: "all" | "tenant" | "landlord") => (id === "all" ? null : id);
     /* Counted the way the list below is: completed leads only when Groups or "Show completed" has them in. */
     const keepDone = view === "groups" || showDone;
-    const working = (s: "tenant" | "landlord" | null) => ALL.filter((l) => (!s || leadSide(l) === s) && (keepDone || !isCompleted(l))).length;
+    const working = (s: "tenant" | "landlord") => ALL.filter((l) => leadSide(l) === s && (keepDone || !isCompleted(l))).length;
+    /* Tenants and Landlords only, no All (James, 24 Oct 2026). The side is in
+       the address, so the sidebar's Tenant and Landlord land on the right tab. */
     const sideTabs = [
-      { id: "all" as const, label: "All", count: source.loading && !ALL.length ? null : working(null) },
       { id: "tenant" as const, label: "Tenants", count: source.loading && !ALL.length ? null : working("tenant") },
       { id: "landlord" as const, label: "Landlords", count: source.loading && !ALL.length ? null : working("landlord") },
     ];
-    const pickSide = (id: "all" | "tenant" | "landlord") => {
-      const s = sideOf(id);
+    const pickSide = (id: "tenant" | "landlord") => {
       setNlOpenRow(null);
-      router.push(s ? `/leads?side=${s}` : "/leads");
+      router.push(`/leads?side=${id}`);
     };
+    const onLandlords = side === "landlord";
+    /* The one button at the end of the filter row (James, 24 Oct 2026): on
+       Tenants, Passport done - only the tenants whose passport is finished,
+       the ones Kirstie can book in. On Landlords the same idea for the
+       landlord side: Appraisal booked, the spine's own last step, read from
+       the same stage every row already shows. Each counts its whole side. */
+    const passportDone = fPassport === "done";
+    const togglePassportDone = () => {
+      setFPassport(passportDone ? null : "done");
+      /* Kept in the address, as the old Passports Done was, so a refresh stays put. */
+      pickPassports(!passportDone);
+    };
+    const passportDoneCount = passportRows ? ALL.filter((l) => leadSide(l) === "tenant" && passportStateOf(l)?.state === "done").length : null;
+    const bookedOn = fStage === APPRAISAL_BOOKED;
+    const bookedCount = ALL.filter((l) => leadSide(l) === "landlord" && (l.spineLabel ?? l.stage) === APPRAISAL_BOOKED).length;
+    /* The stage the button picked may be one nobody on the list is at yet;
+       the select still has to be able to say it. */
+    const stageOptions = fStage && !sideStages.includes(fStage) ? [...sideStages, fStage] : sideStages;
+    /* Passport done asked before the passports have answered: say so, never an empty list. */
+    const passportsWaiting = passportDone && !passportRows;
     const shape: "rows" | "table" | "groups" = view === "groups" ? "groups" : nlTable ? "table" : "rows";
     const pickShape = (to: "rows" | "table" | "groups") => {
       if (to === "groups") return pickView("groups");
       if (view === "groups") pickView("list");
       saveNlTable(to === "table");
     };
-    const anySet = Boolean(fSource || fAgent || fStage || fTags.length || fPassport || q.trim());
-    const clearAll = () => { setFSource(null); setFAgent(null); setFStage(null); setFTags([]); setFPassport(null); setQ(""); };
     const stageTone = (l: Lead): Tone =>
       l.spineLabel ? (l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent") : STAGE_TONE[l.stage];
     const homeOf = (l: Lead) => l.address || (l.preferred && l.preferred !== "—" ? l.preferred : "") || (l.area && l.area !== "—" ? l.area : "");
@@ -929,44 +989,31 @@ export default function Leads() {
 
     return (
       <div data-look="new" className="nl-page nl-rise nl-leads">
+        {/* Just the title and Add lead (James, 24 Oct 2026: "a really long
+            description... get rid of that"). Passport done moved to the end of
+            the filter row; Archived is at the foot of the list. The Not backed
+            up yet box is gone from here too - "if they're not being pushed,
+            just tell me in the admin centre" - and is on Admin's home now
+            (components/LeadsNotBackedUp). */}
         <Mast
-          title={side === "tenant" ? "Tenant Leads" : side === "landlord" ? "Landlord Leads" : "Leads"}
-          blurb={
-            source.loading
-              ? "Fetching today's enquiries…"
-              : source.live
-                ? `${side === "tenant" ? "Everyone who might rent from us" : side === "landlord" ? "Everyone who might let with us" : "Everyone who might rent from us, or let with us"}, live from the portals, your ads and the website${source.total ? ` - ${source.total.toLocaleString("en-GB")} enquiries on record` : ""}. Open one to see what's next.`
-                : (source.reason ?? "New enquiries from the portals, your ads and the website.")
-          }
+          title="Leads"
           actions={
-            <>
-              <button type="button" data-steve="leads.new" onClick={() => setCreating(true)} className="nl-btn nl-btn--primary">
-                <Ico name="plus" /> Add lead
-              </button>
-              {side === "tenant" && (
-                <button type="button" onClick={() => pickPassports(!passportsOn)} aria-pressed={passportsOn} className={`nl-btn nl-btn--secondary${passportsOn ? " nl-leads-on" : ""}`}>
-                  <LIco name="user" size={15} />
-                  Passports Done
-                  {donePassports && <span className="nl-count">{donePassports.length.toLocaleString("en-GB")}</span>}
-                </button>
-              )}
-              <button type="button" data-steve="leads.archived" onClick={() => setArchiveOpen(true)} className="nl-btn nl-btn--quiet">
-                Archived
-              </button>
-            </>
+            <button type="button" data-steve="leads.new" onClick={() => setCreating(true)} className="nl-btn nl-btn--primary">
+              <Ico name="plus" /> Add lead
+            </button>
           }
         />
-
-        <div className="nl-leads-added">
-          <AddedHere refreshKey={addedTick} />
-        </div>
         <ArchivedLeads open={archiveOpen} onClose={() => setArchiveOpen(false)} />
 
         <div className="nl-leads-filters">
           <div className="nl-filters">
-            <label className="nl-fsearch">
+            {/* One row (James, 24 Oct 2026): search, Any source, Any stage, the
+                side's one button, the count. Agent, passport, tags and Not
+                assigned are off the new look; the search still finds a phone
+                number or an address as well as a name. */}
+            <label className="nl-fsearch nl-leads-search">
               <Ico name="search" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search names, phones and addresses" aria-label="Search leads" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search names and areas" aria-label="Search leads" />
             </label>
             <span className={`nl-fsel${fSource ? " is-set" : ""}`}>
               <select aria-label="Source" value={fSource ?? ""} onChange={(e) => setFSource(e.target.value || null)}>
@@ -974,54 +1021,38 @@ export default function Leads() {
                 {sources.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </span>
-            <span className={`nl-fsel${fAgent ? " is-set" : ""}`}>
-              <select aria-label="Agent" value={fAgent ?? ""} onChange={(e) => setFAgent(e.target.value || null)}>
-                <option value="">Any agent</option>
-                {agents.map((o) => <option key={o} value={o}>{o === "Unassigned" ? "Not assigned" : o}</option>)}
-              </select>
-            </span>
             <span className={`nl-fsel${fStage ? " is-set" : ""}`}>
               <select aria-label="Stage" value={fStage ?? ""} onChange={(e) => setFStage(e.target.value || null)}>
                 <option value="">Any stage</option>
-                {stages.map((o) => <option key={o} value={o}>{o}</option>)}
+                {stageOptions.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </span>
-            {passportsWanted && (
-              <span className={`nl-fsel${fPassport ? " is-set" : ""}`}>
-                <select aria-label="Passport" value={fPassport ?? ""} onChange={(e) => setFPassport((e.target.value || null) as PassportState | "none" | null)}>
-                  <option value="">Any passport</option>
-                  {PASSPORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{`Passport ${o.label.toLowerCase()}`}</option>)}
-                </select>
-              </span>
-            )}
-            <TagsMenu tags={tagCounts} value={fTags} onChange={setFTags} />
-            {manyAgents && (unassigned > 0 || fAgent === "Unassigned") && (
-              <button type="button" className="nl-fmore" aria-pressed={fAgent === "Unassigned"} onClick={() => setFAgent(fAgent === "Unassigned" ? null : "Unassigned")}>
-                <LIco name="user" size={14} />
-                {fAgent === "Unassigned" ? "Showing not assigned" : `${unassigned.toLocaleString("en-GB")} not assigned`}
+            {onLandlords ? (
+              <button type="button" aria-pressed={bookedOn} onClick={() => setFStage(bookedOn ? null : APPRAISAL_BOOKED)} className={`nl-btn nl-btn--secondary nl-leads-flag${bookedOn ? " nl-leads-on" : ""}`}>
+                <LIco name="calendar" size={15} />
+                Appraisal booked
+                {!(source.loading && !ALL.length) && <span className="nl-count">{bookedCount.toLocaleString("en-GB")}</span>}
               </button>
-            )}
-            {anySet && (
-              <button type="button" className="nl-fmore" onClick={clearAll}>
-                Clear
+            ) : (
+              <button type="button" aria-pressed={passportDone} onClick={togglePassportDone} className={`nl-btn nl-btn--secondary nl-leads-flag${passportDone ? " nl-leads-on" : ""}`}>
+                <LIco name="user" size={15} />
+                Passport done
+                {passportDoneCount !== null && <span className="nl-count">{passportDoneCount.toLocaleString("en-GB")}</span>}
               </button>
             )}
             <span className="nl-fcount">
-              {source.loading && !ALL.length ? "" : showPassports ? "" : `${book.length.toLocaleString("en-GB")} ${book.length === 1 ? "lead" : "leads"}`}
+              {(source.loading && !ALL.length) || passportsWaiting ? "" : `${book.length.toLocaleString("en-GB")} ${book.length === 1 ? "lead" : "leads"}`}
             </span>
           </div>
 
           <div className="nl-leads-tabline">
-            <Tabs label="Who the leads are" className="min-w-0 flex-1" value={side === "tenant" || side === "landlord" ? side : "all"} onChange={pickSide} items={sideTabs} />
-            {!showPassports && (
-              <span className="nl-toggle" role="group" aria-label="Show as">
-                <button type="button" className={shape === "rows" ? "is-on" : ""} aria-pressed={shape === "rows"} onClick={() => pickShape("rows")}>Rows</button>
-                {side && <button type="button" className={shape === "groups" ? "is-on" : ""} aria-pressed={shape === "groups"} onClick={() => pickShape("groups")}>Groups</button>}
-                <button type="button" className={shape === "table" ? "is-on" : ""} aria-pressed={shape === "table"} onClick={() => pickShape("table")}>Table</button>
-              </span>
-            )}
+            <Tabs label="Who the leads are" className="min-w-0 flex-1" value={onLandlords ? "landlord" : "tenant"} onChange={pickSide} items={sideTabs} />
+            <span className="nl-toggle" role="group" aria-label="Show as">
+              <button type="button" className={shape === "rows" ? "is-on" : ""} aria-pressed={shape === "rows"} onClick={() => pickShape("rows")}>Rows</button>
+              <button type="button" className={shape === "groups" ? "is-on" : ""} aria-pressed={shape === "groups"} onClick={() => pickShape("groups")}>Groups</button>
+              <button type="button" className={shape === "table" ? "is-on" : ""} aria-pressed={shape === "table"} onClick={() => pickShape("table")}>Table</button>
+            </span>
           </div>
-          {scanNote && <p className="nl-meta mt-3">{scanNote}</p>}
         </div>
 
         {source.failed && ALL.length > 0 && (
@@ -1043,18 +1074,10 @@ export default function Leads() {
                 </button>
               )}
             </div>
-          ) : showPassports ? (
-            <div className="nl-holder">
-              <PassportsDoneList
-                passports={donePassports}
-                error={passportsError}
-                leads={ALL.filter((l) => leadSide(l) === "tenant")}
-                activeId={openId}
-                onOpen={(id) => setOpenId(id === openId ? null : id)}
-                q={q}
-                manyAgents={manyAgents}
-              />
-            </div>
+          ) : passportsWaiting ? (
+            <p className="nl-meta flex items-center gap-2 py-10" role={passportRowsFailed ? "alert" : "status"}>
+              {passportRowsFailed ? "The passports didn't load, so Passport done can't say who is ready. Try again in a minute." : <><span className="nl-leads-spin" aria-hidden /> Checking whose passport is done…</>}
+            </p>
           ) : shape === "groups" ? (
             <div className="nl-holder">
               <div className="flex justify-end">
@@ -1141,6 +1164,16 @@ export default function Leads() {
               {pager}
             </>
           )}
+        </div>
+
+        {/* Under the list rather than over it: what was read and what was left
+            out still needs saying (see scanNote), and Archived still needs a
+            way in, but neither is what you come to Leads for. */}
+        <div className="nl-leads-foot">
+          {scanNote && <p className="nl-meta">{scanNote}</p>}
+          <button type="button" data-steve="leads.archived" onClick={() => setArchiveOpen(true)} className="nl-link">
+            Archived leads
+          </button>
         </div>
 
         <LeadDrawer lead={open} onClose={() => setOpenId(null)} onStep={step} nlStartTab={nlStartTab} />
