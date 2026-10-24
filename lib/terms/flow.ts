@@ -3,7 +3,11 @@ import { publicError } from "@/lib/public-error";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { findUserById, type OsUser } from "@/lib/users";
-import { fetchSigned, store } from "@/lib/signed-documents";
+import { fetchSigned, pushToRex, store } from "@/lib/signed-documents";
+import { addFileDoc } from "@/lib/file-documents";
+import { putInstructionInRex } from "@/lib/rex-instruct";
+import { isTestFile } from "@/lib/test-guard";
+import { q } from "@/lib/db";
 import {
   archiveSubmission,
   completeSubmitter,
@@ -15,7 +19,7 @@ import {
 } from "@/lib/docuseal";
 import { edition, editionFor } from "@/lib/terms/catalogue";
 import { agentPhone } from "@/lib/agent-phone";
-import { markTermsSent } from "@/lib/appraisal-store";
+import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
 import { cleanSignature, keepAgentSignature, saveSignature, signaturesFor } from "@/lib/terms/signatures";
 import { contractFooter, contractHtml, detailField, roleOf } from "@/lib/terms/render-html";
 import type { Country, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
@@ -339,6 +343,7 @@ export async function completeIfAll(id: string, origin: string): Promise<boolean
   if (t.completedAt) return true;
   if (!t.agentSignedAt || t.parties.some((p) => !p.signedAt)) return false;
   let key: string | null = null;
+  let filed: { submitterId: number; size: number } | null = null;
   if (t.submissionId && docusealConfigured()) {
     const url = await signedDocumentUrl(t.submissionId);
     if (!url) throw new TermsRefused("DocuSeal hasn't finished the signed copy yet.");
@@ -357,8 +362,12 @@ export async function completeIfAll(id: string, origin: string): Promise<boolean
       fileName: `Terms of Business - ${t.propertyAddress}.pdf`,
     });
     key = stored.r2Key;
+    filed = { submitterId: last.submitterId ?? t.agentSubmitterId ?? 0, size: bytes.length };
   }
   const first = await markSigned(id, key);
+  /* What the DocuSeal webhook always did with a signed copy (Dover Close, 24 Oct
+     2026: signed on our page, and the copy never reached the home's Documents). */
+  if (key && filed) await afterSigned(t, key, filed).catch(() => null);
   if (first) {
     const agent = await findUserById(t.agentId);
     if (agent) {
@@ -378,6 +387,36 @@ export async function completeIfAll(id: string, origin: string): Promise<boolean
     }
   }
   return true;
+}
+
+/**
+ * The signed copy goes where a signed contract always went: onto the home's
+ * Documents as its Terms of Business, a copy into REX, and the landlord and
+ * the home into REX (lib/rex-instruct, which leaves test files alone). Each
+ * step on its own: one that fails costs only itself.
+ */
+export async function afterSigned(t: TermsRow, key: string, filed: { submitterId: number; size: number }): Promise<void> {
+  const ma = t.appraisalId ? await getAppraisal(t.appraisalId).catch(() => null) : null;
+  const from = t.appraisalId ? { kind: "appraisal" as const, id: t.appraisalId } : t.listingId ? { kind: "listing" as const, id: t.listingId } : null;
+  if (from) {
+    const had = await q<{ id: string }>(`SELECT id FROM os_file_documents WHERE r2_key = $1 AND removed_at IS NULL`, [key]).catch(() => []);
+    if (!had.length) {
+      await addFileDoc({
+        home: { address: t.propertyAddress, propertyId: t.propertyId ?? ma?.rexPropertyId ?? null },
+        from,
+        type: "terms_of_business",
+        name: "Terms of Business (signed)",
+        fileName: `Terms of Business - ${t.propertyAddress}.pdf`,
+        r2Key: key,
+        mime: "application/pdf",
+        sizeBytes: filed.size,
+        by: { id: t.agentId, name: t.agentName },
+        isTest: await isTestFile({ appraisalId: t.appraisalId, address: t.propertyAddress }).catch(() => false),
+      }).catch(() => null);
+    }
+  }
+  if (filed.submitterId) await pushToRex(filed.submitterId).catch(() => null);
+  if (ma) await putInstructionInRex(ma.id).catch(() => null);
 }
 
 /** Withdraw: the links stop working, and a new set can be sent. */
