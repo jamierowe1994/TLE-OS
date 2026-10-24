@@ -24,6 +24,12 @@ export function forStaff(t: TermsRow, origin: string) {
       openedAt: p.openedAt,
       signedAt: p.signedAt,
       link: `${origin}/sign/${p.token}`,
+      /* The home address the agent put on the contract, only while it waits for
+         the agent's signature: nobody else has typed anything yet, so it is the
+         agent's own words, and the send screen draws it back on the paper when
+         they come back to sign (James's send screen, 24 Oct 2026). Once it has
+         gone, the address is the landlord's to change and stays theirs. */
+      homeAddress: t.status === "agent" ? String(p.details?.address ?? "") : null,
       /* Everything this edition asks for is in. */
       detailsIn: asked.length > 0 && asked.every((k) => String(p.details?.[k] ?? "").trim() !== ""),
     })),
