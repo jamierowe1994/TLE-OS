@@ -5,6 +5,9 @@ import PageHeader from "@/components/PageHeader";
 import PeopleTabs from "@/components/admin/PeopleTabs";
 import { Pill } from "@/components/Wire";
 import type { Capability } from "@/lib/roles";
+import { useNewLook } from "@/lib/use-new-look";
+import PermissionsNew from "@/components/new-look/admin/PermissionsNew";
+import { LookLoading, NlLoading } from "@/components/new-look/admin/ScreenBits";
 
 /**
  * Who can see what.
@@ -57,6 +60,9 @@ export default function Permissions() {
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  /* The new look (lib/new-look "admin", 24 Oct 2026): read-only there, since
+     roles are changed on People only. Null until known. */
+  const look = useNewLook("admin");
 
   const load = useCallback(() => {
     fetch("/api/admin/permissions")
@@ -85,6 +91,17 @@ export default function Permissions() {
         <p className="hand text-[20px]">Nothing here</p>
       </div>
     );
+  }
+  if (look === null) return <LookLoading what="Reading who holds what" />;
+  if (look) {
+    if (!d) {
+      return (
+        <div data-look="new" className="nl-page nl-adm nl-adm-tab">
+          <NlLoading what="Reading who holds what" />
+        </div>
+      );
+    }
+    return <PermissionsNew d={d} capLabel={(c) => CAP_LABEL[c as Capability] ?? c} noScreenYet={NO_SCREEN_YET} />;
   }
   if (!d) return <p className="text-[12.5px] text-muted">Loading…</p>;
 

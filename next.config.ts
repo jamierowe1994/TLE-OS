@@ -89,6 +89,12 @@ const nextConfig: NextConfig = {
          Invites, where the mailbox card says how it went. */
       { source: "/admin/launch", destination: "/admin/people/invites", permanent: false },
       { source: "/admin/pre-launch", destination: "/admin/people/invites", permanent: false },
+      /* Portals became Process on 12 Sep 2026, and the two pages that only
+         redirected went on 24 Oct 2026. Permanent, unlike the rest here: the
+         destination is the same screen renamed, and nothing will come back
+         to this address. */
+      { source: "/admin/portals", destination: "/admin/process", permanent: true },
+      { source: "/admin/portals/:folder", destination: "/admin/process/:folder", permanent: true },
     ];
   },
 };

@@ -111,6 +111,191 @@
 [data-look="new"] .nl-adm-role select:disabled { opacity: 0.45; cursor: not-allowed; }
 [data-look="new"] .nl-adm-foot { margin-top: 16px; }
 
+/* ── a tab's page: People, Usage and Process (24 Oct 2026) ─────────────────
+   The frame draws the area, the title and the tabs; the page starts under
+   them with at most one short line, then its blocks on hairlines. */
+[data-look="new"] .nl-adm-tab { padding-top: 28px; padding-bottom: 56px; min-width: 0; }
+[data-look="new"] .nl-adm-lead { margin: 0 0 28px; max-width: 720px; font-size: 13.5px; line-height: 20px; color: var(--muted); }
+[data-look="new"] .nl-adm-tab .nl-adm-block { margin-top: 44px; }
+[data-look="new"] .nl-adm-tab .nl-adm-block.is-first { margin-top: 0; }
+[data-look="new"] .nl-adm-block-head .nl-meta { margin: 2px 0 0; }
+[data-look="new"] .nl-adm-block-head > div { min-width: 0; }
+[data-look="new"] .nl-adm-tab .nl-adm-block-head { flex-wrap: wrap; row-gap: 10px; }
+[data-look="new"] .nl-adm-tab .nl-toggle { flex-wrap: wrap; max-width: 100%; }
+[data-look="new"] .nl-adm-sub { margin: 4px 0 14px; max-width: 720px; font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-adm-flash.is-warn { background: var(--warning-soft); }
+[data-look="new"] .nl-adm-flash.is-bad { background: var(--accent-soft); }
+[data-look="new"] .nl-adm-flash p { margin: 0; }
+[data-look="new"] .nl-adm-flash p + p, [data-look="new"] .nl-adm-flash p + .nl-btn { margin-top: 8px; }
+[data-look="new"] .nl-adm-flash.is-first { margin-top: 0; margin-bottom: 24px; }
+[data-look="new"] .nl-adm-bad { color: var(--accent-dark); }
+[data-look="new"] .nl-adm-small { font-size: 15px; line-height: 22px; }
+[data-look="new"] .nl-adm-after { margin-top: 18px; }
+[data-look="new"] .nl-adm-flash.is-head { margin: 0 0 32px; }
+[data-look="new"] .nl-adm-flash .nl-block-title + p { margin-top: 6px; }
+[data-look="new"] .nl-adm-flash .nl-adm-bad { margin-top: 8px; }
+[data-look="new"] .nl-adm-card-head.is-flat { margin-bottom: 0; }
+[data-look="new"] .nl-adm-grow { flex: 1 1 360px; min-width: 0; }
+[data-look="new"] .nl-adm-measure { max-width: 62ch; }
+[data-look="new"] .nl-adm-in-name { flex: 1 1 160px; width: auto; }
+[data-look="new"] .nl-adm-in-mail { flex: 2 1 240px; width: auto; }
+[data-look="new"] .nl-adm-check.is-top { align-items: flex-start; cursor: pointer; }
+[data-look="new"] .nl-adm-check.is-top input { margin-top: 3px; flex: none; }
+[data-look="new"] .nl-adm-check.is-top .nl-strong:not(.nl-adm-muted) { color: var(--ink); }
+[data-look="new"] .nl-adm-lines2 > span { display: block; }
+[data-look="new"] .nl-adm-anchor { scroll-margin-top: 24px; }
+[data-look="new"] .nl-adm-who.is-narrow { flex-basis: 240px; }
+[data-look="new"] .nl-adm-blockline { display: block; }
+[data-look="new"] .nl-adm-inset { margin: 0 4px 12px; }
+[data-look="new"] .nl-adm-path { display: block; font-size: 11px; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-table th.is-wrap { max-width: 96px; white-space: normal; }
+[data-look="new"] .nl-adm-table .is-end { text-align: right; white-space: nowrap; }
+
+/* Figures on hairlines: a number in the serif, what it counts under it. */
+[data-look="new"] .nl-adm-figs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); column-gap: 24px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-figs > li { border-bottom: 1px solid var(--line); min-width: 0; }
+[data-look="new"] .nl-adm-fig { display: flex; flex-direction: column; gap: 3px; height: 100%; padding: 16px 4px; color: inherit; text-decoration: none; min-width: 0; border-radius: 10px; transition: background-color 0.2s, padding 0.3s var(--nl-ease); }
+[data-look="new"] a.nl-adm-fig:hover { background: var(--panel); padding-left: 10px; }
+[data-look="new"] .nl-adm-fig b { font-family: var(--nl-serif); font-weight: 400; font-size: 26px; line-height: 30px; color: var(--ink); overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-fig b.is-word { font-size: 19px; line-height: 26px; }
+[data-look="new"] .nl-adm-fig > span { font-size: 13px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-adm-fig small { font-size: 12px; line-height: 17px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* Tables on hairlines, scrolling inside themselves on a phone. */
+[data-look="new"] .nl-adm-tablewrap { max-width: 100%; overflow-x: auto; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-table { width: 100%; border-collapse: collapse; font-size: 13.5px; line-height: 20px; }
+[data-look="new"] .nl-adm-table th { text-align: left; font-weight: 500; font-size: 12px; line-height: 16px; color: var(--muted); padding: 10px 16px 10px 0; border-bottom: 1px solid var(--line); vertical-align: bottom; }
+[data-look="new"] .nl-adm-table td { padding: 11px 16px 11px 0; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-table th:last-child, [data-look="new"] .nl-adm-table td:last-child { padding-right: 0; }
+[data-look="new"] .nl-adm-table .is-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-adm-table td.is-num { font-family: var(--nl-serif); font-size: 15px; }
+[data-look="new"] .nl-adm-table tr.is-quiet td { color: var(--muted); }
+[data-look="new"] .nl-adm-table tr.is-hot td { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+[data-look="new"] .nl-adm-table tr.is-sub td { background: var(--panel); padding-left: 12px; }
+[data-look="new"] .nl-adm-table td .nl-meta { display: block; }
+[data-look="new"] .nl-adm-table .nl-link { font-size: inherit; font-weight: 400; text-align: left; }
+
+/* The period and who is counted, over Tracking. */
+[data-look="new"] .nl-adm-period { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+[data-look="new"] .nl-adm-period-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+[data-look="new"] .nl-adm-period .nl-toggle { flex-wrap: wrap; }
+[data-look="new"] .nl-adm-dates { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+[data-look="new"] .nl-adm-dates .nl-input { width: auto; padding: 7px 10px; font-size: 13px; }
+[data-look="new"] .nl-adm-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+[data-look="new"] .nl-adm-check input { accent-color: var(--sage-deep); width: 15px; height: 15px; }
+
+/* The two small charts: one bar per day, and bars against a whole. */
+[data-look="new"] .nl-adm-chart-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+[data-look="new"] .nl-adm-days { position: relative; height: 150px; margin-top: 14px; }
+[data-look="new"] .nl-adm-days-max { position: absolute; left: 0; top: 0; font-family: var(--nl-mono); font-size: 10.5px; color: var(--muted); }
+[data-look="new"] .nl-adm-days-top { position: absolute; left: 0; right: 0; top: 8px; border-top: 1px dashed var(--line); }
+[data-look="new"] .nl-adm-days-base { position: absolute; left: 0; right: 0; bottom: 20px; border-top: 1px solid var(--line-strong); }
+[data-look="new"] .nl-adm-days-bars { position: absolute; left: 0; right: 0; top: 12px; bottom: 20px; display: flex; align-items: flex-end; gap: 2px; padding-left: 30px; }
+[data-look="new"] .nl-adm-days-bars button { flex: 1; height: 100%; display: flex; align-items: flex-end; padding: 0; border: 0; background: none; cursor: pointer; min-width: 0; }
+[data-look="new"] .nl-adm-days-bars i { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--sage-deep); transition: background-color 0.2s; }
+[data-look="new"] .nl-adm-days-bars button.is-on i { background: var(--ink); }
+[data-look="new"] .nl-adm-days-axis { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 2px; padding-left: 30px; }
+[data-look="new"] .nl-adm-days-axis span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-align: center; font-size: 10px; color: var(--muted); }
+[data-look="new"] .nl-adm-hbars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+[data-look="new"] .nl-adm-hbars-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13px; }
+[data-look="new"] .nl-adm-hbars-line > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-adm-hbars-line > span:last-child { flex: none; color: var(--muted); }
+[data-look="new"] .nl-adm-hbars-line b { font-family: var(--nl-serif); font-weight: 400; font-size: 15px; color: var(--ink); }
+[data-look="new"] .nl-adm-hbars-track { margin-top: 5px; height: 8px; border-radius: 4px; background: var(--box); overflow: hidden; }
+[data-look="new"] .nl-adm-hbars-track i { display: block; height: 100%; border-radius: 4px; background: var(--sage-deep); }
+
+/* The parts of the OS, as a grid of quiet cards that open. */
+[data-look="new"] .nl-adm-parts { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+[data-look="new"] .nl-adm-part { display: flex; flex-direction: column; gap: 4px; padding: 20px 22px; background: var(--card); border: 1px solid var(--line); border-radius: 20px; color: inherit; text-decoration: none; min-width: 0; transition: border-color 0.25s, transform 0.35s var(--nl-ease); }
+[data-look="new"] .nl-adm-part:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+[data-look="new"] .nl-adm-part-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+[data-look="new"] .nl-adm-part-head .nl-strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-adm-part-head svg { color: var(--faint); flex: none; }
+[data-look="new"] .nl-adm-part .nl-mini-stats > span > span { font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-adm-part .nl-mini-stats b { color: var(--ink); }
+[data-look="new"] .nl-adm-part-top { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+[data-look="new"] .nl-adm-part-top li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+[data-look="new"] .nl-adm-part-top li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-adm-part-top li b { font-family: var(--nl-serif); font-weight: 400; color: var(--ink); flex: none; }
+
+/* Records behind a figure: a line that opens. */
+[data-look="new"] .nl-adm-opener { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; width: 100%; padding: 14px 4px; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; border-radius: 10px; transition: background-color 0.2s; }
+[data-look="new"] .nl-adm-opener:hover { background: var(--panel); }
+[data-look="new"] .nl-adm-opener > span:first-child { min-width: 0; }
+[data-look="new"] .nl-adm-opener > span:last-child { flex: none; text-align: right; }
+[data-look="new"] .nl-adm-opener b { display: block; font-family: var(--nl-serif); font-weight: 400; font-size: 20px; line-height: 24px; }
+[data-look="new"] .nl-adm-openlist { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-openlist > li { border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-adm-openlist .nl-adm-log { border-top: 0; margin: 0 4px 12px; }
+[data-look="new"] .nl-adm-openlist .nl-adm-log > li:last-child { border-bottom: 0; }
+
+/* Notes, copy links and lists for the demo pages. */
+[data-look="new"] .nl-adm-note { margin: 12px 0 0; padding: 12px 16px; border-radius: 14px; background: var(--panel); font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-adm-note.is-care { background: var(--warning-soft); color: var(--ink); }
+[data-look="new"] .nl-adm-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; min-width: 0; }
+[data-look="new"] .nl-adm-copy code { flex: 1 1 260px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 9px 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--page); font-family: var(--nl-mono); font-size: 12px; color: var(--ink); }
+[data-look="new"] .nl-adm-copy .nl-btn { text-decoration: none; }
+[data-look="new"] .nl-adm-bullets { margin: 10px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 20px; color: var(--muted); max-width: 760px; }
+[data-look="new"] .nl-adm-bullets b { font-weight: 500; color: var(--ink); }
+[data-look="new"] .nl-adm-bullets code, [data-look="new"] .nl-adm-steps code { font-family: var(--nl-mono); font-size: 11.5px; padding: 1px 5px; border-radius: 6px; background: var(--box); color: var(--ink); }
+[data-look="new"] .nl-adm-say { margin: 0; font-family: var(--nl-serif); font-size: 18px; line-height: 27px; color: var(--ink); max-width: 720px; }
+[data-look="new"] .nl-adm-steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-steps > li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 0 12px; padding: 18px 4px; border-bottom: 1px solid var(--line); min-width: 0; }
+[data-look="new"] .nl-adm-num { font-family: var(--nl-mono); font-size: 12px; line-height: 21px; color: var(--muted); }
+[data-look="new"] .nl-adm-step-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+[data-look="new"] .nl-adm-step-head .nl-btn { margin-left: auto; text-decoration: none; }
+[data-look="new"] .nl-adm-step-body { margin: 4px 0 0; font-size: 13.5px; line-height: 20px; color: var(--muted); max-width: 760px; }
+[data-look="new"] .nl-adm-step-path { margin: 8px 0 0; font-family: var(--nl-mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* The processes, one line each. */
+[data-look="new"] .nl-adm-plist { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-plist > li { border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-adm-plist a { display: grid; grid-template-columns: minmax(0, 1fr) 16px; gap: 4px 14px; align-items: center; padding: 18px 4px; color: inherit; text-decoration: none; border-radius: 10px; transition: background-color 0.2s, padding 0.3s var(--nl-ease); }
+[data-look="new"] .nl-adm-plist a:hover { background: var(--panel); padding-left: 10px; }
+[data-look="new"] .nl-adm-plist a > svg { color: var(--faint); }
+[data-look="new"] .nl-adm-plist-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+[data-look="new"] .nl-adm-plist-blurb { display: block; margin: 4px 0 2px; font-size: 13.5px; line-height: 20px; color: var(--muted); max-width: 760px; }
+
+/* A person's file. */
+[data-look="new"] .nl-adm-phead { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 20px; margin-bottom: 32px; }
+[data-look="new"] .nl-adm-phead-text { flex: 1 1 320px; min-width: 0; }
+[data-look="new"] .nl-adm-phead .nl-avatar { background: var(--info-soft); }
+[data-look="new"] .nl-adm-phead .nl-adm-who-line { margin-top: 8px; }
+[data-look="new"] .nl-adm-phead-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-look="new"] .nl-adm-reason { margin-top: 14px; max-width: 560px; }
+
+/* Who holds which role. */
+[data-look="new"] .nl-adm-roles { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-adm-roles > li { padding: 20px 4px; border-bottom: 1px solid var(--line); min-width: 0; }
+[data-look="new"] .nl-adm-roles-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+[data-look="new"] .nl-adm-roles p { margin: 4px 0 0; font-size: 13.5px; line-height: 20px; color: var(--muted); max-width: 760px; }
+[data-look="new"] .nl-adm-caps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+[data-look="new"] .nl-adm-holders { list-style: none; margin: 12px 0 0; padding: 0; }
+[data-look="new"] .nl-adm-holders > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; min-width: 0; }
+[data-look="new"] .nl-adm-holders > li > span:first-child { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+
+/* Sending, the email inside the page, and an email opened in a drawer. */
+[data-look="new"] .nl-adm-progress { margin-top: 10px; height: 6px; border-radius: 999px; background: var(--box); overflow: hidden; }
+[data-look="new"] .nl-adm-progress i { display: block; height: 100%; border-radius: 999px; background: var(--sage-deep); transition: width 0.3s; }
+[data-look="new"] .nl-adm-frame { display: block; margin-top: 14px; width: 100%; height: 760px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+[data-look="new"] .nl-drawer.nl-adm-wide { width: min(980px, calc(100% - 20px)); }
+[data-look="new"] .nl-adm-drawer-frame { flex: 1; width: 100%; border: 0; background: #fff; }
+[data-look="new"] .nl-adm-drawer-text { flex: 1; min-width: 0; }
+[data-look="new"] .nl-adm-drawer-text .nl-drawer-title { font-size: 20px; line-height: 26px; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-mailrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+[data-look="new"] .nl-adm-mailrow > span { min-width: 0; }
+[data-look="new"] .nl-adm-mailrow .nl-meta { display: block; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-people > li.nl-adm-mailrow { flex-wrap: nowrap; }
+[data-look="new"] .nl-adm-mailrow .nl-strong { display: block; }
+
+@media (max-width: 760px) {
+  [data-look="new"] .nl-adm-tab { padding-top: 22px; }
+  [data-look="new"] .nl-adm-tab .nl-adm-block { margin-top: 36px; }
+  [data-look="new"] .nl-adm-step-head .nl-btn { margin-left: 0; }
+  [data-look="new"] .nl-adm-frame { height: 560px; }
+  [data-look="new"] .nl-adm-steps > li { grid-template-columns: 22px minmax(0, 1fr); }
+}
+
 /* ── narrower ───────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   [data-look="new"] .nl-adm-census { grid-template-columns: repeat(3, minmax(0, 1fr)); }

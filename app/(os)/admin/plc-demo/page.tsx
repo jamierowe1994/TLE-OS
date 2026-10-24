@@ -1,6 +1,8 @@
 import PageHeader from "@/components/PageHeader";
 import { previewToken } from "@/lib/preview-token";
 import CopyLink from "@/app/(os)/admin/onboarding/CopyLink";
+import { AdminLookSplit } from "@/components/new-look/admin/ScreenBits";
+import PlcDemoNew, { type Door } from "@/components/new-look/admin/PlcDemoNew";
 
 /**
  * The PLC handover, for demonstrating.
@@ -25,20 +27,11 @@ import CopyLink from "@/app/(os)/admin/onboarding/CopyLink";
 
 export const dynamic = "force-dynamic";
 
-type Door = {
-  href: string;
-  label: string;
-  who: string;
-  blurb: string;
-  /** What to press, and what not to. */
-  safe?: string;
-  care?: string;
-};
-
 const DOORS: Door[] = [
   {
     href: "/plc",
     label: "Both sides, on one screen",
+    title: "Both Sides, on One Screen",
     who: "The one to demo with",
     blurb:
       "A switch at the top says whether you are the agent or Kirstie, so you can walk a case the whole way through without signing out and back in. Start a handover with a made-up reference and address, submit it, flip the switch, and decide it.",
@@ -48,6 +41,7 @@ const DOORS: Door[] = [
   {
     href: "/plc/start",
     label: "What the agent does",
+    title: "What the Agent Does",
     who: "Agent",
     blurb:
       "The real handover wizard, as a partner agent meets it. It reads the application out of REX so they type almost nothing, then walks the documents and ends on a tick. Needs a real application on the end of the link.",
@@ -57,6 +51,7 @@ const DOORS: Door[] = [
   {
     href: "/pre-tenancy/plc",
     label: "What Kirstie sees",
+    title: "What Kirstie Sees",
     who: "Compliance",
     blurb:
       "The queue, oldest wait first, with the age going red past 48 hours. Opening one shows the pack, the findings, and the three decisions.",
@@ -66,6 +61,7 @@ const DOORS: Door[] = [
   {
     href: "/admin/plc-checks",
     label: "Whether the scan can be trusted",
+    title: "Whether the Scan Can Be Trusted",
     who: "You",
     blurb:
       "How often the model agreed with the human, how long decisions take, and a list of the cases it got wrong with the reason each time. The argument for letting it run itself one day, or the argument against.",
@@ -77,84 +73,91 @@ const DOORS: Door[] = [
 export default function PlcDemoPage() {
   const token = previewToken();
 
+  /* The new look (lib/new-look "admin", 24 Oct 2026) draws the same doors. */
   return (
-    <>
-      <PageHeader illustration="/illustrations/people/checking-the-calendar.svg" illustrationAspect={1.0} lineBreak="none"
-        title="PLC Handover"
-        blurb="The moment an accepted application becomes compliance's problem. Here are the doors, in the order you would open them."
-      />
+    <AdminLookSplit
+      what="Opening the PLC handover"
+      fresh={<PlcDemoNew doors={DOORS} token={token} />}
+      old={
+        <>
+          <PageHeader illustration="/illustrations/people/checking-the-calendar.svg" illustrationAspect={1.0} lineBreak="none"
+            title="PLC Handover"
+            blurb="The moment an accepted application becomes compliance's problem. Here are the doors, in the order you would open them."
+          />
 
-      <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
-        <h2 className="hand text-[17px] leading-tight">The one you can send</h2>
-        <p className="mt-1 text-[12px] leading-relaxed text-muted">
-          Both halves of the handover, running the real screens against an
-          invented pack: a made-up address, two people called Sample, and a gas
-          certificate that expires eleven days after they move in. No sign-in,
-          nothing real, nothing written. Send this to Susan.
-        </p>
-        <CopyLink path={`/preview/${token}/plc`} />
-      </section>
+          <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
+            <h2 className="hand text-[17px] leading-tight">The one you can send</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-muted">
+              Both halves of the handover, running the real screens against an
+              invented pack: a made-up address, two people called Sample, and a gas
+              certificate that expires eleven days after they move in. No sign-in,
+              nothing real, nothing written. Send this to Susan.
+            </p>
+            <CopyLink path={`/preview/${token}/plc`} />
+          </section>
 
-      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
-        <h2 className="hand text-[17px] leading-tight">The rule worth saying out loud</h2>
-        <p className="mt-1.5 text-[12.5px] leading-relaxed">
-          The scan never decides. It reads the documents and produces findings;
-          a person presses the button. A case cannot leave review without
-          somebody putting their name to it.
-        </p>
-        <p className="mt-2 text-[12px] leading-relaxed text-muted">
-          That is the whole design, and it is the thing to lead with. Everything
-          else on this page is the machinery underneath it.
-        </p>
-      </section>
-
-      <div className="fade-up mt-3 flex flex-col gap-3">
-        {DOORS.map((d) => (
-          <section key={d.href} className="rounded-[22px] border border-line/50 bg-white p-5">
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <h2 className="hand text-[17px] leading-tight">{d.label}</h2>
-              <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-dark">
-                {d.who}
-              </span>
-              <a
-                href={d.href}
-                className="ml-auto shrink-0 rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
-              >
-                Open
-              </a>
-            </div>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{d.blurb}</p>
-            {d.safe && (
-              <p className="mt-2.5 rounded-xl border border-line/80 bg-box p-3 text-[11.5px] leading-relaxed text-muted">
-                {d.safe}
-              </p>
-            )}
-            {d.care && (
-              <p className="mt-2.5 rounded-xl border border-accent-dark/30 bg-accent-soft/30 p-3 text-[11.5px] leading-relaxed">
-                {d.care}
-              </p>
-            )}
-            <p className="mt-2 text-[11px] text-muted">
-              <code className="rounded bg-box px-1 py-0.5">{d.href}</code>
+          <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+            <h2 className="hand text-[17px] leading-tight">The rule worth saying out loud</h2>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed">
+              The scan never decides. It reads the documents and produces findings;
+              a person presses the button. A case cannot leave review without
+              somebody putting their name to it.
+            </p>
+            <p className="mt-2 text-[12px] leading-relaxed text-muted">
+              That is the whole design, and it is the thing to lead with. Everything
+              else on this page is the machinery underneath it.
             </p>
           </section>
-        ))}
-      </div>
 
-      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
-        <h2 className="hand text-[17px] leading-tight">A demo that leaves nothing behind</h2>
-        <ol className="mt-2.5 flex list-decimal flex-col gap-1.5 pl-4 text-[12px] leading-relaxed text-muted">
-          <li>Open the both-sides screen and start a handover with an invented address.</li>
-          <li>Walk the agent&apos;s four steps and send it.</li>
-          <li>Flip the switch to Kirstie. Skip the scan rather than running it, unless you want to show the reading.</li>
-          <li>Approve it with a note, then show the numbers page.</li>
-        </ol>
-        <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
-          One thing to know: there is no delete for a PLC case. Anything you
-          start stays in the store and in the queue, so use an address that
-          obviously is not real.
-        </p>
-      </section>
-    </>
+          <div className="fade-up mt-3 flex flex-col gap-3">
+            {DOORS.map((d) => (
+              <section key={d.href} className="rounded-[22px] border border-line/50 bg-white p-5">
+                <div className="flex flex-wrap items-baseline gap-2.5">
+                  <h2 className="hand text-[17px] leading-tight">{d.label}</h2>
+                  <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-dark">
+                    {d.who}
+                  </span>
+                  <a
+                    href={d.href}
+                    className="ml-auto shrink-0 rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
+                  >
+                    Open
+                  </a>
+                </div>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{d.blurb}</p>
+                {d.safe && (
+                  <p className="mt-2.5 rounded-xl border border-line/80 bg-box p-3 text-[11.5px] leading-relaxed text-muted">
+                    {d.safe}
+                  </p>
+                )}
+                {d.care && (
+                  <p className="mt-2.5 rounded-xl border border-accent-dark/30 bg-accent-soft/30 p-3 text-[11.5px] leading-relaxed">
+                    {d.care}
+                  </p>
+                )}
+                <p className="mt-2 text-[11px] text-muted">
+                  <code className="rounded bg-box px-1 py-0.5">{d.href}</code>
+                </p>
+              </section>
+            ))}
+          </div>
+
+          <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+            <h2 className="hand text-[17px] leading-tight">A demo that leaves nothing behind</h2>
+            <ol className="mt-2.5 flex list-decimal flex-col gap-1.5 pl-4 text-[12px] leading-relaxed text-muted">
+              <li>Open the both-sides screen and start a handover with an invented address.</li>
+              <li>Walk the agent&apos;s four steps and send it.</li>
+              <li>Flip the switch to Kirstie. Skip the scan rather than running it, unless you want to show the reading.</li>
+              <li>Approve it with a note, then show the numbers page.</li>
+            </ol>
+            <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
+              One thing to know: there is no delete for a PLC case. Anything you
+              start stays in the store and in the queue, so use an address that
+              obviously is not real.
+            </p>
+          </section>
+        </>
+      }
+    />
   );
 }

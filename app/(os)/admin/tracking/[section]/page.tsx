@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import PageHeader from "@/components/PageHeader";
-import type { Since } from "@/components/admin/tracking/kit";
+import type { PageRow, PassportItem, Section } from "@/components/admin/tracking/types";
 import {
   DayBars,
   Failed,
@@ -25,6 +25,9 @@ import {
   type TrackingQuery,
 } from "@/components/admin/tracking/kit";
 import { SECTION_BY_KEY, type SectionKey } from "@/lib/tracking/sections";
+import { useNewLook } from "@/lib/use-new-look";
+import TrackingSectionNew from "@/components/new-look/admin/TrackingSectionNew";
+import { LookLoading } from "@/components/new-look/admin/ScreenBits";
 
 /**
  * One part of the OS, drilled into (Admin > Tracking, 15 Oct 2026): every
@@ -34,50 +37,6 @@ import { SECTION_BY_KEY, type SectionKey } from "@/lib/tracking/sections";
  * Two parts have more: the tenant passport carries its funnel and where
  * tenants stop, and "pages" is every page in the OS rather than one part.
  */
-
-type Rec = { at: string; person: string; personName: string; title: string; href: string | null };
-type PageRow = {
-  page: string;
-  label: string;
-  section: string | null;
-  views: number;
-  seconds: number;
-  timed: number;
-  people: number;
-  byPerson: Array<{ key: string; name: string; views: number; seconds: number; timed: number }>;
-};
-type PassportItem = {
-  token: string;
-  name: string;
-  email: string;
-  agent: string;
-  agentKey: string;
-  sentAt: string;
-  openedAt: string | null;
-  opens: number;
-  finishedAt: string | null;
-  lastActivity: string;
-  stage: "sent" | "opened" | "started" | "finished";
-  stoppedAt: string | null;
-};
-type Funnel = { sent: number; opened: number; started: number; finished: number };
-type Section = {
-  section: { key: string; label: string; blurb: string; hasPages: boolean };
-  sources: Record<string, string | null>;
-  people: Array<{ key: string; name: string; team: string; opens: number; actions: number; seconds: number; timed: number; days: number; counts: Record<string, number> }>;
-  teams: Array<{ team: string; people: number; opens: number; actions: number; outcomes: number }>;
-  days: Array<{ day: string; opens: number; actions: number; outcomes: number }>;
-  metrics: Array<{ key: string; label: string; source: string; since: string | null; error: string | null; count: number; people: number; records: Rec[] }>;
-  pages: PageRow[];
-  passport: null | {
-    error: string | null;
-    funnel: Funnel | null;
-    drops: Array<{ at: string; count: number }>;
-    agents: Array<{ key: string; name: string } & Funnel>;
-    list: PassportItem[];
-  };
-  since: Since;
-};
 
 const STAGE: Record<PassportItem["stage"], string> = { sent: "Sent", opened: "Opened", started: "Started", finished: "Finished" };
 
@@ -90,6 +49,38 @@ export default function TrackingSection({ params }: { params: Promise<{ section:
   const title = isPages ? "Every Page" : def?.label ?? "Tracking";
   const back = t ? `/admin/tracking?${queryString(t, { person: t.person })}` : "/admin/tracking";
   const personName = t?.person ? data?.people?.find((p) => p.key === t.person)?.name ?? null : null;
+  /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
+  const look = useNewLook("admin");
+
+  if (look === null) return <LookLoading what="Reading the figures" />;
+  if (look && !isPages && !def) {
+    return (
+      <div data-look="new" className="nl-page nl-adm nl-adm-tab">
+        <p className="nl-empty">There&apos;s no such part of the OS.</p>
+        <Link href="/admin/tracking" className="nl-link">
+          Back to Tracking
+        </Link>
+      </div>
+    );
+  }
+  if (look) {
+    return (
+      <TrackingSectionNew
+        title={title}
+        blurb={isPages ? "Who is on which page, how often, the most and least visited, and where people stay longest." : def!.blurb}
+        back={back}
+        isPages={isPages}
+        t={t}
+        set={set}
+        periodLabel={period?.label ?? null}
+        personName={personName}
+        data={data}
+        loading={loading}
+        error={error}
+        reload={reload}
+      />
+    );
+  }
 
   if (!isPages && !def) {
     return (
