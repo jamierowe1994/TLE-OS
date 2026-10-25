@@ -34,14 +34,6 @@ const ViewingDrawer = dynamic(() => import("@/components/ViewingDrawer"), { ssr:
 const ChangeViewing = dynamic(() => import("@/components/viewings/ChangeViewing"), { ssr: false });
 const AddToBlock = dynamic(() => import("@/components/viewings/AddToBlock"), { ssr: false });
 
-const DOT: Partial<Record<ApptKind, string>> = {
-  viewing: "info",
-  appraisal: "accent",
-  takeon: "accent",
-  inspection: "sage",
-  movein: "warning",
-};
-
 const personal = (a: Appt) => Boolean(a.fromPersonal) || (a.kind === "other" && a.what === "Busy");
 const inOrder = (list: Appt[]) =>
   [...list].sort((a, b) => Number(Boolean(b.allDay)) - Number(Boolean(a.allDay)) || minutesOf(a.start) - minutesOf(b.start));
@@ -62,7 +54,6 @@ function Line({ a, muted = false, onOpen }: { a: Appt; muted?: boolean; onOpen?:
   const inner = (
     <>
       <span className={`nl-dash-time${a.allDay ? " is-allday" : ""}`}>{a.allDay ? "All day" : a.start}</span>
-      <span className={`nl-dash-dot ${muted ? "grey" : (DOT[a.kind] ?? "grey")}`} aria-hidden />
       <span className="nl-dash-line-text">
         <span className="nl-dash-strong">{a.what}</span>
         {(a.who || a.where) && <span className="nl-meta">{[a.who, a.where].filter(Boolean).join(" · ")}</span>}
@@ -132,7 +123,6 @@ function Timeline({ list, onOpen, max }: { list: Appt[]; onOpen: (a: Appt) => vo
         <time className={a.allDay ? "is-allday" : undefined}>{a.allDay ? "All day" : a.start}</time>
         <span className="nl-dash-ev-box">
           <span className="nl-dash-ev-what">
-            <i className={`nl-dash-dot ${DOT[a.kind] ?? "grey"}`} aria-hidden />
             {a.what}
           </span>
           {(a.who || a.where) && <span className="nl-meta">{[a.who, a.where].filter(Boolean).join(" · ")}</span>}
@@ -251,6 +241,7 @@ export default function Agenda() {
 
       {quick && known && <AppointmentDrawer
         newLook
+        centred
         appt={quick}
         onClose={() => setQuick(null)}
         onOpenViewing={(a) => {

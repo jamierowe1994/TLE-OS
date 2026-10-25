@@ -118,7 +118,7 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
   const late = got ? got.rows.filter((r) => r.late).length : 0;
 
   return createPortal(
-    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer" data-shown={shown} role="dialog" aria-modal="true" aria-label={`${ask.title}, ${ask.range}`}>
+    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer nl-dash-modal" data-shown={shown} role="dialog" aria-modal="true" aria-label={`${ask.title}, ${ask.range}`}>
       <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={close} />
       <div className="nl-drawer">
         <div className="nl-drawer-head">
@@ -158,41 +158,37 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
               {terms && got.lateAfterDays != null && (
                 <p className="nl-meta nl-dash-drawer-lede">Late means unsigned for more than {got.lateAfterDays} days, past the last automatic nudge. Longest waiting first.</p>
               )}
-              <ul className="nl-dash-recs">
+              {/* Wide and in columns (James, 25 Oct 2026): every row lines up under its heading, no dots. */}
+              <div className="nl-dash-table" role="table" aria-label={ask.title}>
+                <div className="nl-dash-trow nl-dash-thead" role="row">
+                  <span role="columnheader">{terms ? "For" : "Name"}</span>
+                  <span role="columnheader">Property</span>
+                  <span role="columnheader">{terms ? "Sent" : "When"}</span>
+                  <span role="columnheader">{terms ? "Waiting" : "Source"}</span>
+                  <span role="columnheader">Status</span>
+                  <span aria-hidden />
+                </div>
                 {got.rows.map((r) => (
-                  <li key={r.id}>
-                    <Link href={r.href} className="nl-dash-rec" onClick={() => closeNow()}>
-                      <span className="nl-dash-line-text">
-                        <span className="nl-dash-strong">
-                          {(r.fresh || r.late) && <i className={`nl-dash-pri ${r.late ? "is-warn" : "is-new"}`} aria-hidden />}
-                          {r.name}
-                        </span>
-                        {r.property && <span className="nl-meta">{r.property}</span>}
-                        <span className="nl-dash-rec-facts">
-                          {terms ? (
-                            <>
-                              <span>Sent {fmtWhen(r.at, false)}</span>
-                              <span>
-                                {r.waiting == null ? "Days waiting not known" : `${r.waiting} ${r.waiting === 1 ? "day" : "days"} waiting`}
-                              </span>
-                              {r.late && <span className="is-late">Late</span>}
-                            </>
-                          ) : (
-                            <>
-                              <span>{fmtWhen(r.at, TIMED.has(ask.kind))}</span>
-                              {r.source && <span>{r.source}</span>}
-                            </>
-                          )}
-                          <span className={r.fresh ? "is-new" : undefined}>{r.status}</span>
-                        </span>
-                      </span>
-                      <span className="nl-dash-rec-go" aria-hidden>
-                        <Ico name="arrow" size={14} />
-                      </span>
-                    </Link>
-                  </li>
+                  <Link key={r.id} href={r.href} className="nl-dash-trow nl-dash-rec" role="row" onClick={() => closeNow()}>
+                    <span role="cell" className="nl-dash-strong">{r.name}</span>
+                    <span role="cell" className="nl-meta">{r.property || "-"}</span>
+                    <span role="cell">{fmtWhen(r.at, !terms && TIMED.has(ask.kind))}</span>
+                    <span role="cell">
+                      {terms
+                        ? r.waiting == null
+                          ? "Not known"
+                          : `${r.waiting} ${r.waiting === 1 ? "day" : "days"}`
+                        : r.source || "-"}
+                    </span>
+                    <span role="cell" className={r.late ? "is-late" : r.fresh ? "is-new" : undefined}>
+                      {r.late ? `Late · ${r.status}` : r.status}
+                    </span>
+                    <span role="cell" className="nl-dash-rec-go" aria-hidden>
+                      <Ico name="arrow" size={14} />
+                    </span>
+                  </Link>
                 ))}
-              </ul>
+              </div>
               {got.more && (
                 <div className="nl-dash-acts">
                   <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={loadMore} disabled={more === "busy"}>

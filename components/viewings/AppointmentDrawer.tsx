@@ -86,6 +86,7 @@ export default function AppointmentDrawer({
   onSend,
   newLook = false,
   inline = false,
+  centred = false,
 }: {
   appt: Appt | null;
   outcome?: Outcome;
@@ -106,6 +107,8 @@ export default function AppointmentDrawer({
    * New look only: the same facts and buttons, no scrim, no page lock.
    */
   inline?: boolean;
+  /** A box in the middle of a darkened screen, not a side panel (the dashboard, James 25 Oct 2026). */
+  centred?: boolean;
 }) {
   /* A slot: the viewings booked inside it, from the same diary (8 Oct 2026). */
   const { appts: diary } = useDiary();
@@ -512,7 +515,7 @@ export default function AppointmentDrawer({
       );
     }
     return createPortal(
-      <div data-look="new" className="nl-drawer-wrap nl-diary-drawer" data-shown={shown} data-steve="appointment.drawer" role="dialog" aria-modal="true" aria-label={subject || meta.label}>
+      <div data-look="new" className={`nl-drawer-wrap nl-diary-drawer${centred ? " nl-dash-modal" : ""}`} data-shown={shown} data-steve="appointment.drawer" role="dialog" aria-modal="true" aria-label={subject || meta.label}>
         <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={onClose} />
         <div className="nl-drawer">
           <div className="nl-drawer-head">
