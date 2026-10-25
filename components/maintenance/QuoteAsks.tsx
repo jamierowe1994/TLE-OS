@@ -20,9 +20,9 @@ import { pounds, stamp, toPence } from "@/components/maintenance/works-ui";
  * the home's agent copied in) and closes the others when one is taken.
  */
 
-const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
-const btn = "rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40 disabled:opacity-50";
-const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
+const field = "wn-field w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
+const btn = "wn-btn rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40 disabled:opacity-50";
+const primary = "wn-primary rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
 const label = "mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted";
 const names = (list: string[]) => (list.length <= 1 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`);
 

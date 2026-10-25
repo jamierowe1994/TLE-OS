@@ -7,6 +7,7 @@ import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
 import { ContractorPick, PAID_HOW, pounds, toPence } from "@/components/maintenance/works-ui";
 import { AskForQuotes } from "@/components/maintenance/QuoteAsks";
+import { FloatCard, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
 
 /**
  * The job's small forms, one per thing you can do to it: the quote, the
@@ -18,6 +19,11 @@ import { AskForQuotes } from "@/components/maintenance/QuoteAsks";
  * input a date, all of the different stages so they can jump around in that
  * process a little bit, and raise an invoice"). The Move each one sends is
  * the same as the job sheet's (components/maintenance/JobDrawer).
+ *
+ * `look="float"` (the new-look job page, 25 Oct 2026) draws the same fields,
+ * checks and save as boxes for a FloatSheet: the fields in a card, how it was
+ * paid as choice cards, Back and Save in the sheet's footer box. The Move it
+ * sends is the same. Left out, the form is drawn as it always has been.
  */
 
 export type FormId = "quote" | "request_quote" | "approve" | "assign" | "schedule" | "done" | "already_done" | "invoice" | "paid" | "cancel" | "reopen" | "note" | "edit";
@@ -38,13 +44,13 @@ export const FORM_TITLE: Record<FormId, (o: WorksOrder) => string> = {
   edit: () => "Edit the Details",
 };
 
-const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
+const FIELD = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
 const btn = "rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
 const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
-const label = "mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted";
+const LABEL = "mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted";
 const iso = (local: string | undefined) => (local ? new Date(local).toISOString() : null);
 
-export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadFile }: {
+export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadFile, look, footLeft }: {
   o: WorksOrder;
   form: FormId;
   contractors: Contractor[];
@@ -55,7 +61,14 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
   onBack: () => void;
   /** Puts a file on R2 and the job, returning false if it did not land. */
   uploadFile: (file: File, kind?: "invoice" | "quote") => Promise<boolean>;
+  /** "float": drawn as boxes for a FloatSheet, Back and Save in its footer box. */
+  look?: "float";
+  /** Float only: a line or a link for the footer box's left, when there is no error to show. */
+  footLeft?: React.ReactNode;
 }) {
+  const F = look === "float";
+  const field = F ? "nl-fs-input" : FIELD;
+  const label = F ? "nl-fs-label mb-1 block" : LABEL;
   const [f, setF] = useState<Record<string, string>>({});
   const [file, setFile] = useState<File | null>(null);
   const [mine, setMine] = useState<string | null>(null);
@@ -105,8 +118,8 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
     </label>
   );
 
-  return (
-    <div>
+  const body = (
+    <>
       {form === "quote" && (
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -188,7 +201,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
           <p className="text-[11.5px] text-muted sm:col-span-2">Accounts are emailed the invoice to pay, with the file attached when there is one.</p>
         </div>
       )}
-      {form === "paid" && (
+      {form === "paid" && !F && (
         <div className="grid gap-2">
           {PAID_HOW.map((h) => (
             <label key={h.id} className="flex items-center gap-2 text-[12.5px]">
@@ -228,6 +241,43 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (F) {
+    const problem = mine ?? err;
+    return (
+      <>
+        {form === "paid" ? (
+          <>
+            <div className="nl-fs-choices">
+              {PAID_HOW.map((h) => <FloatChoice key={h.id} title={h.label} on={f.how === h.id} onClick={() => set("how", h.id)} />)}
+            </div>
+            <FloatCard>
+              <label className={label}>A line for the timeline</label>
+              <input value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder="Optional" className={field} />
+              <p className="nl-fs-hint">PayProp is read-only to the OS: choosing it records the fact here, and the payment is keyed in PayProp by hand. Marking it paid closes the job.</p>
+            </FloatCard>
+          </>
+        ) : (
+          /* Ask for Quotes draws its own list and Send; nl-jb-old repaints its buttons (app/new-look/job.css). */
+          <FloatCard className={form === "request_quote" ? "nl-jb-old" : ""}>{body}</FloatCard>
+        )}
+        {form === "request_quote" ? (
+          problem ? <p className="nl-fs-say is-err" role="alert">{problem}</p> : null
+        ) : (
+          <FloatFoot left={problem ? <span className="nl-fs-err" role="alert">{problem}</span> : footLeft}>
+            <button type="button" onClick={onBack} className="nl-btn nl-fs-ghost">Back</button>
+            <button type="button" disabled={busy} onClick={() => void save()} className={`nl-btn ${form === "cancel" ? "nl-btn--danger" : "nl-btn--primary"}`}>{busy ? "Saving…" : form === "cancel" ? "Cancel the job" : "Save"}</button>
+          </FloatFoot>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div>
+      {body}
       {(mine || err) && <p className="mt-3 text-[12px] text-accent-dark">{mine ?? err}</p>}
       {form !== "request_quote" && <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onBack} className={btn}>Back</button>

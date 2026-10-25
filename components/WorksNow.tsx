@@ -39,10 +39,10 @@ const PAID_HOW: { id: PaidHow; label: string }[] = [
 /** The main line of steps, for the progress row. The landlord-organising branch sits off it. */
 const LINE: StepId[] = ["tell_landlord", "arranging", "pick_contractor", "contractor_confirm", "booking", "visit", "aftercare", "payment", "invoice"];
 
-const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
-const btn = "rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
-const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
-const tile = "flex-1 rounded-xl border px-4 py-3 text-left transition-colors";
+const field = "wn-field w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
+const btn = "wn-btn rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
+const primary = "wn-primary rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
+const tile = "wn-tile flex-1 rounded-xl border px-4 py-3 text-left transition-colors";
 
 /** The steps by a short name, for the labelled track on the job sheet. */
 const SHORT: Record<StepId, string> = {
@@ -202,7 +202,7 @@ function Need({ step }: { step: StepId }) {
   const why = optional ? WHY_OPTIONAL[step] : WHY_REQUIRED[step];
   return (
     <p className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[11.5px] text-muted">
-      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${optional ? "border border-line/80 bg-white text-ink/60" : "bg-ink/80 text-page"}`}>{optional ? "Optional" : "Required"}</span>
+      <span className={`wn-need rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${optional ? "border border-line/80 bg-white text-ink/60" : "bg-ink/80 text-page"}`}>{optional ? "Optional" : "Required"}</span>
       {why && <span className="min-w-0">{why}</span>}
     </p>
   );

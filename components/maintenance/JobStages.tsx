@@ -79,9 +79,45 @@ export function currentStage(o: WorksOrder): StepId | null {
   return o.status === "paid" ? "closed" : null;
 }
 
-export function StageTracker({ o, picked, onPick }: { o: WorksOrder; picked: StepId | null; onPick: (s: StepId) => void }) {
+export function StageTracker({ o, picked, onPick, look }: {
+  o: WorksOrder;
+  picked: StepId | null;
+  onPick: (s: StepId) => void;
+  /** "new": the new-look job page's stepper (app/new-look/job.css): numbers or ticks on a hairline, the step it's on in coral. Same stages, same press. */
+  look?: "new";
+}) {
   const stages = stagesOf(o);
   const here = currentStage(o);
+  if (look === "new") {
+    return (
+      <ol className="nl-jb-steps" aria-label="The stages of the job">
+        {stages.map((s, i) => {
+          const on = s.id === here && o.status !== "cancelled";
+          const sel = s.id === picked;
+          const state = on ? "is-now" : s.done ? "is-done" : s.skipped ? "is-skipped" : "";
+          return (
+            <li key={s.id} className={`nl-jb-step ${state}${sel ? " is-sel" : ""}`}>
+              <button
+                type="button"
+                onClick={() => onPick(s.id)}
+                aria-current={on ? "step" : undefined}
+                aria-pressed={sel}
+                title={`${STEPS.find((x) => x.id === s.id)?.label ?? s.label}${s.skipped ? " (skipped)" : ""}`}
+              >
+                <span className="nl-jb-step-n" aria-hidden>
+                  {s.done && !on ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                  ) : s.skipped ? "-" : i + 1}
+                </span>
+                <span className="nl-jb-step-l">{s.label}</span>
+                <span className="nl-jb-step-w">{s.skipped && !s.when ? "Skipped" : s.when}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    );
+  }
   return (
     <ol className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]" aria-label="The stages of the job">
       {stages.map((s, i) => {
@@ -141,8 +177,8 @@ export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun,
   if (stage === here && o.status !== "cancelled") {
     return <WorksNow o={o} move={mv} busy={busy} err={err} canCorporate={canCorporate} canPayrun={canPayrun} onInvoiceLandlord={onInvoiceLandlord} onCertificate={onCertificate} variant={bare ? "bare" : "card"} />;
   }
-  const btn = "rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
-  const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
+  const btn = "wn-btn rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
+  const primary = "wn-primary rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
   const done = stagesOf(o).find((s) => s.id === stage)?.done ?? false;
   let body: React.ReactNode = null;
   switch (stage) {

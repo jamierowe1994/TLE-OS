@@ -17,8 +17,11 @@ import type { Contractor, Move, WorksEvent, WorksOrder, Status, JobTenant } from
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { CertificateUpload, LandlordSaysStep } from "@/components/WorksNow";
 import { OPEN, PAID_HOW, PAYRUN_LABEL, PayrunTrack, awaitingPay, day, pounds, stamp, statusLabel } from "@/components/maintenance/works-ui";
-import { JobForm, FORM_TITLE, type FormId } from "@/components/maintenance/JobForms";
+import { JobForm, FORM_TITLE } from "@/components/maintenance/JobForms";
 import { StagePanel, StageTracker, currentStage, stagesOf } from "@/components/maintenance/JobStages";
+import { TABS, daysFrom, engineerFacts, jobFiles, tel, titleCase, type Pop, type TabId, type Tile } from "@/components/maintenance/job-page";
+import JobPageNew, { JobFailedNew, JobLoadingNew } from "@/components/new-look/maintenance/JobPageNew";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * One job, the whole of it, on one page.
@@ -48,14 +51,6 @@ type Loaded<T> = { state: "loading" } | { state: "failed"; error: string } | { s
 type Job = { order: WorksOrder; events: WorksEvent[]; canPayrun: boolean };
 type Book = { ok: boolean; error?: string; properties: ManagedProperty[] };
 
-/** What is open over the page. */
-type Pop =
-  | { kind: "form"; form: FormId }
-  | { kind: "stage"; stage: StepId }
-  | { kind: "cert" }
-  | { kind: "landlord_says" }
-  | { kind: "people"; who: "tenant" | "contractor" };
-
 type Tone = "plain" | "sage" | "warm" | "hot" | "done";
 const TONE: Record<Tone, string> = {
   plain: "border border-line/70 bg-white text-ink/75",
@@ -71,16 +66,6 @@ const eyebrow = "text-[10.5px] font-semibold uppercase tracking-wide text-muted"
 const card = "rounded-[22px] border border-line/50 bg-white";
 const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] text-muted transition-colors hover:text-ink";
 const quiet = "rounded-full border border-line/80 bg-white px-3 py-1 text-[11.5px] font-medium text-ink/80 transition-colors hover:border-ink/40 hover:text-ink";
-const tel = (s: string) => s.replace(/[^\d+]/g, "");
-const isImage = (f: { type: string; name: string }) => f.type.startsWith("image/") || /\.(jpe?g|png|gif|webp|heic)$/i.test(f.name);
-
-type TabId = "updates" | "details" | "people" | "files";
-const TABS: { id: TabId; label: string }[] = [
-  { id: "updates", label: "Updates" },
-  { id: "details", label: "Details" },
-  { id: "people", label: "People" },
-  { id: "files", label: "Files" },
-];
 
 /** The actions by what they are for. Every key is a tile on the page; one that isn't there today is left out. */
 const GROUPS: { id: string; title: string; blurb: string; icon: string; keys: string[] }[] = [
@@ -103,19 +88,6 @@ const EVENT_ICON: Record<string, string> = {
   assigned: "user", skipped: "cross", scheduled: "calendar", paid: "coin", cancelled: "cross",
 };
 
-/** Headings in Title Case, the small words left small (house style). */
-const SMALL = new Set(["a", "an", "and", "as", "at", "but", "by", "for", "in", "it", "of", "on", "or", "the", "to", "up", "with"]);
-function titleCase(t: string): string {
-  return t.split(" ").map((w, i) => (i > 0 && SMALL.has(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
-}
-
-/** "in 6 days", "today", "3 days ago": how far off a date is, counted in London days. */
-function daysFrom(iso: string): string {
-  const d = (x: Date) => Date.UTC(x.getFullYear(), x.getMonth(), x.getDate());
-  const n = Math.round((d(new Date(iso)) - d(new Date())) / 86_400_000);
-  return n === 0 ? "today" : n === 1 ? "tomorrow" : n === -1 ? "yesterday" : n > 0 ? `in ${n} days` : `${-n} days ago`;
-}
-
 function Loading({ label }: { label: string }) {
   return (
     <p className="flex items-center gap-2 text-[12.5px] text-muted">
@@ -134,6 +106,9 @@ export default function WorksOrderPage() {
   const id = decodeURIComponent(String(params.id ?? ""));
   const router = useRouter();
   const saves = useSaveScope(id);
+  /* The new look behind its own switch (Admin > Switches, "Job page"): the
+     same state, reads and handlers below, drawn by JobPageNew. */
+  const look = useNewLook("job");
 
   const [job, setJob] = useState<Loaded<Job>>({ state: "loading" });
   const [book, setBook] = useState<Loaded<ManagedProperty[]>>({ state: "loading" });
@@ -273,6 +248,7 @@ export default function WorksOrderPage() {
   }
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); e.target.value = ""; };
   const openPop = (p: Pop) => { setErr(null); setPop(p); };
   /* A move from inside a pop-up closes it once it lands. An edit of the
      landlord's details on the way to telling them does not. */
@@ -282,10 +258,15 @@ export default function WorksOrderPage() {
     return ok;
   };
 
+  if (look === null) {
+    return <div className="py-16"><Loading label="Opening the job…" /></div>;
+  }
   if (job.state === "loading" || id === "invoices") {
+    if (look) return <JobLoadingNew />;
     return <div className="py-16"><Loading label="Opening the job…" /></div>;
   }
   if (job.state === "failed" || !o) {
+    if (look) return <JobFailedNew error={job.state === "failed" ? job.error : "No such job."} onRetry={job.state === "failed" ? load : undefined} />;
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
         <p className="hand text-[20px]">The job could not be opened</p>
@@ -318,7 +299,6 @@ export default function WorksOrderPage() {
   const live = o.quoteAsks.filter((a) => a.state === "asked" || a.state === "quoted").length;
 
   /* ── the actions, beside the photos ─────────────────────────────────── */
-  type Tile = { key: string; label: string; what: string; icon: string; off?: string; done?: boolean; run: () => void };
   const isClosed = closed ? "The job is closed" : undefined;
   const tiles: Tile[] = [
     { key: "quote", label: "Log a Quote", what: o.quotePence != null ? `Now ${pounds(o.quotePence)}` : "Their price, and the file", icon: "coin", off: isClosed, done: o.quotePence != null, run: () => openPop({ kind: "form", form: "quote" }) },
@@ -379,6 +359,61 @@ export default function WorksOrderPage() {
   const shownMeta = stageShown ? STEPS.find((s) => s.id === stageShown) : null;
   const arrangedBy = o.arranging === "us" ? "Us" : o.arranging === "landlord" ? "The landlord" : "Not decided";
   const dueIn = o.dueAt && open ? daysFrom(o.dueAt) : null;
+
+  if (look) {
+    return (
+      <JobPageNew
+        o={o}
+        events={events}
+        canPayrun={canPayrun}
+        saves={saves}
+        home={home}
+        shots={shots}
+        bookFailed={book.state === "failed" ? book.error : null}
+        contractor={contractor}
+        trades={trades}
+        busy={busy}
+        err={err}
+        popUp={popUp}
+        openPop={openPop}
+        closePop={() => setPop(null)}
+        picked={picked}
+        setPicked={setPicked}
+        here={here}
+        stageShown={stageShown}
+        shownAt={shownAt}
+        stageCount={stages.length}
+        shownMeta={shownMeta ?? null}
+        tab={tab}
+        setTab={setTab}
+        groups={groups}
+        nextTile={nextTile}
+        nextGroup={nextGroup}
+        isOpen={isOpen}
+        toggleGroup={(gid) => setOpenGroups((cur) => ({ ...cur, [gid]: !isOpen(gid) }))}
+        move={move}
+        popMove={popMove}
+        uploadFile={uploadFile}
+        certificate={certificate}
+        invoiceLandlord={() => void invoiceLandlord()}
+        fileRef={fileRef}
+        onFile={onFile}
+        lightbox={lightbox}
+        setLightbox={setLightbox}
+        tenants={tenants}
+        address={address}
+        open={open}
+        late={late}
+        urgency={urgency}
+        arrangedBy={arrangedBy}
+        dueIn={dueIn}
+        canResend={canResend}
+        unsent={unsent}
+        resendOrder={resendOrder}
+        pickContractor={pickContractor}
+      />
+    );
+  }
 
   return (
     <SaveScopeProvider scope={saves}>
@@ -532,7 +567,7 @@ export default function WorksOrderPage() {
                 </section>
               );
             })}
-            <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); e.target.value = ""; }} />
+            <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={onFile} />
             {err && !popUp && <p className="px-1 text-[12px] text-accent-dark">{err}</p>}
           </aside>
 
@@ -814,20 +849,7 @@ function CallEmail({ phone, email, name, role, address }: { phone: string; email
 /** The engineer going out: their firm, how to reach them, what they're registered for, and their record. */
 function Engineer({ o, c, reading, onPick, canPick, onResend, unsent, busy }: { o: WorksOrder; c: Contractor | null; reading: boolean; onPick: () => void; canPick: boolean; onResend?: () => void; unsent: boolean; busy: boolean }) {
   const [copied, setCopied] = useState(false);
-  const regs = c
-    ? [
-        c.gasSafeNumber ? `Gas Safe ${c.gasSafeNumber}` : "",
-        c.niceicNumber ? `NICEIC ${c.niceicNumber}` : "",
-        c.napitNumber ? `NAPIT ${c.napitNumber}` : "",
-        c.otherRegistration ?? "",
-      ].filter(Boolean)
-    : [];
-  if (c && !regs.length && c.registration) regs.push(c.registration);
-  const insured = c?.publicLiabilityInsurer ? `${c.publicLiabilityInsurer}${c.publicLiabilityExpiry ? ` · to ${day(c.publicLiabilityExpiry)}` : ""}` : "";
-  const quoting = stepOf(o) === "quote";
-  /* Out for quotes, each firm has its own link; the job's one is for the works order. */
-  const link = o.contractorToken && !quoting ? `${typeof window === "undefined" ? "" : window.location.origin}/contractor/${o.contractorToken}` : null;
-  const out = o.quoteAsks.filter((a) => a.state === "asked" || a.state === "quoted");
+  const { regs, insured, quoting, link, out } = engineerFacts(o, c);
   return (
     <Person icon="setting" role="The Engineer" action={
       canPick || onResend ? (
@@ -890,10 +912,7 @@ function Files({ o, onPhoto }: { o: WorksOrder; onPhoto: (photos: string[], star
   if (o.files.length === 0) {
     return <p className="text-[12.5px] text-muted">Nothing on the job yet. Photos of the fault, quotes, invoices and certificates go here, and on the home&apos;s Documents too.</p>;
   }
-  const url = (key: string) => `/api/r2/file?key=${encodeURIComponent(key)}`;
-  const photos = o.files.filter(isImage);
-  const docs = o.files.filter((f) => !isImage(f));
-  const urls = photos.map((p) => url(p.key));
+  const { url, photos, docs, urls } = jobFiles(o);
   return (
     <div className="space-y-3">
       {photos.length > 0 && (

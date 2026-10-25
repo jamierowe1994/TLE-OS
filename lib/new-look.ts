@@ -47,6 +47,8 @@ export const LOOK_SCREENS = [
   { id: "property", label: "Property page", what: "One managed home: rent, tenancy, certificates, works and documents." },
   { id: "overview", label: "Back-office Overview", what: "The back office at a glance." },
   { id: "maintenance", label: "Maintenance", what: "Repairs and planned jobs, grouped as the design has them." },
+  /* One job's own page (James, 25 Oct 2026: "it pulled through this old view... redesign this with the new style in mind"). */
+  { id: "job", label: "Job page", what: "One repair or planned job: the head, the stage it's at, the progress and its actions, in the new style. Off, the page as it is." },
   { id: "contractors", label: "Contractors", what: "The contractor list and each contractor's details." },
   { id: "finances", label: "Finances", what: "Income, costs and the figures behind them." },
   { id: "compliance", label: "Compliance", what: "Certificates across the book: what's in date, due and missing." },
