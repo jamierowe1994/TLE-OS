@@ -18,6 +18,7 @@ import SteveTasks from "@/components/SteveTasks";
 import SteveFace from "@/components/SteveFace";
 import { Ico } from "@/components/new-look/Parts";
 import { useNewLook } from "@/lib/use-new-look";
+import { useStevePeek } from "@/lib/use-steve-peek";
 import { readScreen, runSteps } from "@/lib/screen-controls";
 import type { ScreenPlan } from "@/lib/steve-never";
 
@@ -374,6 +375,15 @@ function Dock() {
      button to click reports in". The strip goes; Report is a button in his
      head line; anything that asks for one of the three lands on the chat. */
   const lookNew = useNewLook("steve") === true;
+  /* Steve as the orb (lib/new-look "orb"): eyes shut in the corner until the
+     pointer comes, open and following it whenever his chat is open, rolling
+     off to peek from the edge when he sits on something, and the glass chat
+     card (app/new-look/steve-orb.css, .is-orb). */
+  const orbOn = useNewLook("orb") === true;
+  const orb = lookNew && orbOn;
+  const dockBtn = useRef<HTMLButtonElement | null>(null);
+  const [dockHover, setDockHover] = useState(false);
+  const peek = useStevePeek(dockBtn, orb && !open) && !dockHover;
   useEffect(() => {
     if (lookNew && (tab === "guides" || tab === "news" || tab === "tasks")) setTab("help");
   }, [lookNew, tab]);
@@ -1980,18 +1990,28 @@ function Dock() {
           Report tab, for everybody - press him, then Report. */}
       <button
         type="button"
+        ref={dockBtn}
         onClick={toggle}
+        onPointerEnter={() => setDockHover(true)}
+        onPointerLeave={() => setDockHover(false)}
+        onFocus={() => setDockHover(true)}
+        onBlur={() => setDockHover(false)}
         title={lookNew ? `${aName} - ask me anything` : `${aName} - help, guides and news`}
         aria-label={lookNew ? `${aName} - ask me anything` : `${aName} - help, guides and news`}
         aria-expanded={open}
         data-hide-from-shot
         data-os-steve
         data-steve-dock
-        className={`os-toast-lift fixed z-[190] text-ink hover:scale-105 active:scale-95 ${lookNew ? "bottom-[10px] right-[18px]" : "bottom-2 right-3"}`}
+        className={`os-toast-lift fixed z-[190] text-ink ${orb ? "steve-dock-orb" : "hover:scale-105 active:scale-95"}${peek ? " is-peek" : ""} ${lookNew ? "bottom-[10px] right-[18px]" : "bottom-2 right-3"}`}
       >
         <span ref={landing} className="block origin-bottom" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("os-steve-land"); }}>
           {/* New look: 56px of Steve, 26px in and 18px up, as the design has him (23 Oct 2026). The face is 78% of this box. */}
-          <AssistantCharacter mood={mood} size={lookNew ? 72 : 76} loop={performing} />
+          <AssistantCharacter
+            mood={orb && open ? (busy ? "thinking" : "idle") : mood}
+            rest={orb && !open && !peek ? "closed" : undefined}
+            size={lookNew ? 72 : 76}
+            loop={performing}
+          />
         </span>
         {/* Something to carry. The dot is only ever there because there is
             genuinely something unread — see the note on `unseen`. */}
@@ -2027,7 +2047,7 @@ function Dock() {
               void toggle();
             }
           }}
-          className="os-toast-lift fade-up fixed bottom-[86px] right-4 z-[190] w-[min(420px,calc(100vw-2rem))] sm:right-[26px]"
+          className={`os-toast-lift fade-up fixed bottom-[86px] right-4 z-[190] w-[min(420px,calc(100vw-2rem))] sm:right-[26px]${orb ? " is-orb" : ""}`}
         >
           <div ref={bubbleRef} className="nl-steve-bubble nl-st-bubble relative">
             {/* The tail, over his head. */}
@@ -2043,7 +2063,11 @@ function Dock() {
               style={{ maxHeight: tab === "feedback" ? "calc(100dvh - 140px)" : `min(${chatCap}px, calc(100dvh - 140px))` }}
             >
               <div className={`nl-st-head${talking ? " is-talking" : ""}`}>
-                <SteveFace size={28} mood={busy ? "thinking" : tab === "feedback" ? "idle" : "happy"} />
+                {orb ? (
+                  <SteveFace size={34} mood={busy ? "thinking" : "idle"} track />
+                ) : (
+                  <SteveFace size={28} mood={busy ? "thinking" : tab === "feedback" ? "idle" : "happy"} />
+                )}
                 {naming ? (
                   namingView
                 ) : (
@@ -2056,7 +2080,7 @@ function Dock() {
                     >
                       {aName}
                     </button>
-                    <span className="nl-st-role">Your assistant</span>
+                    {!orb && <span className="nl-st-role">Your assistant</span>}
                   </>
                 )}
                 <span className="nl-st-tools">

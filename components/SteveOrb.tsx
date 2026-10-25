@@ -17,6 +17,10 @@ import type { SteveMood } from "@/components/SteveFace";
  *  - typing: every keystroke in a box marked data-steve-chat gives a small
  *    pulse, so it breathes with what's typed.
  *  - a press: it squashes, wobbles out of round and settles.
+ *  - the pointer: arriving over him gives a bounce and opens his eyes (in
+ *    the corner he rests with them closed, out of the way). `track` makes
+ *    the eyes follow the pointer round the screen whenever they're open.
+ *  - thinking: the edge waves like liquid as well as the eyes bouncing.
  *  - `level` (0-1), when set, swells it with a voice - ready for him speaking.
  *
  * Plain CSS (app/new-look/steve-orb.css), no WebGL, so a page can carry a
@@ -46,10 +50,25 @@ function onType(fn: () => void) {
   };
 }
 
-/* The swirl inside speeds up and slows down; the eyes keep their own time. */
+/* One pointer listener for the whole page, for every orb whose eyes follow it. */
+const watchers = new Set<(x: number, y: number) => void>();
+let watching = false;
+function onPointer(fn: (x: number, y: number) => void) {
+  watchers.add(fn);
+  if (!watching && typeof window !== "undefined") {
+    watching = true;
+    window.addEventListener("pointermove", (e) => watchers.forEach((f) => f(e.clientX, e.clientY)), { passive: true });
+  }
+  return () => {
+    watchers.delete(fn);
+  };
+}
+
+/* The swirl inside speeds up and slows down; the eyes, the breathing and the
+   edge keep their own time. */
 function swirls(a: Animation) {
   const name = (a as CSSAnimation).animationName ?? "";
-  return name.startsWith("sorb-") && !/blink|look|think/.test(name);
+  return name === "sorb-orbit" || name === "sorb-swell";
 }
 
 function still() {
@@ -62,15 +81,18 @@ export default function SteveOrb({
   className = "",
   label = "Steve",
   level,
+  track = false,
 }: {
   size?: number;
   mood?: SteveMood;
   className?: string;
   label?: string;
   level?: number;
+  track?: boolean;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const ball = useRef<HTMLSpanElement>(null);
+  const gaze = useRef<HTMLSpanElement>(null);
   const [hover, setHover] = useState(false);
 
   /* The swirl's speed follows the mood (and the pointer), eased. */
@@ -89,12 +111,36 @@ export default function SteveOrb({
       onType(() => {
         if (still()) return;
         ref.current?.animate(
-          [{ transform: "scale(1)", filter: "brightness(1)" }, { transform: "scale(1.07)", filter: "brightness(1.12)" }, { transform: "scale(1)", filter: "brightness(1)" }],
-          { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" },
+          [{ transform: "scale(1)", filter: "brightness(1)" }, { transform: "scale(1.09)", filter: "brightness(1.12)" }, { transform: "scale(0.98)" }, { transform: "scale(1)", filter: "brightness(1)" }],
+          { duration: 340, easing: "cubic-bezier(.3,1.4,.5,1)" },
         );
       }),
     [],
   );
+
+  /* The eyes follow the pointer: straight at it, up to a little way off centre. */
+  useEffect(() => {
+    if (!track) return;
+    return onPointer((x, y) => {
+      const r = ref.current?.getBoundingClientRect();
+      const g = gaze.current;
+      if (!r || !g) return;
+      const dx = x - (r.left + r.width / 2);
+      const dy = y - (r.top + r.height / 2);
+      const d = Math.max(r.width * 1.5, Math.hypot(dx, dy));
+      g.style.transform = `translate(${((dx / d) * r.width * 0.09).toFixed(2)}px, ${((dy / d) * r.width * 0.07).toFixed(2)}px)`;
+    });
+  }, [track]);
+
+  /* Arriving under the pointer: a bounce. */
+  const arrive = () => {
+    setHover(true);
+    if (still()) return;
+    ball.current?.animate(
+      [{ transform: "scale(1) translateY(0)" }, { transform: "scale(1.12) translateY(-6%)" }, { transform: "scale(0.97) translateY(1%)" }, { transform: "scale(1.03) translateY(-1%)" }, { transform: "scale(1) translateY(0)" }],
+      { duration: 650, easing: "cubic-bezier(.3,1.5,.5,1)" },
+    );
+  };
 
   /* Surprised: one pop as it arrives. */
   useEffect(() => {
@@ -127,11 +173,11 @@ export default function SteveOrb({
   return (
     <span
       ref={ref}
-      className={`sorb sorb--${mood} ${hover ? "is-hover" : ""} ${className}`}
+      className={`sorb sorb--${mood}${hover ? " is-hover" : ""}${track ? " is-tracking" : ""} ${className}`}
       style={{ width: size, height: size, ["--s" as string]: `${size}px`, ...(swell ? { transform: `scale(${swell})`, transition: "transform 90ms linear" } : {}) }}
       role="img"
       aria-label={label}
-      onPointerEnter={() => setHover(true)}
+      onPointerEnter={arrive}
       onPointerLeave={() => setHover(false)}
       onPointerDown={poke}
     >
@@ -145,8 +191,10 @@ export default function SteveOrb({
       </span>
       {size >= 22 && (
         <span className="sorb-eyes" aria-hidden>
-          <i />
-          <i />
+          <span ref={gaze} className="sorb-gaze">
+            <i />
+            <i />
+          </span>
         </span>
       )}
     </span>

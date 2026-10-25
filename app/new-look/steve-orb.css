@@ -4,22 +4,23 @@
    James's reference (25 Oct 2026): a soft glowing bubble with two white pill
    eyes - an AI in the corner, not a ball - in our coral, not its purple.
    No CSS blur anywhere inside: Safari draws a blurred child as a square past
-   a rounded clip, which showed as a box round him. The mask makes every
-   browser clip to the circle. */
+   a rounded clip, which showed as a box round him. The opaque mask below is
+   the old Safari fix: it adds nothing, but makes Safari clip to the rounded
+   edge, so the edge can wave (thinking) and still clip clean. */
 
 .sorb { position: relative; display: inline-block; flex: none; vertical-align: middle; cursor: default; isolation: isolate; background: none; }
 .sorb-ball {
   position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
-  -webkit-mask-image: radial-gradient(circle, #000 69%, transparent 71%);
-  mask-image: radial-gradient(circle, #000 69%, transparent 71%);
-  background: radial-gradient(circle at 50% 50%, #e98767 0%, #f0a487 42%, #f7cdbb 74%, #fcefe9 100%);
+  -webkit-mask-image: radial-gradient(#fff, #000);
+  transform: translateZ(0);
+  background: radial-gradient(circle at 50% 50%, #f2724a 0%, #f78d68 42%, #fbbba0 74%, #feeae2 100%);
   animation: sorb-breathe 5.2s ease-in-out infinite, sorb-liquid 9s ease-in-out infinite;
   transition: filter 0.6s ease;
 }
 /* A soft coral glow round him, round and outside the clip. */
 .sorb::before {
   content: ""; position: absolute; inset: 2%; border-radius: 50%; pointer-events: none; z-index: -1;
-  box-shadow: 0 0 calc(var(--s) * 0.22) calc(var(--s) * 0.02) rgba(235, 140, 109, 0.42), 0 calc(var(--s) * 0.06) calc(var(--s) * 0.2) rgba(180, 80, 50, 0.18);
+  box-shadow: 0 0 calc(var(--s) * 0.22) calc(var(--s) * 0.02) rgba(242, 114, 74, 0.45), 0 calc(var(--s) * 0.06) calc(var(--s) * 0.2) rgba(190, 70, 35, 0.2);
   animation: sorb-liquid 9s ease-in-out infinite;
 }
 
@@ -35,23 +36,23 @@
   animation: sorb-swell ease-in-out infinite alternate;
   animation-duration: var(--sw);
 }
-.sorb-o.o1 { --c: #e8714c; --w: 0.8;  --r: 0.1;  --sw: 3.8s; animation-duration: 9s; }
-.sorb-o.o2 { --c: #d4583a; --w: 0.62; --r: 0.2;  --sw: 4.6s; animation-duration: 12s; animation-direction: reverse; animation-delay: -4s; }
-.sorb-o.o3 { --c: #f2a09a; --w: 0.6;  --r: 0.24; --sw: 3.2s; animation-duration: 7.5s; animation-delay: -2s; --a: 0.8; }
-.sorb-o.o4 { --c: #b5421f; --w: 0.4;  --r: 0.14; --sw: 5.4s; animation-duration: 15s; animation-delay: -9s; --a: 0.6; }
-.sorb-o.o5 { --c: #f8c7a6; --w: 0.5;  --r: 0.28; --sw: 2.8s; animation-duration: 10s; animation-direction: reverse; animation-delay: -6s; --a: 0.85; }
+.sorb-o.o1 { --c: #f2603a; --w: 0.8;  --r: 0.1;  --sw: 3.8s; animation-duration: 9s; }
+.sorb-o.o2 { --c: #e8492a; --w: 0.62; --r: 0.2;  --sw: 4.6s; animation-duration: 12s; animation-direction: reverse; animation-delay: -4s; }
+.sorb-o.o3 { --c: #ff8f80; --w: 0.6;  --r: 0.24; --sw: 3.2s; animation-duration: 7.5s; animation-delay: -2s; --a: 0.8; }
+.sorb-o.o4 { --c: #d23a12; --w: 0.4;  --r: 0.14; --sw: 5.4s; animation-duration: 15s; animation-delay: -9s; --a: 0.6; }
+.sorb-o.o5 { --c: #ffc39b; --w: 0.5;  --r: 0.28; --sw: 2.8s; animation-duration: 10s; animation-direction: reverse; animation-delay: -6s; --a: 0.85; }
 
 /* The edge goes pale and soft, as the reference does. */
 .sorb-grain {
   position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: radial-gradient(circle, rgba(252, 238, 232, 0) 50%, rgba(252, 238, 232, 0.5) 70%, rgba(253, 245, 241, 0.92) 92%);
+  background: radial-gradient(circle, rgba(255, 236, 228, 0) 54%, rgba(255, 236, 228, 0.45) 74%, rgba(255, 244, 239, 0.9) 94%);
 }
 
-/* The eyes: two white pills, centred, that blink now and then. */
-.sorb-eyes {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: calc(var(--s) * 0.15);
-  pointer-events: none; animation: sorb-look 11s ease-in-out infinite;
-}
+/* The eyes: two white pills, centred, that blink now and then. They drift
+   about on their own, or follow the pointer when tracking. */
+.sorb-eyes { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; animation: sorb-look 11s ease-in-out infinite; }
+.sorb.is-tracking .sorb-eyes { animation: none; }
+.sorb-gaze { display: flex; align-items: center; gap: calc(var(--s) * 0.15); transition: transform 0.18s ease-out; }
 .sorb-eyes i {
   display: block; width: calc(var(--s) * 0.115); height: calc(var(--s) * 0.3); border-radius: 999px; background: #fff;
   box-shadow: 0 calc(var(--s) * 0.01) calc(var(--s) * 0.04) rgba(170, 70, 40, 0.25);
@@ -60,12 +61,15 @@
 
 /* Moods. Speed is set by the component; these are light and eyes. */
 .sorb.is-hover .sorb-ball, .sorb--happy .sorb-ball, .sorb--wink .sorb-ball { filter: saturate(1.12) brightness(1.03); }
-.sorb.is-hover .sorb-eyes i, .sorb--happy .sorb-eyes i { height: calc(var(--s) * 0.22); }
+.sorb--happy .sorb-eyes i { height: calc(var(--s) * 0.22); }
 .sorb--wink .sorb-eyes i:last-child { height: calc(var(--s) * 0.05); }
 .sorb--surprised .sorb-eyes i { height: calc(var(--s) * 0.34); width: calc(var(--s) * 0.13); }
-.sorb--sleepy .sorb-ball { filter: saturate(0.7) brightness(0.98); }
+.sorb--sleepy .sorb-ball { filter: none; }
 .sorb--sleepy .sorb-eyes i { height: calc(var(--s) * 0.05); animation: none; }
-.sorb--thinking .sorb-ball { filter: saturate(1.3); }
+/* The pointer over him opens his eyes, whatever he was doing. */
+.sorb.sorb.is-hover .sorb-eyes i { height: calc(var(--s) * 0.3); }
+.sorb--thinking .sorb-ball { filter: saturate(1.25); animation: sorb-breathe 1.8s ease-in-out infinite, sorb-wave 1.6s ease-in-out infinite; }
+.sorb--thinking::before { animation: sorb-wave 1.6s ease-in-out infinite; }
 .sorb--thinking .sorb-eyes { animation: none; }
 .sorb--thinking .sorb-eyes i { animation: sorb-think 0.9s ease-in-out infinite; }
 .sorb--thinking .sorb-eyes i:last-child { animation-delay: -0.45s; }
@@ -77,7 +81,15 @@
 
 @keyframes sorb-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes sorb-swell { from { transform: scale(0.8); } to { transform: scale(1.2); } }
-@keyframes sorb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+@keyframes sorb-breathe { 0%, 100% { transform: translateZ(0) translateY(0) scale(1); } 50% { transform: translateZ(0) translateY(-3%) scale(1.035); } }
+/* Thinking, or putting an answer down: the edge ripples. */
+@keyframes sorb-wave {
+  0%, 100% { border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%; }
+  20% { border-radius: 56% 44% 53% 47% / 45% 56% 44% 55%; }
+  40% { border-radius: 44% 56% 45% 55% / 56% 44% 55% 45%; }
+  60% { border-radius: 55% 45% 57% 43% / 44% 54% 46% 56%; }
+  80% { border-radius: 46% 54% 44% 56% / 55% 43% 57% 45%; }
+}
 @keyframes sorb-liquid {
   0%, 100% { border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%; }
   25% { border-radius: 52% 48% 51% 49% / 49% 52% 48% 51%; }
@@ -96,4 +108,64 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sorb-ball, .sorb::before, .sorb-o, .sorb-o i, .sorb-eyes, .sorb-eyes i, .sorb--thinking::after { animation: none !important; }
+  .sorb-gaze { transition: none; }
+}
+
+/* ── His corner, as the orb (components/HelpDock, orb on) ──────────────────
+   A bounce under the pointer instead of the old grow. When he sits on
+   something he rolls off the right edge (clockwise, as a ball would), then
+   rolls back just far enough to peek: eyes and the top of his head. */
+.steve-dock-orb { transition: transform 0.7s cubic-bezier(0.3, 1.35, 0.5, 1); }
+.steve-dock-orb.is-peek { transform: translateX(46%) rotate(-16deg); animation: steve-peek-in 1.1s cubic-bezier(0.4, 0, 0.3, 1) both; }
+@keyframes steve-peek-in {
+  0% { transform: none; }
+  50% { transform: translateX(78%) rotate(170deg); }
+  78% { transform: translateX(40%) rotate(-28deg); }
+  100% { transform: translateX(46%) rotate(-16deg); }
+}
+
+/* ── His chat card, as the orb: frosted, a little see-through ─────────────── */
+[data-look="new"].is-orb { transform-origin: 92% 100%; animation: steve-card-in 0.42s cubic-bezier(0.3, 1.3, 0.5, 1) both; }
+/* Scale only, never opacity: a fading parent cuts the card's frosted blur off from the page behind it. */
+@keyframes steve-card-in { from { transform: translateY(12px) scale(0.9); } to { transform: none; } }
+[data-look="new"].is-orb .nl-st-bubble {
+  background: color-mix(in srgb, var(--card) 84%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, #fff 55%, var(--line-strong));
+  border-radius: 28px; padding: 14px 16px 16px;
+  box-shadow: 0 24px 60px -28px rgba(120, 50, 30, 0.35), 0 2px 10px -4px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+[data-look="new"].is-orb .nl-st-bubble > span.absolute { display: none; }
+[data-look="new"].is-orb .nl-st-head { gap: 10px; margin-bottom: 14px; }
+[data-look="new"].is-orb .nl-st-name { font-family: var(--font-heading); font-weight: 500; font-size: 18px; line-height: 24px; letter-spacing: 0; }
+[data-look="new"].is-orb .nl-st-x { border-radius: 50%; }
+[data-look="new"].is-orb .nl-st-x:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+
+/* The conversation: his words on a coral wash, theirs on white glass. */
+[data-look="new"].is-orb .nl-st-says > div:first-child,
+[data-look="new"].is-orb .nl-st-thinking {
+  background: color-mix(in srgb, var(--primary) 13%, transparent); border-radius: 20px 20px 20px 6px;
+}
+[data-look="new"].is-orb .nl-st-says > div:first-child > p { font-size: 15.5px; line-height: 23px; }
+[data-look="new"].is-orb .nl-st-me > p { background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent); border-radius: 20px 20px 6px 20px; }
+
+/* The composer: a white glass pill with a round coral send. */
+[data-look="new"].is-orb .nl-st-ask {
+  background: color-mix(in srgb, var(--card) 86%, transparent); border-color: color-mix(in srgb, var(--line-strong) 80%, transparent);
+  border-radius: 22px; padding: 14px 10px 10px 18px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+[data-look="new"].is-orb .nl-st-ask:focus-within { border-color: color-mix(in srgb, var(--primary) 55%, var(--line-strong)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent); }
+[data-look="new"].is-orb .nl-st-input { font-size: 17px; line-height: 25px; min-height: 64px; }
+[data-look="new"].is-orb .nl-st-send { border-radius: 50%; width: 38px; height: 38px; }
+
+/* The starter questions: glass chips. */
+[data-look="new"].is-orb .nl-st-pills { gap: 6px; }
+[data-look="new"].is-orb .nl-st-pills button {
+  font-size: 13px; border-radius: 999px; padding: 7px 14px;
+  background: color-mix(in srgb, var(--card) 60%, transparent); border-color: color-mix(in srgb, var(--line-strong) 70%, transparent);
+}
+[data-look="new"].is-orb .nl-st-pills button:hover { background: color-mix(in srgb, var(--primary) 10%, var(--card)); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .steve-dock-orb, .steve-dock-orb.is-peek, [data-look="new"].is-orb { animation: none; transition: none; }
 }

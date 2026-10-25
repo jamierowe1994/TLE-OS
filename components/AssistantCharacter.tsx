@@ -453,14 +453,17 @@ function Mouth({ mood, still }: { mood: Mood; still: boolean }) {
  * switch has answered nothing is drawn, rather than one Steve and then the
  * other.
  */
-export default function AssistantCharacter(props: Parameters<typeof InkSteve>[0]) {
+export default function AssistantCharacter(props: Parameters<typeof InkSteve>[0] & { rest?: "closed" }) {
   const look = useNewLook("steve");
   if (look === null) return <span aria-hidden className={props.className} style={{ display: "inline-block", width: props.size ?? 64, height: props.size ?? 64 }} />;
-  if (!look) return <InkSteve {...props} />;
+  if (!look) {
+    const { rest: _rest, ...ink } = props;
+    return <InkSteve {...ink} />;
+  }
   const size = props.size ?? 64;
   return (
     <span className={props.className} style={{ display: "inline-grid", placeItems: "center", width: size, height: size }}>
-      <SteveFace size={Math.round(size * 0.78)} mood={FACE_OF[props.mood ?? "idle"]} track={props.track ?? true} />
+      <SteveFace size={Math.round(size * 0.78)} mood={FACE_OF[props.mood ?? "idle"]} track={props.track ?? true} rest={props.rest} />
     </span>
   );
 }

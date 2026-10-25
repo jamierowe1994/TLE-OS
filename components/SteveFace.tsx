@@ -40,10 +40,13 @@ export default function SteveFace({
   track = false,
   className = "",
   label = "Steve",
+  rest,
 }: {
   size?: number;
   mood?: SteveMood;
   track?: boolean;
+  /** As the orb: "closed" rests with his eyes shut until the pointer comes (the corner). */
+  rest?: "closed";
   className?: string;
   label?: string;
 }) {
@@ -86,7 +89,7 @@ export default function SteveFace({
   const orb = useNewLook("orb") === true;
 
   const m: SteveMood = mood ?? (hover ? "happy" : wink ? "wink" : byTime);
-  if (orb) return <SteveOrb size={size} mood={mood ?? (byTime === "sleepy" ? "sleepy" : "idle")} className={className} label={label} />;
+  if (orb) return <SteveOrb size={size} mood={mood ?? (rest === "closed" ? "sleepy" : "idle")} track={track} className={className} label={label} />;
   const ex: [number, number] = m === "thinking" ? [1.4, -1.6] : m === "surprised" ? [0, 0] : eye;
 
   const pupils =
