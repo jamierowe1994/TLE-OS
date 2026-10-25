@@ -809,3 +809,90 @@
    84px right made room for the old Steve ball and left the page sitting off-centre. */
 [data-nav-look="new"] main[data-os-content] { padding-left: 56px; padding-right: 56px; }
 @media (max-width: 760px) { [data-nav-look="new"] main[data-os-content] { padding-left: 18px; padding-right: 18px; } }
+
+/* ── How the advert is doing: a pop-over in the middle of a darkened screen (25 Oct 2026) ── */
+.nl-po { position: fixed; inset: 0; z-index: 420; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 28px; }
+.nl-po-scrim { position: absolute; inset: 0; border: 0; background: rgba(20, 20, 19, .55); cursor: default; opacity: 0; transition: opacity .28s ease; }
+.nl-po[data-shown="true"] .nl-po-scrim { opacity: 1; }
+.nl-po-card {
+  position: relative; display: flex; flex-direction: column; width: min(860px, 100%); min-width: 0; max-height: min(90vh, 980px);
+  background: #fff; border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 30px 80px rgba(20, 20, 19, .28);
+  opacity: 0; transform: translateY(12px) scale(.985); transition: opacity .3s ease, transform .35s cubic-bezier(.2, .8, .2, 1);
+}
+.nl-po[data-shown="true"] .nl-po-card { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .nl-po-card, .nl-po-scrim { transition: none; } }
+.nl-po-head { display: flex; align-items: flex-start; gap: 16px; padding: 26px 30px 18px; border-bottom: 1px solid var(--line); }
+.nl-po-title { margin-top: 6px; font-family: var(--font-heading); font-weight: 400; font-size: 26px; line-height: 32px; letter-spacing: 0; color: var(--ink); }
+.nl-po-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.nl-po-links a { font-size: 12px; padding: 3px 10px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink); text-decoration: none; transition: border-color .2s, color .2s; }
+.nl-po-links a:hover { border-color: var(--primary); color: var(--accent-dark); }
+.nl-po-body { overflow-y: auto; padding: 22px 30px 26px; display: flex; flex-direction: column; gap: 26px; }
+.nl-po-foot { display: flex; justify-content: flex-end; padding: 14px 30px 18px; border-top: 1px solid var(--line); }
+.nl-po-wait { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); padding: 18px 0; }
+.nl-po-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent-dark); animation: spin 1s linear infinite; }
+.nl-po-note { font-size: 13.5px; color: var(--muted); }
+.nl-po-note.is-bad { color: var(--accent-dark); }
+
+/* the verdict, in a sentence */
+.nl-po-verdict { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px; border-radius: 18px; background: var(--panel); }
+.nl-po-verdict-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 7px; flex: none; background: var(--faint); }
+.nl-po-verdict.is-good { background: #eef1e8; } .nl-po-verdict.is-good .nl-po-verdict-dot { background: var(--sage-deep); }
+.nl-po-verdict.is-look { background: #fbeee8; } .nl-po-verdict.is-look .nl-po-verdict-dot { background: var(--primary); }
+.nl-po-verdict-title { font-family: var(--font-heading); font-size: 20px; line-height: 26px; color: var(--ink); }
+.nl-po-verdict-line { margin-top: 2px; font-size: 14px; line-height: 21px; color: var(--muted); }
+
+/* this home against the average */
+.nl-po-cmps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.nl-po-cmp { min-width: 0; padding: 16px 18px 18px; border: 1px solid var(--line); border-radius: 18px; }
+.nl-po-cmp-head { display: flex; flex-direction: column; gap: 2px; }
+.nl-po-cmp-label { font-size: 14px; font-weight: 500; color: var(--ink); }
+.nl-po-cmp-vs { font-size: 12.5px; color: var(--muted); }
+.nl-po-cmp-vs.is-up { color: var(--sage-ink); } .nl-po-cmp-vs.is-down { color: var(--accent-dark); }
+.nl-po-cmp-help { margin-top: 6px; font-size: 12px; line-height: 17px; color: var(--faint); }
+.nl-po-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.nl-po-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto 8px; column-gap: 10px; row-gap: 4px; align-items: end; }
+.nl-po-bar-who { font-size: 11.5px; color: var(--muted); }
+.nl-po-bar b { grid-row: 1; grid-column: 2; font-family: var(--font-heading); font-weight: 400; font-size: 18px; line-height: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.nl-po-bar-track { grid-column: 1 / -1; height: 8px; border-radius: 999px; background: var(--box); overflow: hidden; }
+.nl-po-bar-track i { display: block; height: 100%; border-radius: 999px; background: color-mix(in srgb, var(--muted) 45%, var(--page)); transform-origin: left; animation: nl-po-grow .9s cubic-bezier(.2, .8, .2, 1) both; }
+.nl-po-bar.is-me .nl-po-bar-track i { background: var(--primary); }
+.nl-po-bar.is-me .nl-po-bar-who { color: var(--ink); font-weight: 500; }
+@keyframes nl-po-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* sections */
+.nl-po-sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 12px; }
+.nl-po-sec-head h3 { font-family: var(--font-heading); font-weight: 400; font-size: 17px; color: var(--ink); }
+.nl-po-sec-head span { font-size: 12.5px; color: var(--muted); }
+
+/* where it ranks: a track with four quarters and the home on it */
+.nl-po-track { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; height: 10px; }
+.nl-po-track-q { border-radius: 999px; background: var(--box); }
+.nl-po-track-q.is-top { background: #dfe5d6; } .nl-po-track-q.is-bottom { background: #f6ddd2; }
+.nl-po-track i { position: absolute; top: 50%; width: 18px; height: 18px; border-radius: 50%; background: var(--primary); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(20, 20, 19, .25); transform: translate(-50%, -50%); }
+.nl-po-track-ends { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11.5px; color: var(--faint); }
+
+/* portal by portal */
+.nl-po-portals ul { list-style: none; margin: 0; padding: 0; }
+.nl-po-portals li { display: grid; grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 1fr) auto; align-items: baseline; gap: 14px; padding: 11px 0; border-top: 1px solid var(--line); }
+.nl-po-portals li:first-child { border-top: 0; }
+.nl-po-p-name { font-size: 14px; color: var(--ink); }
+.nl-po-p-me { font-family: var(--font-heading); font-size: 18px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.nl-po-p-avg { font-size: 12.5px; color: var(--muted); }
+.nl-po-p-vs { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--box); color: var(--muted); }
+.nl-po-p-vs.is-up { background: #eef1e8; color: var(--sage-ink); } .nl-po-p-vs.is-down { background: #fbeee8; color: var(--accent-dark); }
+
+/* views to date */
+.nl-po-line { display: block; width: 100%; height: 70px; }
+.nl-po-line-ln { fill: none; stroke: var(--primary); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.nl-po-line-fill { fill: color-mix(in srgb, var(--primary) 10%, transparent); }
+.nl-po-full { padding-top: 6px; border-top: 1px solid var(--line); }
+
+@media (max-width: 760px) {
+  .nl-po { padding: 0; align-items: end; }
+  .nl-po-card { width: 100%; max-height: 92vh; border-radius: 22px 22px 0 0; }
+  .nl-po-head, .nl-po-body, .nl-po-foot { padding-left: 18px; padding-right: 18px; }
+  .nl-po-title { font-size: 22px; line-height: 28px; }
+  .nl-po-cmps { grid-template-columns: minmax(0, 1fr); }
+  .nl-po-portals li { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .nl-po-p-avg { display: none; }
+}

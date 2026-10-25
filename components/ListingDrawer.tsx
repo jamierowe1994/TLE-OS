@@ -12,6 +12,7 @@ import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PortalMarket from "@/components/listing/PortalMarket";
+import PortalOverview from "@/components/listing/PortalOverview";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
 import BookViewing from "@/components/viewings/BookViewing";
 import ApplicationFormCard from "@/components/listing/ApplicationFormCard";
@@ -3211,10 +3212,16 @@ function ListingDrawerBody({
           {tab === "marketing" && <div className="fade-up">{sectionBody("marketing")}</div>}
         </SectionPanel>
         {advertDrawer}
-        {/* Preview: where it is advertised and how it is doing. */}
-        <SectionPanel open={portalStats} icon="megaphone" title="On the Portals" lead={TAB_LEAD.portals} onClose={() => setPortalStats(false)}>
-          {portalStats && <div className="fade-up">{sectionBody("portals")}</div>}
-        </SectionPanel>
+        {/* Preview: how it is doing, at a glance, in the middle of a darkened
+            screen (James, 25 Oct 2026), the full breakdown one press inside. */}
+        <PortalOverview
+          open={portalStats}
+          onClose={() => setPortalStats(false)}
+          listingId={String(listing.id)}
+          name={listing.name}
+          liveSince={listing.publishedAt ?? null}
+          links={portals.map((p) => ({ portal: p.portal, url: p.url }))}
+        />
         {/* The landlord, every field changeable, extra landlords and contacts. */}
         <SectionPanel open={landlordOpen} icon="home" title="The Landlord" lead="Every detail can be changed here, with any other landlords and points of contact on the home." onClose={() => setLandlordOpen(false)}>
           {landlordOpen && <div className="fade-up">{landlordBlock}</div>}
