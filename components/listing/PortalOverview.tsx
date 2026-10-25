@@ -12,12 +12,18 @@ import type { HistoryPoint, Market } from "@/lib/portal-market";
  * property is performing... the stats are really good, but they're also
  * confusing unless you really dig into each point").
  *
- * A pop-over in the middle of a darkened screen, as the other pop-outs are:
- * a verdict in a sentence, three plain comparisons with the average live
- * home, where it ranks, each portal on a line and the views to date. The
- * full breakdown (components/listing/PortalMarket) is one press away, so
- * nothing the old panel said is lost. Same read, /api/listings/stats.
+ * Floating on a darkened screen the way Search is (James, 25 Oct 2026: "break
+ * it down into boxes... we don't always have to use a white background... it
+ * should be really animated when they come up"): the heading and where it
+ * ranks sit on the dark with no box, and everything else is its own box, each
+ * rising in on its own beat. A verdict in a sentence, three plain comparisons
+ * with the average live home, each portal and the views to date. The full
+ * breakdown (components/listing/PortalMarket) is one press away. Same read,
+ * /api/listings/stats.
  */
+
+/** Each piece arrives a beat after the one before. */
+const beat = (i: number) => ({ animationDelay: `${120 + i * 90}ms` });
 
 type Answer = {
   ok: boolean;
@@ -41,11 +47,11 @@ function versus(me: number | null | undefined, avg: number | null | undefined, m
 }
 
 /** This home against the average, as two bars on one scale. */
-function Compare({ label, help, me, avg, unit, dp = 0, more, fewer }: { label: string; help: string; me: number | null | undefined; avg: number | null | undefined; unit?: string; dp?: number; more?: string; fewer?: string }) {
+function Compare({ label, help, me, avg, unit, dp = 0, more, fewer, i }: { label: string; help: string; me: number | null | undefined; avg: number | null | undefined; unit?: string; dp?: number; more?: string; fewer?: string; i: number }) {
   const top = Math.max(me ?? 0, avg ?? 0) * 1.08 || 1;
   const v = versus(me, avg, more, fewer);
   return (
-    <div className="nl-po-cmp">
+    <div className="nl-po-cmp nl-po-box nl-po-in" style={beat(i)}>
       <div className="nl-po-cmp-head">
         <span className="nl-po-cmp-label">{label}</span>
         <span className={`nl-po-cmp-vs is-${v.tone}`}>{v.text}</span>
@@ -171,7 +177,7 @@ export default function PortalOverview({
     <div data-look="new" className="nl-po" data-shown={shown} role="dialog" aria-modal="true" aria-label={`${name} on the portals`}>
       <button type="button" className="nl-po-scrim" aria-label="Close" onClick={onClose} />
       <div className="nl-po-card">
-        <div className="nl-po-head">
+        <div className="nl-po-head nl-po-in" style={{ animationDelay: "40ms" }}>
           <div className="min-w-0 flex-1">
             <p className="nl-eyebrow">On the portals{days ? ` · live ${days} ${days === 1 ? "day" : "days"}` : ""}</p>
             <h2 className="nl-po-title">How {name} is doing</h2>
@@ -205,7 +211,7 @@ export default function PortalOverview({
           ) : (
             <>
               {verdict ? (
-                <section className={`nl-po-verdict is-${verdict.tone}`}>
+                <section className={`nl-po-verdict nl-po-in is-${verdict.tone}`} style={beat(0)}>
                   <span className="nl-po-verdict-dot" aria-hidden />
                   <div>
                     <p className="nl-po-verdict-title">{verdict.title}</p>
@@ -213,19 +219,19 @@ export default function PortalOverview({
                   </div>
                 </section>
               ) : (
-                <p className="nl-po-note">The comparison with other homes builds as today&apos;s figures are read. Look again in a minute.</p>
+                <p className="nl-po-note nl-po-box nl-po-in" style={beat(0)}>The comparison with other homes builds as today&apos;s figures are read. Look again in a minute.</p>
               )}
 
               {me && m && (
                 <div className="nl-po-cmps">
-                  <Compare label="Views a day" help="People opening the advert itself." me={me.viewsPerDay} avg={m.average.viewsPerDay} dp={1} />
-                  <Compare label="Seen in searches a day" help="Times it came up in someone's results." me={me.appearancesPerDay} avg={m.average.appearancesPerDay} />
-                  <Compare label="Opened from a search" help="Of the times it was seen, how often it was opened. The photos, headline and price at work." me={me.ctr} avg={m.average.ctr} unit="%" dp={1} more="higher" fewer="lower" />
+                  <Compare i={1} label="Views a day" help="People opening the advert itself." me={me.viewsPerDay} avg={m.average.viewsPerDay} dp={1} />
+                  <Compare i={2} label="Seen in searches a day" help="Times it came up in someone's results." me={me.appearancesPerDay} avg={m.average.appearancesPerDay} />
+                  <Compare i={3} label="Opened from a search" help="Of the times it was seen, how often it was opened. The photos, headline and price at work." me={me.ctr} avg={m.average.ctr} unit="%" dp={1} more="higher" fewer="lower" />
                 </div>
               )}
 
               {pos != null && m?.rank && (
-                <section className="nl-po-rank">
+                <section className="nl-po-rank nl-po-in" style={beat(4)}>
                   <div className="nl-po-sec-head">
                     <h3>Where it ranks</h3>
                     <span>{ordinal(m.rank)} of {m.homes} homes on the portals, by views a day</span>
@@ -245,7 +251,7 @@ export default function PortalOverview({
               )}
 
               {portalRows.length > 0 && (
-                <section className="nl-po-portals">
+                <section className="nl-po-portals nl-po-box nl-po-in" style={beat(5)}>
                   <div className="nl-po-sec-head">
                     <h3>Portal by Portal</h3>
                     <span>Views a day, this home and the average</span>
@@ -266,7 +272,7 @@ export default function PortalOverview({
                 </section>
               )}
 
-              <section className="nl-po-total">
+              <section className="nl-po-total nl-po-box nl-po-in" style={beat(6)}>
                 <div className="nl-po-sec-head">
                   <h3>So Far</h3>
                   <span>
@@ -277,7 +283,7 @@ export default function PortalOverview({
               </section>
 
               {full && (
-                <section className="nl-po-full">
+                <section className="nl-po-full nl-po-box nl-po-in" style={beat(0)}>
                   <PortalMarket listingId={listingId} />
                 </section>
               )}
@@ -286,7 +292,7 @@ export default function PortalOverview({
         </div>
 
         {a?.ok && !a.empty && (
-          <div className="nl-po-foot">
+          <div className="nl-po-foot nl-po-in" style={beat(7)}>
             <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setFull((f) => !f)}>
               {full ? "Hide the full breakdown" : "See the full breakdown"}
             </button>

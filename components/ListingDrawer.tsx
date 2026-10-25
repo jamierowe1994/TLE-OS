@@ -13,6 +13,7 @@ import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PortalMarket from "@/components/listing/PortalMarket";
 import PortalOverview from "@/components/listing/PortalOverview";
+import LandlordStage from "@/components/listing/LandlordStage";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
 import BookViewing from "@/components/viewings/BookViewing";
 import ApplicationFormCard from "@/components/listing/ApplicationFormCard";
@@ -2228,18 +2229,12 @@ function ListingDrawerBody({
     </>
   );
 
-  const landlordBlock = (
-    <>
-              {(() => {
-                const where = { listingId: String(listing.id), propertyId: listing.propertyId ?? null, address: [listing.name, listing.locality].filter(Boolean).join(", ") };
-                const l = landlord.status === "known" ? landlord.landlord : null;
-                return (
-                  <HomeLandlords
-                    homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`}
-                    address={where.address}
-                    readOnly={testListing ? "A test listing keeps its own landlord." : null}
-                    requireOne={landlord.status !== "problem"}
-                    main={
+  /* The landlord's people, for the section and for Edit landlord's stage. */
+  const where = { listingId: String(listing.id), propertyId: listing.propertyId ?? null, address: [listing.name, listing.locality].filter(Boolean).join(", ") };
+  const l = landlord.status === "known" ? landlord.landlord : null;
+  const lHomeKey = testListing ? null : listing.propertyId ?? `listing:${listing.id}`;
+  const lReadOnly = testListing ? "A test listing keeps its own landlord." : null;
+  const lMain = (
                       landlord.status === "loading" || landlord.status === "idle"
                         ? null
                         : l && l.from !== "os"
@@ -2253,16 +2248,16 @@ function ListingDrawerBody({
                               note: l.from === "record" ? "From the home's record in the OS. Not on this listing in REX yet." : null,
                             }]
                           : []
-                    }
-                    mainSlot={
+  );
+  const lMainSlot = (
                       l && l.from === "os" ? (
                         /* Changed in the OS to a company, an estate or a new owner (Dan
                            Richards, 17 Oct 2026): what kind, who it was, Undo, the papers. */
                         <ListingChangedLandlord listingId={where.listingId} propertyId={where.propertyId} address={where.address} onChanged={() => setLandlordRev((n) => n + 1)} />
                       ) : undefined
-                    }
-                    mainProblem={landlord.status === "problem" ? landlord.says : null}
-                    mainAction={
+  );
+  const lMainProblem = landlord.status === "problem" ? landlord.says : null;
+  const lMainAction = (
                       !testListing && landlord.status !== "loading" && landlord.status !== "idle" ? (
                         <ChangeLandlordButton
                           where={where}
@@ -2271,12 +2266,19 @@ function ListingDrawerBody({
                           onChanged={() => setLandlordRev((n) => n + 1)}
                         />
                       ) : null
-                    }
-                    onChanged={() => setLandlordRev((n) => n + 1)}
-                  />
-                );
-              })()}
-    </>
+  );
+  const landlordBlock = (
+    <HomeLandlords
+      homeKey={lHomeKey}
+      address={where.address}
+      readOnly={lReadOnly}
+      requireOne={landlord.status !== "problem"}
+      main={lMain}
+      mainSlot={lMainSlot}
+      mainProblem={lMainProblem}
+      mainAction={lMainAction}
+      onChanged={() => setLandlordRev((n) => n + 1)}
+    />
   );
 
   const accessBlock = (
@@ -3222,10 +3224,20 @@ function ListingDrawerBody({
           liveSince={listing.publishedAt ?? null}
           links={portals.map((p) => ({ portal: p.portal, url: p.url }))}
         />
-        {/* The landlord, every field changeable, extra landlords and contacts. */}
-        <SectionPanel open={landlordOpen} icon="home" title="The Landlord" lead="Every detail can be changed here, with any other landlords and points of contact on the home." onClose={() => setLandlordOpen(false)}>
-          {landlordOpen && <div className="fade-up">{landlordBlock}</div>}
-        </SectionPanel>
+        {/* Edit landlord on the stage (James, 25 Oct 2026): the people as boxes on a
+            darkened screen, each opening in place, and the first is who we ring. */}
+        <LandlordStage
+          open={landlordOpen}
+          onClose={() => setLandlordOpen(false)}
+          homeKey={lHomeKey}
+          address={where.address}
+          readOnly={lReadOnly}
+          main={lMain}
+          mainSlot={lMainSlot ?? undefined}
+          mainProblem={lMainProblem}
+          mainAction={lMainAction ?? undefined}
+          onChanged={() => setLandlordRev((n) => n + 1)}
+        />
 
         {gridFrom !== null && shots.length > 0 && (
           <PhotoGrid photos={shots} name={listing.name} origin={gridFrom} onClose={() => setGridFrom(null)} />
