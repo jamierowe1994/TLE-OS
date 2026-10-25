@@ -822,7 +822,48 @@
 .nl-po-card > * { pointer-events: auto; }
 .nl-po-in { opacity: 0; animation: nl-po-rise .55s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes nl-po-rise { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .nl-po-in { animation: none; opacity: 1; } .nl-po-scrim { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .nl-po-in, .nl-ls-new, .nl-ls-new-body, .nl-ap-bar { animation: none; opacity: 1; } .nl-po-scrim { transition: none; } }
+
+/* Automate Passport (components/listing/AutoPassportStage): the reasons in a
+   small box, the reminder full size, the buttons floating apart at the foot. */
+.nl-ap { padding-bottom: 120px; }
+.nl-ap-card { width: min(760px, 100%); }
+.nl-ap-lede { margin-top: 6px; font-size: 13.5px; line-height: 20px; color: rgba(255, 255, 255, .75); }
+.nl-ap-why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 18px 20px; border-radius: 20px; background: rgba(255, 255, 255, .92); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.nl-ap-reason { display: flex; gap: 12px; align-items: flex-start; }
+.nl-ap-reason p { font-size: 13px; line-height: 19px; color: var(--ink); }
+.nl-ap-reason b { font-weight: 600; }
+.nl-ap-ico { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--box); color: var(--ink); }
+.nl-ap-mailhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; padding: 10px 4px 0; color: #fff; }
+.nl-ap-kicker { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .7); }
+.nl-ap-subject { font-size: 13.5px; color: rgba(255, 255, 255, .8); }
+.nl-ap-subject b { color: #fff; font-weight: 500; }
+.nl-ap-mail { border-radius: 22px; overflow: hidden; background: #fff; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .55); }
+.nl-ap-mail iframe { display: block; width: 100%; border: 0; transition: height .35s cubic-bezier(.2, .8, .2, 1); }
+.nl-ap-note { padding: 2px 4px; font-size: 13.5px; color: #fff; }
+.nl-ap-bar { position: fixed; left: 50%; bottom: 22px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: min(760px, calc(100% - 32px)); transform: translateX(-50%); animation: nl-ap-bar-in .55s cubic-bezier(.2, .8, .2, 1) .45s both; pointer-events: none; }
+.nl-ap-bar > * { pointer-events: auto; }
+@keyframes nl-ap-bar-in { from { opacity: 0; transform: translate(-50%, 18px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.nl-ap-bar-end { display: flex; align-items: center; gap: 10px; }
+.nl-ap-btn { font: inherit; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 20px; border-radius: 999px; border: 0; background: #fff; color: var(--ink); font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .55); transition: transform .2s, box-shadow .2s, background-color .2s; }
+.nl-ap-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 18px 38px -14px rgba(0, 0, 0, .6); }
+.nl-ap-btn:disabled { opacity: .6; cursor: default; }
+/* Dark glass, so it reads over the white email as well as the dark. */
+.nl-ap-btn.is-quiet { background: rgba(20, 20, 19, .62); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28), 0 14px 34px -14px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.nl-ap-btn.is-quiet:hover:not(:disabled) { background: rgba(20, 20, 19, .74); }
+.nl-ap-btn.is-go { background: var(--accent-dark); color: #fff; }
+.nl-ap-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .4); border-top-color: #fff; animation: spin 1s linear infinite; }
+@media (max-width: 640px) {
+  .nl-ap { padding: 28px 16px 100px; }
+  .nl-ap-why { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px; }
+  /* One row on a phone: a round Back, then the two others sharing the rest. */
+  .nl-ap-bar { gap: 8px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .nl-ap-bar-end { flex: 1; gap: 8px; min-width: 0; }
+  .nl-ap-bar-end .nl-ap-btn { flex: 1; min-width: 0; }
+  .nl-ap-btn { justify-content: center; height: 46px; padding: 0 14px; font-size: 13.5px; white-space: nowrap; }
+  .nl-ap-btn.is-back { width: 46px; padding: 0; flex: none; }
+  .nl-ap-wide { display: none; }
+}
 
 /* the heading, straight on the dark */
 .nl-po-head { display: flex; align-items: flex-start; gap: 16px; padding: 4px 4px 10px; color: #fff; }
@@ -924,7 +965,7 @@
 .nl-ls-av.is-joint_landlord { background: #e3e3d3; color: #4a5a40; }
 .nl-ls-av.is-contact { background: #f1ddd2; color: #8f5a48; }
 .nl-ls-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 3px; }
-.nl-ls-first { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: #fff; }
+.nl-ls-first { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .nl-ls-kind { font-size: 11.5px; color: var(--muted); }
 .nl-ls-name { display: block; font-size: 16px; font-weight: 500; color: var(--ink); }
 .nl-ls-sub { display: block; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -940,9 +981,46 @@
 .nl-ls-said { font-size: 13px; color: #fff; padding: 2px 6px; }
 .nl-ls-adds { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 6px; }
 .nl-ls-add { font: inherit; font-size: 13.5px; padding: 10px 18px; border-radius: 999px; border: 1px dashed rgba(255, 255, 255, .55); background: transparent; color: #fff; cursor: pointer; transition: background-color .2s, border-color .2s; }
-.nl-ls-add:hover { background: rgba(255, 255, 255, .12); border-color: #fff; }
+.nl-ls-add:hover, .nl-ls-add[aria-pressed="true"] { background: rgba(255, 255, 255, .12); border-color: #fff; }
+
+/* Inside an open box: one quiet row per detail, each icon in its own round chip so it never gets lost. */
+.nl-ls-cb .nl-ls-cb-name { font-size: 13px; font-weight: 500; color: var(--ink); }
+.nl-ls-cb > p:first-child { display: flex; align-items: center; gap: 10px; min-height: 42px; }
+.nl-ls-cb > p:first-child::before { content: ""; flex: none; width: 30px; height: 30px; border-radius: 50%; background: #ece6df no-repeat center / 15px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23141413' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5'/%3E%3C/svg%3E"); }
+/* The icons are masked spans, so the chip sits behind them on the row. */
+.nl-ls-edit .min-h-\[42px\] { position: relative; gap: 6px 10px; padding-left: 40px; }
+.nl-ls-edit .min-h-\[42px\]::before { content: ""; position: absolute; left: 0; top: 6px; width: 30px; height: 30px; border-radius: 50%; background: #ece6df; }
+.nl-ls-edit .min-h-\[42px\] > span:first-child { position: absolute; left: 7px; top: 13px; width: 16px !important; height: 16px !important; color: var(--ink); }
+/* The WhatsApp / Email / address pills: white, with ink icons. The copy button (h-7) is left round. */
+.nl-ls-edit .min-h-\[42px\] .border.rounded-full { background: #fff; color: var(--ink); border-color: var(--line-strong); padding: 5px 12px; font-size: 12px; }
+.nl-ls-edit .min-h-\[42px\] .border.rounded-full svg { color: var(--ink); }
+.nl-ls-edit .min-h-\[42px\] .border.rounded-full:hover { border-color: var(--ink); }
+.nl-ls-edit .min-h-\[42px\] .h-7.rounded-full { color: var(--ink); }
+.nl-ls-edit .divide-y > * { border-color: var(--line); }
+
+/* The blank box that bubbles out to add someone. */
+.nl-ls-new { animation: nl-ls-bubble .5s cubic-bezier(.2, .9, .25, 1.15) both; transform-origin: top center; }
+@keyframes nl-ls-bubble { from { opacity: 0; transform: scale(.94) translateY(-6px); } to { opacity: 1; transform: none; } }
+.nl-ls-new-head { display: flex; align-items: center; gap: 14px; padding: 16px 18px; }
+.nl-ls-new .nl-ls-av { background: #ece6df; color: var(--ink); }
+.nl-ls-x { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; transition: border-color .2s, background-color .2s; }
+.nl-ls-x:hover { border-color: var(--ink); }
+.nl-ls-new-body { padding: 4px 22px 20px 74px; border-top: 1px solid var(--line); animation: nl-ls-open .45s cubic-bezier(.2, .8, .2, 1) .08s both; }
+.nl-ls-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; margin-top: 16px; }
+.nl-ls-f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.nl-ls-f.is-wide { grid-column: 1 / -1; gap: 8px; align-items: flex-start; }
+.nl-ls-f.is-wide > .nl-ls-f { width: 100%; }
+.nl-ls-f > span { font-size: 12px; font-weight: 500; color: var(--muted); }
+.nl-ls-f input { font: inherit; font-size: 14px; width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: #fff; color: var(--ink); outline: none; transition: border-color .2s, box-shadow .2s; }
+.nl-ls-f input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--sage-soft); }
+.nl-ls-f input::placeholder { color: var(--faint); }
+.nl-ls-same { font: inherit; font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; }
+.nl-ls-same:hover { border-color: var(--ink); }
+.nl-ls-msg { margin-top: 10px; font-size: 13px; font-weight: 500; color: var(--accent-dark); }
 @media (max-width: 760px) {
   .nl-ls-row { padding: 14px 14px; gap: 10px; }
   .nl-ls-grip { display: none; }
-  .nl-ls-edit { padding: 4px 16px 18px; }
+  .nl-ls-edit, .nl-ls-new-body { padding: 4px 16px 18px; }
+  .nl-ls-new-head { padding: 14px; gap: 10px; }
+  .nl-ls-fields { grid-template-columns: minmax(0, 1fr); }
 }

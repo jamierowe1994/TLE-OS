@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ContactBlock from "@/components/ContactBlock";
 import { InlineField } from "@/components/Bits";
-import { AddPersonModal, type HomePerson, type Kind, type MainLandlord } from "@/components/HomeLandlords";
+import type { HomePerson, Kind, MainLandlord } from "@/components/HomeLandlords";
 
 /**
  * Edit landlord, on the stage (James, 25 Oct 2026): "the landlord at the top
@@ -28,6 +28,100 @@ type Entry =
 
 const TAG: Record<Entry["kind"], string> = { main: "Landlord", joint_landlord: "Additional landlord", contact: "Contact" };
 const beat = (i: number) => ({ animationDelay: `${140 + i * 90}ms` });
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type NewPerson = { name: string; relation: string; phone: string; email: string; address: string };
+
+/* Adding someone (James, 25 Oct 2026): no pop-up over the stage. A blank box
+   bubbles out in the list where they will sit - a landlord after the other
+   landlords, a contact at the end - with an X to think better of it. */
+function NewPersonBox({ kind, address, onCancel, onSave }: { kind: Kind; address: string; onCancel: () => void; onSave: (d: NewPerson) => Promise<{ ok: boolean; error?: string }> }) {
+  const [d, setD] = useState<NewPerson>({ name: "", relation: "", phone: "", email: "", address: "" });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const ref = useRef<HTMLLIElement>(null);
+  const landlord = kind === "joint_landlord";
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      ref.current?.querySelector("input")?.focus({ preventScroll: true });
+    }, 260);
+    return () => window.clearTimeout(t);
+  }, []);
+  async function save() {
+    if (d.name.trim().length < 2) return setMsg("Put their name in.");
+    if (d.email.trim() && !EMAIL.test(d.email.trim())) return setMsg("That email doesn't look right.");
+    if (landlord && !d.email.trim()) return setMsg("A landlord needs an email address - the contracts and Propoly go to it.");
+    if (!landlord && !d.email.trim() && !d.phone.trim()) return setMsg("Add a mobile or an email, so there's a way to reach them.");
+    setBusy(true);
+    setMsg(null);
+    const r = await onSave(d);
+    setBusy(false);
+    if (!r.ok) setMsg(r.error ?? "That didn't save. Try again.");
+  }
+  const field = (k: keyof NewPerson, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+    <label className="nl-ls-f">
+      <span>{label}</span>
+      <input value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} disabled={busy} {...props} />
+    </label>
+  );
+  return (
+    <li ref={ref} className="nl-ls-box nl-ls-new" aria-label={landlord ? "New landlord" : "New contact"}>
+      <div className="nl-ls-new-head">
+        <span className={`nl-ls-av is-${kind}`} aria-hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="nl-ls-kind">{landlord ? "Additional landlord" : "Contact"}</span>
+          <span className="nl-ls-name">{d.name.trim() || (landlord ? "New landlord" : "New contact")}</span>
+        </span>
+        <button type="button" className="nl-ls-x" aria-label="Don't add them" disabled={busy} onClick={onCancel}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div
+        className="nl-ls-new-body"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
+            e.preventDefault();
+            void save();
+          }
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            if (!busy) onCancel();
+          }
+        }}
+      >
+        <div className="nl-ls-fields">
+          {field("name", "Full name", { placeholder: landlord ? "As on their ID, or the company's name" : "Their name", autoComplete: "off" })}
+          {field("relation", "Who they are", { placeholder: landlord ? "e.g. Director, Wife" : "e.g. Partner, lets us in", maxLength: 80 })}
+          {field("phone", "Mobile", { type: "tel", placeholder: "07..." })}
+          {field("email", landlord ? "Email" : "Email (or a mobile)", { type: "email", placeholder: "name@example.com" })}
+          {landlord && (
+            <div className="nl-ls-f is-wide">
+              {field("address", "Their own home address", { placeholder: "Where they live, with the postcode" })}
+              {address && (
+                <button type="button" className="nl-ls-same" disabled={busy} onClick={() => setD({ ...d, address })}>
+                  Same as the let property
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <p className="nl-ls-note">{landlord ? "Kept on the home, so they show on its listing, its lets and its page." : "Not a landlord: not on the contract, and never sent to Propoly."}</p>
+        {msg && <p className="nl-ls-msg">{msg}</p>}
+        <div className="nl-ls-acts">
+          <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={busy} onClick={() => void save()}>
+            {busy ? "Saving…" : "Add them"}
+          </button>
+          <button type="button" className="nl-link" disabled={busy} onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
 
 export default function LandlordStage({
@@ -69,11 +163,12 @@ export default function LandlordStage({
       setShown(false);
       setShut(new Set());
       setSaid(null);
+      setAdding(null);
       return;
     }
     const t = requestAnimationFrame(() => setShown(true));
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || adding) return;
+      if (e.key !== "Escape") return;
       if (document.querySelectorAll('[role="dialog"]').length > 1) return;
       onClose();
     };
@@ -85,7 +180,7 @@ export default function LandlordStage({
       window.removeEventListener("keydown", onKey);
       document.documentElement.style.overflow = was;
     };
-  }, [open, onClose, adding]);
+  }, [open, onClose]);
 
   const load = useCallback(() => {
     if (!homeKey) {
@@ -175,6 +270,27 @@ export default function LandlordStage({
     setSaid(p.kind === "joint_landlord" ? `${p.name} is off this home. If they're on a Propoly deal, take them off it there too.` : `${p.name} is off this home.`);
   }
 
+  async function addPerson(f: NewPerson): Promise<{ ok: boolean; error?: string }> {
+    const kind = adding;
+    if (!kind || !homeKey) return { ok: false, error: "This home can't take people yet." };
+    const j = await fetch("/api/portfolio/people", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ propertyId: homeKey, kind, name: f.name, email: f.email, phone: f.phone, relation: f.relation }),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+    if (!j?.ok) return { ok: false, error: j?.error ?? "That didn't save. Try again." };
+    if (kind === "joint_landlord" && f.address.trim() && f.email.trim()) {
+      await fetch("/api/people/home-address", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: f.email, name: f.name, address: f.address }) }).catch(() => null);
+    }
+    setAdding(null);
+    setSaid(`${f.name.trim()} is on this home now.`);
+    load();
+    onChanged?.();
+    return { ok: true };
+  }
+
   if (!open || typeof document === "undefined") return null;
   /* Whatever has arrived shows; what hasn't says so in its place. */
   const reading = main === null && people === null;
@@ -246,6 +362,8 @@ export default function LandlordStage({
         {isOpen && (
           <div className="nl-ls-edit">
             <ContactBlock
+              className="nl-ls-cb"
+              nameClassName="nl-ls-cb-name"
               role={e.kind === "contact" ? "point of contact" : "landlord"}
               call={e.kind === "contact"}
               person={person}
@@ -334,16 +452,27 @@ export default function LandlordStage({
                 <b>No landlord held.</b> Every home needs one.{mainProblem ? ` ${mainProblem}` : ""}
               </div>
             )}
-            {entries.length > 0 && <ul className="nl-ls-list">{entries.map(box)}</ul>}
+            {(entries.length > 0 || adding) && (
+              <ul className="nl-ls-list">
+                {(() => {
+                  const boxes = entries.map(box);
+                  if (adding && homeKey) {
+                    const after = adding === "joint_landlord" ? entries.reduce((n, e, i) => (e.kind !== "contact" ? i + 1 : n), 0) : entries.length;
+                    boxes.splice(after, 0, <NewPersonBox key={`new-${adding}`} kind={adding} address={address} onCancel={() => setAdding(null)} onSave={addPerson} />);
+                  }
+                  return boxes;
+                })()}
+              </ul>
+            )}
             {failed && <p className="nl-ls-said nl-po-in" style={beat(entries.length + 1)}>{failed}</p>}
             {said && <p className="nl-ls-said">{said}</p>}
             {readOnly && <p className="nl-ls-said">{readOnly}</p>}
             {!readOnly && homeKey && (
               <div className="nl-ls-adds nl-po-in" style={beat(entries.length + 2)}>
-                <button type="button" className="nl-ls-add" onClick={() => setAdding("joint_landlord")}>
+                <button type="button" className="nl-ls-add" aria-pressed={adding === "joint_landlord"} onClick={() => setAdding("joint_landlord")}>
                   + Add another landlord
                 </button>
-                <button type="button" className="nl-ls-add" onClick={() => setAdding("contact")}>
+                <button type="button" className="nl-ls-add" aria-pressed={adding === "contact"} onClick={() => setAdding("contact")}>
                   + Add a contact
                 </button>
               </div>
@@ -352,29 +481,6 @@ export default function LandlordStage({
         )}
       </div>
 
-      {adding && homeKey && (
-        <AddPersonModal
-          kind={adding}
-          address={address}
-          onClose={() => setAdding(null)}
-          onSubmit={async (f) => {
-            const j = await fetch("/api/portfolio/people", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ propertyId: homeKey, kind: f.kind, name: f.name, email: f.email, phone: f.phone, relation: f.relation }),
-            })
-              .then((r) => r.json())
-              .catch(() => null);
-            if (!j?.ok) return { ok: false, error: j?.error ?? "That didn't save. Try again." };
-            if (f.kind === "joint_landlord" && f.address.trim() && f.email.trim()) {
-              await fetch("/api/people/home-address", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: f.email, name: f.name, address: f.address }) }).catch(() => null);
-            }
-            load();
-            onChanged?.();
-            return { ok: true };
-          }}
-        />
-      )}
     </div>,
     document.body
   );

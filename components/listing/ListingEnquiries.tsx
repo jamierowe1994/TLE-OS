@@ -7,6 +7,7 @@ import { PressButton } from "@/components/Bits";
 import { Tag } from "@/components/ListingTags";
 import PassportAnswers from "@/components/passport/PassportAnswers";
 import NotifyEnquiries from "@/components/listing/NotifyEnquiries";
+import AutoPassportStage from "@/components/listing/AutoPassportStage";
 import { Badge, Ico } from "@/components/new-look/Parts";
 import dynamic from "next/dynamic";
 import { readJson } from "@/lib/page-cache";
@@ -125,6 +126,7 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
   const [auto, setAuto] = useState<Auto | null>(null);
   const [autoSent, setAutoSent] = useState<Set<string>>(new Set());
   const [autoAsk, setAutoAsk] = useState(false);
+  const closeAutoAsk = useCallback(() => setAutoAsk(false), []);
   const [reminder, setReminder] = useState<{ subject: string; html: string } | null>(null);
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoNote, setAutoNote] = useState<string | null>(null);
@@ -349,7 +351,18 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
         )}
 
       {/* Turning it on: what happens, and the reminder as a tenant will get it. */}
-      {autoAsk &&
+      {autoAsk && look === "new" && (
+        <AutoPassportStage
+          home={home}
+          reminder={reminder}
+          note={autoNote}
+          busy={autoBusy}
+          onBack={closeAutoAsk}
+          onToMe={() => void reminderToMe()}
+          onTurnOn={() => void turnAuto(true)}
+        />
+      )}
+      {autoAsk && look !== "new" &&
         createPortal(
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" data-steve-never>
             <button aria-label="Close" onClick={() => !autoBusy && setAutoAsk(false)} className="absolute inset-0 cursor-default bg-ink/45" />
