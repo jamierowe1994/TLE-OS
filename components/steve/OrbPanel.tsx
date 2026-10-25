@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import SteveFace from "@/components/SteveFace";
 import { whenAgo } from "@/lib/lead-spine";
 
@@ -84,7 +84,6 @@ export default function OrbPanel(p: {
   onStart: () => void;
   onOpenThread: (id: string) => void;
   onClose: () => void;
-  onEscape: () => void;
   busy: boolean;
   /** The conversation, newest at the bottom, already drawn by HelpDock. */
   conversation: ReactNode;
@@ -107,12 +106,53 @@ export default function OrbPanel(p: {
     { v: "chats", label: "Messages", icon: ICON.chats },
     { v: "report", label: "Report", icon: ICON.flag },
   ];
+  /* ── Moving between screens (James, 25 Oct 2026: "rather than jumping ...
+     nicely animated, kind of overexaggerated"). The screen going leaves
+     first - sideways towards where you are going, or, for Chat, its button
+     drops off the card - then the next one springs in from the other side.
+     Closing drops the whole card off the screen before Steve comes back. */
+  const ORDER: OrbView[] = ["home", "chats", "report", "chat"];
+  const [leave, setLeave] = useState<"" | "out" | "start">("");
+  const [dir, setDir] = useState(1);
+  const [closing, setClosing] = useState(false);
+  const moveTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(moveTimer.current), []);
+  const motion = () => typeof window !== "undefined" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const after = (how: "out" | "start", then: () => void, ms: number) => {
+    window.clearTimeout(moveTimer.current);
+    if (!motion()) return then();
+    setLeave(how);
+    moveTimer.current = window.setTimeout(() => {
+      setLeave("");
+      then();
+    }, ms);
+  };
   const go = (v: OrbView) => {
     p.setMenu(false);
-    setArticle(null);
+    if (v === view && !article) return;
+    setDir(ORDER.indexOf(v) >= ORDER.indexOf(view) ? 1 : -1);
     if (v === "chats") p.onThreads();
-    p.setView(v);
+    after("out", () => {
+      setArticle(null);
+      p.setView(v);
+    }, 170);
   };
+  const start = () => {
+    setDir(1);
+    after("start", p.onStart, 360);
+  };
+  const openThread = (id: string) => {
+    setDir(1);
+    after("out", () => p.onOpenThread(id), 170);
+  };
+  const close = () => {
+    p.setMenu(false);
+    if (!motion()) return p.onClose();
+    setClosing(true);
+    window.clearTimeout(moveTimer.current);
+    moveTimer.current = window.setTimeout(p.onClose, 400);
+  };
+  const leaving = leave ? ` is-leave-${leave}` : "";
 
   const name = p.naming ? (
     <span className="sv-naming">{p.namingView}</span>
@@ -153,21 +193,22 @@ export default function OrbPanel(p: {
       onKeyDown={(e) => {
         if (e.key === "Escape" && !p.naming) {
           e.stopPropagation();
-          p.onEscape();
+          if (p.menu) p.setMenu(false);
+          else close();
         }
       }}
-      className={`os-toast-lift sv-panel${p.wide ? " is-wide" : ""}${p.opening ? " is-opening" : ""}`}
+      className={`os-toast-lift sv-panel${p.wide ? " is-wide" : ""}${p.opening ? " is-opening" : ""}${closing ? " is-closing" : ""}`}
     >
-      <div className={`sv-card is-${view}`}>
+      <div className={`sv-card is-${view}`} style={{ ["--dir" as string]: dir }}>
         {view === "home" && article && (
-          <div className="sv-article">
+          <div className={`sv-article sv-view${leaving}`}>
             <div className="sv-bar">
-              <button type="button" className="sv-icon" aria-label="Back" onClick={() => setArticle(null)}>
+              <button type="button" className="sv-icon" aria-label="Back" onClick={() => { setDir(-1); after("out", () => setArticle(null), 170); }}>
                 <I d={ICON.back} />
               </button>
               <h2>News</h2>
               <span className="sv-bar-r">
-                <button type="button" onClick={p.onClose} aria-label="Close" className="sv-icon">
+                <button type="button" onClick={close} aria-label="Close" className="sv-icon">
                   <I d={ICON.close} />
                 </button>
               </span>
@@ -191,13 +232,13 @@ export default function OrbPanel(p: {
         )}
 
         {view === "home" && !article && (
-          <div className="sv-home">
+          <div className={`sv-home sv-view${leaving}`}>
             <div className="sv-wash" aria-hidden />
             <div className="sv-top">
-              <span className="sv-mark">OS</span>
+              <span className="sv-mark">TLE OS</span>
               <span className="sv-top-r">
                 {menu}
-                <button type="button" onClick={p.onClose} aria-label="Close" className="sv-icon">
+                <button type="button" onClick={close} aria-label="Close" className="sv-icon">
                   <I d={ICON.close} />
                 </button>
               </span>
@@ -207,7 +248,7 @@ export default function OrbPanel(p: {
               <h2 className="sv-lead">If you need anything at all, let&apos;s chat.</h2>
             </div>
             <div className="sv-cards">
-              <button type="button" className="sv-start" onClick={p.onStart}>
+              <button type="button" className="sv-start" onClick={start}>
                 <SteveFace size={34} mood="idle" track />
                 <span className="sv-start-t">
                   <b>Chat with {p.aName}</b>
@@ -226,7 +267,7 @@ export default function OrbPanel(p: {
                 <ul className="sv-news-list">
                   {p.news.slice(0, 4).map((n) => (
                     <li key={n.id}>
-                      <button type="button" onClick={() => { setArticle(n); p.onNewsRead(); }}>
+                      <button type="button" onClick={() => { setDir(1); after("out", () => setArticle(n), 170); p.onNewsRead(); }}>
                         <span className="sv-news-k">{kindLabel(n.kind)}</span>
                         <span className="sv-news-t">{n.title}</span>
                         <span className="sv-news-w">{whenAgo(n.publishedAt)}</span>
@@ -240,14 +281,15 @@ export default function OrbPanel(p: {
         )}
 
         {view === "chats" && (
-          <div className="sv-chats">
-            <div className="sv-bar is-centred">
+          <div className={`sv-chats sv-view${leaving}`}>
+            <div className="sv-wash is-short" aria-hidden />
+            <div className="sv-bar is-centred is-on-wash">
               <h2>Messages</h2>
-              <button type="button" onClick={p.onClose} aria-label="Close" className="sv-icon sv-bar-x">
+              <button type="button" onClick={close} aria-label="Close" className="sv-icon sv-bar-x">
                 <I d={ICON.close} />
               </button>
             </div>
-            <div className="sv-body">
+            <div className="sv-body is-cards">
               {p.threadsFailed ? (
                 <p className="sv-empty">
                   Your conversations could not be read just now.{" "}
@@ -261,7 +303,7 @@ export default function OrbPanel(p: {
                 <ul className="sv-list">
                   {p.threads.map((t) => (
                     <li key={t.thread}>
-                      <button type="button" onClick={() => p.onOpenThread(t.thread)}>
+                      <button type="button" onClick={() => openThread(t.thread)}>
                         <span className="sv-list-t">{t.title || "A file you sent"}</span>
                         <span className="sv-list-w">{whenAgo(t.lastAt)}</span>
                       </button>
@@ -270,7 +312,7 @@ export default function OrbPanel(p: {
                 </ul>
               )}
             </div>
-            <button type="button" className="sv-float" onClick={p.onStart}>
+            <button type="button" className="sv-float" onClick={start}>
               Chat with {p.aName}
               <I d={ICON.send} size={15} />
             </button>
@@ -278,7 +320,7 @@ export default function OrbPanel(p: {
         )}
 
         {view === "chat" && (
-          <div className="sv-chat">
+          <div className={`sv-chat sv-view${leaving}`}>
             <div className="sv-bar">
               <button type="button" className="sv-icon" aria-label="Back" onClick={() => go("home")}>
                 <I d={ICON.back} />
@@ -287,7 +329,7 @@ export default function OrbPanel(p: {
               {name}
               <span className="sv-bar-r">
                 {!p.naming && menu}
-                <button type="button" onClick={p.onClose} aria-label="Close" className="sv-icon">
+                <button type="button" onClick={close} aria-label="Close" className="sv-icon">
                   <I d={ICON.close} />
                 </button>
               </span>
@@ -308,10 +350,10 @@ export default function OrbPanel(p: {
         )}
 
         {view === "report" && (
-          <div className="sv-report">
+          <div className={`sv-report sv-view${leaving}`}>
             <div className="sv-bar is-centred">
               <h2>Report a Problem</h2>
-              <button type="button" onClick={p.onClose} aria-label="Close" className="sv-icon sv-bar-x">
+              <button type="button" onClick={close} aria-label="Close" className="sv-icon sv-bar-x">
                 <I d={ICON.close} />
               </button>
             </div>
