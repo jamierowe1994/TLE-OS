@@ -104,6 +104,17 @@
 [data-look="new"] .nl-ct-work { display: grid; gap: 2px; font-size: 13px; line-height: 19px; color: var(--ink); text-align: right; }
 [data-look="new"] .nl-ct-end { display: inline-flex; align-items: center; gap: 12px; color: var(--faint); }
 [data-look="new"] .nl-ct-end .nl-link { color: var(--muted); }
+/* The column heads above the book, on the rows' own grid; each sorts (James, 25 Oct 2026). */
+[data-look="new"] .nl-ct-chead { display: grid; grid-template-columns: 40px minmax(0, 1fr) 210px 110px auto; gap: 18px; align-items: center; padding: 4px 0 8px; }
+[data-look="new"] .nl-ct-sort { all: unset; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; color: var(--muted); cursor: pointer; border-radius: 6px; }
+[data-look="new"] .nl-ct-chead-work { justify-self: end; }
+[data-look="new"] .nl-ct-sort svg { opacity: 0; transition: opacity 0.2s, transform 0.2s; }
+[data-look="new"] .nl-ct-sort:hover { color: var(--ink); }
+[data-look="new"] .nl-ct-sort:hover svg { opacity: 0.5; }
+[data-look="new"] .nl-ct-sort.is-on { color: var(--ink); }
+[data-look="new"] .nl-ct-sort.is-on svg { opacity: 1; }
+[data-look="new"] .nl-ct-sort svg.is-down { transform: rotate(180deg); }
+[data-look="new"] .nl-ct-sort:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* The contractor's record in the floating boxes. */
 [data-look="new"] .nl-ct-prof-name { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 24px; line-height: 30px; letter-spacing: 0; overflow-wrap: anywhere; }
@@ -118,7 +129,8 @@
 
 @media (max-width: 900px) {
   [data-look="new"] .nl-ct-crow { grid-template-columns: 40px minmax(0, 1fr) 110px auto; }
-  [data-look="new"] .nl-ct-paper { display: none; }
+  [data-look="new"] .nl-ct-chead { grid-template-columns: 40px minmax(0, 1fr) 110px auto; }
+  [data-look="new"] .nl-ct-paper, [data-look="new"] .nl-ct-chead-paper { display: none; }
   [data-look="new"] .nl-ct-s-sm { display: block; }
   [data-look="new"] .nl-ct-figs4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   [data-look="new"] .nl-ct-two { grid-template-columns: minmax(0, 1fr); }
@@ -135,7 +147,8 @@
   [data-look="new"] .nl-ct-job .nl-ct-q, [data-look="new"] .nl-ct-inv .nl-ct-q { grid-column: 2; justify-content: flex-start; }
   [data-look="new"] .nl-ct-inv .nl-ct-amt { grid-column: 2; text-align: left; }
   [data-look="new"] .nl-ct-crow { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; }
-  [data-look="new"] .nl-ct-work { display: none; }
+  [data-look="new"] .nl-ct-chead { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; }
+  [data-look="new"] .nl-ct-work, [data-look="new"] .nl-ct-chead-work { display: none; }
   [data-look="new"] .nl-ct-end .nl-link { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-ct-view { animation: none; } }

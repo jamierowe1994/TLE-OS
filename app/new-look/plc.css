@@ -49,6 +49,10 @@
 [data-look="new"] .nl-plc-card.is-accent { background: var(--accent-soft); border-color: transparent; }
 [data-look="new"] .nl-plc-card.is-sage { background: var(--sage-soft); border-color: transparent; }
 [data-look="new"] .nl-plc-card.is-panel { background: var(--panel); }
+/* The handover queue is a list, so it is not boxed (James, 25 Oct 2026): hairlines on the page, as on Leads. */
+[data-look="new"] .nl-plc-card.nl-plc-queue { background: none; border: 0; border-radius: 0; padding: 0; }
+[data-look="new"] .nl-plc-queue .nl-plc-rows { margin-left: 0; margin-right: 0; }
+[data-look="new"] .nl-plc-queue .nl-plc-row { border-radius: 0; }
 [data-look="new"] .nl-plc-cardhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 12px; }
 [data-look="new"] .nl-plc-h { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 20px; line-height: 26px; letter-spacing: 0; color: var(--ink); }
 [data-look="new"] .nl-plc-say { margin: 8px 0 6px; font-family: var(--nl-serif); font-size: 17px; line-height: 25px; color: var(--ink); white-space: pre-wrap; }
@@ -60,7 +64,7 @@
 
 /* the queue beside the start form */
 [data-look="new"] .nl-plc-top { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 28px; }
-[data-look="new"] .nl-plc-rows { list-style: none; margin: 10px -8px 0; padding: 0; }
+[data-look="new"] .nl-plc-rows { list-style: none; margin: 10px -8px 0; padding: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 [data-look="new"] .nl-plc-rows > li + li { border-top: 1px solid var(--line); }
 [data-look="new"] .nl-plc-row {
   width: 100%; display: flex; align-items: center; gap: 16px; padding: 14px 8px; font: inherit; color: inherit; text-align: left;

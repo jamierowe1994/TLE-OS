@@ -105,7 +105,7 @@ export function Pill({ state }: { state: PlcCase["state"] }) {
     reviewing: "First check",
     checked: "Final approval",
     approved: "Approved",
-    deferred: "Deferred",
+    deferred: "Sent back",
     declined: "Declined",
   };
   return (
