@@ -179,7 +179,6 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
           <span className="nl-dash-strong">
             {/* The priority: clay for a warning, coral for new since you last
                 looked, quiet once seen. */}
-            <i className={`nl-dash-pri${a.tone === "warn" ? " is-warn" : a.hot ? " is-new" : ""}`} aria-hidden />
             {a.title}
           </span>
           {a.body && <span className="nl-meta">{a.body}</span>}
@@ -294,7 +293,7 @@ function NoticeDrawer({
   if (!row || typeof document === "undefined") return null;
   const about = row.href ? aboutOf(row.href) : null;
   return createPortal(
-    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer is-small" data-shown={shown} role="dialog" aria-modal="true" aria-label={row.title}>
+    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer nl-dash-modal is-small" data-shown={shown} role="dialog" aria-modal="true" aria-label={row.title}>
       <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={close} />
       <div className="nl-drawer">
         <div className="nl-drawer-head">

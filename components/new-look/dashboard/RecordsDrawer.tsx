@@ -176,7 +176,7 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
   const late = got ? got.rows.filter((r) => r.late).length : 0;
 
   return createPortal(
-    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer" data-shown={shown} role="dialog" aria-modal="true" aria-label={`${ask.title}, ${ask.range}`}>
+    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer nl-dash-modal" data-shown={shown} role="dialog" aria-modal="true" aria-label={`${ask.title}, ${ask.range}`}>
       <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={close} />
       <div className="nl-drawer">
         <div className="nl-drawer-head">
@@ -216,48 +216,62 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
               {terms && got.lateAfterDays != null && (
                 <p className="nl-meta nl-dash-drawer-lede">Late means unsigned for more than {got.lateAfterDays} days, past the last automatic nudge. Longest waiting first.</p>
               )}
-              <ul className="nl-dash-recs">
-                {got.rows.map((r, i) => (
-                  /* Each row drops in a beat after the one above it (James, 25 Oct 2026). */
-                  <li key={r.id} className={`nl-dash-rec-in${terms ? " is-term" : ""}`} style={{ animationDelay: `${Math.min(i, 14) * 60 + 140}ms` }}>
-                    <Link href={r.href} className="nl-dash-rec" onClick={() => closeNow()}>
-                      <span className="nl-dash-line-text">
-                        <span className="nl-dash-strong">
-                          {(r.fresh || r.late) && <i className={`nl-dash-pri ${r.late ? "is-warn" : "is-new"}`} aria-hidden />}
-                          {r.name}
-                        </span>
-                        {r.property && <span className="nl-meta">{r.property}</span>}
-                        <span className="nl-dash-rec-facts">
-                          {terms ? (
-                            <>
-                              <span>Sent {fmtWhen(r.at, false)}</span>
-                              <span>
-                                {r.waiting == null ? "Days waiting not known" : `${r.waiting} ${r.waiting === 1 ? "day" : "days"} waiting`}
-                              </span>
-                              {r.late && <span className="is-late">Late</span>}
-                            </>
-                          ) : (
-                            <>
-                              <span>{fmtWhen(r.at, TIMED.has(ask.kind))}</span>
-                              {r.source && <span>{r.source}</span>}
-                            </>
-                          )}
-                          <span className={r.fresh ? "is-new" : undefined}>{r.status}</span>
-                        </span>
+              {/* Wide and in columns (James, 25 Oct 2026): every row lines up under its heading, no dots.
+                  The rows drop in one after another; terms add Opened (one tick sent, two opened) and a Nudge. */}
+              <div className={`nl-dash-table${terms ? " is-terms" : ""}`} role="table" aria-label={ask.title}>
+                <div className="nl-dash-trow nl-dash-thead" role="row">
+                  <span role="columnheader">{terms ? "For" : "Name"}</span>
+                  <span role="columnheader">Property</span>
+                  <span role="columnheader">{terms ? "Sent" : "When"}</span>
+                  <span role="columnheader">{terms ? "Waiting" : "Source"}</span>
+                  <span role="columnheader">Status</span>
+                  {terms && <span role="columnheader">Opened</span>}
+                  {terms && <span aria-hidden />}
+                  <span aria-hidden />
+                </div>
+                {got.rows.map((r, i) => {
+                  const cells = (
+                    <>
+                      <span role="cell" className="nl-dash-strong">{r.name}</span>
+                      <span role="cell" className="nl-meta">{r.property || "-"}</span>
+                      <span role="cell">{fmtWhen(r.at, !terms && TIMED.has(ask.kind))}</span>
+                      <span role="cell">
+                        {terms
+                          ? r.waiting == null
+                            ? "Not known"
+                            : `${r.waiting} ${r.waiting === 1 ? "day" : "days"}`
+                          : r.source || "-"}
                       </span>
-                      <span className="nl-dash-rec-go" aria-hidden>
+                      <span role="cell" className={r.late ? "is-late" : r.fresh ? "is-new" : undefined}>
+                        {r.late ? `Late · ${r.status}` : r.status}
+                      </span>
+                    </>
+                  );
+                  const delay = { animationDelay: `${Math.min(i, 14) * 60 + 140}ms` };
+                  if (!terms) {
+                    return (
+                      <Link key={r.id} href={r.href} className="nl-dash-trow nl-dash-rec nl-dash-rec-in" style={delay} role="row" onClick={() => closeNow()}>
+                        {cells}
+                        <span role="cell" className="nl-dash-rec-go" aria-hidden>
+                          <Ico name="arrow" size={14} />
+                        </span>
+                      </Link>
+                    );
+                  }
+                  /* A terms row holds a button, so the row is a block with the
+                     link stretched over it and the Nudge sitting above the link. */
+                  return (
+                    <div key={r.id} className="nl-dash-trow nl-dash-rec nl-dash-rec-in is-term" style={delay} role="row">
+                      {cells}
+                      <span role="cell"><Ticks opened={r.opened} /></span>
+                      <span role="cell" className="nl-dash-rec-nudge"><Nudge r={r} /></span>
+                      <Link href={r.href} role="cell" className="nl-dash-rec-go nl-dash-rec-stretch" aria-label={`Open ${r.name}`} onClick={() => closeNow()}>
                         <Ico name="arrow" size={14} />
-                      </span>
-                    </Link>
-                    {terms && (
-                      <span className="nl-dash-rec-side">
-                        <Ticks opened={r.opened} />
-                        <Nudge r={r} />
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
               {got.more && (
                 <div className="nl-dash-acts">
                   <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={loadMore} disabled={more === "busy"}>

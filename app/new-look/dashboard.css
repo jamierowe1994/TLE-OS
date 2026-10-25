@@ -97,7 +97,7 @@
 [data-look="new"] .nl-dash-agenda > li:first-child { border-top: 0; }
 [data-look="new"] .nl-dash-agenda-row {
   font: inherit; color: inherit; width: 100%; text-align: left; background: transparent; border: 0;
-  display: grid; grid-template-columns: 52px 10px minmax(0, 1fr); gap: 14px; align-items: baseline;
+  display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 14px; align-items: baseline;
   padding: 16px 0; border-radius: 12px; transition: background-color 0.2s, padding 0.3s var(--nl-ease);
 }
 [data-look="new"] button.nl-dash-agenda-row { cursor: pointer; }
@@ -397,7 +397,7 @@
   [data-look="new"] .nl-dash-two { margin-bottom: 48px; }
   [data-look="new"] .nl-dash-ev-row { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; }
   [data-look="new"] .nl-dash-ev-row em { grid-column: 2; }
-  [data-look="new"] .nl-dash-agenda-row { grid-template-columns: 46px 10px minmax(0, 1fr); gap: 12px; }
+  [data-look="new"] .nl-dash-agenda-row { grid-template-columns: 46px minmax(0, 1fr); gap: 12px; }
   [data-look="new"] .nl-dash-needs > li { gap: 12px; }
   [data-look="new"] .nl-dash-launch-grid, [data-look="new"] .nl-dash-picker { grid-template-columns: minmax(0, 1fr); }
   [data-look="new"] .nl-dash-launch-bar { padding-right: 16px; }
@@ -435,12 +435,69 @@
 [data-look="new"] .nl-dash-rec-in { animation: nl-dash-drop .42s var(--nl-ease) both; }
 @keyframes nl-dash-drop { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-dash-rec-in { animation: none; } }
-[data-look="new"] .nl-dash-rec-in.is-term { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
-[data-look="new"] .nl-dash-rec-in.is-term > .nl-dash-rec { flex: 1 1 260px; min-width: 0; }
-[data-look="new"] .nl-dash-rec-side { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 4px 10px; margin-left: auto; }
 [data-look="new"] .nl-dash-nudge { display: inline-flex; align-items: center; gap: 10px; }
 [data-look="new"] .nl-dash-nudge-said { font-size: 12px; }
 [data-look="new"] .nl-dash-nudge-said.is-ok { color: var(--sage-ink); }
 [data-look="new"] .nl-dash-nudge-said.is-bad { color: var(--accent-dark); max-width: 220px; }
 [data-look="new"] .nl-ticks { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--faint); white-space: nowrap; }
 [data-look="new"] .nl-ticks.is-read { color: var(--sage-ink); }
+/* ---------- pop-outs in the middle of the screen (James, 25 Oct 2026) ----------
+   "I want them to pop out in the middle of the screen... darken the background
+   around it." A wide box over a darkened page, for the figure lists, the Needs
+   You task and a diary item; full screen on a phone as before. */
+[data-look="new"].nl-dash-modal .nl-drawer-scrim { background: rgba(20, 20, 19, .55); }
+[data-look="new"].nl-dash-modal[data-shown] .nl-drawer {
+  top: 50%; left: 50%; right: auto; bottom: auto;
+  width: min(1120px, calc(100% - 64px)); max-height: min(88vh, 960px);
+  border-radius: 24px; border: 1px solid var(--line);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 30px 80px rgba(20, 20, 19, .28);
+  transition: opacity .28s ease, transform .28s ease;
+}
+[data-look="new"].nl-dash-modal.is-small[data-shown] .nl-drawer { width: min(640px, calc(100% - 64px)); }
+[data-look="new"].nl-dash-modal.nl-diary-drawer[data-shown] .nl-drawer { width: min(760px, calc(100% - 64px)); }
+[data-look="new"].nl-dash-modal[data-shown="false"] .nl-drawer { opacity: 0; transform: translate(-50%, -47%) scale(.98); }
+[data-look="new"].nl-dash-modal[data-shown="false"] .nl-drawer-scrim { opacity: 0; transition: opacity .28s ease; }
+
+/* The records, in columns that line up under their headings. */
+[data-look="new"] .nl-dash-table { display: flex; flex-direction: column; }
+[data-look="new"] .nl-dash-trow {
+  display: grid; align-items: center; column-gap: 20px;
+  grid-template-columns: minmax(150px, 1.1fr) minmax(220px, 2fr) minmax(110px, .8fr) minmax(90px, .7fr) minmax(150px, 1.2fr) 20px;
+  padding: 12px 10px; border-top: 1px solid var(--line); text-decoration: none; color: var(--ink);
+}
+[data-look="new"] .nl-dash-trow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; line-height: 20px; }
+[data-look="new"] .nl-dash-thead { border-top: 0; padding-top: 4px; padding-bottom: 8px; }
+[data-look="new"] .nl-dash-thead > span { font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+[data-look="new"] .nl-dash-trow.nl-dash-rec { border-radius: 10px; }
+[data-look="new"] .nl-dash-trow.nl-dash-rec:hover { background: var(--panel); }
+[data-look="new"] .nl-dash-trow.nl-dash-rec:hover .nl-dash-strong, [data-look="new"] .nl-dash-trow.nl-dash-rec:hover .nl-dash-rec-go { color: var(--coral); }
+[data-look="new"] .nl-dash-trow .is-late { color: var(--accent-dark); }
+@media (max-width: 760px) {
+  [data-look="new"].nl-dash-modal[data-shown] .nl-drawer, [data-look="new"].nl-dash-modal.is-small[data-shown] .nl-drawer, [data-look="new"].nl-dash-modal.nl-diary-drawer[data-shown] .nl-drawer { top: 0; left: 0; width: 100%; max-height: none; height: 100%; border-radius: 0; border: 0; transform: none; }
+  [data-look="new"] .nl-dash-thead { display: none; }
+  [data-look="new"] .nl-dash-trow { grid-template-columns: minmax(0, 1fr) 20px; row-gap: 2px; }
+  [data-look="new"] .nl-dash-trow > span { grid-column: 1; white-space: normal; }
+  [data-look="new"] .nl-dash-trow > .nl-dash-rec-go { grid-column: 2; grid-row: 1 / span 5; }
+}
+/* Its own entrance: the side panel's slide-in animation moves it by transform, which would undo the centring. */
+[data-look="new"].nl-dash-modal[data-shown] .nl-drawer { animation: nl-dash-pop .3s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes nl-dash-pop { from { opacity: 0; transform: translate(-50%, -47%) scale(.98); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@media (max-width: 760px) { [data-look="new"].nl-dash-modal[data-shown] .nl-drawer { animation: nl-fade .25s ease both; } }
+/* Names and statuses wrap rather than hide behind an ellipsis. */
+[data-look="new"] .nl-dash-trow > span.nl-dash-strong, [data-look="new"] .nl-dash-trow > span:nth-child(5) { white-space: normal; overflow: visible; }
+[data-look="new"] .nl-dash-trow { grid-template-columns: minmax(180px, 1.4fr) minmax(200px, 1.8fr) minmax(100px, .7fr) minmax(80px, .6fr) minmax(170px, 1.4fr) 20px; }
+
+/* Terms in the records table (25 Oct 2026): Opened and Nudge columns, the row's
+   link stretched over it, the Nudge above the link so it can be pressed. */
+[data-look="new"] .nl-dash-table.is-terms .nl-dash-trow {
+  grid-template-columns: minmax(150px, 1.2fr) minmax(170px, 1.6fr) minmax(90px, .6fr) minmax(70px, .5fr) minmax(150px, 1.2fr) 92px 180px 20px;
+}
+[data-look="new"] .nl-dash-trow.is-term { position: relative; }
+[data-look="new"] .nl-dash-rec-stretch { color: inherit; }
+[data-look="new"] .nl-dash-rec-stretch::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
+[data-look="new"] .nl-dash-trow > .nl-dash-rec-nudge { position: relative; z-index: 2; overflow: visible; display: flex; justify-content: flex-end; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-dash-table.is-terms .nl-dash-trow { grid-template-columns: minmax(0, 1fr) 20px; }
+  [data-look="new"] .nl-dash-table.is-terms .nl-dash-trow > .nl-dash-rec-nudge { padding-top: 6px; }
+}
