@@ -155,8 +155,9 @@ export default function DashboardNew({ title }: { title: string }) {
 
       <FrontFigures range={range} setRange={setRange} front={front} />
 
-      <div className="nl-dash-two">
-        <Agenda />
+      {/* Today across the page on white, the way the Diary draws a day (25 Oct 2026); Needs You under it. */}
+      <Agenda />
+      <div className="nl-dash-needs">
         <NeedsYou onCount={onNeeds} />
       </div>
 

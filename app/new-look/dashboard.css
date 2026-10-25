@@ -420,3 +420,27 @@
   [data-look="new"] .nl-dash-skel i, [data-look="new"] .nl-dash-spin { animation-duration: 3s; }
 }
 
+
+/* ── Today across the page, on white, as the Diary draws a day (25 Oct 2026) ── */
+[data-look="new"] .nl-dash-today { margin: 12px 0 12px; padding: 22px 26px 14px; background: #fff; border: 1px solid var(--line); border-radius: 24px; }
+[data-look="new"] .nl-dash-today .nl-dash-card-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+[data-look="new"] .nl-dash-today .nl-diary-agenda { margin-top: 6px; }
+[data-look="new"] .nl-dash-needs { margin: 0 0 72px; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-dash-today { padding: 18px 14px 8px; border-radius: 20px; }
+  [data-look="new"] .nl-dash-needs { margin-bottom: 48px; }
+}
+
+/* ── The records drawer's rows drop in one by one; terms carry ticks and a nudge ── */
+[data-look="new"] .nl-dash-rec-in { animation: nl-dash-drop .42s var(--nl-ease) both; }
+@keyframes nl-dash-drop { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-dash-rec-in { animation: none; } }
+[data-look="new"] .nl-dash-rec-in.is-term { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+[data-look="new"] .nl-dash-rec-in.is-term > .nl-dash-rec { flex: 1 1 260px; min-width: 0; }
+[data-look="new"] .nl-dash-rec-side { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 4px 10px; margin-left: auto; }
+[data-look="new"] .nl-dash-nudge { display: inline-flex; align-items: center; gap: 10px; }
+[data-look="new"] .nl-dash-nudge-said { font-size: 12px; }
+[data-look="new"] .nl-dash-nudge-said.is-ok { color: var(--sage-ink); }
+[data-look="new"] .nl-dash-nudge-said.is-bad { color: var(--accent-dark); max-width: 220px; }
+[data-look="new"] .nl-ticks { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--faint); white-space: nowrap; }
+[data-look="new"] .nl-ticks.is-read { color: var(--sage-ink); }

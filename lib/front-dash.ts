@@ -149,6 +149,8 @@ export interface FrontRecord {
   /** Terms only: whole days since it went out, and whether that is late. */
   waiting?: number | null;
   late?: boolean;
+  /** Terms only: a landlord has opened it (two ticks); null where the record can't say (e-sign). */
+  opened?: boolean | null;
   /** Leads only: still at New. */
   fresh?: boolean;
 }

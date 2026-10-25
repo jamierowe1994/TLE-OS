@@ -25,7 +25,7 @@ export function dotTone(a: Appt): string {
 /** The kind, in words, for the right of a row and the month cells. */
 export function kindWord(a: Appt): string {
   if (a.fromPersonal) return "Personal";
-  return KIND_META[a.kind].label;
+  return KIND_META[a.kind]?.label ?? "In the diary";
 }
 
 /**

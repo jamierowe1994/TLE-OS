@@ -67,6 +67,64 @@ function query(ask: RecordAsk, offset: number): string {
 
 type Got = { rows: FrontRecord[]; total: number; more: boolean; lateAfterDays?: number };
 
+/** One tick for sent, two for opened, as a message app does (James, 25 Oct 2026). */
+function Ticks({ opened }: { opened: boolean | null | undefined }) {
+  const two = opened === true;
+  return (
+    <span
+      className={`nl-ticks${two ? " is-read" : ""}`}
+      title={opened == null ? "Sent. Whether it's been opened isn't recorded for e-signature requests." : two ? "Opened by the landlord" : "Sent, not opened yet"}
+    >
+      <svg width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M1.5 7.5l3.5 3.5 7-8" />
+        {two && <path d="M8 11l7-8" />}
+      </svg>
+      <span>{opened == null ? "Sent" : two ? "Opened" : "Not opened"}</span>
+    </span>
+  );
+}
+
+/** Nudge one set: asks once ("Email Roman"), then sends from the person's own mailbox. */
+function Nudge({ r }: { r: FrontRecord }) {
+  const [state, setState] = useState<"idle" | "ask" | "going" | "done" | "failed">("idle");
+  const [said, setSaid] = useState<string | null>(null);
+  const first = (r.name.split(" & ")[0] ?? "").trim().split(/\s+/)[0] || "them";
+  const go = async () => {
+    setState("going");
+    const j = (await fetch("/api/dashboard/front/nudge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: r.id }) })
+      .then((x) => x.json())
+      .catch(() => null)) as { ok?: boolean; error?: string; to?: string } | null;
+    if (j?.ok) {
+      setState("done");
+      setSaid(`Nudged ${j.to || first}`);
+    } else {
+      setState("failed");
+      setSaid(j?.error ?? "That didn't send. Try again.");
+    }
+  };
+  if (state === "done") return <span className="nl-dash-nudge-said is-ok">{said}</span>;
+  if (state === "ask" || state === "going") {
+    return (
+      <span className="nl-dash-nudge">
+        <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={state === "going"} onClick={() => void go()}>
+          {state === "going" ? "Sending…" : `Email ${first}`}
+        </button>
+        <button type="button" className="nl-link" disabled={state === "going"} onClick={() => setState("idle")}>
+          Cancel
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span className="nl-dash-nudge">
+      {state === "failed" && <span className="nl-dash-nudge-said is-bad">{said}</span>}
+      <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setState("ask")}>
+        Nudge
+      </button>
+    </span>
+  );
+}
+
 export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordAsk | null; onClose: () => void }) {
   const key = ask ? query(ask, 0) : null;
   const { shown, close } = useSlideOver(Boolean(ask), closeNow, key);
@@ -159,8 +217,9 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
                 <p className="nl-meta nl-dash-drawer-lede">Late means unsigned for more than {got.lateAfterDays} days, past the last automatic nudge. Longest waiting first.</p>
               )}
               <ul className="nl-dash-recs">
-                {got.rows.map((r) => (
-                  <li key={r.id}>
+                {got.rows.map((r, i) => (
+                  /* Each row drops in a beat after the one above it (James, 25 Oct 2026). */
+                  <li key={r.id} className={`nl-dash-rec-in${terms ? " is-term" : ""}`} style={{ animationDelay: `${Math.min(i, 14) * 60 + 140}ms` }}>
                     <Link href={r.href} className="nl-dash-rec" onClick={() => closeNow()}>
                       <span className="nl-dash-line-text">
                         <span className="nl-dash-strong">
@@ -190,6 +249,12 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
                         <Ico name="arrow" size={14} />
                       </span>
                     </Link>
+                    {terms && (
+                      <span className="nl-dash-rec-side">
+                        <Ticks opened={r.opened} />
+                        <Nudge r={r} />
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
