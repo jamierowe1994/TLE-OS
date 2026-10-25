@@ -62,8 +62,17 @@ function ask(): Promise<LookOn> {
   return asking;
 }
 
-export function useNewLook(screen: LookScreen): boolean | null {
+/**
+ * `waitForOff`: a screen whose OLD look is expensive to start (the dashboard's
+ * board asks for the whole lead, listing and application books, ~2 MB, the
+ * moment it mounts) is not drawn old from a kept answer alone. A kept "new"
+ * still paints at once; a kept "old" waits for this load's answer, so a
+ * browser that last saw the switch off doesn't flash the old board - and pay
+ * for its reads - on the first visit after the switch is turned on.
+ */
+export function useNewLook(screen: LookScreen, opts?: { waitForOff?: boolean }): boolean | null {
   const [on, setOn] = useState<boolean | null>(null);
+  const waitForOff = Boolean(opts?.waitForOff);
   useEffect(() => {
     const f = forced();
     if (f) {
@@ -71,13 +80,13 @@ export function useNewLook(screen: LookScreen): boolean | null {
       return;
     }
     const start = answer ?? kept();
-    if (start) setOn(start[screen]);
+    if (start && (answer || start[screen] || !waitForOff)) setOn(start[screen]);
     const l = (a: LookOn) => setOn(a[screen]);
     listeners.add(l);
     if (!answer) void ask();
     return () => {
       listeners.delete(l);
     };
-  }, [screen]);
+  }, [screen, waitForOff]);
   return on;
 }

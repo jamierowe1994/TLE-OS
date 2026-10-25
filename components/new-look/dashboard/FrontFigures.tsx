@@ -1,43 +1,36 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { appraisalsSlot, useShared, type Slot } from "@/components/widgets";
 import {
   RANGES,
   SOURCE_BUCKETS,
-  londonDay,
   lastDays,
   sparkOf,
   sumRange,
-  type FrontAnswer,
   type RangeDays,
   type SourceBucket,
 } from "@/lib/front-dash";
-import type { MarketAppraisal } from "@/lib/market-appraisal";
 import { CountUp, DayBars, Spark, Steps, type StepRow } from "./Charts";
+import RecordsDrawer, { type RecordAsk } from "./RecordsDrawer";
+import type { FrontView } from "./useFront";
 
 /**
  * The front dashboard's bottom half (new look, 24 Oct 2026), after the
  * design's front office: the range switch, four figures with their change and
  * a sparkline, leads per day by source, and the tenant pipeline.
  *
- * Every figure is live: the leads, lets, terms, passports and viewings from
- * /api/dashboard/front (read once a visit, 180 London days, so the switch never
- * asks again), the appraisals from /api/appraisals through the shared read the
- * Market Appraisals screen's figure already uses. A range is the last 7, 30 or
- * 90 London days including today, worked out from now(); the change is against
- * the same number of days just before. A part that could not be read shows a
- * dash and why, never a held number.
+ * Every figure is live, from /api/dashboard/front (read once a visit, 180
+ * London days, so the switch never asks again), in three reads that each land
+ * on their own (./useFront). A range is the last 7, 30 or 90 London days
+ * including today, worked out from now(); the change is against the same
+ * number of days just before. A part that could not be read shows a dash and
+ * why, never a held number.
+ *
+ * Every figure, every pipeline step and every bar on the leads chart opens
+ * the records behind it in a drawer (./RecordsDrawer, 25 Oct 2026), and each
+ * record opens its own page. The drawer reads the same rows the figure was
+ * counted from, so the two always agree.
  */
-
-export const frontSlot: Slot = { p: null };
-
-export function useFront() {
-  return useShared<FrontAnswer>(frontSlot, "/api/dashboard/front", (j) =>
-    j.ok === true && Array.isArray(j.days) ? (j as unknown as FrontAnswer) : null
-  );
-}
 
 const KEEP = "nl-dash-range-v1";
 
@@ -86,7 +79,6 @@ function diffBadge(cur: number, prev: number, n: number): Badge {
 
 type Fig = {
   label: string;
-  href: string;
   loading: boolean;
   error: string | null;
   value: number | null;
@@ -95,14 +87,21 @@ type Fig = {
   spark?: number[] | null;
   /** In place of a sparkline, for a figure that has no history (Terms out). */
   strip?: ReactNode;
+  /** What opens when it is clicked: the records behind it. */
+  ask: Omit<RecordAsk, "figure"> | null;
 };
 
-function Figure({ f }: { f: Fig }) {
-  return (
-    <Link href={f.href} className="nl-dash-stat">
+/** A day key as a short label for a tooltip: "Mon 20 Oct". */
+const tipDay = (day: string) =>
+  new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+function Figure({ f, labels, onOpen }: { f: Fig; labels: string[]; onOpen: (a: RecordAsk) => void }) {
+  const ready = !f.loading && !f.error && f.value != null;
+  const body = (
+    <>
       <span className="nl-dash-stat-top">
         <span>{f.label}</span>
-        {!f.loading && !f.error && f.badge && (
+        {ready && f.badge && (
           <em className={`nl-dash-badge is-${f.badge.tone}`} title={f.badge.title}>
             {f.badge.text}
           </em>
@@ -112,7 +111,7 @@ function Figure({ f }: { f: Fig }) {
         <span className="nl-dash-skel" aria-label="Loading">
           <i />
         </span>
-      ) : f.error || f.value == null ? (
+      ) : !ready ? (
         <>
           <b className="nl-dash-stat-n is-off">-</b>
           <span className="nl-dash-stat-sub nl-dash-warn">{f.error ?? "Couldn't be read just now"}</span>
@@ -120,20 +119,24 @@ function Figure({ f }: { f: Fig }) {
       ) : (
         <>
           <b className="nl-dash-stat-n">
-            <CountUp value={f.value} />
+            <CountUp value={f.value!} />
           </b>
           <span className="nl-dash-stat-sub">{f.sub}</span>
-          {f.strip ?? (f.spark && <Spark values={f.spark} label={`${f.label}, day by day`} />)}
+          {f.strip ?? (f.spark && <Spark values={f.spark} labels={labels} label={`${f.label}, day by day`} />)}
         </>
       )}
-    </Link>
+    </>
+  );
+  /* Only a figure that has been read opens a list: a dash has nothing behind it. */
+  if (!ready || !f.ask) return <div className="nl-dash-stat is-still">{body}</div>;
+  return (
+    <button type="button" className="nl-dash-stat" onClick={() => onOpen({ ...f.ask!, figure: f.value! })} aria-label={`${f.label}: ${f.value!.toLocaleString("en-GB")}. Show them.`}>
+      {body}
+    </button>
   );
 }
 
 /* ── the half ─────────────────────────────────────────────────────────── */
-
-const live = (a: MarketAppraisal) => !a.cancelledAt && !a.archivedAt;
-const SAY_FAILED = "Couldn't be read just now";
 
 function dayLabel(day: string, n: number): string {
   const d = new Date(`${day}T12:00:00Z`);
@@ -142,94 +145,62 @@ function dayLabel(day: string, n: number): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
-export default function FrontFigures({
-  range,
-  setRange,
-  front,
-}: {
-  range: RangeDays;
-  setRange: (r: RangeDays) => void;
-  front: ReturnType<typeof useFront>;
-}) {
-  const appraisals = useShared<{ appraisals: MarketAppraisal[] }>(appraisalsSlot, "/api/appraisals", (j) =>
-    Array.isArray(j.appraisals) && !j.error ? { appraisals: j.appraisals as MarketAppraisal[] } : null
-  );
+export default function FrontFigures({ range, setRange, front }: { range: RangeDays; setRange: (r: RangeDays) => void; front: FrontView }) {
   const [src, setSrc] = useState<SourceBucket | "all">("all");
+  const [ask, setAsk] = useState<RecordAsk | null>(null);
   const n = range;
-  const data = front.data;
-  /* The page's own days when the route hasn't answered, so the appraisals
-     still count on the same London calendar. */
-  const days = useMemo(() => data?.days ?? lastDays(180), [data]);
-  const today = days[days.length - 1];
+  /* The page's own days until an answer lands, so the labels are ready. */
+  const days = useMemo(() => front.days ?? lastDays(180), [front.days]);
   const at = useMemo(() => new Map(days.map((d, i) => [d, i])), [days]);
-
-  const frontErr = front.loading ? null : front.data ? null : front.unlinked ? "Your account isn't linked yet - ask James" : SAY_FAILED;
-  const partErr = <T,>(p: { ok: true; data: T } | { ok: false; error: string } | undefined): string | null =>
-    front.loading ? null : frontErr ?? (p && !p.ok ? p.error.replace(/\.$/, "") : null);
+  const chartDays = days.slice(-n);
+  const sparkLabels = useMemo(() => chartDays.map(tipDay), [chartDays.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const span = `${tipDay(chartDays[0])} to ${tipDay(chartDays[chartDays.length - 1])}`;
+  const rangeWords = `Last ${n} days · ${span}`;
 
   /* New leads */
-  const leads = data?.leads.ok ? data.leads.data : null;
+  const leads = front.leads.data;
   const leadTotals = useMemo(
     () => (leads ? days.map((_, i) => SOURCE_BUCKETS.reduce((a, b) => a + leads.bySource[b.id][i], 0)) : null),
     [leads, days]
   );
 
-  /* Appraisals booked: created in the range, not cancelled or tidied away. */
-  const apList = appraisals.data?.appraisals ?? null;
-  const apSeries = useMemo(() => {
-    if (!apList) return null;
-    const s = days.map(() => 0);
-    for (const a of apList) {
-      if (!live(a) || !a.createdAt) continue;
-      const i = at.get(londonDay(new Date(a.createdAt)));
-      if (i != null) s[i]++;
-    }
-    return s;
-  }, [apList, days, at]);
-  const apToday = apList ? apList.filter((a) => live(a) && a.appointmentAt && londonDay(new Date(a.appointmentAt)) === today).length : 0;
-  const apInstructed = apList
-    ? apList.filter((a) => {
-        if (!live(a) || !a.createdAt) return false;
-        const i = at.get(londonDay(new Date(a.createdAt)));
-        return i != null && i >= days.length - n && (a.liveStage ?? a.stage) === "won";
-      }).length
-    : 0;
+  /* Appraisals booked: made in the range, not cancelled or tidied away (the whole office's). */
+  const ap = front.appraisals.data;
 
   /* Terms out: now, not range-bound. */
-  const terms = data?.terms.ok ? data.terms.data : null;
+  const terms = front.terms.data;
   const late = terms ? terms.rows.filter((r) => r.late).length : 0;
 
   /* Let agreed */
-  const lets = data?.lets.ok ? data.lets.data : null;
+  const lets = front.lets.data;
   const rentSum = lets ? sumRange(lets.rentSum, n) : 0;
   const rentN = lets ? sumRange(lets.rentN, n) : 0;
 
   const figs: Fig[] = [
     {
       label: "New leads",
-      href: "/leads",
-      loading: front.loading,
-      error: partErr(data?.leads),
+      loading: front.leads.loading,
+      error: front.leads.error,
       value: leadTotals ? sumRange(leadTotals, n) : null,
       badge: leadTotals ? pctBadge(sumRange(leadTotals, n), sumRange(leadTotals, n, 1), n) : null,
       sub: leads ? `${sumRange(leads.fresh, n).toLocaleString("en-GB")} not contacted yet` : null,
       spark: leadTotals ? sparkOf(leadTotals, n) : null,
+      ask: { kind: "leads", days: n, title: "New Leads", range: rangeWords, note: "Every lettings lead received, newest first. A coral dot is one nobody has contacted yet.", board: { href: "/leads", label: "Open the Leads board" } },
     },
     {
       label: "Appraisals booked",
-      href: "/market-appraisals",
-      loading: appraisals.loading,
-      error: appraisals.loading ? null : appraisals.data ? null : appraisals.unlinked ? "Your account isn't linked yet - ask James" : SAY_FAILED,
-      value: apSeries ? sumRange(apSeries, n) : null,
-      badge: apSeries ? diffBadge(sumRange(apSeries, n), sumRange(apSeries, n, 1), n) : null,
-      sub: `${apToday} today · ${apInstructed} instructed`,
-      spark: apSeries ? sparkOf(apSeries, n) : null,
+      loading: front.appraisals.loading,
+      error: front.appraisals.error,
+      value: ap ? sumRange(ap.created, n) : null,
+      badge: ap ? diffBadge(sumRange(ap.created, n), sumRange(ap.created, n, 1), n) : null,
+      sub: ap ? `${ap.today} today · ${sumRange(ap.won, n)} instructed` : null,
+      spark: ap ? sparkOf(ap.created, n) : null,
+      ask: { kind: "appraisals", days: n, title: "Appraisals Booked", range: rangeWords, note: "Booked in these days, the whole office's, newest first.", board: { href: "/market-appraisals", label: "Open Market Appraisals" } },
     },
     {
       label: "Terms out",
-      href: "/market-appraisals",
-      loading: front.loading,
-      error: partErr(data?.terms),
+      loading: front.terms.loading,
+      error: front.terms.error,
       value: terms ? terms.rows.length : null,
       badge: terms && late > 0 ? { text: `${late} late`, tone: "warn", title: `Unsigned more than ${terms.lateAfterDays} days, past the last automatic nudge` } : null,
       sub: "awaiting signature",
@@ -239,12 +210,12 @@ export default function FrontFigures({
           <i className="is-late" style={{ flexGrow: late }} />
         </span>
       ) : null,
+      ask: { kind: "terms", title: "Terms Out", range: "Out for signature now", note: "Every set still waiting on a signature. Each opens the place to chase it from.", board: { href: "/market-appraisals", label: "Open Market Appraisals" } },
     },
     {
       label: "Let agreed",
-      href: "/applications",
-      loading: front.loading,
-      error: partErr(data?.lets),
+      loading: front.lets.loading,
+      error: front.lets.error,
       value: lets ? sumRange(lets.agreed, n) : null,
       badge: lets ? diffBadge(sumRange(lets.agreed, n), sumRange(lets.agreed, n, 1), n) : null,
       sub: rentN
@@ -253,11 +224,11 @@ export default function FrontFigures({
           ? "no rent recorded on them"
           : "none in these days",
       spark: lets ? sparkOf(lets.agreed, n) : null,
+      ask: { kind: "lets", days: n, title: "Let Agreed", range: rangeWords, note: "Applications accepted in these days, less any that fell through, newest first.", board: { href: "/applications", label: "Open Applications" } },
     },
   ];
 
   /* The leads chart: this range, one bar a day, filtered by the chip. */
-  const chartDays = days.slice(-n);
   const barTotals = leads
     ? chartDays.map((d) => {
         const i = at.get(d)!;
@@ -266,18 +237,64 @@ export default function FrontFigures({
     : [];
   const avg = barTotals.length ? barTotals.reduce((a, v) => a + v, 0) / barTotals.length : 0;
   const fmtAvg = (v: number) => (v >= 10 ? Math.round(v).toLocaleString("en-GB") : v.toFixed(1));
+  const srcLabel = src === "all" ? null : (SOURCE_BUCKETS.find((b) => b.id === src)?.label ?? null);
+  const pickDay = (k: number) => {
+    const day = chartDays[k];
+    if (!day) return;
+    setAsk({
+      kind: "leads",
+      day,
+      source: src === "all" ? null : src,
+      figure: barTotals[k] ?? 0,
+      title: srcLabel ? `${srcLabel} Leads` : "Leads That Day",
+      range: new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }),
+      note: srcLabel ? `Only leads from ${srcLabel}, as the chip over the chart.` : "Every lettings lead received that day.",
+      board: { href: "/leads", label: "Open the Leads board" },
+    });
+  };
 
   /* The pipeline, over the same days. */
-  const stepOf = (p: { ok: true; data: number[] } | { ok: false; error: string } | undefined, read: (s: number[]) => number) =>
-    front.loading ? null : p && p.ok ? read(p.data) : null;
-  const steps: StepRow[] = [
-    { label: "Enquiries", href: "/leads?side=tenant", value: leads ? sumRange(leads.tenant, n) : null, hint: "Tenant leads received" },
-    { label: "Passport done", href: "/leads?passports=done", value: stepOf(data?.passports, (s) => sumRange(s, n)), hint: "Tenant passports finished" },
-    { label: "Viewed", href: "/viewings", value: stepOf(data?.viewings, (s) => sumRange(s, n)), hint: "Viewings held: in the diary, not cancelled, and the time has come. Whether the tenant turned up is not recorded." },
-    { label: "Applied", href: "/applications", value: lets ? sumRange(lets.applied, n) : null, hint: "Applications received, and offers accepted on the listing" },
-    { label: "Let agreed", href: "/applications", value: lets ? sumRange(lets.agreed, n) : null, hint: "Applications accepted, less any that fell through" },
+  const stepOf = <T,>(p: { loading: boolean; data: T | null }, read: (d: T) => number) => (p.loading || !p.data ? null : read(p.data));
+  type Step = StepRow & { ask: Omit<RecordAsk, "figure"> };
+  const steps: Step[] = [
+    {
+      label: "Enquiries",
+      value: stepOf(front.leads, (d) => sumRange(d.tenant, n)),
+      note: front.leads.loading ? "Reading…" : front.leads.error,
+      hint: "Tenant leads received",
+      ask: { kind: "tenant", days: n, title: "Enquiries", range: rangeWords, note: "Tenant leads received, newest first.", board: { href: "/leads?side=tenant", label: "Open Tenant leads" } },
+    },
+    {
+      label: "Passport done",
+      value: stepOf(front.passports, (d) => sumRange(d, n)),
+      note: front.passports.loading ? "Reading…" : front.passports.error,
+      hint: "Tenant passports finished",
+      ask: { kind: "passports", days: n, title: "Passport Done", range: rangeWords, note: "Tenant passports finished, newest first.", board: { href: "/leads?passports=done", label: "Open finished passports" } },
+    },
+    {
+      label: "Viewed",
+      value: stepOf(front.viewings, (d) => sumRange(d, n)),
+      note: front.viewings.loading ? "Reading…" : front.viewings.error,
+      hint: "Viewings held: in the diary, not cancelled, and the time has come. Whether the tenant turned up is not recorded.",
+      ask: { kind: "viewings", days: n, title: "Viewed", range: rangeWords, note: "Viewings held: in the diary, not cancelled, and the time has come. Whether the tenant turned up is not recorded.", board: { href: "/viewings", label: "Open the Diary" } },
+    },
+    {
+      label: "Applied",
+      value: stepOf(front.lets, (d) => sumRange(d.applied, n)),
+      note: front.lets.loading ? "Reading…" : front.lets.error,
+      hint: "Applications received, and offers accepted on the listing",
+      ask: { kind: "applied", days: n, title: "Applied", range: rangeWords, note: "Applications received, and offers accepted on the listing, newest first.", board: { href: "/applications", label: "Open Applications" } },
+    },
+    {
+      label: "Let agreed",
+      value: stepOf(front.lets, (d) => sumRange(d.agreed, n)),
+      note: front.lets.loading ? "Reading…" : front.lets.error,
+      hint: "Applications accepted, less any that fell through",
+      ask: { kind: "lets", days: n, title: "Let Agreed", range: rangeWords, note: "Applications accepted in these days, less any that fell through, newest first.", board: { href: "/applications", label: "Open Applications" } },
+    },
   ];
-  const whose = data ? (data.everything ? "across the whole business" : "in your own book") : null;
+  const stepsLoading = front.leads.loading && front.lets.loading && front.passports.loading;
+  const whose = front.everything == null ? null : front.everything ? "across the whole business" : "in your own book";
 
   return (
     <section className="nl-dash-front" aria-labelledby="nl-dash-range-title">
@@ -287,9 +304,10 @@ export default function FrontFigures({
             Last {n} Days
           </h2>
           <p className="nl-dash-bar-sub">
-            {data && !data.everything
+            {front.everything === false
               ? "Your leads, terms and lets. Appraisals are the whole office's."
-              : "Leads, appraisals and terms across the whole business."}
+              : "Leads, appraisals and terms across the whole business."}{" "}
+            Click a figure to see what&rsquo;s behind it.
           </p>
         </div>
         <div className="nl-dash-seg" role="group" aria-label="Range">
@@ -303,7 +321,7 @@ export default function FrontFigures({
 
       <div className="nl-dash-stats">
         {figs.map((f) => (
-          <Figure key={f.label} f={f} />
+          <Figure key={f.label} f={f} labels={sparkLabels} onOpen={setAsk} />
         ))}
       </div>
 
@@ -320,15 +338,15 @@ export default function FrontFigures({
             </span>
           </div>
           <p className="nl-dash-card-sub">
-            Per day. Today in coral, the dotted line is the average{leads ? ` (${fmtAvg(avg)} a day)` : ""}. Hover a day for the split.
+            Per day. Today in coral, the dotted line is the average{leads ? ` (${fmtAvg(avg)} a day)` : ""}. Hover a day for the split, click it for the leads.
           </p>
-          {front.loading ? (
+          {front.leads.loading ? (
             <p className="nl-dash-wait">
               <span className="nl-dash-spin" aria-hidden />
               Counting the leads…
             </p>
           ) : !leads ? (
-            <p className="nl-dash-note nl-dash-warn">{partErr(data?.leads) ?? SAY_FAILED}. No chart rather than an old one.</p>
+            <p className="nl-dash-note nl-dash-warn">{front.leads.error ?? "Couldn't be read just now"}. No chart rather than an old one.</p>
           ) : (
             <DayBars
               key={`${n}-${src}`}
@@ -336,6 +354,7 @@ export default function FrontFigures({
               totals={barTotals}
               todayIndex={chartDays.length - 1}
               avgLabel={fmtAvg}
+              onPick={pickDay}
               split={(k) => {
                 const i = at.get(chartDays[k])!;
                 return src === "all" ? SOURCE_BUCKETS.map((b) => [b.label, leads.bySource[b.id][i]] as [string, number]) : [];
@@ -350,28 +369,23 @@ export default function FrontFigures({
             <span className="nl-meta">Last {n} days</span>
           </div>
           <p className="nl-dash-card-sub">
-            Tenant enquiries to lets{whose ? ` ${whose}` : ""}. Each step is counted over the same {n} days, not one group followed through.
+            Tenant enquiries to lets{whose ? ` ${whose}` : ""}. Each step is counted over the same {n} days, not one group followed through. Click a step for its list.
           </p>
-          {front.loading ? (
+          {stepsLoading ? (
             <p className="nl-dash-wait">
               <span className="nl-dash-spin" aria-hidden />
               Reading the pipeline…
             </p>
-          ) : frontErr ? (
-            <p className="nl-dash-note nl-dash-warn">{frontErr}.</p>
           ) : (
-            <Steps
-              key={n}
-              steps={steps}
-              Link={({ href, className, title, children }) => (
-                <Link href={href} className={className} title={title}>
-                  {children}
-                </Link>
-              )}
-            />
+            <Steps key={n} steps={steps} onPick={(s) => {
+              const step = steps.find((x) => x.label === s.label);
+              if (step && step.value != null) setAsk({ ...step.ask, figure: step.value });
+            }} />
           )}
         </div>
       </div>
+
+      <RecordsDrawer ask={ask} onClose={() => setAsk(null)} />
     </section>
   );
 }

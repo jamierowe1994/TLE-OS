@@ -6,10 +6,11 @@ import { Ico } from "@/components/new-look/Parts";
 import { minutesOf } from "@/lib/diary";
 import { sumRange } from "@/lib/front-dash";
 import Agenda, { useMyDay } from "./Agenda";
-import FrontFigures, { useFront, useRange } from "./FrontFigures";
+import FrontFigures, { useRange } from "./FrontFigures";
 import LaunchSet from "./LaunchSet";
 import NeedsYou from "./NeedsYou";
 import QuickPills, { type SteveAsk } from "./QuickPills";
+import { useFront } from "./useFront";
 
 /**
  * The Dashboard in the new look (lib/new-look "dashboard", 23 Oct 2026), after
@@ -31,6 +32,15 @@ import QuickPills, { type SteveAsk } from "./QuickPills";
  *    are out, and the prep for the next appraisal in their own diary today, at
  *    its real time. Then the agent's own quick links.
  *  - Today and Needs You read exactly what the old tiles read.
+ *
+ * WHAT IT DOWNLOADS (25 Oct 2026, "the loading speed on that is pretty slow"):
+ * the three figure reads (./useFront: about 16 KB together, before compression), the diary, the bell's
+ * twelve and the launch checklist. Nothing here reads a whole board: the
+ * appraisals are counted on the server now rather than from /api/appraisals,
+ * and the lead, listing and application boards (~2 MB together) were only
+ * ever pulled by the old dashboard flashing up first from a stale "off" kept
+ * in this browser - the page now waits for the switch's answer before drawing
+ * the old board (lib/use-new-look, waitForOff).
  */
 
 function steveSays(
@@ -82,9 +92,9 @@ export default function DashboardNew({ title }: { title: string }) {
 
   /* Steve's chips, where the day gives them something to answer. */
   const asks: SteveAsk[] = [];
-  const fresh = front.data?.leads.ok ? sumRange(front.data.leads.data.fresh, 7) : null;
+  const fresh = front.leads.data ? sumRange(front.leads.data.fresh, 7) : null;
   if (fresh == null || fresh > 0) asks.push({ label: "Who should I call first?", ask: "Who should I call first?" });
-  if (front.data?.terms.ok && front.data.terms.data.rows.length > 0) {
+  if (front.terms.data && front.terms.data.rows.length > 0) {
     asks.push({ label: "Draft a chase for unsigned terms", ask: "Draft a chase for my unsigned terms of business" });
   }
   const london = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());

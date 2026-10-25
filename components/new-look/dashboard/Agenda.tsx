@@ -1,10 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import DiaryCalendar from "@/components/DiaryCalendar";
 import ListPopout, { ViewAllButton } from "@/components/ListPopout";
+import type { BlockAnchor } from "@/components/viewings/AddToBlock";
 import { useMyDiary } from "@/lib/diary-store";
-import { minutesOf, type Appt, type ApptKind } from "@/lib/diary";
+import { KIND_META, minutesOf, type Appt, type ApptKind } from "@/lib/diary";
+import { useSlideOver } from "@/lib/use-slide-over";
 
 /**
  * Today, in the new look: the signed-in person's OWN diary (useMyDiary), the
@@ -12,11 +16,23 @@ import { minutesOf, type Appt, type ApptKind } from "@/lib/diary";
  * all-day first; personal busy times and private entries ("Busy") stay off,
  * exactly as TodayWidget in components/widgets decides.
  *
- * A line opens the full calendar, as a press on the old tile did. "View full
- * calendar" and "View all" (today and tomorrow in full) are the old tile's two
- * buttons. Tomorrow is shown under today, a few lines of it, as the wide tile
- * did.
+ * A line opens that appointment's overview over the dashboard (James, 25 Oct
+ * 2026: "if I was to click on morning clinic... it should pop up and give me
+ * an overview rather than taking me to the other calendar"): the Diary's own
+ * quick look (components/viewings/AppointmentDrawer, in its new-look dress),
+ * with the viewing file, Change time and Add another viewing behind it exactly
+ * as on the Diary. "View full calendar" still opens the full calendar, and
+ * "View all" is today and tomorrow in full. Tomorrow is shown under today, a
+ * few lines of it, as the wide tile did.
  */
+
+/* The Diary's drawers, fetched the first time one opens rather than with the
+   dashboard: the viewing file in particular is a large piece of code, and the
+   dashboard should not wait for it (25 Oct 2026, speed). */
+const AppointmentDrawer = dynamic(() => import("@/components/viewings/AppointmentDrawer"), { ssr: false });
+const ViewingDrawer = dynamic(() => import("@/components/ViewingDrawer"), { ssr: false });
+const ChangeViewing = dynamic(() => import("@/components/viewings/ChangeViewing"), { ssr: false });
+const AddToBlock = dynamic(() => import("@/components/viewings/AddToBlock"), { ssr: false });
 
 const DOT: Partial<Record<ApptKind, string>> = {
   viewing: "info",
@@ -42,7 +58,7 @@ export function useMyDay() {
   };
 }
 
-function Line({ a, muted = false, onOpen }: { a: Appt; muted?: boolean; onOpen?: () => void }) {
+function Line({ a, muted = false, onOpen }: { a: Appt; muted?: boolean; onOpen?: (a: Appt) => void }) {
   const inner = (
     <>
       <span className={`nl-dash-time${a.allDay ? " is-allday" : ""}`}>{a.allDay ? "All day" : a.start}</span>
@@ -56,7 +72,7 @@ function Line({ a, muted = false, onOpen }: { a: Appt; muted?: boolean; onOpen?:
   return (
     <li className={muted ? "is-muted" : undefined}>
       {onOpen ? (
-        <button type="button" className="nl-dash-agenda-row" onClick={onOpen}>
+        <button type="button" className="nl-dash-agenda-row" onClick={() => onOpen(a)}>
           {inner}
         </button>
       ) : (
@@ -93,10 +109,10 @@ const until = (mins: number) => {
 /**
  * Today as the design's timeline: the time, the entry in a box, a coral line
  * at now, what has passed faded, and the next one picked out with how long
- * until it starts. All-day entries sit at the top. Every row opens the full
- * calendar, as the old tile did.
+ * until it starts. All-day entries sit at the top. Every row opens that
+ * appointment's overview.
  */
-function Timeline({ list, onOpen, max }: { list: Appt[]; onOpen: () => void; max: number }) {
+function Timeline({ list, onOpen, max }: { list: Appt[]; onOpen: (a: Appt) => void; max: number }) {
   const now = useLondonNow();
   const endOf = (a: Appt) => minutesOf(a.start) + Math.max(0, a.mins || 0);
   const allDay = list.filter((a) => a.allDay);
@@ -112,7 +128,7 @@ function Timeline({ list, onOpen, max }: { list: Appt[]; onOpen: () => void; max
   const rows: React.ReactNode[] = [];
   const ev = (a: Appt, state: "past" | "next" | "later" | "allday", note: string) => (
     <li key={a.id} className={`nl-dash-ev is-${state}`}>
-      <button type="button" className="nl-dash-ev-row" onClick={onOpen}>
+      <button type="button" className="nl-dash-ev-row" onClick={() => onOpen(a)}>
         <time className={a.allDay ? "is-allday" : undefined}>{a.allDay ? "All day" : a.start}</time>
         <span className="nl-dash-ev-box">
           <span className="nl-dash-ev-what">
@@ -143,7 +159,21 @@ export default function Agenda() {
   const [calendar, setCalendar] = useState(false);
   const [all, setAll] = useState(false);
   const SHOW = 6;
-  const open = () => setCalendar(true);
+  const openCalendar = () => setCalendar(true);
+  /* The appointment open over the dashboard, and what it can lead on to. */
+  const [quick, setQuick] = useState<Appt | null>(null);
+  const [full, setFull] = useState<Appt | null>(null);
+  const [changing, setChanging] = useState<Appt | null>(null);
+  const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
+  const [sentExtra, setSentExtra] = useState<Set<string>>(new Set());
+  const onSend = (id: string, label: string) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`));
+  const open = (a: Appt) => {
+    setAll(false);
+    setQuick(a);
+  };
+  /* The Diary's quick look draws every kind the diary knows; anything else
+     gets the plain overview below rather than a broken card. */
+  const known = Boolean(quick && KIND_META[quick.kind]);
 
   return (
     <section className="nl-dash-card nl-dash-col" aria-labelledby="nl-dash-today">
@@ -181,7 +211,7 @@ export default function Agenda() {
             </>
           )}
           <div className="nl-dash-acts">
-            <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={open}>
+            <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={openCalendar}>
               View full calendar
             </button>
             <button type="button" className="nl-link" onClick={() => setAll(true)}>
@@ -209,15 +239,93 @@ export default function Agenda() {
       >
         <div data-look="new" className="nl-dash-pop">
           {today.length === 0 ? <p className="nl-dash-note">Nothing in the diary today.</p> : (
-            <ol className="nl-dash-agenda">{today.map((a) => <Line key={a.id} a={a} />)}</ol>
+            <ol className="nl-dash-agenda">{today.map((a) => <Line key={a.id} a={a} onOpen={open} />)}</ol>
           )}
           <p className="nl-dash-sub">Tomorrow</p>
           {tomorrow.length === 0 ? <p className="nl-dash-note">Nothing in the diary tomorrow.</p> : (
-            <ol className="nl-dash-agenda">{tomorrow.map((a) => <Line key={a.id} a={a} muted />)}</ol>
+            <ol className="nl-dash-agenda">{tomorrow.map((a) => <Line key={a.id} a={a} muted onOpen={open} />)}</ol>
           )}
         </div>
       </ListPopout>
       <DiaryCalendar open={calendar} onClose={() => setCalendar(false)} />
+
+      {quick && known && <AppointmentDrawer
+        newLook
+        appt={quick}
+        onClose={() => setQuick(null)}
+        onOpenViewing={(a) => {
+          setQuick(null);
+          setFull(a);
+        }}
+        onChangeTime={(a) => {
+          setQuick(null);
+          setChanging(a);
+        }}
+        onAddToBlock={(anchor) => {
+          setQuick(null);
+          setBlockAnchor(anchor);
+        }}
+        sentExtra={sentExtra}
+        onSend={onSend}
+      />}
+      <PlainOverview appt={known ? null : quick} onClose={() => setQuick(null)} />
+      {full && <ViewingDrawer
+        appt={full}
+        onClose={() => setFull(null)}
+        onChangeTime={(a) => {
+          setFull(null);
+          setChanging(a);
+        }}
+        onAddToBlock={(anchor) => {
+          setFull(null);
+          setBlockAnchor(anchor);
+        }}
+        sentExtra={sentExtra}
+        onSend={onSend}
+      />}
+      {changing && <ChangeViewing appt={changing} onClose={() => setChanging(null)} />}
+      {blockAnchor && <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />}
     </section>
+  );
+}
+
+/**
+ * The plain overview, for an entry the Diary's quick look has no card for:
+ * what, when, where and who, as the diary has them, and the full calendar.
+ */
+function PlainOverview({ appt, onClose: closeNow }: { appt: Appt | null; onClose: () => void }) {
+  const { shown, close } = useSlideOver(Boolean(appt), closeNow, appt?.id);
+  useEffect(() => {
+    if (!appt) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [appt, close]);
+  if (!appt || typeof document === "undefined") return null;
+  const day = appt.day === 0 ? "Today" : appt.day === 1 ? "Tomorrow" : appt.day === -1 ? "Yesterday" : null;
+  const time = appt.allDay ? "All day" : `${appt.start}${appt.mins ? `, ${appt.mins} min` : ""}`;
+  return createPortal(
+    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer" data-shown={shown} role="dialog" aria-modal="true" aria-label={appt.what}>
+      <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={close} />
+      <div className="nl-drawer">
+        <div className="nl-drawer-head">
+          <div className="min-w-0 flex-1">
+            <p className="nl-eyebrow">In the diary{day ? ` · ${day}` : ""} · {time}</p>
+            <h2 className="nl-dash-drawer-title">{appt.what}</h2>
+          </div>
+          <button type="button" className="nl-iconbtn" aria-label="Close" onClick={close}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+        <div className="nl-drawer-body">
+          <dl className="nl-dash-dl">
+            <div><dt>When</dt><dd>{day ?? "In the diary"}, {time}</dd></div>
+            <div><dt>Where</dt><dd>{appt.where || <span className="nl-meta">No address on this entry.</span>}</dd></div>
+            <div><dt>Who</dt><dd>{appt.who || <span className="nl-meta">Nobody named on this entry.</span>}</dd></div>
+          </dl>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }

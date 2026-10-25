@@ -74,7 +74,7 @@ export default function Dashboard() {
       .catch(() => {});
     return () => { gone = true; };
   }, []);
-  const look = useNewLook("dashboard");
+  const look = useNewLook("dashboard", { waitForOff: true });
 
   /* ── THE NEW LOOK (lib/new-look "dashboard", 23 Oct 2026) ─────────────────
      The greeting, today's diary and the figures, laid out as the design has

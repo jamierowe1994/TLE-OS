@@ -90,6 +90,20 @@ export interface FrontTerms {
   lateAfterDays: number;
 }
 
+/** Market appraisals, the whole office's (the Market Appraisals screen's own list). */
+export interface FrontAppraisals {
+  /** Per day: appraisals booked (made) that day, not cancelled or tidied away. */
+  created: number[];
+  /** Per day, by the day it was booked: those of them now won (instructed). */
+  won: number[];
+  /** Appraisals whose appointment is today, in London. */
+  today: number;
+}
+
+/** The parts the route can be asked for one at a time (?parts=a,b). */
+export const FRONT_PARTS = ["leads", "appraisals", "lets", "terms", "passports", "viewings"] as const;
+export type FrontPart = (typeof FRONT_PARTS)[number];
+
 export interface FrontAnswer {
   ok: true;
   /** Oldest first, FRONT_DAYS of them, the last is today in London. */
@@ -97,14 +111,64 @@ export interface FrontAnswer {
   /** Whose figures: true for the whole business, false for one person's own. */
   everything: boolean;
   scopeLabel: string;
-  leads: Part<FrontLeads>;
-  lets: Part<FrontLets>;
-  terms: Part<FrontTerms>;
+  /* Each part is here only when it was asked for (all of them by default). */
+  leads?: Part<FrontLeads>;
+  appraisals?: Part<FrontAppraisals>;
+  lets?: Part<FrontLets>;
+  terms?: Part<FrontTerms>;
   /** Per day: passports finished. */
-  passports: Part<number[]>;
+  passports?: Part<number[]>;
   /** Per day: viewings held (in the diary, not cancelled, started by now). */
-  viewings: Part<number[]>;
+  viewings?: Part<number[]>;
 }
+
+/* ── The records behind a figure (GET /api/dashboard/front/records) ─────── */
+
+/**
+ * Which list: every figure and pipeline step has one. leads and tenant can
+ * also be one day of the chart, and one source chip.
+ */
+export const RECORD_KINDS = ["leads", "tenant", "appraisals", "terms", "lets", "applied", "passports", "viewings"] as const;
+export type RecordKind = (typeof RECORD_KINDS)[number];
+
+/** One record, as the drawer lists it. Never a phone number or an email. */
+export interface FrontRecord {
+  id: string;
+  /** Who: the applicant, landlord or tenant. */
+  name: string;
+  /** The home it is about, as words. Blank when nothing names one. */
+  property: string;
+  /** Where it came from, when that is known. */
+  source: string | null;
+  /** ISO: when it happened (received, booked, sent, agreed, finished, held). */
+  at: string | null;
+  /** Where it has got to, in a few words. */
+  status: string;
+  /** The page that opens it. */
+  href: string;
+  /** Terms only: whole days since it went out, and whether that is late. */
+  waiting?: number | null;
+  late?: boolean;
+  /** Leads only: still at New. */
+  fresh?: boolean;
+}
+
+export type FrontRecords =
+  | {
+      ok: true;
+      kind: RecordKind;
+      /** The London days listed, inclusive; null for terms (now, not a range). */
+      from: string | null;
+      to: string | null;
+      /** How many there are: always the figure the dashboard shows. */
+      total: number;
+      rows: FrontRecord[];
+      offset: number;
+      more: boolean;
+      everything: boolean;
+      lateAfterDays?: number;
+    }
+  | { ok: false; error: string };
 
 /** Sum the last `n` entries of a series, or the `n` before those (`back` = 1). */
 export function sumRange(series: number[], n: number, back = 0): number {
@@ -114,12 +178,11 @@ export function sumRange(series: number[], n: number, back = 0): number {
   return s;
 }
 
-/** The last `n` entries of a series, folded into at most `points` buckets for a sparkline. */
-export function sparkOf(series: number[], n: number, points = 15): number[] {
-  const tail = series.slice(-n);
-  if (tail.length <= points) return tail;
-  const size = Math.ceil(tail.length / points);
-  const out: number[] = [];
-  for (let i = 0; i < tail.length; i += size) out.push(tail.slice(i, i + size).reduce((a, v) => a + v, 0));
-  return out;
+/**
+ * The last `n` days of a series, one point a day, for a sparkline (25 Oct 2026:
+ * it used to fold 30 days into 15 two-day sums and 90 into 15 six-day sums,
+ * which smoothed the peaks away and made the hover meaningless).
+ */
+export function sparkOf(series: number[], n: number): number[] {
+  return series.slice(-n);
 }

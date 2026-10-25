@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import ListPopout from "@/components/ListPopout";
 import { Ico } from "@/components/new-look/Parts";
 import { clearedHere, noticesSlot, useShared } from "@/components/widgets";
 import type { Notice } from "@/lib/notices";
+import { useSlideOver } from "@/lib/use-slide-over";
 
 /**
  * Needs you, in the new look: the bell's own notices, scoped to the person -
@@ -13,13 +15,39 @@ import type { Notice } from "@/lib/notices";
  * read (noticesSlot) and the same tick (/api/notifications/done), so a line
  * ticked in either look is gone from both.
  *
- * Each line opens where it is dealt with (the design's button, worded for the
- * action where the notice says what it is: Call, Chase, Send, Sign), and keeps
- * the old tile's tick: struck through for a moment, then cleared, with a few
- * seconds of Undo. "View all" pops out the bell's full open list, as before.
+ * Pressing a line opens it in a small drawer (James, 25 Oct 2026: "I should
+ * be able to click individually into these to see what the task is and then
+ * tick them off"): the notice in full, when it came, the record it is about,
+ * a way there and the same Done tick. The row keeps its way there as an arrow
+ * alone ("drop the word Open and just have the arrow"); Call, Chase, Send and
+ * Sign are arrows too, since every one of them only opens the record - the
+ * verb is its label for a screen reader and on hover, and the drawer's own
+ * button says where it goes. The tick is the old tile's: struck through for a
+ * moment, then cleared, with a few seconds of Undo. "View all" pops out the
+ * bell's full open list, as before.
  */
 
-type Row = { id: string; title: string; body: string; href: string | null; hot: boolean; tone: Notice["tone"]; act: string };
+type Row = { id: string; title: string; body: string; href: string | null; hot: boolean; tone: Notice["tone"]; act: string; at: string; kind: Notice["kind"] };
+
+/** What the record behind a notice is, from where it opens. */
+function aboutOf(href: string): { what: string; go: string } {
+  const path = href.split("?")[0];
+  if (path.startsWith("/leads")) return { what: "A lead", go: "Open the Lead" };
+  if (path.startsWith("/market-appraisals")) return { what: "A market appraisal", go: "Open the Appraisal" };
+  if (path.startsWith("/listings")) return { what: "A listing", go: "Open the Listing" };
+  if (path.startsWith("/applications")) return { what: "A let in progress", go: "Open the Application" };
+  if (path.startsWith("/portfolio")) return { what: "A managed home", go: "Open the Home" };
+  if (path.startsWith("/viewings")) return { what: "The diary", go: "Open the Diary" };
+  if (path.startsWith("/compliance")) return { what: "Compliance", go: "Open Compliance" };
+  if (path.startsWith("/maintenance")) return { what: "A repair", go: "Open the Job" };
+  return { what: "Where it is dealt with", go: "Go to It" };
+}
+
+const fmtAt = (iso: string) => {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "Not recorded";
+  return d.toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+};
 
 /**
  * The button's word, from what the notice is (lib/notifications names each
@@ -52,6 +80,8 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
   useEffect(() => () => { if (undoTimer.current) window.clearTimeout(undoTimer.current); }, []);
 
   const [showAll, setShowAll] = useState(false);
+  /* The line open in the drawer. */
+  const [detail, setDetail] = useState<Row | null>(null);
   const [everything, setEverything] = useState<Notice[] | null>(null);
   const [allError, setAllError] = useState<string | null>(null);
   useEffect(() => {
@@ -77,6 +107,8 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
     hot: n.tone === "warn" || (data?.seenAt ? n.at > data.seenAt : true),
     tone: n.tone,
     act: actionFor(n),
+    at: n.at,
+    kind: n.kind,
   });
   const items = (data?.notices ?? []).filter((n) => !clearedHere.has(n.id)).map(shape);
   const allItems = everything ? everything.filter((n) => !clearedHere.has(n.id)).map(shape) : items;
@@ -135,7 +167,15 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
         <button type="button" className="nl-dash-tick" aria-label={ticked ? "Done" : "Mark as done"} title="Mark as done" onClick={() => tick(a.id)}>
           {ticked && <Ico name="check" size={11} />}
         </button>
-        <span className="nl-dash-line-text">
+        <button
+          type="button"
+          className="nl-dash-line-text nl-dash-need-open"
+          onClick={() => {
+            setShowAll(false);
+            setDetail(a);
+          }}
+          aria-label={`${a.title}. Show the detail.`}
+        >
           <span className="nl-dash-strong">
             {/* The priority: clay for a warning, coral for new since you last
                 looked, quiet once seen. */}
@@ -143,10 +183,10 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
             {a.title}
           </span>
           {a.body && <span className="nl-meta">{a.body}</span>}
-        </span>
+        </button>
         {a.href && (
-          <Link href={a.href} onClick={onOpen} className="nl-dash-go">
-            {a.act} <Ico name="arrow" size={13} />
+          <Link href={a.href} onClick={onOpen} className="nl-dash-go is-icon" aria-label={a.act} title={a.act}>
+            <Ico name="arrow" size={14} />
           </Link>
         )}
       </li>
@@ -207,6 +247,106 @@ export default function NeedsYou({ onCount }: { onCount?: (n: number | null, mor
           {foot}
         </div>
       </ListPopout>
+
+      <NoticeDrawer
+        row={detail}
+        ticked={detail ? fading.has(detail.id) || clearedHere.has(detail.id) : false}
+        cleared={detail ? clearedHere.has(detail.id) : false}
+        onTick={() => detail && tick(detail.id)}
+        onClose={() => setDetail(null)}
+        saveError={saveError}
+      />
     </section>
+  );
+}
+
+/** One line of Needs You in full, with its Done tick and the way to it. */
+function NoticeDrawer({
+  row,
+  ticked,
+  cleared,
+  onTick,
+  onClose: closeNow,
+  saveError,
+}: {
+  row: Row | null;
+  ticked: boolean;
+  cleared: boolean;
+  onTick: () => void;
+  onClose: () => void;
+  saveError: string | null;
+}) {
+  const { shown, close } = useSlideOver(Boolean(row), closeNow, row?.id);
+  useEffect(() => {
+    if (!row) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [row, close]);
+  /* Ticked here: it clears from the list behind, and the drawer goes a moment later. */
+  const [closing, setClosing] = useState(false);
+  useEffect(() => setClosing(false), [row?.id]);
+  useEffect(() => {
+    if (!row || !closing || !cleared) return;
+    const id = window.setTimeout(close, 450);
+    return () => window.clearTimeout(id);
+  }, [row, closing, cleared, close]);
+  if (!row || typeof document === "undefined") return null;
+  const about = row.href ? aboutOf(row.href) : null;
+  return createPortal(
+    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer is-small" data-shown={shown} role="dialog" aria-modal="true" aria-label={row.title}>
+      <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={close} />
+      <div className="nl-drawer">
+        <div className="nl-drawer-head">
+          <div className="min-w-0 flex-1">
+            <p className="nl-eyebrow">
+              Needs You · {fmtAt(row.at)}
+              {row.tone === "warn" ? " · needs doing" : ""}
+            </p>
+            <h2 className="nl-dash-drawer-title">{row.title}</h2>
+          </div>
+          <button type="button" className="nl-iconbtn" aria-label="Close" onClick={close}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+        <div className="nl-drawer-body">
+          {row.body ? <p className="nl-dash-need-body">{row.body}</p> : <p className="nl-dash-note">Nothing more was written on this one.</p>}
+          <dl className="nl-dash-dl">
+            <div><dt>When</dt><dd>{fmtAt(row.at)}</dd></div>
+            <div>
+              <dt>About</dt>
+              <dd>
+                {about && row.href ? (
+                  <Link href={row.href} className="nl-link" onClick={() => closeNow()}>{about.what}</Link>
+                ) : (
+                  <span className="nl-meta">No record is linked to this one.</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+          {saveError && <p className="nl-dash-note nl-dash-warn">{saveError}</p>}
+        </div>
+        <div className="nl-drawer-foot">
+          <button
+            type="button"
+            className={`nl-btn nl-btn--secondary nl-btn--sm nl-dash-done${ticked ? " is-done" : ""}`}
+            disabled={ticked}
+            onClick={() => {
+              setClosing(true);
+              onTick();
+            }}
+          >
+            <Ico name="check" size={14} />
+            {ticked ? "Done" : "Mark as done"}
+          </button>
+          {about && row.href && (
+            <Link href={row.href} className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => closeNow()}>
+              {about.go} <Ico name="arrow" size={14} />
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
