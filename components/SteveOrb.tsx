@@ -6,8 +6,8 @@ import type { SteveMood } from "@/components/SteveFace";
 /**
  * Steve as an orb (25 Oct 2026, James: "a bit of a ball ... almost like a
  * Jarvis kind of thing that moves and pulses", then "more like it's an AI
- * that's in the corner"). A soft glowing bubble of lilac, violet, blue and
- * pink, always moving inside, with two white pill eyes that blink, bounce
+ * that's in the corner"). A soft glowing coral bubble,
+ * always moving inside, with two white pill eyes that blink, bounce
  * while he thinks and squint when he's pleased. Behind the "orb" switch;
  * SteveFace draws this in his place.
  *

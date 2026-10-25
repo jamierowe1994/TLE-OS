@@ -1,8 +1,8 @@
 /* Steve as an orb (components/SteveOrb.tsx). Not scoped to [data-look]: he
    is drawn on old screens too, and the "orb" switch alone decides.
 
-   James's reference (25 Oct 2026): a soft glowing bubble of lilac, violet,
-   blue and pink with two white pill eyes - an AI in the corner, not a ball.
+   James's reference (25 Oct 2026): a soft glowing bubble with two white pill
+   eyes - an AI in the corner, not a ball - in our coral, not its purple.
    No CSS blur anywhere inside: Safari draws a blurred child as a square past
    a rounded clip, which showed as a box round him. The mask makes every
    browser clip to the circle. */
@@ -12,14 +12,14 @@
   position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
   -webkit-mask-image: radial-gradient(circle, #000 69%, transparent 71%);
   mask-image: radial-gradient(circle, #000 69%, transparent 71%);
-  background: radial-gradient(circle at 50% 50%, #c48bf1 0%, #d2a3f4 42%, #e9c9f3 74%, #f8ecf6 100%);
+  background: radial-gradient(circle at 50% 50%, #e98767 0%, #f0a487 42%, #f7cdbb 74%, #fcefe9 100%);
   animation: sorb-breathe 5.2s ease-in-out infinite, sorb-liquid 9s ease-in-out infinite;
   transition: filter 0.6s ease;
 }
-/* A soft lilac glow round him, round and outside the clip. */
+/* A soft coral glow round him, round and outside the clip. */
 .sorb::before {
   content: ""; position: absolute; inset: 2%; border-radius: 50%; pointer-events: none; z-index: -1;
-  box-shadow: 0 0 calc(var(--s) * 0.22) calc(var(--s) * 0.02) rgba(185, 140, 240, 0.42), 0 calc(var(--s) * 0.06) calc(var(--s) * 0.2) rgba(110, 90, 200, 0.18);
+  box-shadow: 0 0 calc(var(--s) * 0.22) calc(var(--s) * 0.02) rgba(235, 140, 109, 0.42), 0 calc(var(--s) * 0.06) calc(var(--s) * 0.2) rgba(180, 80, 50, 0.18);
   animation: sorb-liquid 9s ease-in-out infinite;
 }
 
@@ -35,16 +35,16 @@
   animation: sorb-swell ease-in-out infinite alternate;
   animation-duration: var(--sw);
 }
-.sorb-o.o1 { --c: #a668f2; --w: 0.8;  --r: 0.1;  --sw: 3.8s; animation-duration: 9s; }
-.sorb-o.o2 { --c: #6e7cf2; --w: 0.62; --r: 0.2;  --sw: 4.6s; animation-duration: 12s; animation-direction: reverse; animation-delay: -4s; }
-.sorb-o.o3 { --c: #f096d2; --w: 0.6;  --r: 0.24; --sw: 3.2s; animation-duration: 7.5s; animation-delay: -2s; --a: 0.8; }
-.sorb-o.o4 { --c: #5560e8; --w: 0.4;  --r: 0.14; --sw: 5.4s; animation-duration: 15s; animation-delay: -9s; --a: 0.6; }
-.sorb-o.o5 { --c: #f4b8de; --w: 0.5;  --r: 0.28; --sw: 2.8s; animation-duration: 10s; animation-direction: reverse; animation-delay: -6s; --a: 0.85; }
+.sorb-o.o1 { --c: #e8714c; --w: 0.8;  --r: 0.1;  --sw: 3.8s; animation-duration: 9s; }
+.sorb-o.o2 { --c: #d4583a; --w: 0.62; --r: 0.2;  --sw: 4.6s; animation-duration: 12s; animation-direction: reverse; animation-delay: -4s; }
+.sorb-o.o3 { --c: #f2a09a; --w: 0.6;  --r: 0.24; --sw: 3.2s; animation-duration: 7.5s; animation-delay: -2s; --a: 0.8; }
+.sorb-o.o4 { --c: #b5421f; --w: 0.4;  --r: 0.14; --sw: 5.4s; animation-duration: 15s; animation-delay: -9s; --a: 0.6; }
+.sorb-o.o5 { --c: #f8c7a6; --w: 0.5;  --r: 0.28; --sw: 2.8s; animation-duration: 10s; animation-direction: reverse; animation-delay: -6s; --a: 0.85; }
 
 /* The edge goes pale and soft, as the reference does. */
 .sorb-grain {
   position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: radial-gradient(circle, rgba(250, 236, 248, 0) 50%, rgba(250, 236, 248, 0.5) 70%, rgba(252, 244, 250, 0.92) 92%);
+  background: radial-gradient(circle, rgba(252, 238, 232, 0) 50%, rgba(252, 238, 232, 0.5) 70%, rgba(253, 245, 241, 0.92) 92%);
 }
 
 /* The eyes: two white pills, centred, that blink now and then. */
@@ -54,7 +54,7 @@
 }
 .sorb-eyes i {
   display: block; width: calc(var(--s) * 0.115); height: calc(var(--s) * 0.3); border-radius: 999px; background: #fff;
-  box-shadow: 0 calc(var(--s) * 0.01) calc(var(--s) * 0.04) rgba(90, 60, 170, 0.25);
+  box-shadow: 0 calc(var(--s) * 0.01) calc(var(--s) * 0.04) rgba(170, 70, 40, 0.25);
   transform-origin: 50% 50%; animation: sorb-blink 5.5s infinite; transition: height 0.3s ease, border-radius 0.3s ease;
 }
 
@@ -71,7 +71,7 @@
 .sorb--thinking .sorb-eyes i:last-child { animation-delay: -0.45s; }
 .sorb--thinking::after {
   content: ""; position: absolute; inset: -16%; border-radius: 50%; z-index: -2; pointer-events: none;
-  background: radial-gradient(circle, rgba(166, 104, 242, 0.34) 0%, rgba(110, 124, 242, 0.14) 45%, rgba(110, 124, 242, 0) 70%);
+  background: radial-gradient(circle, rgba(235, 140, 109, 0.38) 0%, rgba(214, 88, 58, 0.14) 45%, rgba(214, 88, 58, 0) 70%);
   animation: sorb-glow 1.6s ease-in-out infinite;
 }
 
