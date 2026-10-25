@@ -598,7 +598,7 @@ type EsignRaw = {
   content?: {
     listing?: { id?: number | string; property?: { system_search_key?: string } };
     email_subject?: string;
-    roles?: { record?: { name?: string } }[];
+    roles?: { provider_role_id?: string; record?: { name?: string } }[];
   };
 };
 
@@ -636,11 +636,15 @@ async function outstandingEsign(): Promise<Esign[]> {
 
 /** Who an e-sign request is for and which home: read in full, once, and held. */
 async function esignDetail(id: number): Promise<{ name: string; property: string; listingId: string | null }> {
-  return cached(`esign-one:${id}`, 10 * 60_000, async () => {
+  return cached(`esign-one2:${id}`, 10 * 60_000, async () => {
     const one = await rexCall("EsignRequests", "read", { id });
     if (!one.ok) throw new Say("Terms couldn't be read just now.");
     const r = one.result as EsignRaw;
-    const names = (r.content?.roles ?? []).map((x) => (x.record?.name ?? "").trim()).filter(Boolean);
+    /* The landlords only: the Agent role is one of ours, not who it waits on (as /api/esign/outstanding). */
+    const names = (r.content?.roles ?? [])
+      .filter((x) => (x.provider_role_id ?? "").toLowerCase() !== "agent")
+      .map((x) => (x.record?.name ?? "").trim())
+      .filter(Boolean);
     const fromSubject = (r.content?.email_subject ?? "").split(/\s+-\s+/).slice(1).join(" - ").trim();
     return {
       name: [...new Set(names)].join(" & "),
@@ -650,7 +654,7 @@ async function esignDetail(id: number): Promise<{ name: string; property: string
   });
 }
 
-type TermRec = FrontTerm & { id: string; name: string; property: string; href: string; status: string; esignId?: number };
+type TermRec = FrontTerm & { id: string; name: string; property: string; href: string; status: string; opened: boolean | null; esignId?: number };
 
 async function termBook(ctx: FrontCtx): Promise<{ rows: TermRec[]; lateAfterDays: number }> {
   const { req, who } = ctx;
@@ -691,9 +695,10 @@ async function termBook(ctx: FrontCtx): Promise<{ rows: TermRec[]; lateAfterDays
        on a file still working - the same test the automatic nudge makes -
        and not since redrawn on our own page. */
     !everything && !name
-      ? Promise.resolve([] as { record_id: string; sent: string | null; landlord: string; address: string }[])
-      : q<{ record_id: string; sent: string | null; landlord: string; address: string }>(
-          `SELECT cs.record_id, cs.payload->>'firstSentAt' AS sent, a.landlord, a.address
+      ? Promise.resolve([] as { record_id: string; sent: string | null; landlord: string; address: string; views: string | null }[])
+      : q<{ record_id: string; sent: string | null; landlord: string; address: string; views: string | null }>(
+          `SELECT cs.record_id, cs.payload->>'firstSentAt' AS sent, a.landlord, a.address,
+                  (SELECT v.payload->>'count' FROM os_case_state v WHERE v.kind = 'landlord-contract-views' AND v.record_id = cs.record_id LIMIT 1) AS views
              FROM os_case_state cs JOIN os_market_appraisals a ON a.id = cs.record_id
             WHERE cs.kind = 'contract-send'
               AND a.stage NOT IN ('won', 'lost') AND a.cancelled_at IS NULL AND a.archived_at IS NULL
@@ -721,6 +726,7 @@ async function termBook(ctx: FrontCtx): Promise<{ rows: TermRec[]; lateAfterDays
         name: r.parties?.trim() || r.landlord?.trim() || "Landlord not named",
         property: r.address.trim(),
         status: r.opened ? "Opened, not signed" : "Not opened yet",
+        opened: Boolean(r.opened),
         href: r.appraisal_id ? `/market-appraisals/${enc(r.appraisal_id)}` : r.listing_id ? `/listings/${enc(r.listing_id)}` : "/market-appraisals",
       };
     }),
@@ -731,7 +737,8 @@ async function termBook(ctx: FrontCtx): Promise<{ rows: TermRec[]; lateAfterDays
       from: "docuseal",
       name: r.landlord?.trim() || "Landlord not named",
       property: r.address?.trim() ?? "",
-      status: "Contract sent, not signed",
+      status: Number(r.views ?? 0) > 0 ? "Opened, not signed" : "Contract sent, not opened",
+      opened: Number(r.views ?? 0) > 0,
       href: `/market-appraisals/${enc(r.record_id)}`,
     })),
     /* An e-sign request older than 60 days is one nobody is chasing: REX still holds
@@ -747,10 +754,17 @@ async function termBook(ctx: FrontCtx): Promise<{ rows: TermRec[]; lateAfterDays
         name: "",
         property: "",
         status: "E-signature requested, not signed",
+        opened: null,
         href: "/market-appraisals",
       })),
   ];
   return { rows, lateAfterDays };
+}
+
+/** Whether a set of terms (by its list id) is in this person's own Terms out list: the gate on a nudge. */
+export async function termInScope(ctx: FrontCtx, id: string): Promise<boolean> {
+  const { rows } = await termBook(ctx);
+  return rows.some((r) => r.id === id);
 }
 
 export async function readTerms(ctx: FrontCtx): Promise<FrontTerms> {

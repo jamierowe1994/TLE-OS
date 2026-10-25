@@ -67,6 +67,64 @@ function query(ask: RecordAsk, offset: number): string {
 
 type Got = { rows: FrontRecord[]; total: number; more: boolean; lateAfterDays?: number };
 
+/** One tick for sent, two for opened, as a message app does (James, 25 Oct 2026). */
+function Ticks({ opened }: { opened: boolean | null | undefined }) {
+  const two = opened === true;
+  return (
+    <span
+      className={`nl-ticks${two ? " is-read" : ""}`}
+      title={opened == null ? "Sent. Whether it's been opened isn't recorded for e-signature requests." : two ? "Opened by the landlord" : "Sent, not opened yet"}
+    >
+      <svg width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M1.5 7.5l3.5 3.5 7-8" />
+        {two && <path d="M8 11l7-8" />}
+      </svg>
+      <span>{opened == null ? "Sent" : two ? "Opened" : "Not opened"}</span>
+    </span>
+  );
+}
+
+/** Nudge one set: asks once ("Email Roman"), then sends from the person's own mailbox. */
+function Nudge({ r }: { r: FrontRecord }) {
+  const [state, setState] = useState<"idle" | "ask" | "going" | "done" | "failed">("idle");
+  const [said, setSaid] = useState<string | null>(null);
+  const first = (r.name.split(" & ")[0] ?? "").trim().split(/\s+/)[0] || "them";
+  const go = async () => {
+    setState("going");
+    const j = (await fetch("/api/dashboard/front/nudge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: r.id }) })
+      .then((x) => x.json())
+      .catch(() => null)) as { ok?: boolean; error?: string; to?: string } | null;
+    if (j?.ok) {
+      setState("done");
+      setSaid(`Nudged ${j.to || first}`);
+    } else {
+      setState("failed");
+      setSaid(j?.error ?? "That didn't send. Try again.");
+    }
+  };
+  if (state === "done") return <span className="nl-dash-nudge-said is-ok">{said}</span>;
+  if (state === "ask" || state === "going") {
+    return (
+      <span className="nl-dash-nudge">
+        <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={state === "going"} onClick={() => void go()}>
+          {state === "going" ? "Sending…" : `Email ${first}`}
+        </button>
+        <button type="button" className="nl-link" disabled={state === "going"} onClick={() => setState("idle")}>
+          Cancel
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span className="nl-dash-nudge">
+      {state === "failed" && <span className="nl-dash-nudge-said is-bad">{said}</span>}
+      <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setState("ask")}>
+        Nudge
+      </button>
+    </span>
+  );
+}
+
 export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordAsk | null; onClose: () => void }) {
   const key = ask ? query(ask, 0) : null;
   const { shown, close } = useSlideOver(Boolean(ask), closeNow, key);
@@ -158,36 +216,61 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
               {terms && got.lateAfterDays != null && (
                 <p className="nl-meta nl-dash-drawer-lede">Late means unsigned for more than {got.lateAfterDays} days, past the last automatic nudge. Longest waiting first.</p>
               )}
-              {/* Wide and in columns (James, 25 Oct 2026): every row lines up under its heading, no dots. */}
-              <div className="nl-dash-table" role="table" aria-label={ask.title}>
+              {/* Wide and in columns (James, 25 Oct 2026): every row lines up under its heading, no dots.
+                  The rows drop in one after another; terms add Opened (one tick sent, two opened) and a Nudge. */}
+              <div className={`nl-dash-table${terms ? " is-terms" : ""}`} role="table" aria-label={ask.title}>
                 <div className="nl-dash-trow nl-dash-thead" role="row">
                   <span role="columnheader">{terms ? "For" : "Name"}</span>
                   <span role="columnheader">Property</span>
                   <span role="columnheader">{terms ? "Sent" : "When"}</span>
                   <span role="columnheader">{terms ? "Waiting" : "Source"}</span>
                   <span role="columnheader">Status</span>
+                  {terms && <span role="columnheader">Opened</span>}
+                  {terms && <span aria-hidden />}
                   <span aria-hidden />
                 </div>
-                {got.rows.map((r) => (
-                  <Link key={r.id} href={r.href} className="nl-dash-trow nl-dash-rec" role="row" onClick={() => closeNow()}>
-                    <span role="cell" className="nl-dash-strong">{r.name}</span>
-                    <span role="cell" className="nl-meta">{r.property || "-"}</span>
-                    <span role="cell">{fmtWhen(r.at, !terms && TIMED.has(ask.kind))}</span>
-                    <span role="cell">
-                      {terms
-                        ? r.waiting == null
-                          ? "Not known"
-                          : `${r.waiting} ${r.waiting === 1 ? "day" : "days"}`
-                        : r.source || "-"}
-                    </span>
-                    <span role="cell" className={r.late ? "is-late" : r.fresh ? "is-new" : undefined}>
-                      {r.late ? `Late · ${r.status}` : r.status}
-                    </span>
-                    <span role="cell" className="nl-dash-rec-go" aria-hidden>
-                      <Ico name="arrow" size={14} />
-                    </span>
-                  </Link>
-                ))}
+                {got.rows.map((r, i) => {
+                  const cells = (
+                    <>
+                      <span role="cell" className="nl-dash-strong">{r.name}</span>
+                      <span role="cell" className="nl-meta">{r.property || "-"}</span>
+                      <span role="cell">{fmtWhen(r.at, !terms && TIMED.has(ask.kind))}</span>
+                      <span role="cell">
+                        {terms
+                          ? r.waiting == null
+                            ? "Not known"
+                            : `${r.waiting} ${r.waiting === 1 ? "day" : "days"}`
+                          : r.source || "-"}
+                      </span>
+                      <span role="cell" className={r.late ? "is-late" : r.fresh ? "is-new" : undefined}>
+                        {r.late ? `Late · ${r.status}` : r.status}
+                      </span>
+                    </>
+                  );
+                  const delay = { animationDelay: `${Math.min(i, 14) * 60 + 140}ms` };
+                  if (!terms) {
+                    return (
+                      <Link key={r.id} href={r.href} className="nl-dash-trow nl-dash-rec nl-dash-rec-in" style={delay} role="row" onClick={() => closeNow()}>
+                        {cells}
+                        <span role="cell" className="nl-dash-rec-go" aria-hidden>
+                          <Ico name="arrow" size={14} />
+                        </span>
+                      </Link>
+                    );
+                  }
+                  /* A terms row holds a button, so the row is a block with the
+                     link stretched over it and the Nudge sitting above the link. */
+                  return (
+                    <div key={r.id} className="nl-dash-trow nl-dash-rec nl-dash-rec-in is-term" style={delay} role="row">
+                      {cells}
+                      <span role="cell"><Ticks opened={r.opened} /></span>
+                      <span role="cell" className="nl-dash-rec-nudge"><Nudge r={r} /></span>
+                      <Link href={r.href} role="cell" className="nl-dash-rec-go nl-dash-rec-stretch" aria-label={`Open ${r.name}`} onClick={() => closeNow()}>
+                        <Ico name="arrow" size={14} />
+                      </Link>
+                    </div>
+                  );
+                })}
               </div>
               {got.more && (
                 <div className="nl-dash-acts">

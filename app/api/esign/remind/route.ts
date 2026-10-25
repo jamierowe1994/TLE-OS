@@ -5,6 +5,7 @@ import { sendAsAgent } from "@/lib/send-as-agent";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { renderPlain } from "@/lib/campaign-mail";
+import { esignRemindWording as wording } from "@/lib/esign-remind";
 
 /**
  * Chasing a set of terms that hasn't come back.
@@ -29,33 +30,6 @@ import { renderPlain } from "@/lib/campaign-mail";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-function wording(o: {
-  landlordFirst: string;
-  address: string;
-  sentAt: string | null;
-  agentName: string;
-  agentPhone: string;
-}): { subject: string; text: string } {
-  const when = o.sentAt
-    ? new Date(o.sentAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" })
-    : null;
-  const where = o.address || "your property";
-  return {
-    subject: `Your terms of business — ${where}`,
-    text: `Hi ${o.landlordFirst},
-
-Just a quick note — the terms of business for ${where} are still waiting on your signature.
-
-They went out${when ? ` on ${when}` : ""} from DocuSign, so the email will be in your inbox under "The Letting Experts". It's worth a look in your junk folder too; that is where it usually is.
-
-If you can't find it, reply to this and I'll send it straight out again. And if there's anything in it you'd like to talk through first, ring me on ${o.agentPhone} — that's often quicker than email.
-
-Kind regards,
-${o.agentName}
-The Letting Experts`,
-  };
-}
 
 export async function POST(req: NextRequest) {
   /* READ-ONLY WHILE VIEWING AS. A write made wearing somebody else's face

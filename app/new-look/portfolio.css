@@ -170,36 +170,90 @@
 [data-look="new"] .nl-prop-dl-v { white-space: normal !important; font-size: 17px !important; line-height: 23px !important; overflow-wrap: anywhere; }
 [data-look="new"] .nl-prop-leaving { align-items: flex-start !important; flex-wrap: wrap; }
 
-/* ── row lists: jobs and visits ─────────────────────────────────────────── */
-[data-look="new"] .nl-prop-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
-[data-look="new"] .nl-prop-list > li { border-bottom: 1px solid var(--line); }
-[data-look="new"] .nl-prop-job, [data-look="new"] .nl-prop-visit {
-  font: inherit; color: inherit; text-decoration: none; display: grid; align-items: center; gap: 18px; width: 100%;
-  padding: 14px 6px; background: none; border: 0; text-align: left; cursor: pointer; transition: background-color .2s;
+/* ── each tab's head: its name, how it stands, its buttons (25 Oct 2026) ── */
+[data-look="new"] .nl-tabhead {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 28px;
+  margin: 8px 0 28px; padding-bottom: 24px; border-bottom: 1px solid var(--line);
 }
-[data-look="new"] .nl-prop-job { grid-template-columns: 130px minmax(0, 1fr) minmax(0, 260px) auto; }
-[data-look="new"] .nl-prop-visit { grid-template-columns: minmax(0, 1fr) minmax(0, 240px) auto; }
-[data-look="new"] .nl-prop-job:hover, [data-look="new"] .nl-prop-visit:hover { background: var(--panel); }
-[data-look="new"] .nl-prop-job-next { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-[data-look="new"] .nl-prop-job-next.is-hot { color: var(--accent-dark); font-weight: 500; }
-[data-look="new"] .nl-prop-carried { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 14px 6px; }
-[data-look="new"] .nl-prop-visit-files { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 6px 14px; }
-[data-look="new"] .nl-prop-visit-files a { max-width: 100%; }
-[data-look="new"] .nl-prop-due { padding: 14px 18px; border-radius: 16px; background: var(--panel); font-size: 14px; }
-[data-look="new"] .nl-prop-due b { font-weight: 600; }
-[data-look="new"] .nl-prop-due.is-hot { background: var(--accent-soft); }
-@media (max-width: 900px) {
-  [data-look="new"] .nl-prop-job { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; }
-  [data-look="new"] .nl-prop-job-ref { display: none; }
-  [data-look="new"] .nl-prop-job-next { grid-column: 1; grid-row: 2; white-space: normal; }
-  [data-look="new"] .nl-prop-job > .nl-badge { grid-column: 2; grid-row: 1; }
-  [data-look="new"] .nl-prop-visit { grid-template-columns: minmax(0, 1fr) auto; }
-  [data-look="new"] .nl-prop-visit-when { display: none; }
+[data-look="new"] .nl-tabhead-title { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 28px; line-height: 34px; letter-spacing: 0; color: var(--ink); }
+[data-look="new"] .nl-tabhead-sub { margin: 6px 0 0; font-size: 15px; line-height: 22px; color: var(--muted); }
+[data-look="new"] .nl-tabhead-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+[data-look="new"] .nl-tabhead-acts > .nl-btn { padding: 11px 18px; font-size: 14.5px; gap: 8px; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-tabhead { align-items: stretch; flex-direction: column; margin-top: 0; padding-bottom: 20px; }
+  [data-look="new"] .nl-tabhead-title { font-size: 24px; line-height: 30px; }
+  [data-look="new"] .nl-tabhead-acts { justify-content: stretch; }
+  [data-look="new"] .nl-tabhead-acts > * { flex: 1 1 100%; justify-content: center; }
 }
 
-/* ── the send bar over certificates and documents ───────────────────────── */
-[data-look="new"] .nl-prop-sendbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; padding: 16px 20px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
-[data-look="new"] .nl-prop-sendbar .nl-meta { flex: 1 1 320px; margin: 0; font-size: 13px; }
+/* ── row lists: jobs and visits, each group a card ──────────────────────── */
+[data-look="new"] .nl-prop-group { display: flex; flex-direction: column; gap: 12px; }
+[data-look="new"] .nl-holder > .nl-prop-group + .nl-prop-group { margin-top: 36px; }
+[data-look="new"] .nl-prop-group-title { display: flex; align-items: baseline; gap: 10px; margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 18px; line-height: 24px; letter-spacing: 0; color: var(--ink); }
+[data-look="new"] .nl-prop-group-title > .nl-meta { font-family: var(--font-body, inherit); font-size: 14px; }
+[data-look="new"] .nl-prop-group-toggle { width: 100%; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+[data-look="new"] .nl-prop-group-foot { margin: 0; }
+[data-look="new"] .nl-prop-list { list-style: none; margin: 0; padding: 4px 0; background: var(--card); border: 1px solid var(--line); border-radius: 20px; }
+[data-look="new"] .nl-prop-list > li + li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-prop-job, [data-look="new"] .nl-prop-visit {
+  font: inherit; color: inherit; text-decoration: none; display: grid; align-items: center; gap: 20px; width: 100%;
+  padding: 18px 22px; background: none; border: 0; text-align: left; cursor: pointer; transition: background-color .2s;
+}
+[data-look="new"] .nl-prop-list > li:first-child > .nl-prop-job, [data-look="new"] .nl-prop-list > li:first-child > .nl-prop-visit { border-radius: 16px 16px 0 0; }
+[data-look="new"] .nl-prop-list > li:last-child > .nl-prop-job, [data-look="new"] .nl-prop-list > li:last-child > .nl-prop-visit { border-radius: 0 0 16px 16px; }
+[data-look="new"] .nl-prop-list > li:only-child > .nl-prop-job, [data-look="new"] .nl-prop-list > li:only-child > .nl-prop-visit { border-radius: 16px; }
+[data-look="new"] .nl-prop-job { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 300px) auto; }
+[data-look="new"] .nl-prop-visit { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 260px) auto; }
+[data-look="new"] .nl-prop-job:hover, [data-look="new"] .nl-prop-visit:hover { background: var(--panel); }
+[data-look="new"] .nl-prop-row-ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--box); color: var(--muted); }
+[data-look="new"] .nl-prop-row-ic.is-hot { background: var(--accent-soft); color: var(--accent-dark); }
+[data-look="new"] .nl-prop-row-title { display: block; margin-bottom: 3px; font-size: 16px; line-height: 22px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-prop-job .nl-meta, [data-look="new"] .nl-prop-visit .nl-meta, [data-look="new"] .nl-prop-carried .nl-meta { font-size: 13.5px; }
+[data-look="new"] .nl-prop-job-next { font-size: 14px; line-height: 20px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-prop-job-next.is-hot { color: var(--accent-dark); font-weight: 500; }
+[data-look="new"] .nl-prop-visit-when { font-size: 14px; }
+[data-look="new"] .nl-prop-carried { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 18px 22px; }
+[data-look="new"] .nl-prop-visit-files { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 22px 16px 86px; }
+[data-look="new"] .nl-prop-visit-files a { max-width: 100%; }
+[data-look="new"] .nl-prop-due { padding: 18px 22px; border-radius: 18px; background: var(--panel); font-size: 15px; line-height: 22px; }
+[data-look="new"] .nl-prop-due b { font-weight: 600; }
+[data-look="new"] .nl-prop-due.is-hot { background: var(--accent-soft); }
+[data-look="new"] .nl-prop-blank { margin: 0; padding: 28px 24px; border: 1px dashed var(--line-strong); border-radius: 20px; font-family: var(--nl-serif); font-size: 17px; color: var(--muted); text-align: center; }
+@media (max-width: 900px) {
+  [data-look="new"] .nl-prop-job { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px 14px; padding: 16px; }
+  [data-look="new"] .nl-prop-job-next { grid-column: 2 / -1; grid-row: 2; white-space: normal; }
+  [data-look="new"] .nl-prop-job > .nl-badge { grid-column: 3; grid-row: 1; }
+  [data-look="new"] .nl-prop-visit { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 14px; padding: 16px; }
+  [data-look="new"] .nl-prop-visit-when { display: none; }
+  [data-look="new"] .nl-prop-carried { grid-template-columns: 40px minmax(0, 1fr); gap: 8px 14px; padding: 16px; }
+  [data-look="new"] .nl-prop-carried > :last-child { grid-column: 2; }
+  [data-look="new"] .nl-prop-row-ic { width: 40px; height: 40px; border-radius: 12px; }
+  [data-look="new"] .nl-prop-row-title { white-space: normal; }
+  [data-look="new"] .nl-prop-visit-files { padding: 0 16px 14px 70px; }
+}
+
+/* The certificate file's own head (its name, pills and Attach) is the tab's
+   head now, so it goes; its rows grow to match the jobs and visits. */
+[data-look="new"] .nl-prop-file > section > input[type="file"] + div { display: none; }
+[data-look="new"] .nl-prop-file > section > ul.space-y-2 > * + * { margin-top: 10px; }
+[data-look="new"] .nl-prop-file > section > ul.space-y-2 > li { padding: 18px 22px; border-radius: 18px; background: var(--card); }
+[data-look="new"] .nl-prop-file > section > ul.space-y-2 > li > div:first-child { gap: 12px; }
+[data-look="new"] .nl-prop-file > section > ul.space-y-2 > li > div:first-child > span:first-child { font-size: 16px; font-weight: 500; }
+[data-look="new"] .nl-prop-file > section > ul.space-y-2 > li > div:first-child > .text-\[11px\] { font-size: 13.5px; }
+[data-look="new"] .nl-prop-file > section > ul.space-y-2 > li > div:first-child > button { padding: 7px 16px; font-size: 13px; }
+[data-look="new"] .nl-prop-file > section > ul.space-y-2 > li .text-\[12px\] { font-size: 13.5px; }
+
+/* The documents keep their drop zone; the line and Upload above it are the
+   tab's head now. */
+[data-look="new"] .nl-prop-docs > div:first-child > div:first-child:has(> p + button) { display: none; }
+
+/* ── the pop-ups: room to work (James, 25 Oct 2026: "there's nothing wrong
+   with making them bigger"). Every pop-up drawn inside the page, the page's
+   own and the shared ones, opens wider than the old 600 / 760. ──────────── */
+[data-look="new"].nl-prop-page [role="dialog"] > .fade-up { max-width: min(1080px, 100%) !important; }
+@media (min-width: 640px) {
+  [data-look="new"].nl-prop-page [role="dialog"] > .fade-up { padding: 40px 44px; }
+}
 
 /* The certificate file keeps its own parts; its outer box goes flat. */
 [data-look="new"] .nl-prop-file > section { border: 0; padding: 0; background: transparent; box-shadow: none; }

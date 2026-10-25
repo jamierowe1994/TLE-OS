@@ -353,7 +353,7 @@ export default function PropertyFile({
   };
 
   const attachAll = (
-    <button type="button" onClick={() => openPicker(null)} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] font-semibold transition-colors hover:border-ink/40">
+    <button type="button" data-attach onClick={() => openPicker(null)} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] font-semibold transition-colors hover:border-ink/40">
       Attach a certificate
     </button>
   );
