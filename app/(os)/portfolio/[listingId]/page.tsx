@@ -991,6 +991,81 @@ export default function PropertyPage() {
     ) : null;
     const isRecord = Boolean(landlord?.contactId.startsWith("record:"));
 
+    /* Each tab's own buttons (James, 25 Oct 2026): what you do about that
+       part of the home sits at the top of it, beside how it stands - book an
+       inspection on Inspections, report a repair on Maintenance. Once notice
+       is in, Inspections leads with the check-out. Every one opens the same
+       pop-up as the head and the menu. */
+    const ic = (name: string) => <DoodleIcon name={name} size={15} />;
+    const btn = (label: string, icon: string, onClick: () => void, o: { primary?: boolean; disabled?: boolean; title?: string } = {}) => (
+      <button type="button" disabled={o.disabled} onClick={onClick} title={o.title} className={`nl-btn ${o.primary ? "nl-btn--primary" : "nl-btn--secondary"}`}>
+        {ic(icon)} {label}
+      </button>
+    );
+    const closedJobs = works.state === "ready" ? works.data.orders.length - openJobs.length : 0;
+    const certButton = () => document.querySelector<HTMLButtonElement>(".nl-prop-file [data-attach]")?.click();
+    const docPicker = () => document.querySelector<HTMLInputElement>(".nl-prop-docs input[type=file]")?.click();
+    const heads: Partial<Record<Tab, { sub: React.ReactNode; acts: React.ReactNode }>> = {
+      tenancy: {
+        sub: standing.find((s) => s.id === "tenancy")?.text,
+        acts: (
+          <>
+            {btn("Tenant gave notice", "logout", () => act({ kind: "tenant-notice" }), { disabled: !canAct || !tenants.length, title: "Starts the move-out" })}
+            {swapOn
+              ? btn(`${swapOn.swap.label ?? "Tenancy swap"} under way`, "key", () => act({ kind: "swap-open" }), { primary: true })
+              : btn("Tenancy swap", "key", () => act({ kind: "swap" }), { primary: true, disabled: !canAct || !tenants.length, title: "Add someone, swap a sharer or re-reference" })}
+          </>
+        ),
+      },
+      compliance: {
+        sub: standing.find((s) => s.id === "compliance")?.text,
+        acts: (
+          <>
+            {btn("Email certificates", "mail", () => setSendOpen({ start: null, heading: "Email Certificates" }), { disabled: p.test || !loginListings.length, title: "To the tenants, from you, kept on the record" })}
+            {btn("Add a certificate", "upload", certButton, { disabled: !propertyId, title: "Read and filed on the home" })}
+            {btn("Plan a certificate", "calendar", () => act({ kind: "planned" }), { primary: true, disabled: !canAct, title: "A gas safety, EICR or service, by a date" })}
+          </>
+        ),
+      },
+      maintenance: {
+        sub: works.state === "ready" && closedJobs > 0
+          ? <>{standing.find((s) => s.id === "maintenance")?.text} · {closedJobs} finished</>
+          : standing.find((s) => s.id === "maintenance")?.text,
+        acts: (
+          <>
+            {btn("Plan a certificate", "calendar", () => act({ kind: "planned" }), { disabled: !canAct, title: "A gas safety, EICR or service, by a date" })}
+            {btn("Report a repair", "setting", () => act({ kind: "repair" }), { primary: true, disabled: !canAct, title: "Tenant and landlord told at each step" })}
+          </>
+        ),
+      },
+      inspections: {
+        sub: noticeIn
+          ? <>Notice is in{leaving?.moveOutOn ? ` · they leave ${day(leaving.moveOutOn)}` : ""}</>
+          : standing.find((s) => s.id === "inspections")?.text,
+        acts: (
+          <>
+            {btn("Record a past visit", "checklist", () => act({ kind: "past-visit" }), { disabled: !canAct || visits.state !== "ready", title: "Already done elsewhere. No emails" })}
+            {btn("Book an inspection", "calendar", () => void bookVisit(), { primary: !(canAct && noticeIn), disabled: !canAct || visits.state !== "ready", title: "A property visit: the home and the tenant" })}
+            {canAct && noticeIn && btn("Book the check-out", "logout", () => void bookCheckout(), { primary: true, disabled: visits.state !== "ready", title: leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in" })}
+          </>
+        ),
+      },
+      documents: {
+        sub: "Inventories, agreements and anything else that isn't a certificate",
+        acts: (
+          <>
+            {btn("Send to tenants", "mail", () => setSendOpen({ start: null }), { disabled: p.test || !loginListings.length, title: "Certificates and documents, from you, kept on the record" })}
+            {btn("Add a document", "upload", docPicker, { primary: true, disabled: p.test })}
+          </>
+        ),
+      },
+      notes: {
+        sub: noteCount > 0 ? `${noteCount} ${noteCount === 1 ? "note" : "notes"} on this home` : "Calls, emails and queries about this home",
+        acts: btn("Add a note", "note", () => document.getElementById("home-note")?.focus(), { primary: true, disabled: !propertyId }),
+      },
+    };
+    const head = heads[tab];
+
     return (
       <SaveScopeProvider scope={saves}>
         <div data-look="new" className="nl-page nl-prop-page">
@@ -1146,6 +1221,15 @@ export default function PropertyPage() {
             </div>
 
             <div key={tab} className="nl-pane">
+              {head && (
+                <div className="nl-tabhead">
+                  <div className="min-w-0">
+                    <h2 className="nl-tabhead-title">{nlTabs.find((t) => t.id === tab)?.label}</h2>
+                    {head.sub && <p className="nl-tabhead-sub">{head.sub}</p>}
+                  </div>
+                  <div className="nl-tabhead-acts">{head.acts}</div>
+                </div>
+              )}
               {tab === "overview" && (
                 <div className="nl-bento">
                   {/* The tenants, or a shared house's rooms. */}
@@ -1340,9 +1424,6 @@ export default function PropertyPage() {
 
               {tab === "compliance" && (
                 <div className="nl-holder">
-                  {!p.test && loginListings.length > 0 && (
-                    <NlSendBar onSend={() => setSendOpen({ start: null, heading: "Email Certificates" })} what="this home's certificates" label="Email Certificates" />
-                  )}
                   {houseView && house && !house.house && !lets && (
                     <p className="nl-meta">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
                   )}
@@ -1378,10 +1459,7 @@ export default function PropertyPage() {
               )}
 
               {tab === "documents" && (
-                <div className="nl-holder">
-                  {!p.test && loginListings.length > 0 && (
-                    <NlSendBar onSend={() => setSendOpen({ start: null })} what="this home's certificates and documents" label="Send to Tenants" />
-                  )}
+                <div className="nl-holder nl-prop-docs">
                   {/* The home's documents (lib/file-documents): kept on the OS; nobody is sent anything. */}
                   <FileDocuments
                     key={p.listingId}
@@ -2459,15 +2537,6 @@ function NlFact({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function NlSendBar({ onSend, what, label }: { onSend: () => void; what: string; label: string }) {
-  return (
-    <div className="nl-prop-sendbar">
-      <p className="nl-meta">Email the tenants {what}, from you. You pick the files and the people, edit the email before it goes, and each send is kept on the record.</p>
-      <button type="button" onClick={onSend} className="nl-btn nl-btn--secondary nl-btn--sm"><Ico name="mail" size={14} />{label}</button>
-    </div>
-  );
-}
-
 function NlActivityRow({ a }: { a: Activity }) {
   return (
     <li className={`nl-prop-act${a.unfinished ? " is-draft" : ""}${a.hot ? " is-hot" : ""}`}>
@@ -2493,7 +2562,7 @@ function NlJobs({ orders, carried, onOpen }: { orders: WorksOrder[]; carried: Ca
   const open = orders.filter((o) => OPEN.includes(o.status));
   const closed = orders.filter((o) => !OPEN.includes(o.status));
   if (!orders.length && !carried.length) {
-    return <p className="nl-empty">No jobs on this home yet. Report a repair or plan a certificate and it lands here.</p>;
+    return <p className="nl-prop-blank">No jobs on this home yet. Report a repair or plan a certificate and it lands here.</p>;
   }
   const row = (o: WorksOrder) => {
     const next = nextFor(o);
@@ -2501,10 +2570,14 @@ function NlJobs({ orders, carried, onOpen }: { orders: WorksOrder[]; carried: Ca
     return (
       <li key={o.id}>
         <button type="button" onClick={() => onOpen(o)} className="nl-prop-job">
-          <span className="nl-mono nl-prop-job-ref">#{o.ref} · {o.kind === "repair" ? "Repair" : "Planned"}</span>
+          <span className={`nl-prop-row-ic${next.hot && OPEN.includes(o.status) ? " is-hot" : ""}`} aria-hidden>
+            <DoodleIcon name={o.kind === "repair" ? "setting" : "calendar"} size={17} />
+          </span>
           <span className="min-w-0">
-            <span className="nl-strong block truncate">{o.title}</span>
-            <span className="nl-meta block truncate">{o.category} · reported {shortDay(o.reportedAt ?? o.createdAt)}</span>
+            <span className="nl-prop-row-title">{o.title}</span>
+            <span className="nl-meta block truncate">
+              <span className="nl-mono">#{o.ref}</span> · {o.kind === "repair" ? "Repair" : "Planned"} · {o.category} · reported {shortDay(o.reportedAt ?? o.createdAt)}
+            </span>
           </span>
           <span className={`nl-prop-job-next${next.hot ? " is-hot" : ""}`}>{next.text}</span>
           <Badge tone={tone}>{statusLabel(o)}</Badge>
@@ -2514,31 +2587,36 @@ function NlJobs({ orders, carried, onOpen }: { orders: WorksOrder[]; carried: Ca
   };
   return (
     <div className="nl-holder">
-      {open.length > 0 ? <ul className="nl-prop-list">{open.map(row)}</ul> : <p className="nl-empty">Nothing open on this home.</p>}
+      <section className="nl-prop-group">
+        <h3 className="nl-prop-group-title">Open <span className="nl-meta">{open.length}</span></h3>
+        {open.length > 0 ? <ul className="nl-prop-list">{open.map(row)}</ul> : <p className="nl-prop-blank">Nothing open on this home.</p>}
+      </section>
       {carried.length > 0 && (
-        <div>
-          <h3 className="nl-block-title mb-2">Still Open from the Old System</h3>
+        <section className="nl-prop-group">
+          <h3 className="nl-prop-group-title">Still Open from the Old System <span className="nl-meta">{carried.length}</span></h3>
           <ul className="nl-prop-list">
             {carried.map((c) => (
               <li key={c.taskId} className="nl-prop-carried">
+                <span className={`nl-prop-row-ic${c.overdue ? " is-hot" : ""}`} aria-hidden><DoodleIcon name="setting" size={17} /></span>
                 <span className="min-w-0">
-                  <span className="nl-strong block truncate">{c.title}</span>
+                  <span className="nl-prop-row-title">{c.title}</span>
                   <span className="nl-meta block truncate">{c.category} · {c.progress || "Not started"}{c.managedBy ? ` · with ${c.managedBy}` : ""}</span>
                 </span>
                 {c.dueOn ? <Badge tone={c.overdue ? "accent" : "neutral"} bare>{c.overdue ? "Overdue" : "Due"} {day(c.dueOn)}</Badge> : <span />}
               </li>
             ))}
           </ul>
-          <p className="nl-meta mt-1.5">Taken on from the Maintenance board.</p>
-        </div>
+          <p className="nl-meta nl-prop-group-foot">Taken on from the Maintenance board.</p>
+        </section>
       )}
       {closed.length > 0 && (
-        <div>
-          <button type="button" className="nl-link" onClick={() => setShowClosed((v) => !v)} aria-expanded={showClosed}>
-            {showClosed ? "Hide finished jobs" : `${closed.length} finished ${closed.length === 1 ? "job" : "jobs"}`}
+        <section className="nl-prop-group">
+          <button type="button" className="nl-prop-group-title nl-prop-group-toggle" onClick={() => setShowClosed((v) => !v)} aria-expanded={showClosed}>
+            Finished <span className="nl-meta">{closed.length}</span>
+            <span className="nl-link ml-auto">{showClosed ? "Hide" : "Show"}</span>
           </button>
-          {showClosed && <ul className="nl-prop-list nl-fade mt-3">{closed.map(row)}</ul>}
-        </div>
+          {showClosed && <ul className="nl-prop-list nl-fade">{closed.map(row)}</ul>}
+        </section>
       )}
     </div>
   );
@@ -2550,9 +2628,12 @@ function NlVisits({ data }: { data: Visits }) {
   const row = (i: Inspection) => (
     <li key={i.id}>
       <Link href={`/inspections?open=${encodeURIComponent(i.id)}`} className="nl-prop-visit">
+        <span className={`nl-prop-row-ic${i.status === "no_access" ? " is-hot" : ""}`} aria-hidden>
+          <DoodleIcon name={i.kind === "check_out" ? "logout" : i.kind === "check_in" ? "key" : "checklist"} size={17} />
+        </span>
         <span className="min-w-0">
-          <span className="nl-strong block truncate">{VISIT_KIND[i.kind] ?? "Visit"}</span>
-          <span className="nl-meta block truncate">#{i.ref}{i.inspector ? ` · ${i.inspector}` : ""}</span>
+          <span className="nl-prop-row-title">{VISIT_KIND[i.kind] ?? "Visit"}</span>
+          <span className="nl-meta block truncate"><span className="nl-mono">#{i.ref}</span>{i.inspector ? ` · ${i.inspector}` : ""}</span>
         </span>
         <span className="nl-meta nl-prop-visit-when">
           {i.visitedAt ? `Visited ${day(i.visitedAt)}` : i.bookedAt ? `Booked ${stamp(i.bookedAt)}` : i.dueAt ? `Due ${day(i.dueAt)}` : ""}
@@ -2579,14 +2660,19 @@ function NlVisits({ data }: { data: Visits }) {
           <span className="nl-meta"> · {d.why}</span>
         </div>
       ))}
-      {open.length > 0 && <ul className="nl-prop-list">{open.map(row)}</ul>}
-      {past.length > 0 && (
-        <div>
-          <h3 className="nl-block-title mb-2">Past Visits</h3>
-          <ul className="nl-prop-list">{past.map(row)}</ul>
-        </div>
+      {open.length > 0 && (
+        <section className="nl-prop-group">
+          <h3 className="nl-prop-group-title">In Hand <span className="nl-meta">{open.length}</span></h3>
+          <ul className="nl-prop-list">{open.map(row)}</ul>
+        </section>
       )}
-      {!data.due.length && !data.inspections.length && <p className="nl-empty">No visits on this home yet, and none owed.</p>}
+      {past.length > 0 && (
+        <section className="nl-prop-group">
+          <h3 className="nl-prop-group-title">Past Visits <span className="nl-meta">{past.length}</span></h3>
+          <ul className="nl-prop-list">{past.map(row)}</ul>
+        </section>
+      )}
+      {!data.due.length && !data.inspections.length && <p className="nl-prop-blank">No visits on this home yet, and none owed.</p>}
     </div>
   );
 }
