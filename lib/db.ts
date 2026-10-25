@@ -4753,6 +4753,16 @@ CREATE TABLE IF NOT EXISTS os_property_people (
   removed_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS os_property_people_property ON os_property_people (property_id) WHERE removed_at IS NULL;
+-- Who we ring first on a home (James, 25 Oct 2026: "drag and drop who you want
+-- the point of contact to be"): the landlords and contacts in the order the
+-- agent put them, the first being the point of contact. Keys are the people's
+-- ids, or "main:<key>" for a landlord the record holds.
+CREATE TABLE IF NOT EXISTS os_home_contact_order (
+  home_key   TEXT PRIMARY KEY,
+  keys       JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_by TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- The landlord changed in the OS (Dan Richards, 17 Oct 2026, ticket 083d7752):
 -- a home that turns out to be owned by a company, an estate under probate, or
