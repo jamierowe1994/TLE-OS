@@ -121,7 +121,7 @@ export default function JobPageNew(v: JobView) {
     ...(v.urgency && v.open ? [{ text: v.urgency, hot: o.urgency === "emergency" }] : []),
     ...(v.late ? [{ text: "Overdue", hot: true }] : []),
     ...(o.rehearsal ? [{ text: "Walkthrough" }] : []),
-  ];
+  ].filter((w) => w.text);
 
   const facts: { k: string; v: string; sub?: string | null; hot?: boolean; quiet?: boolean }[] = [
     { k: o.kind === "repair" ? "Attend By" : "Due By", v: o.dueAt ? (o.kind === "repair" ? stamp(o.dueAt) : day(o.dueAt)) : "Not set", sub: v.dueIn, hot: v.late, quiet: !o.dueAt },
@@ -158,7 +158,7 @@ export default function JobPageNew(v: JobView) {
             <header className="nl-jb-head">
               <p className="nl-jb-words">
                 {words.map((w, i) => (
-                  <span key={w.text} className={w.hot ? "is-hot" : ""}>
+                  <span key={`${i}-${w.text}`} className={w.hot ? "is-hot" : ""}>
                     {i > 0 && <span className="nl-jb-sep" aria-hidden> · </span>}
                     {w.text}
                   </span>
