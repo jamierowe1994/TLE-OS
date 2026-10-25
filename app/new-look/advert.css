@@ -4,7 +4,7 @@
    Drawer. Sits under the photo drop (z 160) and the guide (z 200) that open over it. */
 /* No rise on the wrap itself (it sits inside .nl-rise): an animated wrap cuts the drawer's blur off from the page behind. */
 [data-look="new"].nl-adv-wrap { position: fixed; inset: 0; z-index: 125; animation: none; }
-[data-look="new"] .nl-adv-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(20, 20, 19, .2); cursor: default; animation: nl-fade .3s ease both; }
+[data-look="new"] .nl-adv-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(20, 20, 19, .58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); cursor: default; animation: nl-fade .3s ease both; }
 [data-look="new"] .nl-adv-drawer { position: absolute; top: 10px; right: 10px; bottom: 10px; width: min(880px, calc(100% - 20px)); display: flex; flex-direction: column; background: color-mix(in srgb, var(--page) 95%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.1); backdrop-filter: blur(24px) saturate(1.1); color: var(--ink); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; animation: nl-adv-in .55s var(--nl-ease) both; }
 @keyframes nl-adv-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes nl-adv-out { to { transform: translateX(40px); opacity: 0; } }
@@ -32,7 +32,8 @@
 @keyframes nl-adv-spin { to { transform: rotate(360deg); } }
 
 /* Steve's band. */
-[data-look="new"] .nl-adv-fill { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 16px; padding: 18px 20px; border-radius: 20px; background: var(--accent-soft); }
+/* No band behind it (James, 25 Oct): clean, on the drawer's own white. */
+[data-look="new"] .nl-adv-fill { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 16px; padding: 2px 0 4px; }
 [data-look="new"] .nl-adv-fill-text { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 [data-look="new"] .nl-adv-fill-text b { font-weight: 600; font-size: 14.5px; line-height: 20px; }
 [data-look="new"] .nl-adv-fill-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
