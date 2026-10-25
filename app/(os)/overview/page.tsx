@@ -8,6 +8,8 @@ import OverviewPanel, { useOverviewPanel } from "@/components/portfolio/Overview
 import { useNewLook } from "@/lib/use-new-look";
 import { Mast, Badge, Ico } from "@/components/new-look/Parts";
 import { Stat, Meter, Card as NlCard, Failed, Loading, Spin } from "@/components/new-look/backoffice/Bits";
+import RecordsDrawer, { type PmRecordKind, type RecordAsk } from "@/components/new-look/dashboard/RecordsDrawer";
+import { CountUp } from "@/components/new-look/dashboard/Charts";
 
 /**
  * Overview (1 Oct 2026): property management at a glance, one tile per part
@@ -346,71 +348,97 @@ function OverviewNew({ data, error, reload, open, panel }: { data: Board | null;
   const reading = !data && !error;
   const vac = data?.moveOuts && data?.lettings ? combine(data.moveOuts, data.lettings) : undefined;
 
+  /* The figure lists (James, 25 Oct 2026: "they should all be clickable tiles,
+     and they should open out"): the records behind a figure in the front
+     dashboard's pop-out (app/api/overview/records), and the three boards that
+     already open here (inspections, reviews, move-outs) as they always did. */
+  const [ask, setAsk] = useState<RecordAsk | null>(null);
+  const list = (kind: PmRecordKind, title: string, figure: number, columns: [string, string, string, string, string], board: { href: string; label: string }, note: string, empty: string, drift = true) => () =>
+    setAsk({ kind, endpoint: "/api/overview/records", title, figure, range: data?.scope ? (data.scope.whole ? "Every home" : "Your homes") : "Now", note, board, columns, empty, drift });
+  const md = data?.maintenance?.ok ? data.maintenance.data : null;
+  const ind = data?.inspections?.ok ? data.inspections.data : null;
+  const rd = data?.reviews?.ok ? data.reviews.data : null;
+  const mo = data?.moveOuts?.ok ? data.moveOuts.data : null;
+  const cd = data?.compliance?.ok ? data.compliance.data : null;
+  const apd = data?.applications?.ok ? data.applications.data : null;
+  const ld = data?.lettings?.ok ? data.lettings.data : null;
+  const state = (t: Tile<unknown> | undefined) => ({ loading: reading || (!t && !error), error: error ? "Couldn't be read just now" : tileErr(t) });
+
   return (
-    <div data-look="new" className="nl-page nl-rise nl-bo">
+    <div data-look="new" className="nl-page nl-rise nl-bo nl-pm">
       <Mast
         eyebrow={data?.scope ? (data.scope.whole ? "Every home across the business" : "The homes on your own book") : "Back office"}
         title="PM Dashboard"
-        blurb="Your homes at a glance: what is late, what is coming up, and where to go next. Every figure is live from the screen it opens."
+        blurb="Your homes at a glance: what is late, what is coming up, and where to go next. Press any figure to see what is behind it."
       />
 
       {error && <Failed onRetry={reload}>{error}</Failed>}
-      {reading && <Loading>Reading every board… the first look of the day can take half a minute.</Loading>}
 
-      <div className="nl-bo-stats">
-        <Stat
-          label="Managed"
-          href="/portfolio"
-          value={error ? "-" : pd ? pd.managed.toLocaleString("en-GB") : null}
-          error={tileErr(p)}
-          note={pd ? `homes for ${pd.landlords.toLocaleString("en-GB")} landlord${pd.landlords === 1 ? "" : "s"}` : undefined}
-        />
-        <Stat
-          label="Occupancy"
-          href="/portfolio"
-          value={error ? "-" : pd ? (pd.occupied != null ? pct(pd.occupied, pd.managed) : "-") : null}
-          error={tileErr(p)}
-          delta={pd && pd.occupied != null ? `${pd.vacant ?? 0} vacant` : undefined}
-          deltaTone={pd && (pd.vacant ?? 0) > 0 ? "bad" : "quiet"}
-          note={pd ? (pd.occupied != null ? `${pd.upcoming ?? 0} becoming vacant` : "tenancy status not read yet") : undefined}
-        />
-        <Stat
-          label="Rent roll"
-          href="/portfolio"
-          value={error ? "-" : pd ? compact(pd.rentRoll) : null}
-          error={tileErr(p)}
-          delta={pd ? "a month" : undefined}
-          note={pd ? `average ${pounds(pd.avgRent)}` : undefined}
-        />
-        <Stat
-          label="Arrears"
-          href="/finances"
-          warm={!!ad && ad.tenants > 0}
-          value={error ? "-" : ad ? compact(ad.owed) : null}
-          error={tileErr(a)}
-          delta={ad ? `${ad.tenants} tenant${ad.tenants === 1 ? "" : "s"}` : undefined}
-          deltaTone={ad && ad.tenants > 0 ? "bad" : "quiet"}
-          note={ad ? (ad.tenants > 0 ? `behind · largest ${pounds(ad.largest)}` : "behind on rent") : undefined}
-        />
-      </div>
+      <PmRow title="The Book" sub="The managed homes, who is in them, and the rent they bring.">
+        <PmTile label="Managed homes" {...state(p)} value={pd?.managed ?? null}
+          sub={pd ? `for ${pd.landlords.toLocaleString("en-GB")} landlord${pd.landlords === 1 ? "" : "s"}` : null}
+          strip={pd && pd.occupied != null ? [pd.occupied, (pd.vacant ?? 0) + (pd.upcoming ?? 0)] : null}
+          onOpen={pd ? list("managed", "Managed Homes", pd.managed, ["Landlord", "Home", "Let since", "Service", "Tenants"], { href: "/portfolio", label: "Open Portfolio" }, "Every home on the book, A to Z, Let Only and Rent Collect included. The figure on the tile counts homes as property management does.", "No managed homes on the book.", false) : undefined} />
+        <PmTile label="Occupancy" {...state(p)} value={pd && pd.occupied != null && pd.managed > 0 ? Math.round((pd.occupied / pd.managed) * 100) : null} suffix="%"
+          badge={pd && (pd.vacant ?? 0) > 0 ? { text: `${pd.vacant} vacant`, tone: "warn" } : null}
+          sub={pd ? (pd.occupied != null ? `${pd.upcoming ?? 0} becoming vacant` : "tenancy status not read yet") : null}
+          strip={pd && pd.occupied != null ? [pd.occupied, pd.vacant ?? 0] : null}
+          onOpen={() => open("move-outs")} />
+        <PmTile label="Rent roll" {...state(p)} value={pd?.rentRoll ?? null} money
+          sub={pd ? `a month · average ${pounds(pd.avgRent)}` : null}
+          onOpen={pd ? list("managed", "Managed Homes", pd.managed, ["Landlord", "Home", "Let since", "Service", "Tenants"], { href: "/portfolio", label: "Open Portfolio" }, "Every home on the book, A to Z.", "No managed homes on the book.", false) : undefined} />
+        <PmTile label="Arrears" {...state(a)} value={ad?.owed ?? null} money
+          badge={ad && ad.tenants > 0 ? { text: `${ad.tenants} tenant${ad.tenants === 1 ? "" : "s"}`, tone: "warn" } : null}
+          sub={ad ? (ad.tenants > 0 ? `behind · largest ${pounds(ad.largest)}` : "nobody behind on rent") : null}
+          onOpen={ad ? list("arrears", "Arrears", ad.tenants, ["Tenant", "Home", "Last invoice", "", "Owed"], { href: "/finances", label: "Open Finances" }, "Tenants behind on rent, most owed first.", "Nobody is behind on rent.") : undefined} />
+      </PmRow>
 
-      <div className="nl-bo-g2">
+      <PmRow title="The Work" sub="Jobs, visits and the tenancies that need something doing.">
+        <PmTile label="Maintenance" {...state(data?.maintenance)} value={md?.open ?? null}
+          badge={md && md.overdue > 0 ? { text: `${md.overdue} overdue`, tone: "warn" } : null}
+          sub={md ? `${md.emergencies} emergenc${md.emergencies === 1 ? "y" : "ies"} · ${md.followUp} to follow up` : null}
+          strip={md ? [md.open - md.overdue, md.overdue] : null}
+          onOpen={md ? list("maintenance", "Open Jobs", md.open, ["Job", "Home", "Due", "Urgency", "Status"], { href: "/maintenance", label: "Open Maintenance" }, "Overdue first, then by when they're due.", "No open jobs.") : undefined} />
+        <PmTile label="Inspections due" {...state(data?.inspections)} value={ind?.due ?? null}
+          badge={ind && ind.overdue > 0 ? { text: `${ind.overdue} overdue`, tone: "warn" } : null}
+          sub={ind ? `${ind.booked} booked · ${ind.awaitingTenant} waiting on the tenant` : null}
+          strip={ind ? [ind.due - ind.overdue, ind.overdue] : null}
+          onOpen={() => open("inspections")} />
+        <PmTile label="Tenancy reviews" {...state(data?.reviews)} value={rd?.due ?? null}
+          badge={rd && rd.overdue > 0 ? { text: `${rd.overdue} overdue`, tone: "warn" } : null}
+          sub={rd ? `${rd.noticeServed} notice served · ${rd.doneThisMonth} done this month` : null}
+          strip={rd ? [rd.due - rd.overdue, rd.overdue] : null}
+          onOpen={() => open("tenancy-reviews")} />
+        <PmTile label="Move-outs" {...state(data?.moveOuts)} value={mo?.open ?? null}
+          badge={mo && mo.overdue > 0 ? { text: `${mo.overdue} overdue`, tone: "warn" } : null}
+          sub={mo ? `${mo.next30} in the next 30 days` : null}
+          strip={mo ? [mo.open - mo.overdue, mo.overdue] : null}
+          onOpen={() => open("move-outs")} />
+      </PmRow>
+
+      <PmRow title="Compliance and Lettings" sub="Certificates, and the homes on their way to a tenant.">
+        <PmTile label="Certificates expired" {...state(data?.compliance)} value={cd?.expired ?? null}
+          badge={cd && cd.dueSoon > 0 ? { text: `${cd.dueSoon} due in 30 days`, tone: "warn" } : null}
+          sub={cd ? `on ${cd.homesAffected} home${cd.homesAffected === 1 ? "" : "s"}` : null}
+          strip={cd ? [cd.dueSoon, cd.expired] : null}
+          onOpen={cd ? list("compliance", "Certificates", cd.expired + cd.dueSoon, ["Certificate", "Home", "Expires", "Landlord", "Status"], { href: "/compliance", label: "Open Compliance" }, "Expired first, then the ones due in the next 30 days.", "Nothing expired or due.") : undefined} />
+        <PmTile label="Applications" {...state(data?.applications)} value={apd?.open ?? null}
+          sub={apd ? `${apd.movingIn} moving in` : null}
+          onOpen={apd ? list("applications", "Open Applications", apd.open, ["Applicants", "Home", "Received", "", "Status"], { href: "/applications", label: "Open Applications" }, "Newest first.", "No open applications.") : undefined} />
+        <PmTile label="On the market" {...state(data?.lettings)} value={ld?.available ?? null}
+          sub={ld ? `${ld.letAgreed} let agreed · ${ld.drafts} drafts` : null}
+          onOpen={ld ? list("market", "On the Market", ld.available, ["Rent", "Home", "Live since", "", "Status"], { href: "/listings", label: "Open Listings" }, "Longest on the market first.", "Nothing on the market.") : undefined} />
+        <PmTile label="Let agreed" {...state(data?.lettings)} value={ld?.letAgreed ?? null} sub={ld ? "on their way to a move-in" : null} href="/applications" />
+      </PmRow>
+
+      <div className="nl-bo-g2 nl-pm-cards">
         <NlCard title="Occupancy" aside={<Link href="/portfolio" className="nl-link nl-bo-aside">Portfolio</Link>}>
           {!p ? (
             <Loading>Reading the book…</Loading>
           ) : !p.ok ? (
             <p className="nl-bo-err">{p.error}</p>
           ) : p.data.occupied == null ? (
-            /* Before the old system's tenancy status is read, REX only knows whether a tenant's
-               name is on file, which reads half the book as empty - so no meters. */
-            <>
-              <p className="nl-meta">Tenanted and vacant come from the tenancy status, which has not been read yet. Until it is, the book as it stands:</p>
-              <div className="nl-bo-mini" style={{ "--n": 3 } as React.CSSProperties}>
-                <MiniFact k="Homes" v={p.data.managed} />
-                <MiniFact k="Landlords" v={p.data.landlords} />
-                <div className="min-w-0"><span>Average rent</span><b>{pounds(p.data.avgRent)}</b></div>
-              </div>
-            </>
+            <p className="nl-meta">Tenanted and vacant come from the tenancy status, which has not been read yet.</p>
           ) : (
             <div className="nl-bo-meters">
               <Meter label="Tenanted" n={p.data.occupied} of={p.data.managed} />
@@ -429,122 +457,19 @@ function OverviewNew({ data, error, reload, open, panel }: { data: Board | null;
             <Loading>Reading the move-outs…</Loading>
           ) : !vac.ok ? (
             <p className="nl-bo-err">{vac.error}</p>
+          ) : vac.data.next.length === 0 ? (
+            <p className="nl-meta">No move-out days ahead.</p>
           ) : (
-            <>
-              <p className="nl-bo-fig">
-                {vac.data.open.toLocaleString("en-GB")}
-                <span className="nl-meta"> tenancies ending</span>
-              </p>
-              <div className="nl-bo-mini" style={{ "--n": 4 } as React.CSSProperties}>
-                <MiniFact k="Overdue" v={vac.data.overdue} hot={vac.data.overdue > 0} />
-                <MiniFact k="Next 30 days" v={vac.data.next30} />
-                <MiniFact k="On the market" v={vac.data.available} />
-                <MiniFact k="Let agreed" v={vac.data.letAgreed} />
-              </div>
-              {vac.data.next.length === 0 ? (
-                <p className="nl-meta mt-3">No move-out days ahead.</p>
-              ) : (
-                <ul className="nl-bo-list">
-                  {vac.data.next.map((l, i) => (
-                    <li key={i}>
-                      <span className="nl-strong min-w-0 flex-1 truncate">{l.where}</span>
-                      <span className="nl-meta shrink-0">{l.on ? shortDay(l.on) : ""}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
+            <ul className="nl-bo-list">
+              {vac.data.next.map((l, i) => (
+                <li key={i}>
+                  <span className="nl-strong min-w-0 flex-1 truncate">{l.where}</span>
+                  <span className="nl-meta shrink-0">{l.on ? shortDay(l.on) : ""}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </NlCard>
-      </div>
-
-      <div className="nl-bo-g3">
-        <Part title="Maintenance" href="/maintenance" tile={data?.maintenance}>
-          {(d) => (
-            <>
-              <Fig n={d.open} label="open jobs" />
-              <div className="nl-bo-mini" style={{ "--n": 3 } as React.CSSProperties}>
-                <MiniFact k="Overdue" v={d.overdue} hot={d.overdue > 0} />
-                <MiniFact k="Follow up" v={d.followUp} hot={d.followUp > 0} />
-                <MiniFact k="Emergencies" v={d.emergencies} hot={d.emergencies > 0} />
-              </div>
-              {d.late.length === 0 ? (
-                <p className="nl-meta mt-3">Nothing late.</p>
-              ) : (
-                <ul className="nl-bo-list">
-                  {d.late.map((l, i) => (
-                    <li key={i}>
-                      <span className="min-w-0 flex-1 truncate"><span className="nl-strong">{l.title}</span>{l.where ? <span className="nl-meta"> · {l.where}</span> : null}</span>
-                      {l.dueOn ? <Badge tone="accent" plain>due {shortDay(l.dueOn)}</Badge> : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {d.partial && <p className="nl-bo-err mt-2">{d.partial}</p>}
-            </>
-          )}
-        </Part>
-
-        <Part title="Inspections" onOpen={() => open("inspections")} tile={data?.inspections}>
-          {(d) => (
-            <>
-              <Fig n={d.due} label="visits due" />
-              <div className="nl-bo-mini" style={{ "--n": 3 } as React.CSSProperties}>
-                <MiniFact k="Overdue" v={d.overdue} hot={d.overdue > 0} />
-                <MiniFact k="Booked in" v={d.booked} />
-                <MiniFact k="Waiting on tenant" v={d.awaitingTenant} />
-              </div>
-            </>
-          )}
-        </Part>
-
-        <Part title="Tenancy Reviews" onOpen={() => open("tenancy-reviews")} tile={data?.reviews}>
-          {(d) => (
-            <>
-              <Fig n={d.due} label="to review" />
-              <div className="nl-bo-mini" style={{ "--n": 3 } as React.CSSProperties}>
-                <MiniFact k="Overdue" v={d.overdue} hot={d.overdue > 0} />
-                <MiniFact k="Notice served" v={d.noticeServed} />
-                <MiniFact k="Done this month" v={d.doneThisMonth} />
-              </div>
-            </>
-          )}
-        </Part>
-
-        <Part title="Compliance" href="/compliance" tile={data?.compliance}>
-          {(d) => (
-            <>
-              <Fig n={d.expired} label="certificates expired" hot={d.expired > 0} />
-              <div className="nl-bo-mini" style={{ "--n": 2 } as React.CSSProperties}>
-                <MiniFact k="Due in 30 days" v={d.dueSoon} hot={d.dueSoon > 0} />
-                <MiniFact k="Homes affected" v={d.homesAffected} />
-              </div>
-            </>
-          )}
-        </Part>
-
-        <Part title="Applications" href="/applications" tile={data?.applications}>
-          {(d) => (
-            <>
-              <Fig n={d.open} label="open applications" />
-              <div className="nl-bo-mini" style={{ "--n": 1 } as React.CSSProperties}>
-                <MiniFact k="Moving in" v={d.movingIn} />
-              </div>
-            </>
-          )}
-        </Part>
-
-        <Part title="Lettings" href="/listings" tile={data?.lettings}>
-          {(d) => (
-            <>
-              <Fig n={d.available} label="homes on the market" />
-              <div className="nl-bo-mini" style={{ "--n": 2 } as React.CSSProperties}>
-                <MiniFact k="Let agreed" v={d.letAgreed} />
-                <MiniFact k="Drafts" v={d.drafts} />
-              </div>
-            </>
-          )}
-        </Part>
       </div>
 
       {data && (
@@ -554,9 +479,72 @@ function OverviewNew({ data, error, reload, open, panel }: { data: Board | null;
         </p>
       )}
 
+      <RecordsDrawer ask={ask} onClose={() => setAsk(null)} />
       {panel}
     </div>
   );
+}
+
+/** A row of figures under its heading, the front dashboard's way. */
+function PmRow({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
+  return (
+    <section className="nl-pm-row">
+      <div className="nl-dash-bar-h">
+        <div>
+          <h2 className="nl-dash-h2">{title}</h2>
+          <p className="nl-dash-bar-sub">{sub}</p>
+        </div>
+      </div>
+      <div className="nl-dash-stats">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * One figure, drawn as the front dashboard's are: label and badge, the number
+ * counting up, what it means, and a strip of what is fine against what is
+ * late. Pressing it opens what is behind it; a figure that wasn't read is a
+ * dash with the reason, and opens nothing.
+ */
+function PmTile({
+  label, value, loading, error, sub, badge, strip, money, suffix, onOpen, href,
+}: {
+  label: string; value: number | null; loading: boolean; error: string | null; sub?: React.ReactNode; badge?: { text: string; tone: "warn" | "up" | "flat" } | null;
+  strip?: [number, number] | null; money?: boolean; suffix?: string; onOpen?: () => void; href?: string;
+}) {
+  const ready = !loading && !error && value != null;
+  const body = (
+    <>
+      <span className="nl-dash-stat-top">
+        <span>{label}</span>
+        {ready && badge && <em className={`nl-dash-badge is-${badge.tone}`}>{badge.text}</em>}
+      </span>
+      {loading ? (
+        <span className="nl-dash-skel" aria-label="Loading"><i /></span>
+      ) : !ready ? (
+        <>
+          <b className="nl-dash-stat-n is-off">-</b>
+          <span className="nl-dash-stat-sub nl-dash-warn">{error ?? "Couldn't be read just now"}</span>
+        </>
+      ) : (
+        <>
+          <b className="nl-dash-stat-n">
+            <CountUp value={value!} format={(n) => (money ? compact(n) : `${Math.round(n).toLocaleString("en-GB")}${suffix ?? ""}`)} />
+          </b>
+          <span className="nl-dash-stat-sub">{sub}</span>
+          {strip && strip[0] + strip[1] > 0 && (
+            <span className="nl-dash-strip" aria-hidden>
+              <i className="is-ok" style={{ flexGrow: Math.max(0, strip[0]) }} />
+              <i className="is-late" style={{ flexGrow: Math.max(0, strip[1]) }} />
+            </span>
+          )}
+        </>
+      )}
+    </>
+  );
+  if (ready && onOpen) return <button type="button" className="nl-dash-stat" onClick={onOpen} aria-label={`${label}. Show them.`}>{body}</button>;
+  if (ready && href) return <Link href={href} className="nl-dash-stat">{body}</Link>;
+  return <div className="nl-dash-stat is-still">{body}</div>;
 }
 
 /** One part of the job: its figure, its counts, and where it opens. */
