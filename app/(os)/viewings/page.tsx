@@ -1,7 +1,7 @@
 "use client";
 
 import AccessBoard from "@/components/viewings/AccessBoard";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
@@ -27,7 +27,7 @@ import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import { PressButton } from "@/components/Bits";
 import { useNewLook } from "@/lib/use-new-look";
 import { Mast, Menu, Tabs, Ico } from "@/components/new-look/Parts";
-import { DayDial, DiaryRows, MonthGrid, Spinner, dayLabel } from "@/components/new-look/diary/DiaryParts";
+import { DiaryRows, MonthGrid, Spinner, dayLabel } from "@/components/new-look/diary/DiaryParts";
 import { openGuide } from "@/lib/guide-sheet";
 
 /**
@@ -69,14 +69,20 @@ const hasFeedback = (a: Appt) => Boolean(a.feedback);
 type TileId = "upcoming" | "today" | "week" | "due" | "in";
 /** What the space beside the month is showing. `day` is a month click. */
 type Panel = AgendaMode | "week";
-/** The new look's tabs (lib/new-look "diary"): the old views and panels, side by side. */
-type NlTab = "day" | "week" | "month" | "upcoming" | "due" | "in" | "report";
+/**
+ * The new look's tabs (lib/new-look "diary"). Two since 25 Oct 2026 (James:
+ * "the automatic preselection should be Month... get rid of the Day... we
+ * can keep the 7 days"): the day is what opens under the month, and the
+ * feedback views went, the rows still saying Feedback due where it is.
+ */
+type NlTab = "month" | "week";
 
 export default function Viewings() {
   const look = useNewLook("diary");
-  const [nlTab, setNlTab] = useState<NlTab>("day");
-  /* Upcoming in the new look: whole days, about this many rows at a time. */
-  const [upRows, setUpRows] = useState(20);
+  const [nlTab, setNlTab] = useState<NlTab>("month");
+  /* The entry dropped down under its row in the new look, and the day under the month to bring into view. */
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const dayRef = useRef<HTMLDivElement | null>(null);
   /* Three views, not two. "Feedback" is the landlord's question - people have
      been round, what did they say - and it is asked per PROPERTY, which is a
      different shape from a diary. See components/viewings/FeedbackReport. */
@@ -188,7 +194,7 @@ export default function Viewings() {
 
   /* What the Print button prints: the day, or the seven days. */
   const printGroups: PrintGroup[] =
-    (look ? nlTab === "day" : panel === "day")
+    (look ? nlTab === "month" : panel === "day")
       ? [{ heading: fmtFull(dateOfOffset(selected)), sub: nearLabel(selected) ?? undefined, list: byDay.get(selected) ?? [] }]
       : Array.from({ length: 7 }, (_, i) => ({
           heading: fmtFull(dateOfOffset(i)),
@@ -284,38 +290,48 @@ export default function Viewings() {
     /* A figure is only said once the diary has answered, and never over a
        failed read (the live-figures rule). */
     const sure = !loading && !error;
-    const nlPick = (offset: number) => {
+    /* A day opens under the month; the week's days and entries open there too. */
+    const showDay = (offset: number, openId: string | null = null) => {
       pickDay(offset);
-      setNlTab("day");
+      setNlTab("month");
+      setOpenRow(openId);
+      window.setTimeout(() => dayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    };
+    const drop = {
+      openId: openRow,
+      onToggle: (a: Appt) => setOpenRow((cur) => (cur === a.id ? null : a.id)),
+      render: (a: Appt) => (
+        <AppointmentDrawer
+          newLook
+          inline
+          appt={a}
+          onClose={() => setOpenRow(null)}
+          onOpenViewing={(x) => setFullId(x.id)}
+          onChangeTime={(x) => setChanging(x)}
+          onAddToBlock={(anchor) => setBlockAnchor(anchor)}
+          sentExtra={sentExtra}
+          onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
+        />
+      ),
     };
     const dayList = byDay.get(selected) ?? [];
     const dayCount = counted(dayList);
     const weekCount = counted(week);
     const n = (x: number) => (sure ? x : null);
     const tabs: { id: NlTab; label: string; count?: number | null }[] = [
-      { id: "day", label: "Day" },
-      { id: "week", label: "Next 7 days", count: n(weekCount) },
       { id: "month", label: "Month" },
-      { id: "upcoming", label: "Upcoming", count: n(counted(upcoming)) },
-      { id: "due", label: "Feedback due", count: n(due.length) },
-      { id: "in", label: "Feedback in", count: n(fedBack.length) },
-      { id: "report", label: "Feedback report" },
+      { id: "week", label: "Next 7 days", count: n(weekCount) },
     ];
     const blurbs: Record<NlTab, string> = {
-      day: "",
-      week: "Today and the six days after it, hour by hour.",
-      month: "Pick a day to open it on the dial.",
-      upcoming: "Everything still to happen, a day at a time.",
-      due: "Been, and nobody has written down what was said.",
-      in: "What the applicant said, ready for the landlord.",
-      report: "Every viewing's feedback, gathered by property.",
+      month: "Pick a day and it opens below. Open anything on it to see the details, change it or confirm it.",
+      week: "Today and the six days after it, hour by hour. Pick one to open it under the month.",
     };
     const whose = fAgent ? (fAgent === me?.name ? "in your diary" : `in ${fAgent}'s diary`) : everything ? "across the team" : "";
     const blurb = loading
       ? "Reading the diary…"
       : error
         ? "The diary couldn't be read just now, so no figures are shown. Try again in a moment."
-        : `${weekCount === 0 ? "Nothing" : weekCount === 1 ? "One appointment" : `${weekCount} appointments`} in the next seven days${whose ? ` ${whose}` : ""}. Step through the days on the dial, or open the month.`;
+        : `${weekCount === 0 ? "Nothing" : weekCount === 1 ? "One appointment" : `${weekCount} appointments`} in the next seven days${whose ? ` ${whose}` : ""}.`;
     const anySet = Boolean(q.trim() || fKind || (everything && fAgent));
     const loadingLine = (
       <p className="nl-empty" role="status">
@@ -323,17 +339,6 @@ export default function Viewings() {
         Reading the diary…
       </p>
     );
-    /* Upcoming, a day at a time, each day a door back to the dial. */
-    const allUpDays = [...new Set(upcoming.map((a) => a.day))];
-    /* Paged by DAY, so a day is never cut in half. */
-    const upcomingDays: number[] = [];
-    let upLeft = upRows;
-    for (const d of allUpDays) {
-      if (upLeft <= 0) break;
-      upcomingDays.push(d);
-      upLeft -= upcoming.filter((a) => a.day === d).length;
-    }
-    const upHidden = upcoming.filter((a) => a.day > (upcomingDays[upcomingDays.length - 1] ?? Infinity)).length;
     return (
       <>
         <div data-look="new" className="nl-page nl-rise nl-diary">
@@ -350,10 +355,7 @@ export default function Viewings() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    pickDay(0);
-                    setNlTab("day");
-                  }}
+                  onClick={() => showDay(0)}
                   className="nl-btn nl-btn--secondary"
                 >
                   Back to today
@@ -361,7 +363,7 @@ export default function Viewings() {
                 <Menu
                   items={[
                     {
-                      label: nlTab === "day" ? "Print this day" : "Print the next seven days",
+                      label: nlTab === "month" ? "Print this day" : "Print the next seven days",
                       sub: "A run sheet for the car",
                       onClick: () => window.print(),
                     },
@@ -430,83 +432,35 @@ export default function Viewings() {
           )}
 
           <div className="nl-diary-body" key={nlTab}>
-            {nlTab === "day" && (
+            {nlTab === "month" && (
               <>
-                <DayDial selected={selected} byDay={byDay} onSelect={pickDay} />
-                <div className="nl-diary-dayhead">
-                  <h2 className="nl-section-title">{dayLabel(selected)}</h2>
-                  <span className="nl-meta">
-                    {nearLabel(selected) ? fmtFull(dateOfOffset(selected)) : ""}
-                    {nearLabel(selected) && sure && dayCount ? " · " : ""}
-                    {sure && dayCount ? `${dayCount} ${dayCount === 1 ? "appointment" : "appointments"}` : ""}
-                  </span>
-                  <button type="button" className="nl-link ml-auto" onClick={() => window.print()}>
-                    Print
-                  </button>
+                <MonthGrid byDay={byDay} selected={selected} monthShift={monthShift} onMonthShift={setMonthShift} onPick={(d) => showDay(d)} />
+                <div ref={dayRef} className="nl-diary-under">
+                  <div className="nl-diary-dayhead">
+                    <h2 className="nl-section-title">{dayLabel(selected)}</h2>
+                    <span className="nl-meta">
+                      {nearLabel(selected) ? fmtFull(dateOfOffset(selected)) : ""}
+                      {nearLabel(selected) && sure && dayCount ? " · " : ""}
+                      {sure && dayCount ? `${dayCount} ${dayCount === 1 ? "appointment" : "appointments"}` : ""}
+                    </span>
+                    <button type="button" className="nl-link ml-auto" onClick={() => window.print()}>
+                      Print
+                    </button>
+                  </div>
+                  {loading && !dayList.length ? (
+                    loadingLine
+                  ) : dayList.length ? (
+                    <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setOpenRow(a.id)} drop={drop} />
+                  ) : (
+                    <p className="nl-empty">{selected < 0 ? "Nothing was booked that day." : "A clear day. Rare. Enjoy it."}</p>
+                  )}
                 </div>
-                {loading && !dayList.length ? (
-                  loadingLine
-                ) : dayList.length ? (
-                  <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />
-                ) : (
-                  <p className="nl-empty">{selected < 0 ? "Nothing was booked that day." : "A clear day. Rare. Enjoy it."}</p>
-                )}
               </>
             )}
 
             {nlTab === "week" && (
               <div className="nl-diary-holder">
-                {loading && !DIARY.length ? loadingLine : <WeekGrid appts={scoped} onOpen={(a) => setQuickId(a.id)} onPrint={() => window.print()} onPickDay={nlPick} />}
-              </div>
-            )}
-
-            {nlTab === "month" && <MonthGrid byDay={byDay} selected={selected} monthShift={monthShift} onMonthShift={setMonthShift} onPick={nlPick} />}
-
-            {nlTab === "upcoming" &&
-              (loading && !upcoming.length ? (
-                loadingLine
-              ) : upcoming.length === 0 ? (
-                <p className="nl-empty">Nothing booked ahead.</p>
-              ) : (
-                upcomingDays.map((d) => {
-                  const list = upcoming.filter((a) => a.day === d);
-                  const c = counted(list);
-                  return (
-                    <section key={d} className="nl-diary-group">
-                      <button type="button" className="nl-diary-grouphead" onClick={() => nlPick(d)}>
-                        <span className={`nl-block-title${d === 0 ? " is-today" : ""}`}>{dayLabel(d)}</span>
-                        <span className="nl-meta">{nearLabel(d) ? fmtShort(dateOfOffset(d)) : ""}</span>
-                        <span className="nl-meta ml-auto">{c} {c === 1 ? "appointment" : "appointments"}</span>
-                      </button>
-                      <DiaryRows list={list} page={list.length} resetKey={`up:${d}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />
-                    </section>
-                  );
-                }).concat(
-                  upHidden > 0 ? (
-                    <button key="more" type="button" className="nl-btn nl-btn--secondary nl-btn--sm mt-6" onClick={() => setUpRows((n) => n + 20)}>
-                      See more · {upHidden} to go
-                    </button>
-                  ) : upRows > 20 ? (
-                    <button key="less" type="button" className="nl-link mt-6" onClick={() => setUpRows(20)}>
-                      Show less
-                    </button>
-                  ) : (
-                    []
-                  )
-                )
-              ))}
-
-            {(nlTab === "due" || nlTab === "in") &&
-              (() => {
-                const list = nlTab === "due" ? due : fedBack;
-                if (loading && !list.length) return loadingLine;
-                if (!list.length) return <p className="nl-empty">{nlTab === "due" ? "Nothing waiting on feedback. Rare, and good." : "No feedback recorded yet."}</p>;
-                return <DiaryRows list={list} showDay resetKey={nlTab} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />;
-              })()}
-
-            {nlTab === "report" && (
-              <div className="nl-diary-holder">
-                <FeedbackReport appts={scoped} loading={loading} error={error} onOpen={(a) => setQuickId(a.id)} onPrint={() => window.print()} />
+                {loading && !DIARY.length ? loadingLine : <WeekGrid appts={scoped} onOpen={(a) => showDay(a.day, a.id)} onPrint={() => window.print()} onPickDay={(d) => showDay(d)} />}
               </div>
             )}
           </div>

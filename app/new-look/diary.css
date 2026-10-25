@@ -88,6 +88,24 @@
   [data-look="new"] .nl-diary-caret { grid-column: 4; grid-row: 1; }
 }
 
+/* A row that drops down (25 Oct 2026): the caret turns, and the entry's
+   details and buttons open under it in a soft panel, not a drawer. */
+[data-look="new"] .nl-diary-caret { transition: transform 0.3s var(--nl-ease); }
+[data-look="new"] .nl-diary-row.is-open { background: var(--panel); padding-left: 10px; padding-right: 10px; border-radius: 12px 12px 0 0; }
+[data-look="new"] .nl-diary-row.is-open .nl-diary-caret { transform: rotate(90deg); color: var(--ink); }
+[data-look="new"] .nl-diary-drop { background: var(--panel); border-radius: 0 0 16px 16px; margin-bottom: 10px; animation: nl-diary-drop 0.32s var(--nl-ease); }
+@keyframes nl-diary-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-diary-drop { animation: none; } }
+[data-look="new"] .nl-diary-inline-body { display: flex; flex-direction: column; gap: 20px; padding: 6px 20px 18px 80px; }
+[data-look="new"] .nl-diary-inline-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-diary-inline-body { padding: 4px 14px 16px; }
+  [data-look="new"] .nl-diary-inline-foot { padding: 12px 14px 14px; justify-content: flex-start; }
+}
+
+/* The day under the month: what a click on a day opens. */
+[data-look="new"] .nl-diary-under { margin-top: 34px; scroll-margin-top: 24px; }
+
 /* Upcoming: each day a heading that opens it on the dial. */
 [data-look="new"] .nl-diary-group + .nl-diary-group { margin-top: 30px; }
 [data-look="new"] .nl-diary-grouphead {

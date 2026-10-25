@@ -85,6 +85,7 @@ export default function AppointmentDrawer({
   sentExtra,
   onSend,
   newLook = false,
+  inline = false,
 }: {
   appt: Appt | null;
   outcome?: Outcome;
@@ -99,6 +100,12 @@ export default function AppointmentDrawer({
   onSend: (apptId: string, label: string) => void;
   /** The Diary's new look (lib/new-look "diary"): the same card as a new-look drawer. */
   newLook?: boolean;
+  /**
+   * Dropped down under its row in the Diary instead of a drawer (James,
+   * 25 Oct 2026: "rather than it being a pop-out, it should drop down").
+   * New look only: the same facts and buttons, no scrim, no page lock.
+   */
+  inline?: boolean;
 }) {
   /* A slot: the viewings booked inside it, from the same diary (8 Oct 2026). */
   const { appts: diary } = useDiary();
@@ -109,13 +116,15 @@ export default function AppointmentDrawer({
     setSlotSaid(null);
   }, [appt?.id]);
   /* Every way out plays the card out first (lib/use-slide-over). */
-  const { shown, close: onClose } = useSlideOver(Boolean(appt), closeNow, appt?.id);
+  const slide = useSlideOver(Boolean(appt) && !inline, closeNow, appt?.id);
+  const shown = slide.shown;
+  const onClose = inline ? closeNow : slide.close;
   useEffect(() => {
-    if (!appt) return;
+    if (!appt || inline) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [appt, onClose]);
+  }, [appt, onClose, inline]);
 
   /* The property behind it, and its keys. Live REX entries carry no listing
      link, so the address text is the only join; matched conservatively,
@@ -207,26 +216,7 @@ export default function AppointmentDrawer({
         .sort((a, b) => apptStartIso(a).localeCompare(apptStartIso(b)));
     })();
     const anchor = anchorFromAppt({ ...appt, listingId: appt.listingId ?? match?.listingId ?? null });
-    return createPortal(
-      <div data-look="new" className="nl-drawer-wrap nl-diary-drawer" data-shown={shown} data-steve="appointment.drawer" role="dialog" aria-modal="true" aria-label={subject || meta.label}>
-        <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={onClose} />
-        <div className="nl-drawer">
-          <div className="nl-drawer-head">
-            <div className="min-w-0 flex-1">
-              <p className="nl-eyebrow">
-                {meta.label}
-                {appt.unaccompanied ? " (unaccompanied)" : ""} · {near ?? fmtFull(dateOfOffset(appt.day))} · {time}
-                {past ? " · happened" : ""}
-              </p>
-              <h2 className="nl-drawer-title mt-1.5">{subject || meta.label}</h2>
-              {appt.who && appt.kind !== "slot" && <p className="nl-meta mt-1.5">with {appt.who}</p>}
-            </div>
-            <button type="button" className="nl-iconbtn" aria-label="Close" onClick={onClose}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
-            </button>
-          </div>
-
-          <div className="nl-drawer-body">
+    const bodyParts = (<>
             <dl className="nl-diary-dl">
               <div>
                 <dt>When</dt>
@@ -447,9 +437,8 @@ export default function AppointmentDrawer({
                 )}
               </section>
             )}
-          </div>
-
-          <div className="nl-drawer-foot">
+</>);
+    const footParts = (<>
             {appt.kind === "slot" ? (
               <>
                 {slotSaid && <p className="nl-diary-warn w-full text-[12px]">{slotSaid}</p>}
@@ -489,7 +478,7 @@ export default function AppointmentDrawer({
                   </button>
                 )}
                 <button type="button" data-steve="appointment.open-viewing" onClick={() => onOpenViewing(appt)} className={np}>
-                  {past && !appt.feedback ? "Open the viewing and record feedback" : "Open the viewing file"}
+                  {inline ? (past && !appt.feedback ? "Open and record feedback" : "Open") : past && !appt.feedback ? "Open the viewing and record feedback" : "Open the viewing file"}
                 </button>
               </>
             ) : appt.appraisalId ? (
@@ -513,7 +502,37 @@ export default function AppointmentDrawer({
                 {appt.fromPersonal ? "From your personal calendar. Only the time is shown here - change it in your personal calendar." : appt.fromRex || appt.fromOutlook ? "A calendar entry made outside the OS, not linked to a record here. Change it where it was made." : "Not linked to a record."}
               </p>
             )}
+</>);
+    if (inline) {
+      return (
+        <div className="nl-diary-inline" data-steve="appointment.inline">
+          <div className="nl-diary-inline-body">{bodyParts}</div>
+          <div className="nl-diary-inline-foot">{footParts}</div>
+        </div>
+      );
+    }
+    return createPortal(
+      <div data-look="new" className="nl-drawer-wrap nl-diary-drawer" data-shown={shown} data-steve="appointment.drawer" role="dialog" aria-modal="true" aria-label={subject || meta.label}>
+        <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={onClose} />
+        <div className="nl-drawer">
+          <div className="nl-drawer-head">
+            <div className="min-w-0 flex-1">
+              <p className="nl-eyebrow">
+                {meta.label}
+                {appt.unaccompanied ? " (unaccompanied)" : ""} · {near ?? fmtFull(dateOfOffset(appt.day))} · {time}
+                {past ? " · happened" : ""}
+              </p>
+              <h2 className="nl-drawer-title mt-1.5">{subject || meta.label}</h2>
+              {appt.who && appt.kind !== "slot" && <p className="nl-meta mt-1.5">with {appt.who}</p>}
+            </div>
+            <button type="button" className="nl-iconbtn" aria-label="Close" onClick={onClose}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
           </div>
+
+          <div className="nl-drawer-body">{bodyParts}</div>
+
+          <div className="nl-drawer-foot">{footParts}</div>
         </div>
       </div>,
       document.body

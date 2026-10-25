@@ -52,14 +52,28 @@ export function Spinner() {
   return <span className="nl-diary-spin" aria-hidden />;
 }
 
+/**
+ * What a row drops down to show (James, 25 Oct 2026: "rather than it being a
+ * pop-out, it should drop down to show us what they've got"). Given, a row
+ * opens and closes in place; without it, a row opens its drawer as before.
+ */
+export type RowDrop = { openId: string | null; onToggle: (a: Appt) => void; render: (a: Appt) => React.ReactNode };
+
 /** One appointment on the agenda: time, dot, who and what, its state, the way in. */
-export function DiaryRow({ a, showDay, sentExtra, onOpen }: { a: Appt; showDay?: boolean; sentExtra?: Set<string>; onOpen: (a: Appt) => void }) {
+export function DiaryRow({ a, showDay, sentExtra, onOpen, drop }: { a: Appt; showDay?: boolean; sentExtra?: Set<string>; onOpen: (a: Appt) => void; drop?: RowDrop }) {
   const st = statusOf(a, sentExtra);
   const past = a.day < 0;
   const time = showDay ? fmtShort(dateOfOffset(a.day)).split(" ").slice(0, 2).join(" ") : a.allDay ? "All day" : a.start;
+  const open = Boolean(drop && drop.openId === a.id);
   return (
-    <li>
-      <button type="button" data-steve-row="" className={`nl-diary-row${past ? " is-past" : ""}`} onClick={() => onOpen(a)}>
+    <li className={open ? "is-open" : undefined}>
+      <button
+        type="button"
+        data-steve-row=""
+        className={`nl-diary-row${past ? " is-past" : ""}${open ? " is-open" : ""}`}
+        aria-expanded={drop ? open : undefined}
+        onClick={() => (drop ? drop.onToggle(a) : onOpen(a))}
+      >
         <span className="nl-diary-time">{time}</span>
         <span className={`nl-diary-dot is-${dotTone(a)}`} aria-hidden />
         <span className="min-w-0">
@@ -77,19 +91,22 @@ export function DiaryRow({ a, showDay, sentExtra, onOpen }: { a: Appt; showDay?:
           <path d="M9 6l6 6-6 6" />
         </svg>
       </button>
+      {open && drop && <div className="nl-diary-drop">{drop.render(a)}</div>}
     </li>
   );
 }
 
 /** Rows, a page at a time: a real Thursday came back with 32 entries on it. */
-export function DiaryRows({ list, showDay, sentExtra, onOpen, page = 12, resetKey }: { list: Appt[]; showDay?: boolean; sentExtra?: Set<string>; onOpen: (a: Appt) => void; page?: number; resetKey: string }) {
+export function DiaryRows({ list, showDay, sentExtra, onOpen, page = 12, resetKey, drop }: { list: Appt[]; showDay?: boolean; sentExtra?: Set<string>; onOpen: (a: Appt) => void; page?: number; resetKey: string; drop?: RowDrop }) {
   const [shown, setShown] = useState<{ key: string; n: number }>({ key: resetKey, n: page });
-  const n = shown.key === resetKey ? shown.n : page;
+  /* An entry opened from elsewhere (the week) is never hidden behind See more. */
+  const at = drop?.openId ? list.findIndex((a) => a.id === drop.openId) : -1;
+  const n = Math.max(shown.key === resetKey ? shown.n : page, at + 1);
   return (
     <>
       <ol className="nl-diary-agenda">
         {list.slice(0, n).map((a) => (
-          <DiaryRow key={a.id} a={a} showDay={showDay} sentExtra={sentExtra} onOpen={onOpen} />
+          <DiaryRow key={a.id} a={a} showDay={showDay} sentExtra={sentExtra} onOpen={onOpen} drop={drop} />
         ))}
       </ol>
       {list.length > n ? (
@@ -184,7 +201,7 @@ export function dayLabel(offset: number): string {
 
 /**
  * The month: whole weeks, Monday first, the first two entries written in
- * each day and a count of the rest. A day opens on the dial.
+ * each day and a count of the rest. A day opens underneath it.
  */
 export function MonthGrid({
   byDay,
