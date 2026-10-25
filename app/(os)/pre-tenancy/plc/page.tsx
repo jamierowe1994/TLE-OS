@@ -42,6 +42,23 @@ import type { PlcCase } from "@/lib/plc";
  * scan's track record while deciding stops being an independent check.
  */
 
+/**
+ * THE STAGES (Susan, 23 Oct 2026: "I sent it back as there was a query... it
+ * is not showing anywhere in the PLC queue now? Should we have a Sent back -
+ * pending box? and also what has been approved so far"). A pack sent back
+ * left the queue and nothing showed it again until the agent re-sent it. Now
+ * the page reads every pack and shows it at its stage: waiting on the team
+ * (the queue, as before), sent back (with the agent, or being fixed),
+ * approved, declined, and everything together.
+ */
+type Stage = "waiting" | "back" | "approved" | "declined" | "all";
+const OPEN_STATES: PlcCase["state"][] = ["submitted", "scanning", "reviewing", "checked"];
+/** Sent back: deferred to the agent, or reopened by them and being fixed (the reason stays on it). */
+const isBack = (c: PlcCase) => c.state === "deferred" || (c.state === "assembling" && Boolean(c.decidedAt));
+/** Ever handed to the team: anything past assembling, or back with the agent after a send-back. */
+const handedOver = (c: PlcCase) => c.state !== "assembling" || Boolean(c.decidedAt);
+const lastMove = (c: PlcCase) => (OPEN_STATES.includes(c.state) ? c.submittedAt : c.decidedAt) ?? c.submittedAt ?? c.createdAt;
+
 /** What the business currently tells agents. The bar the queue is measured against. */
 const TARGET_HOURS = 48;
 
@@ -78,6 +95,7 @@ function Tile({ icon, tone, value, label, note }: { icon: string; tone: "green" 
 
 export default function PlcQueuePage() {
   const [queue, setQueue] = useState<PlcCase[] | null>(null);
+  const [stage, setStage] = useState<Stage>("waiting");
   const [openId, setOpenId] = useState<string | null>(null);
   const [open, setOpen] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +122,10 @@ export default function PlcQueuePage() {
           { ...DEMO_SCANNED, id: "s1", address: "16 Lord Street, Nottingham NG1 3AA", agentName: "Dan Richards", submittedAt: h(70), moveInDate: "2026-09-18" },
           { ...DEMO_SCANNED, id: "s2", address: "Flat 3, 61 Musters Road, West Bridgford", agentName: "Emily Watson", submittedAt: h(31), moveInDate: "2026-09-25" },
           demoCase({ id: "s3", state: "submitted", address: "27 Lady Bay Road, Lady Bay NG2", agentName: "Sam Whitaker", submittedAt: h(6), moveInDate: "2026-10-02" }),
+          /* One at each later stage, so every tab has something on it. */
+          demoCase({ id: "s4", state: "deferred", address: "9 Trent Boulevard, West Bridgford", agentName: "Dan Richards", submittedAt: h(30), decidedAt: h(4), decidedBy: "Susan Liles", decisionNote: "The gas certificate is a screenshot of an email. Please attach the certificate itself." }),
+          demoCase({ id: "s5", state: "assembling", address: "4 Mona Street, Beeston", agentName: "Emily Watson", submittedAt: h(50), decidedAt: h(20), decidedBy: "Kirstie Mulholland", decisionNote: "Guarantor ID missing." }),
+          demoCase({ id: "s6", state: "approved", address: "12 Musters Road, West Bridgford", agentName: "Sam Whitaker", submittedAt: h(28), decidedAt: h(2), decidedBy: "Susan Liles" }),
         ];
         const built = {
           cases,
@@ -129,7 +151,8 @@ export default function PlcQueuePage() {
         setQueue([...cases]);
         return;
       }
-      const res = await api<{ cases: PlcCase[] }>("/api/plc?queue=1");
+      /* Every pack, so the page can show each stage, not just the queue (23 Oct 2026). */
+      const res = await api<{ cases: PlcCase[] }>("/api/plc");
       setQueue(res.cases);
     } catch (e) {
       setError((e as Error).message);
@@ -179,7 +202,24 @@ export default function PlcQueuePage() {
 
   if (queue === null && !error) return <WorkspaceLoading />;
 
-  const list = queue ?? [];
+  const every = (queue ?? []).filter(handedOver);
+  /* The queue: what is with the team, longest wait first, as it always was. */
+  const list = every
+    .filter((c) => OPEN_STATES.includes(c.state))
+    .sort((a, b) => (a.submittedAt ?? a.createdAt).localeCompare(b.submittedAt ?? b.createdAt));
+  const byLatest = (xs: PlcCase[]) => [...xs].sort((a, b) => lastMove(b).localeCompare(lastMove(a)));
+  const back = byLatest(every.filter(isBack));
+  const approved = byLatest(every.filter((c) => c.state === "approved"));
+  const declined = byLatest(every.filter((c) => c.state === "declined"));
+  const all = byLatest(every);
+  const stages: { id: Stage; label: string; n: number }[] = [
+    { id: "waiting", label: "Waiting on you", n: list.length },
+    { id: "back", label: "Sent back", n: back.length },
+    { id: "approved", label: "Approved", n: approved.length },
+    { id: "declined", label: "Declined", n: declined.length },
+    { id: "all", label: "Everything", n: all.length },
+  ];
+  const shown = stage === "back" ? back : stage === "approved" ? approved : stage === "declined" ? declined : stage === "all" ? all : list;
   /* Not read is not empty (Rig run 4, P-075): with the queue unread the tiles
      said 0 and "The queue is clear" under the error. */
   const unread = queue === null && Boolean(error);
@@ -188,7 +228,7 @@ export default function PlcQueuePage() {
     const d = daysUntil(c.moveInDate);
     return d != null && d <= 7;
   });
-  const openCase = open?.case ?? list.find((c) => c.id === openId) ?? null;
+  const openCase = open?.case ?? every.find((c) => c.id === openId) ?? null;
 
   return (
     <div className="space-y-5 pb-8">
@@ -214,8 +254,73 @@ export default function PlcQueuePage() {
         <Tile icon="key" tone={soon.length ? "red" : "green"} value={unread ? "—" : soon.length} label="Moving in this week" note={unread ? "Couldn't read the queue" : soon.length ? "Decide these first" : "Nothing this close"} />
       </div>
 
+      {/* ── the stages ── */}
+      {!unread && (
+        <div className="fade-up flex flex-wrap gap-2" role="tablist" aria-label="PLC stages">
+          {stages.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={stage === t.id}
+              onClick={() => setStage(t.id)}
+              className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition ${stage === t.id ? "border-ink bg-ink text-white" : "border-line/80 bg-card text-ink hover:border-ink/40"}`}
+            >
+              {t.label} <span className={stage === t.id ? "text-white/70" : "text-muted"}>{t.n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── the other stages: newest move first, each opening the same review ── */}
+      {!unread && stage !== "waiting" && (
+        shown.length === 0 ? (
+          <section className="fade-up rounded-[22px] border border-line/70 bg-card p-6 text-[13px] text-muted">
+            {stage === "back" ? "Nothing sent back at the moment." : stage === "approved" ? "Nothing approved yet." : stage === "declined" ? "Nothing declined." : "No packs handed over yet."}
+          </section>
+        ) : (
+          <section className="fade-up rounded-[22px] border border-line/70 bg-card p-2">
+            <ul className="divide-y divide-line/50">
+              {shown.map((c) => {
+                const fixing = c.state === "assembling";
+                const when = OPEN_STATES.includes(c.state) ? c.submittedAt : c.decidedAt;
+                return (
+                  <li key={c.id}>
+                    <button type="button" onClick={() => setOpenId(c.id)} className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl px-4 py-3.5 text-left transition hover:bg-page">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14.5px] font-semibold">{c.address}</span>
+                        <span className="block truncate text-[12.5px] text-muted">
+                          {c.agentName}
+                          {OPEN_STATES.includes(c.state)
+                            ? ` · handed over ${prettyWhen(c.submittedAt)}`
+                            : c.state === "approved"
+                              ? ` · approved ${prettyWhen(when)}${c.decidedBy ? ` by ${c.decidedBy}` : ""}`
+                              : c.state === "declined"
+                                ? ` · declined ${prettyWhen(when)}${c.decidedBy ? ` by ${c.decidedBy}` : ""}`
+                                : ` · sent back ${prettyWhen(when)}${c.decidedBy ? ` by ${c.decidedBy}` : ""}`}
+                          {c.moveInDate ? ` · moving in ${prettyDate(c.moveInDate)}` : ""}
+                        </span>
+                        {isBack(c) && c.decisionNote && <span className="mt-1 block text-[12.5px] text-ink">&ldquo;{c.decisionNote}&rdquo;</span>}
+                      </span>
+                      {isBack(c) ? (
+                        <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${fixing ? "bg-page text-muted" : "bg-[#f5e3c7] text-[#8a5a1c]"}`}>
+                          {fixing ? "Sent back · agent fixing" : "Sent back · with the agent"}
+                        </span>
+                      ) : (
+                        <Pill state={c.state} />
+                      )}
+                      <span className="text-muted"><DoodleIcon name="trend-up" size={13} /></span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )
+      )}
+
       {/* ── the queue ── */}
-      {unread ? null : list.length === 0 ? (
+      {unread || stage !== "waiting" ? null : list.length === 0 ? (
         <section className="fade-up flex items-center gap-4 rounded-[22px] border border-line/70 bg-card p-6">
           <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${PLC_GREEN}`}>✓</span>
           <div>
@@ -250,6 +355,8 @@ export default function PlcQueuePage() {
                     </span>
                     <SentAnywayTag c={c} />
                     <FinalAskTag c={c} />
+                    {/* Sent back once and handed over again: the old reason is still on it. */}
+                    {c.decidedAt && <span className="shrink-0 whitespace-nowrap rounded-full bg-page px-2.5 py-1 text-[11px] font-semibold text-muted" title={c.decisionNote ? `Sent back: ${c.decisionNote}` : undefined}>Resent after a send-back</span>}
                     <Pill state={c.state} />
                     <span className="text-muted"><DoodleIcon name="trend-up" size={13} /></span>
                   </button>
