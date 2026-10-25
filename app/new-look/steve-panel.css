@@ -4,14 +4,17 @@
    The frame is frosted glass - the page shows through, blurred - and the
    conversation itself is solid, so it is never hard to read. The corner
    nearest him comes almost to a point, so the card still reads as his
-   speech bubble. Opening: he floats up, the card grows out of him, and the
-   coral fills the top. */
+   speech bubble. Opening: he floats up, the card grows out of him and the
+   coral fills the top, then he drops off the bottom of the screen and the
+   card drops with him, to sit low where he was. Small to wide and back
+   grows and shrinks rather than jumping. */
 
 .sv-panel {
-  position: fixed; z-index: 190; right: 22px; bottom: 92px;
-  width: min(390px, calc(100vw - 24px)); height: min(660px, calc(100dvh - 116px));
+  position: fixed; z-index: 190; right: 22px; bottom: 16px;
+  width: min(390px, calc(100vw - 24px)); height: min(680px, calc(100dvh - 40px));
+  transition: width 0.55s cubic-bezier(0.3, 1.08, 0.4, 1), height 0.55s cubic-bezier(0.3, 1.08, 0.4, 1), right 0.55s cubic-bezier(0.3, 1.08, 0.4, 1), bottom 0.55s cubic-bezier(0.3, 1.08, 0.4, 1);
 }
-.sv-panel.is-wide { top: 12px; bottom: 12px; right: 12px; width: clamp(380px, 30vw, 560px); height: auto; }
+.sv-panel.is-wide { right: 12px; bottom: 12px; width: clamp(380px, 30vw, 560px); height: calc(100dvh - 24px); }
 
 .sv-card {
   position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden;
@@ -22,23 +25,33 @@
   box-shadow: 0 30px 70px -30px rgba(110, 45, 25, 0.38), 0 2px 12px -4px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.55);
   color: var(--ink);
 }
+.sv-card { transition: border-radius 0.55s ease; }
 .sv-panel.is-wide .sv-card { border-radius: 24px; }
 
 /* Opening. Scale and clip only, never opacity: a fading card loses its blur. */
-.sv-panel.is-opening .sv-card { animation: sv-grow 0.62s cubic-bezier(0.3, 1, 0.4, 1) 0.14s both; }
-.sv-panel.is-opening .sv-wash { animation: sv-fill 0.7s cubic-bezier(0.3, 1, 0.4, 1) 0.32s both; }
+/* Grown from where he floats (76px up), held there while the coral fills,
+   then dropped to sit where he was as he falls away. */
+.sv-panel.is-opening .sv-card { animation: sv-grow 0.95s cubic-bezier(0.3, 1, 0.4, 1) 0.1s both; }
+.sv-panel.is-opening .sv-wash { animation: sv-fill 0.7s cubic-bezier(0.3, 1, 0.4, 1) 0.28s both; }
 @keyframes sv-grow {
-  from { clip-path: circle(20px at calc(100% - 26px) calc(100% + 40px)); transform: translateY(10px) scale(0.96); }
-  to { clip-path: circle(170% at calc(100% - 26px) calc(100% + 40px)); transform: none; }
+  0% { clip-path: circle(22px at calc(100% - 32px) calc(100% - 30px)); transform: translateY(-76px) scale(0.96); }
+  55% { clip-path: circle(170% at calc(100% - 32px) calc(100% - 30px)); transform: translateY(-76px); }
+  100% { clip-path: circle(170% at calc(100% - 32px) calc(100% - 30px)); transform: none; animation-timing-function: ease; }
 }
 @keyframes sv-fill {
   from { clip-path: circle(0 at 100% 100%); }
   to { clip-path: circle(160% at 100% 100%); }
 }
-/* The wide window has its own close: he rolls away off the edge until it shuts. */
-.steve-dock-orb.is-tucked { transform: translateX(160%) rotate(220deg); pointer-events: none; }
-.steve-dock-orb.is-opening { animation: sv-float 0.75s cubic-bezier(0.3, 1.3, 0.5, 1); }
-@keyframes sv-float { 0% { transform: none; } 38% { transform: translateY(-20px) scale(1.12); } 100% { transform: none; } }
+/* While his card is open he is off the bottom of the screen: a float up as
+   it starts to grow, then a drop. Closing brings him back up (the dock's
+   own spring transition). */
+.steve-dock-orb.is-away { transform: translateY(190%) scale(0.9); pointer-events: none; animation: sv-drop 1s cubic-bezier(0.45, 0, 0.3, 1) both; }
+@keyframes sv-drop {
+  0% { transform: none; }
+  28% { transform: translateY(-22px) scale(1.12); }
+  55% { transform: translateY(-22px) scale(1.12); }
+  100% { transform: translateY(190%) scale(0.9); }
+}
 
 /* Shared bits. */
 .sv-icon {
@@ -46,7 +59,7 @@
   background: transparent; color: inherit; cursor: pointer; transition: background-color 0.2s;
 }
 .sv-icon:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
-.sv-icon:focus-visible, .sv-tabs button:focus-visible, .sv-start:focus-visible, .sv-recent:focus-visible, .sv-list button:focus-visible, .sv-float:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.sv-icon:focus-visible, .sv-tabs button:focus-visible, .sv-start:focus-visible, .sv-list button:focus-visible, .sv-float:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .sv-bar {
   position: relative; flex: none; display: flex; align-items: center; gap: 8px; min-height: 60px; padding: 10px 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
@@ -94,21 +107,45 @@
 .sv-hi { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 27px; line-height: 33px; letter-spacing: 0; color: rgba(255, 255, 255, 0.72); }
 .sv-lead { margin: 2px 0 0; font-family: var(--font-heading); font-weight: 500; font-size: 27px; line-height: 33px; letter-spacing: 0; color: #fff; }
 .sv-cards { position: relative; margin-top: 26px; display: flex; flex-direction: column; gap: 10px; }
-.sv-start, .sv-recent {
+.sv-start {
   width: 100%; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 18px; background: var(--card); color: var(--ink);
   font: inherit; text-align: left; cursor: pointer; box-shadow: 0 10px 26px -18px rgba(90, 35, 20, 0.45);
   transition: transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1), box-shadow 0.25s;
 }
-.sv-start:hover, .sv-recent:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -18px rgba(90, 35, 20, 0.55); }
+.sv-start:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -18px rgba(90, 35, 20, 0.55); }
 .sv-start { display: flex; align-items: center; gap: 12px; padding: 14px 16px 14px 12px; }
 .sv-start > svg { margin-left: auto; color: var(--primary); }
 .sv-start-t { display: flex; flex-direction: column; min-width: 0; }
 .sv-start-t b { font-weight: 600; font-size: 15px; line-height: 20px; }
 .sv-start-t span { font-size: 13px; line-height: 18px; color: var(--muted); }
-.sv-recent { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 16px; }
-.sv-recent-k { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
-.sv-recent-t { font-size: 14px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sv-recent-w { font-size: 12px; line-height: 20px; color: var(--faint); }
+/* News on Home: what James publishes in Admin > Newsroom. */
+.sv-news { position: relative; margin-top: 22px; }
+.sv-news h3 { margin: 0 6px 8px; font-family: var(--font-heading); font-weight: 500; font-size: 16px; line-height: 22px; letter-spacing: 0; color: var(--ink); }
+.sv-empty.is-tight { padding: 10px 6px; }
+.sv-news-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sv-news-list button {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 16px; text-align: left; font: inherit; color: var(--ink);
+  background: var(--card); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 16px; cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1), border-color 0.2s;
+}
+.sv-news-list button:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--primary) 40%, var(--line)); }
+.sv-news-list button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.sv-news-k { grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 16px; color: var(--accent-dark); }
+.sv-news-t { font-size: 14px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sv-news-w { font-size: 12px; line-height: 20px; color: var(--faint); white-space: nowrap; }
+
+/* A news article, in place of Home. */
+.sv-article { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.sv-article .sv-bar h2 { margin-left: 2px; }
+.sv-article-body { padding: 20px 22px 26px; animation: sv-in 0.35s cubic-bezier(0.3, 1.2, 0.5, 1) both; }
+.sv-article-h { margin: 6px 0 0; font-family: var(--font-heading); font-weight: 500; font-size: 22px; line-height: 28px; letter-spacing: 0; color: var(--ink); }
+.sv-article-by { margin: 6px 0 0; font-size: 12.5px; color: var(--faint); }
+.sv-article-text { margin-top: 16px; font-family: var(--nl-serif); font-size: 16px; line-height: 25px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sv-article-go {
+  margin-top: 20px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px;
+  background: var(--primary); color: var(--on-primary); font-size: 14px; font-weight: 600; text-decoration: none;
+}
+@keyframes sv-in { from { transform: translateX(14px); opacity: 0.6; } to { transform: none; opacity: 1; } }
 
 /* ── Tabs ─────────────────────────────────────────────────────────────── */
 .sv-tabs { flex: none; display: flex; border-top: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent); padding: 6px 6px 8px; }
@@ -158,15 +195,51 @@
 .sv-panel[data-look="new"] .nl-st-bar { margin-top: 6px; }
 .sv-panel[data-look="new"] .nl-st-send { width: 34px; height: 34px; border-radius: 50%; }
 
-.sv-report-body { padding: 16px 18px; }
+/* ── Report, as the orb's card draws it ───────────────────────────────── */
+.sv-report-body { padding: 16px 16px 18px; display: flex; flex-direction: column; }
+.sv-rp { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.sv-rp-box {
+  flex: 1 1 auto; min-height: 150px; width: 100%; resize: none; padding: 14px 16px; border-radius: 18px;
+  border: 1px solid var(--line-strong); background: var(--card); outline: none;
+  font: inherit; font-size: 15px; line-height: 22px; color: var(--ink); transition: border-color 0.2s, box-shadow 0.2s;
+}
+.sv-rp-box::placeholder { color: var(--faint); }
+.sv-rp-box:focus { border-color: color-mix(in srgb, var(--primary) 55%, var(--line-strong)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent); }
+.sv-rp.is-drag .sv-rp-box { border-style: dashed; border-color: var(--primary); }
+.sv-rp-drop { margin: -4px 0 0; font-size: 12.5px; color: var(--accent-dark); }
+.sv-rp-add { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.sv-rp-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 14px; border-radius: 14px;
+  border: 1px solid var(--line-strong); background: var(--card); font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.sv-rp-chip:hover:not(:disabled) { border-color: var(--ink); }
+.sv-rp-chip:disabled { opacity: 0.45; cursor: default; }
+.sv-rp-rec { width: 9px; height: 9px; flex: none; border-radius: 50%; background: #d4452c; box-shadow: 0 0 0 3px color-mix(in srgb, #d4452c 18%, transparent); }
+.sv-rp-voice { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; margin-top: -2px; }
+.sv-rp-voice input { width: 16px; height: 16px; accent-color: var(--primary); }
+.sv-rp-err { margin: 0; font-size: 12.5px; color: var(--accent-dark); }
+.sv-rp-files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sv-rp-files li { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; background: var(--box); font-size: 12.5px; }
+.sv-rp-fname { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sv-rp-files button { font: inherit; font-size: 12.5px; color: var(--muted); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.sv-rp-send {
+  flex: none; width: 100%; padding: 13px; border: 0; border-radius: 999px; background: var(--primary); color: var(--on-primary);
+  font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; transition: background-color 0.2s, opacity 0.2s;
+}
+.sv-rp-send:hover:not(:disabled) { background: var(--accent-dark); }
+.sv-rp-send:disabled { opacity: 0.4; cursor: default; }
+.sv-rp-done { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 30px 10px; }
+.sv-rp-done p { margin: 0; font-size: 15px; color: var(--ink); }
+.sv-rp-tick { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--accent-dark); }
 
 /* A phone: the card takes the width, a little short of the top. */
 @media (max-width: 520px) {
-  .sv-panel, .sv-panel.is-wide { right: 8px; left: 8px; width: auto; top: auto; bottom: 86px; height: calc(100dvh - 104px); }
+  .sv-panel, .sv-panel.is-wide { right: 8px; width: calc(100vw - 16px); bottom: 10px; height: calc(100dvh - 24px); }
   .sv-hello { margin-top: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sv-panel.is-opening .sv-card, .sv-panel.is-opening .sv-wash, .steve-dock-orb.is-opening, .sv-typing i, .sv-spin { animation: none; }
-  .sv-start, .sv-recent, .sv-float { transition: none; }
+  .sv-panel.is-opening .sv-card, .sv-panel.is-opening .sv-wash, .steve-dock-orb.is-away, .sv-typing i, .sv-spin, .sv-article-body { animation: none; }
+  .sv-panel, .sv-card, .sv-start, .sv-news-list button, .sv-float { transition: none; }
 }

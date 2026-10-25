@@ -1,13 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import SteveFace from "@/components/SteveFace";
 import { whenAgo } from "@/lib/lead-spine";
 
 /**
  * Steve's chat card when he is the orb (lib/new-look "orb"), James 25 Oct
  * 2026, after the Intercom layout he liked: a Home with the coral filling the
- * top and one "Chat with Steve" card, Messages listing each conversation by
+ * top, "Chat with Steve" and the News James publishes (Admin > Newsroom),
+ * each opening as a short article; Messages listing each conversation by
  * the question that started it, a conversation where he speaks first, and
  * Report. Three tabs along the bottom; the conversation hides them.
  *
@@ -19,6 +20,15 @@ import { whenAgo } from "@/lib/lead-spine";
  */
 
 export type OrbView = "home" | "chats" | "chat" | "report";
+export interface OrbNews {
+  id: string;
+  title: string;
+  body: string;
+  kind: string;
+  link: string;
+  author: string;
+  publishedAt: string;
+}
 export interface OrbThread {
   thread: string;
   title: string;
@@ -50,6 +60,11 @@ const ICON = {
   shrink: <path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7" />,
 };
 
+/* The newsroom's kinds, in words: lib/news-store NEWS_KIND_LABEL, copied
+   because that file reads the database and this one runs in the browser. */
+const KIND: Record<string, string> = { announcement: "Announcement", release: "New in the OS", reminder: "Reminder" };
+const kindLabel = (kind: string) => KIND[kind] ?? "News";
+
 export default function OrbPanel(p: {
   aName: string;
   myFirst: string;
@@ -78,9 +93,15 @@ export default function OrbPanel(p: {
   composer: ReactNode;
   note: ReactNode;
   report: ReactNode;
+  /** The newsroom's live posts, newest first; null while they load. */
+  news: OrbNews[] | null;
+  onNewsRead: () => void;
   scroller: (el: HTMLDivElement | null) => void;
 }) {
   const { view } = p;
+  /* A news article, opened from Home; any tab press closes it. */
+  const [article, setArticle] = useState<OrbNews | null>(null);
+  useEffect(() => setArticle(null), [view]);
   const tabs: { v: OrbView; label: string; icon: ReactNode }[] = [
     { v: "home", label: "Home", icon: ICON.home },
     { v: "chats", label: "Messages", icon: ICON.chats },
@@ -88,6 +109,7 @@ export default function OrbPanel(p: {
   ];
   const go = (v: OrbView) => {
     p.setMenu(false);
+    setArticle(null);
     if (v === "chats") p.onThreads();
     p.setView(v);
   };
@@ -137,7 +159,38 @@ export default function OrbPanel(p: {
       className={`os-toast-lift sv-panel${p.wide ? " is-wide" : ""}${p.opening ? " is-opening" : ""}`}
     >
       <div className={`sv-card is-${view}`}>
-        {view === "home" && (
+        {view === "home" && article && (
+          <div className="sv-article">
+            <div className="sv-bar">
+              <button type="button" className="sv-icon" aria-label="Back" onClick={() => setArticle(null)}>
+                <I d={ICON.back} />
+              </button>
+              <h2>News</h2>
+              <span className="sv-bar-r">
+                <button type="button" onClick={p.onClose} aria-label="Close" className="sv-icon">
+                  <I d={ICON.close} />
+                </button>
+              </span>
+            </div>
+            <div className="sv-body sv-article-body">
+              <p className="sv-news-k">{kindLabel(article.kind)}</p>
+              <h3 className="sv-article-h">{article.title}</h3>
+              <p className="sv-article-by">
+                {whenAgo(article.publishedAt)}
+                {article.author ? ` · ${article.author}` : ""}
+              </p>
+              <div className="sv-article-text">{article.body}</div>
+              {article.link && (
+                <a href={article.link} className="sv-article-go" target={article.link.startsWith("/") ? undefined : "_blank"} rel="noreferrer">
+                  Read more
+                  <I d={ICON.send} size={15} />
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {view === "home" && !article && (
           <div className="sv-home">
             <div className="sv-wash" aria-hidden />
             <div className="sv-top">
@@ -162,14 +215,27 @@ export default function OrbPanel(p: {
                 </span>
                 <I d={ICON.send} size={18} />
               </button>
-              {p.threads && p.threads.length > 0 && (
-                <button type="button" className="sv-recent" onClick={() => p.onOpenThread(p.threads![0].thread)}>
-                  <span className="sv-recent-k">Carry on</span>
-                  <span className="sv-recent-t">{p.threads[0].title}</span>
-                  <span className="sv-recent-w">{whenAgo(p.threads[0].lastAt)}</span>
-                </button>
-              )}
             </div>
+            <section className="sv-news" aria-labelledby="sv-news-h">
+              <h3 id="sv-news-h">News</h3>
+              {p.news === null ? (
+                <p className="sv-empty is-tight"><span className="sv-spin" aria-hidden /> Reading the news…</p>
+              ) : p.news.length === 0 ? (
+                <p className="sv-empty is-tight">Nothing new just now.</p>
+              ) : (
+                <ul className="sv-news-list">
+                  {p.news.slice(0, 4).map((n) => (
+                    <li key={n.id}>
+                      <button type="button" onClick={() => { setArticle(n); p.onNewsRead(); }}>
+                        <span className="sv-news-k">{kindLabel(n.kind)}</span>
+                        <span className="sv-news-t">{n.title}</span>
+                        <span className="sv-news-w">{whenAgo(n.publishedAt)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
         )}
 
