@@ -2,9 +2,10 @@
 
 /* The drawer: wide, from the right, inset 10px with a 24px radius as the design's
    Drawer. Sits under the photo drop (z 160) and the guide (z 200) that open over it. */
-[data-look="new"].nl-adv-wrap { position: fixed; inset: 0; z-index: 125; }
+/* No rise on the wrap itself (it sits inside .nl-rise): an animated wrap cuts the drawer's blur off from the page behind. */
+[data-look="new"].nl-adv-wrap { position: fixed; inset: 0; z-index: 125; animation: none; }
 [data-look="new"] .nl-adv-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(20, 20, 19, .2); cursor: default; animation: nl-fade .3s ease both; }
-[data-look="new"] .nl-adv-drawer { position: absolute; top: 10px; right: 10px; bottom: 10px; width: min(880px, calc(100% - 20px)); display: flex; flex-direction: column; background: var(--page); color: var(--ink); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; animation: nl-adv-in .55s var(--nl-ease) both; }
+[data-look="new"] .nl-adv-drawer { position: absolute; top: 10px; right: 10px; bottom: 10px; width: min(880px, calc(100% - 20px)); display: flex; flex-direction: column; background: color-mix(in srgb, var(--page) 95%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.1); backdrop-filter: blur(24px) saturate(1.1); color: var(--ink); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; animation: nl-adv-in .55s var(--nl-ease) both; }
 @keyframes nl-adv-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes nl-adv-out { to { transform: translateX(40px); opacity: 0; } }
 [data-look="new"].nl-adv-wrap.is-closing .nl-adv-drawer { animation: nl-adv-out .26s ease both; }
@@ -49,7 +50,12 @@
 [data-look="new"] .nl-adv-caret { color: var(--faint); transition: transform .45s var(--nl-ease); }
 [data-look="new"] .nl-adv-step.is-open .nl-adv-caret { transform: rotate(90deg); }
 [data-look="new"] .nl-adv-step-head:hover .nl-adv-step-name { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
-[data-look="new"] .nl-adv-step-body { padding: 4px 4px 22px 46px; }
+[data-look="new"] .nl-adv-step-body { padding: 4px 4px 22px 46px; transition: opacity .3s var(--nl-ease), transform .45s var(--nl-ease); }
+/* The step being left fades as it folds; the next opens a beat after it. */
+[data-look="new"] .nl-adv-step:not(.is-open) .nl-adv-step-body { opacity: 0; transform: translateY(-6px); }
+[data-look="new"] .nl-adv-step.is-open .nl-collapse { transition-delay: .08s; }
+[data-look="new"] .nl-adv-step.is-open .nl-adv-step-body { animation: nl-adv-step-in .5s var(--nl-ease) .12s both; }
+@keyframes nl-adv-step-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 [data-look="new"] .nl-adv-next { margin-top: 18px; }
 [data-look="new"] .nl-adv-gap { margin-top: 16px; }
 [data-look="new"] .nl-adv-aside { margin: 12px 0 0; }
@@ -124,7 +130,7 @@
 
 /* The foot: preview, where it stands, then save or push. */
 /* Room on the right for Steve, who sits over every screen in the bottom corner. */
-[data-look="new"] .nl-adv-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 92px 14px 28px; border-top: 1px solid var(--line); background: var(--page); }
+[data-look="new"] .nl-adv-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 92px 14px 28px; border-top: 1px solid var(--line); background: transparent; }
 [data-look="new"] .nl-adv-foot-text { flex: 1 1 200px; min-width: 0; text-align: right; font-size: 12.5px; line-height: 18px; color: var(--muted); }
 [data-look="new"] .nl-adv-foot-text.is-bad { color: var(--accent-dark); }
 [data-look="new"] .nl-adv-foot-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
@@ -157,5 +163,5 @@
   [data-look="new"] .nl-adv-foot-acts { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-look="new"] .nl-adv-drawer, [data-look="new"] .nl-adv-scrim { animation: none; }
+  [data-look="new"] .nl-adv-drawer, [data-look="new"] .nl-adv-scrim, [data-look="new"] .nl-adv-step-body { animation: none; transition: none; }
 }

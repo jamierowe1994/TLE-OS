@@ -110,6 +110,53 @@ export default function EditAdvert({
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  /* Moving on folds the step you were on away while the next one opens, and
+     the next one's heading glides up to the top: one continuous move. */
+  const [leaving, setLeaving] = useState<StepId | null>(null);
+  const glideTo = useRef<StepId | null>(null);
+  const goStep = (s: StepId | null) => {
+    const was = open;
+    if (was && was !== s) {
+      setLeaving(was);
+      window.setTimeout(() => setLeaving((l) => (l === was ? null : l)), 620);
+    }
+    glideTo.current = s;
+    setOpen(s);
+  };
+  useEffect(() => {
+    const s = glideTo.current;
+    glideTo.current = null;
+    const body = bodyRef.current;
+    const li = s && s === open ? body?.querySelector<HTMLElement>(`[data-step="${s}"]`) : null;
+    if (!body || !li) return;
+    const off = () => li.getBoundingClientRect().top - body.getBoundingClientRect().top;
+    const from = off();
+    const to = 8;
+    if (Math.abs(from - to) < 4) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      body.scrollTop += from - to;
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const stop = () => cancelAnimationFrame(raf);
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - t0) / 600);
+      const want = from + (to - from) * (1 - Math.pow(1 - k, 3));
+      body.scrollTop += off() - want;
+      if (k < 1) raf = requestAnimationFrame(tick);
+      else body.removeEventListener("wheel", stop);
+    };
+    raf = requestAnimationFrame(tick);
+    // A reader who scrolls mid-glide takes over.
+    body.addEventListener("wheel", stop, { once: true, passive: true });
+    body.addEventListener("touchstart", stop, { once: true, passive: true });
+    return () => {
+      stop();
+      body.removeEventListener("wheel", stop);
+      body.removeEventListener("touchstart", stop);
+    };
+  }, [open]);
 
   const input = a.input;
   const stepDone = (s: StepId) => (input ? STEP_NEEDS[s].every((k) => a.okFor(k)) : false);
@@ -598,8 +645,8 @@ export default function EditAdvert({
                   const done = stepDone(s);
                   const next = ORDER[i + 1];
                   return (
-                    <li key={s} className={`nl-adv-step${isOpen ? " is-open" : ""}${done ? " is-done" : ""}`}>
-                      <button type="button" className="nl-adv-step-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : s)}>
+                    <li key={s} data-step={s} className={`nl-adv-step${isOpen ? " is-open" : ""}${done ? " is-done" : ""}`}>
+                      <button type="button" className="nl-adv-step-head" aria-expanded={isOpen} onClick={() => goStep(isOpen ? null : s)}>
                         <span className="nl-adv-tick">{done ? <Ico name="check" size={13} /> : i + 1}</span>
                         <span className="nl-adv-step-name">{STEP_NAMES[s]}</span>
                         <span className="nl-adv-step-sum">{summary(s)}</span>
@@ -609,11 +656,11 @@ export default function EditAdvert({
                       </button>
                       <div className={`nl-collapse${isOpen ? " is-open" : ""}`}>
                         <div>
-                          {isOpen && (
+                          {(isOpen || leaving === s) && (
                             <div className="nl-adv-step-body">
                               {body(s)}
                               {next && (
-                                <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm nl-adv-next" onClick={() => setOpen(next)}>
+                                <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm nl-adv-next" onClick={() => goStep(next)}>
                                   Next: {STEP_NAMES[next]}
                                 </button>
                               )}

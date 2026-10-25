@@ -57,7 +57,9 @@ export default function LandlordStage({
   const [people, setPeople] = useState<HomePerson[] | null>(null);
   const [order, setOrder] = useState<string[]>([]);
   const [failed, setFailed] = useState<string | null>(null);
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  /* Everyone shows open from the start; the caret folds a box away. */
+  const [shut, setShut] = useState<Set<string>>(() => new Set());
+  const [armed, setArmed] = useState<string | null>(null);
   const [adding, setAdding] = useState<Kind | null>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function LandlordStage({
   useEffect(() => {
     if (!open) {
       setShown(false);
-      setOpenKey(null);
+      setShut(new Set());
       setSaid(null);
       return;
     }
@@ -168,7 +170,6 @@ export default function LandlordStage({
     if (!window.confirm(`Take ${p.name} off this home?`)) return;
     const j = await fetch(`/api/portfolio/people?id=${encodeURIComponent(p.id)}`, { method: "DELETE" }).then((r) => r.json()).catch(() => null);
     if (!j?.ok) return setSaid(j?.error ?? "That didn't come off. Try again.");
-    setOpenKey(null);
     load();
     onChanged?.();
     setSaid(p.kind === "joint_landlord" ? `${p.name} is off this home. If they're on a Propoly deal, take them off it there too.` : `${p.name} is off this home.`);
@@ -179,22 +180,33 @@ export default function LandlordStage({
   const reading = main === null && people === null;
 
   const box = (e: Entry, i: number) => {
-    const isOpen = openKey === e.key;
+    const isOpen = !shut.has(e.key);
+    const fold = () =>
+      setShut((s) => {
+        const n = new Set(s);
+        if (n.has(e.key)) n.delete(e.key);
+        else n.add(e.key);
+        return n;
+      });
     const first = i === 0;
     const person = e.kind === "main" ? { name: e.m.name, email: e.m.email, phone: e.m.phone } : { name: e.p.name, email: e.p.email, phone: e.p.phone };
     const relation = e.kind === "main" ? null : e.p.relation;
     return (
       <li
         key={e.key}
-        className={`nl-ls-box nl-po-in${isOpen ? " is-open" : ""}${first ? " is-first" : ""}${drag === e.key ? " is-dragging" : ""}`}
+        className={`nl-ls-box nl-po-in${isOpen ? " is-open" : ""}${drag === e.key ? " is-dragging" : ""}`}
         style={beat(i + 1)}
-        draggable={!readOnly && !isOpen}
+        // Only the name row picks a box up, so the fields inside stay easy to type in.
+        draggable={!readOnly && armed === e.key}
         onDragStart={(ev) => {
           setDrag(e.key);
           ev.dataTransfer.effectAllowed = "move";
           ev.dataTransfer.setData("text/plain", e.key);
         }}
-        onDragEnd={() => setDrag(null)}
+        onDragEnd={() => {
+          setDrag(null);
+          setArmed(null);
+        }}
         onDragOver={(ev) => {
           if (drag && drag !== e.key) ev.preventDefault();
         }}
@@ -204,7 +216,14 @@ export default function LandlordStage({
           setDrag(null);
         }}
       >
-        <button type="button" className="nl-ls-row" aria-expanded={isOpen} onClick={() => setOpenKey(isOpen ? null : e.key)}>
+        <button
+          type="button"
+          className="nl-ls-row"
+          aria-expanded={isOpen}
+          onClick={fold}
+          onPointerDown={() => !readOnly && setArmed(e.key)}
+          onPointerUp={() => setArmed(null)}
+        >
           {!readOnly && (
             <span className="nl-ls-grip" aria-hidden title="Drag to reorder">
               <svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor"><circle cx="3" cy="3" r="1.4" /><circle cx="9" cy="3" r="1.4" /><circle cx="3" cy="9" r="1.4" /><circle cx="9" cy="9" r="1.4" /><circle cx="3" cy="15" r="1.4" /><circle cx="9" cy="15" r="1.4" /></svg>
@@ -287,7 +306,7 @@ export default function LandlordStage({
           <div className="min-w-0 flex-1">
             <p className="nl-eyebrow">{address}</p>
             <h2 className="nl-po-title">{landlords > 1 ? "Landlords" : "Landlord"}</h2>
-            <p className="nl-ls-lede">Press anyone to change their details. The first is who we ring: drag someone to the top to make them the point of contact.</p>
+            <p className="nl-ls-lede">Change any detail in place. The first is who we ring: drag someone to the top to make them the point of contact.</p>
           </div>
           <button type="button" className="nl-iconbtn" aria-label="Close" onClick={onClose}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden>
