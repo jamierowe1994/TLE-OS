@@ -634,6 +634,34 @@ async function outstandingEsign(): Promise<Esign[]> {
     }));
 }
 
+/* A landlord's name as the two sides hold it: lower case, single spaces, one per person. */
+const peopleIn = (names: string) =>
+  names
+    .toLowerCase()
+    .split(/\s*(?:&|,|\band\b)\s*/)
+    .map((x) => x.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+/**
+ * Each landlord once (25 Oct 2026, James: "14 over 7, 30 and 90 days"). REX
+ * keeps every resend as its own request, so James Roberts read as three sets
+ * out and Martina Mirandola as two. Newest kept. Also left out: a landlord
+ * whose terms are already out from our own page or DocuSeal, and one already
+ * instructed. A request whose names can't be read is kept - one too many
+ * rather than a set quietly missing.
+ */
+async function oncePerLandlord(rows: Esign[], alreadyOut: string[], won: Set<string>): Promise<Esign[]> {
+  const seen = new Set(alreadyOut.flatMap(peopleIn));
+  const named = await Promise.all(rows.map(async (r) => ({ r, who: await esignDetail(r.id).then((d) => peopleIn(d.name)).catch(() => [] as string[]) })));
+  const out: Esign[] = [];
+  for (const { r, who } of named.sort((a, b) => (b.r.sentAt ?? "").localeCompare(a.r.sentAt ?? ""))) {
+    if (who.length && who.some((p) => seen.has(p) || won.has(p) || [...won].some((w) => peopleIn(w).includes(p)))) continue;
+    who.forEach((p) => seen.add(p));
+    out.push(r);
+  }
+  return out;
+}
+
 /** Who an e-sign request is for and which home: read in full, once, and held. */
 async function esignDetail(id: number): Promise<{ name: string; property: string; listingId: string | null }> {
   return cached(`esign-one2:${id}`, 10 * 60_000, async () => {
@@ -714,6 +742,17 @@ async function termBook(ctx: FrontCtx): Promise<{ rows: TermRec[]; lateAfterDays
        answers a refusal with nobody outstanding, which would be a made-up 0. */
     rexConfigured() ? cached("esign", 10 * 60_000, outstandingEsign) : Promise.resolve([] as Esign[]),
   ]);
+  /* Landlords already instructed: a REX e-sign still out to one of them was
+     overtaken (Ian Lennox, 25 Oct 2026: won through DocuSeal, his REX request
+     still counted). Last 90 days, by name, the only thing both sides hold. */
+  const won = new Set(
+    (
+      await q<{ who: string }>(
+        `SELECT LOWER(TRIM(landlord)) AS who FROM os_market_appraisals
+          WHERE stage = 'won' AND updated_at > NOW() - INTERVAL '90 days' AND TRIM(landlord) <> ''`
+      ).catch(() => [] as { who: string }[])
+    ).map((r) => r.who)
+  );
   const late = (sentAt: string | null) => sentAt != null && new Date(sentAt).getTime() < lateAt;
   const rows: TermRec[] = [
     ...page.map((r): TermRec => {
@@ -743,9 +782,11 @@ async function termBook(ctx: FrontCtx): Promise<{ rows: TermRec[]; lateAfterDays
     })),
     /* An e-sign request older than 60 days is one nobody is chasing: REX still holds
        ones from 2023 as outstanding, and counting them read "44 out, 43 late". */
-    ...esign
-      .filter((r) => (everything || r.sentById === rexUserId) && Boolean(r.sentAt) && Date.now() - new Date(r.sentAt as string).getTime() <= ESIGN_STALE_MS)
-      .map((r): TermRec => ({
+    ...(await oncePerLandlord(
+      esign.filter((r) => (everything || r.sentById === rexUserId) && Boolean(r.sentAt) && Date.now() - new Date(r.sentAt as string).getTime() <= ESIGN_STALE_MS),
+      [...page.map((r) => r.parties?.trim() || r.landlord?.trim() || ""), ...docuseal.map((r) => r.landlord?.trim() ?? "")],
+      won
+    )).map((r): TermRec => ({
         id: `esign:${r.id}`,
         esignId: r.id,
         sentAt: r.sentAt,

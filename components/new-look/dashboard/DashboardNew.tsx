@@ -1,8 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import SteveFace from "@/components/SteveFace";
-import { Ico } from "@/components/new-look/Parts";
+import { useCallback, useEffect, useState } from "react";
 import { minutesOf } from "@/lib/diary";
 import { sumRange } from "@/lib/front-dash";
 import Agenda, { useMyDay } from "./Agenda";
@@ -11,6 +9,7 @@ import LaunchSet from "./LaunchSet";
 import NeedsYou from "./NeedsYou";
 import QuickPills, { type SteveAsk } from "./QuickPills";
 import { useFront } from "./useFront";
+import { AskPill, DashThread, useDashChat } from "./DashChat";
 
 /**
  * The Dashboard in the new look (lib/new-look "dashboard", 23 Oct 2026), after
@@ -24,9 +23,10 @@ import { useFront } from "./useFront";
  *  - Steve's line under the greeting is said from their own day (the diary
  *    count and the next time, and how many things wait on them), never the
  *    design's sample sentence.
- *  - The ask box sends the question to the real Steve (HelpDock, event
- *    "os-steve-ask"), who answers in his own panel. The design's canned
- *    answers are not here; nor is its attach button (attach in his panel).
+ *  - The ask box is one line (25 Oct 2026). Asking turns the page into the
+ *    conversation (./DashChat): the figures drop away, the question shows as
+ *    text, his dots, then his answer from the real Steve, with the box risen
+ *    to the foot. "Back to your day" brings the figures back.
  *  - The design's sample questions are Steve's chips only where the day has
  *    something for them: calling first while leads wait, a chase while terms
  *    are out, and the prep for the next appraisal in their own diary today, at
@@ -68,26 +68,30 @@ export default function DashboardNew({ title }: { title: string }) {
   const day = useMyDay();
   const [needs, setNeeds] = useState<{ n: number; more: boolean } | null>(null);
   const onNeeds = useCallback((n: number | null, more: boolean) => setNeeds(n == null ? null : { n, more }), []);
-  const [q, setQ] = useState("");
-  const [sent, setSent] = useState(false);
-  const sentTimer = useRef<number | null>(null);
-  useEffect(() => () => { if (sentTimer.current) window.clearTimeout(sentTimer.current); }, []);
+  const chat = useDashChat();
+  /* home -> leaving (the figures dropping away) -> chat; and back again. */
+  const [phase, setPhase] = useState<"home" | "leaving" | "chat">("home");
+  useEffect(() => {
+    if (phase !== "leaving") return;
+    const t = window.setTimeout(() => setPhase("chat"), 420);
+    return () => window.clearTimeout(t);
+  }, [phase]);
 
   const front = useFront();
   const [range, setRange] = useRange();
 
   const send = (raw: string) => {
-    const text = raw.trim();
-    if (!text) return;
-    window.dispatchEvent(new CustomEvent("os-steve-ask", { detail: text }));
-    setSent(true);
-    if (sentTimer.current) window.clearTimeout(sentTimer.current);
-    sentTimer.current = window.setTimeout(() => setSent(false), 2400);
+    if (!raw.trim()) return;
+    if (phase === "home") {
+      setPhase("leaving");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    void chat.send(raw);
   };
-  const ask = () => {
-    if (!q.trim()) return;
-    send(q);
-    setQ("");
+  const back = () => {
+    chat.reset();
+    setPhase("home");
+    window.scrollTo({ top: 0 });
   };
 
   /* Steve's chips, where the day gives them something to answer. */
@@ -109,59 +113,37 @@ export default function DashboardNew({ title }: { title: string }) {
   const date = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
   const says = steveSays(day, needs);
 
+  const away = phase !== "home";
   return (
-    <div data-look="new" className="nl-page nl-dash">
-      <section className="nl-dash-hello">
-        <div className="nl-dash-date">{date}</div>
-        <h1 className="nl-dash-title">
-          <SteveFace size={52} track mood={sent ? "thinking" : undefined} className="nl-dash-face" />
-          <span>{title}</span>
-        </h1>
-        <p className="nl-dash-says" aria-live="polite">
-          <b>Steve</b> {says ?? "Having a look at your day…"}
-        </p>
-
-        <form
-          className="nl-dash-ask"
-          onSubmit={(e) => {
-            e.preventDefault();
-            ask();
-          }}
-        >
-          <textarea
-            rows={2}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              /* Enter sends, Shift+Enter is a new line - as in Steve's own box. */
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                ask();
-              }
-            }}
-            placeholder="How can Steve help today?"
-            aria-label="Ask Steve"
-          />
-          <div className="nl-dash-ask-bar">
-            <span className="nl-dash-ask-who">{sent ? "Over to Steve - his answer opens beside you" : "Steve · knows your book"}</span>
-            <button type="submit" className={`nl-dash-ask-send${q.trim() ? "" : " is-idle"}`} aria-label="Send to Steve" disabled={!q.trim()}>
-              <Ico name="arrow" size={16} />
-            </button>
+    <div data-look="new" className={`nl-page nl-dash${away ? " is-asking" : ""}${phase === "chat" ? " is-chat" : ""}`}>
+      {phase !== "chat" && (
+        <section className="nl-dash-hello">
+          <div className="nl-dash-date">{date}</div>
+          <h1 className="nl-dash-title">{title}</h1>
+          <p className="nl-dash-says" aria-live="polite">
+            <b>Steve</b> {says ?? "Having a look at your day…"}
+          </p>
+          <div className="nl-dash-askwrap">
+            <AskPill onSend={send} busy={chat.busy} />
           </div>
-        </form>
+          <QuickPills asks={asks} onAsk={send} />
+        </section>
+      )}
 
-        <QuickPills asks={asks} onAsk={send} />
-      </section>
+      {phase === "chat" && <DashThread talk={chat.talk} busy={chat.busy} screens={chat.screens} onSend={send} onBack={back} />}
 
-      <FrontFigures range={range} setRange={setRange} front={front} />
+      {/* Kept mounted while Steve has the page, so the way back is instant. */}
+      <div className="nl-dash-rest" hidden={phase === "chat"}>
+        <FrontFigures range={range} setRange={setRange} front={front} />
 
-      {/* Today across the page on white, the way the Diary draws a day (25 Oct 2026); Needs You under it. */}
-      <Agenda />
-      <div className="nl-dash-needs">
-        <NeedsYou onCount={onNeeds} />
+        {/* Today across the page on white, the way the Diary draws a day (25 Oct 2026); Needs You under it. */}
+        <Agenda />
+        <div className="nl-dash-needs">
+          <NeedsYou onCount={onNeeds} />
+        </div>
+
+        <LaunchSet />
       </div>
-
-      <LaunchSet />
     </div>
   );
 }
