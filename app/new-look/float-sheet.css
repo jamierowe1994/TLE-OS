@@ -171,3 +171,13 @@
   [data-look="new"] .nl-fs-stack.is-anim > *, [data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > *, [data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > *, [data-look="new"] .nl-fs-tick { animation: none; }
   [data-look="new"] .nl-fs, [data-look="new"] .nl-fs-scrim { transition: none; }
 }
+
+/* The cards scroll in their own space, so the footer box (sticky at the foot
+   of that space) never has half a card showing beneath it (25 Oct 2026).
+   Phones keep one scrolling page. */
+@media (min-width: 761px) {
+  [data-look="new"] .nl-fs { overflow: hidden; }
+  [data-look="new"] .nl-fs-stack { flex: 0 1 auto; min-height: 0; max-height: 100%; }
+  [data-look="new"] .nl-fs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  [data-look="new"] .nl-fs-body::-webkit-scrollbar { display: none; }
+}
