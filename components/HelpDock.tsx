@@ -2165,6 +2165,7 @@ function Dock() {
                       className="hidden"
                     />
                     <textarea
+                      data-steve-chat
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={(e) => {

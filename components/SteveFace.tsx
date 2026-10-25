@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useNewLook } from "@/lib/use-new-look";
+import SteveOrb from "@/components/SteveOrb";
 
 /**
  * Steve in the new look (Claude Design, 23 Oct 2026): a round coral sprite
@@ -81,7 +83,10 @@ export default function SteveFace({
     };
   }, [mood]);
 
+  const orb = useNewLook("orb") === true;
+
   const m: SteveMood = mood ?? (hover ? "happy" : wink ? "wink" : byTime);
+  if (orb) return <SteveOrb size={size} mood={mood ?? (byTime === "sleepy" ? "sleepy" : "idle")} className={className} label={label} />;
   const ex: [number, number] = m === "thinking" ? [1.4, -1.6] : m === "surprised" ? [0, 0] : eye;
 
   const pupils =

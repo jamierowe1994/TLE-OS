@@ -29,6 +29,7 @@ export const LOOK_LEVELS: { id: LookLevel; label: string; says: string }[] = [
 
 export const LOOK_SCREENS = [
   { id: "nav", label: "Sidebar and frame", what: "The sidebar as the design has it: flat, full height, one straight line down to a white page, no rounded panel. Every screen sits in it." },
+  { id: "orb", label: "Steve as an orb", what: "Steve drawn as a moving coral ball everywhere he appears: always turning inside, quicker when he's thinking, pulsing as you type to him, wobbling when pressed. Off, the character." },
   { id: "steve", label: "Steve", what: "The new Steve character in the corner, and his bubble cut down to the chat with a Report button." },
   { id: "listings", label: "Listings board", what: "The Listings page: type-only header, the filter row, text tabs and the new cards." },
   { id: "listing", label: "Listing page", what: "One listing: the head with its two jobs, the big photo beside The Details, the progress line and the tabs." },
