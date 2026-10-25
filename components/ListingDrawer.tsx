@@ -292,6 +292,8 @@ function ListingDrawerBody({
   });
   /* Edit the advert's own switch (lib/new-look "advert"): null until known. */
   const advertLook = useNewLook("advert");
+  /* The progress line in graded sage (James, 25 Oct 2026), behind its own switch. */
+  const graded = useNewLook("spine") === true;
   /* The new look's tab on the page itself; Edit the advert stays a pop-out. */
   const [nlTab, setNlTab] = useState<NlTab>(() => {
     const asked = askedTab(initialTab);
@@ -2858,10 +2860,11 @@ function ListingDrawerBody({
         </div>
 
         {/* Where it's up to: a step each, nothing written under them. */}
-        <div className="nl-progress" style={{ "--nl-steps": LISTING_TRACK.length } as React.CSSProperties} aria-label="Where it's up to">
+        <div className={`nl-progress${graded ? " is-graded" : ""}`} style={{ "--nl-steps": LISTING_TRACK.length } as React.CSSProperties} aria-label="Where it's up to">
           {LISTING_TRACK.map((st, i) => (
             <button
               key={st.id}
+              style={{ "--i": i } as React.CSSProperties}
               type="button"
               onClick={() => setStep(i)}
               disabled={i < floor}

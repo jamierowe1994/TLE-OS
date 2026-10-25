@@ -2296,7 +2296,6 @@ function Dock() {
       onStart={startChat}
       onOpenThread={(id) => void openThread(id)}
       onClose={() => void toggle()}
-      onEscape={() => (orbMenu ? setOrbMenu(false) : void toggle())}
       busy={busy}
       greeting={greeting}
       conversation={
