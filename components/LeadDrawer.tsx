@@ -1305,6 +1305,7 @@ function LeadDrawerBody({
   const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
   /* Their passport as a list of answers (8 Oct 2026), not the tenant's own form. */
   const [answersOpen, setAnswersOpen] = useState(false);
+  const closeAnswers = useCallback(() => setAnswersOpen(false), []);
   /* ?passport=1 from the bell's "Files in" (23 Oct 2026): open their passport,
      where what they sent is listed. Once, then off the address. */
   useEffect(() => {
@@ -5795,7 +5796,14 @@ function LeadDrawerBody({
         onAddAnother={bookMode === "viewing" ? setBlockAnchor : undefined}
       />
       <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
-      <PassportAnswers email={answersOpen ? passportEmail || null : null} name={lead.name} home={enqProperty} onClose={() => setAnswersOpen(false)} />
+      <PassportAnswers
+        email={answersOpen ? passportEmail || null : null}
+        name={lead.name}
+        home={enqProperty}
+        onClose={closeAnswers}
+        look={newLook ? "new" : undefined}
+        onBook={isTenant ? () => { setAnswersOpen(false); setBookMode("viewing"); setBooking(true); } : undefined}
+      />
 
       {/* ── Recording the appraisal: what was found, what was said. Saving
           writes a real note and moves the record to the follow-up. ── */}

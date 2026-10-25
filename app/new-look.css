@@ -847,11 +847,12 @@
 .nl-ap { padding-bottom: 120px; }
 .nl-ap-card { width: min(760px, 100%); }
 .nl-ap-lede { margin-top: 6px; font-size: 13.5px; line-height: 20px; color: rgba(255, 255, 255, .75); }
-.nl-ap-why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 18px 20px; border-radius: 20px; background: rgba(255, 255, 255, .92); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+/* The reasons straight on the dark, no box (James, 25 Oct). */
+.nl-ap-why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; padding: 4px 4px 6px; }
 .nl-ap-reason { display: flex; gap: 12px; align-items: flex-start; }
-.nl-ap-reason p { font-size: 13px; line-height: 19px; color: var(--ink); }
-.nl-ap-reason b { font-weight: 600; }
-.nl-ap-ico { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--box); color: var(--ink); }
+.nl-ap-reason p { font-size: 14px; line-height: 21px; color: rgba(255, 255, 255, .88); }
+.nl-ap-reason b { font-weight: 600; color: #fff; }
+.nl-ap-ico { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, .14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22); color: #fff; }
 .nl-ap-mailhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; padding: 10px 4px 0; color: #fff; }
 .nl-ap-kicker { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .7); }
 .nl-ap-subject { font-size: 13.5px; color: rgba(255, 255, 255, .8); }
@@ -873,7 +874,7 @@
 .nl-ap-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .4); border-top-color: #fff; animation: spin 1s linear infinite; }
 @media (max-width: 640px) {
   .nl-ap { padding: 28px 16px 100px; }
-  .nl-ap-why { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px; }
+  .nl-ap-why { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 4px 2px; }
   /* One row on a phone: a round Back, then the two others sharing the rest. */
   .nl-ap-bar { gap: 8px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
   .nl-ap-bar-end { flex: 1; gap: 8px; min-width: 0; }
@@ -1041,4 +1042,62 @@
   .nl-ls-edit, .nl-ls-new-body { padding: 4px 16px 18px; }
   .nl-ls-new-head { padding: 14px; gap: 10px; }
   .nl-ls-fields { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── A tenant's passport on the stage (components/passport/PassportStage) ──
+   The passport on the left with the next steps under it, every answer on the
+   right in boxes that sit side by side. Under the email window and the
+   WhatsApp sheet (z-150) that its buttons open. */
+.nl-po.nl-pp { z-index: 145; }
+.nl-pp-card { width: min(1240px, 100%); }
+.nl-pp-state { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22); font-size: 12.5px; color: #fff; }
+.nl-pp-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+.nl-pp-state.is-done i { background: #a9bf98; }
+.nl-pp-bad { padding: 16px 20px; border-radius: 20px; background: #fbe6dc; color: #8a3f2a; font-size: 13.5px; }
+.nl-pp-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.nl-pp-left { position: sticky; top: 0; display: flex; flex-direction: column; gap: 18px; }
+
+/* The tenant's own passport (app/tenant-passport.css), lifted onto the dark. */
+.nl-pp .tpx.tpx-agent { min-height: 0; background: transparent; font-size: 15px; }
+.nl-pp .tpx .passcol { position: static; height: auto; min-height: 0; background: none; padding: 6px 0 0; display: block; }
+.nl-pp .tpx .pass, .nl-pp .tpx.steps-on .pass { --w: min(360px, 100%); margin: 0 auto; }
+.nl-pp .tpx .phint { display: none; }
+.nl-pp-hint { margin-top: 4px; text-align: center; font-size: 12px; color: rgba(255, 255, 255, .6); }
+
+.nl-pp-acts { display: flex; flex-direction: column; gap: 8px; }
+.nl-pp-act { font: inherit; display: flex; align-items: center; gap: 10px; width: 100%; height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 500; text-decoration: none; cursor: pointer; box-shadow: 0 14px 34px -16px rgba(0, 0, 0, .6); transition: transform .2s, box-shadow .2s, background-color .2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nl-pp-act:hover { transform: translateY(-1px); box-shadow: 0 18px 38px -16px rgba(0, 0, 0, .65); }
+.nl-pp-act.is-go { background: var(--accent-dark); color: #fff; }
+.nl-pp-act.is-quiet { background: rgba(255, 255, 255, .12); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); }
+.nl-pp-act.is-quiet:hover { background: rgba(255, 255, 255, .2); }
+.nl-pp-said { padding: 2px 6px; font-size: 13px; color: #fff; }
+
+.nl-pp-answers { column-count: 2; column-gap: 14px; }
+.nl-pp-box { break-inside: avoid; margin: 0 0 14px; padding: 16px 18px 6px; border-radius: 20px; background: rgba(255, 255, 255, .94); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.nl-pp-box.is-wide { column-span: all; }
+.nl-pp-box h3 { margin-bottom: 4px; font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.nl-pp-box dl > div { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+.nl-pp-box dl > div:first-child { border-top: 0; }
+.nl-pp-box dt { font-size: 12.5px; line-height: 18px; color: var(--muted); }
+.nl-pp-box dd { min-width: 0; font-size: 13.5px; line-height: 18px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.nl-pp-box .is-none dd { font-weight: 400; color: var(--faint); }
+.nl-pp-docs { list-style: none; margin: 0 0 8px; padding: 0; }
+.nl-pp-docs li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+.nl-pp-docs li:first-child { border-top: 0; }
+.nl-pp-docs b { display: block; font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nl-pp-docs span span { display: block; font-size: 12px; color: var(--muted); }
+.nl-pp-open { flex: none; padding: 5px 14px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: 12px; font-weight: 500; color: var(--ink); text-decoration: none; }
+.nl-pp-open:hover { border-color: var(--ink); }
+
+@media (max-width: 1180px) { .nl-pp-answers { column-count: 1; } }
+@media (max-width: 860px) {
+  .nl-pp-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .nl-pp-left { position: static; }
+  .nl-pp-acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nl-pp-act { justify-content: center; padding: 0 12px; font-size: 13.5px; }
+  .nl-pp-act.is-go { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .nl-po.nl-pp { padding: 28px 16px 40px; }
+  .nl-pp .tpx .pass { --w: min(320px, 100%); }
 }

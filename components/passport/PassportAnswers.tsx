@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import PassportScene from "@/components/PassportScene";
 import { PassportRulesContext } from "@/components/PassportBook";
-import { EMPTY_PASSPORT, isEmployed, isTrading, otherAdultCount, otherCredit, otherName, type PassportData, type PassportRules } from "@/lib/passport-shape";
+import { EMPTY_PASSPORT, type PassportData } from "@/lib/passport-shape";
 import { tenantDocLabel } from "@/lib/tenant-documents-kinds";
+import { day, groups, type Answer } from "@/components/passport/answers";
+import PassportStage from "@/components/passport/PassportStage";
 
 /**
  * A TENANT'S PASSPORT, AS A LIST (James, 8 Oct 2026).
@@ -20,110 +22,18 @@ import { tenantDocLabel } from "@/lib/tenant-documents-kinds";
  * agent reads a file. Read only, from GET /api/tenant/passport/answers.
  */
 
-type SentIn = { id: string; kind: string; name: string; r2Key: string; uploadedAt: string };
-type Answer = { ok?: boolean; error?: string; name?: string; email?: string; submittedAt?: string | null; updatedAt?: string; householdIncome?: number | null; data?: PassportData; rules?: PassportRules; documents?: SentIn[] };
-
-const yn = (b: boolean | null | undefined) => (b == null ? null : b ? "Yes" : "No");
-const money = (s: string | number | null | undefined) => {
-  const n = Number(String(s ?? "").replace(/[£,\s]/g, ""));
-  return Number.isFinite(n) && n > 0 ? `£${Math.round(n).toLocaleString("en-GB")}` : null;
-};
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
-const dob = (s: string) => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : s || null);
-const month = (s: string) => (/^\d{4}-\d{2}$/.test(s) ? new Date(`${s}-01T12:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : s || null);
-
-function groups(d: PassportData, household: number | null, rules: PassportRules): { title: string; rows: [string, string | null][] }[] {
-  /* Each adult's credit under their own name (Rhiannon, 14 Oct 2026). A
-     passport from before the others were asked shows "Not answered". */
-  const others = otherAdultCount(d);
-  const leadFirst = d.legalName.trim().split(/\s+/)[0] || "lead tenant";
-  const othersCredit: [string, string | null][] = Array.from({ length: others }, (_, k) => {
-    const c = otherCredit(d, k);
-    return [`Adverse credit, ${otherName(d, k) || `adult ${k + 2}`}`, c.credit ? `Yes${c.note.trim() ? `: ${c.note.trim()}` : ""}` : yn(c.credit)];
-  });
-  return [
-    {
-      title: "Who they are",
-      rows: [
-        ["Legal name", d.legalName || null],
-        ["Known as", d.knownAs || null],
-        ["Date of birth", dob(d.dob)],
-        /* Never on a Scottish passport (Lianna Denholm, 15 Oct 2026). */
-        ...(rules.noNationality ? [] : ([["Nationality", d.nationality || null]] as [string, string | null][])),
-        ["Email", d.email || null],
-        ["Mobile", d.mobile || null],
-      ],
-    },
-    /* England only: never on a Scottish passport (James, 15 Oct 2026). */
-    ...(rules.noRightToRent
-      ? []
-      : [
-          {
-            title: "Right to rent",
-            rows: [
-              ["British or Irish passport", yn(d.hasBritishPassport)],
-              ...(d.hasBritishPassport === false ? ([["Share code", d.shareCode || null]] as [string, string | null][]) : []),
-            ] as [string, string | null][],
-          },
-        ]),
-    {
-      title: "Work and money",
-      rows: [
-        ["What they do", d.applicantType || null],
-        /* Only the questions the passport asked them, by what they do. */
-        ...(isEmployed(d)
-          ? ([
-              ["Hours", d.workHours || null],
-              ["Zero-hours contract", yn(d.zeroHours)],
-              ["On probation", yn(d.onProbation)],
-            ] as [string, string | null][])
-          : []),
-        ...(isTrading(d) ? ([["Trading for", d.tradingFor || null]] as [string, string | null][]) : []),
-        ["Their income, a year", money(d.annualIncome)],
-        ["Household income, a year", money(household)],
-        ["Savings", money(d.savings)],
-      ],
-    },
-    {
-      title: "Who is moving in",
-      rows: [
-        ["Adults", d.numAdults || null],
-        ["Children", d.numChildren || null],
-        ["Other adults' incomes", d.coOccupantIncomes || null],
-      ],
-    },
-    {
-      title: "Where they live now",
-      rows: [
-        ["Current address", d.currentAddress || null],
-        ["Moved in", month(d.movedIn)],
-        ["Three years there", yn(d.livedThreeYears)],
-        ...(d.livedThreeYears === false ? ([["Previous address", d.previousAddress || null]] as [string, string | null][]) : []),
-        ["Rented in the last 12 months", yn(d.rentedLast12Months)],
-        ["Rent paid on time", yn(d.rentOnTime)],
-        ["Landlord reference", yn(d.landlordRef)],
-      ],
-    },
-    {
-      title: "Everything else",
-      rows: [
-        [others ? `Adverse credit, ${leadFirst}` : "Adverse credit", yn(d.adverseCredit)],
-        ...(d.adverseCredit ? ([["About it", d.adverseCreditNote || null]] as [string, string | null][]) : []),
-        ...othersCredit,
-        ["Guarantor available", yn(d.guarantor)],
-        ["Pets", d.pets ? d.petsNote || "Yes" : yn(d.pets)],
-        ["Smoker", yn(d.smoker)],
-      ],
-    },
-  ];
-}
-
-export default function PassportAnswers({ email, name, home, onClose }: {
+export default function PassportAnswers({ email, name, home, onClose, look, onBook, onOpenFile }: {
   email: string | null;
   name?: string;
   /** The home on the agent's screen, when there is one: a Scottish home shows no nationality. */
   home?: string | null;
   onClose: () => void;
+  /** The new look: the passport on the dark stage with next steps (components/passport/PassportStage). */
+  look?: "new";
+  /** Book them a viewing (the new look's next steps). */
+  onBook?: () => void;
+  /** Open their lead file (the new look's next steps). */
+  onOpenFile?: () => void;
 }) {
   const [a, setA] = useState<Answer | null>(null);
 
@@ -141,14 +51,15 @@ export default function PassportAnswers({ email, name, home, onClose }: {
   }, [email, home]);
 
   useEffect(() => {
-    if (!email) return;
+    if (!email || look === "new") return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [email, onClose]);
+  }, [email, onClose, look]);
 
   if (!email) return null;
   const d: PassportData = { ...EMPTY_PASSPORT, ...(a?.data ?? {}) };
+  if (look === "new") return <PassportStage a={a} d={d} email={email} name={name} home={home ?? null} onClose={onClose} onBook={onBook} onOpenFile={onOpenFile} />;
 
   return createPortal(
     <div className="fixed inset-0 z-[150]" data-steve-never>

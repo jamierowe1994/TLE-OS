@@ -117,7 +117,8 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
   const [preview, setPreview] = useState<{ subject: string; html: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<Result[] | null>(null);
-  const [viewing, setViewing] = useState<{ email: string; name: string } | null>(null);
+  const [viewing, setViewing] = useState<{ email: string; name: string; e?: Enquiry } | null>(null);
+  const closeViewing = useCallback(() => setViewing(null), []);
   /* The enquirer whose lead file is open over the listing, and which row is fetching it. */
   const [openLead, setOpenLead] = useState<Lead | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
@@ -244,6 +245,20 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
     setOpening(null);
     if (lead) setOpenLead(lead);
     else window.location.assign(`/leads?open=${encodeURIComponent(e.id)}`);
+  }
+  /* From their passport: their own file, or their file with its viewing booker
+     open (?book=viewing, which the file spends once). */
+  function fileFrom(e: Enquiry) {
+    setViewing(null);
+    void openEnquirer(e);
+  }
+  function bookFrom(e: Enquiry) {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("book", "viewing");
+      window.history.replaceState(window.history.state, "", u.toString());
+    } catch { /* fine: the file still opens */ }
+    fileFrom(e);
   }
   /* Next / Previous in the lead file walk this listing's enquirers. */
   function stepEnquirer(delta: number) {
@@ -419,7 +434,15 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
         <NotifyEnquiries listingId={String(listingId)} propertyId={propertyId} address={home ?? "This home"} onClose={() => setNotifying(false)} />
       )}
 
-      <PassportAnswers email={viewing?.email ?? null} name={viewing?.name} home={home} onClose={() => setViewing(null)} />
+      <PassportAnswers
+        email={viewing?.email ?? null}
+        name={viewing?.name}
+        home={home}
+        onClose={closeViewing}
+        look={look}
+        onBook={viewing?.e ? () => bookFrom(viewing.e!) : undefined}
+        onOpenFile={viewing?.e ? () => fileFrom(viewing.e!) : undefined}
+      />
 
       {/* Over the listing's own panels (z-130), in a layer of its own - and
           UNDER every pop-up the lead's file opens (z-140 and up: WhatsApp,
@@ -562,7 +585,7 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
               const on = can && chosen.has(k);
               const s = statusOf(e);
               const src = sourceLabel(e.source);
-              const openAnswers = () => setViewing({ email: e.email.trim(), name: e.name });
+              const openAnswers = () => setViewing({ email: e.email.trim(), name: e.name, e });
               return (
                 <li key={e.id} className={`nl-enq-row${on ? " is-picked" : ""}`}>
                   <button
@@ -769,7 +792,7 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
                   ) : statuses === null ? (
                     <span className="text-[11px] text-muted">…</span>
                   ) : (
-                    <StatusPill s={statusOf(e)} auto={autoSent.has(k)} onOpen={() => setViewing({ email: e.email.trim(), name: e.name })} />
+                    <StatusPill s={statusOf(e)} auto={autoSent.has(k)} onOpen={() => setViewing({ email: e.email.trim(), name: e.name, e })} />
                   )}
                 </span>
               </li>
