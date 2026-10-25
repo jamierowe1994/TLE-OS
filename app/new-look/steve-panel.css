@@ -35,6 +35,8 @@
   from { clip-path: circle(0 at 100% 100%); }
   to { clip-path: circle(160% at 100% 100%); }
 }
+/* The wide window has its own close: he rolls away off the edge until it shuts. */
+.steve-dock-orb.is-tucked { transform: translateX(160%) rotate(220deg); pointer-events: none; }
 .steve-dock-orb.is-opening { animation: sv-float 0.75s cubic-bezier(0.3, 1.3, 0.5, 1); }
 @keyframes sv-float { 0% { transform: none; } 38% { transform: translateY(-20px) scale(1.12); } 100% { transform: none; } }
 

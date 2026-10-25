@@ -2096,7 +2096,9 @@ function Dock() {
                       rows={talking ? 1 : 3}
                       aria-label={`Ask ${aName}`}
                       placeholder={
-                        stage === "onboarding-name"
+                        orb && stage === "ask"
+                          ? "Ask a question…"
+                          : stage === "onboarding-name"
                           ? "Your name"
                           : stage === "onboarding-help"
                             ? "What you'd like a hand with"
