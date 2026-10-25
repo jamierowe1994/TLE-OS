@@ -482,7 +482,9 @@ export default function Portfolio() {
         <span className="nl-meta">Checking…</span>
       );
       const photo = p.image ?? house?.rooms.find((r) => r.image)?.image ?? null;
-      return { s, price, tags, cert, photo, where, who, landlord, title: house ? house.name : p.name, letSince: house ? null : p.letSince };
+      /* Who lives there, for the card: "Empty" rather than "No tenant on record". */
+      const living = house ? who : p.tenants.length ? p.tenants.map((t) => t.name).join(" & ") : "Empty";
+      return { s, price, tags, cert, photo, where, who, living, landlord, title: house ? house.name : p.name, letSince: house ? null : p.letSince };
     };
 
     return (
@@ -696,18 +698,17 @@ export default function Portfolio() {
                       return (
                         <Link key={row.house ? row.house.key : row.p.listingId} href={`/portfolio/${encodeURIComponent(row.p.listingId)}`} onClick={remember} className="nl-prop h-full" aria-label={`Open ${f.title}`}>
                           <span className="nl-prop-photo">
-                            <PropertyPhoto src={f.photo} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                            <PropertyPhoto src={f.photo} alt="" seed={row.p.listingId} kind={f.title} className="absolute inset-0 h-full w-full object-cover" />
                             <span className="nl-prop-tags">{f.tags}</span>
                           </span>
+                          {/* Squared off like the design's cards (James, 25 Oct 2026): rent, the home,
+                              who lives there and where, and whose it is. The certificate line and
+                              Let since went; both are on the home's page and in the list view. */}
                           <span className="nl-prop-body">
                             <span className="nl-price">{f.price}</span>
                             <span className="nl-strong">{f.title}</span>
-                            <span className="nl-meta">{f.where}</span>
-                            <span className="nl-meta">{[f.who, f.landlord ? `Landlord ${f.landlord.name}` : "No landlord on record"].join(" · ")}</span>
-                            <span className="nl-prop-foot">
-                              {f.letSince && <span>Let since <b>{day(f.letSince)}</b></span>}
-                              <span className="ml-auto min-w-0">{f.cert}</span>
-                            </span>
+                            <span className="nl-meta">{f.living} · {f.where}</span>
+                            {byAgent && <span className="nl-meta">{row.p.agent?.name ?? "No agent"}</span>}
                           </span>
                         </Link>
                       );
@@ -719,7 +720,7 @@ export default function Portfolio() {
                       const f = facts(row);
                       return (
                         <Link key={row.house ? row.house.key : row.p.listingId} href={`/portfolio/${encodeURIComponent(row.p.listingId)}`} onClick={remember} className="nl-row nl-port-row" aria-label={`Open ${f.title}`}>
-                          <span className="nl-row-photo"><PropertyPhoto src={f.photo} alt="" className="absolute inset-0 h-full w-full object-cover" /></span>
+                          <span className="nl-row-photo"><PropertyPhoto src={f.photo} alt="" seed={row.p.listingId} kind={f.title} className="absolute inset-0 h-full w-full object-cover" /></span>
                           <span className="min-w-0">
                             <span className="flex flex-wrap gap-1.5">{f.tags}</span>
                             <span className="nl-strong mt-1.5 block truncate">{f.title}</span>

@@ -543,7 +543,7 @@ export default function Applications() {
                       >
                         <span className="nl-row-photo">
                           {a.image ? (
-                            <PropertyPhoto src={a.image} className="absolute inset-0 h-full w-full object-cover" />
+                            <PropertyPhoto src={a.image} seed={a.id} className="absolute inset-0 h-full w-full object-cover" />
                           ) : (
                             <span className="absolute inset-0 grid place-items-center text-muted" aria-hidden>
                               <svg width="30" height="24" viewBox="0 0 56 44" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M4 42h48M10 42V20L28 6l18 14v22M23 42V30h10v12" /></svg>
@@ -920,7 +920,7 @@ export default function Applications() {
                         </p>
                       </div>
                       <div className="flex min-w-0 items-center gap-3 sm:col-span-2 xl:col-span-1">
-                        <PropertyPhoto src={a.image} className="h-12 w-16 shrink-0 rounded-xl" />
+                        <PropertyPhoto src={a.image} seed={a.id} className="h-12 w-16 shrink-0 rounded-xl" />
                         <div className="min-w-0">
                           <p className="truncate text-[13px] font-semibold" title={a.property}>{a.property}</p>
                           {/* Below xl the offer and move-in ride this line;
