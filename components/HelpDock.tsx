@@ -380,7 +380,8 @@ function Dock() {
      pointer comes, open and following it whenever his chat is open, rolling
      off to peek from the edge when he sits on something, and the glass chat
      card (app/new-look/steve-orb.css, .is-orb). */
-  const orbOn = useNewLook("orb") === true;
+  const orbRaw = useNewLook("orb");
+  const orbOn = orbRaw === true;
   const orb = lookNew && orbOn;
   const dockBtn = useRef<HTMLButtonElement | null>(null);
   const [dockHover, setDockHover] = useState(false);
@@ -836,8 +837,11 @@ function Dock() {
      above it. */
   const loadHistoryRef = useRef<((reveal?: "latest") => Promise<void>) | null>(null);
   useEffect(() => {
-    if (!signedIn || briefAsked.current) return;
+    /* The orb has no morning brief (James, 25 Oct 2026: "We don't need that
+       anymore"). Wait for the switch to answer before asking. */
+    if (!signedIn || briefAsked.current || orbRaw === null) return;
     briefAsked.current = true;
+    if (orbRaw) return;
     let gone = false;
     (async () => {
       const due = await fetch("/api/assistant/brief", { cache: "no-store" })
@@ -864,7 +868,7 @@ function Dock() {
       gone = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signedIn]);
+  }, [signedIn, orbRaw]);
 
   /* ?steve=tasks opens him on the Tasks tab - the bell's link for a task. */
   useEffect(() => {
@@ -896,6 +900,7 @@ function Dock() {
       const q = String((e as CustomEvent<string>).detail ?? "").trim();
       if (!q) return;
       setTab("help");
+      setOrbView("chat");
       setOpen(true);
       void (async () => {
         if (!linesRef.current.length) await loadHistoryRef.current?.();
@@ -924,7 +929,7 @@ function Dock() {
       setOrbView("home");
       setOrbMenu(false);
       setOpening(true);
-      window.setTimeout(() => setOpening(false), 900);
+      window.setTimeout(() => setOpening(false), 1200);
       void loadThreads();
     }
     if (!next) {
@@ -2036,6 +2041,133 @@ function Dock() {
 )
   ;
 
+  /* Report, in the orb's card (James, 25 Oct 2026: "a little bit fancier ...
+     cleaner"). The same state and the same send as reportView; only the
+     drawing differs: no small print, the box takes the room, the send is
+     coral, and a recording counts down from three minutes instead of saying
+     so. */
+  const reportOrb = sent ? (
+    <div className="sv-rp-done">
+      <span aria-hidden className="sv-rp-tick">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+      </span>
+      <p>{lost || "Thanks - that's with James."}</p>
+    </div>
+  ) : (
+    <div
+      className={`sv-rp${dragging ? " is-drag" : ""}`}
+      onDragEnter={(e) => {
+        if (!carriesFiles(e)) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragOver={(e) => {
+        if (!carriesFiles(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = busy || pics.length >= 4 ? "none" : "copy";
+        if (!dragging) setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        if (!carriesFiles(e)) return;
+        e.preventDefault();
+        setDragging(false);
+        if (!busy) addPics(e.dataTransfer.files);
+      }}
+      onPaste={(e) => {
+        const pasted = [...e.clipboardData.files];
+        if (pasted.some((f) => f.type.startsWith("image/"))) {
+          e.preventDefault();
+          if (!busy) addPics(pasted.map((f) => (f.name === "image.png" ? new File([f], "Pasted screenshot.png", { type: f.type }) : f)));
+        }
+      }}
+    >
+      <Segmented
+        className="w-full"
+        options={[
+          { id: "bug", label: "Broken" },
+          { id: "confusing", label: "Confusing" },
+          { id: "idea", label: "Idea" },
+        ]}
+        value={kind}
+        onChange={setKind}
+      />
+      <textarea
+        value={fb}
+        onChange={(e) => setFb(e.target.value)}
+        placeholder={kind === "idea" ? "What would make it better?" : kind === "confusing" ? "What were you trying to do?" : "What were you doing, and what happened?"}
+        aria-label="Tell us what happened"
+        className="sv-rp-box"
+      />
+      {dragging && <p className="sv-rp-drop">{pics.length >= 4 ? "Four pictures is the most" : "Drop your screenshot here"}</p>}
+
+      <div className="sv-rp-add">
+        {rec.supported && (
+          <button type="button" disabled={busy || Boolean(rec.clip)} onClick={record} className="sv-rp-chip">
+            <span aria-hidden className="sv-rp-rec" />
+            Record my screen
+          </button>
+        )}
+        <button type="button" disabled={busy || pics.length >= 4} onClick={() => shotPicker.current?.click()} className="sv-rp-chip">
+          <DoodleIcon name="camera" size={14} />
+          Add a screenshot
+        </button>
+        <input
+          ref={shotPicker}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          hidden
+          onChange={(e) => {
+            addPics(e.target.files ?? []);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      {rec.supported && !rec.clip && (
+        <label className="sv-rp-voice">
+          <input type="checkbox" checked={voice} onChange={(e) => setVoice(e.target.checked)} />
+          <span>Talk it through while I record</span>
+        </label>
+      )}
+      {picNote && <p className="sv-rp-err">{picNote}</p>}
+      {rec.problem && <p className="sv-rp-err">{rec.problem}</p>}
+
+      {(rec.clip || pics.length > 0) && (
+        <ul className="sv-rp-files">
+          {rec.clip && (
+            <li>
+              <span aria-hidden className="sv-rp-rec" />
+              <span className="sv-rp-fname">Screen recording · {clockFace(rec.clip.seconds)} · {weigh(rec.clip.file.size)}</span>
+              <button type="button" onClick={rec.clear}>Remove</button>
+            </li>
+          )}
+          {pics.map((f, i) => (
+            <li key={`${f.name}-${i}`}>
+              <DoodleIcon name="camera" size={12} />
+              <span className="sv-rp-fname">{f.name || "Pasted screenshot"} · {weigh(f.size)}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPics((p) => p.filter((_, n) => n !== i));
+                  setPicNote("");
+                }}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <button type="button" disabled={busy || !(fb.trim() || rec.clip || pics.length)} onClick={sendFeedback} className="sv-rp-send">
+        {busy ? sending || "Sending…" : "Send it"}
+      </button>
+    </div>
+  );
+
   /* The composer, shared by the new look's card and the orb's
      (components/steve/OrbPanel). */
   const composerView = (
@@ -2188,7 +2320,9 @@ function Dock() {
           <p className="sv-note">I can&apos;t answer on my own just now. Everything you ask goes to James, and the answers become the guides.</p>
         ) : null
       }
-      report={reportView}
+      report={reportOrb}
+      news={posts}
+      onNewsRead={() => posts && markSeen(posts)}
       scroller={(el) => { scroller.current = el; }}
     />
   );
@@ -2205,7 +2339,7 @@ function Dock() {
           className={`os-toast-lift fixed bottom-6 ${lookNew ? "right-[100px]" : "right-[96px]"} z-[191] flex items-center gap-2 rounded-full bg-[#C4412F] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]`}
         >
           <span aria-hidden className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
-          Recording {clockFace(rec.seconds)} · Stop
+          {orb ? `Recording · ${clockFace(Math.max(0, MAX_SECONDS - rec.seconds))} left · Stop` : `Recording ${clockFace(rec.seconds)} · Stop`}
         </button>
       )}
       {/* The floating "Report a problem" pill that sat beside Steve for owners
@@ -2226,7 +2360,7 @@ function Dock() {
         data-hide-from-shot
         data-os-steve
         data-steve-dock
-        className={`os-toast-lift fixed z-[190] text-ink ${orb ? "steve-dock-orb" : "hover:scale-105 active:scale-95"}${peek ? " is-peek" : ""}${opening ? " is-opening" : ""}${orb && open && wide ? " is-tucked" : ""} ${lookNew ? "bottom-[10px] right-[18px]" : "bottom-2 right-3"}`}
+        className={`os-toast-lift fixed z-[190] text-ink ${orb ? "steve-dock-orb" : "hover:scale-105 active:scale-95"}${peek ? " is-peek" : ""}${orb && open ? " is-away" : ""} ${lookNew ? "bottom-[10px] right-[18px]" : "bottom-2 right-3"}`}
       >
         <span ref={landing} className="block origin-bottom" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("os-steve-land"); }}>
           {/* New look: 56px of Steve, 26px in and 18px up, as the design has him (23 Oct 2026). The face is 78% of this box. */}
