@@ -268,7 +268,7 @@ export default function Maintenance() {
         ) : (
           <div className="nl-bo-stack">
             {grouped.map((g) => (
-              <section key={g.status} className="nl-bo-card nl-bo-group">
+              <section key={g.status} className="nl-bo-card nl-bo-group is-list">
                 <div className="nl-bo-card-head">
                   <h2 className="nl-bo-card-title">{g.label}</h2>
                   <span className="nl-count">{g.rows.length}</span>

@@ -126,6 +126,10 @@
 [data-look="new"] .nl-bo-stack { display: flex; flex-direction: column; gap: 16px; }
 [data-look="new"] .nl-bo-group { padding: 22px 26px 8px; }
 [data-look="new"] .nl-bo-group .nl-bo-card-head { margin-bottom: 4px; }
+/* A list is never boxed (James, 25 Oct 2026): white space and hairlines, as on Leads. Applications keep their boxes. */
+[data-look="new"] .nl-bo-card.is-list { background: none; border: 0; border-radius: 0; padding: 0; }
+[data-look="new"] .nl-bo-card.is-list .nl-bo-jobs { border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-bo-stack > .nl-bo-card.is-list + .nl-bo-card.is-list { margin-top: 24px; }
 [data-look="new"] .nl-bo-jobs { list-style: none; margin: 0; padding: 0; }
 [data-look="new"] .nl-bo-jobs > li { border-top: 1px solid var(--line); }
 [data-look="new"] .nl-bo-job {
@@ -193,21 +197,28 @@
 
 /* The book, as the design's table. */
 [data-look="new"] .nl-bo-shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 12px; }
-[data-look="new"] .nl-bo-table { border: 1px solid var(--line); border-radius: 24px; overflow: hidden; background: var(--card); }
+[data-look="new"] .nl-bo-table { border-top: 1px solid var(--line); }
 [data-look="new"] .nl-bo-table table { width: 100%; border-collapse: collapse; table-layout: auto; }
-[data-look="new"] .nl-bo-table th { font-size: 12px; font-weight: 500; color: var(--muted); text-align: left; padding: 12px 20px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-[data-look="new"] .nl-bo-table td { padding: 14px 20px; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 14px; }
-[data-look="new"] .nl-bo-table tr:last-child td { border-bottom: 0; }
+[data-look="new"] .nl-bo-table th { font-size: 12px; font-weight: 500; color: var(--muted); text-align: left; padding: 12px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+[data-look="new"] .nl-bo-table td { padding: 16px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 14px; }
 [data-look="new"] .nl-bo-table tbody tr { cursor: pointer; transition: background-color 0.2s; }
-[data-look="new"] .nl-bo-table tbody tr:hover { background: var(--page); }
+[data-look="new"] .nl-bo-table tbody tr:hover { background: var(--panel); }
+/* The column heads sort (James, 25 Oct 2026): press once, again to reverse, a third time for the book's own order. */
+[data-look="new"] .nl-bo-sort { all: unset; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: inherit; border-radius: 6px; }
+[data-look="new"] .nl-bo-sort svg { opacity: 0; transition: opacity 0.2s, transform 0.2s; }
+[data-look="new"] .nl-bo-sort:hover { color: var(--ink); }
+[data-look="new"] .nl-bo-sort:hover svg { opacity: 0.5; }
+[data-look="new"] .nl-bo-sort.is-on { color: var(--ink); }
+[data-look="new"] .nl-bo-sort.is-on svg { opacity: 1; }
+[data-look="new"] .nl-bo-sort svg.is-down { transform: rotate(180deg); }
+[data-look="new"] .nl-bo-sort:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 [data-look="new"] .nl-bo-table tbody tr:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 [data-look="new"] .nl-bo-table tbody tr.is-off { opacity: 0.6; }
 [data-look="new"] .nl-bo-who { display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 360px; }
 @media (max-width: 1180px) { [data-look="new"] .nl-bo-hide-md { display: none; } }
 @media (max-width: 760px) {
   [data-look="new"] .nl-bo-hide-sm { display: none; }
-  [data-look="new"] .nl-bo-table { border-radius: 20px; }
-  [data-look="new"] .nl-bo-table th, [data-look="new"] .nl-bo-table td { padding: 12px 12px; }
+  [data-look="new"] .nl-bo-table th, [data-look="new"] .nl-bo-table td { padding: 12px 8px; }
   [data-look="new"] .nl-bo-table td:first-child { max-width: 190px; }
   [data-look="new"] .nl-bo-brow { gap: 10px; }
   [data-look="new"] .nl-bo-brow > svg { display: none; }
