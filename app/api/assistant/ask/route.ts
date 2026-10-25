@@ -11,6 +11,8 @@ import {
   myHistory,
   isOnboarded,
   clearChat,
+  myThreads,
+  threadLines,
   type LogAttachment,
   type LogKind,
 } from "@/lib/assistant-log";
@@ -25,6 +27,8 @@ import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
  * Talking to the assistant.
  *
  * GET  → this person's own history, and whether they've been introduced
+ *        ?threads=1 → their conversations this week, titled by the first question
+ *        ?thread=<id> → one of their own conversations
  * POST → logs what they said, logs what he says back, returns the reply
  *
  * ── The introduction is a script; the questions go to Claude ─────────────
@@ -63,6 +67,18 @@ function scripted(kind: LogKind, said: string): string | null {
 export async function GET(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   if (!userId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+
+  /* The orb's chat card: separate conversations (25 Oct 2026). Own only. */
+  if (req.nextUrl.searchParams.get("threads")) {
+    return NextResponse.json({ threads: await myThreads(userId) });
+  }
+  const one = req.nextUrl.searchParams.get("thread");
+  if (one) {
+    const lines = await threadLines(userId, one);
+    return NextResponse.json({
+      history: lines.map((l) => ({ role: l.role, text: l.role === "assistant" ? l.text.replace(/^\[[a-z-]+\] (done|refused) — /, "") : l.text, createdAt: l.createdAt })),
+    });
+  }
 
   const [history, onboarded, b] = await Promise.all([
     myHistory(userId),
@@ -120,6 +136,8 @@ export async function POST(req: NextRequest) {
     screen?: unknown;
     today?: unknown;
     attachments?: unknown;
+    /** The orb's chat card keeps conversations apart: only this thread is context. */
+    separate?: boolean;
   };
   const attachments = readAttachments(b.attachments);
   const text = (b.text ?? "").trim();
@@ -175,7 +193,7 @@ export async function POST(req: NextRequest) {
 
   /* Their own recent turns, so a follow-up like "and the second one?" lands.
      Capped in the brain, not here. */
-  const history = (await myHistory(userId, 12)).map((l) => ({
+  const history = (b.separate ? (await threadLines(userId, thread, 13)).slice(0, -1) : await myHistory(userId, 12)).map((l) => ({
     role: l.role === "assistant" ? ("assistant" as const) : ("user" as const),
     text: l.text,
   }));

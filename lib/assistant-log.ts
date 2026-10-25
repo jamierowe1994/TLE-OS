@@ -203,6 +203,68 @@ export async function clearChat(userId: string, userEmail: string): Promise<void
   });
 }
 
+/**
+ * Steve's conversations, each its own thread (James, 25 Oct 2026: "Rather than
+ * having ongoing conversations, it will basically have different
+ * conversations instead"). The Messages list in the orb's chat card.
+ *
+ * Titled by the first thing they asked in it. Only the last seven days, and
+ * the latest twelve: the list clears itself weekly, or as it fills, without
+ * anything being deleted - every line stays in os_assistant_log for the
+ * console, as with clearChat. A clear still draws its line too.
+ */
+export interface ChatThread {
+  thread: string;
+  title: string;
+  lastAt: string;
+  said: number;
+}
+
+export async function myThreads(userId: string): Promise<ChatThread[]> {
+  if (!hasDb()) return [];
+  try {
+    const cut = await q<{ at: string | null }>(
+      `SELECT MAX(created_at)::text AS at FROM os_assistant_log WHERE user_id = $1 AND kind = 'cleared'`,
+      [userId]
+    );
+    const rows = await q<{ thread: string; title: string | null; last_at: string; said: string }>(
+      `SELECT thread,
+              (ARRAY_AGG(text ORDER BY created_at) FILTER (WHERE role = 'agent'))[1] AS title,
+              MAX(created_at)::text AS last_at,
+              COUNT(*) FILTER (WHERE role = 'agent')::text AS said
+         FROM os_assistant_log
+        WHERE user_id = $1 AND kind = 'ask'
+          AND created_at > GREATEST(COALESCE($2::timestamptz, '-infinity'::timestamptz), now() - interval '7 days')
+        GROUP BY thread
+       HAVING COUNT(*) FILTER (WHERE role = 'agent') > 0
+        ORDER BY MAX(created_at) DESC
+        LIMIT 12`,
+      [userId, cut[0]?.at ?? null]
+    );
+    return rows.map((r) => ({ thread: r.thread, title: (r.title ?? "").slice(0, 160), lastAt: r.last_at, said: Number(r.said) || 0 }));
+  } catch (e) {
+    console.error("[assistant-log] could not list conversations", e);
+    return [];
+  }
+}
+
+/** One of their own conversations, oldest first. Their own only: the user id is the caller's. */
+export async function threadLines(userId: string, thread: string, limit = 80): Promise<LogLine[]> {
+  if (!hasDb() || !thread) return [];
+  try {
+    const rows = await q<Row>(
+      `SELECT ${COLS} FROM os_assistant_log
+        WHERE user_id = $1 AND thread = $2 AND kind <> 'cleared'
+        ORDER BY created_at DESC LIMIT $3`,
+      [userId, thread.slice(0, 64), limit]
+    );
+    return rows.map(toLine).reverse();
+  } catch (e) {
+    console.error("[assistant-log] could not read a conversation", e);
+    return [];
+  }
+}
+
 /** Has this person been through the initiation? */
 export async function isOnboarded(userId: string): Promise<boolean> {
   if (!hasDb()) return false;

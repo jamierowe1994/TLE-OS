@@ -19,6 +19,7 @@ import SteveFace from "@/components/SteveFace";
 import { Ico } from "@/components/new-look/Parts";
 import { useNewLook } from "@/lib/use-new-look";
 import { useStevePeek } from "@/lib/use-steve-peek";
+import OrbPanel, { type OrbThread, type OrbView } from "@/components/steve/OrbPanel";
 import { readScreen, runSteps } from "@/lib/screen-controls";
 import type { ScreenPlan } from "@/lib/steve-never";
 
@@ -384,6 +385,16 @@ function Dock() {
   const dockBtn = useRef<HTMLButtonElement | null>(null);
   const [dockHover, setDockHover] = useState(false);
   const peek = useStevePeek(dockBtn, orb && !open) && !dockHover;
+  /* The orb's chat card (components/steve/OrbPanel): which screen, whether it
+     is the wide side panel, its conversations, and his hello. */
+  const [orbView, setOrbView] = useState<OrbView>("home");
+  const [wide, setWide] = useState(false);
+  const [orbMenu, setOrbMenu] = useState(false);
+  const [threads, setThreads] = useState<OrbThread[] | null>(null);
+  const [threadsFailed, setThreadsFailed] = useState(false);
+  const [greeting, setGreeting] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [myFirst, setMyFirst] = useState("");
   useEffect(() => {
     if (lookNew && (tab === "guides" || tab === "news" || tab === "tasks")) setTab("help");
   }, [lookNew, tab]);
@@ -567,6 +578,7 @@ function Dock() {
            could not be looked at before they shipped. */
         {
           setSignedIn(Boolean(j?.user) || j?.hasDb === false);
+          setMyFirst(String(j?.user?.name ?? "").trim().split(/\s+/)[0] ?? "");
         }
       )
       .catch(() => {});
@@ -907,6 +919,14 @@ function Dock() {
     timers.current.forEach(clearTimeout);
     const next = !open;
     setOpen(next);
+    if (next && orb) {
+      /* He floats up, then the card grows out of him (steve-panel.css). */
+      setOrbView("home");
+      setOrbMenu(false);
+      setOpening(true);
+      window.setTimeout(() => setOpening(false), 900);
+      void loadThreads();
+    }
     if (!next) {
       setMood("idle");
       rest();
@@ -927,6 +947,7 @@ function Dock() {
    *  than on an empty thread. */
   async function loadHistory(reveal?: "latest") {
     if (reveal) revealing.current = true;
+    if (reveal && orb) setOrbView("chat");
     const r = await fetch("/api/assistant/ask", { cache: "no-store" })
       .then((x) => (x.ok ? x.json() : null))
       .catch(() => null);
@@ -1170,6 +1191,8 @@ function Dock() {
           text,
           kind: stage,
           thread: thread.current,
+          /* The orb's card keeps conversations apart: this thread is his context. */
+          separate: orb || undefined,
           path,
           openListingId: getOpenListing(),
           /* Everything layered on screen, furthest back first. Read HERE and
@@ -1289,6 +1312,49 @@ function Dock() {
    * onboarded is counted across all time, so clearing does not make him ask
    * your name again like you had never met.
    */
+  /* ── The orb's chat card: separate conversations (25 Oct 2026) ─────────── */
+  async function loadThreads() {
+    setThreadsFailed(false);
+    const r = await fetch("/api/assistant/ask?threads=1", { cache: "no-store" })
+      .then((x) => (x.ok ? x.json() : null))
+      .catch(() => null);
+    if (!r) {
+      setThreadsFailed(true);
+      return;
+    }
+    setThreads(Array.isArray(r.threads) ? r.threads : []);
+  }
+
+  /** A new conversation: a thread of its own, and he says hello first. The
+   *  introduction, while it is due, is its own conversation. */
+  function startChat() {
+    setOrbMenu(false);
+    setOrbView("chat");
+    if (stage !== "ask") return;
+    thread.current = `c${Date.now()}`;
+    setMark(linesRef.current.length);
+    setGreeting(true);
+    window.setTimeout(() => {
+      setGreeting(false);
+      setLines((l) => [...l, { role: "assistant", text: `Hi${myFirst ? ` ${myFirst}` : ""}! What can I help you with?` }]);
+    }, 1100);
+  }
+
+  /** One of their conversations from Messages, carried on where it left off. */
+  async function openThread(id: string) {
+    setOrbMenu(false);
+    setGreeting(false);
+    setOrbView("chat");
+    thread.current = id;
+    const r = await fetch(`/api/assistant/ask?thread=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((x) => (x.ok ? x.json() : null))
+      .catch(() => null);
+    const got: Line[] = (r?.history ?? []).map((h: Line) => ({ role: h.role, text: h.text }));
+    const base = linesRef.current.length;
+    setLines((l) => [...l, ...(r ? got : [{ role: "assistant" as const, text: "I couldn't open that conversation just now. Try again in a moment." }])]);
+    setMark(base);
+  }
+
   async function clear() {
     if (busy) return;
     setBusy(true);
@@ -1443,9 +1509,10 @@ function Dock() {
         autoFocus
         maxLength={20}
         aria-label="What you call him"
+        placeholder={orb ? "A name for him" : undefined}
         className="w-28 rounded-full border border-line/80 bg-white px-2.5 py-0.5 text-[11.5px] outline-none focus:border-ink/40"
       />
-      {nameDraft.trim().toLowerCase() !== "hamish" && (
+      {!orb && nameDraft.trim().toLowerCase() !== "hamish" && (
         <button type="button" onClick={() => void saveName("Hamish")} className="rounded-full border border-line/80 px-2 py-0.5 text-[11px] hover:border-ink/40">Hamish</button>
       )}
       <button type="button" onClick={() => void saveName(nameDraft)} className="rounded-full bg-ink px-2.5 py-0.5 text-[11px] font-semibold text-page">Save</button>
@@ -1969,6 +2036,161 @@ function Dock() {
 )
   ;
 
+  /* The composer, shared by the new look's card and the orb's
+     (components/steve/OrbPanel). */
+  const composerView = (
+    <>
+                  <div
+                    className={`nl-st-ask${talking ? " is-talking" : ""}${chatDrag ? " is-drag" : ""}`}
+                    onDragEnter={(e) => {
+                      if (!carriesFiles(e) || stage !== "ask") return;
+                      e.preventDefault();
+                      setChatDrag(true);
+                    }}
+                    onDragOver={(e) => {
+                      if (!carriesFiles(e) || stage !== "ask") return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = files.length >= 4 ? "none" : "copy";
+                      if (!chatDrag) setChatDrag(true);
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setChatDrag(false);
+                    }}
+                    onDrop={(e) => {
+                      if (!carriesFiles(e)) return;
+                      e.preventDefault();
+                      setChatDrag(false);
+                      if (stage === "ask") void attach([...e.dataTransfer.files]);
+                    }}
+                    onPaste={(e) => {
+                      const pasted = [...e.clipboardData.files];
+                      if (!pasted.length || stage !== "ask") return;
+                      e.preventDefault();
+                      /* The browser calls every pasted picture "image.png". */
+                      void attach(pasted.map((f) => (f.name === "image.png" ? new File([f], "Pasted screenshot.png", { type: f.type }) : f)));
+                    }}
+                  >
+                    <input
+                      ref={picker}
+                      type="file"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.txt,.csv,.doc,.docx,.xls,.xlsx"
+                      onChange={(e) => {
+                        attach(e.target.files);
+                        e.target.value = "";
+                      }}
+                      className="hidden"
+                    />
+                    <textarea
+                      data-steve-chat
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        /* Enter sends, Shift+Enter is a new line. */
+                        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          void say();
+                        }
+                      }}
+                      autoFocus
+                      rows={talking ? 1 : 3}
+                      aria-label={`Ask ${aName}`}
+                      placeholder={
+                        stage === "onboarding-name"
+                          ? "Your name"
+                          : stage === "onboarding-help"
+                            ? "What you'd like a hand with"
+                            : talking
+                              ? `Ask ${aName} anything…`
+                              : `How can I help? Try "${OPENERS[1].text}"`
+                      }
+                      className="nl-st-input"
+                    />
+                    {filesView}
+                    {chatDrag && (
+                      <p aria-hidden className="nl-st-drop">
+                        {files.length >= 4 ? "Four files is the limit for one question" : "Drop it here to attach it"}
+                      </p>
+                    )}
+                    <div className="nl-st-bar">
+                      <button
+                        type="button"
+                        onClick={() => picker.current?.click()}
+                        disabled={stage !== "ask" || files.length >= 4}
+                        title={
+                          files.length >= 4
+                            ? "Four files is the limit for one question"
+                            : `Attach a document or a photograph${pasteKeys ? `, or paste a screenshot with ${pasteKeys}` : ""}`
+                        }
+                        className="nl-btn nl-btn--quiet nl-btn--sm nl-st-attach"
+                      >
+                        <Ico name="plus" size={15} />
+                        Attach
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void say()}
+                        disabled={!canSend}
+                        aria-label="Send"
+                        title={uploading ? "Waiting for the file" : "Send"}
+                        className="nl-st-send"
+                      >
+                        <Ico name="arrow" size={16} />
+                      </button>
+                    </div>
+                  </div>
+    </>
+  );
+
+  const orbPanel = (
+    <OrbPanel
+      aName={aName}
+      myFirst={myFirst}
+      view={orbView}
+      setView={setOrbView}
+      wide={wide}
+      setWide={setWide}
+      menu={orbMenu}
+      setMenu={setOrbMenu}
+      opening={opening}
+      naming={naming}
+      namingView={namingView}
+      onRename={() => { setNameDraft(aName === "Steve" ? "" : aName); setNaming(true); setNameErr(null); }}
+      threads={threads}
+      threadsFailed={threadsFailed}
+      onThreads={() => void loadThreads()}
+      onStart={startChat}
+      onOpenThread={(id) => void openThread(id)}
+      onClose={() => void toggle()}
+      onEscape={() => (orbMenu ? setOrbMenu(false) : void toggle())}
+      busy={busy}
+      greeting={greeting}
+      conversation={
+        <>
+          {lines.slice(mark).map((l, k) => lineView(l, mark + k))}
+          {busy && (
+            <p className="nl-st-thinking">
+              <span>Having a look</span>
+              <span aria-hidden className="nl-st-dots">
+                <i />
+                <i />
+                <i />
+              </span>
+            </p>
+          )}
+        </>
+      }
+      composer={composerView}
+      note={
+        liveKnown && !live ? (
+          <p className="sv-note">I can&apos;t answer on my own just now. Everything you ask goes to James, and the answers become the guides.</p>
+        ) : null
+      }
+      report={reportView}
+      scroller={(el) => { scroller.current = el; }}
+    />
+  );
+
   return (
     <>
       {/* While a recording runs this is the only thing of ours on the screen,
@@ -2002,7 +2224,7 @@ function Dock() {
         data-hide-from-shot
         data-os-steve
         data-steve-dock
-        className={`os-toast-lift fixed z-[190] text-ink ${orb ? "steve-dock-orb" : "hover:scale-105 active:scale-95"}${peek ? " is-peek" : ""} ${lookNew ? "bottom-[10px] right-[18px]" : "bottom-2 right-3"}`}
+        className={`os-toast-lift fixed z-[190] text-ink ${orb ? "steve-dock-orb" : "hover:scale-105 active:scale-95"}${peek ? " is-peek" : ""}${opening ? " is-opening" : ""}${orb && open && wide ? " is-tucked" : ""} ${lookNew ? "bottom-[10px] right-[18px]" : "bottom-2 right-3"}`}
       >
         <span ref={landing} className="block origin-bottom" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("os-steve-land"); }}>
           {/* New look: 56px of Steve, 26px in and 18px up, as the design has him (23 Oct 2026). The face is 78% of this box. */}
@@ -2026,7 +2248,7 @@ function Dock() {
         <span className="sr-only">{unseen > 0 ? `${unseen} unread` : ""}</span>
       </button>
 
-      {open && (lookNew ? (
+      {open && (orb ? orbPanel : lookNew ? (
         /* ── The new look (lib/new-look "steve", James 23 Oct 2026) ─────────
            One card: his head line, then whatever has been said in THIS
            opening, then the composer box, then three things to press until
@@ -2147,105 +2369,7 @@ function Dock() {
                   {/* The composer. A screenshot can be pasted into it or a file
                       dropped on it, as well as chosen with Attach; each goes
                       straight up, the same as a chosen file. */}
-                  <div
-                    className={`nl-st-ask${talking ? " is-talking" : ""}${chatDrag ? " is-drag" : ""}`}
-                    onDragEnter={(e) => {
-                      if (!carriesFiles(e) || stage !== "ask") return;
-                      e.preventDefault();
-                      setChatDrag(true);
-                    }}
-                    onDragOver={(e) => {
-                      if (!carriesFiles(e) || stage !== "ask") return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = files.length >= 4 ? "none" : "copy";
-                      if (!chatDrag) setChatDrag(true);
-                    }}
-                    onDragLeave={(e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setChatDrag(false);
-                    }}
-                    onDrop={(e) => {
-                      if (!carriesFiles(e)) return;
-                      e.preventDefault();
-                      setChatDrag(false);
-                      if (stage === "ask") void attach([...e.dataTransfer.files]);
-                    }}
-                    onPaste={(e) => {
-                      const pasted = [...e.clipboardData.files];
-                      if (!pasted.length || stage !== "ask") return;
-                      e.preventDefault();
-                      /* The browser calls every pasted picture "image.png". */
-                      void attach(pasted.map((f) => (f.name === "image.png" ? new File([f], "Pasted screenshot.png", { type: f.type }) : f)));
-                    }}
-                  >
-                    <input
-                      ref={picker}
-                      type="file"
-                      multiple
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.txt,.csv,.doc,.docx,.xls,.xlsx"
-                      onChange={(e) => {
-                        attach(e.target.files);
-                        e.target.value = "";
-                      }}
-                      className="hidden"
-                    />
-                    <textarea
-                      data-steve-chat
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        /* Enter sends, Shift+Enter is a new line. */
-                        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                          e.preventDefault();
-                          void say();
-                        }
-                      }}
-                      autoFocus
-                      rows={talking ? 1 : 3}
-                      aria-label={`Ask ${aName}`}
-                      placeholder={
-                        stage === "onboarding-name"
-                          ? "Your name"
-                          : stage === "onboarding-help"
-                            ? "What you'd like a hand with"
-                            : talking
-                              ? `Ask ${aName} anything…`
-                              : `How can I help? Try "${OPENERS[1].text}"`
-                      }
-                      className="nl-st-input"
-                    />
-                    {filesView}
-                    {chatDrag && (
-                      <p aria-hidden className="nl-st-drop">
-                        {files.length >= 4 ? "Four files is the limit for one question" : "Drop it here to attach it"}
-                      </p>
-                    )}
-                    <div className="nl-st-bar">
-                      <button
-                        type="button"
-                        onClick={() => picker.current?.click()}
-                        disabled={stage !== "ask" || files.length >= 4}
-                        title={
-                          files.length >= 4
-                            ? "Four files is the limit for one question"
-                            : `Attach a document or a photograph${pasteKeys ? `, or paste a screenshot with ${pasteKeys}` : ""}`
-                        }
-                        className="nl-btn nl-btn--quiet nl-btn--sm nl-st-attach"
-                      >
-                        <Ico name="plus" size={15} />
-                        Attach
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void say()}
-                        disabled={!canSend}
-                        aria-label="Send"
-                        title={uploading ? "Waiting for the file" : "Send"}
-                        className="nl-st-send"
-                      >
-                        <Ico name="arrow" size={16} />
-                      </button>
-                    </div>
-                  </div>
+                  {composerView}
 
                   {/* Three things to press, until the conversation is real. */}
                   {stage === "ask" && !talking && (
