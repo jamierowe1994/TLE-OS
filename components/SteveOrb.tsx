@@ -5,10 +5,11 @@ import type { SteveMood } from "@/components/SteveFace";
 
 /**
  * Steve as an orb (25 Oct 2026, James: "a bit of a ball ... almost like a
- * Jarvis kind of thing that moves and pulses"). A coral ball that is always
- * moving inside itself: five soft blobs of peach, cream, coral, rust and
- * brown drifting round under a fine grain, so light and dark patches roll
- * across it. Behind the "orb" switch; SteveFace draws this in his place.
+ * Jarvis kind of thing that moves and pulses", then "more like it's an AI
+ * that's in the corner"). A soft glowing bubble of lilac, violet, blue and
+ * pink, always moving inside, with two white pill eyes that blink, bounce
+ * while he thinks and squint when he's pleased. Behind the "orb" switch;
+ * SteveFace draws this in his place.
  *
  * How it answers:
  *  - mood: thinking spins it up, sleepy slows and dims it, happy brightens
@@ -45,6 +46,12 @@ function onType(fn: () => void) {
   };
 }
 
+/* The swirl inside speeds up and slows down; the eyes keep their own time. */
+function swirls(a: Animation) {
+  const name = (a as CSSAnimation).animationName ?? "";
+  return name.startsWith("sorb-") && !/blink|look|think/.test(name);
+}
+
 function still() {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 }
@@ -72,7 +79,7 @@ export default function SteveOrb({
     if (!el || still()) return;
     const rate = SPEED[mood] * (hover && mood !== "thinking" ? 1.35 : 1);
     el.getAnimations({ subtree: true }).forEach((a) => {
-      if ((a as CSSAnimation).animationName?.startsWith("sorb-")) a.updatePlaybackRate(rate);
+      if (swirls(a)) a.updatePlaybackRate(rate);
     });
   }, [mood, hover]);
 
@@ -109,7 +116,7 @@ export default function SteveOrb({
       { duration: 900, easing: "cubic-bezier(.3,1.4,.5,1)" },
     );
     ball.current?.getAnimations({ subtree: true }).forEach((a) => {
-      if (!(a as CSSAnimation).animationName?.startsWith("sorb-")) return;
+      if (!swirls(a)) return;
       a.updatePlaybackRate(4);
       window.setTimeout(() => a.updatePlaybackRate(SPEED[mood]), 700);
     });
@@ -135,8 +142,13 @@ export default function SteveOrb({
         <span className="sorb-o o4"><i /></span>
         <span className="sorb-o o5"><i /></span>
         <span className="sorb-grain" />
-        <span className="sorb-shine" />
       </span>
+      {size >= 22 && (
+        <span className="sorb-eyes" aria-hidden>
+          <i />
+          <i />
+        </span>
+      )}
     </span>
   );
 }
