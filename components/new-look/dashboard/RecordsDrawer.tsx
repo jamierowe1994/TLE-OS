@@ -22,8 +22,21 @@ import type { FrontRecord, FrontRecords, RangeDays, RecordKind, SourceBucket } f
  * A list that can't be read says so; nothing is ever shown from an old read.
  */
 
+/** The PM Dashboard's own lists (app/api/overview/records), drawn by the same pop-out. */
+export type PmRecordKind = "managed" | "arrears" | "maintenance" | "compliance" | "applications" | "market";
+
 export type RecordAsk = {
-  kind: RecordKind;
+  kind: RecordKind | PmRecordKind;
+  /** Where the list is read from; the front dashboard's by default. */
+  endpoint?: string;
+  /** The five column headings, where the list isn't people and dates (the PM Dashboard's). */
+  columns?: [string, string, string, string, string];
+  /** What an empty list says. */
+  empty?: string;
+  /** False where the list is knowingly a wider count than the figure (the PM Dashboard's
+   *  Managed homes against the whole book): the header shows the list's own count and
+   *  the "something has changed" line is not said. */
+  drift?: boolean;
   /** The range, or one day of it (a bar on the leads chart). Terms take neither. */
   days?: RangeDays;
   day?: string;
@@ -54,7 +67,7 @@ const fmtWhen = (iso: string | null, withTime: boolean) => {
 };
 
 /** The kinds whose rows carry a real time of day, not just a date. */
-const TIMED = new Set<RecordKind>(["leads", "tenant", "appraisals", "passports", "viewings"]);
+const TIMED = new Set<string>(["leads", "tenant", "appraisals", "passports", "viewings"]);
 
 function query(ask: RecordAsk, offset: number): string {
   const p = new URLSearchParams({ kind: ask.kind });
@@ -62,7 +75,7 @@ function query(ask: RecordAsk, offset: number): string {
   else if (ask.days) p.set("days", String(ask.days));
   if (ask.source) p.set("source", ask.source);
   if (offset) p.set("offset", String(offset));
-  return `/api/dashboard/front/records?${p}`;
+  return `${ask.endpoint ?? "/api/dashboard/front/records"}?${p}`;
 }
 
 type Got = { rows: FrontRecord[]; total: number; more: boolean; lateAfterDays?: number };
@@ -184,7 +197,7 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
             <p className="nl-eyebrow">{ask.range}</p>
             <h2 className="nl-dash-drawer-title">{ask.title}</h2>
             <p className="nl-dash-drawer-fig">
-              <b>{ask.figure.toLocaleString("en-GB")}</b>
+              <b>{(ask.drift === false && got ? got.total : ask.figure).toLocaleString("en-GB")}</b>
               {terms && got && late > 0 && <em className="is-late">{late} late</em>}
             </p>
             {ask.note && <p className="nl-meta">{ask.note}</p>}
@@ -205,10 +218,10 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
               Reading the list…
             </p>
           ) : got.total === 0 ? (
-            <p className="nl-dash-note">{terms ? "Nothing out for signature right now." : "None in these days."}</p>
+            <p className="nl-dash-note">{ask.empty ?? (terms ? "Nothing out for signature right now." : "None in these days.")}</p>
           ) : (
             <div>
-              {got.total !== ask.figure && (
+              {got.total !== ask.figure && ask.drift !== false && (
                 <p className="nl-dash-note nl-dash-drawer-drift">
                   {got.total.toLocaleString("en-GB")} now - the figure was read a moment ago and something has changed since.
                 </p>
@@ -220,11 +233,11 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
                   The rows drop in one after another; terms add Opened (one tick sent, two opened) and a Nudge. */}
               <div className={`nl-dash-table${terms ? " is-terms" : ""}`} role="table" aria-label={ask.title}>
                 <div className="nl-dash-trow nl-dash-thead" role="row">
-                  <span role="columnheader">{terms ? "For" : "Name"}</span>
-                  <span role="columnheader">Property</span>
-                  <span role="columnheader">{terms ? "Sent" : "When"}</span>
-                  <span role="columnheader">{terms ? "Waiting" : "Source"}</span>
-                  <span role="columnheader">Status</span>
+                  <span role="columnheader">{ask.columns?.[0] ?? (terms ? "For" : "Name")}</span>
+                  <span role="columnheader">{ask.columns?.[1] ?? "Property"}</span>
+                  <span role="columnheader">{ask.columns?.[2] ?? (terms ? "Sent" : "When")}</span>
+                  <span role="columnheader">{ask.columns?.[3] ?? (terms ? "Waiting" : "Source")}</span>
+                  <span role="columnheader">{ask.columns?.[4] ?? "Status"}</span>
                   {terms && <span role="columnheader">Opened</span>}
                   {terms && <span aria-hidden />}
                   <span aria-hidden />
