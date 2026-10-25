@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { holdPlace } from "./hold-place";
 
 /**
  * The new look's shared parts (lib/new-look), styled from app/new-look.css.
@@ -63,7 +64,7 @@ export function Tabs<T extends string>({
     <div ref={ref} role="tablist" aria-label={label} className={`nl-tabs ${className}`}>
       {ind && <span aria-hidden className={`nl-tab-ind${ind.ready ? " is-ready" : ""}`} style={{ transform: `translateX(${ind.x}px)`, width: ind.w }} />}
       {items.map((t) => (
-        <button key={t.id} type="button" role="tab" aria-selected={t.id === value} className={`nl-tab${t.id === value ? " is-on" : ""}`} onClick={() => onChange(t.id)}>
+        <button key={t.id} type="button" role="tab" aria-selected={t.id === value} className={`nl-tab${t.id === value ? " is-on" : ""}`} onClick={() => { if (t.id !== value) holdPlace(ref.current); onChange(t.id); }}>
           {t.label}
           {t.count != null && <span className="nl-tab-n">{t.count}</span>}
           {t.dot && <span className="nl-tab-dot" aria-label="Needs attention" />}

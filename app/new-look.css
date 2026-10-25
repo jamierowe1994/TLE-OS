@@ -914,10 +914,9 @@
 .nl-ls .nl-po-card { width: min(720px, 100%); }
 .nl-ls-lede { margin-top: 8px; max-width: 520px; font-size: 13.5px; line-height: 20px; color: rgba(255, 255, 255, .75); }
 .nl-ls-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.nl-ls-box { background: #fff; border: 1px solid var(--line); border-radius: 20px; transition: box-shadow .25s, transform .25s, opacity .2s; }
-.nl-ls-box.is-first { box-shadow: 0 0 0 2px var(--primary); }
+.nl-ls-box { background: rgba(255, 255, 255, .9); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, .5); border-radius: 20px; transition: box-shadow .25s, transform .25s, opacity .2s; }
 .nl-ls-box.is-dragging { opacity: .45; }
-.nl-ls-box[draggable="true"] { cursor: grab; }
+.nl-ls-box:not(.is-dragging) .nl-ls-row { cursor: grab; }
 .nl-ls-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px 18px; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 20px; }
 .nl-ls-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .nl-ls-grip { color: var(--faint); flex: none; cursor: grab; }
