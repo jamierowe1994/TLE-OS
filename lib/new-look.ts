@@ -32,6 +32,7 @@ export const LOOK_SCREENS = [
   { id: "orb", label: "Steve as an orb", what: "Steve drawn as a moving coral ball everywhere he appears: always turning inside, quicker when he's thinking, pulsing as you type to him, wobbling when pressed. Off, the character." },
   { id: "steve", label: "Steve", what: "The new Steve character in the corner, and his bubble cut down to the chat with a Report button." },
   { id: "listings", label: "Listings board", what: "The Listings page: type-only header, the filter row, text tabs and the new cards." },
+  { id: "spine", label: "Graded progress line", what: "The listing's progress line fills in sage, pale at the start to dark at the stage it's on, instead of black then coral." },
   { id: "listing", label: "Listing page", what: "One listing: the head with its two jobs, the big photo beside The Details, the progress line and the tabs." },
   { id: "settings", label: "Settings", what: "Your Profile, every tab: the form with the landlord's preview, appearance, connections, automations and the rest." },
   /* The rest of the site (James, 23 Oct 2026): built behind these, each turned on when he's ready. */

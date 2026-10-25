@@ -345,6 +345,23 @@
 .nl-step.now span { color: var(--ink); font-weight: 600; }
 .nl-step.done span { color: var(--ink); }
 .nl-step:hover:not(:disabled) span { color: var(--ink); }
+/* Graded (the "spine" switch): the line fills in sage, pale at the first
+   stage to dark at the last, each step carrying its own slice of one long
+   gradient so the filled part reads as one bar. The step it's on fills in
+   as it arrives. */
+.nl-progress.is-graded .nl-step i {
+  --g0: #d2d8c3; --g1: var(--sage-ink);
+  --a: calc(var(--i) / var(--nl-steps) * 100%);
+  --b: calc((var(--i) + 1) / var(--nl-steps) * 100%);
+}
+.nl-progress.is-graded .nl-step.done i,
+.nl-progress.is-graded .nl-step.now i {
+  background: var(--line) linear-gradient(90deg, color-mix(in srgb, var(--g1) var(--a), var(--g0)), color-mix(in srgb, var(--g1) var(--b), var(--g0))) no-repeat;
+  background-size: 100% 100%;
+}
+.nl-progress.is-graded .nl-step.now i { animation: nl-spine-fill 0.7s cubic-bezier(0.3, 1, 0.4, 1) both; }
+@keyframes nl-spine-fill { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
+@media (prefers-reduced-motion: reduce) { .nl-progress.is-graded .nl-step.now i { animation: none; } }
 @media (max-width: 760px) { .nl-progress { overflow-x: auto; grid-template-columns: repeat(var(--nl-steps, 6), 112px); padding-bottom: 6px; } }
 
 .nl-ltabs { margin-bottom: 30px; }
