@@ -66,6 +66,9 @@ type Board = {
   mineNote?: string | null;
 };
 type Per = Map<string, { open: number; owed: number; today: boolean }>;
+/* The book's columns, sortable (James, 25 Oct 2026). Null is the order the book comes in. */
+type SortKey = "name" | "paper" | "work";
+type Sort = { key: SortKey; dir: 1 | -1 } | null;
 
 const OPEN: Status[] = ["reported", "approval", "approved", "scheduled"];
 /** How long an unpaid contractor invoice waits before it is called out. Not a term anybody agreed: a flag, not a rule. */
@@ -84,6 +87,7 @@ export default function ContractorsPage() {
   const [raising, setRaising] = useState(false);
   const [logged, setLogged] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [sort, setSort] = useState<Sort>(null);
   /* The new look only: Send a contractor (which kind, then the same report
      form), the job it raised, and Needs You opened out past its first five. */
   const [sending, setSending] = useState<null | "choose" | "repair" | "planned">(null);
@@ -343,10 +347,10 @@ export default function ContractorsPage() {
               </label>
               <span className="nl-fcount">{plural(mine.length + company.length + others.length, "contractor")}</span>
             </div>
-            <CtShelf title="Your Contractors" blurb="The people you ring. Added by you." rows={mine} per={per} onOpen={setProfile} onEdit={setEditing} canEdit={canEdit} searching={Boolean(needle)} />
-            <CtShelf title="The Company's Contractors" blurb="Kept by the office. Everyone can book them." rows={company} per={per} onOpen={setProfile} onEdit={setEditing} canEdit={canEdit} searching={Boolean(needle)} />
+            <CtShelf title="Your Contractors" blurb="The people you ring. Added by you." rows={mine} per={per} onOpen={setProfile} onEdit={setEditing} canEdit={canEdit} searching={Boolean(needle)} sort={sort} onSort={setSort} />
+            <CtShelf title="The Company's Contractors" blurb="Kept by the office. Everyone can book them." rows={company} per={per} onOpen={setProfile} onEdit={setEditing} canEdit={canEdit} searching={Boolean(needle)} sort={sort} onSort={setSort} />
             {data.office && othersByOwner.map(([owner, rows]) => (
-              <CtShelf key={owner} title={`${owner}'s Contractors`} blurb={`Added by ${owner}. Only they and the office see these.`} rows={rows} per={per} onOpen={setProfile} onEdit={setEditing} canEdit={canEdit} searching={Boolean(needle)} />
+              <CtShelf key={owner} title={`${owner}'s Contractors`} blurb={`Added by ${owner}. Only they and the office see these.`} rows={rows} per={per} onOpen={setProfile} onEdit={setEditing} canEdit={canEdit} searching={Boolean(needle)} sort={sort} onSort={setSort} />
             ))}
           </div>
         ) : (
@@ -907,9 +911,47 @@ function CtInvRow({ j, waited, paid = false }: { j: Job; waited: number; paid?: 
   );
 }
 
-/** A shelf of the book: its heading, then a row for each contractor. */
-function CtShelf({ title, blurb, rows, per, onOpen, onEdit, canEdit, searching }: {
+/* Busiest first: out today, then open jobs, then money owed; not active last. */
+const workRank = (c: Row, per: Per) => {
+  const p = per.get(c.id);
+  return (c.active ? 0 : -1e9) + (p?.today ? 1e6 : 0) + (p?.open ?? 0) * 1e3 + (p?.owed ?? 0) / 1e6;
+};
+/* Problems first: expired, then due soon, then none on file or no date, then in date. */
+const PAPER_RANK: Record<string, number> = { expired: 0, soon: 1, none: 2, no_date: 3, ok: 4 };
+const byName = (a: Row, b: Row) => a.name.localeCompare(b.name, "en-GB", { sensitivity: "base" });
+
+function sortRows(rows: Row[], per: Per, sort: Sort): Row[] {
+  if (!sort) return rows;
+  const by = (a: Row, b: Row): number =>
+    sort.key === "name" ? byName(a, b)
+      : sort.key === "work" ? workRank(b, per) - workRank(a, per)
+        : (PAPER_RANK[liabilityOf(a).state] ?? 9) - (PAPER_RANK[liabilityOf(b).state] ?? 9) || (liabilityOf(a).days ?? 1e9) - (liabilityOf(b).days ?? 1e9);
+  return [...rows].sort((a, b) => by(a, b) * sort.dir || byName(a, b));
+}
+
+/** A column head that sorts: first press the natural way, the second reverses it, the third goes back to the book's own order. */
+function SortHead({ k, label, sort, onSort, className = "" }: { k: SortKey; label: string; sort: Sort; onSort: (s: Sort) => void; className?: string }) {
+  const on = sort?.key === k ? sort.dir : 0;
+  return (
+    <button
+      type="button"
+      aria-label={`Sort by ${label.toLowerCase()}`}
+      aria-pressed={on !== 0}
+      className={`nl-ct-sort${on ? " is-on" : ""} ${className}`}
+      onClick={() => onSort(on === 0 ? { key: k, dir: 1 } : on === 1 ? { key: k, dir: -1 } : null)}
+    >
+      {label}
+      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className={on === -1 ? "is-down" : ""}>
+        <path d="M2 6.5 5 3.5l3 3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
+/** A shelf of the book: its heading, the column heads to sort by, then a row for each contractor. */
+function CtShelf({ title, blurb, rows, per, onOpen, onEdit, canEdit, searching, sort, onSort }: {
   title: string; blurb: string; rows: Row[]; per: Per; onOpen: (c: Row) => void; onEdit: (c: Contractor) => void; canEdit: (c: Contractor) => boolean; searching: boolean;
+  sort: Sort; onSort: (s: Sort) => void;
 }) {
   return (
     <section className="nl-ct-sec">
@@ -917,7 +959,22 @@ function CtShelf({ title, blurb, rows, per, onOpen, onEdit, canEdit, searching }
       <p className="nl-meta nl-ct-shnote">{blurb}</p>
       {rows.length === 0 ? (
         <p className="nl-ct-calm">{searching ? "Nobody here matches that." : "Nobody here yet."}</p>
-      ) : rows.map((c) => <CtRow key={c.id} c={c} p={per.get(c.id)} onOpen={() => onOpen(c)} onEdit={canEdit(c) ? () => onEdit(c) : null} />)}
+      ) : (
+        <>
+          <div className="nl-ct-chead">
+            <span aria-hidden />
+            <SortHead k="name" label="Contractor" sort={sort} onSort={onSort} />
+            <SortHead k="paper" label="Paperwork" sort={sort} onSort={onSort} className="nl-ct-chead-paper" />
+            <SortHead k="work" label="Work" sort={sort} onSort={onSort} className="nl-ct-chead-work" />
+            {/* The row's last column, unseen, so the heads sit over their columns. */}
+            <span className="nl-ct-end" aria-hidden style={{ visibility: "hidden" }}>
+              {rows.some(canEdit) && <span className="nl-link">Edit</span>}
+              <svg width="15" height="15" viewBox="0 0 24 24" />
+            </span>
+          </div>
+          {sortRows(rows, per, sort).map((c) => <CtRow key={c.id} c={c} p={per.get(c.id)} onOpen={() => onOpen(c)} onEdit={canEdit(c) ? () => onEdit(c) : null} />)}
+        </>
+      )}
     </section>
   );
 }

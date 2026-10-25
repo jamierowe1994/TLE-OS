@@ -51,8 +51,7 @@
 [data-look="new"] .nl-hud-group > span:first-child { flex: 1; }
 [data-look="new"] .nl-hud-nothing { margin: 0; padding: 6px 10px 8px; font-size: 13px; line-height: 19px; color: var(--faint); }
 
-[data-look="new"] .nl-hud-swipe { position: relative; user-select: none; -webkit-user-select: none; overflow: hidden; border-radius: 16px; }
-[data-look="new"] .nl-hud-swipe + .nl-hud-swipe { margin-top: 4px; }
+[data-look="new"] .nl-hud-swipe { position: relative; user-select: none; -webkit-user-select: none; overflow: hidden; }
 [data-look="new"] .nl-hud-swipe-acts { position: absolute; top: 0; bottom: 0; right: 0; display: flex; transition: opacity 0.2s; }
 [data-look="new"] .nl-hud-swipe-acts.is-shut { opacity: 0; pointer-events: none; }
 [data-look="new"] .nl-hud-swipe-btn {
@@ -66,11 +65,12 @@
 
 [data-look="new"] .nl-hud-item {
   font: inherit; color: inherit; text-align: left; display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 10px; border: 1px solid transparent; border-radius: 16px; background: var(--page); cursor: pointer;
-  transition: background-color 0.25s var(--nl-ease), border-color 0.25s;
+  padding: 12px 10px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--page); cursor: pointer;
+  transition: background-color 0.25s var(--nl-ease);
 }
+/* On hairlines, as every list is (James, 25 Oct 2026); the open chat marked as Leads marks the current row. */
 [data-look="new"] .nl-hud-item:hover { background: var(--panel); }
-[data-look="new"] .nl-hud-item.is-on { background: var(--card); border-color: var(--line); }
+[data-look="new"] .nl-hud-item.is-on { background: var(--panel); box-shadow: inset 2px 0 0 var(--primary); }
 [data-look="new"] .nl-hud-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 [data-look="new"] .nl-hud-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 [data-look="new"] .nl-hud-item-name { display: flex; align-items: baseline; gap: 8px; font-size: 14px; line-height: 20px; }

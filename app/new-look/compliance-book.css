@@ -41,8 +41,9 @@
 @keyframes nl-cbook-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
 /* ── cards ──────────────────────────────────────────────────────────────── */
-[data-look="new"] .nl-cbook-card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 28px; min-width: 0; }
-[data-look="new"] .nl-cbook-card + .nl-cbook-card { margin-top: 16px; }
+/* Lists are never boxed (James, 25 Oct 2026): white space and hairlines, as on Leads. */
+[data-look="new"] .nl-cbook-card { min-width: 0; }
+[data-look="new"] .nl-cbook-card + .nl-cbook-card { margin-top: 44px; }
 [data-look="new"] .nl-cbook-h { font-weight: 500; letter-spacing: 0; }
 [data-look="new"] .nl-cbook-fail { padding: 4px 0 26px; }
 [data-look="new"] .nl-cbook-wait { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 26px 0 10px; font-size: 13px; color: var(--muted); }
@@ -100,7 +101,6 @@
 [data-look="new"] .nl-cbook-table td { padding: 16px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 14px; }
 [data-look="new"] .nl-cbook-table tbody tr { cursor: pointer; transition: background-color .2s; }
 [data-look="new"] .nl-cbook-table tbody tr:hover { background: var(--panel); }
-[data-look="new"] .nl-cbook-table tbody tr:last-child td { border-bottom: 0; }
 [data-look="new"] .nl-cbook-tprop { min-width: 0; }
 [data-look="new"] .nl-cbook-open { font: inherit; font-size: 15px; font-weight: 500; color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 [data-look="new"] .nl-cbook-open:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -134,7 +134,6 @@
   [data-look="new"] .nl-cbook-tiles { gap: 10px; }
   [data-look="new"] .nl-cbook-tile { padding: 16px; border-radius: 18px; }
   [data-look="new"] .nl-cbook-fig { font-size: 30px; line-height: 34px; margin-top: 6px; }
-  [data-look="new"] .nl-cbook-card { padding: 20px 16px; border-radius: 20px; }
 
   /* the next month: days beside the home, requirement and date underneath */
   [data-look="new"] .nl-cbook-soon-head { display: none; }
