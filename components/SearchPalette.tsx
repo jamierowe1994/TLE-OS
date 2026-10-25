@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { refFromPath, useNoteVisit } from "@/lib/recent-visits";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * Search for anything (10 Oct 2026). Search in the sidebar, or ⌘K, darkens
@@ -66,15 +67,15 @@ function Marked({ text, words }: { text: string; words: string[] }) {
 }
 
 /** One row: the photo or initials, the name, what it is, the line under it. */
-function ResultRow({ it, i, on, words, onHover, onGo }: { it: Item; i: number; on: boolean; words: string[]; onHover: (i: number) => void; onGo: (it: Item) => void }) {
+function ResultRow({ it, i, on, words, onHover, onGo, float = false }: { it: Item; i: number; on: boolean; words: string[]; onHover: (i: number) => void; onGo: (it: Item) => void; float?: boolean }) {
   return (
-    <li>
+    <li className={float ? "nl-sf-card" : undefined} style={float ? ({ "--i": i } as React.CSSProperties) : undefined}>
       <button
         type="button"
         data-row={i}
         onMouseMove={() => onHover(i)}
         onClick={() => onGo(it)}
-        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors ${on ? "bg-card shadow-[0_6px_18px_-12px_rgba(16,16,20,0.35)]" : ""}`}
+        className={float ? `nl-sf-row${on ? " is-on" : ""}` : `flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors ${on ? "bg-card shadow-[0_6px_18px_-12px_rgba(16,16,20,0.35)]" : ""}`}
       >
         {it.image ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -124,6 +125,8 @@ function ResultRow({ it, i, on, words, onHover, onGo }: { it: Item; i: number; o
 }
 
 export default function SearchPalette() {
+  /* Floating boxes (James, 25 Oct 2026): the bar alone at the top, each result its own box over the dark. */
+  const float = useNewLook("search") === true;
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -265,19 +268,19 @@ export default function SearchPalette() {
 
   let row = -1;
   return createPortal(
-    <div className="fixed inset-0 z-[300]" role="dialog" aria-modal="true" aria-label="Search for anything" onKeyDown={onKey}>
+    <div {...(float ? { "data-look": "new" } : {})} className={`fixed inset-0 z-[300]${float ? " nl-sf" : ""}`} role="dialog" aria-modal="true" aria-label="Search for anything" onKeyDown={onKey}>
       <button
         type="button"
         aria-label="Close search"
         onClick={close}
-        className={`absolute inset-0 cursor-default bg-ink/40 backdrop-blur-[2px] transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`}
+        className={float ? `nl-sf-scrim${shown ? " is-shown" : ""}` : `absolute inset-0 cursor-default bg-ink/40 backdrop-blur-[2px] transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`}
       />
       <div
-        className={`relative mx-auto mt-[10vh] flex max-h-[78vh] w-[min(92vw,720px)] flex-col overflow-hidden rounded-3xl border border-line/70 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)] transition-[opacity,translate,scale] duration-200 ease-out motion-reduce:transition-none ${
+        className={float ? `nl-sf-stack${shown ? " is-shown" : ""}` : `relative mx-auto mt-[10vh] flex max-h-[78vh] w-[min(92vw,720px)] flex-col overflow-hidden rounded-3xl border border-line/70 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)] transition-[opacity,translate,scale] duration-200 ease-out motion-reduce:transition-none ${
           shown ? "translate-y-0 scale-100 opacity-100" : "-translate-y-2 scale-[0.98] opacity-0"
         }`}
       >
-        <label className="flex shrink-0 items-center gap-3 border-b border-line/70 px-5 py-4">
+        <label className={float ? "nl-sf-bar" : "flex shrink-0 items-center gap-3 border-b border-line/70 px-5 py-4"}>
           <DoodleIcon name="search" size={18} className="shrink-0 text-muted" />
           <input
             ref={input}
@@ -294,17 +297,17 @@ export default function SearchPalette() {
           )}
         </label>
 
-        <div ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+        <div ref={list} className={float ? "nl-sf-list" : "min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3"}>
           {!typing ? (
             recent && recent.length > 0 ? (
               <section>
-                <h3 className="flex items-center gap-2 px-3 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">
+                <h3 className={float ? "nl-sf-h" : "flex items-center gap-2 px-3 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted"}>
                   <DoodleIcon name="clock" size={12} />
                   Recent
                 </h3>
-                <ul>
+                <ul className={float ? "nl-sf-ul" : undefined}>
                   {recent.map((it, i) => (
-                    <ResultRow key={it.id} it={it} i={i} on={i === active} words={[]} onHover={setActive} onGo={go} />
+                    <ResultRow key={it.id} it={it} i={i} on={i === active} words={[]} onHover={setActive} onGo={go} float={float} />
                   ))}
                 </ul>
                 <p className="px-3 pb-1 pt-2 text-[11px] text-muted">Or type a name, an address, a phone number, an email, a word from a note or a job.</p>
@@ -333,16 +336,16 @@ export default function SearchPalette() {
           ) : (
             answer.groups.map((g) => (
               <section key={g.group} className="mb-2 last:mb-0">
-                <h3 className="flex items-center gap-2 px-3 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">
+                <h3 className={float ? "nl-sf-h" : "flex items-center gap-2 px-3 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted"}>
                   <DoodleIcon name={GROUPS[g.group].icon} size={12} />
                   {GROUPS[g.group].title}
                   <span className="figures font-normal normal-case tracking-normal">{g.items.length + g.more}</span>
                 </h3>
-                <ul>
+                <ul className={float ? "nl-sf-ul" : undefined}>
                   {g.items.map((it) => {
                     row += 1;
                     const i = row;
-                    return <ResultRow key={it.id} it={it} i={i} on={i === active} words={words} onHover={setActive} onGo={go} />;
+                    return <ResultRow key={it.id} it={it} i={i} on={i === active} words={words} onHover={setActive} onGo={go} float={float} />;
                   })}
                 </ul>
                 {g.more > 0 && <p className="px-3 pt-0.5 text-[11px] text-muted">And {g.more} more - add a word to narrow it down.</p>}
