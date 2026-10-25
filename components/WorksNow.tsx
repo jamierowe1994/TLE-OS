@@ -6,6 +6,7 @@ import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_
 import { categoriesOf, CATEGORY_CERT_TYPE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
 import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
+import { FloatCard, FloatCardHead, FloatFoot } from "@/components/new-look/FloatSheet";
 /* Render-time use only, so the circle with works-ui (which draws ContractorForm) is harmless. */
 import { PAYRUN_LABEL, PAYRUN_LINE, PayrunTrack, awaitingPay } from "@/components/maintenance/works-ui";
 import { AskForQuotes, QuoteBoard } from "@/components/maintenance/QuoteAsks";
@@ -842,8 +843,13 @@ export const BLANK_CONTRACTOR: Partial<Contractor> = {
   gasSafeNumber: "", niceicNumber: "", napitNumber: "", otherRegistration: "", publicLiabilityInsurer: "", publicLiabilityNumber: "",
 };
 
-/** The form, used from the book and from inside a job. */
-export function ContractorForm({ initial, canCorporate, onSaved, onClose, compact = false }: { initial: Partial<Contractor>; canCorporate: boolean; onSaved: (c: Contractor) => void; onClose: () => void; compact?: boolean }) {
+/** The form, used from the book and from inside a job.
+ *
+ *  `look="float"` (the new-look Contractors page, 25 Oct 2026) draws the same
+ *  fields, checks and save as separate boxes for a FloatSheet - Contact,
+ *  Registrations, Public Liability, Website and Notes, who sees them - with
+ *  Cancel and Save in the sheet's footer box. Nothing else changes. */
+export function ContractorForm({ initial, canCorporate, onSaved, onClose, compact = false, look }: { initial: Partial<Contractor>; canCorporate: boolean; onSaved: (c: Contractor) => void; onClose: () => void; compact?: boolean; look?: "float" }) {
   const [c, setC] = useState<Partial<Contractor> & { scope?: "mine" | "corporate" }>({ ...BLANK_CONTRACTOR, ...initial, scope: initial.id ? (initial.ownerId ? "mine" : "corporate") : "mine" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -868,6 +874,79 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "Could not save.");
     onSaved(r.contractor);
+  }
+  if (look === "float" && !compact) {
+    const fl = "nl-fs-input mt-1";
+    const lb = "nl-fs-label";
+    const box = (k: string, labelText: string, input: React.ReactNode, wide = false, hintText?: string) => (
+      <div key={k} className={wide ? "is-wide" : ""}><label className={lb}>{labelText}</label>{input}{hintText && <p className="nl-fs-hint">{hintText}</p>}</div>
+    );
+    return (
+      <>
+        <FloatCard>
+          <FloatCardHead title="Contact" aside="Who they are and how to reach them" />
+          <div className="nl-fs-grid">
+            {box("name", "Company or name", <input value={c.name ?? ""} onChange={(e) => setC({ ...c, name: e.target.value })} placeholder="JD Plumbing & Heating" className={fl} />)}
+            {box("trade", "Trade", <input value={c.trade ?? ""} onChange={(e) => setC({ ...c, trade: e.target.value })} placeholder="Gas Safe engineer, electrician, handyman…" className={fl} />)}
+            {box("contact", "Who you ring", <input value={c.contact ?? ""} onChange={(e) => setC({ ...c, contact: e.target.value })} placeholder="Contact name" className={fl} />)}
+            {box("phone", "Phone", <input value={c.phone ?? ""} onChange={(e) => setC({ ...c, phone: e.target.value })} className={fl} />)}
+            {box("email", "Email", <input type="email" value={c.email ?? ""} onChange={(e) => setC({ ...c, email: e.target.value })} placeholder="Where the works orders go" className={fl} />)}
+            {box("address", "Address", <input value={c.address ?? ""} onChange={(e) => setC({ ...c, address: e.target.value })} className={fl} />)}
+          </div>
+        </FloatCard>
+        <FloatCard>
+          <FloatCardHead title="Registrations" />
+          <p className="nl-fs-hint -mt-1 mb-3">The numbers their trade carries. Leave blank any that don&apos;t apply.</p>
+          <div className="nl-fs-grid">
+            {box("gas", "Gas Safe number", <input value={c.gasSafeNumber ?? ""} onChange={(e) => setC({ ...c, gasSafeNumber: e.target.value })} placeholder="e.g. 123456" className={fl} />)}
+            {box("niceic", "NICEIC number", <input value={c.niceicNumber ?? ""} onChange={(e) => setC({ ...c, niceicNumber: e.target.value })} className={fl} />)}
+            {box("napit", "NAPIT number", <input value={c.napitNumber ?? ""} onChange={(e) => setC({ ...c, napitNumber: e.target.value })} className={fl} />)}
+            {box("other", "Other registration", <input value={c.otherRegistration ?? ""} onChange={(e) => setC({ ...c, otherRegistration: e.target.value })} placeholder="ELECSA, Stroma, OFTEC…" className={fl} />)}
+            {(c.registration ?? "").trim() !== "" && box("legacy", "Registration (the old box)", <input value={c.registration ?? ""} onChange={(e) => setC({ ...c, registration: e.target.value })} className={fl} />, true, "Move the number into its own box above, then clear this one.")}
+          </div>
+        </FloatCard>
+        <FloatCard>
+          <FloatCardHead title="Public Liability" />
+          <p className="nl-fs-hint -mt-1 mb-3">Their insurance. The record warns when it is about to run out.</p>
+          <div className="nl-fs-grid">
+            {box("insurer", "Insurer", <input value={c.publicLiabilityInsurer ?? ""} onChange={(e) => setC({ ...c, publicLiabilityInsurer: e.target.value })} className={fl} />)}
+            {box("policy", "Policy number", <input value={c.publicLiabilityNumber ?? ""} onChange={(e) => setC({ ...c, publicLiabilityNumber: e.target.value })} className={fl} />)}
+            {box("expires", "Expires", <div className="mt-1"><FieldDate value={c.publicLiabilityExpiry ?? ""} onChange={(v) => setC({ ...c, publicLiabilityExpiry: v || null })} placeholder="The policy's end date" clearable /></div>)}
+            {box("cover", "Cover", <input value={cover} onChange={(e) => setCover(e.target.value)} inputMode="decimal" placeholder="£ e.g. 5,000,000" className={fl} />)}
+          </div>
+        </FloatCard>
+        <FloatCard>
+          <FloatCardHead title="Website and Notes" />
+          <p className="nl-fs-hint -mt-1 mb-3">Add their website and the OS reads their logo off it.</p>
+          <div className="nl-fs-grid">
+            {box("website", "Website", <input value={c.website ?? ""} onChange={(e) => setC({ ...c, website: e.target.value })} placeholder="jdplumbing.co.uk" className={fl} />, true)}
+            {box("notes", "Notes", <textarea value={c.notes ?? ""} onChange={(e) => setC({ ...c, notes: e.target.value })} rows={2} placeholder="Areas they cover, rates, hours, how they like to be booked" className={fl} />, true)}
+          </div>
+        </FloatCard>
+        <FloatCard>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            {canCorporate ? (
+              <label className="flex items-center gap-2 text-[13.5px]">
+                <input type="checkbox" checked={c.scope === "corporate"} onChange={(e) => setC({ ...c, scope: e.target.checked ? "corporate" : "mine" })} className="h-4 w-4 accent-[var(--accent-dark)]" />
+                On the company shelf, for everyone
+              </label>
+            ) : (
+              <span className="text-[13px] text-muted">Goes in your own book.</span>
+            )}
+            <button type="button" role="switch" aria-checked={c.active !== false} onClick={() => setC({ ...c, active: c.active === false })} className="flex items-center gap-2 text-[13.5px]">
+              <span className={`relative block h-5 w-9 shrink-0 rounded-full transition-colors ${c.active !== false ? "bg-[var(--sage-deep)]" : "bg-line"}`}>
+                <span className={`absolute left-0 top-0.5 block h-4 w-4 rounded-full bg-white shadow transition-transform ${c.active !== false ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+              </span>
+              {c.active !== false ? "Active - offered on jobs" : "Not active"}
+            </button>
+          </div>
+        </FloatCard>
+        <FloatFoot left={err ? <span className="nl-fs-err" role="alert">{err}</span> : <span>A name and a trade, at least. The rest can wait.</span>}>
+          <button type="button" onClick={onClose} className="nl-btn nl-fs-ghost">Cancel</button>
+          <button type="button" disabled={busy} onClick={() => void save()} className="nl-btn nl-btn--primary">{busy ? "Saving…" : "Save contractor"}</button>
+        </FloatFoot>
+      </>
+    );
   }
   return (
     <div className={`grid gap-3 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>

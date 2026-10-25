@@ -1,0 +1,141 @@
+/* New look: Contractors, after James's design (25 Oct 2026). Prefix nl-ct-.
+   The calm pass: fewer boxes, more air, one accent. A type-only head with the
+   three actions beside it, three figures on hairlines, text tabs, and the jobs
+   as rows with a date column and an action each. Statuses are words, no dots.
+   The pop-outs are the floating boxes (app/new-look/float-sheet.css). */
+
+[data-look="new"].nl-ct { max-width: 980px; padding-bottom: 72px; }
+
+/* The head: title and summary on the left, the actions on the right. */
+[data-look="new"] .nl-ct-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px 24px; padding-top: 24px; margin-bottom: 40px; }
+[data-look="new"] .nl-ct-top .nl-title { font-weight: 500; letter-spacing: 0; }
+[data-look="new"] .nl-ct-top .nl-blurb { margin-top: 12px; }
+[data-look="new"] .nl-ct-reading { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-body); font-size: 14px; }
+[data-look="new"] .nl-ct-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The three figures, on hairlines. */
+[data-look="new"] .nl-ct-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-ct-strip > button {
+  font: inherit; color: inherit; text-align: left; background: none; border: 0; border-left: 1px solid var(--line); cursor: pointer;
+  display: grid; gap: 4px; align-content: start; padding: 22px 24px; min-width: 0;
+}
+[data-look="new"] .nl-ct-strip > button:first-child { border-left: 0; padding-left: 0; }
+[data-look="new"] .nl-ct-strip > button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+[data-look="new"] .nl-ct-strip span { font-size: 13px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-ct-strip b {
+  display: flex; align-items: center; min-height: 38px; font-family: var(--nl-serif); font-weight: 400; font-size: 34px; line-height: 1.1;
+  font-variant-numeric: tabular-nums; transition: color 0.2s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+[data-look="new"] .nl-ct-strip b.is-hot { color: var(--accent-dark); }
+[data-look="new"] .nl-ct-strip > button:hover b:not(.is-hot) { color: var(--sage-ink); }
+[data-look="new"] .nl-ct-strip em { font-style: normal; font-size: 12.5px; line-height: 18px; color: var(--faint); min-height: 18px; }
+[data-look="new"] .nl-ct-fig-err { font-family: var(--font-body); font-size: 14px; color: var(--accent-dark); }
+
+/* The tabs, with Mine / Everyone at the end. */
+[data-look="new"] .nl-ct-tabrow { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; margin-top: 48px; }
+[data-look="new"] .nl-ct-tabrow > .nl-tabs { flex: 1 1 320px; min-width: 0; }
+[data-look="new"] .nl-ct-tabrow > .nl-toggle { margin-bottom: 8px; }
+[data-look="new"] .nl-ct-whose { margin: 10px 0 0; }
+[data-look="new"] .nl-ct-view { animation: nl-in 0.4s var(--nl-ease) both; }
+
+/* A section: its heading, a count, its rows. */
+[data-look="new"] .nl-ct-sec { margin-top: 36px; min-width: 0; }
+[data-look="new"] .nl-ct-sh { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 10px; }
+[data-look="new"] .nl-ct-sh h2 { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 20px; line-height: 26px; letter-spacing: 0; color: var(--ink); }
+[data-look="new"] .nl-ct-sh > span { font-size: 13px; color: var(--faint); font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-ct-sh > .nl-ct-total { font-family: var(--nl-serif); font-size: 22px; line-height: 28px; color: var(--ink); }
+[data-look="new"] .nl-ct-shnote { margin: -4px 0 10px; }
+[data-look="new"] .nl-ct-calm { margin: 0; padding: 22px 0; border-top: 1px solid var(--line); color: var(--muted); font-family: var(--nl-serif); font-size: 16px; line-height: 24px; }
+[data-look="new"] .nl-ct-more {
+  display: block; width: 100%; font: inherit; font-size: 13px; color: var(--muted); text-align: left; cursor: pointer;
+  background: none; border: 0; border-top: 1px solid var(--line); padding: 18px 0 0;
+}
+[data-look="new"] .nl-ct-more:hover { color: var(--ink); }
+[data-look="new"] .nl-ct-later { margin: 0; padding: 18px 0 8px; border-top: 1px solid var(--line); font-size: 12.5px; font-weight: 500; color: var(--muted); }
+[data-look="new"] .nl-ct-foot { margin-top: 28px; }
+
+/* A job: the date, the home and the job, who and why, and its action. */
+[data-look="new"] .nl-ct-job, [data-look="new"] .nl-ct-inv {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 24px; align-items: start;
+  padding: 22px 0; border-top: 1px solid var(--line);
+}
+[data-look="new"] .nl-ct-inv { grid-template-columns: 76px minmax(0, 1fr) 100px auto; }
+[data-look="new"] .nl-ct-inv.is-paid { opacity: 0.6; }
+[data-look="new"] .nl-ct-later + .nl-ct-job { border-top: 0; }
+[data-look="new"] .nl-ct-dt { display: block; padding-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+[data-look="new"] .nl-ct-dt b { display: block; font-weight: 500; font-size: 14px; color: var(--ink); white-space: nowrap; }
+[data-look="new"] .nl-ct-dt.is-late b { color: var(--accent-dark); }
+[data-look="new"] .nl-ct-t { display: grid; gap: 3px; min-width: 0; }
+[data-look="new"] .nl-ct-home { font-weight: 500; font-size: 15.5px; line-height: 22px; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+[data-look="new"] .nl-ct-home span { font-weight: 400; color: var(--muted); }
+[data-look="new"] .nl-ct-home:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+[data-look="new"] .nl-ct-d { font-size: 14px; line-height: 20px; color: var(--ink); overflow-wrap: anywhere; }
+[data-look="new"] .nl-ct-m { display: block; margin-top: 2px; font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-ct-m .is-bad { color: var(--accent-dark); }
+[data-look="new"] .nl-ct-who {
+  font: inherit; color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong);
+}
+[data-look="new"] .nl-ct-who:hover { text-decoration-color: currentColor; }
+[data-look="new"] .nl-ct-q { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; padding-top: 2px; }
+[data-look="new"] .nl-ct-q .nl-btn { text-decoration: none; }
+[data-look="new"] .nl-ct-st { font-size: 13px; line-height: 19px; color: var(--ink); white-space: nowrap; }
+[data-look="new"] .nl-ct-st.is-ok { color: var(--sage-ink); }
+[data-look="new"] .nl-ct-amt { padding-top: 1px; text-align: right; font-family: var(--nl-serif); font-size: 19px; line-height: 24px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The book: search, then a row for each contractor. */
+[data-look="new"] .nl-ct-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 28px; }
+[data-look="new"] .nl-ct-tools > .nl-fsearch { flex: 0 1 380px; }
+[data-look="new"] .nl-ct-crow {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) 210px 110px auto; gap: 18px; align-items: center;
+  padding: 18px 0; border-top: 1px solid var(--line); cursor: pointer; color: var(--ink);
+}
+[data-look="new"] .nl-ct-crow:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
+[data-look="new"] .nl-ct-crow.is-off { opacity: 0.6; }
+[data-look="new"] .nl-ct-crow b { display: block; font-weight: 500; font-size: 15px; line-height: 21px; transition: color 0.2s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-ct-crow:hover b { color: var(--sage-ink); }
+[data-look="new"] .nl-ct-s { display: block; font-size: 12.5px; line-height: 18px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-ct-s-sm { display: none; }
+[data-look="new"] .nl-ct-paper { display: grid; gap: 2px; min-width: 0; font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-ct-paper > span:first-child { overflow-wrap: anywhere; }
+[data-look="new"] .nl-ct-paper .is-ok { color: var(--muted); }
+[data-look="new"] .nl-ct-paper .is-soon { color: var(--warning); }
+[data-look="new"] .nl-ct-paper .is-bad { color: var(--accent-dark); }
+[data-look="new"] .nl-ct-work { display: grid; gap: 2px; font-size: 13px; line-height: 19px; color: var(--ink); text-align: right; }
+[data-look="new"] .nl-ct-end { display: inline-flex; align-items: center; gap: 12px; color: var(--faint); }
+[data-look="new"] .nl-ct-end .nl-link { color: var(--muted); }
+
+/* The contractor's record in the floating boxes. */
+[data-look="new"] .nl-ct-prof-name { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 24px; line-height: 30px; letter-spacing: 0; overflow-wrap: anywhere; }
+[data-look="new"] .nl-ct-figs4 { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+[data-look="new"] .nl-ct-fig { display: grid; gap: 2px; padding: 12px 14px; }
+[data-look="new"] .nl-ct-fig span { font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-ct-fig b { font-family: var(--nl-serif); font-weight: 400; font-size: 22px; line-height: 28px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-ct-fig b.is-hot { color: var(--accent-dark); }
+[data-look="new"] .nl-ct-fig small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-ct-docs > section { border: 0; border-radius: 18px; background: var(--page); padding: 16px 18px; box-shadow: 0 16px 32px -24px rgba(0, 0, 0, 0.55); }
+[data-look="new"] .nl-ct-two { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+
+@media (max-width: 900px) {
+  [data-look="new"] .nl-ct-crow { grid-template-columns: 40px minmax(0, 1fr) 110px auto; }
+  [data-look="new"] .nl-ct-paper { display: none; }
+  [data-look="new"] .nl-ct-s-sm { display: block; }
+  [data-look="new"] .nl-ct-figs4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-look="new"] .nl-ct-two { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  [data-look="new"] .nl-ct-top { margin-bottom: 28px; padding-top: 12px; }
+  [data-look="new"] .nl-ct-acts { width: 100%; }
+  [data-look="new"] .nl-ct-strip { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-ct-strip > button { border-left: 0; padding: 16px 0; border-top: 1px solid var(--line); }
+  [data-look="new"] .nl-ct-strip > button:first-child { border-top: 0; }
+  [data-look="new"] .nl-ct-strip b { font-size: 28px; min-height: 32px; }
+  [data-look="new"] .nl-ct-tabrow { margin-top: 36px; }
+  [data-look="new"] .nl-ct-job, [data-look="new"] .nl-ct-inv { grid-template-columns: 64px minmax(0, 1fr); gap: 10px 16px; }
+  [data-look="new"] .nl-ct-job .nl-ct-q, [data-look="new"] .nl-ct-inv .nl-ct-q { grid-column: 2; justify-content: flex-start; }
+  [data-look="new"] .nl-ct-inv .nl-ct-amt { grid-column: 2; text-align: left; }
+  [data-look="new"] .nl-ct-crow { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; }
+  [data-look="new"] .nl-ct-work { display: none; }
+  [data-look="new"] .nl-ct-end .nl-link { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-ct-view { animation: none; } }

@@ -9,6 +9,7 @@ import FieldDate from "@/components/FieldDate";
 import DoodleIcon from "@/components/DoodleIcon";
 import ContractorMark from "@/components/contractors/ContractorMark";
 import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
+import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
 
 /**
  * Their invoice, for work done without a job on the OS. It goes on as a
@@ -20,7 +21,7 @@ import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice
  * from inside a contractor's record. `bare` drops its own frame and heading
  * when the caller draws them.
  */
-export function LogInvoice({ contractor, onClose, onSaved, bare = false }: { contractor: Contractor; onClose: () => void; onSaved: (orderId: string) => void; bare?: boolean }) {
+export function LogInvoice({ contractor, onClose, onSaved, bare = false, look }: { contractor: Contractor; onClose: () => void; onSaved: (orderId: string) => void; bare?: boolean; /** The new look's floating boxes: the same fields and save, as cards for a FloatSheet. */ look?: "float" }) {
   const [props, setProps] = useState<Property[] | null>(null);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Property | null>(null);
@@ -99,6 +100,72 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false }: { con
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "Could not log the invoice.");
     onSaved(String(r.order?.id ?? ""));
+  }
+
+  if (look === "float") {
+    const fl = "nl-fs-input";
+    return (
+      <>
+        <FloatCard>
+          <FloatCardHead title="The Home" />
+          {picked ? (
+            <div className="nl-fs-row">
+              <span className="min-w-0 truncate">{picked.name}<span className="text-muted">{picked.locality ? ` · ${picked.locality}` : ""}</span></span>
+              <button type="button" onClick={() => { setPicked(null); setQ(""); }} className="nl-link shrink-0">Change</button>
+            </div>
+          ) : (
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={props === null ? "Reading the book…" : "Start typing the address"} aria-label="The home" className={fl} />
+          )}
+          {hits.length > 0 && (
+            <ul className="nl-fs-list mt-2">
+              {hits.map((p) => (
+                <li key={p.id}>
+                  <button type="button" onClick={() => setPicked(p)} className="flex w-full flex-col rounded-lg px-2 py-2 text-left hover:bg-panel">
+                    <span className="text-[13.5px]">{p.name}</span>
+                    <span className="text-[11.5px] text-muted">{p.locality}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!picked && props && q.trim().length > 2 && hits.length === 0 && <p className="nl-fs-hint">Not on the book. It will go on under the address as typed.</p>}
+        </FloatCard>
+        <FloatCard>
+          <FloatCardHead title="The Invoice" />
+          <div className="nl-fs-grid">
+            <div className="is-wide"><label className="nl-fs-label">What the work was</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Replaced kitchen tap" className={`${fl} mt-1`} /></div>
+            <div><label className="nl-fs-label">Invoice total</label><input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="£" className={`${fl} mt-1`} /></div>
+            <div><label className="nl-fs-label">Their invoice number</label><input value={ref} onChange={(e) => setRef(e.target.value)} className={`${fl} mt-1`} /></div>
+            <div><label className="nl-fs-label">When the work was done</label><div className="mt-1"><FieldDate value={doneOn} onChange={setDoneOn} placeholder="Today if left" /></div></div>
+            <div>
+              <span className="nl-fs-label">The invoice itself</span>
+              <label className={`${fl} mt-1 flex cursor-pointer items-center justify-between gap-2`}>
+                <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : "PDF or photo"}</span>
+                <span className="shrink-0 text-[12px] underline">{file ? "Change" : "Choose"}</span>
+                <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+              </label>
+            </div>
+          </div>
+          {(reading || readSaid) && (
+            <p className="nl-fs-reading mt-3">
+              {reading && <span className="nl-bo-spin" aria-hidden />}
+              {reading ? "Reading the invoice…" : readSaid}
+            </p>
+          )}
+        </FloatCard>
+        <FloatCard>
+          <FloatCardHead title="Who Is Paid" />
+          <div className="grid gap-2 text-[13.5px]">
+            <label className="nl-fs-tick-row"><input type="radio" name={`payee-${contractor.id}`} checked={payee === "contractor"} onChange={() => setPayee("contractor")} /><b>Pay {contractor.name}</b></label>
+            <label className="nl-fs-tick-row"><input type="radio" name={`payee-${contractor.id}`} checked={payee === "agent"} onChange={() => setPayee("agent")} /><b>I paid them myself - reimburse me</b></label>
+          </div>
+        </FloatCard>
+        <FloatFoot left={err ? <span className="nl-fs-err" role="alert">{err}</span> : <span>Goes on the home as a finished job. Accounts are told.</span>}>
+          <button type="button" onClick={onClose} className="nl-btn nl-fs-ghost">Cancel</button>
+          <button type="button" disabled={busy} onClick={() => void save()} className="nl-btn nl-btn--primary">{busy ? "Logging…" : "Log the invoice"}</button>
+        </FloatFoot>
+      </>
+    );
   }
 
   const body = (
@@ -264,5 +331,84 @@ export function RaiseInvoiceDrawer({ open, contractors, me, onClose, onSaved }: 
         </div>
       </aside>
     </div>
+  );
+}
+
+/**
+ * Log an invoice from the top of Contractors, in the new look's floating
+ * boxes (25 Oct 2026). The same two parts as RaiseInvoiceDrawer - who it is
+ * from, picked out of the book this person can see, then the same LogInvoice
+ * and its same save - as two screens. Mount it only while it is open.
+ */
+export function RaiseInvoiceSheet({ contractors, me, onClose, onSaved }: {
+  contractors: Pickable[];
+  me: string | null;
+  onClose: () => void;
+  onSaved: (orderId: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [picked, setPicked] = useState<Pickable | null>(null);
+  const hits = useMemo(() => {
+    const needle = q.trim();
+    const list = [...contractors].sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
+    return (needle ? list.filter((c) => searchMatches(needle, c.name, c.trade, c.contact, c.phone, c.email, c.ownerName ?? "")) : list).slice(0, 40);
+  }, [contractors, q]);
+  const whose = (c: Pickable) => (!c.ownerId ? "Company" : c.ownerId === me ? "Yours" : `${c.ownerName || "An agent"}'s`);
+  return (
+    <FloatSheet
+      title="Log an Invoice"
+      step={picked ? 2 : 1}
+      steps={2}
+      onBack={picked ? () => setPicked(null) : undefined}
+      onClose={onClose}
+      screenKey={picked ? `inv-${picked.id}` : "who"}
+      question={picked ? "The invoice" : "Who is it from?"}
+      lede={picked ? "Nobody else is emailed." : "For work done without a job on the OS. It goes on the home as a finished job with the invoice attached, and accounts are told."}
+      foot={picked ? undefined : (
+        <FloatFoot left={<span>{contractors.length ? `${contractors.length} in the book you can see` : ""}</span>}>
+          <button type="button" onClick={onClose} className="nl-btn nl-fs-ghost">Cancel</button>
+        </FloatFoot>
+      )}
+    >
+      {picked ? (
+        <>
+          <FloatCard>
+            <div className="flex items-center gap-3">
+              <ContractorMark name={picked.name} logoUrl={picked.logoUrl} size={36} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{picked.name}</span>
+                <span className="block truncate text-[12.5px] text-muted">{[picked.trade, whose(picked)].filter(Boolean).join(" · ")}</span>
+              </span>
+              <button type="button" onClick={() => setPicked(null)} className="nl-link shrink-0">Change</button>
+            </div>
+          </FloatCard>
+          <LogInvoice key={picked.id} contractor={picked} look="float" onClose={onClose} onSaved={onSaved} />
+        </>
+      ) : contractors.length === 0 ? (
+        <FloatCard><p className="m-0 text-[13.5px] text-muted">There are no contractors in your book yet. Add them first with Add one.</p></FloatCard>
+      ) : (
+        <>
+          <FloatCard>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, trade, phone…" aria-label="Search contractors" className="nl-fs-input" />
+          </FloatCard>
+          {hits.length === 0 ? (
+            <p className="nl-fs-say">Nobody in the book matches that.</p>
+          ) : (
+            <div className="nl-fs-choices">
+              {hits.map((c) => (
+                <FloatChoice
+                  key={c.id}
+                  icon={<ContractorMark name={c.name} logoUrl={c.logoUrl} size={34} />}
+                  title={`${c.name}${c.active ? "" : " · not active"}`}
+                  text={[c.trade, c.contact].filter(Boolean).join(" · ") || undefined}
+                  aside={<span className="text-muted">{whose(c)}</span>}
+                  onClick={() => setPicked(c)}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </FloatSheet>
   );
 }

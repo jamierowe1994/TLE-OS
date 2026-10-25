@@ -11,6 +11,7 @@ import ContractorMark from "@/components/contractors/ContractorMark";
 import { LogInvoice } from "@/components/contractors/InvoiceForm";
 import ContractorDocs from "@/components/contractors/ContractorDocs";
 import { coverWords, credentialsOf, jobHref, liabilityOf, longDay, siteHref, siteLabel } from "@/components/contractors/credentials";
+import FloatSheet, { FloatCard, FloatCardHead } from "@/components/new-look/FloatSheet";
 
 /* Kept here too, so Maintenance's Log work already done still finds it. */
 export { LogInvoice } from "@/components/contractors/InvoiceForm";
@@ -52,8 +53,10 @@ function whenOf(o: WorksOrder): string {
   return `${verb} ${said}${o.status === "scheduled" && o.scheduledAt ? ` · ${hhmm(o.scheduledAt)}` : ""}`;
 }
 
-export default function ContractorProfile({ id, ownerName, onClose, onEdit, onChanged, canEdit }: {
+export default function ContractorProfile({ id, ownerName, onClose, onEdit, onChanged, canEdit, look }: {
   id: string;
+  /** The new look's floating boxes (Contractors, 25 Oct 2026): the same record, read and actions, as separate cards. */
+  look?: "float";
   /** Whose book they are in, by name, when it is somebody else's (the office's view). */
   ownerName?: string | null;
   onClose: () => void;
@@ -77,10 +80,12 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
     return () => { live = false; };
   }, [id, nonce]);
   useEffect(() => {
+    /* The floating boxes close themselves on Escape. */
+    if (look === "float") return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close]);
+  }, [close, look]);
 
   const refreshLogo = useCallback(async () => {
     if (!d) return;
@@ -103,6 +108,178 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
   const pl = c ? liabilityOf(c) : null;
   const site = c ? siteHref(c.website) : null;
   const DONE_SHOWN = 8;
+
+  if (look === "float") {
+    const tone = (t: "neutral" | "good" | "warn" | "accent") => (t === "accent" ? "text-accent-dark" : t === "warn" ? "text-[var(--warning)]" : t === "good" ? "text-[var(--sage-ink)]" : "text-muted");
+    return (
+      <FloatSheet title={`${whose}${c && !c.active ? ", not active" : ""}`} size="lg" onClose={onClose} label={c?.name || "Contractor"}>
+        {!d && !err && (
+          <FloatCard><p className="nl-fs-reading m-0"><span className="nl-bo-spin" aria-hidden />Reading their record…</p></FloatCard>
+        )}
+        {err && !d && (
+          <FloatCard>
+            <div className="nl-fs-row"><span className="nl-fs-err">{err}</span><button type="button" onClick={() => setNonce((n) => n + 1)} className="nl-btn nl-btn--secondary nl-btn--sm">Try again</button></div>
+          </FloatCard>
+        )}
+        {c && d && (
+          <>
+            <FloatCard>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <ContractorMark name={c.name} logoUrl={c.logoUrl} size={64} />
+                <div className="min-w-0 flex-1">
+                  <p className="nl-ct-prof-name">{c.name}</p>
+                  <p className="mt-1 text-[13.5px] text-muted">{[c.trade, c.contact ? `ask for ${c.contact}` : ""].filter(Boolean).join(" · ")}</p>
+                  <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
+                    <span className={c.active ? "text-[var(--sage-ink)]" : "text-muted"}>{c.active ? "Active - offered on jobs" : "Not active"}</span>
+                    {creds.map((x) => <span key={x.key} className="text-muted">{x.label} {x.value}</span>)}
+                    {pl && <span className={tone(pl.tone)}>{pl.pill}</span>}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={() => setLogging((v) => !v)} className="nl-btn nl-btn--primary nl-btn--sm">Log an invoice</button>
+                {c.phone && <a href={`tel:${c.phone.replace(/[^\d+]/g, "")}`} className="nl-btn nl-btn--secondary nl-btn--sm">Call</a>}
+                {c.email && <a href={`mailto:${c.email}`} className="nl-btn nl-btn--secondary nl-btn--sm">Email</a>}
+                {site && <a href={site} target="_blank" rel="noopener noreferrer" className="nl-btn nl-btn--secondary nl-btn--sm">Website</a>}
+                {canEdit(c) && <button type="button" onClick={() => onEdit(c)} className="nl-btn nl-btn--secondary nl-btn--sm">Edit</button>}
+                {site && (
+                  <button type="button" disabled={logo.busy} onClick={() => void refreshLogo()} className="nl-btn nl-fs-ghost nl-btn--sm">
+                    {logo.busy && <span className="nl-bo-spin" aria-hidden />}
+                    {logo.busy ? "Reading their website…" : c.logoUrl ? "Refresh logo" : "Find their logo"}
+                  </button>
+                )}
+              </div>
+              {logo.note && <p className="nl-fs-hint mt-2">{logo.note}</p>}
+            </FloatCard>
+
+            <div className="nl-ct-figs4">
+              {([
+                ["Jobs", String(d.stats.jobs), d.stats.open ? `${d.stats.open} open` : "none open", false],
+                ["Quoted", pounds(d.stats.quotedPence), "the quotes logged", false],
+                ["Invoiced", pounds(d.stats.invoicedPence), `${pounds(d.stats.paidPence)} paid`, false],
+                ["Owed to them", pounds(d.stats.outstandingPence), d.stats.outstandingPence ? "invoices waiting" : "nothing waiting", d.stats.outstandingPence > 0],
+              ] as [string, string, string, boolean][]).map(([k, v, sub, hot]) => (
+                <FloatCard key={k} className="nl-ct-fig">
+                  <span>{k}</span>
+                  <b className={hot ? "is-hot" : ""}>{v}</b>
+                  <small>{sub}</small>
+                </FloatCard>
+              ))}
+            </div>
+
+            {logging && (
+              <FloatCard>
+                <FloatCardHead title={`Log an Invoice from ${c.name}`} />
+                <p className="nl-fs-hint -mt-1 mb-3">For work done without a job on the OS. It goes on the home as a finished job with the invoice attached, and accounts are told. Nobody else is emailed.</p>
+                <LogInvoice
+                  contractor={c}
+                  bare
+                  onClose={() => setLogging(false)}
+                  onSaved={() => { setLogging(false); setNonce((n) => n + 1); onChanged?.(); }}
+                />
+              </FloatCard>
+            )}
+
+            <div className="nl-ct-docs"><ContractorDocs contractorId={c.id} trade={c.trade} /></div>
+
+            <FloatCard>
+              <FloatCardHead title="Their Jobs" aside={jobs.length ? `${openJobs.length} open · ${doneJobs.length} finished` : undefined} />
+              {d.everyone === false && <p className="nl-fs-hint -mt-1">Your own jobs with them: on the homes in your book, or ones you raised.</p>}
+              {jobs.length === 0 ? (
+                <p className="mt-2 text-[13.5px] text-muted">No jobs with them yet. Put them on a job and it shows here, or log an invoice they sent in.</p>
+              ) : (
+                <>
+                  {openJobs.length > 0 && <JobList title="Open" rows={openJobs} plain />}
+                  {doneJobs.length > 0 && <JobList title="Finished" rows={showAll ? doneJobs : doneJobs.slice(0, DONE_SHOWN)} plain />}
+                  {doneJobs.length > DONE_SHOWN && (
+                    <button type="button" onClick={() => setShowAll((v) => !v)} className="nl-link mt-3">
+                      {showAll ? "Show fewer" : `Show all ${doneJobs.length} finished`}
+                    </button>
+                  )}
+                </>
+              )}
+            </FloatCard>
+
+            <div className="nl-ct-two">
+              <FloatCard>
+                <FloatCardHead title="Credentials" />
+                <div className="space-y-3 text-[13px]">
+                  {creds.length === 0 ? (
+                    <p className="m-0 text-muted">No registration numbers on file.{canEdit(c) ? " Add them with Edit." : ""}</p>
+                  ) : creds.map((x) => (
+                    <div key={x.key} className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="m-0 text-[12px] text-muted">{x.label}</p>
+                        <p className="figures m-0 mt-0.5 break-words text-[14px]">{x.value}</p>
+                      </div>
+                      {x.register && <a href={x.register.url} target="_blank" rel="noopener noreferrer" className="nl-link shrink-0 text-[12px]">Check on {x.register.name}</a>}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 border-t border-[var(--line)] pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="m-0 text-[12px] text-muted">Public liability</p>
+                    {pl && pl.state !== "none" && <span className={`text-[12.5px] ${tone(pl.tone)}`}>{pl.state === "expired" ? "Expired" : pl.state === "soon" ? "Expires soon" : pl.state === "ok" ? "In date" : "No expiry given"}</span>}
+                  </div>
+                  {pl?.state === "none" ? (
+                    <p className="m-0 mt-1.5 text-[13px] text-muted">No insurance on file.{canEdit(c) ? " Add it with Edit." : ""}</p>
+                  ) : (
+                    <dl className="m-0 mt-2 grid grid-cols-2 gap-x-4 gap-y-2.5 text-[13px]">
+                      <Line k="Insurer" v={c.publicLiabilityInsurer || "Not given"} />
+                      <Line k="Policy number" v={c.publicLiabilityNumber || "Not given"} />
+                      <Line k="Cover" v={coverWords(c.publicLiabilityCoverPence) || "Not given"} />
+                      <Line k="Expires" v={c.publicLiabilityExpiry ? longDay(c.publicLiabilityExpiry) : "Not given"} hot={pl?.state === "expired" || pl?.state === "soon"} />
+                    </dl>
+                  )}
+                </div>
+              </FloatCard>
+
+              <FloatCard>
+                <FloatCardHead title="How to Reach Them" />
+                <dl className="m-0 grid gap-2.5 text-[13px]">
+                  {([
+                    ["Ask for", c.contact, undefined, false],
+                    ["Phone", c.phone, c.phone ? `tel:${c.phone.replace(/[^\d+]/g, "")}` : undefined, false],
+                    ["Email", c.email, c.email ? `mailto:${c.email}` : undefined, false],
+                    ["Website", siteLabel(c.website), site ?? undefined, true],
+                    ["Address", c.address, undefined, false],
+                  ] as [string, string, string | undefined, boolean][]).map(([k, v, href, ext]) => (
+                    <div key={k} className="min-w-0">
+                      <dt className="text-[12px] text-muted">{k}</dt>
+                      <dd className="m-0 break-words">{!v ? <span className="text-muted">Not given</span> : href ? <a href={href} {...(ext ? { target: "_blank", rel: "noopener noreferrer" } : {})} className="hover:underline">{v}</a> : v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {c.notes && <p className="m-0 mt-3 whitespace-pre-wrap rounded-xl bg-[var(--panel)] px-3 py-2.5 text-[13px] leading-relaxed">{c.notes}</p>}
+                {c.createdBy && <p className="nl-fs-hint mt-3">Added by {c.createdBy}.</p>}
+              </FloatCard>
+            </div>
+
+            <FloatCard>
+              <FloatCardHead title="Booked In" />
+              {upcoming.length === 0 ? (
+                <p className="m-0 text-[13.5px] text-muted">Nothing booked with them.</p>
+              ) : (
+                <ul className="nl-fs-list">
+                  {upcoming.map((o) => (
+                    <li key={o.id}>
+                      <a href={jobHref(o.id)} className="flex items-center gap-3 py-2.5 hover:opacity-80">
+                        <DateChip iso={o.scheduledAt!} />
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13.5px]">{o.propertyName}</span>
+                          <span className="block truncate text-[12px] text-muted">#{o.ref} · {o.title} · {hhmm(o.scheduledAt!)}</span>
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </FloatCard>
+          </>
+        )}
+      </FloatSheet>
+    );
+  }
 
   return (
     <div className="so-root fixed inset-0 z-[130]" data-shown={shown}>
@@ -298,10 +475,10 @@ function Figure({ icon, label, value, sub, hot = false }: { icon: string; label:
   );
 }
 
-function JobList({ title, rows }: { title: string; rows: WorksOrder[] }) {
+function JobList({ title, rows, plain = false }: { title: string; rows: WorksOrder[]; /** Status as a plain word rather than a pill (the new look). */ plain?: boolean }) {
   return (
     <div className="mt-4">
-      <p className={eyebrow}>{title}</p>
+      <p className={plain ? "m-0 text-[12px] font-medium text-muted" : eyebrow}>{title}</p>
       <ul className="mt-1.5 divide-y divide-line/50">
         {rows.map((o) => {
           const amount = o.invoicePence != null ? pounds(o.invoicePence) : o.quotePence != null ? `${pounds(o.quotePence)} quoted` : "";
@@ -313,7 +490,7 @@ function JobList({ title, rows }: { title: string; rows: WorksOrder[] }) {
                   <span className="block truncate text-[11px] text-muted">#{o.ref} · {o.title}</span>
                 </span>
                 <span className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
-                  <Pill tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Pill>
+                  {plain ? <span className={`text-[12.5px] ${STATUS_TONE[o.status] === "warn" ? "text-[var(--warning)]" : STATUS_TONE[o.status] === "good" ? "text-[var(--sage-ink)]" : "text-ink"}`}>{STATUS_LABEL[o.status]}</span> : <Pill tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Pill>}
                   <span className="whitespace-nowrap text-[11px] text-muted">{whenOf(o)}</span>
                 </span>
                 <span className={`figures col-span-2 text-[13px] sm:col-span-1 sm:min-w-[84px] sm:text-right ${amount ? "" : "hidden sm:block"}`}>{amount}</span>

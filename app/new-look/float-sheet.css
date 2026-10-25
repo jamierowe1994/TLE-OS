@@ -1,0 +1,173 @@
+/* New look: the floating boxes (components/new-look/FloatSheet). Prefix nl-fs-.
+   James, 25 Oct 2026, from the Contractors design: a darkened, blurred page
+   and every piece its own floating box - the header, the question, each
+   choice, the footer - rather than one big panel. Written to be used by any
+   screen. The boxes are the page colour, so they turn with the dark theme;
+   the dark behind them stays dark in both. */
+
+[data-look="new"].nl-fs-wrap { position: fixed; inset: 0; z-index: 150; }
+[data-look="new"] .nl-fs-scrim {
+  position: absolute; inset: 0; background: rgba(20, 20, 19, 0.5);
+  -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+  opacity: 0; transition: opacity 0.25s ease;
+}
+[data-look="new"].nl-fs-wrap[data-shown="true"] .nl-fs-scrim { opacity: 1; }
+[data-look="new"].nl-fs-wrap.is-instant .nl-fs-scrim { transition: none; opacity: 1; }
+[data-look="new"] .nl-fs {
+  position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; align-items: center;
+  padding: calc(7vh + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  opacity: 0; transition: opacity 0.25s ease;
+}
+[data-look="new"].nl-fs-wrap[data-shown="true"] .nl-fs { opacity: 1; }
+[data-look="new"].nl-fs-wrap:not([data-shown="true"]) .nl-fs { pointer-events: none; }
+[data-look="new"] .nl-fs-stack { width: min(640px, 100%); flex: none; display: flex; flex-direction: column; }
+[data-look="new"] .nl-fs.is-lg .nl-fs-stack { width: min(880px, 100%); }
+
+/* The boxes float in, one after another. `backwards` so a finished one holds no
+   transform: a field's pop-up list then sits over the box below it. */
+[data-look="new"] .nl-fs-stack.is-anim > *,
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > * { animation: nl-fs-float 0.5s var(--nl-ease) backwards; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > * { animation: nl-fs-float 0.5s var(--nl-ease) backwards; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > :nth-child(1) { animation-delay: 0.1s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > :nth-child(2) { animation-delay: 0.14s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > :nth-child(3) { animation-delay: 0.18s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > :nth-child(n + 4) { animation-delay: 0.22s; }
+[data-look="new"] .nl-fs-stack.is-anim > :nth-child(2) { animation-delay: 0.04s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > :nth-child(1) { animation-delay: 0.06s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > :nth-child(2) { animation-delay: 0.1s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > :nth-child(3) { animation-delay: 0.14s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > :nth-child(4) { animation-delay: 0.18s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > :nth-child(n + 5) { animation-delay: 0.22s; }
+@keyframes nl-fs-float { from { opacity: 0; transform: translateY(14px) scale(0.985); } }
+
+/* The header box. */
+[data-look="new"] .nl-fs-head {
+  display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 20px;
+  background: var(--page); color: var(--ink); border-radius: 18px; box-shadow: 0 20px 40px -24px rgba(0, 0, 0, 0.5);
+}
+[data-look="new"] .nl-fs-head > .nl-fs-ib:first-child { margin-left: -8px; }
+[data-look="new"] .nl-fs-title { flex: 1; min-width: 0; margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 18px; line-height: 24px; letter-spacing: 0; }
+[data-look="new"] .nl-fs-stepn { font-family: var(--nl-mono); font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+[data-look="new"] .nl-fs-ib {
+  display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--muted); cursor: pointer; transition: color 0.2s, border-color 0.2s;
+}
+[data-look="new"] .nl-fs-ib:hover { color: var(--ink); border-color: var(--ink); }
+[data-look="new"] .nl-fs-ib:focus-visible, [data-look="new"] .nl-fs-choice:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* The progress line, on the dark. */
+[data-look="new"] .nl-fs-prog { display: grid; grid-auto-flow: column; gap: 4px; padding: 0 4px; margin-top: 10px; }
+[data-look="new"] .nl-fs-prog i { display: block; height: 3px; border-radius: 3px; background: rgba(255, 255, 255, 0.22); transition: background-color 0.3s; }
+[data-look="new"] .nl-fs-prog i.is-past { background: rgba(255, 255, 255, 0.85); }
+[data-look="new"] .nl-fs-prog i.is-on { background: var(--primary); }
+
+/* The body: the question in white, then the boxes. */
+[data-look="new"] .nl-fs-body { display: grid; gap: 12px; align-content: start; padding-top: 26px; }
+[data-look="new"] .nl-fs-q { margin: 0; color: #fff; font-family: var(--nl-serif); font-size: 26px; line-height: 1.3; }
+[data-look="new"] .nl-fs-lede { margin: -6px 0 6px; color: rgba(255, 255, 255, 0.72); font-size: 13.5px; line-height: 20px; }
+[data-look="new"] .nl-fs-lb { margin: 6px 0 -4px; color: rgba(255, 255, 255, 0.85); font-size: 12.5px; font-weight: 500; }
+[data-look="new"] .nl-fs-say { margin: 0; color: rgba(255, 255, 255, 0.85); font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-fs-say.is-err { color: #f5b49c; }
+
+/* A box of content. */
+[data-look="new"] .nl-fs-card {
+  position: relative; min-width: 0; background: var(--page); color: var(--ink); border-radius: 18px; padding: 16px 18px;
+  box-shadow: 0 16px 32px -24px rgba(0, 0, 0, 0.55); font-size: 14px; line-height: 20px;
+}
+[data-look="new"] .nl-fs-card.is-tight { padding: 6px 18px; }
+[data-look="new"] .nl-fs-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+[data-look="new"] .nl-fs-card-head h3 { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 16px; line-height: 22px; letter-spacing: 0; }
+[data-look="new"] .nl-fs-card-head span { font-size: 12.5px; color: var(--muted); }
+[data-look="new"] .nl-fs-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-look="new"] .nl-fs-grid > .is-wide { grid-column: 1 / -1; }
+[data-look="new"] .nl-fs-cols { display: grid; gap: 12px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-look="new"] .nl-fs-cols > .is-wide { grid-column: 1 / -1; }
+
+/* Fields inside a box. */
+[data-look="new"] .nl-fs-label { display: block; font-size: 12.5px; line-height: 18px; font-weight: 500; color: var(--muted); }
+[data-look="new"] .nl-fs-label em { font-style: normal; font-weight: 400; color: var(--faint); }
+[data-look="new"] .nl-fs-input {
+  width: 100%; font: inherit; font-size: 14px; line-height: 20px; color: var(--ink); background: var(--page);
+  border: 1px solid var(--line-strong); border-radius: 12px; padding: 10px 12px; outline: 0; transition: border-color 0.2s, box-shadow 0.2s;
+}
+[data-look="new"] textarea.nl-fs-input { font-family: var(--nl-serif); font-size: 16px; line-height: 1.5; resize: vertical; }
+[data-look="new"] .nl-fs-input:focus { border-color: var(--ink); box-shadow: 0 0 0 2px var(--primary); }
+[data-look="new"] .nl-fs-input::placeholder { color: var(--faint); }
+[data-look="new"] .nl-fs-hint { margin: 4px 0 0; font-size: 12px; line-height: 17px; color: var(--muted); }
+[data-look="new"] .nl-fs-err { margin: 0; font-size: 13px; line-height: 19px; color: var(--accent-dark); }
+[data-look="new"] .nl-fs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+[data-look="new"] .nl-fs-row b { display: block; font-weight: 500; }
+[data-look="new"] .nl-fs-row small { display: block; font-size: 12.5px; color: var(--muted); }
+[data-look="new"] .nl-fs-tick-row { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+[data-look="new"] .nl-fs-tick-row input { margin-top: 3px; width: 16px; height: 16px; flex: none; accent-color: var(--accent-dark); }
+[data-look="new"] .nl-fs-tick-row b { display: block; font-weight: 500; }
+[data-look="new"] .nl-fs-card.nl-fs-tick-row.is-on { box-shadow: 0 0 0 2px var(--primary), 0 16px 32px -24px rgba(0, 0, 0, 0.55); }
+[data-look="new"] .nl-fs-tick-row small { display: block; margin-top: 2px; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-fs-list { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-fs-list > li + li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-fs-sum { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 10px 14px; margin: 0; font-size: 13.5px; line-height: 19px; }
+[data-look="new"] .nl-fs-sum dt { color: var(--muted); }
+[data-look="new"] .nl-fs-sum dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+[data-look="new"] .nl-fs-sum button { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; justify-self: end; }
+[data-look="new"] .nl-fs-sum button:hover { color: var(--ink); }
+
+/* Each choice its own box. */
+[data-look="new"] .nl-fs-choices { display: grid; gap: 10px; }
+[data-look="new"] .nl-fs-choices.is-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-look="new"] .nl-fs-choices.is-row { display: flex; flex-wrap: wrap; }
+[data-look="new"] .nl-fs-choice {
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
+  background: var(--page); border: 0; border-radius: 16px; padding: 14px 16px; box-shadow: 0 16px 32px -24px rgba(0, 0, 0, 0.55);
+  transition: transform 0.25s var(--nl-ease), box-shadow 0.2s;
+}
+[data-look="new"] .nl-fs-choice.has-icon { grid-template-columns: 34px minmax(0, 1fr) auto; }
+[data-look="new"] .nl-fs-choice:hover:not(:disabled) { transform: translateY(-1px); }
+[data-look="new"] .nl-fs-choice.is-on { box-shadow: 0 0 0 2px var(--primary), 0 16px 32px -24px rgba(0, 0, 0, 0.55); }
+[data-look="new"] .nl-fs-choice:disabled { opacity: 0.6; cursor: not-allowed; }
+[data-look="new"] .nl-fs-choice-i:has(> span) { background: transparent; }
+[data-look="new"] .nl-fs-choice-i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--panel); color: var(--ink); }
+[data-look="new"] .nl-fs-choice-t { min-width: 0; display: grid; gap: 2px; }
+[data-look="new"] .nl-fs-choice-t b { font-weight: 600; font-size: 15px; line-height: 21px; }
+[data-look="new"] .nl-fs-choice-t span { font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-fs-choice-a { color: var(--ink); font-size: 12.5px; white-space: nowrap; }
+[data-look="new"] .nl-fs-choices.is-row .nl-fs-choice { padding: 9px 13px; border-radius: 12px; grid-template-columns: auto; text-align: center; }
+[data-look="new"] .nl-fs-choices.is-row .nl-fs-choice-t b { font-size: 13.5px; font-weight: 500; }
+[data-look="new"] .nl-fs-choices.is-row .nl-fs-choice-t span { font-size: 11.5px; line-height: 15px; }
+[data-look="new"] .nl-fs-choices.is-row .nl-fs-choice-a { display: none; }
+
+/* The footer box, held to the bottom while the boxes scroll. */
+[data-look="new"] .nl-fs-foot {
+  position: sticky; bottom: 0; z-index: 2; margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  padding: 10px 10px 10px 18px; background: var(--page); color: var(--ink); border-radius: 16px; box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.6);
+}
+[data-look="new"] .nl-fs-foot-l { min-width: 0; flex: 1 1 160px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-fs-foot-r { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
+[data-look="new"] .nl-fs-ghost { color: var(--muted); padding: 8px 12px; }
+[data-look="new"] .nl-fs-ghost:hover:not(:disabled) { color: var(--ink); background: var(--panel); }
+
+/* Done: a tick and what happens next. */
+[data-look="new"] .nl-fs-done { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 40px 18px; border-radius: 20px; }
+[data-look="new"] .nl-fs-tick { width: 64px; height: 64px; border-radius: 50%; background: var(--sage-deep); color: #fff; display: grid; place-items: center; animation: nl-fs-pop 0.5s var(--nl-ease) backwards; }
+@keyframes nl-fs-pop { from { transform: scale(0.4); opacity: 0; } }
+[data-look="new"] .nl-fs-done b { font-family: var(--font-heading); font-weight: 500; font-size: 22px; line-height: 28px; letter-spacing: 0; }
+[data-look="new"] .nl-fs-done p { margin: 0; color: var(--muted); max-width: 44ch; font-size: 14px; line-height: 21px; }
+
+/* A spinner on the dark or in a box. */
+[data-look="new"] .nl-fs-reading { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  [data-look="new"] .nl-fs { padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); }
+  [data-look="new"] .nl-fs-stack, [data-look="new"] .nl-fs.is-lg .nl-fs-stack { width: 100%; }
+  [data-look="new"] .nl-fs-q { font-size: 22px; }
+  [data-look="new"] .nl-fs-grid, [data-look="new"] .nl-fs-cols, [data-look="new"] .nl-fs-choices.is-2 { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-fs-sum { grid-template-columns: minmax(0, 1fr) auto; }
+  [data-look="new"] .nl-fs-sum dt { grid-column: 1 / -1; margin-bottom: -8px; }
+  [data-look="new"] .nl-fs-foot { padding: 10px; }
+  [data-look="new"] .nl-fs-foot-r { width: 100%; }
+  [data-look="new"] .nl-fs-foot-r > .nl-btn--primary { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-fs-stack.is-anim > *, [data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > *, [data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > *, [data-look="new"] .nl-fs-tick { animation: none; }
+  [data-look="new"] .nl-fs, [data-look="new"] .nl-fs-scrim { transition: none; }
+}
