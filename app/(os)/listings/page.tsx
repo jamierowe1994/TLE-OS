@@ -36,6 +36,8 @@ import { Badge, Ico, Mast, Tabs } from "@/components/new-look/Parts";
  */
 
 type SampleListing = {
+  /** "Flat", "Terraced house"... from the book; picks the drawing when there's no photo. */
+  propertyType?: string | null;
   /** Every photo REX holds, in its own order. Absent on the static fallback,
    *  which predates the OS carrying more than one. */
   images?: string[];
@@ -869,14 +871,7 @@ export default function Listings() {
         : !l.archived && !l.letAgreed && !l.offline && (l.taken ?? l.fellThrough)
           ? `${(l.taken ?? l.fellThrough)!.why}${l.taken ? ". Take the advert down." : ". Relist it if it's back on the market."}`
           : null;
-    const photo = (l: SampleListing, cls: string) =>
-      l.image ? (
-        <PropertyPhoto src={l.image} className={cls} />
-      ) : (
-        <span className="absolute inset-0 grid place-items-center text-muted" aria-hidden>
-          <svg width="56" height="44" viewBox="0 0 56 44" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><path d="M4 42h48M10 42V20L28 6l18 14v22M23 42V30h10v12" /></svg>
-        </span>
-      );
+    const photo = (l: SampleListing, cls: string) => <PropertyPhoto src={l.image} seed={l.id} kind={`${l.propertyType ?? ""} ${l.name}`} className={cls} />;
     return (
       <div data-look="new" className="nl-page nl-rise">
         <Mast

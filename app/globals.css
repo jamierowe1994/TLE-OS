@@ -1714,3 +1714,7 @@ body:has(.fixed.inset-0.flex.items-center.justify-center, .fixed.inset-0.flex.it
   cursor: grab;
 }
 .rent-range input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent-dark); outline-offset: 2px; }
+
+/* PropertyPhoto with no photo (25 Oct 2026): a palette tile with a line drawing, centred at any size. */
+.pp-tile { display: grid; place-items: center; overflow: hidden; }
+.pp-tile > svg { width: 42%; max-width: 104px; min-width: 22px; height: auto; }
