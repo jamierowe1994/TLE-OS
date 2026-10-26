@@ -584,10 +584,16 @@
 .nl-saverow-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); animation: steve-dot 1.4s ease-in-out infinite; flex: none; }
 
 /* ── Overview bento cells ───────────────────────────────────────────────── */
-.nl-clamp { position: relative; max-height: 104px; overflow: hidden; transition: max-height .6s var(--nl-ease); font-family: var(--nl-serif); font-size: 17px; line-height: 26px; white-space: pre-line; }
-.nl-clamp::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(transparent, var(--card)); transition: opacity .4s; }
-.nl-clamp.is-open { max-height: 2000px; }
-.nl-clamp.is-open::after, .nl-clamp.is-short::after { opacity: 0; }
+/* Text that fills its box (FillText, 26 Oct 2026): the box takes the row's
+   height, the text runs to its bottom in whole lines, View more only when it
+   would run off. On a phone the cell has no partner, so it keeps 4 lines. */
+.nl-fill { position: relative; flex: 1 1 auto; min-height: 138px; }
+.nl-fill-text { position: absolute; top: 0; left: 0; right: 0; overflow: hidden; font-family: var(--nl-serif); font-size: 17px; line-height: 26px; white-space: pre-line; }
+.nl-fill.is-over .nl-fill-text::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 26px; background: linear-gradient(transparent, var(--card)); }
+.nl-fill-more { position: absolute; left: 0; bottom: 0; }
+.nl-fill.is-open { min-height: 0; }
+.nl-fill.is-open .nl-fill-text { position: static; }
+.nl-fill.is-open .nl-fill-more { position: static; display: inline-block; margin-top: 12px; }
 .nl-desc-edit { font: inherit; font-family: var(--nl-serif); font-size: 17px; line-height: 26px; width: 100%; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--page); color: var(--ink); resize: vertical; outline: 0; }
 .nl-desc-edit:focus { border-color: var(--sage-deep); }
 .nl-features { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

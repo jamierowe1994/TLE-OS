@@ -9,7 +9,7 @@ const POSTCODE = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/i;
 const UNIT_WORDS = /^(flat|room|apartment|unit|apt|studio)$/;
 const FILLER = /^(flat|room|apartment|unit|apt|studio|floor|the|ground|first|second|third|top|basement|lower|upper|gff|fff|house|rear|front)$/;
 const DESCRIPTOR = /^(basement|ground|first|second|third|top|lower|upper|gff|fff|rear|front|garden|penthouse|annexe?)$/;
-const STREET_SUFFIX = /^(road|street|avenue|lane|close|drive|way|place|terrace|gardens|court|crescent|square|grove|walk|park|hill|mews|row|green|view|rise|wynd|quay|parade|vale|gate|loan|brae)$/;
+export const STREET_SUFFIX = /^(road|street|avenue|lane|close|drive|way|place|terrace|gardens|court|crescent|square|grove|walk|park|hill|mews|row|green|view|rise|wynd|quay|parade|vale|gate|loan|brae)$/;
 
 export function postcodeOf(s: string): string | null {
   const m = String(s).match(POSTCODE);

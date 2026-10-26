@@ -19,29 +19,8 @@
   font-family: var(--font-heading); font-weight: 700; font-size: 52px; line-height: 58px; letter-spacing: -1.2px;
   color: var(--ink); margin: 0 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 16px; text-wrap: balance;
 }
-[data-look="new"] .nl-dash-face { flex: none; }
 [data-look="new"] .nl-dash-says { font-size: 14px; line-height: 21px; color: var(--muted); margin: 0 0 30px; animation: nl-in 0.8s var(--nl-ease) 0.3s both; }
 [data-look="new"] .nl-dash-says b { color: var(--ink); font-weight: 600; }
-
-[data-look="new"] .nl-dash-ask {
-  text-align: left; background: var(--card); border: 1px solid var(--line-strong); border-radius: 24px;
-  padding: 16px 14px 10px 20px; transition: border-color 0.3s;
-}
-[data-look="new"] .nl-dash-ask:focus-within { border-color: var(--faint); }
-[data-look="new"] .nl-dash-ask textarea {
-  display: block; width: 100%; min-height: 56px; resize: none; border: 0; outline: 0; background: transparent;
-  font-family: var(--nl-serif); font-size: 19px; line-height: 28px; color: var(--ink);
-}
-[data-look="new"] .nl-dash-ask textarea::placeholder { color: var(--faint); }
-[data-look="new"] .nl-dash-ask-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-[data-look="new"] .nl-dash-ask-who { font-size: 12px; color: var(--faint); margin-right: 6px; min-width: 0; }
-[data-look="new"] .nl-dash-ask-send {
-  width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 0; border-radius: 10px; cursor: pointer;
-  background: var(--primary); color: var(--on-primary); transition: background-color 0.3s var(--nl-ease), color 0.3s;
-}
-[data-look="new"] .nl-dash-ask-send:hover:not(:disabled) { background: var(--coral-hover); color: var(--on-primary); }
-[data-look="new"] .nl-dash-ask-send.is-idle { background: var(--box); color: var(--faint); cursor: default; }
-[data-look="new"] .nl-dash-ask-send:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* the agent's own quick links, where the design has its sample questions */
 [data-look="new"] .nl-dash-quick { margin-top: 16px; }
@@ -383,10 +362,8 @@
 }
 @media (max-width: 760px) {
   [data-look="new"] .nl-dash-hello { margin: 24px auto 48px; }
-  [data-look="new"] .nl-dash-title { flex-direction: column; gap: 6px; font-size: 34px; line-height: 40px; letter-spacing: -0.8px; }
+  [data-look="new"] .nl-dash-title { font-size: 34px; line-height: 40px; letter-spacing: -0.8px; }
   [data-look="new"] .nl-dash-says { margin-bottom: 22px; }
-  [data-look="new"] .nl-dash-ask { padding: 14px 12px 10px 16px; border-radius: 20px; }
-  [data-look="new"] .nl-dash-ask textarea { font-size: 17px; line-height: 25px; }
   [data-look="new"] .nl-dash-bar-h { flex-direction: column; align-items: stretch; margin-top: 8px; }
   [data-look="new"] .nl-dash-seg { align-self: flex-start; }
   [data-look="new"] .nl-dash-stat { padding: 16px 14px 14px; }
@@ -508,3 +485,69 @@
 [data-look="new"] .nl-pm-row .nl-dash-bar-h { margin-bottom: 14px; }
 [data-look="new"] .nl-pm-cards { margin-top: 34px; }
 [data-look="new"] .nl-pm .nl-dash-stat .nl-dash-strip { margin-top: 18px; }
+
+/* ── Ask Steve on the page (components/new-look/dashboard/DashChat, 25 Oct 2026) ──
+   One white pill with a faint grey edge and a coral round send. Asking drops
+   the figures away and the page becomes the conversation, the pill risen to
+   the foot. Calm motion: fades and short drifts, nothing bouncing. */
+[data-look="new"] .nl-dash-title { display: block; }
+[data-look="new"] .nl-dash-askwrap { max-width: 640px; margin: 0 auto; }
+[data-look="new"] .nl-dash-pillbox { display: flex; align-items: center; gap: 8px; height: 58px; padding: 0 8px 0 24px; border-radius: 999px; background: #fff; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(20, 20, 19, .04); transition: border-color .25s, box-shadow .25s; }
+[data-look="new"] .nl-dash-pillbox:focus-within { border-color: var(--line-strong); box-shadow: 0 6px 22px -12px rgba(20, 20, 19, .22); }
+[data-look="new"] .nl-dash-pillbox input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font-family: var(--nl-serif); font-size: 18px; color: var(--ink); }
+[data-look="new"] .nl-dash-pillbox input::placeholder { color: var(--faint); }
+[data-look="new"] .nl-dash-pillsend { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 50%; background: var(--primary); color: #fff; cursor: pointer; transition: background-color .25s, opacity .25s, transform .2s; }
+[data-look="new"] .nl-dash-pillsend:hover:not(:disabled) { background: var(--coral-hover); }
+[data-look="new"] .nl-dash-pillsend:active:not(:disabled) { transform: scale(.94); }
+[data-look="new"] .nl-dash-pillsend:disabled { opacity: .45; cursor: default; }
+[data-look="new"] .nl-dash-pillsend:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Leaving: the greeting lifts and fades, the figures sink and fade. */
+[data-look="new"].nl-dash.is-asking .nl-dash-hello { animation: nl-dash-lift .42s cubic-bezier(.4, 0, .2, 1) both; }
+[data-look="new"].nl-dash.is-asking .nl-dash-rest { animation: nl-dash-sink .42s cubic-bezier(.4, 0, .2, 1) both; pointer-events: none; }
+@keyframes nl-dash-lift { to { opacity: 0; transform: translateY(-14px); } }
+@keyframes nl-dash-sink { to { opacity: 0; transform: translateY(28px); } }
+/* And back: the figures settle in again. */
+[data-look="new"].nl-dash:not(.is-asking) .nl-dash-rest { animation: nl-in .5s var(--nl-ease) both; }
+
+/* The conversation. */
+[data-look="new"] .nl-dash-chat { max-width: 720px; margin: 0 auto; min-height: calc(100vh - 120px); display: flex; flex-direction: column; }
+[data-look="new"] .nl-dash-chat-top { display: flex; justify-content: flex-start; padding: 8px 0 28px; animation: nl-in .45s var(--nl-ease) both; }
+[data-look="new"] .nl-dash-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 22px; flex: 1; }
+[data-look="new"] .nl-dash-line { animation: nl-dash-line-in .45s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes nl-dash-line-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+[data-look="new"] .nl-dash-line.is-me { align-self: flex-end; max-width: 82%; }
+[data-look="new"] .nl-dash-line.is-me p { margin: 0; padding: 12px 18px; border-radius: 22px 22px 6px 22px; background: var(--box); font-size: 15.5px; line-height: 23px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-look="new"] .nl-dash-line.is-steve { align-self: stretch; }
+[data-look="new"] .nl-dash-line-who { display: flex; width: max-content; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+[data-look="new"] .nl-dash-line-who i { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f6b39a, var(--primary) 60%, #c9603f); box-shadow: 0 0 10px rgba(235, 140, 109, .45); }
+[data-look="new"] .nl-dash-line-text { font-size: 15.5px; line-height: 25px; color: var(--ink); }
+[data-look="new"] .nl-dash-line-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+[data-look="new"] .nl-dash-typing { display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 14px; border-radius: 999px; background: var(--box); }
+[data-look="new"] .nl-dash-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: nl-dash-dot 1.2s ease-in-out infinite; }
+[data-look="new"] .nl-dash-typing i:nth-child(2) { animation-delay: .15s; }
+[data-look="new"] .nl-dash-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes nl-dash-dot { 0%, 100% { opacity: .35; transform: none; } 50% { opacity: 1; transform: translateY(-3px); } }
+
+/* The box at the foot, risen from below. */
+[data-look="new"] .nl-dash-dock { position: sticky; bottom: 0; z-index: 3; margin-top: 28px; padding: 18px 0 24px; background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--page) 38%); animation: nl-dash-dock-in .5s cubic-bezier(.2, .8, .2, 1) .12s both; }
+@keyframes nl-dash-dock-in { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+[data-look="new"] .nl-dash-pillbox.is-docked { box-shadow: 0 10px 30px -16px rgba(20, 20, 19, .3); }
+
+@media (max-width: 640px) {
+  [data-look="new"] .nl-dash-pillbox { height: 52px; padding-left: 18px; }
+  [data-look="new"] .nl-dash-pillbox input { font-size: 16px; }
+  [data-look="new"] .nl-dash-pillsend { width: 38px; height: 38px; }
+  [data-look="new"] .nl-dash-chat { min-height: calc(100vh - 150px); }
+  [data-look="new"] .nl-dash-line.is-me { max-width: 90%; }
+  [data-look="new"] .nl-dash-dock { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  /* Clear of Steve's own button in the corner, so it never sits on the send. */
+  [data-look="new"] .nl-dash-pillbox.is-docked { margin-right: 80px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"].nl-dash.is-asking .nl-dash-hello, [data-look="new"].nl-dash.is-asking .nl-dash-rest, [data-look="new"] .nl-dash-line, [data-look="new"] .nl-dash-dock, [data-look="new"] .nl-dash-chat-top { animation-duration: .01s; }
+  [data-look="new"] .nl-dash-typing i { animation: none; opacity: .7; }
+}
+/* His words as text on the page, not in the panel's grey bubble (AssistantSays). */
+[data-look="new"] .nl-dash-line-text > div { margin: 0; padding: 0; background: none; border-radius: 0; }
+[data-look="new"] .nl-dash-line-text p { font-size: 15.5px; line-height: 25px; color: var(--ink); }
