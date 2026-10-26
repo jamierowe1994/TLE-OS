@@ -39,8 +39,10 @@ import {
   postBodyFor,
   postSubjectFor,
   subjectFor,
+  APPRAISAL_KICKERS,
   type AppraisalInvite,
 } from "@/lib/appraisal-email";
+import { esignRemindWording, ESIGN_REMIND_KICKER } from "@/lib/esign-remind";
 import { renderPlain } from "@/lib/campaign-mail";
 import { homeCardsHtml } from "@/lib/home-cards";
 import {
@@ -639,7 +641,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     summary:
       "Short, sent the moment it is booked, however it was booked. The date, time, address and agent on their own lines in bold, and the calendar invite attached. One of only two emails before the visit: this, and the pre-presentation the day before.",
     render: () =>
-      renderPlain(confirmSubjectFor(SAMPLE_INVITE), confirmBodyFor(SAMPLE_INVITE)),
+      renderPlain(confirmSubjectFor(SAMPLE_INVITE), confirmBodyFor(SAMPLE_INVITE), { landlord: true, kicker: APPRAISAL_KICKERS.confirm }),
   },
   {
     id: "appraisal-pre",
@@ -651,7 +653,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     to: "The landlord",
     summary:
       "Soon after booking. A button straight to their pre-presentation - who is coming, what happens on the day, how long it takes - which opens without an account. Nothing to set up until after the valuation.",
-    render: () => renderPlain(subjectFor(SAMPLE_INVITE), bodyFor(SAMPLE_INVITE)),
+    render: () => renderPlain(subjectFor(SAMPLE_INVITE), bodyFor(SAMPLE_INVITE), { landlord: true, kicker: APPRAISAL_KICKERS.pre }),
   },
   {
     /**
@@ -700,7 +702,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
         availableFrom: null,
         summary: "Wants it on the market before Christmas. Weighing us against one other agent.",
         fileUrl: `${SITE}/landlord/enter?token=example`,
-      })),
+      }), { landlord: true, kicker: APPRAISAL_KICKERS.post }),
   },
 
   {
@@ -890,21 +892,16 @@ export const TLE_EMAILS: CatalogEntry[] = [
     to: "The landlord who hasn't signed",
     summary:
       "A nudge, not a resend. REX exposes no resend and no signing URL, so this points at the DocuSign email already in their inbox and offers to send it again.",
-    render: () =>
-      renderPlain(
-        "Your terms of business - 8 Recreation Terrace, Nottingham NG2 3AB",
-        `Hi Raj,
-
-Just a quick note - the terms of business for 8 Recreation Terrace, Nottingham NG2 3AB are still waiting on your signature.
-
-They went out on 1 October from DocuSign, so the email will be in your inbox under "The Letting Experts". It's worth a look in your junk folder too; that is where it usually is.
-
-If you can't find it, reply to this and I'll send it straight out again. And if there's anything in it you'd like to talk through first, ring me on 0115 123 4567 - that's often quicker than email.
-
-Kind regards,
-Sam Whitaker
-The Letting Experts`
-      ),
+    render: () => {
+      const m = esignRemindWording({
+        landlordFirst: "Raj",
+        address: "8 Recreation Terrace, Nottingham NG2 3AB",
+        sentAt: "2026-10-01T10:00:00Z",
+        agentName: "Sam Whitaker",
+        agentPhone: "0115 123 4567",
+      });
+      return renderPlain(m.subject, m.text, { landlord: true, kicker: ESIGN_REMIND_KICKER });
+    },
   },
 
   /* ── The two doorways: an appointment becomes an account ──────────────────

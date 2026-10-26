@@ -5,7 +5,7 @@ import { sendAsAgent } from "@/lib/send-as-agent";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { renderPlain } from "@/lib/campaign-mail";
-import { esignRemindWording as wording } from "@/lib/esign-remind";
+import { esignRemindWording as wording, ESIGN_REMIND_KICKER } from "@/lib/esign-remind";
 
 /**
  * Chasing a set of terms that hasn't come back.
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
        (lib/send-as-agent). It went through REX's mailer until 16 Sep, which
        needed a REX contact id and told the agent to "open them in REX first"
        when there wasn't one; the timeline is kept by the drop-box copy. */
-    const mail = renderPlain(mailText.subject, mailText.text);
+    const mail = renderPlain(mailText.subject, mailText.text, { landlord: true, kicker: ESIGN_REMIND_KICKER });
     const sent = await sendAsAgent({
       me,
       to,

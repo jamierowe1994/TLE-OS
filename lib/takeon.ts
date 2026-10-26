@@ -204,7 +204,8 @@ export async function draftTakeOnConfirmation(input: { ma: MarketAppraisal; me: 
     to: to.includes("@") ? to : null,
     toName: ma.landlord,
     subject,
-    html: renderPlain(subject, text).html,
+    /* To the landlord: their letterhead (26 Oct 2026). */
+    html: renderPlain(subject, text, { landlord: true, kicker: "Photographs" }).html,
     blocked: to.includes("@") ? undefined : "The landlord has no email address on the file, so this cannot go.",
     alreadySent: prev && isRepeat(prev, startsAt) ? { at: prev.sentAt, to: prev.to, subject: prev.subject } : undefined,
     attachment: null,

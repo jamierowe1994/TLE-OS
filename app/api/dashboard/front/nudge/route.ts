@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { NudgeRefused, sendContractNudge } from "@/lib/contract-nudge";
 import { renderPlain } from "@/lib/campaign-mail";
-import { esignRemindWording } from "@/lib/esign-remind";
+import { esignRemindWording, ESIGN_REMIND_KICKER } from "@/lib/esign-remind";
 import { Say, frontCtx, termInScope } from "@/lib/front-dash-reads";
 import { publicError } from "@/lib/public-error";
 import { publicOrigin } from "@/lib/origin";
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       agentName: me.name,
       agentPhone: "0161 883 2525",
     });
-    const mail = renderPlain(text.subject, text.text);
+    const mail = renderPlain(text.subject, text.text, { landlord: true, kicker: ESIGN_REMIND_KICKER });
     const sent = await sendAsAgent({ me, to: landlord.email, toName: landlord.name || undefined, subject: mail.subject, html: mail.html });
     if (!sent.sent) return no(sent.detail, sent.reason === "no_address" ? 400 : 502);
     return NextResponse.json({ ok: true, to: landlord.name || "the landlord" });
