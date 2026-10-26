@@ -3,12 +3,16 @@ import { hasDb, q } from "@/lib/db";
 import { getOrder, logEvent } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 import { agentFor } from "@/lib/works-agent";
+import { runContractorChases } from "@/lib/works-chase";
 
 /**
  * The day after a booked visit, the contractor gets "all done?" with the
  * page to mark it done and drop in photos and the invoice. Once per job.
+ *
+ * And the contractor reminders that have come due (lib/works-chase, Sean
+ * McMahon, 26 Oct 2026), on this same hourly tick rather than a cron of their own.
  */
-export async function worksSweep(): Promise<{ doneRequests: number }> {
+export async function worksSweep(): Promise<{ doneRequests: number; chases?: Awaited<ReturnType<typeof runContractorChases>> | { error: string } }> {
   if (!hasDb()) return { doneRequests: 0 };
   const rows = await q<{ id: string }>(
     `SELECT id FROM os_works_orders
@@ -27,5 +31,6 @@ export async function worksSweep(): Promise<{ doneRequests: number }> {
     await q(`UPDATE os_works_orders SET done_request_at = NOW() WHERE id = $1`, [r.id]);
     if (outcomes.some((e) => e.sent)) sent += 1;
   }
-  return { doneRequests: sent };
+  const chases = await runContractorChases().catch((e) => ({ error: e instanceof Error ? e.message : "failed" }));
+  return { doneRequests: sent, chases };
 }

@@ -1167,6 +1167,63 @@ export const WORKS_CONTRACTOR_DONE_REQUEST = {
   branding: { showSignoff: false },
 } as const;
 
+/**
+ * Chasing a contractor who hasn't come back (Sean McMahon, 26 Oct 2026: "is
+ * there any way I can just touch a button and remind that contractor, in a
+ * polite way?"). Two of them: a polite reminder, then a final one that says
+ * the job goes elsewhere, unpaid, unless they answer within 48 hours. Both
+ * carry the job and their own page, where they give a date or mark it done.
+ * {{sentOn}}, {{followedUp}}, {{chaseLine}}, {{chaseButton}} and {{cancelBy}}
+ * are filled by lib/works-emails.
+ */
+export const WORKS_CONTRACTOR_CHASE = {
+  subject: "Reminder: works order #{{ref}}, {{title}} at {{address}}",
+  preheader: "A quick nudge on a job we sent you.",
+  mode: "blocks",
+  blocks: [
+    H("wch1", "Just Checking In on Job #{{ref}}"),
+    T("wch2", "Hi {{contractorGreeting}},<br><br>We sent you works order #{{ref}} on {{sentOn}}. {{chaseLine}}"),
+    FACTS("wch3", [
+      ["The job", "{{title}}"],
+      ["Address", "{{address}}"],
+      ["Job number", "#{{ref}}"],
+      ["Attend by", "{{dueBy}}"],
+    ]),
+    T("wch4", "<strong>Tenants to arrange access with</strong><br>{{tenantsList}}"),
+    SP("wch5", 8),
+    BTN("wch6", "{{chaseButton}}", "{{contractorLink}}"),
+    SP("wch7", 8),
+    T("wch8", "If you can't take it on, that's fine. Just reply and let us know, so we can place it with someone else."),
+    T("wch9", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}} · {{agentEmail}}"),
+    FOOT("wch10", "You're getting this because you have a job open with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const WORKS_CONTRACTOR_CHASE_FINAL = {
+  subject: "Final reminder: works order #{{ref}}, {{title}} at {{address}}",
+  preheader: "Please come back to us within 48 hours, or we'll have to place this job elsewhere.",
+  mode: "blocks",
+  blocks: [
+    H("wcf1", "Final Reminder: Job #{{ref}}"),
+    T("wcf2", "Hi {{contractorGreeting}},<br><br>We sent you works order #{{ref}} on {{sentOn}}{{followedUp}}. {{chaseLine}}"),
+    T("wcf3", "<strong>Unless you come back to us within the next 48 hours, by {{cancelBy}}, we'll have to cancel this job with you and place it elsewhere. Once it's cancelled, it won't be paid.</strong>"),
+    FACTS("wcf4", [
+      ["The job", "{{title}}"],
+      ["Address", "{{address}}"],
+      ["Job number", "#{{ref}}"],
+      ["Attend by", "{{dueBy}}"],
+    ]),
+    SP("wcf5", 8),
+    BTN("wcf6", "{{chaseButton}}", "{{contractorLink}}"),
+    SP("wcf7", 8),
+    T("wcf8", "A date, marking it done on that page, or a quick reply to say you can't do it is all we need."),
+    T("wcf9", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}} · {{agentEmail}}"),
+    FOOT("wcf10", "You're getting this because you have a job open with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /* To the tenant when it's marked done: are you happy? (step 8) */
 export const WORKS_TENANT_HAPPY = {
   subject: "Was {{title}} sorted?",

@@ -19,6 +19,7 @@ import { homePeople } from "@/lib/home-people";
 import { keyNumbersFor, rexIdOf } from "@/lib/home-keys";
 import { accessLineFor } from "@/lib/viewing-brief";
 import type { JobTenant } from "@/lib/works-orders";
+import { CHASE_GRACE_HOURS } from "@/lib/works-chase-rules";
 
 /**
  * The emails a job sends as it moves: to the contractor, the tenant and the
@@ -361,8 +362,28 @@ async function toAsked(o: WorksOrder, a: QuoteAsk, id: string, base: Record<stri
   return { ...(await send(o, id, c?.email ?? "", vars, me, "contractor")), name: c?.name || a.contractorName };
 }
 
+/**
+ * The words that change with where a chased job is (Sean McMahon, 26 Oct
+ * 2026): no date yet, or a date that has been with nothing back. The
+ * deadline on the final is 48 hours from the moment it goes.
+ */
+function chaseVars(o: WorksOrder, remindedAt: string | null | undefined): Record<string, string> {
+  const short = (v: string) => new Date(v).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
+  const been = !!o.scheduledAt && new Date(o.scheduledAt).getTime() <= Date.now();
+  const sent = o.contractorConfirmedAt || o.contractorContactedAt || o.createdAt;
+  return {
+    sentOn: short(sent),
+    followedUp: remindedAt ? ` and followed up on ${short(remindedAt)}` : "",
+    chaseLine: been
+      ? `It was booked for ${esc(when(o.scheduledAt))}, and we haven't heard whether it's done. If it is, could you mark it done on your page and add the ${o.kind === "planned" ? "certificate" : "invoice"}?`
+      : "We haven't heard back yet. Could you let us know the date you're going?",
+    chaseButton: been ? "Mark it done, or give a new date" : "Give us a date",
+    cancelBy: when(new Date(Date.now() + CHASE_GRACE_HOURS * 3600000).toISOString()),
+  };
+}
+
 /** Which emails a move sets off. Returns every outcome, for the timeline. */
-export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request", me: OsUser, detail: { how?: string; quiet?: boolean } & MoveOut = {}): Promise<SendOutcome[]> {
+export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request" | "chase_reminder" | "chase_final", me: OsUser, detail: { how?: string; quiet?: boolean; remindedAt?: string | null } & MoveOut = {}): Promise<SendOutcome[]> {
   const out: SendOutcome[] = [];
   const vars = await varsFor(o, me);
   const contractor = await contractorOf(o.contractorId);
@@ -498,6 +519,13 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     case "cancel":
       if (contractor) out.push(await send(o, "works-contractor-cancelled", contractor.email, vars, me, "contractor"));
       break;
+    /* Chasing the contractor (lib/works-chase): by hand, or on the dates set. */
+    case "chase_reminder":
+    case "chase_final":
+      out.push(contractor
+        ? await send(o, action === "chase_final" ? "works-contractor-chase-final" : "works-contractor-chase", contractor.email, { ...vars, ...chaseVars(o, detail.remindedAt) }, me, "contractor")
+        : { to: "contractor", sent: false, reason: "the contractor's record could not be found" });
+      break;
     default:
       break;
   }
@@ -514,6 +542,11 @@ export async function previewJobEmail(o: WorksOrder, id: string, me: OsUser, ove
   const c = await contractorOf(o.contractorId);
   const { subject, html } = await renderTleEmailLive(id, vars);
   return { subject, html, to: c?.email ?? "", contractorName: c?.name ?? o.contractorName };
+}
+
+/** A chase email exactly as it would go to the contractor on this job, sent nowhere (lib/works-chase). */
+export async function previewChaseEmail(o: WorksOrder, kind: "reminder" | "final", me: OsUser, remindedAt: string | null): Promise<{ subject: string; html: string; to: string; contractorName: string }> {
+  return previewJobEmail(o, kind === "final" ? "works-contractor-chase-final" : "works-contractor-chase", me, chaseVars(o, remindedAt));
 }
 
 /** One line per outcome, for the job's timeline. */

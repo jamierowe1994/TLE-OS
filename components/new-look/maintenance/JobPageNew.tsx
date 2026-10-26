@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import SaveChip, { SaveScopeProvider, type SaveScope } from "@/components/SaveChip";
 import PhotoLightbox from "@/components/PhotoLightbox";
@@ -14,6 +15,7 @@ import { day, stamp, statusLabel } from "@/components/maintenance/works-ui";
 import { titleCase, type Pop, type TabId, type TileGroup } from "@/components/maintenance/job-page";
 import { JobGroups, JobRecord } from "@/components/new-look/maintenance/JobRecord";
 import { JobSheets } from "@/components/new-look/maintenance/JobSheets";
+import { ChaseBar, ChaseSheet, chaseTile } from "@/components/new-look/maintenance/JobChase";
 
 /**
  * The job page in the new look (lib/new-look "job", James, 25 Oct 2026: "it
@@ -83,6 +85,8 @@ export type JobView = {
   unsent: boolean;
   resendOrder: () => void;
   pickContractor: () => void;
+  /** The job as a chase answered it (components/new-look/maintenance/JobChase). */
+  setJobData: (order: WorksOrder, events: WorksEvent[]) => void;
 };
 
 /** While the job is being read. */
@@ -115,6 +119,22 @@ const WORKING_FILES = "image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,
 export default function JobPageNew(v: JobView) {
   const { o, saves, home, shots, bookFailed, here, picked, stageShown, shownAt, stageCount, shownMeta, popUp, err, busy } = v;
   const cancelled = o.status === "cancelled";
+  /* Chase the contractor (Sean McMahon, 26 Oct 2026): its own sheet, opened
+     from its action, the line on the job, or the bell (?chase=1). */
+  const [chasing, setChasing] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("chase") === "1") setChasing(true);
+  }, []);
+  const onChaseSaved = ({ order, events }: { order: WorksOrder; events: WorksEvent[] }) => v.setJobData(order, events);
+  const chase = chaseTile(o, () => { v.closePop(); setChasing(true); });
+  /* Beside Set the Date: the chase is about the date (or the done) not coming. */
+  const groups = v.groups.map((g) => {
+    if (g.id !== "schedule") return g;
+    const at = g.items.findIndex((t) => t.key === "date");
+    const items = [...g.items];
+    items.splice(at < 0 ? items.length : at + 1, 0, chase);
+    return { ...g, items };
+  });
   const homeHref = home ? `/portfolio/${encodeURIComponent(String(home.listingId))}` : null;
 
   /* Status as plain words: what it is, where it is, how urgent, and late in clay. */
@@ -181,6 +201,7 @@ export default function JobPageNew(v: JobView) {
                   </div>
                 ))}
               </dl>
+              <ChaseBar v={v} onOpen={() => setChasing(true)} onSaved={onChaseSaved} />
             </header>
 
             {/* ── the stage it's on, its question and its choices ─────────── */}
@@ -235,7 +256,7 @@ export default function JobPageNew(v: JobView) {
 
           {/* ── the actions, in their groups ──────────────────────────────── */}
           <aside className="nl-jb-side" aria-label="What you can do on this job">
-            <JobGroups v={v} />
+            <JobGroups v={{ ...v, groups }} />
             <input ref={v.fileRef} type="file" accept={WORKING_FILES} className="hidden" onChange={v.onFile} />
             {err && !popUp && <p className="nl-jb-said is-err" role="alert">{err}</p>}
           </aside>
@@ -243,6 +264,7 @@ export default function JobPageNew(v: JobView) {
       </div>
 
       <JobSheets v={v} />
+      {chasing && !popUp && <ChaseSheet v={v} onClose={() => setChasing(false)} onSaved={onChaseSaved} />}
       {v.lightbox && <PhotoLightbox photos={v.lightbox.photos} start={v.lightbox.start} name={o.title} onClose={() => v.setLightbox(null)} />}
     </SaveScopeProvider>
   );

@@ -7,6 +7,8 @@ import { OTHER as OTHER_DOC } from "@/lib/doc-types";
 import { TEST_STREET } from "@/lib/test-guard";
 import type { BankDetails } from "@/lib/bank";
 import { asksFor, askById, upsertAsks, resendAsk, recordAskQuote, declineAsk, acceptAsk, isLive, type QuoteAsk } from "@/lib/works-quotes";
+import { chaseOf, stopChaseOnMove } from "@/lib/works-chase-store";
+import type { WorksChase } from "@/lib/works-chase-rules";
 export type { QuoteAsk };
 
 /**
@@ -180,6 +182,8 @@ export interface WorksOrder {
   quoteRequestedAt: string | null;
   /** Every contractor asked for that quote, each with their own answer (Sean, 21 Oct 2026). Read by getOrder only; empty on a list. */
   quoteAsks: QuoteAsk[];
+  /** Chasing the contractor for an answer (Sean, 26 Oct 2026). Read by getOrder only; absent on a list. */
+  chase?: WorksChase | null;
   /** The contractor the works order last went to, and their name then. Null before 21 Oct 2026, or before it goes. */
   orderSentTo: string | null;
   orderSentToName: string;
@@ -624,7 +628,8 @@ export async function getOrder(id: string): Promise<{ order: WorksOrder; events:
   const events = (await q<Row>(`SELECT id, order_id, at, by_name, kind, text FROM os_works_order_events WHERE order_id = $1 ORDER BY at DESC`, [id])).map((e) => ({
     id: s(e.id), orderId: s(e.order_id), at: iso(e.at)!, by: s(e.by_name), kind: s(e.kind), text: s(e.text),
   }));
-  return { order: { ...toOrder(r), quoteAsks: await asksFor(id) }, events };
+  const [quoteAsks, chase] = await Promise.all([asksFor(id), chaseOf(id)]);
+  return { order: { ...toOrder(r), quoteAsks, chase }, events };
 }
 
 export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; tenantEmail?: string | null; limit?: number; rehearsal?: boolean } = {}): Promise<WorksOrder[]> {
@@ -1181,6 +1186,12 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
     }).catch(() => null);
   }
   const next = await getOrder(id);
+  /* The contractor came back, or the job moved on: any chase stops here, the
+     moment it happens (Sean McMahon, 26 Oct 2026). Best effort. */
+  if (o.chase && !o.chase.stoppedAt) {
+    await stopChaseOnMove(o, next!.order, move.action, move.action === "file" ? move.file : null, by).catch(() => null);
+    return (await getOrder(id))!.order;
+  }
   return next!.order;
 }
 
