@@ -99,14 +99,14 @@ export async function refreshViewingDiaries(listingId: string): Promise<number> 
   const access = await accessLineFor(listingId, details?.propertyId ?? null);
   let done = 0;
   for (const r of rows) {
-    const b = (r.booking ?? {}) as { applicantName?: string; applicantEmail?: string | null; applicantPhone?: string | null; address?: string; startsAt?: string; minutes?: number; unaccompanied?: boolean; leadId?: string };
+    const b = (r.booking ?? {}) as { applicantName?: string; applicantEmail?: string | null; applicantPhone?: string | null; address?: string; startsAt?: string; minutes?: number; unaccompanied?: boolean; leadId?: string; outlookKey?: string };
     const address = details?.address || b.address || "the property";
     /* Booked before the number was kept on the booking: REX's contact has it. */
     let phone = b.applicantPhone ?? null;
     if (!phone && b.startsAt) {
       const seen = await q<{ payload: { contactId?: string | null } }>(
         `SELECT payload FROM os_case_state WHERE kind = 'rex-viewing' AND record_id = $1`,
-        [`${b.leadId ?? r.lead_id}|${listingId}|${new Date(b.startsAt).toISOString()}`]
+        [b.outlookKey ? b.outlookKey.replace(/^viewing\|/, "") : `${b.leadId ?? r.lead_id}|${listingId}|${new Date(b.startsAt).toISOString()}`]
       ).catch(() => []);
       phone = (await rexContactDetails(seen[0]?.payload?.contactId ?? null).catch(() => ({ phone: null }))).phone;
     }
@@ -126,7 +126,9 @@ export async function refreshViewingDiaries(listingId: string): Promise<number> 
     }
     if (b.startsAt) {
       const { putInOutlook } = await import("@/lib/outlook-calendar");
-      const key = `viewing|${b.leadId ?? r.lead_id}|${listingId}|${new Date(b.startsAt).toISOString()}`;
+      /* A moved viewing keeps the key its entry was made under (lib/viewing-change);
+         rebuilt from the new time it found nothing, and the entry kept its old words. */
+      const key = b.outlookKey || `viewing|${b.leadId ?? r.lead_id}|${listingId}|${new Date(b.startsAt).toISOString()}`;
       const held = await q<{ n: string }>(`SELECT COUNT(*)::text AS n FROM os_case_state WHERE kind = 'outlook-event' AND record_id = $1`, [key]).catch(() => []);
       if (Number(held[0]?.n ?? 0) > 0) {
         const res = await putInOutlook({

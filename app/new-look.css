@@ -641,8 +641,10 @@
 .nl-vwhen { display: flex; flex-direction: column; font-size: 14px; font-weight: 500; }
 .nl-vwhen span { font-family: var(--nl-mono); font-size: 12px; font-weight: 400; color: var(--muted); }
 .nl-vrows .nl-vacts { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+/* A row's actions never break mid-word (26 Oct 2026: Change time joined Add after and Open). */
+.nl-vrows .nl-vacts > button { white-space: nowrap; }
 .nl-vslot { margin: 12px 0; padding: 14px 16px; border: 1.5px dashed var(--line-strong); border-radius: 18px; }
-@media (max-width: 760px) { .nl-vrows > li { grid-template-columns: 1fr auto; } .nl-vrows > li > .nl-vstate { display: none; } }
+@media (max-width: 760px) { .nl-vrows > li { grid-template-columns: 1fr auto; } .nl-vrows > li > .nl-vstate { display: none; } .nl-vrows > li > .nl-vacts { grid-column: 1 / -1; } }
 
 /* ── on/off switch ──────────────────────────────────────────────────────── */
 .nl-switch { position: relative; width: 44px; height: 26px; border-radius: 13px; border: 0; padding: 0; background: var(--box); cursor: pointer; flex: none; transition: background .35s var(--nl-ease); }

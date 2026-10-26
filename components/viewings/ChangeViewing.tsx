@@ -28,6 +28,38 @@ export function apptStartIso(a: Pick<Appt, "day" | "start">): string {
   return d.toISOString();
 }
 
+/**
+ * A viewing as a listing knows it, as the diary entry Change time moves
+ * (James, 26 Oct 2026: "you'll be able to rearrange viewings" from the
+ * listing). The diary counts days from today and times on the wall clock,
+ * which is what apptStartIso reads back.
+ */
+export function apptFromViewing(
+  v: { id: string; startsAt: string; mins: number; who: string; email?: string | null; phone?: string | null; agent?: string | null; leadId?: string | null; unaccompanied?: boolean },
+  home: { address: string; listingId: string; propertyId?: string | null }
+): Appt {
+  const at = new Date(v.startsAt);
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    id: v.id,
+    day: Math.round((midnight(at) - midnight(new Date())) / 86_400_000),
+    start: `${pad(at.getHours())}:${pad(at.getMinutes())}`,
+    mins: v.mins || 30,
+    kind: "viewing",
+    what: `Viewing - ${home.address}`,
+    where: home.address,
+    who: v.who,
+    agent: v.agent ?? "",
+    contact: { email: v.email ?? "", phone: v.phone ?? "" },
+    listingId: home.listingId,
+    propertyId: home.propertyId ?? null,
+    leadId: v.leadId ?? null,
+    unaccompanied: Boolean(v.unaccompanied),
+    comms: [],
+  };
+}
+
 /** Only a viewing still to come, in a diary we can move it in. */
 export function canChangeTime(a: Appt | null | undefined): boolean {
   if (!a || a.kind !== "viewing" || a.fromOutlook) return false;

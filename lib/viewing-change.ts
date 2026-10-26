@@ -253,7 +253,17 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
       `SELECT record_id FROM os_case_state WHERE kind = 'rex-viewing' AND payload->>'eventId' = $1 LIMIT 1`,
       [eventId]
     ).catch(() => []);
-    const outlookKey = rows[0] ? `viewing|${rows[0].record_id}` : null;
+    let outlookKey = rows[0] ? `viewing|${rows[0].record_id}` : null;
+    /* No note of the diary copy (its write is allowed to fail quietly): our
+       own row of the booking still carries the key its Outlook entry was made
+       under, so that entry is moved or taken out rather than left standing at
+       the old time beside the new one (26 Oct 2026, Stuart's double booking). */
+    if (!outlookKey) {
+      const ours = await q<OsRow>(`SELECT id, author_id, starts_at, booking FROM os_appointments WHERE rex_event_id = $1 AND booking IS NOT NULL LIMIT 1`, [eventId]).catch(() => []);
+      const key = ours[0] ? outlookKeyOf(ours[0]) : null;
+      const known = key ? await q(`SELECT 1 FROM os_case_state WHERE kind = 'outlook-event' AND record_id = $1`, [key]).catch(() => []) : [];
+      if (key && known.length) outlookKey = key;
+    }
     const rexCopies = await rexCopiesToOutlook(me.id).catch(() => false);
     /* Their REX copies its diary into Outlook (lib/rex-outlook-sync): REX's
        copy moves or goes with the change above, and ours, if there is one

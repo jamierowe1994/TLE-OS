@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
@@ -8,6 +8,9 @@ import ViewingBooker, { type BookedResult } from "@/components/ViewingBooker";
 import { OS_LEAD_PREFIX } from "@/lib/contacts-as-leads";
 import type { ScoredMatch } from "@/lib/contact-match";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
+import AlreadyBooked, { upcomingHere, type ExistingViewing } from "@/components/viewings/AlreadyBooked";
+import ChangeViewing, { apptFromViewing } from "@/components/viewings/ChangeViewing";
+import type { Appt } from "@/lib/diary";
 
 /**
  * Book a viewing from a LISTING or from the Viewings screen (Howard's tickets,
@@ -53,6 +56,7 @@ export default function BookViewing({
   home = null,
   occupant = null,
   onBooked,
+  onMoved,
 }: {
   open: boolean;
   onClose: () => void;
@@ -61,19 +65,49 @@ export default function BookViewing({
   /** The sitting tenant, for the booker's courtesy heads-up. */
   occupant?: { name: string; email: string; phone: string } | null;
   onBooked?: (v: BookedViewing) => void;
+  /** They were already booked in here and the agent moved that viewing instead (26 Oct 2026). */
+  onMoved?: (said: string) => void;
 }) {
   const [person, setPerson] = useState<OnFile | null>(null);
   const [booker, setBooker] = useState(false);
   /* "Add another viewing to this slot" from the booker's last step: it
      outlives this booker, which has closed by then. */
   const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
+  /* Already booked in here (Stuart Roper, 26 Oct 2026): their viewings still
+     to come on this home, asked before the booker opens; and the one being
+     moved instead, once they say Move it. */
+  const [existing, setExisting] = useState<ExistingViewing[] | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [moving, setMoving] = useState<Appt | null>(null);
+  /* Which pick an answer belongs to: one that comes back after the window
+     closed, or after another pick, is dropped. */
+  const asked = useRef(0);
 
   useEffect(() => {
+    asked.current++;
     if (!open) {
       setPerson(null);
       setBooker(false);
+      setExisting(null);
+      setChecking(false);
     }
   }, [open]);
+
+  /** Picked: straight to the booker, unless they already have a viewing here still to come. */
+  async function pick(p: OnFile) {
+    setPerson(p);
+    if (!home) {
+      setBooker(true);
+      return;
+    }
+    const n = ++asked.current;
+    setChecking(true);
+    const found = await upcomingHere({ listingId: home.id, leadId: p.leadId, contactId: p.contactId, email: p.email, name: p.name });
+    if (n !== asked.current) return;
+    setChecking(false);
+    if (found.length) setExisting(found);
+    else setBooker(true);
+  }
 
   async function book(p: OnFile, v: Parameters<Parameters<typeof ViewingBooker>[0]["onBooked"]>[0]): Promise<BookedResult> {
     if (!v.startsAt) return { said: "Pick a time first." };
@@ -124,19 +158,44 @@ export default function BookViewing({
     };
   }
 
-  if (!open && !blockAnchor) return null;
+  if (!open && !blockAnchor && !moving) return null;
 
   return (
     <>
       <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
-      {open && !booker && (
+      {open && !booker && !existing && (
         <WhoIsViewing
           home={home}
           onClose={onClose}
-          onPick={(p) => {
-            setPerson(p);
+          busy={checking}
+          onPick={(p) => void pick(p)}
+        />
+      )}
+      {open && existing && person && home && (
+        <AlreadyBooked
+          name={person.name}
+          existing={existing}
+          address={home.name}
+          onClose={onClose}
+          onBookAnother={() => {
+            setExisting(null);
             setBooker(true);
           }}
+          onMove={(v) => {
+            /* Change time on the one they have, and this booking is over. */
+            setMoving(apptFromViewing(
+              { ...v, who: v.who || person.name, email: v.email || person.email, phone: v.phone || person.phone, leadId: v.leadId || person.leadId },
+              { address: home.name, listingId: home.id, propertyId: home.propertyId ?? null }
+            ));
+            onClose();
+          }}
+        />
+      )}
+      {moving && (
+        <ChangeViewing
+          appt={moving}
+          onClose={() => setMoving(null)}
+          onChanged={(said) => onMoved?.(said)}
         />
       )}
       <ViewingBooker
@@ -167,12 +226,15 @@ export function WhoIsViewing({
   onPick,
   title = "Who's viewing?",
   sub,
+  busy = false,
 }: {
   home: BookHome | null;
   onClose: () => void;
   onPick: (p: OnFile) => void;
   title?: string;
   sub?: string;
+  /** Checking whether the person picked is already booked in here. */
+  busy?: boolean;
 }) {
   const [mode, setMode] = useState<"file" | "new">("file");
   const [find, setFind] = useState("");
@@ -274,6 +336,12 @@ export function WhoIsViewing({
                 placeholder="Name, email or mobile…"
                 className={field}
               />
+              {busy && (
+                <p className="mt-3 flex items-center gap-2 text-[12px] text-muted" role="status">
+                  <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                  Checking whether they&apos;re already booked in here…
+                </p>
+              )}
               {!needle && home && people && people.length > 0 && (
                 <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">Asked about this home</p>
               )}
@@ -283,7 +351,8 @@ export function WhoIsViewing({
                     <button
                       type="button"
                       onClick={() => onPick(p)}
-                      className="flex w-full items-center gap-3 rounded-xl border border-line/60 bg-white p-3 text-left transition-colors hover:border-ink/40"
+                      disabled={busy}
+                      className="flex w-full items-center gap-3 rounded-xl border border-line/60 bg-white p-3 text-left transition-colors hover:border-ink/40 disabled:cursor-wait disabled:opacity-60"
                     >
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60 text-accent-dark">
                         <DoodleIcon name="user" size={14} />
