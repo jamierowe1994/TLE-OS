@@ -114,6 +114,38 @@ export function tleBrand(audience: EmailAudience = "landlord") {
   };
 }
 
+/**
+ * The landlord look (James, 26 Oct 2026: "bring them in line with the new
+ * styling... minimal, self-explanatory, a little bit of flair"). The new
+ * look's landlord palette from the landlord file - ink on white, a coral
+ * button with ink words, Bricolage titles, a thin palette strip at the top -
+ * laid over tleBrand("landlord") for the emails that go to a landlord, and
+ * nothing else: tenants, the team, the trades and Francesca's newsletters
+ * keep their own.
+ */
+export function landlordLook() {
+  return {
+    look: "landlord",
+    headingFont: "bricolage",
+    headingColor: "#141413",
+    headingWeight: 600,
+    headingTracking: "-0.02em",
+    bodyFont: "inter",
+    bodyColor: "#3a3936",
+    bodySize: 15,
+    accentColor: "#eb8c6d",
+    buttonTextColor: "#141413",
+    buttonWeight: 600,
+    buttonRadius: 12,
+    linkColor: "#aa4a2b",
+    lineColor: "#e9e9e6",
+    faintColor: "#87867f",
+    bgColor: "#f6f5f1",
+    contentPad: 36,
+    outerPad: 28,
+  };
+}
+
 type Recipient = { name?: string; email?: string; address?: string };
 
 let n = 0;
@@ -249,7 +281,7 @@ export function plainTextOf(text: string): string {
  * and the difference between a branded confirmation and a wall of plain text
  * is most of what a landlord judges us on before anyone turns up.
  */
-export function renderPlain(subject: string, text: string): { subject: string; html: string } {
+export function renderPlain(subject: string, text: string, opts: { landlord?: boolean; kicker?: string } = {}): { subject: string; html: string } {
   const paras = text
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -270,7 +302,7 @@ export function renderPlain(subject: string, text: string): { subject: string; h
        sign-off is already in the text. */
     { ...footerBlock(false), showSocial: true },
   ];
-  const brand = { ...tleBrand(), showSignoff: false };
+  const brand = { ...tleBrand(), showSignoff: false, ...(opts.landlord ? { ...landlordLook(), ...(opts.kicker ? { kicker: opts.kicker } : {}) } : {}) };
   const out = renderTemplate({ name: subject, subject, blocks }, { brand, mergeCtx: mergeContextFor({}, brand) });
   const raw = typeof out === "string" ? out : (out?.html ?? "");
   return { subject, html: renderTokens(raw, mergeContextFor({}, brand)) };

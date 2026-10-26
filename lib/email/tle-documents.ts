@@ -49,6 +49,12 @@ const IMG = (id: string, url: string, alt: string, width: number): Block => ({
   type: "image", id, url, alt, linkUrl: "", align: "center", width,
 });
 const SP = (id: string, height = 16): Block => ({ type: "spacer", id, height });
+/* Key facts as rows: a small label over each value, hairlines between, no box
+   (the landlord look, 26 Oct 2026). A row whose value is left unfilled drops
+   out, so optional facts can sit in the list. */
+const FACTS = (id: string, rows: readonly (readonly [string, string])[]): Block => ({
+  type: "facts", id, text: rows.map(([label, value]) => `${label}|${value}`).join("\n"),
+});
 const DIV = (id: string): Block => ({ type: "divider", id, color: "#E7E2DD" });
 const FOOT = (id: string, note: string): Block => ({
   type: "footer", id, note, address: "The Letting Experts", showSocial: true, unsubscribe: false,
@@ -1398,19 +1404,16 @@ export const LANDLORD_TERMS_REQUEST = {
   preheader: "{{agentFirst}} has signed. About five minutes to read and sign yours.",
   mode: "blocks",
   blocks: [
-    H("ltr1", "Your Terms of Business"),
-    T(
-      "ltr2",
-      "Hi {{firstName}},<br><br>Thank you for choosing The Letting Experts for <strong>{{address}}</strong>. Your terms of business are ready, and {{agentFirst}} has already signed for us."
-    ),
-    T("ltr3", "The button opens them in full. If there's anything we don't have yet, like your landlord registration or the account for your rent, it asks you first, then you sign."),
-    BTN("ltr4", "Read and sign", "{{link}}"),
-    SP("ltr5", 8),
-    T("ltr6", "Any questions at all, just reply to this email and it comes straight to {{agentFirst}}."),
-    T("ltr7", "The Letting Experts"),
+    H("ltr1", "Ready for Your Signature"),
+    T("ltr2", "Hi {{firstName}},<br><br>Thank you for choosing The Letting Experts. Your terms of business are ready, and {{agentFirst}} has already signed for us."),
+    FACTS("ltr3", [["Your home", "{{address}}"], ["Takes about", "Five minutes"]]),
+    T("ltr4", "If there's anything we don't have yet, like your landlord registration or the account for your rent, it asks you first. Then you sign."),
+    BTN("ltr5", "Read and sign", "{{link}}"),
+    SP("ltr6", 8),
+    T("ltr7", "Any questions, just reply. It comes straight to {{agentFirst}}."),
     FOOT("ltr8", "You're getting this because {{agentFirst}} at The Letting Experts sent you your terms of business to sign."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Terms of business" },
 } as const;
 
 /** Landlord: everybody has signed - their copy (lib/terms, 23 Oct 2026). */
