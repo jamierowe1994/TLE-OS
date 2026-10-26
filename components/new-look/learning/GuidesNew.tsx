@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Mast } from "@/components/new-look/Parts";
+import { BookMotif, coverPattern, TleMark } from "./Covers";
 import { Back } from "./LearningHub";
 
 /**
@@ -129,8 +130,11 @@ export default function GuidesNew() {
                 {shown.map((g, i) => (
                   <article key={g.id} className={`nl-lr-book is-${g.audience}`} style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }}>
                     <a className="nl-lr-book-main" href={`/api/tools/learning/open?id=${g.id}`} target="_blank" rel="noreferrer">
-                      <span className="nl-lr-cover" aria-hidden>
-                        <i>{g.title.replace(/^(The (Letting|Marketing) Experts|TLE|TME|TPE)\s+/i, "").slice(0, 1)}</i>
+                      <span className={`nl-lr-cover is-pat${coverPattern(g.id)}`} aria-hidden>
+                        <TleMark />
+                        <span className="nl-lr-cover-art">
+                          <BookMotif audience={g.audience} />
+                        </span>
                       </span>
                       <span className="nl-lr-tags">
                         <em>{AUDIENCE_WORD[g.audience]}</em>
