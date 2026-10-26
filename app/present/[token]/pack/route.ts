@@ -5,7 +5,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { readPresentation, presentationExpiry } from "@/lib/present-store";
 import { SAMPLE_DECK, deckKind } from "@/lib/present";
-import { agentPhotoY, canBePack, packData, packHtml } from "@/lib/pre-pack";
+import { agentPhotoY, canBePack, packData, packHtml, packQuestionsFor, packQuestionsForDeck } from "@/lib/pre-pack";
 import { withPlayableVideo } from "@/lib/present-video";
 
 /**
@@ -16,6 +16,8 @@ import { withPlayableVideo } from "@/lib/present-video";
  * /present/<token> to be told so and tidied away.
  *
  * `sample` is the showroom copy: no customer data, no answers saved, no opens.
+ * `sample?mine=1` is the same with the signed-in person's own quick questions,
+ * for "See it on a pack" in Profile > Pre-appraisal (26 Oct 2026).
  */
 
 export const dynamic = "force-dynamic";
@@ -35,7 +37,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
 
   if (token === "sample") {
     const deck = { ...SAMPLE_DECK, kind: "pre-appraisal" as const, createdAt: new Date().toISOString() };
-    return new NextResponse(packHtml(packData(deck, null)), { headers: HEADERS });
+    const mine = req.nextUrl.searchParams.get("mine") === "1" ? verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value) : null;
+    const own = mine ? await packQuestionsFor(mine) : null;
+    return new NextResponse(packHtml(packData(deck, null, own ? { questions: own.show ? own.questions : [] } : {})), { headers: HEADERS });
   }
 
   const row = await readPresentation(token);
@@ -53,5 +57,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
   const viewer = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const me = viewer ? await findUserById(viewer).catch(() => null) : null;
   const frame = Boolean(me && (me.id === author || me.role === "owner" || me.role === "super_admin"));
-  return new NextResponse(packHtml(packData(deck, row.token, { agentPhotoY: await agentPhotoY(author), frame })), { headers: HEADERS });
+  /* The quick questions are the appraising agent's own, read as it opens (26 Oct 2026 team call). */
+  const questions = await packQuestionsForDeck(row.deck, author);
+  return new NextResponse(packHtml(packData(deck, row.token, { agentPhotoY: await agentPhotoY(author), frame, questions })), { headers: HEADERS });
 }

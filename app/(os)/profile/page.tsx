@@ -24,6 +24,7 @@ import {
 import { fetchMe, invalidateMe } from "@/lib/me";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Ico, Mast, Tabs } from "@/components/new-look/Parts";
+import PreAppraisalQuestions from "@/components/new-look/PreAppraisalQuestions";
 
 /**
  * The profile: who this agent is, how their OS looks, what keeps THEM legal,
@@ -36,9 +37,9 @@ import { Badge, Ico, Mast, Tabs } from "@/components/new-look/Parts";
 /** In the doodle set; the pack has none. */
 const LOCK_ICON = "lock";
 
-type TabKey = "info" | "appearance" | "custom" | "automations" | "compliance" | "connections" | "ads";
+type TabKey = "info" | "appearance" | "custom" | "preappraisal" | "automations" | "compliance" | "connections" | "ads";
 
-const TABS: { key: TabKey; label: string }[] = [
+const TABS: { key: TabKey; label: string; newOnly?: boolean }[] = [
   { key: "info", label: "Profile information" },
   { key: "appearance", label: "Appearance" },
   /* Your own fields, the filters that come with them, and the questions you
@@ -46,6 +47,9 @@ const TABS: { key: TabKey; label: string }[] = [
      that was all it held; it is now two different kinds of custom thing, and
      the shorter word covers both without promising either. */
   { key: "custom", label: "Custom" },
+  /* Their own quick questions on the pre-appraisal pack (26 Oct 2026 team
+     call, lib/pre-pack-questions). New look only. */
+  { key: "preappraisal", label: "Pre-appraisal", newOnly: true },
   /* Their own automations, and Steve building them (lib/automations, 22 Oct 2026). */
   { key: "automations", label: "Automations" },
   { key: "compliance", label: "Personal compliance" },
@@ -651,6 +655,7 @@ export default function ProfilePage() {
           )}
 
           {tab === "custom" && <div className="nl-holder max-w-[1100px]"><CustomAttributes /></div>}
+          {tab === "preappraisal" && <PreAppraisalQuestions />}
           {tab === "automations" && <Automations look="new" />}
           {tab === "compliance" && <PersonalCompliance look="new" />}
 
@@ -746,7 +751,7 @@ export default function ProfilePage() {
 
       {/* ── Tabs, same grammar as the records. ── */}
       <div className="mt-8 flex gap-1 overflow-x-auto border-b border-line/80">
-        {TABS.map((t) => (
+        {TABS.filter((t) => !t.newOnly).map((t) => (
           <button
             key={t.key}
             type="button"

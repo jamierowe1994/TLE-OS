@@ -479,6 +479,9 @@ button { font: inherit; color: inherit; }
 .seg-ctl { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: calc(var(--u) * .3); background: var(--well); border-radius: calc(var(--u) * 1.2); padding: calc(var(--u) * .3); }
 .seg-ctl button { border: 0; background: transparent; border-radius: calc(var(--u) * .9); padding: calc(var(--u) * .85) calc(var(--u) * .6); font-size: var(--fs-small); color: var(--muted); cursor: pointer; transition: background .3s var(--ease), color .3s; white-space: nowrap; }
 .seg-ctl button:hover { color: var(--ink); }
+/* Five or six of an agent's own questions (26 Oct 2026): the same card, the rows closer, so it stays inside the slide on a 16:9 screen. */
+.qcard.many .q { gap: calc(var(--u) * .6); padding: calc(var(--u) * 1.05) 0; }
+.qcard.many .seg-ctl button { padding-top: calc(var(--u) * .6); padding-bottom: calc(var(--u) * .6); }
 .seg-ctl button[aria-checked="true"] { background: var(--paper); color: var(--ink); font-weight: 500; box-shadow: 0 1px 2px rgba(20, 20, 19, .08); }
 /* locked previews */
 .locks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 1.4); margin-top: calc(var(--u) * 3.6); }
@@ -695,13 +698,17 @@ const SLIDES = [];
 function slide(title, html, o) { SLIDES.push(Object.assign({ title, html }, o || {})); }
 
 /* ============================================================
-   The pre-appraisal pack. Seven slides, sent the day before the visit.
+   The pre-appraisal pack. Seven slides, sent the day before the visit,
+   or six when the agent leaves their quick questions out (26 Oct 2026).
    Its own devices: a ticket, a big video, a time ring, a tick list,
    quick questions, locked previews and a map. Nothing here repeats
    the appraisal presentation.
    ============================================================ */
 const P = D.property, L = D.landlord, A = D.agent, V = D.visit;
 const RING_C = ['var(--coral)', 'var(--sage)', 'var(--manilla-2)', 'var(--oat)'];
+/* Each agent's own quick questions (26 Oct 2026 team call); none = no questions slide. */
+const ASK = D.questions && D.questions.length > 0;
+const PAGES = ['Six', 'Seven'][ASK ? 1 : 0];
 
 /* 1 cover: the entrance, with the appointment as a ticket */
 n = 0; slide('Your Visit', `
@@ -709,7 +716,7 @@ n = 0; slide('Your Visit', `
     <div>
       <p class="eyebrow in" ${i()}>Your pre-appraisal pack</p>
       <h1 class="title hero in" ${i()}>See you on ${v('visit.weekday')}, <span class="soft">${v('landlord.first')}.</span></h1>
-      <p class="lead in" ${i()}>Everything you need before ${v('agent.first')} comes round to ${v('property.street')}. Seven short pages, about two minutes.</p>
+      <p class="lead in" ${i()}>Everything you need before ${v('agent.first')} comes round to ${v('property.street')}. ${PAGES} short pages, about two minutes.</p>
       <div class="btns in" ${i()}><button class="btn dark" data-go="1"><span>Open your pack</span>${arrowR}</button><button class="btn" id="calBtn">${ic('diary', '')}<span>Add to calendar</span></button></div>
       <div class="chips in" ${i()}>${A.video && (A.video.src || A.video.link) ? `<span class="pill">${ic('play', '')}<span>A video from ${v('agent.first')}</span></span>` : ''}<span class="pill">${ic('check', '')}What to have ready</span><span class="pill">${ic('pin', '')}Where and when</span></div>
     </div>
@@ -779,8 +786,8 @@ n = 0; slide('Worth Having to Hand', `
   <div class="ready">${D.ready.map((r, k) => `<button class="rd in" ${i()} data-tick="${k}" aria-pressed="false"><span class="rd-ic">${ic(r[0], '')}</span><span class="rd-box">${ic('check', '')}</span><b>${v('ready.' + k + '.1', r[1])}</b><span class="lab">${v('ready.' + k + '.2', r[2])}</span></button>`).join('')}</div>
   <p class="lab in" ${i('margin-top:calc(var(--u)*2.4);text-align:center')}>Don’t worry if you’re missing any. Tick what you have and ${v('agent.first')} will sort the rest.</p>`, { note: 'Nothing here is', noteB: 'essential' });
 
-/* 5 a few quick questions */
-n = 0; slide('Quick Questions', `
+/* 5 a few quick questions: the agent's own, and left out if they've switched them off */
+n = 0; if (ASK) slide('Quick Questions', `
   <div class="cols" style="grid-template-columns:1fr 1.45fr;align-items:center">
     <div>
       <p class="eyebrow in" ${i()}>A few quick questions</p>
@@ -788,7 +795,7 @@ n = 0; slide('Quick Questions', `
       <p class="lead in" ${i()}>Thirty seconds now means I can bring the right homes to compare and an honest figure on the day.</p>
       <div class="btns in" ${i()}><button class="btn dark" id="sendQ" disabled><span>Send to ${v('agent.first')}</span>${arrowR}</button></div>
     </div>
-    <div class="qcard in" ${i()}>${D.questions.map((q, k) => `<div class="q"><b>${v('questions.' + k + '.0', q[0])}</b><div class="seg-ctl" role="radiogroup" aria-label="${esc(q[0])}">${q[1].map((o, j) => `<button role="radio" aria-checked="false" data-q="${k}" data-o="${j}">${esc(o)}</button>`).join('')}</div></div>`).join('')}</div>
+    <div class="qcard${D.questions.length > 4 ? ' many' : ''} in" ${i()}>${D.questions.map((q, k) => `<div class="q"><b>${v('questions.' + k + '.0', q[0])}</b><div class="seg-ctl" role="radiogroup" aria-label="${esc(q[0])}">${q[1].map((o, j) => `<button role="radio" aria-checked="false" data-q="${k}" data-o="${j}">${esc(o)}</button>`).join('')}</div></div>`).join('')}</div>
   </div>`, { note: 'Takes about', noteB: '30 seconds' });
 
 /* 6 what you'll get on the day: locked previews */
@@ -889,8 +896,8 @@ stage.addEventListener('click', e => { const t = e.target.closest('[data-tick]')
 paintReady();
 /* quick questions: one answer per row, then send */
 const answers = {};
-stage.addEventListener('click', e => { const o = e.target.closest('[data-q]'); if (!o) return; answers[o.dataset.q] = +o.dataset.o; o.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-checked', b === o)); document.getElementById('sendQ').disabled = Object.keys(answers).length < D.questions.length; });
-document.getElementById('sendQ').onclick = function () { const b = this; const done = () => { b.innerHTML = ic('check', '') + 'Sent. Thank you, ' + esc(L.first); b.disabled = true; }; b.disabled = true; if (!D.token) return done(); fetch('/api/present/answers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: D.token, answers: D.questions.map((q, k) => ({ q: q[0], a: q[1][answers[k]] })) }) }).then(r => r.json()).then(j => { if (!j || !j.ok) throw new Error(); done(); }).catch(() => { b.disabled = false; b.innerHTML = '<span>That didn\u2019t send. Try again</span>'; }); };
+if (ASK) stage.addEventListener('click', e => { const o = e.target.closest('[data-q]'); if (!o) return; answers[o.dataset.q] = +o.dataset.o; o.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-checked', b === o)); document.getElementById('sendQ').disabled = Object.keys(answers).length < D.questions.length; });
+if (ASK) document.getElementById('sendQ').onclick = function () { const b = this; const done = () => { b.innerHTML = ic('check', '') + 'Sent. Thank you, ' + esc(L.first); b.disabled = true; }; b.disabled = true; if (!D.token) return done(); fetch('/api/present/answers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: D.token, answers: D.questions.map((q, k) => ({ q: q[0], a: q[1][answers[k]] })) }) }).then(r => r.json()).then(j => { if (!j || !j.ok) throw new Error(); done(); }).catch(() => { b.disabled = false; b.innerHTML = '<span>That didn\u2019t send. Try again</span>'; }); };
 /* the ring: hovering a row lights its slice */
 stage.querySelectorAll('.legend-list li').forEach(li => { li.addEventListener('mouseenter', () => stage.querySelectorAll('.tring .seg').forEach(c => c.classList.toggle('dim', c.dataset.k !== li.dataset.k))); li.addEventListener('mouseleave', () => stage.querySelectorAll('.tring .seg').forEach(c => c.classList.remove('dim'))); });
 document.getElementById('ovBtn').onclick = () => overview(true);

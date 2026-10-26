@@ -4,6 +4,7 @@ import path from "node:path";
 import { icsFor } from "@/lib/appraisal-email";
 import { hasDb, q } from "@/lib/db";
 import { firstNameOf, type PresentDeck } from "@/lib/present";
+import { DEFAULT_PACK_QUESTIONS, PRE_PACK_QUESTIONS_PREF, readSetting, type PackQuestion, type PackQuestionsSetting } from "@/lib/pre-pack-questions";
 
 /**
  * THE PRE-APPRAISAL PACK (Claude Design, 23 Oct 2026).
@@ -15,8 +16,9 @@ import { firstNameOf, type PresentDeck } from "@/lib/present";
  *
  * Every value is the deck's own (the landlord, the home, the booked visit,
  * the agent and their welcome video) apart from the company's fixed words:
- * the plan for the visit, the six things worth having ready, the four
- * questions and the arrival notes. Nothing is invented: a deck with no
+ * the plan for the visit, the six things worth having ready and the arrival
+ * notes. The quick questions are the agent's own (lib/pre-pack-questions,
+ * 26 Oct 2026), and an agent can leave that slide out altogether. Nothing is invented: a deck with no
  * video shows the agent's photo, a deck with no note gets the company's
  * first-person welcome, and there is no shareable video link because we
  * have no such thing, so there is no Copy button.
@@ -49,6 +51,7 @@ export type PackData = {
   };
   plan: [string, number, string][];
   ready: [string, string, string][];
+  /** The agent's own quick questions. Empty = they've switched the slide off, and the pack leaves it out. */
   questions: [string, string[]][];
   arrive: string[];
 };
@@ -72,14 +75,8 @@ const READY: [string, string, string][] = [
   ["home", "Proof you own it", "A mortgage statement or the title deeds."],
 ];
 
-const QUESTIONS: [string, string[]][] = [
-  ["When would you like it let?", ["As soon as possible", "Next month", "I’m flexible"]],
-  ["Will it be furnished?", ["Furnished", "Part furnished", "Unfurnished"]],
-  /* In place of "Would you consider pets?" (James, 23 Oct 2026): under the new
-     rules a landlord can't simply say no to a pet, so it isn't a real choice. */
-  ["Is anyone living there now?", ["It’s empty", "Tenants are in", "I live there"]],
-  ["Have you let a home before?", ["Yes, myself", "Yes, with an agent", "This is my first"]],
-];
+/* The quick questions are each agent's own now (26 Oct 2026 team call): the
+   defaults, and the comment about pets, live in lib/pre-pack-questions. */
 
 /* The design's first line promised on-street parking at every home, which a
    city flat can't have; this one is true everywhere. */
@@ -144,7 +141,7 @@ export const DEFAULT_PHOTO_Y = 6;
 export function packData(
   deck: PresentDeck,
   token: string | null,
-  opts: { meet?: PackData["meet"]; agentPhotoY?: number | null; frame?: boolean } = {}
+  opts: { meet?: PackData["meet"]; agentPhotoY?: number | null; frame?: boolean; questions?: PackQuestion[] } = {}
 ): PackData {
   const meet = opts.meet ?? "headshot";
   const start = new Date(deck.startsAt as string);
@@ -190,7 +187,7 @@ export function packData(
     },
     plan: packPlan(minutes),
     ready: READY,
-    questions: QUESTIONS,
+    questions: (opts.questions ?? DEFAULT_PACK_QUESTIONS).map((x) => [x.q, x.options] as [string, string[]]),
     arrive: ARRIVE,
   };
 }
@@ -226,4 +223,28 @@ export async function savePhotoY(token: string, authorId: string, y: number, by:
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
     [frameKey(authorId), JSON.stringify({ y }), by]
   );
+}
+
+/* ── Each agent's own quick questions (26 Oct 2026 team call) ── */
+
+/** An agent's questions and whether they show the slide; the defaults for anybody who hasn't changed them. */
+export async function packQuestionsFor(userId: string | null | undefined): Promise<PackQuestionsSetting> {
+  if (!userId || !hasDb()) return readSetting(null);
+  const rows = await q<{ value: unknown }>(`SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = $2`, [userId, PRE_PACK_QUESTIONS_PREF]).catch(() => []);
+  return readSetting(rows[0]?.value ?? null);
+}
+
+/**
+ * The questions a pack shows: those of the agent whose appraisal it is - the
+ * person on the deck, found by their email, else whoever made it - never the
+ * person looking at it. An empty list leaves the slide out.
+ */
+export async function packQuestionsForDeck(deck: PresentDeck, authorId: string | null): Promise<PackQuestion[]> {
+  const email = (deck.agent?.email ?? "").trim().toLowerCase();
+  const byEmail =
+    email && hasDb()
+      ? (await q<{ id: string }>(`SELECT id FROM os_users WHERE lower(email) = $1 LIMIT 1`, [email]).catch(() => []))[0]?.id ?? null
+      : null;
+  const s = await packQuestionsFor(byEmail ?? authorId);
+  return s.show ? s.questions : [];
 }

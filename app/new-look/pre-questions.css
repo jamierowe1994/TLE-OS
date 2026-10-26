@@ -1,0 +1,48 @@
+/* New look: Profile > Pre-appraisal, each agent's own quick questions for the
+   pre-appraisal pack (components/new-look/PreAppraisalQuestions, 26 Oct 2026).
+   The editor on the left, the slide as the landlord sees it on the right. */
+
+[data-look="new"] .nl-pq { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 56px; align-items: start; max-width: 1100px; }
+[data-look="new"] .nl-pq-blurb { margin: 2px 0 0; max-width: 60ch; font-family: var(--nl-serif); font-size: 16px; line-height: 24px; color: var(--muted); }
+[data-look="new"] .nl-pq-switch { display: flex; align-items: center; gap: 14px; margin: 22px 0 8px; padding: 14px 18px; border-radius: 18px; background: var(--panel); }
+
+[data-look="new"] .nl-pq-list { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--line); transition: opacity .3s; }
+[data-look="new"] .nl-pq-list.is-off { opacity: .5; }
+[data-look="new"] .nl-pq-item { padding: 16px 0; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-pq-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+[data-look="new"] .nl-pq-head .nl-input { padding: 9px 12px; font-size: 15px; font-weight: 500; }
+[data-look="new"] .nl-pq-tools { display: flex; align-items: center; gap: 6px; }
+[data-look="new"] .nl-pq-tools .nl-iconbtn:disabled { opacity: .35; cursor: default; }
+[data-look="new"] .nl-pq-remove { margin-left: 6px; color: var(--muted); }
+[data-look="new"] .nl-pq-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0 30px; }
+[data-look="new"] .nl-pq-optlab { margin-right: 2px; }
+[data-look="new"] .nl-pq-opt { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--card); transition: border-color .2s, box-shadow .2s; }
+[data-look="new"] .nl-pq-opt:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--sage-soft); }
+[data-look="new"] .nl-pq-opt input { font: inherit; font-size: 13.5px; line-height: 20px; color: var(--ink); border: 0; background: transparent; outline: 0; padding: 3px 0; min-width: 0; max-width: 100%; }
+[data-look="new"] .nl-pq-opt button { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+[data-look="new"] .nl-pq-opt button:hover:not(:disabled) { background: var(--box); color: var(--ink); }
+[data-look="new"] .nl-pq-opt button:disabled { opacity: .3; cursor: default; }
+[data-look="new"] .nl-pq-problem { margin: 14px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--warning-soft); color: var(--warning); font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-pq-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 22px; }
+
+/* The preview copies the pack's quick-questions card (lib/decks/pre-appraisal-pack.html .qcard). */
+[data-look="new"] .nl-pq-preview { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 10px; }
+[data-look="new"] .nl-pq-card { background: #f3f2ee; border-radius: 22px; padding: 6px 22px; }
+[data-look="new"] .nl-pq-card.is-empty { padding: 26px 22px; }
+[data-look="new"] .nl-pq-q { display: flex; flex-direction: column; gap: 9px; padding: 15px 0; border-top: 1px solid rgba(20, 20, 19, .08); }
+[data-look="new"] .nl-pq-q:first-child { border-top: 0; }
+[data-look="new"] .nl-pq-q b { font-weight: 500; font-size: 14.5px; line-height: 20px; color: #141413; overflow-wrap: anywhere; }
+[data-look="new"] .nl-pq-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; padding: 3px; border-radius: 12px; background: #e8e7e2; }
+[data-look="new"] .nl-pq-seg span { padding: 7px 4px; border-radius: 9px; font-size: 12px; line-height: 16px; color: #63625b; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .nl-pq-seg span.is-on { background: #fff; color: #141413; font-weight: 500; box-shadow: 0 1px 2px rgba(20, 20, 19, .08); }
+
+@media (max-width: 1100px) {
+  [data-look="new"] .nl-pq { grid-template-columns: 1fr; gap: 36px; }
+  [data-look="new"] .nl-pq-preview { position: static; }
+}
+@media (max-width: 640px) {
+  [data-look="new"] .nl-pq-head { grid-template-columns: auto minmax(0, 1fr); }
+  [data-look="new"] .nl-pq-tools { grid-column: 2; justify-content: flex-end; }
+  [data-look="new"] .nl-pq-opts { margin-left: 0; }
+  [data-look="new"] .nl-pq-seg { grid-auto-flow: row; }
+}
