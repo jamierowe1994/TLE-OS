@@ -332,27 +332,28 @@ export const CERTIFICATE_SHARED_LANDLORD = {
   preheader: "Attached, and on the property's file. Nothing to do.",
   mode: "blocks",
   blocks: [
-    H("crl1", "{{certLabel}} renewed"),
-    T(
-      "crl2",
-      "Hi {{firstName}},<br><br>The renewed {{certLabel}} for <strong>{{address}}</strong> is attached. It runs to <strong>{{expires}}</strong>."
-    ),
+    H("crl1", "Renewed and on File"),
+    T("crl2", "Hi {{firstName}},<br><br>A certificate on your property has been renewed. Your copy is attached."),
+    FACTS("crl11", [
+      ["Certificate", "{{certLabel}}"],
+      ["Property", "{{address}}"],
+      ["Runs to", "{{expires}}"],
+    ]),
     T(
       "crl3",
-      "It is on the property's file and in your landlord portal, so you can pull it up whenever you need it without asking us for it. {{alsoLine}}"
+      "It's on the property's file and in your landlord portal, so you can pull it up whenever you need it without asking us. {{alsoLine}}"
     ),
     SP("crl4", 8),
-    DIV("crl5"),
-    H2("crl6", "Nothing to do"),
+    H2("crl6", "Nothing to Do"),
     T(
       "crl7",
-      "We hold the date and we chase the next renewal before it lapses. If anything on the certificate looks wrong, reply and we will take it up with the engineer."
+      "We hold the date and chase the next renewal before it lapses. If anything on the certificate looks wrong, just reply and we'll take it up with the engineer."
     ),
     SP("crl8", 8),
     T("crl9", "The Letting Experts"),
     FOOT("crl10", "You're getting this because you let a property through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Certificates" },
 } as const;
 
 /**
@@ -424,18 +425,20 @@ export const COMPLIANCE_CHASE_LANDLORD = {
   preheader: "We need the renewed certificate before it lapses.",
   mode: "blocks",
   blocks: [
-    H("cl1", "{{certLabel}} is due for renewal"),
-    T(
-      "cl2",
-      "Hi {{firstName}},<br><br>The {{certLabel}} for <strong>{{address}}</strong> expires on <strong>{{expires}}</strong>, which is {{daysLeft}} days away."
-    ),
+    H("cl1", "A Certificate Due for Renewal"),
+    T("cl2", "Hi {{firstName}},<br><br>A certificate on your property is coming up for renewal."),
+    FACTS("cl13", [
+      ["Certificate", "{{certLabel}}"],
+      ["Property", "{{address}}"],
+      ["Expires", "{{expires}}"],
+      ["Time left", "{{daysLeft}} days"],
+    ]),
     T(
       "cl3",
-      "By law the property must hold a valid certificate for as long as it is let. If it lapses we have to stop marketing it, and an existing tenancy can be affected too - so we chase these early rather than close to the date."
+      "By law the property must hold a valid certificate for as long as it is let. If it lapses we have to stop marketing it, and an existing tenancy can be affected too. That's why we get in touch early rather than close to the date."
     ),
     SP("cl4", 8),
-    DIV("cl5"),
-    H2("cl6", "What happens next"),
+    H2("cl6", "Two Ways to Renew It"),
     T(
       "cl7",
       "<strong>If you arrange it yourself:</strong> send us the certificate when you have it and we'll put it on the property's file."
@@ -446,13 +449,13 @@ export const COMPLIANCE_CHASE_LANDLORD = {
     ),
     T(
       "cl9",
-      "Either way {{agentName}} is copied in on this and can pick it up with you."
+      "Either way, {{agentName}} is copied in and can pick it up with you."
     ),
     SP("cl10", 8),
     T("cl11", "The Letting Experts"),
     FOOT("cl12", "You're getting this because you let a property through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Certificates" },
 } as const;
 
 /* ──────────────────── the two doorways ────────────────────
@@ -556,12 +559,12 @@ export const LANDLORD_OFFER = {
     T("lo2", "Hi {{firstName}},<br><br>We've had an offer on <strong>{{address}}</strong>."),
     T("lo3", "{{summaryList}}"),
     T("lo4", "{{agentLine}}"),
-    T("lo5", "Reply to this email or give {{agentName}} a ring to say whether you'd like to accept it. Nothing is agreed until you say yes."),
+    T("lo5", "Just reply, or give {{agentName}} a ring, to say whether you'd like to accept it. Nothing is agreed until you say yes."),
     SP("lo6", 8),
     T("lo7", "{{agentName}}<br>The Letting Experts"),
     FOOT("lo8", "You're getting this because The Letting Experts are letting your home."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "An offer" },
 } as const;
 
 /**
@@ -585,7 +588,9 @@ export const CUSTOMER_UPDATE = {
     T("cu5", "Any questions, just reply to this email.<br><br>{{agentName}}<br>The Letting Experts"),
     FOOT("cu6", "{{footLine}}"),
   ],
-  branding: { showSignoff: false },
+  /* The kicker shows on the landlord look only; the tenant's copy of this
+     document (update-tenant) renders without it. */
+  branding: { showSignoff: false, kicker: "An update" },
 } as const;
 
 /**
@@ -1564,18 +1569,16 @@ export const LANDLORD_VIEWING_BOOKED = {
   preheader: "{{whenPretty}}, and what it needs from you.",
   mode: "blocks",
   blocks: [
-    H("lv1", "A viewing is booked"),
-    T(
-      "lv2",
-      "Hi {{firstName}},<br><br>We have booked a viewing at <strong>{{address}}</strong> for <strong>{{whenPretty}}</strong>. {{meetLine}}"
-    ),
-    T("lv3", "If that time is a problem for access, just reply to this email and we will move it."),
-    T("lv4", "We will let you know how it went."),
+    H("lv1", "A Viewing at Your Home"),
+    T("lv2", "Hi {{firstName}},<br><br>We've booked a viewing at your home."),
+    FACTS("lv8", [["Your home", "{{address}}"], ["When", "{{whenPretty}}"]]),
+    T("lv3", "{{meetLine}} If the time is a problem for access, just reply and we'll move it."),
+    T("lv4", "We'll let you know how it goes."),
     SP("lv5", 8),
     T("lv6", "{{agentName}}<br>The Letting Experts"),
     FOOT("lv7", "You're getting this because The Letting Experts are letting your property."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Viewings" },
 } as const;
 
 export const LANDLORD_VIEWING_MOVED = {
@@ -1583,17 +1586,15 @@ export const LANDLORD_VIEWING_MOVED = {
   preheader: "The viewing is now {{whenPretty}}.",
   mode: "blocks",
   blocks: [
-    H("lm1", "The viewing has a new time"),
-    T(
-      "lm2",
-      "Hi {{firstName}},<br><br>The viewing at <strong>{{address}}</strong> has moved from {{oldWhen}} to <strong>{{whenPretty}}</strong>. {{meetLine}}"
-    ),
-    T("lm3", "If the new time is a problem for access, just reply to this email and we will sort another."),
+    H("lm1", "A New Time for the Viewing"),
+    T("lm2", "Hi {{firstName}},<br><br>The viewing at your home has moved to a new time."),
+    FACTS("lm7", [["Your home", "{{address}}"], ["New time", "{{whenPretty}}"], ["Previously", "{{oldWhen}}"]]),
+    T("lm3", "{{meetLine}} If the new time is a problem for access, just reply and we'll sort another."),
     SP("lm4", 8),
     T("lm5", "{{agentName}}<br>The Letting Experts"),
     FOOT("lm6", "You're getting this because The Letting Experts are letting your property."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Viewings" },
 } as const;
 
 /* ── The offer is accepted ────────────────────────────────────────────────
@@ -1619,18 +1620,20 @@ export const APPLICATION_ACCEPTED_LANDLORD = {
   preheader: "What was agreed, and what happens next.",
   mode: "blocks",
   blocks: [
-    H("aal1", "You have new tenants on the way"),
+    H("aal1", "New Tenants on the Way"),
     T(
       "aal2",
-      "Dear {{landlordName}},<br><br>Good news: the application on <strong>{{address}}</strong> has been accepted. Here is what was agreed:"
+      "Dear {{landlordName}},<br><br>Good news: the application on <strong>{{address}}</strong> has been accepted. Here's what was agreed:"
     ),
     T("aal3", "{{detailsList}}"),
-    T("aal4", "<strong>What happens next.</strong> We are starting the tenants' references now and will let you know as soon as they are back. The let goes ahead once the references are through and the tenancy agreement is signed, and we will keep you posted at each step.<br><br>Any questions, just reply to this email or give me a call."),
+    H2("aal8", "What Happens Next"),
+    T("aal4", "We're starting the tenants' references now and will let you know as soon as they're back. The let goes ahead once the references are through and the tenancy agreement is signed, and we'll keep you posted at each step."),
+    T("aal9", "Any questions, just reply or give me a call."),
     SP("aal5", 8),
     T("aal6", "{{agentName}}<br>{{agentPhone}}<br>{{agentEmail}}<br>The Letting Experts"),
     FOOT("aal7", "You're getting this because an application has been accepted on a property we let for you."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your let" },
 } as const;
 
 export const APPLICATION_ACCEPTED_TENANT = {

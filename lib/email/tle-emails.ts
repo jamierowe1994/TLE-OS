@@ -930,8 +930,9 @@ The Letting Experts`
         withSample(o ?? APPLICATION_ACCEPTED_LANDLORD, {
           landlordName: "Mr Raj Patel",
           address: "8 Recreation Terrace, Nottingham NG2 3AB",
+          /* The shape lib/handover.ts builds: only the rows the application holds, values in bold. */
           detailsList:
-            "Offer amount: £1,250 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Turner, Daniel Turner",
+            "Offer amount: <strong>£1,250 pcm</strong><br>Start date: <strong>01/10/2026</strong><br>Length of tenancy: <strong>12 months</strong><br>Date accepted: <strong>16/09/2026</strong><br>Tenant names: <strong>Sophie Turner, Daniel Turner</strong>",
           agentName: "Sam Whitaker",
           agentPhone: "0115 123 4567",
           agentEmail: "sam@thelettingexperts.co.uk",
