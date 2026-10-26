@@ -451,6 +451,39 @@ body {
 .intro-rise { animation: intro-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .intro-rise-late { animation: intro-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both; }
 
+/* The entrance (IntroGate, new look): the name lands a letter at a time, OS
+   in coral, and a short coral line draws out from the middle under it. When
+   it goes, the whole mark lifts a little as the cover fades. */
+.entrance-mark { display: flex; font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-weight: 700; font-size: clamp(56px, 9vw, 112px); line-height: 1; letter-spacing: 0; color: var(--ink); transition: transform .7s cubic-bezier(0.22, 1, 0.36, 1); }
+.entrance-mark > span { display: inline-block; animation: entrance-letter .75s cubic-bezier(0.22, 1.3, 0.36, 1) both; }
+.entrance-mark > .is-os { color: #eb8c6d; font-weight: 500; }
+.entrance-rule { display: block; width: clamp(64px, 8vw, 96px); height: 3px; border-radius: 2px; background: #eb8c6d; transform-origin: center; animation: entrance-rule .6s cubic-bezier(0.22, 1, 0.36, 1) .55s both; }
+.opacity-0 .entrance-mark { transform: translateY(-14px); }
+@keyframes entrance-letter {
+  from { opacity: 0; transform: translateY(28px) rotate(4deg); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes entrance-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* As the entrance fades (IntroGate, new look), the page underneath pops in:
+   each block of the screen, one after another, rising and settling. */
+@keyframes entrance-pop {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+html[data-entrance="pop"] main[data-os-content] > * > *,
+html[data-entrance="pop"] main[data-os-content] .nl-dash-rest > * {
+  animation: entrance-pop 0.7s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+html[data-entrance="pop"] main[data-os-content] > * > :nth-child(2),
+html[data-entrance="pop"] main[data-os-content] .nl-dash-rest > :nth-child(2) { animation-delay: 0.08s; }
+html[data-entrance="pop"] main[data-os-content] > * > :nth-child(3),
+html[data-entrance="pop"] main[data-os-content] .nl-dash-rest > :nth-child(3) { animation-delay: 0.16s; }
+html[data-entrance="pop"] main[data-os-content] > * > :nth-child(4),
+html[data-entrance="pop"] main[data-os-content] .nl-dash-rest > :nth-child(4) { animation-delay: 0.24s; }
+html[data-entrance="pop"] main[data-os-content] > * > :nth-child(n + 5),
+html[data-entrance="pop"] main[data-os-content] .nl-dash-rest > :nth-child(n + 5) { animation-delay: 0.32s; }
+
 /* ---------------------------------------------------------------------------
    Illustrations in the dark.
 

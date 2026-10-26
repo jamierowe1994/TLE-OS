@@ -13,6 +13,7 @@ import { CATEGORY_CERT, ContractorPick, REPORTED_BY, type Property } from "@/com
 import { searchMatches } from "@/lib/search-match";
 import DoodleIcon from "@/components/DoodleIcon";
 import FloatSheet, { FloatChoice, FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
+import CategoryIcon from "@/components/maintenance/CategoryIcon";
 
 type Group = "property" | "what" | "urgency" | "when" | "tenant" | "landlord" | "check";
 
@@ -478,7 +479,34 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           </div>
           )}
 
-          {at("what") && (
+          {at("what") && F && (
+            /* The floating look: every category as a tile to tap, with its
+               icon, straight on the dark - the same ticks, the same field. */
+            <div className="sm:col-span-2">
+              <p className="nl-fs-lb mb-2">{planned ? "What the visit covers" : "What kind of job"} <em>- tick as many as it needs</em></p>
+              <div className="nl-fs-tiles" role="group" aria-label="Category">
+                {cats.map((c) => {
+                  const on = picks.includes(c);
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setCategory(joinCategories(on ? picks.filter((x) => x !== c) : [...picks, c]))}
+                      className={`nl-fs-tile${on ? " is-on" : ""}`}
+                    >
+                      <span className="nl-fs-tile-i"><CategoryIcon name={c} /></span>
+                      <span className="nl-fs-tile-t">{c}</span>
+                      {on && (
+                        <svg className="nl-fs-tile-tick" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {at("what") && !F && (
           <div className={card("sm:col-span-2")}>
             <label className={label}>Category {F ? <em>- {planned ? "tick as many as the visit covers" : "type to find, tick as many as it needs"}</em> : <span className="font-normal normal-case tracking-normal">- {planned ? "tick as many as the visit covers" : "type to find, tick as many as it needs"}</span>}</label>
             <div className="mt-1 grid gap-2 sm:grid-cols-2 sm:gap-5">
@@ -503,7 +531,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               <p className="nl-fs-lb mb-2">How urgent{!urgency && " - pick one"}</p>
               <div className="nl-fs-choices">
                 {URGENCIES.map((u) => (
-                  <FloatChoice key={u.id} on={urgency === u.id} onClick={() => setUrgency(u.id)} title={u.label} text={u.blurb} aside={<span className="text-muted">{u.within}</span>} />
+                  <FloatChoice key={u.id} on={urgency === u.id} onClick={() => setUrgency(u.id)} icon={<CategoryIcon name={u.id === "emergency" ? "bolt" : u.id === "urgent" ? "clock" : "calendar"} />} title={u.label} text={u.blurb} aside={<span className="text-muted">{u.within}</span>} />
                 ))}
               </div>
             </div>

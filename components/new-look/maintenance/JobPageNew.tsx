@@ -109,6 +109,9 @@ export function JobFailedNew({ error, onRetry }: { error: string; onRetry?: () =
   );
 }
 
+/* What Add a File takes: anything the job might need, not only evidence (lib/r2 "working"). */
+const WORKING_FILES = "image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.eml,.msg";
+
 export default function JobPageNew(v: JobView) {
   const { o, saves, home, shots, bookFailed, here, picked, stageShown, shownAt, stageCount, shownMeta, popUp, err, busy } = v;
   const cancelled = o.status === "cancelled";
@@ -181,7 +184,7 @@ export default function JobPageNew(v: JobView) {
             </header>
 
             {/* ── the stage it's on, its question and its choices ─────────── */}
-            <section className="nl-jb-stage" aria-labelledby="nl-jb-stage-h">
+            <section className={`nl-jb-stage${!cancelled && !(picked && picked !== here) ? " is-now" : ""}`} aria-labelledby="nl-jb-stage-h">
               <div className="nl-jb-stage-top">
                 <span>{cancelled ? "Cancelled" : picked && picked !== here ? "Another stage" : "Current stage"}</span>
                 {shownAt >= 0 && !cancelled && <span className="nl-jb-stepof">Step {shownAt + 1} of {stageCount}</span>}
@@ -233,7 +236,7 @@ export default function JobPageNew(v: JobView) {
           {/* ── the actions, in their groups ──────────────────────────────── */}
           <aside className="nl-jb-side" aria-label="What you can do on this job">
             <JobGroups v={v} />
-            <input ref={v.fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={v.onFile} />
+            <input ref={v.fileRef} type="file" accept={WORKING_FILES} className="hidden" onChange={v.onFile} />
             {err && !popUp && <p className="nl-jb-said is-err" role="alert">{err}</p>}
           </aside>
         </div>
