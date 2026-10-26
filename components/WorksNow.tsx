@@ -860,13 +860,14 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
      is typed in pounds and kept in pence. */
   const [cover, setCover] = useState(initial.publicLiabilityCoverPence != null ? String(initial.publicLiabilityCoverPence / 100) : "");
   /* Bank details (Stuart Roper, 26 Oct 2026), the new look's form only. The
-     account number is whole here when the record was opened by somebody who
-     may edit it; opened from the list it is the last four, and the box is
-     sent only once something is typed in it, so it is never wiped unseen. */
+     account number is never whole here (lib/bank-vault): the box shows the
+     last four as its hint and is sent only once a new one is typed, so it is
+     never wiped unseen. */
   const [bank, setBank] = useState({
     name: initial.bankAccountName ?? "",
     sort: initial.bankSortCode ? sortCodeWords(initial.bankSortCode) : "",
-    acct: initial.bankAccountNumber ?? "",
+    /* Never the whole number (lib/bank-vault): the box is blank, its hint the last four. */
+    acct: "",
     typed: false,
   });
   const group = (title: string, blurb: string) => (
@@ -881,7 +882,7 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
     if (!compact && cover.trim() && (!Number.isFinite(coverPounds) || coverPounds < 0)) return setErr("The cover should be an amount in pounds, e.g. 5,000,000.");
     let body: Record<string, unknown> = compact ? c : { ...c, publicLiabilityExpiry: c.publicLiabilityExpiry || null, publicLiabilityCoverPence: cover.trim() ? Math.round(coverPounds * 100) : null };
     if (look === "float" && !compact) {
-      const sendAcct = bank.typed || Boolean(initial.bankAccountNumber);
+      const sendAcct = bank.typed && Boolean(bank.acct.trim());
       const held = !sendAcct && initial.bankAccountLast4 ? "00000000" : bank.acct;
       /* Checked here as the server checks it, so the box that is wrong is said before anything goes. */
       const cleared = !bank.name.trim() && !bank.sort.trim() && !bank.acct.trim();

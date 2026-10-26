@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, signedTokenUserId } from "@/lib/auth";
 import { q } from "@/lib/db";
+import { emailCheckDue } from "@/lib/email-check";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,9 +19,12 @@ export async function GET(req: NextRequest) {
   try {
     const rows = await q<{ role: string; locked_at: Date | null }>(`SELECT role, locked_at FROM os_users WHERE id = $1`, [userId]);
     const r = rows[0];
-    /* capped: the middleware's pace cap applies - to everybody but an owner. */
+    /* capped: the middleware's pace cap applies - to everybody but an owner.
+       emailDue: the every-few-days email check is owed (lib/email-check); a
+       check that can't be read is not owed, so it never locks anyone out. */
+    const emailDue = r && !r.locked_at ? await emailCheckDue(userId).catch(() => false) : false;
     return NextResponse.json(
-      { ok: true, locked: Boolean(r?.locked_at), capped: r?.role !== "owner" },
+      { ok: true, locked: Boolean(r?.locked_at), capped: r?.role !== "owner", emailDue },
       { headers: { "cache-control": "private, no-store" } }
     );
   } catch {

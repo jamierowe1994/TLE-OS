@@ -6,10 +6,12 @@ import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { accountsInvoiceEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import { bankForInvoice } from "@/lib/contractor-bank";
+import { recentBankChanges } from "@/lib/bank-vault";
+import type { BankDetails } from "@/lib/bank";
 import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
 import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
-import { markOrderSent, pounds, tenantsOf, URGENCIES, type Move, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
+import { contractorBank, markOrderSent, pounds, tenantsOf, URGENCIES, type Move, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
 import type { OsUser } from "@/lib/users";
 import { getLandlordPref, landlordHold } from "@/lib/landlord-prefs";
 import { propertyAgentFor } from "@/lib/works-property-agent";
@@ -247,6 +249,30 @@ async function invoiceAttachments(o: WorksOrder): Promise<{ filename: string; co
   }
 }
 
+/**
+ * Whether accounts should ring the contractor before paying (lib/bank-vault,
+ * 26 Oct 2026): the details came with this invoice and aren't the ones on
+ * the contractor's record, or the record's details were replaced in the last
+ * 30 days. Null when neither.
+ */
+async function bankCaution(o: WorksOrder, bank: BankDetails & { from: "invoice" | "record" }): Promise<string | null> {
+  const who = o.contractorName || "the contractor";
+  const ring = `Before paying, ring ${who} on a number you already had (not one from the invoice or an email) to confirm them.`;
+  if (bank.from === "invoice" && o.contractorId) {
+    const held = await contractorBank(o.contractorId).catch(() => null);
+    const differs = !held || held.sortCode !== bank.sortCode || held.accountNumber !== bank.accountNumber;
+    if (differs) return `${held ? `These aren't the bank details on ${who}'s record` : `${who} had no bank details on record before this invoice`}. ${ring}`;
+  }
+  if (o.contractorId) {
+    const [changed] = await recentBankChanges(30, o.contractorId);
+    if (changed) {
+      const day = new Date(changed.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
+      return `${who}'s bank details were changed on ${day} by ${changed.by}. ${ring}`;
+    }
+  }
+  return null;
+}
+
 /** The accounts inbox: a contractor's invoice is on a job (Michael, 7 Sep 2026).
  *  The words live in lib/email/works-internal.ts so the catalogue can show
  *  them without a job having to move. */
@@ -259,7 +285,7 @@ export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promis
   if (!address.includes("@")) return { to: "accounts", sent: false, reason: "no accounts or compliance inbox set under Maintenance, Invoices, Who invoices are from" };
   /* Where to pay it (Stuart Roper, 26 Oct 2026): the invoice's own details, else the contractor's record. */
   const bank = await bankForInvoice(o).catch(() => null);
-  const mail = accountsInvoiceEmail(o, bank);
+  const mail = accountsInvoiceEmail(o, bank, bank ? await bankCaution(o, bank).catch(() => null) : null);
   if (o.rehearsal) return keep(o.id, "accounts", address, mail.subject, mail.html);
   try {
     /* The invoice itself goes with it, so it can be keyed into PayProp

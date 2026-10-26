@@ -86,6 +86,16 @@ CREATE INDEX IF NOT EXISTS os_users_rex ON os_users (rex_user_id);
 ALTER TABLE os_users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;
 ALTER TABLE os_users ADD COLUMN IF NOT EXISTS locked_by TEXT;
 ALTER TABLE os_users ADD COLUMN IF NOT EXISTS locked_reason TEXT NOT NULL DEFAULT '';
+-- The every-few-days email check (lib/email-check, 26 Oct 2026): when this
+-- person last proved they hold their own mailbox.
+ALTER TABLE os_users ADD COLUMN IF NOT EXISTS email_checked_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS os_email_check_codes (
+  user_id     TEXT PRIMARY KEY,
+  code_hash   TEXT NOT NULL,
+  sent_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at  TIMESTAMPTZ NOT NULL,
+  attempts    INT NOT NULL DEFAULT 0
+);
 
 -- Pending email verifications. The token is NEVER stored — only its SHA-256,
 -- so a read of this table cannot be turned into a sign-in. One live row per

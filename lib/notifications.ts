@@ -15,6 +15,7 @@ import { newBookingsFor } from "@/lib/rex-viewings";
 import { decisionsFor, waitingOnDesk } from "@/lib/section-notices";
 import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
 import { gapsForBell } from "@/lib/propoly-mail";
+import { recentBankChanges } from "@/lib/bank-vault";
 import { bookFor } from "@/lib/listings-cache";
 import { recentTenantSends } from "@/lib/tenant-documents";
 import { termsForAgent } from "@/lib/terms/store";
@@ -451,6 +452,21 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
           : `${credit ? "The Anthropic account ran out of credit" : "The Anthropic key was refused"}${back ? `, back since ${new Date(back).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}` : ""}. Waiting PLC files read themselves once it answered.`,
         href: "/admin/ai-costs",
         tone: open ? "warn" : "none",
+      });
+    }
+  }
+  /* A contractor's bank details replaced (lib/bank-vault, 26 Oct 2026): the
+     classic payment fraud, so owners hear about each one for a fortnight. */
+  if (me.role === "owner") {
+    for (const c of await recentBankChanges(14).catch(() => [])) {
+      out.push({
+        id: `bank-change:${c.contractorId}:${c.at}`,
+        kind: "money",
+        at: c.at,
+        title: `${c.contractorName}'s bank details were changed`,
+        body: `By ${c.by}. Before their next invoice is paid, someone should ring them on a number we already had to confirm the new details.`,
+        href: `/contractors?id=${encodeURIComponent(c.contractorId)}`,
+        tone: "warn",
       });
     }
   }

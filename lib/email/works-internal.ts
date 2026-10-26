@@ -36,7 +36,7 @@ const when = (iso: string | null) =>
  * bank details to pay it to, whole (Stuart Roper, 26 Oct 2026): this goes to
  * the accounts inbox and nowhere else, and whoever pays needs every digit.
  */
-export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null): AgentEmail {
+export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null, caution?: string | null): AgentEmail {
   const payee = o.payee === "agent" ? `${o.raisedBy} (paid the contractor themselves)` : o.contractorName || "the contractor";
   const subject = `Invoice in: #${o.ref} ${o.title}, ${pounds(o.invoicePence)} to ${payee}`;
   const payTo = bank ? `${bank.accountName} · sort code ${sortCodeWords(bank.sortCode)} · account ${bank.accountNumber}` : "";
@@ -61,6 +61,9 @@ export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null): 
           tone: bank ? ("neutral" as const) : ("attention" as const),
           icon: "mark-money.png",
         }]),
+        /* New or changed bank details: the classic payment fraud is "we've
+           changed banks" (lib/bank-vault, 26 Oct 2026). Said, never blocked. */
+        ...(caution && bank && o.payee !== "agent" ? [{ title: "Check before paying", detail: caution, tone: "attention" as const, icon: "mark-money.png" }] : []),
       ],
       rowsLead: "To pay",
       /* Same bare rows as its twin to compliance: two facts about one job,
@@ -72,7 +75,7 @@ export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null): 
       tip: "Mark it paid on the job once it has gone through PayProp, and it drops off the accounts list.",
       tipQuiet: true,
     }),
-    text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}.${payTo ? ` Pay to ${payTo}.` : ""} Reference #${o.ref}. Open: ${jobLink(o.id)}`,
+    text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}.${payTo ? ` Pay to ${payTo}.` : ""}${caution && bank ? ` Check before paying: ${caution}` : ""} Reference #${o.ref}. Open: ${jobLink(o.id)}`,
   };
 }
 

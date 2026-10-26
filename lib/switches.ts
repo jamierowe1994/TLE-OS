@@ -591,6 +591,19 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "AGENT_AUTOMATIONS",
     legacyOn: "on",
   },
+  {
+    /* The every-few-days email check (lib/email-check, James 26 Oct 2026:
+       "confirmation via email every couple of days, just to make sure"). A
+       second factor nobody has to set up: the code goes to the work mailbox
+       they already have. No new variable: unset is off. */
+    key: "email_check",
+    label: "Check it's them by email every few days",
+    what: "Every 3 days, each person signed in to the OS is asked for a 6-digit code emailed to their work address before they carry on. Nothing else changes. If the email can't be sent, they are let in and it asks again next time.",
+    who: "EVERY STAFF ACCOUNT, by email to their own work address, on the internal sender. Nothing goes to landlords or tenants.",
+    confirm: "CHECK EMAIL",
+    legacyEnv: "EMAIL_CHECK",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

@@ -6,6 +6,7 @@ import { addFileDoc } from "@/lib/file-documents";
 import { OTHER as OTHER_DOC } from "@/lib/doc-types";
 import { TEST_STREET } from "@/lib/test-guard";
 import type { BankDetails } from "@/lib/bank";
+import { noteBankChange, openAccount, sealAccount } from "@/lib/bank-vault";
 import { asksFor, askById, upsertAsks, resendAsk, recordAskQuote, declineAsk, acceptAsk, isLive, type QuoteAsk } from "@/lib/works-quotes";
 import { chaseOf, stopChaseOnMove } from "@/lib/works-chase-store";
 import type { WorksChase } from "@/lib/works-chase-rules";
@@ -388,7 +389,7 @@ function toContractor(r: Row): Contractor {
     publicLiabilityExpiry: plainDate(r.public_liability_expiry),
     publicLiabilityCoverPence: r.public_liability_cover_pence == null ? null : Number(r.public_liability_cover_pence),
     logoUrl: s(r.logo_url),
-    bankAccountName: s(r.bank_account_name), bankSortCode: s(r.bank_sort_code), bankAccountLast4: s(r.bank_account_number).slice(-4),
+    bankAccountName: s(r.bank_account_name), bankSortCode: s(r.bank_sort_code), bankAccountLast4: openAccount(s(r.bank_account_number)).slice(-4),
     deletedAt: iso(r.deleted_at), deletedBy: s(r.deleted_by),
   };
 }
@@ -463,20 +464,27 @@ export async function saveContractor(input: Partial<Contractor> & { name: string
 
 const given = (v: string | undefined) => (v === undefined ? null : String(v).trim());
 
-/** The whole account number, for the edit form and the invoice to accounts. */
+/** The whole account number, for the server only: the invoice to accounts, and checking a change. Never sent to a browser (lib/bank-vault). */
 export async function contractorBank(id: string): Promise<BankDetails | null> {
   if (!hasDb() || !id) return null;
   const [r] = await q<Row>(`SELECT bank_account_name, bank_sort_code, bank_account_number FROM os_contractors WHERE id = $1`, [id]);
-  if (!r || !s(r.bank_account_number)) return null;
-  return { accountName: s(r.bank_account_name), sortCode: s(r.bank_sort_code), accountNumber: s(r.bank_account_number) };
+  const accountNumber = r ? openAccount(s(r.bank_account_number)) : "";
+  if (!r || !accountNumber) return null;
+  return { accountName: s(r.bank_account_name), sortCode: s(r.bank_sort_code), accountNumber };
 }
 
-/** Put their bank details on the record, or clear them with null. Checked by the caller (lib/bank readBank). */
-export async function setContractorBank(id: string, bank: BankDetails | null): Promise<void> {
+/**
+ * Put their bank details on the record, or clear them with null. Checked by
+ * the caller (lib/bank readBank). The account number is stored sealed, and a
+ * change goes in the audit, masked (lib/bank-vault).
+ */
+export async function setContractorBank(id: string, bank: BankDetails | null, by?: { id?: string | null; email: string; via: string; contractorName: string }): Promise<void> {
+  const before = by ? await contractorBank(id).catch(() => null) : null;
   await q(
     `UPDATE os_contractors SET bank_account_name = $2, bank_sort_code = $3, bank_account_number = $4, updated_at = NOW() WHERE id = $1`,
-    [id, bank?.accountName ?? "", bank?.sortCode ?? "", bank?.accountNumber ?? ""]
+    [id, bank?.accountName ?? "", bank?.sortCode ?? "", sealAccount(bank?.accountNumber ?? "")]
   );
+  if (by) await noteBankChange({ contractorId: id, contractorName: by.contractorName, before, after: bank, by, via: by.via });
 }
 
 /** Jobs still open with a contractor, across everybody's - what stops a delete. */

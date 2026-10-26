@@ -19,6 +19,12 @@ export type AuditKind =
   | "sign_in"
   | "sign_in_failed"
   | "password_reset"
+  /* A contractor's bank details added, changed or removed (lib/bank-vault,
+     26 Oct 2026), masked. "Changed" ones are flagged to owners. */
+  | "bank_details_changed"
+  /* The every-few-days email check at sign-in (lib/email-check). */
+  | "email_check_sent"
+  | "email_check_passed"
   | "view_as_start"
   | "view_as_end"
   /* Arming or disarming a send. Recorded because a switch that turns on
