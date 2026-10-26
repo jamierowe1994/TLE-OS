@@ -686,19 +686,17 @@ export const TENANT_VIEWING_BOOKED = {
   preheader: "The address, the time, and who is meeting you.",
   mode: "blocks",
   blocks: [
-    H("tp1", "You're booked in"),
-    T(
-      "tp2",
-      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> is confirmed for <strong>{{whenPretty}}</strong>. {{meetLine}}"
-    ),
-    SP("vb3", 8),
+    H("tp1", "You're Booked In"),
+    T("vb2", "Hi {{firstName}},<br><br>Your viewing is confirmed. Here's everything you need."),
+    FACTS("vb9", [["The home", "{{address}}"], ["When", "{{whenPretty}}"]]),
+    /* tp2 stays the line the calendar buttons follow (lib/viewing-confirm). */
+    T("tp2", "{{meetLine}}"),
     T("vb4", "{{nextLine}}"),
     T("vb5", "Need to change the time? Just reply to this email."),
-    SP("vb6", 8),
-    T("vb7", "The Letting Experts"),
+    T("vb7", "Enjoy the viewing,<br>{{agentName}}"),
     FOOT("vb8", "You're getting this because you booked a viewing with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Viewing booked", mast: "manilla" },
 } as const;
 
 /**
@@ -739,21 +737,20 @@ export const TENANT_SIGN_IN = {
   preheader: "One click and you are in. The link works once and lasts a day.",
   mode: "blocks",
   blocks: [
-    H("ts1", "Here is your link"),
+    H("ts1", "Here's Your Way In"),
     T(
       "ts2",
-      "Hi {{firstName}},<br><br>Open the button below and you are into your account with The Letting Experts: where your tenancy is up to, what happens next, and your passport."
+      "Hi {{firstName}},<br><br>The button below takes you into your account with The Letting Experts: where your tenancy is up to, what happens next, and your passport."
     ),
-    SP("ts3", 8),
+    FACTS("ts11", [["Works", "Once"], ["Lasts", "24 hours"]]),
     BTN("ts4", "Open my account", "{{link}}"),
     SP("ts5", 8),
-    T("ts6", "The link works once and lasts 24 hours. If it has run out, ask for another from the sign-in page."),
+    T("ts6", "If it has run out, ask for another from the sign-in page."),
     T("ts7", "If you didn't ask for this, you can ignore it. Nothing happens unless the link is opened."),
-    SP("ts8", 8),
-    T("ts9", "The Letting Experts"),
+    T("ts9", "See you inside,<br>The Letting Experts"),
     FOOT("ts10", "You're getting this because a sign-in was requested for this address at The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Sign in", mast: "sage" },
 } as const;
 
 
@@ -1519,18 +1516,15 @@ export const VIEWING_CANCELLED = {
   preheader: "We're sorry for the change. Reply and we'll find another time.",
   mode: "blocks",
   blocks: [
-    H("vc1", "Your viewing is cancelled"),
-    T(
-      "vc2",
-      "Hi {{firstName}},<br><br>I'm sorry, but your viewing at <strong>{{address}}</strong> on <strong>{{whenPretty}}</strong> can no longer go ahead."
-    ),
+    H("vc1", "Sorry, This Viewing Is Off"),
+    T("vc2", "Hi {{firstName}},<br><br>I'm sorry, but this viewing can no longer go ahead."),
+    FACTS("vc8", [["The home", "{{address}}"], ["Was booked for", "{{whenPretty}}"]]),
     T("vc3", "{{reasonLine}}"),
     T("vc4", "If you'd still like to see it, or something similar, just reply to this email and I'll find you another time."),
-    SP("vc5", 8),
-    T("vc6", "{{agentName}}<br>The Letting Experts"),
+    T("vc6", "Speak soon,<br>{{agentName}}"),
     FOOT("vc7", "You're getting this because you booked a viewing with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Viewing cancelled", mast: "oat" },
 } as const;
 
 /* "It's been let" to the other enquirers and viewers, from Take It Offline
@@ -1540,17 +1534,17 @@ export const LISTING_LET_NOTICE = {
   preheader: "Thanks for your interest. If you're still looking, we have other homes near you.",
   mode: "blocks",
   blocks: [
-    H("ln1", "This home has now been let"),
+    H("ln1", "This One's Been Let"),
     T("ln2", "Hi {{firstName}},<br><br>Thanks for your interest in <strong>{{address}}</strong>. It has now been let, so it's no longer available."),
     T("ln3", "If you're still looking, we have other homes on now. Press the button to see what's near you, or just reply to this email with what you're after and I'll let you know as soon as something similar comes up."),
     /* Show Me Other Homes (James, 22 Oct 2026): their own link, so the agent
        hears that they asked (lib/let-notice moreHomesLink). */
-    BTN("ln3b", "Show Me Other Homes", "{{homesUrl}}", "center"),
+    BTN("ln3b", "Show me other homes", "{{homesUrl}}"),
     SP("ln4", 8),
-    T("ln5", "{{agentName}}<br>The Letting Experts"),
+    T("ln5", "Good luck with the search,<br>{{agentName}}"),
     FOOT("ln6", "You're getting this because you asked about or viewed this home with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Home let", mast: "oat" },
 } as const;
 
 export const VIEWING_MOVED = {
@@ -1558,17 +1552,14 @@ export const VIEWING_MOVED = {
   preheader: "Your viewing is now {{whenPretty}}.",
   mode: "blocks",
   blocks: [
-    H("vm1", "Your viewing has a new time"),
-    T(
-      "vm2",
-      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> has moved from {{oldWhen}} to <strong>{{whenPretty}}</strong>. {{meetLine}}"
-    ),
+    H("vm1", "New Time, Same Home"),
+    T("vm2", "Hi {{firstName}},<br><br>Your viewing has moved to a new time. {{meetLine}}"),
+    FACTS("vm7", [["The home", "{{address}}"], ["New time", "{{whenPretty}}"], ["Moved from", "{{oldWhen}}"]]),
     T("vm3", "The new time is attached as a calendar file, so you can add it in one tap. If it doesn't suit, just reply and we'll sort another."),
-    SP("vm4", 8),
-    T("vm5", "{{agentName}}<br>The Letting Experts"),
+    T("vm5", "Speak soon,<br>{{agentName}}"),
     FOOT("vm6", "You're getting this because you booked a viewing with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Viewing moved", mast: "manilla" },
 } as const;
 
 /* ── The landlord, told about a viewing (James, 6 Oct 2026) ──────────────
@@ -1775,18 +1766,18 @@ export const TENANT_PORTAL_LOGIN = {
   preheader: "Report a repair online and follow it until it's fixed. No password needed.",
   mode: "blocks",
   blocks: [
-    H("tpl1", "Your Tenant Account Is Ready"),
-    T("tpl2", "Hi {{firstName}},<br><br>{{agentName}} has set up your tenant account with The Letting Experts for {{address}}."),
-    T("tpl3", "From now on, the quickest way to report a repair is online. Tell us what's wrong and where, and you can follow it from reported to fixed. Your messages to us are kept there too."),
+    H("tpl1", "Your Account Is All Set"),
+    T("tpl2", "Hi {{firstName}},<br><br>{{agentName}} has set up your tenant account with The Letting Experts for <strong>{{address}}</strong>."),
+    T("tpl3", "From now on, the quickest way to report a repair is online. Tell us what's wrong and where, and you can follow it all the way from reported to fixed. Your messages to us are kept there too."),
     SP("tpl4", 8),
     BTN("tpl5", "Open my tenant account", "{{link}}"),
     SP("tpl6", 8),
     T("tpl7", "There's no password to remember. The button signs you straight in and works for 14 days. After that, go to <a href=\"{{signInHref}}\">{{signInLink}}</a> at any time and type in this email address, and we'll send you a fresh link."),
     T("tpl8", "{{emergencyLine}}"),
-    T("tpl9", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("tpl9", "Speak soon,<br>{{agentName}}"),
     FOOT("tpl10", "You're getting this because you rent your home through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your account", mast: "sage" },
 } as const;
 
 /**
@@ -1978,18 +1969,17 @@ export const VIEWING_REMINDER = {
   preheader: "{{address}}. Everything you need for this morning.",
   mode: "blocks",
   blocks: [
-    H("vr1", "See you today"),
-    T("vr2", "Hi {{firstName}},<br><br>A reminder that you're viewing <strong>{{address}}</strong> today at <strong>{{timePretty}}</strong>. {{meetLine}}"),
-    SP("vr3", 8),
-    BTN("vr4", "Open it on a map", "{{mapLink}}"),
+    H("vr1", "Today's the Day"),
+    T("vr2", "Hi {{firstName}},<br><br>Just a reminder that your viewing is today. {{meetLine}}"),
+    FACTS("vr11", [["The home", "{{address}}"], ["Time", "Today at {{timePretty}}"]]),
+    BTN("vr4", "Show me on a map", "{{mapLink}}"),
     SP("vr5", 8),
     T("vr6", "Bring some photo ID, and any questions about the home or the landlord."),
     T("vr7", "Running late, or can't make it? {{contactLine}}"),
-    SP("vr8", 8),
-    T("vr9", "The Letting Experts"),
+    T("vr9", "Enjoy the viewing,<br>The Letting Experts"),
     FOOT("vr10", "You're getting this because you booked a viewing with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Viewing today", mast: "manilla" },
 } as const;
 
 /** Closed as a no-show on the viewing. {{whenPretty}} ("on Tuesday 4 September"). Rebooked by reply. */
@@ -1998,15 +1988,14 @@ export const VIEWING_REBOOK = {
   preheader: "We missed you. Reply with a time that suits.",
   mode: "blocks",
   blocks: [
-    H("vb1", "Shall we find another time?"),
+    H("vb1", "We Missed You"),
     T("vb2", "Hi {{firstName}},<br><br>We missed you at <strong>{{address}}</strong> {{whenPretty}}. No problem, things come up."),
     T("vb3", "If you'd still like to see it, reply with two or three days and times that suit you and I'll book it straight back in."),
     T("vb4", "If it's not the one after all, reply and tell me, and I'll send you others."),
-    SP("vb5", 8),
-    T("vb6", "{{agentName}}<br>The Letting Experts"),
+    T("vb6", "Speak soon,<br>{{agentName}}"),
     FOOT("vb7", "You're getting this because you booked a viewing with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your viewing", mast: "manilla" },
 } as const
 
 /** Two hours after the viewing. One button, to the feedback page, already signed in. {{viewedOn}} */
@@ -2015,16 +2004,18 @@ export const VIEWING_FEEDBACK = {
   preheader: "A minute, while you still remember it.",
   mode: "blocks",
   blocks: [
-    H("vf1", "How was it?"),
-    T("vf2", "Hi {{firstName}},<br><br>Thanks for coming to see <strong>{{address}}</strong> {{viewedOn}}. Whatever you thought, it helps: it tells me what to send you next, and it tells the landlord how their home is landing."),
+    H("vf1", "So, How Was It?"),
+    T("vf2", "Hi {{firstName}},<br><br>Thanks for coming to see <strong>{{address}}</strong> {{viewedOn}}. Love it or not, I'd like to hear: it tells me what to send you next, and it tells the landlord how their home is landing."),
     T("vf3", "It takes about a minute. If it's the one, you can put an offer in on the same page."),
     SP("vf4", 8),
-    BTN("vf5", "Tell us what you thought", "{{link}}"),
+    BTN("vf5", "Share what I thought", "{{link}}"),
     SP("vf6", 8),
-    T("vf7", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    /* No {{agentPhone}}: lib/tenant-journey-emails never fills it, so it went
+       out as the bare placeholder. */
+    T("vf7", "Thanks again,<br>{{agentName}}"),
     FOOT("vf8", "You're getting this because you viewed a property with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your viewing", mast: "manilla" },
 } as const;
 
 /** Their feedback says it wasn't for them. {{reasonLine}} {{homesList}} = live homes nearby at a similar rent. */
@@ -2033,16 +2024,15 @@ export const VIEWING_NOT_FOR_THEM = {
   preheader: "Homes on now that might suit you better.",
   mode: "blocks",
   blocks: [
-    H("vn1", "Not that one? Try these"),
+    H("vn1", "Not That One? Try These"),
     T("vn2", "Hi {{firstName}},<br><br>Thanks for telling us what you thought of <strong>{{address}}</strong>. {{reasonLine}}"),
-    T("vn3", "Here are some others on with us now, nearby and at a similar rent:"),
+    T("vn3", "So here are some others on with us now, nearby and at a similar rent:"),
     T("vn4", "{{homesList}}"),
     T("vn5", "Reply with any you'd like to see and I'll book them in."),
-    SP("vn6", 8),
-    T("vn7", "{{agentName}}<br>The Letting Experts"),
+    T("vn7", "Happy hunting,<br>{{agentName}}"),
     FOOT("vn8", "You're getting this because you viewed a property with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "More homes", mast: "oat" },
 } as const
 
 /** The application is in. {{offerLine}} {{holdingFeeLine}} */
