@@ -57,6 +57,7 @@ import HomeNotes from "@/components/portfolio/HomeNotes";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Tabs, Menu, Ico, type MenuItem, type Tone } from "@/components/new-look/Parts";
 import PhotoGrid from "@/components/new-look/PhotoGrid";
+import type { IncomingLet } from "@/app/api/portfolio/incoming/route";
 
 /**
  * One home, the whole of it, on one page.
@@ -440,6 +441,22 @@ export default function PropertyPage() {
       .catch(() => { /* no swap shown; making one still works */ });
     return () => { live = false; };
   }, [p?.listingId]);
+
+  /* The let on its way in (Joe Patten, 26 Oct 2026; /api/portfolio/incoming):
+     a home REX has as let with nobody on it, because its let went straight
+     into Propoly, shows who is moving in and opens their let - rather than
+     a greyed-out Change the tenants and no word why. New look only. */
+  const [incoming, setIncoming] = useState<IncomingLet[]>([]);
+  useEffect(() => {
+    if (!look || !p?.listingId || p.test) return;
+    let live = true;
+    setIncoming([]);
+    fetch(`/api/portfolio/incoming?listing=${encodeURIComponent(p.listingId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok) setIncoming(j.lets ?? []); })
+      .catch(() => { /* nothing shown; the home reads as before */ });
+    return () => { live = false; };
+  }, [look, p?.listingId, p?.test]);
 
   /* ── drafts: a form started and not sent (lib/property-drafts) ───────── */
   const [drafts, setDrafts] = useState<Loaded<PropertyDraft[]>>({ state: "loading" });
@@ -917,6 +934,12 @@ export default function PropertyPage() {
       }, 60);
     };
     const serviceTone: Tone = p.test ? "accent" : p.service === "Managed" ? "good" : "neutral";
+    /* Nobody on the home yet, and a let on its way in: that let stands in for
+       Change the tenants, which needs tenants to change. Adding the newcomers
+       there would start a second Propoly deal for the same people. */
+    const comingIn = !tenants.length && !swapOn ? incoming[0] ?? null : null;
+    const comingNames = comingIn ? (comingIn.tenants.length ? comingIn.tenants.join(" & ") : "The new tenants") : "";
+    const comingWhen = comingIn?.moveIn ? `moving in ${day(comingIn.moveIn)}` : "move-in date to set";
     const rentShown = houseView && house && !lets ? houseLine : rentLine;
     const menu: MenuItem[] = [
       { label: "Book a property visit", sub: "Every 6 months: the home and the tenant", disabled: !canAct || visits.state !== "ready", onClick: () => void bookVisit() },
@@ -926,7 +949,9 @@ export default function PropertyPage() {
       { label: "Tenant gave notice", sub: "Starts the move-out", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "tenant-notice" }) },
       swapOn
         ? { label: `${swapOn.swap.label ?? "Tenant swap"} under way`, sub: `${(swapOn.swap.joining.length ? swapOn.swap.joining : swapOn.swap.rereference ?? []).join(", ")} from ${day(swapOn.swap.moveIn)} · ${swapOn.plc?.short ?? "PLC check next"}`, onClick: () => act({ kind: "swap-open" }) }
-        : { label: "Change the tenants", sub: "Add someone, swap a sharer or re-reference", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "swap" }) },
+        : comingIn
+          ? { label: "New tenants on the way", sub: `${comingNames}, ${comingWhen}`, href: comingIn.href }
+          : { label: "Change the tenants", sub: tenants.length ? "Add someone, swap a sharer or re-reference" : "No tenants on this home yet", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "swap" }) },
       "rule",
       { label: "Send out logins", sub: "Tenant account, to report repairs", disabled: p.test || !loginListings.length, onClick: () => setShowLogins(true) },
       { label: "Email Certificates", sub: "To the tenants, kept on the record", disabled: p.test || !loginListings.length, onClick: () => setSendOpen({ start: null, heading: "Email Certificates" }) },
@@ -970,6 +995,7 @@ export default function PropertyPage() {
         text: leaving ? `Relet · leaving ${leaving.moveOutOn ? day(leaving.moveOutOn) : "date to set"}`
           : tenancy.state === "loading" ? "Reading…"
           : tenancy.state === "ready" && tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} />
+          : comingIn ? `${comingNames}, ${comingWhen}`
           : `${tenants.length} ${tenants.length === 1 ? "tenant" : "tenants"}`,
       },
     ];
@@ -1013,7 +1039,9 @@ export default function PropertyPage() {
             {btn("Tenant gave notice", "logout", () => act({ kind: "tenant-notice" }), { disabled: !canAct || !tenants.length, title: "Starts the move-out" })}
             {swapOn
               ? btn(`${swapOn.swap.label ?? "Tenancy swap"} under way`, "key", () => act({ kind: "swap-open" }), { primary: true })
-              : btn("Tenancy swap", "key", () => act({ kind: "swap" }), { primary: true, disabled: !canAct || !tenants.length, title: "Add someone, swap a sharer or re-reference" })}
+              : comingIn
+                ? btn("Open their let", "key", () => router.push(comingIn.href), { primary: true, title: `${comingNames}, ${comingWhen}` })
+                : btn("Tenancy swap", "key", () => act({ kind: "swap" }), { primary: true, disabled: !canAct || !tenants.length, title: tenants.length ? "Add someone, swap a sharer or re-reference" : "No tenants on this home yet" })}
           </>
         ),
       },
@@ -1191,7 +1219,7 @@ export default function PropertyPage() {
                   <div className="nl-fact"><span>Let type</span><b className={p.letType ? "" : "is-quiet"}>{p.letType ?? "Not set"}</b></div>
                   <div className="nl-fact"><span>Let since</span><b className={p.letSince ? "" : "is-quiet"}>{p.letSince ? day(p.letSince) : "Not set"}</b></div>
                   <div className="nl-fact"><span>Tenancy</span><b className={tenancy.state === "ready" && tenancy.data.tenancy ? "" : "is-quiet"}>{tenancyRow}</b></div>
-                  <div className="nl-fact"><span>{roomsOnly ? "Rooms let" : tenants.length === 1 ? "Tenant" : "Tenants"}</span><b className={(roomsOnly ? letRooms.length : tenants.length) ? "" : "is-quiet"}>{roomsOnly && house ? `${letRooms.length} of ${house.rooms.length}` : tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"}</b></div>
+                  <div className="nl-fact"><span>{roomsOnly ? "Rooms let" : tenants.length === 1 ? "Tenant" : "Tenants"}</span><b className={(roomsOnly ? letRooms.length : tenants.length) ? "" : "is-quiet"}>{roomsOnly && house ? `${letRooms.length} of ${house.rooms.length}` : tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? `None yet, ${comingWhen}` : "None on record"}</b></div>
                   <div className="nl-fact"><span>On the books since</span><b>{day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince).replace("—", "Not known")}</b></div>
                 </div>
                 {/* The agent, the key numbers and the source: each changeable in place. */}
@@ -1258,6 +1286,11 @@ export default function PropertyPage() {
                       <ul className="nl-prop-people">
                         {tenants.map((t) => <li key={t.contactId}><PartyCard p={t} plain role="tenant" about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} /></li>)}
                       </ul>
+                    ) : comingIn ? (
+                      <p className="nl-empty">
+                        None yet. {comingNames} {comingIn.tenants.length === 1 ? "is" : "are"} {comingWhen}, on a let going through Propoly.{" "}
+                        <Link href={comingIn.href} className="nl-link">Open their let</Link>
+                      </p>
                     ) : (
                       <p className="nl-empty">No tenant on record. It is empty, or the let has not been recorded.</p>
                     )}
@@ -1356,11 +1389,23 @@ export default function PropertyPage() {
 
               {tab === "tenancy" && (
                 <div className="nl-bento nl-prop-two">
+                  {comingIn && (
+                    <section className="nl-cell nl-cell--manilla span2">
+                      <h3 className="nl-block-title">Moving In</h3>
+                      <p className="text-[14px]">
+                        {comingNames}
+                        <span className="nl-meta"> · {comingIn.moveIn ? `from ${day(comingIn.moveIn)}` : "move-in date to set"}{comingIn.status ? ` · ${comingIn.status}` : ""}</span>
+                      </p>
+                      <p className="nl-meta">Their let is going through Propoly, so they are already on it - there is nothing to add here. Everything about it is on their let.</p>
+                      <Link href={comingIn.href} className="nl-link self-start">Open their let</Link>
+                    </section>
+                  )}
+
                   <section className="nl-cell">
                     <h3 className="nl-block-title">The Tenancy</h3>
                     {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
                       <dl className="nl-prop-dl">
-                        <NlFact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"} />
+                        <NlFact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? "None yet, a let is on its way in" : "None on record"} />
                         <NlFact label="Rent" value={rentLine ?? noRent} />
                         <NlFact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.letSince ? day(p.letSince) : "-"} />
                         <NlFact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : "Rolling, no end date") : "-"} />

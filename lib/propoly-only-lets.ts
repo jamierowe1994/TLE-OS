@@ -40,7 +40,7 @@ const SAME_LET_DAYS = 150;
 const norm = (s: string | null | undefined) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
 /** The numbers on the door, as written: "Room 5, 166 Gloucester Road" -> ["5", "166"]. */
-const doorNumbers = (s: string) => (s.toLowerCase().match(/\b\d+[a-z]?\b/g) ?? []);
+export const doorNumbers = (s: string) => (s.toLowerCase().match(/\b\d+[a-z]?\b/g) ?? []);
 
 /**
  * The same home, allowing for a room or a flat written on one side and not
@@ -48,14 +48,19 @@ const doorNumbers = (s: string) => (s.toLowerCase().match(/\b\d+[a-z]?\b/g) ?? [
  * in REX): same postcode, and every number on the Propoly address is on REX's.
  */
 function sameLetHome(rex: Application, deal: BusinessDeal): boolean {
-  const rexAddress = `${rex.property}, ${rex.locality ?? ""}`;
+  return sameLetAddress({ name: rex.property, locality: rex.locality }, deal);
+}
+
+/** The same home as this deal, from a REX address in two parts (the home's name, then its locality). */
+export function sameLetAddress(home: { name: string; locality?: string | null }, deal: BusinessDeal): boolean {
+  const rexAddress = `${home.name}, ${home.locality ?? ""}`;
   const dealAddress = `${deal.app.propertyName}, ${deal.app.locality ?? ""}`;
   if (sameHome(rexAddress, dealAddress)) return true;
   const pr = postcodeOf(rexAddress);
   const pd = postcodeOf(dealAddress);
   if (!pr || !pd || pr.replace(/\s/g, "") !== pd.replace(/\s/g, "")) return false;
   const wanted = doorNumbers(deal.app.propertyName);
-  const have = new Set(doorNumbers(rex.property));
+  const have = new Set(doorNumbers(home.name));
   return wanted.length > 0 && wanted.every((n) => have.has(n));
 }
 
@@ -73,7 +78,7 @@ function onRex(deal: BusinessDeal, book: Application[]): boolean {
 }
 
 /** Still a let in progress: not cancelled, not unsuccessful. */
-const live = (d: BusinessDeal) => d.statusKey !== "cancelled" && d.app.stage !== "unsuccessful" && !d.app.dateUnsuccessful;
+export const live = (d: BusinessDeal) => d.statusKey !== "cancelled" && d.app.stage !== "unsuccessful" && !d.app.dateUnsuccessful;
 
 /** The names and emails one REX user goes by in the OS (Kirstie is Wallington in REX, Mulholland here). */
 export async function whoIsRexUser(rexUserId: string): Promise<{ names: Set<string>; emails: Set<string> }> {
