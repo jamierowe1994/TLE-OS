@@ -557,7 +557,7 @@ export const LANDLORD_OFFER = {
   blocks: [
     H("lo1", "An Offer on Your Home"),
     T("lo2", "Hi {{firstName}},<br><br>We've had an offer on <strong>{{address}}</strong>."),
-    T("lo3", "{{summaryList}}"),
+    { type: "facts", id: "lo3", text: "{{summaryList}}" },
     T("lo4", "{{agentLine}}"),
     T("lo5", "Just reply, or give {{agentName}} a ring, to say whether you'd like to accept it. Nothing is agreed until you say yes."),
     SP("lo6", 8),
@@ -1620,7 +1620,7 @@ export const APPLICATION_ACCEPTED_LANDLORD = {
       "aal2",
       "Dear {{landlordName}},<br><br>Good news: the application on <strong>{{address}}</strong> has been accepted. Here's what was agreed:"
     ),
-    T("aal3", "{{detailsList}}"),
+    { type: "facts", id: "aal3", text: "{{detailsList}}" },
     H2("aal8", "What Happens Next"),
     T("aal4", "We're starting the tenants' references now and will let you know as soon as they're back. The let goes ahead once the references are through and the tenancy agreement is signed, and we'll keep you posted at each step."),
     T("aal9", "Any questions, just reply or give me a call."),
