@@ -369,27 +369,22 @@ export const CERTIFICATE_SHARED_TENANT = {
   preheader: "Your copy, attached. Nothing is wrong and nothing is needed.",
   mode: "blocks",
   blocks: [
-    H("crt1", "Your home's {{certLabel}}"),
-    T(
-      "crt2",
-      "Hi {{firstName}},<br><br>The {{certLabel}} for <strong>{{address}}</strong> has been renewed, and your copy is attached. It runs to <strong>{{expires}}</strong>."
-    ),
+    H("crt1", "Your Copy, Hot off the Press"),
+    T("crt2", "Hi {{firstName}},<br><br>A certificate for your home has been renewed, and your copy is attached."),
+    FACTS("crt11", [
+      ["Certificate", "{{certLabel}}"],
+      ["Your home", "{{address}}"],
+      ["Runs to", "{{expires}}"],
+    ]),
     T(
       "crt3",
-      "You are entitled to a copy of this, so we send it as soon as it lands rather than waiting to be asked. Nothing is wrong and there is nothing you need to do - keep it with your tenancy papers."
+      "You're entitled to a copy of this, so we send it as soon as it lands rather than waiting to be asked. <strong>Nothing is wrong and there's nothing you need to do</strong> - just keep it with your tenancy papers."
     ),
-    SP("crt4", 8),
-    DIV("crt5"),
-    H2("crt6", "If you cannot open it"),
-    T(
-      "crt7",
-      "Reply to this email and we will send it another way, or print a copy for you."
-    ),
-    SP("crt8", 8),
-    T("crt9", "The Letting Experts"),
+    T("crt7", "If it won't open, reply to this email and we'll send it another way, or print a copy for you."),
+    T("crt9", "All the best,<br>The Letting Experts"),
     FOOT("crt10", "You're getting this because you rent a home managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Certificates", mast: "sage" },
 } as const;
 
 /**
@@ -867,15 +862,22 @@ export const WORKS_TENANT_RECEIVED = {
   preheader: "What happens next, and how soon.",
   mode: "blocks",
   blocks: [
-    H("wt1", "We've logged it"),
-    T("wt2", "Hi {{tenantName}},<br><br>Thanks for letting us know about <strong>{{title}}</strong> at {{address}}. It's logged as job #{{ref}} and we're on it."),
-    T("wt3", "We've marked it <strong>{{urgency}}</strong>, which means we aim to have somebody attend by <strong>{{dueBy}}</strong>. We'll email you the moment a contractor is booked, with the date and who to expect."),
-    T("wt4", "If it gets worse, or it's an emergency - no heating, a leak you can't stop, no power - ring us straight away on {{agentPhone}} rather than waiting for the email."),
-    SP("wt5", 8),
-    T("wt6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    H("wt1", "Thanks, We're on It"),
+    T("wt2", "Hi {{tenantName}},<br><br>Thanks for letting us know. Your repair is logged and we're on it."),
+    FACTS("wt8", [
+      ["The repair", "{{title}}"],
+      ["Your home", "{{address}}"],
+      ["Job number", "#{{ref}}"],
+      ["How urgent", "{{urgency}}"],
+      ["We aim to attend by", "{{dueBy}}"],
+    ]),
+    T("wt3", "We'll email you the moment a contractor is booked, with the date and who to expect."),
+    H2("wt9", "If It's an Emergency"),
+    T("wt4", "<strong>If it gets worse, or it's an emergency - no heating, a leak you can't stop, no power - ring us straight away on {{agentPhone}}</strong> rather than waiting for the email."),
+    T("wt6", "Speak soon,<br>{{agentName}}"),
     FOOT("wt7", "You're getting this because you reported a repair at a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repairs", mast: "sage" },
 } as const;
 
 export const WORKS_TENANT_BOOKED = {
@@ -883,14 +885,19 @@ export const WORKS_TENANT_BOOKED = {
   preheader: "Who to expect, and when.",
   mode: "blocks",
   blocks: [
-    H("wtb1", "Booked: {{scheduledAt}}"),
-    T("wtb2", "Hi {{tenantName}},<br><br><strong>{{contractorName}}</strong> is booked to attend {{address}} on <strong>{{scheduledAt}}</strong> for <strong>{{title}}</strong> (job #{{ref}})."),
+    H("wtb1", "The Date Is Set"),
+    T("wtb2", "Hi {{tenantName}},<br><br>We've booked <strong>{{contractorName}}</strong> to come round. Here's what to expect."),
+    FACTS("wtb7", [
+      ["When", "{{scheduledAt}}"],
+      ["Who's coming", "{{contractorName}}"],
+      ["The job", "{{title}} (#{{ref}})"],
+      ["Your home", "{{address}}"],
+    ]),
     T("wtb3", "Please make sure somebody can let them in. If that time doesn't work, reply to this email or ring {{agentPhone}} and we'll move it."),
-    SP("wtb4", 8),
-    T("wtb5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wtb5", "Thanks,<br>{{agentName}}"),
     FOOT("wtb6", "You're getting this because a contractor is booked at a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Booked in", mast: "sage" },
 } as const;
 
 export const WORKS_TENANT_DONE = {
@@ -898,14 +905,13 @@ export const WORKS_TENANT_DONE = {
   preheader: "Tell us if it isn't right.",
   mode: "blocks",
   blocks: [
-    H("wtd1", "That's done"),
-    T("wtd2", "Hi {{tenantName}},<br><br>Job #{{ref}}, <strong>{{title}}</strong>, is marked done: {{completionNote}}"),
+    H("wtd1", "Job Done"),
+    T("wtd2", "Hi {{tenantName}},<br><br><strong>{{title}}</strong> (job #{{ref}}) is marked done: {{completionNote}}"),
     T("wtd3", "If it isn't right, or the problem comes back, reply to this email and we'll get somebody back out."),
-    SP("wtd4", 8),
-    T("wtd5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wtd5", "Thanks,<br>{{agentName}}"),
     FOOT("wtd6", "You're getting this because a repair was carried out at a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repairs", mast: "sage" },
 } as const;
 
 export const WORKS_LANDLORD_APPROVAL = {
@@ -1070,14 +1076,18 @@ export const WORKS_TENANT_NOTICE = {
   preheader: "A contractor is coming to {{address}}. It's genuinely us.",
   mode: "blocks",
   blocks: [
-    H("wtn1", "A contractor is on the way"),
-    T("wtn2", "Hi {{tenantName}},<br><br>We've asked <strong>{{contractorName}}</strong> to sort <strong>{{title}}</strong> at {{address}} (job #{{ref}})."),
+    H("wtn1", "Help Is on the Way"),
+    T("wtn2", "Hi {{tenantName}},<br><br>We've asked a contractor to sort a repair at your home."),
+    FACTS("wtn7", [
+      ["Who's coming", "{{contractorName}}"],
+      ["The job", "{{title}} (#{{ref}})"],
+      ["Your home", "{{address}}"],
+    ]),
     T("wtn3", "They'll contact you directly to arrange a time to come round. If you're ever unsure whether a call is genuine, ring us on {{agentPhone}} and we'll confirm."),
-    SP("wtn4", 8),
-    T("wtn5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wtn5", "Thanks,<br>{{agentName}}"),
     FOOT("wtn6", "You're getting this because you live at a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repairs", mast: "sage" },
 } as const;
 
 /* Planned work - a gas safety, an EICR - with the tick on Plan a
@@ -1088,15 +1098,19 @@ export const WORKS_TENANT_PLANNED_NOTICE = {
   preheader: "A routine check at {{address}}. It's genuinely us.",
   mode: "blocks",
   blocks: [
-    H("wtp1", "Someone will be in touch about access"),
-    T("wtp2", "Hi {{tenantName}},<br><br>The <strong>{{title}}</strong> at {{address}} is due, and we've asked <strong>{{contractorName}}</strong> to carry it out (job #{{ref}})."),
+    H("wtp1", "Time for a Safety Check"),
+    T("wtp2", "Hi {{tenantName}},<br><br>A routine safety check on your home is due, and we've asked a contractor to carry it out."),
+    FACTS("wtp8", [
+      ["The check", "{{title}} (#{{ref}})"],
+      ["Who's coming", "{{contractorName}}"],
+      ["Your home", "{{address}}"],
+    ]),
     T("wtp3", "They'll contact you directly to arrange a time to get access. It's a routine check that keeps the home safe, so please help them find a time that works for you."),
     T("wtp4", "If you're ever unsure whether a call is genuine, ring us on {{agentPhone}} and we'll confirm."),
-    SP("wtp5", 8),
-    T("wtp6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wtp6", "Thanks,<br>{{agentName}}"),
     FOOT("wtp7", "You're getting this because you live at a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Safety check", mast: "sage" },
 } as const;
 
 export const WORKS_TENANT_FOUND = {
@@ -1104,14 +1118,17 @@ export const WORKS_TENANT_FOUND = {
   preheader: "{{contractorName}} will be in touch to arrange access.",
   mode: "blocks",
   blocks: [
-    H("wtf1", "We've found someone"),
-    T("wtf2", "Hi {{tenantName}},<br><br>Good news on <strong>{{title}}</strong> (job #{{ref}}): <strong>{{contractorName}}</strong> has agreed to do the work."),
+    H("wtf1", "Good News: We've Found Someone"),
+    T("wtf2", "Hi {{tenantName}},<br><br>A contractor has said yes to your repair, so it's on its way to being fixed."),
+    FACTS("wtf7", [
+      ["Who's coming", "{{contractorName}}"],
+      ["The job", "{{title}} (#{{ref}})"],
+    ]),
     T("wtf3", "They'll be in touch with you directly to arrange a time that suits you both. If you haven't heard from them within a couple of days, reply to this email or ring {{agentPhone}} and we'll chase."),
-    SP("wtf4", 8),
-    T("wtf5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wtf5", "Speak soon,<br>{{agentName}}"),
     FOOT("wtf6", "You're getting this because you reported a repair at a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repairs", mast: "sage" },
 } as const;
 
 /* To the landlord once the date is in (step 6). */
@@ -1156,19 +1173,18 @@ export const WORKS_TENANT_HAPPY = {
   preheader: "One click to tell us. If it isn't right, we'll get somebody back out.",
   mode: "blocks",
   blocks: [
-    H("wth1", "Was it sorted?"),
-    T("wth2", "Hi {{tenantName}},<br><br>We believe {{contractorName}} has been out to {{address}} for <strong>{{title}}</strong> (job #{{ref}}). Could you tell us whether you're happy with what's been done?"),
-    SP("wth3", 8),
+    H("wth1", "All Sorted?"),
+    T("wth2", "Hi {{tenantName}},<br><br>We believe {{contractorName}} has been out to {{address}} for <strong>{{title}}</strong> (job #{{ref}}). Are you happy with what's been done? One tap tells us."),
+    SP("wth3", 4),
     BTN("wth4", "Yes, all sorted", "{{happyLink}}"),
     SP("wth5", 4),
     BTN("wth6", "No, it isn't right", "{{notHappyLink}}"),
     SP("wth7", 8),
     T("wth8", "A no comes straight to us and somebody from the team will be in touch."),
-    SP("wth9", 8),
-    T("wth10", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wth10", "Thanks,<br>{{agentName}}"),
     FOOT("wth11", "You're getting this because a repair was carried out at a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repairs", mast: "sage" },
 } as const;
 
 /* ── Inspections (10 Sep 2026) ────────────────────────────────────────────
@@ -1184,18 +1200,22 @@ export const INSPECTION_TENANT_ACCESS = {
   preheader: "A routine visit to the property. Pick whichever date suits, or tell us none of them do.",
   mode: "blocks",
   blocks: [
-    H("ita1", "Can we pop round?"),
-    T("ita2", "Hi {{tenantName}},<br><br>We look after {{address}} for the landlord, and part of that is calling in every so often to check the property is in good order and to pick up anything that needs putting right. It usually takes about {{howLong}}."),
+    H("ita1", "Can We Pop Round?"),
+    T("ita2", "Hi {{tenantName}},<br><br>We look after your home for the landlord, and part of that is calling in every so often to check the property is in good order and to pick up anything that needs putting right."),
+    FACTS("ita11", [
+      ["Your home", "{{address}}"],
+      ["How long it takes", "About {{howLong}}"],
+    ]),
     T("ita3", "<strong>These are the times we can do:</strong><br>{{slots}}"),
-    SP("ita4", 8),
-    BTN("ita5", "Choose a time", "{{accessLink}}"),
+    SP("ita4", 4),
+    BTN("ita5", "Choose my time", "{{accessLink}}"),
     SP("ita6", 8),
-    T("ita7", "If none of them work, use the same link to tell us - we will find another time. You are welcome to be there; if you would rather not be, let us know on the link and we will let ourselves in with the keys we hold. We will not come without your agreement, and you will get at least {{noticeHours}} hours notice either way."),
-    SP("ita8", 8),
-    T("ita9", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    H2("ita12", "Your Home, Your Say"),
+    T("ita7", "If none of them work, use the same link to tell us and we'll find another time. You're welcome to be there; if you'd rather not be, let us know on the link and we'll let ourselves in with the keys we hold. <strong>We won't come without your agreement, and you'll get at least {{noticeHours}} hours' notice either way.</strong>"),
+    T("ita9", "Thanks,<br>{{agentName}}"),
     FOOT("ita10", "You're getting this because you rent a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Property visit", mast: "sage" },
 } as const;
 
 /* To the tenant once a time is agreed: the notice, in writing. */
@@ -1204,18 +1224,23 @@ export const INSPECTION_TENANT_BOOKED = {
   preheader: "Confirming the property visit we agreed.",
   mode: "blocks",
   blocks: [
-    H("itb1", "That's in the diary"),
-    T("itb2", "Hi {{tenantName}},<br><br>Confirming that <strong>{{inspector}}</strong> will call at {{address}} on <strong>{{whenPretty}}</strong> for a routine property visit. This email is your written notice of it."),
-    T("itb3", "There is nothing you need to do. If anything has been bothering you about the property, that visit is a good moment to point it out - or reply to this email now and we will have it on the list before we arrive."),
-    T("itb4", "If the time stops working, reply and we will move it."),
+    H("itb1", "That's in the Diary"),
+    T("itb2", "Hi {{tenantName}},<br><br>Confirming your routine property visit. <strong>This email is your written notice of it</strong>, with the date, the time and who's coming right here."),
+    FACTS("itb8", [
+      ["When", "{{whenPretty}}"],
+      ["Who's coming", "{{inspector}}"],
+      ["Your home", "{{address}}"],
+    ]),
+    T("itb3", "There's nothing you need to do. If anything has been bothering you about the property, the visit is a good moment to point it out - or reply to this email now and we'll have it on the list before we arrive."),
+    T("itb4", "If the time stops working, reply and we'll move it."),
     /* Their own link (3 Oct 2026): one press says the time works, or asks for another. */
     SP("itb4a", 4),
     BTN("itb4b", "Confirm the time works", "{{accessLink}}"),
     SP("itb5", 8),
-    T("itb6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("itb6", "Speak soon,<br>{{agentName}}"),
     FOOT("itb7", "You're getting this because you rent a property managed by The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Property visit", mast: "sage" },
 } as const;
 
 /* To the landlord once a time is booked (Rhiannon, 21 Oct 2026, ticket
@@ -1765,17 +1790,17 @@ export const TENANT_DOCUMENTS = {
   preheader: "Your copies, attached to this email.",
   mode: "blocks",
   blocks: [
-    H("tdc1", "Documents for Your Home"),
+    H("tdc1", "Your Paperwork Has Arrived"),
     T("tdc2", "Hi {{firstName}},"),
     /* The sender's own words (20 Oct 2026, Email Certificates): the box on
        the send screen is filled with the default in lib/home-send
        defaultMessage and whatever they change it to goes here, escaped. */
     T("tdc4", "{{messageHtml}}"),
     T("tdc3", "{{docList}}"),
-    T("tdc6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("tdc6", "All the best,<br>{{agentName}}"),
     FOOT("tdc7", "You're getting this because you rent your home through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your documents", mast: "sage" },
 } as const;
 
 /** Two days after the passport invite, nothing typed. */
