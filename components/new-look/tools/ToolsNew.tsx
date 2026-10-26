@@ -36,7 +36,7 @@ const ICON: Record<string, React.ReactNode> = {
       <circle cx="12" cy="10" r="2.4" />
     </>
   ),
-  library: (
+  learning: (
     <>
       <path d="M4.5 5.5c2.5-1 5-1 7.5.5v13c-2.5-1.5-5-1.5-7.5-.5z" />
       <path d="M19.5 5.5c-2.5-1-5-1-7.5.5v13c2.5-1.5 5-1.5 7.5-.5z" />

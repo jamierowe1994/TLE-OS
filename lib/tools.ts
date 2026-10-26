@@ -165,15 +165,15 @@ export const TOOLS: Tool[] = [
     group: "prospecting",
   },
   {
-    /* James, 26 Oct 2026: "add one called Library, which will be under a
-       Learning section." The tile first; what goes on its shelves is next. */
-    key: "library",
-    name: "Library",
-    blurb: "Everything worth reading in one place: the training, the guides and the how-we-do-it, to dip into whenever you need it.",
+    /* James, 26 Oct 2026: one tile under Learning that takes them in, to
+       Guides (Francesca's library of documents) and Systems (a tour of the
+       OS from every side), so they can see how things work for themselves. */
+    key: "learning",
+    name: "Learning",
+    blurb: "The guides worth reading and a tour of the system from every side, to dip into whenever you need it.",
     icon: "note",
-    href: null,
-    status: "building",
-    note: "Being built now. The shelves go up next.",
+    href: "/tools/learning",
+    status: "live",
     access: "included",
     group: "learning",
   },
