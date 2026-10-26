@@ -56,14 +56,26 @@ export async function GET(req: NextRequest) {
   /* Which of them are this person's own (Rhiannon, 15 Oct 2026, lib/works-mine):
      the board shows Mine or Everyone, and the tiles count whichever is shown.
      A failed read of their homes is said on the page, never an empty Mine. */
-  const mine = await mineFor(req, who, orders, carried?.jobs ?? null, carried?.done ?? []).catch(() => null);
+  /* A failure here used to fall back to Everyone without a word (26 Oct 2026):
+     an agent who opens on Mine saw their count jump by everybody else's jobs
+     on one refresh and drop back on the next. Tried twice now, and if it still
+     fails the page says it is showing everyone's (mineFailed). */
+  const mineOf = () => mineFor(req, who, orders, carried?.jobs ?? null, [...(carried?.done ?? []), ...(carried?.closed ?? [])]);
+  const mine = await mineOf().catch(() => mineOf()).catch((e) => {
+    console.error("[works-orders] Mine could not be worked out", e instanceof Error ? e.message : e);
+    return null;
+  });
   return NextResponse.json({
     ok: true, live: true, orders: shown, contractors, summary, ringForApproval, mine,
     carried: carried?.jobs ?? [],
     /* Planned jobs a certificate on file has since finished (5 Oct 2026). */
     carriedDone: carried?.done ?? [],
+    /* Closed here by hand, with the note (Sean McMahon, 26 Oct 2026). Off the board and its figures. */
+    carriedClosed: carried?.closed ?? [],
     carriedReadAt: carried?.readAt ?? null,
     ...(carried ? {} : { carriedError: "The jobs copied across from the old system couldn't be read just now, so the figures leave them out. Try again in a minute." }),
+    ...(carried?.certsUnchecked ? { carriedWarning: "We couldn't check which planned jobs a certificate has since finished, so a few finished ones may be counted as open just now. Try again in a minute." } : {}),
+    ...(mine ? {} : { mineFailed: true }),
     lastMonth: lastMonth?.summary ?? null,
     lastMonthOn: lastMonth?.day ?? null,
     canCorporate: can(actor.role, "see:business"),

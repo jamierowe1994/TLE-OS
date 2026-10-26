@@ -3,7 +3,8 @@ import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
-import { listContractors, getContractor, saveContractor, contractorStats, contractorsFor, placeContractor, listOrders, getOrder, setContractorLogo, type Contractor } from "@/lib/works-orders";
+import { listContractors, getContractor, saveContractor, contractorStats, contractorsFor, placeContractor, listOrders, getOrder, setContractorLogo, contractorBank, setContractorBank, deleteContractor, type Contractor } from "@/lib/works-orders";
+import { readBank } from "@/lib/bank";
 import { geocode } from "@/lib/geocode";
 import { findLogo, websiteUrl } from "@/lib/contractor-logo";
 import { scopeJobs, statsOf } from "@/lib/contractor-scope";
@@ -21,6 +22,15 @@ import { scopeJobs, statsOf } from "@/lib/contractor-scope";
  *                     with see:business may put one on the company shelf or
  *                     edit a company one. You cannot edit another agent's.
  * POST { id, action: "refresh_logo" } → read their logo off the website again.
+ * POST { id, action: "delete" } → delete them (James, 26 Oct 2026). Soft, and
+ *                     refused while they have open jobs. Who may: whoever may
+ *                     edit them - their own agent, or see:business for a
+ *                     company one. The office, who sees every agent's book,
+ *                     cannot delete an agent's contractor, as it cannot edit one.
+ *
+ * Bank details (Stuart Roper, 26 Oct 2026) save with the rest. The account
+ * number goes out whole only on a record opened by somebody who may edit it;
+ * everywhere else it is the last four.
  *
  * The jobs on a profile are this person's own unless they are the office
  * (James, 21 Oct 2026, lib/contractor-scope), and the money is counted over
@@ -32,6 +42,9 @@ import { scopeJobs, statsOf } from "@/lib/contractor-scope";
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** Whoever may edit a contractor: the agent whose book they are in, or the office-with-the-money for a company one. */
+const mayEdit = (c: Contractor, meId: string, actorRole: string | null | undefined) => (c.ownerId ? c.ownerId === meId : can(actorRole, "see:business"));
 
 export async function GET(req: NextRequest) {
   const who = await whoIs(req);
@@ -51,9 +64,10 @@ export async function GET(req: NextRequest) {
     /* The office sees every agent's book (James, 19 Oct 2026); an agent only their own and the company's. */
     if (!c) return NextResponse.json({ ok: false, error: "No such contractor." }, { status: 404 });
     if (c.ownerId && c.ownerId !== me.id && !can(me.role, "see:everything")) return NextResponse.json({ ok: false, error: "This contractor is in another agent's book, so only they and the office can open their record." }, { status: 404 });
-    const [allStats, orders] = await Promise.all([contractorStats(id), listOrders({ limit: 500 })]);
+    const [allStats, orders, bank] = await Promise.all([contractorStats(id), listOrders({ limit: 500 }), mayEdit(c, me.id, actor.role) ? contractorBank(id) : Promise.resolve(null)]);
     const scoped = await scopeJobs(req, who, orders.filter((o) => o.contractorId === id));
-    return NextResponse.json({ ok: true, contractor: c, stats: scoped.everyone ? allStats : statsOf(scoped.orders), jobs: scoped.orders, everyone: scoped.everyone, mineJobs: scoped.mine });
+    const shown: Contractor = bank ? { ...c, bankAccountNumber: bank.accountNumber } : c;
+    return NextResponse.json({ ok: true, contractor: shown, canEdit: mayEdit(c, me.id, actor.role) && !c.deletedAt, stats: scoped.everyone ? allStats : statsOf(scoped.orders), jobs: scoped.orders, everyone: scoped.everyone, mineJobs: scoped.mine });
   }
   return NextResponse.json({ ok: true, contractors: await listContractors(me.id), me: me.id, canCorporate: can(actor.role, "see:business") });
 }
@@ -75,20 +89,51 @@ export async function POST(req: NextRequest) {
     await setContractorLogo(cur.id, logo);
     return NextResponse.json({ ok: true, contractor: { ...cur, logoUrl: logo } });
   }
+  /* Delete (James, 26 Oct 2026). Never with open jobs: they would be left
+     with nobody, so they are moved first. */
+  if (b?.action === "delete" && b.id) {
+    const cur = await getContractor(b.id);
+    if (!cur || cur.deletedAt) return NextResponse.json({ ok: false, error: "No such contractor." }, { status: 404 });
+    if (!mayEdit(cur, me.id, actor.role)) return NextResponse.json({ ok: false, error: cur.ownerId ? "That contractor is in somebody else's book, so only they can delete them." : "Company contractors are kept by the office, so only they can delete one." }, { status: 403 });
+    const done = await deleteContractor(cur.id, me.name || me.email);
+    if (!done.ok) {
+      return NextResponse.json({ ok: false, open: done.open, error: `${cur.name} still ${done.open === 1 ? "has 1 open job" : `has ${done.open} open jobs`}. Move ${done.open === 1 ? "it" : "them"} to someone else first, then delete them.` }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true });
+  }
   if (!b?.name?.trim() || !b.trade?.trim()) return NextResponse.json({ ok: false, error: "A contractor needs a name and a trade." }, { status: 400 });
   const corporate = can(actor.role, "see:business");
   try {
     if (b.id) {
       const cur = await getContractor(b.id);
-      if (!cur) return NextResponse.json({ ok: false, error: "No such contractor." }, { status: 404 });
+      if (!cur || cur.deletedAt) return NextResponse.json({ ok: false, error: "No such contractor." }, { status: 404 });
       if (cur.ownerId && cur.ownerId !== me.id) return NextResponse.json({ ok: false, error: "That contractor is in somebody else's book." }, { status: 403 });
       if (!cur.ownerId && !corporate) return NextResponse.json({ ok: false, error: "Company contractors are kept by the office. Add your own copy instead." }, { status: 403 });
     }
     const wantsCorporate = b.scope === "corporate";
     if (wantsCorporate && !corporate) return NextResponse.json({ ok: false, error: "Only the office can put a contractor on the company shelf." }, { status: 403 });
     const before = b.id ? await getContractor(b.id) : null;
+    /* Bank details: a box left out of the save keeps what it held, and the
+       account number is only sent when somebody typed one, so a form opened
+       from the list (last four only) never wipes it. Checked before anything
+       is saved, so a mistyped sort code saves nothing. */
+    const bankSent = b.bankAccountName !== undefined || b.bankSortCode !== undefined || b.bankAccountNumber !== undefined;
+    let bank: ReturnType<typeof readBank> | null = null;
+    if (bankSent) {
+      const held = before ? await contractorBank(before.id) : null;
+      const name = b.bankAccountName ?? before?.bankAccountName ?? "";
+      const sort = b.bankSortCode ?? before?.bankSortCode ?? "";
+      /* Name and sort code both cleared, number untouched: clear the lot. */
+      const clearing = !String(name).trim() && !String(sort).trim() && b.bankAccountNumber === undefined;
+      bank = readBank({ accountName: name, sortCode: sort, accountNumber: clearing ? "" : b.bankAccountNumber ?? held?.accountNumber ?? "" });
+      if (!bank.ok) return NextResponse.json({ ok: false, error: bank.error }, { status: 400 });
+    }
     const ownerId = b.id ? before!.ownerId : wantsCorporate ? null : me.id;
     let contractor = await saveContractor({ ...b, name: b.name, trade: b.trade, ownerId: b.id && corporate && b.scope ? (wantsCorporate ? null : me.id) : ownerId }, me.name || me.email);
+    if (bank?.ok) {
+      await setContractorBank(contractor.id, bank.bank);
+      contractor = { ...contractor, bankAccountName: bank.bank?.accountName ?? "", bankSortCode: bank.bank?.sortCode ?? "", bankAccountLast4: (bank.bank?.accountNumber ?? "").slice(-4) };
+    }
     /* Place them from their address, so the picker can say how far. Best
        effort, after the save. */
     if (contractor.address) {

@@ -89,6 +89,21 @@ export async function heldComplianceBook(): Promise<CachedBook | null> {
 }
 
 /**
+ * The same, but a database that does not answer is an error rather than "no
+ * book" (26 Oct 2026). For the Maintenance board's done-on-a-certificate
+ * check, where reading a failure as "nothing on file" quietly put a dozen
+ * finished jobs back on the board for one load. Null still means no book has
+ * ever been built.
+ */
+export async function heldComplianceBookStrict(): Promise<CachedBook | null> {
+  if (memory) return memory;
+  if (!hasDb()) return null;
+  const rows = await q<{ payload: { book: ComplianceBook }; computed_at: Date }>("SELECT payload, computed_at FROM os_cache WHERE key = $1", [CACHE_KEY]);
+  if (!rows[0]) return null;
+  return { book: rows[0].payload.book, at: new Date(rows[0].computed_at).getTime() };
+}
+
+/**
  * Change the held book in place and keep it, without a REX sweep. For a mark
  * a person has just made (not needed) that every screen should show at once;
  * the next full refresh reads the same answer from the database anyway.

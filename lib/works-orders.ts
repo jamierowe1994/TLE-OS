@@ -5,6 +5,7 @@ import { uid } from "@/lib/auth";
 import { addFileDoc } from "@/lib/file-documents";
 import { OTHER as OTHER_DOC } from "@/lib/doc-types";
 import { TEST_STREET } from "@/lib/test-guard";
+import type { BankDetails } from "@/lib/bank";
 import { asksFor, askById, upsertAsks, resendAsk, recordAskQuote, declineAsk, acceptAsk, isLive, type QuoteAsk } from "@/lib/works-quotes";
 export type { QuoteAsk };
 
@@ -124,6 +125,19 @@ export interface Contractor {
   /** Whose book they are in. Null is the company's: everyone can use them. */
   ownerId: string | null;
   createdBy: string;
+  /* Where to pay them (Stuart Roper, 26 Oct 2026). The account number travels
+     as its last four only; the whole number comes with the record for
+     somebody who may edit it (contractorBank), and goes to accounts in the
+     invoice email. Optional, like the credentials, for the showroom's. */
+  bankAccountName?: string;
+  /** Six digits, no dashes. */
+  bankSortCode?: string;
+  bankAccountLast4?: string;
+  /** Only on a record opened by somebody who may edit it. */
+  bankAccountNumber?: string;
+  /** Deleted (James, 26 Oct 2026): off every list and picker, kept for the jobs they did. */
+  deletedAt?: string | null;
+  deletedBy?: string;
 }
 
 /** What a contractor has done for us, off the jobs they were on. */
@@ -370,6 +384,8 @@ function toContractor(r: Row): Contractor {
     publicLiabilityExpiry: plainDate(r.public_liability_expiry),
     publicLiabilityCoverPence: r.public_liability_cover_pence == null ? null : Number(r.public_liability_cover_pence),
     logoUrl: s(r.logo_url),
+    bankAccountName: s(r.bank_account_name), bankSortCode: s(r.bank_sort_code), bankAccountLast4: s(r.bank_account_number).slice(-4),
+    deletedAt: iso(r.deleted_at), deletedBy: s(r.deleted_by),
   };
 }
 
@@ -391,7 +407,7 @@ export async function setContractorLogo(id: string, logoUrl: string): Promise<vo
 export async function listContractors(forUserId?: string | null): Promise<Contractor[]> {
   if (!hasDb()) return [];
   return (
-    await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal AND (owner_id IS NULL OR owner_id = $1) ORDER BY active DESC, (owner_id IS NULL), trade, name`, [forUserId ?? ""])
+    await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal AND deleted_at IS NULL AND (owner_id IS NULL OR owner_id = $1) ORDER BY active DESC, (owner_id IS NULL), trade, name`, [forUserId ?? ""])
   ).map(toContractor);
 }
 
@@ -399,7 +415,7 @@ export async function listContractors(forUserId?: string | null): Promise<Contra
  *  so it sees every contractor (James, 19 Oct 2026). */
 export async function listAllContractors(): Promise<Contractor[]> {
   if (!hasDb()) return [];
-  return (await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal ORDER BY active DESC, (owner_id IS NULL), trade, name`)).map(toContractor);
+  return (await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal AND deleted_at IS NULL ORDER BY active DESC, (owner_id IS NULL), trade, name`)).map(toContractor);
 }
 
 export async function getContractor(id: string): Promise<Contractor | null> {
@@ -442,6 +458,42 @@ export async function saveContractor(input: Partial<Contractor> & { name: string
 }
 
 const given = (v: string | undefined) => (v === undefined ? null : String(v).trim());
+
+/** The whole account number, for the edit form and the invoice to accounts. */
+export async function contractorBank(id: string): Promise<BankDetails | null> {
+  if (!hasDb() || !id) return null;
+  const [r] = await q<Row>(`SELECT bank_account_name, bank_sort_code, bank_account_number FROM os_contractors WHERE id = $1`, [id]);
+  if (!r || !s(r.bank_account_number)) return null;
+  return { accountName: s(r.bank_account_name), sortCode: s(r.bank_sort_code), accountNumber: s(r.bank_account_number) };
+}
+
+/** Put their bank details on the record, or clear them with null. Checked by the caller (lib/bank readBank). */
+export async function setContractorBank(id: string, bank: BankDetails | null): Promise<void> {
+  await q(
+    `UPDATE os_contractors SET bank_account_name = $2, bank_sort_code = $3, bank_account_number = $4, updated_at = NOW() WHERE id = $1`,
+    [id, bank?.accountName ?? "", bank?.sortCode ?? "", bank?.accountNumber ?? ""]
+  );
+}
+
+/** Jobs still open with a contractor, across everybody's - what stops a delete. */
+export async function openJobsWith(id: string): Promise<number> {
+  if (!hasDb()) return 0;
+  const [r] = await q<{ n: string }>(`SELECT count(*)::text AS n FROM os_works_orders WHERE contractor_id = $1 AND NOT rehearsal AND status IN ('reported','approval','approved','scheduled')`, [id]);
+  return Number(r?.n ?? 0);
+}
+
+/**
+ * Delete a contractor (James, 26 Oct 2026). Soft: stamped, not removed, so
+ * every job and invoice they were on still reads their name (the job keeps
+ * contractor_name of its own). Refused while they have open jobs - those
+ * need moving to somebody else first.
+ */
+export async function deleteContractor(id: string, by: string): Promise<{ ok: true } | { ok: false; open: number }> {
+  const open = await openJobsWith(id);
+  if (open > 0) return { ok: false, open };
+  await q(`UPDATE os_contractors SET deleted_at = NOW(), deleted_by = $2, active = false, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, [id, by]);
+  return { ok: true };
+}
 
 /** Their record with us: the jobs, and the money through them. */
 export async function contractorStats(id: string): Promise<ContractorStats> {
@@ -1202,7 +1254,7 @@ export interface RankedContractor extends Contractor {
 /** The book for one job: those whose trade fits first, nearest first within that. */
 export async function contractorsFor(order: WorksOrder, forUserId: string): Promise<RankedContractor[]> {
   if (!hasDb()) return [];
-  const rows = await q<Row>(`SELECT * FROM os_contractors WHERE active AND rehearsal = $2 AND (owner_id IS NULL OR owner_id = $1)`, [forUserId, order.rehearsal]);
+  const rows = await q<Row>(`SELECT * FROM os_contractors WHERE active AND deleted_at IS NULL AND rehearsal = $2 AND (owner_id IS NULL OR owner_id = $1)`, [forUserId, order.rehearsal]);
   /* A boiler service and an EPC on one job: a contractor fits on either trade. */
   const words = [...new Set(categoriesOf(order.category).flatMap((c) => TRADE_WORDS[c] ?? []))];
   const here = order.propertyLat != null && order.propertyLng != null ? { lat: order.propertyLat, lng: order.propertyLng } : null;

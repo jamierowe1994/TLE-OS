@@ -3,6 +3,7 @@ import { emailShell, type ShellRow } from "@/lib/email/shell";
 import { skyListShell } from "@/lib/email/shell-sky";
 import { LANDLORD_INVOICE_ANSWERS, pounds, type WorksOrder } from "@/lib/works-orders";
 import type { AgentEmail } from "@/lib/email/agent-emails";
+import { sortCodeWords, type BankDetails } from "@/lib/bank";
 
 /**
  * The two emails a job sends to OUR OWN inboxes: accounts when an invoice
@@ -30,10 +31,15 @@ const where = (o: WorksOrder) => o.propertyName + (o.locality ? `, ${o.locality}
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
 
-/** A contractor's invoice is on a job, ready to key into PayProp. */
-export function accountsInvoiceEmail(o: WorksOrder): AgentEmail {
+/**
+ * A contractor's invoice is on a job, ready to key into PayProp. With the
+ * bank details to pay it to, whole (Stuart Roper, 26 Oct 2026): this goes to
+ * the accounts inbox and nowhere else, and whoever pays needs every digit.
+ */
+export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null): AgentEmail {
   const payee = o.payee === "agent" ? `${o.raisedBy} (paid the contractor themselves)` : o.contractorName || "the contractor";
   const subject = `Invoice in: #${o.ref} ${o.title}, ${pounds(o.invoicePence)} to ${payee}`;
+  const payTo = bank ? `${bank.accountName} · sort code ${sortCodeWords(bank.sortCode)} · account ${bank.accountNumber}` : "";
   return {
     subject,
     html: skyListShell({
@@ -49,6 +55,12 @@ export function accountsInvoiceEmail(o: WorksOrder): AgentEmail {
           tone: "attention",
           icon: "mark-money.png",
         },
+        ...(o.payee === "agent" ? [] : [{
+          title: bank ? "Pay to" : "No bank details given",
+          detail: bank ? payTo : `Ask ${o.contractorName || "the contractor"} where to pay, then add it to their record on the OS.`,
+          tone: bank ? ("neutral" as const) : ("attention" as const),
+          icon: "mark-money.png",
+        }]),
       ],
       rowsLead: "To pay",
       /* Same bare rows as its twin to compliance: two facts about one job,
@@ -60,7 +72,7 @@ export function accountsInvoiceEmail(o: WorksOrder): AgentEmail {
       tip: "Mark it paid on the job once it has gone through PayProp, and it drops off the accounts list.",
       tipQuiet: true,
     }),
-    text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}. Reference #${o.ref}. Open: ${jobLink(o.id)}`,
+    text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}.${payTo ? ` Pay to ${payTo}.` : ""} Reference #${o.ref}. Open: ${jobLink(o.id)}`,
   };
 }
 

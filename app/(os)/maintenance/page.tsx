@@ -11,7 +11,7 @@ import { Pill } from "@/components/Wire";
 import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import type { Contractor, WorksOrder, WorksSummary, Kind, Move, Status } from "@/lib/works-orders";
-import type { CarriedDone, CarriedJob } from "@/lib/works-carried";
+import type { CarriedClosed, CarriedDone, CarriedJob } from "@/lib/works-carried";
 import { URGENCIES } from "@/lib/works-catalogue";
 import { STEPS, stepOf } from "@/lib/works-steps";
 import WalkthroughLink from "@/components/showroom/WalkthroughLink";
@@ -59,7 +59,7 @@ export default function Maintenance() {
     else if (params.get("section") === "planned") setSection("planned");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params, router]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; canPayrun?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string; ringForApproval?: string[]; mine?: { orders: string[]; carried: string[]; summary: WorksSummary; startOn: "mine" | "everyone"; note: string | null } | null } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; canPayrun?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedClosed?: CarriedClosed[]; carriedReadAt?: string | null; carriedError?: string; carriedWarning?: string; mineFailed?: boolean; ringForApproval?: string[]; mine?: { orders: string[]; carried: string[]; summary: WorksSummary; startOn: "mine" | "everyone"; note: string | null } | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
@@ -119,6 +119,24 @@ export default function Maintenance() {
     return (data?.carried ?? []).filter((j) => j.kind === section && (view === "everyone" || mineCarried.has(j.taskId)) && (!needle || searchMatches(needle, j.title, j.address, j.tenant, j.landlord, j.managedBy, j.category)));
   }, [data, section, q, view, mineCarried]);
   const carriedDone = useMemo(() => (data?.carriedDone ?? []).filter((j) => view === "everyone" || mineCarried.has(j.taskId)), [data, view, mineCarried]);
+  /* Closed here with a note (Sean McMahon, 26 Oct 2026), listed under Show finished jobs. */
+  const carriedClosed = useMemo(() => {
+    const needle = q.trim();
+    return (data?.carriedClosed ?? []).filter((j) => j.kind === section && (view === "everyone" || mineCarried.has(j.taskId)) && (!needle || searchMatches(needle, j.title, j.address, j.tenant, j.landlord, j.managedBy, j.category, j.note)));
+  }, [data, section, q, view, mineCarried]);
+  /* Close or reopen an old-system job. The board reads again after, so every figure moves with it. */
+  async function closeCarried(j: CarriedJob, note: string): Promise<string | null> {
+    const r = await fetch("/api/works-orders/carried", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ taskId: j.taskId, note }) }).then((x) => x.json()).catch(() => null);
+    if (!r?.ok) return r?.error ?? "Could not close the job.";
+    load();
+    return null;
+  }
+  async function reopenCarried(j: CarriedJob): Promise<string | null> {
+    const r = await fetch("/api/works-orders/carried", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ taskId: j.taskId, action: "reopen" }) }).then((x) => x.json()).catch(() => null);
+    if (!r?.ok) return r?.error ?? "Could not reopen the job.";
+    load();
+    return null;
+  }
   const [takingOn, setTakingOn] = useState<string | null>(null);
   async function takeOn(j: CarriedJob) {
     setTakingOn(j.taskId);
@@ -239,6 +257,9 @@ export default function Maintenance() {
           </div>
         )}
         {view === "mine" && mine?.note && section !== "contractors" && section !== "invoices" && <p className="nl-meta mb-4">{mine.note}</p>}
+        {/* Mine could not be worked out (26 Oct 2026): said, never a silent switch to everyone's. */}
+        {data?.mineFailed && section !== "contractors" && section !== "invoices" && <div className="mb-4"><Failed onRetry={load}>Your own jobs couldn&apos;t be worked out just now, so this is everyone&apos;s and the figures count them all.</Failed></div>}
+        {data?.carriedWarning && jobsTab && <p className="nl-bo-note mb-4">{data.carriedWarning}</p>}
 
         {error && <Failed onRetry={load}>{error}</Failed>}
         {data && !data.live && <p className="nl-bo-note mb-4">{data.reason}</p>}
@@ -251,7 +272,7 @@ export default function Maintenance() {
           <Loading>Contractors have their own place now, under Portfolio. Taking you there…</Loading>
         ) : !data ? (
           !error && <Loading>Reading the jobs…</Loading>
-        ) : grouped.length === 0 && carried.length === 0 ? (
+        ) : grouped.length === 0 && carried.length === 0 && !(showClosed && carriedClosed.length) ? (
           <EmptyCard
             title={section === "repair" ? (view === "mine" ? "Nothing Broken on Your Homes" : "Nothing Broken That We Know Of") : view === "mine" ? "Nothing Planned on Your Homes" : "Nothing Planned"}
             action={
@@ -298,8 +319,9 @@ export default function Maintenance() {
                 </ul>
               </section>
             ))}
-            {carried.length > 0 && <div className="nl-bo-legacy"><CarriedList jobs={carried} readAt={data?.carriedReadAt ?? null} busy={takingOn} onTakeOn={(j) => void takeOn(j)} /></div>}
+            {carried.length > 0 && <div className="nl-bo-legacy"><CarriedList jobs={carried} readAt={data?.carriedReadAt ?? null} busy={takingOn} onTakeOn={(j) => void takeOn(j)} onCloseJob={closeCarried} /></div>}
             {section === "planned" && carriedDone.length > 0 && <div className="nl-bo-legacy"><DoneOnCertificates jobs={carriedDone} /></div>}
+            {showClosed && carriedClosed.length > 0 && <ClosedCarried jobs={carriedClosed} onReopen={reopenCarried} />}
           </div>
         )}
         {data?.carriedError && <div className="mt-4"><Failed>{data.carriedError}</Failed></div>}
@@ -545,13 +567,31 @@ const readWhen = (iso: string) => {
  * row says how late it is against the date the old system expected it done,
  * and Take it on moves it here as a works order, without emailing anyone.
  */
-function CarriedList({ jobs, readAt, busy, onTakeOn }: { jobs: CarriedJob[]; readAt: string | null; busy: string | null; onTakeOn: (j: CarriedJob) => void }) {
+function CarriedList({ jobs, readAt, busy, onTakeOn, onCloseJob }: {
+  jobs: CarriedJob[]; readAt: string | null; busy: string | null; onTakeOn: (j: CarriedJob) => void;
+  /** Close it here with a note (the new look, Sean McMahon, 26 Oct 2026). Resolves to an error, or null when it closed. */
+  onCloseJob?: (j: CarriedJob, note: string) => Promise<string | null>;
+}) {
   const today = Date.now();
+  const [closing, setClosing] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [closeErr, setCloseErr] = useState<string | null>(null);
+  const [closeBusy, setCloseBusy] = useState(false);
+  const startClose = (id: string) => { setClosing(id); setNote(""); setCloseErr(null); };
+  async function confirmClose(j: CarriedJob) {
+    if (!onCloseJob) return;
+    if (note.trim().length < 3) return setCloseErr("Say why it's being closed, in a few words.");
+    setCloseBusy(true);
+    const err = await onCloseJob(j, note);
+    setCloseBusy(false);
+    if (err) return setCloseErr(err);
+    setClosing(null);
+  }
   return (
     <section className="rounded-[22px] border border-dashed border-line/60 bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="text-[15px]">Still in the Old System</h2>
-        <span className="text-[11px] text-muted">{jobs.length} · copied across{readAt ? ` ${readWhen(readAt)}` : ""}. Take one on to run it here.</span>
+        <span className="text-[11px] text-muted">{jobs.length} · copied across{readAt ? ` ${readWhen(readAt)}` : ""}. Take one on to run it here{onCloseJob ? ", or close it with a note if it's done with" : ""}.</span>
       </div>
       <ul className="mt-3 divide-y divide-line/50">
         {jobs.map((j) => {
@@ -573,12 +613,82 @@ function CarriedList({ jobs, readAt, busy, onTakeOn }: { jobs: CarriedJob[]; rea
                 {status}{j.progress ? ` · ${j.progress}` : ""}
                 {j.managedBy ? <span className="block text-[10.5px] font-normal text-muted">With {j.managedBy}</span> : null}
               </span>
-              <PressButton disabled={busy === j.taskId} onClick={() => onTakeOn(j)} className="row-span-2 rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold disabled:opacity-40 md:row-span-1">
-                {busy === j.taskId ? "Taking on…" : "Take it on"}
-              </PressButton>
+              {onCloseJob ? (
+                <span className="row-span-2 flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center md:row-span-1">
+                  <PressButton disabled={busy === j.taskId || closing === j.taskId} onClick={() => onTakeOn(j)} className="rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold disabled:opacity-40">
+                    {busy === j.taskId ? "Taking on…" : "Take it on"}
+                  </PressButton>
+                  <button type="button" disabled={closing === j.taskId} onClick={() => startClose(j.taskId)} className="nl-btn nl-btn--secondary nl-btn--sm justify-center disabled:opacity-40">Close</button>
+                </span>
+              ) : (
+                <PressButton disabled={busy === j.taskId} onClick={() => onTakeOn(j)} className="row-span-2 rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold disabled:opacity-40 md:row-span-1">
+                  {busy === j.taskId ? "Taking on…" : "Take it on"}
+                </PressButton>
+              )}
+              {closing === j.taskId && (
+                <div className="col-span-full mt-1 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-3.5">
+                  <label htmlFor={`close-${j.taskId}`} className="block text-[13px] font-medium">Why is it being closed?</label>
+                  <p className="m-0 mt-0.5 text-[12px] text-muted">Kept with your name and today&apos;s date. It comes off the board and the counts here; the old system isn&apos;t changed.</p>
+                  <textarea
+                    id={`close-${j.taskId}`}
+                    autoFocus
+                    rows={2}
+                    value={note}
+                    maxLength={500}
+                    onChange={(e) => { setNote(e.target.value); setCloseErr(null); }}
+                    placeholder="e.g. Fixed back in August, the tenant confirmed"
+                    className="nl-input mt-2 w-full"
+                  />
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <button type="button" disabled={closeBusy} onClick={() => void confirmClose(j)} className="nl-btn nl-btn--primary nl-btn--sm">{closeBusy ? "Closing…" : "Close the job"}</button>
+                    <button type="button" disabled={closeBusy} onClick={() => setClosing(null)} className="nl-btn nl-btn--secondary nl-btn--sm">Cancel</button>
+                    {closeErr && <span className="text-[12.5px] text-accent-dark" role="alert">{closeErr}</span>}
+                  </div>
+                </div>
+              )}
             </li>
           );
         })}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * Old-system jobs closed here with a note (Sean McMahon, 26 Oct 2026). Quiet,
+ * under Show finished jobs: what it was, why it was closed, who and when, and
+ * Reopen to put it back on the board. New look only.
+ */
+function ClosedCarried({ jobs, onReopen }: { jobs: CarriedClosed[]; onReopen: (j: CarriedClosed) => Promise<string | null> }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<{ id: string; text: string } | null>(null);
+  async function reopen(j: CarriedClosed) {
+    setBusy(j.taskId);
+    setErr(null);
+    const e = await onReopen(j);
+    setBusy(null);
+    if (e) setErr({ id: j.taskId, text: e });
+  }
+  return (
+    <section className="nl-bo-card is-list">
+      <div className="nl-bo-card-head">
+        <h2 className="nl-bo-card-title">Closed from the Old System</h2>
+        <span className="nl-count">{jobs.length}</span>
+      </div>
+      <p className="nl-meta mb-2 mt-0">Closed here with a note. Off the board and its figures; the old system still has them open.</p>
+      <ul className="nl-bo-jobs">
+        {jobs.map((j) => (
+          <li key={j.taskId} className="nl-bo-closed">
+            <span className="min-w-0">
+              <span className="nl-bo-job-title">{j.title}</span>
+              <span className="nl-meta block truncate">{j.propertyName}{j.locality ? `, ${j.locality}` : ""}{j.category ? ` · ${j.category}` : ""}</span>
+              <span className="mt-1.5 block text-[13px] leading-snug">&ldquo;{j.note}&rdquo;</span>
+              <span className="nl-meta block">Closed by {j.closedBy || "someone"} {readWhen(j.closedAt)}</span>
+              {err?.id === j.taskId && <span className="block text-[12.5px] text-accent-dark" role="alert">{err.text}</span>}
+            </span>
+            <button type="button" disabled={busy === j.taskId} onClick={() => void reopen(j)} className="nl-btn nl-btn--secondary nl-btn--sm shrink-0">{busy === j.taskId ? "Reopening…" : "Reopen"}</button>
+          </li>
+        ))}
       </ul>
     </section>
   );

@@ -12,6 +12,7 @@ import { LogInvoice } from "@/components/contractors/InvoiceForm";
 import ContractorDocs from "@/components/contractors/ContractorDocs";
 import { coverWords, credentialsOf, jobHref, liabilityOf, longDay, siteHref, siteLabel } from "@/components/contractors/credentials";
 import FloatSheet, { FloatCard, FloatCardHead } from "@/components/new-look/FloatSheet";
+import { maskedAccount, sortCodeWords } from "@/lib/bank";
 
 /* Kept here too, so Maintenance's Log work already done still finds it. */
 export { LogInvoice } from "@/components/contractors/InvoiceForm";
@@ -71,6 +72,8 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
   const [nonce, setNonce] = useState(0);
   const [logo, setLogo] = useState<{ busy: boolean; note: string | null }>({ busy: false, note: null });
   const [showAll, setShowAll] = useState(false);
+  /* Delete (James, 26 Oct 2026): asked first, refused while they have open jobs. */
+  const [deleting, setDeleting] = useState<{ asking: boolean; busy: boolean; err: string | null }>({ asking: false, busy: false, err: null });
   useEffect(() => {
     let live = true;
     fetch(`/api/contractors?id=${encodeURIComponent(id)}`, { cache: "no-store" })
@@ -98,6 +101,15 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
     } else setLogo({ busy: false, note: r?.error ?? "Their website couldn't be read just now." });
   }, [d, onChanged]);
 
+  const removeThem = useCallback(async () => {
+    if (!d) return;
+    setDeleting({ asking: true, busy: true, err: null });
+    const r = await fetch("/api/contractors", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: d.contractor.id, action: "delete" }) }).then((x) => x.json()).catch(() => null);
+    if (!r?.ok) return setDeleting({ asking: true, busy: false, err: r?.error ?? "Could not delete them just now." });
+    onChanged?.();
+    onClose();
+  }, [d, onChanged, onClose]);
+
   const c = d?.contractor;
   const whose = c ? (c.ownerId ? (ownerName ? `${ownerName}'s contractor` : "Your contractor") : "Company contractor") : "Contractor";
   const jobs = useMemo(() => [...(d?.jobs ?? [])].sort((a, b) => (b.reportedAt ?? b.createdAt).localeCompare(a.reportedAt ?? a.createdAt)), [d]);
@@ -112,7 +124,7 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
   if (look === "float") {
     const tone = (t: "neutral" | "good" | "warn" | "accent") => (t === "accent" ? "text-accent-dark" : t === "warn" ? "text-[var(--warning)]" : t === "good" ? "text-[var(--sage-ink)]" : "text-muted");
     return (
-      <FloatSheet title={`${whose}${c && !c.active ? ", not active" : ""}`} size="lg" onClose={onClose} label={c?.name || "Contractor"}>
+      <FloatSheet title={`${whose}${c?.deletedAt ? ", deleted" : c && !c.active ? ", not active" : ""}`} size="lg" onClose={onClose} label={c?.name || "Contractor"}>
         {!d && !err && (
           <FloatCard><p className="nl-fs-reading m-0"><span className="nl-bo-spin" aria-hidden />Reading their record…</p></FloatCard>
         )}
@@ -130,19 +142,20 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
                   <p className="nl-ct-prof-name">{c.name}</p>
                   <p className="mt-1 text-[13.5px] text-muted">{[c.trade, c.contact ? `ask for ${c.contact}` : ""].filter(Boolean).join(" · ")}</p>
                   <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
-                    <span className={c.active ? "text-[var(--sage-ink)]" : "text-muted"}>{c.active ? "Active - offered on jobs" : "Not active"}</span>
+                    <span className={c.active ? "text-[var(--sage-ink)]" : "text-muted"}>{c.deletedAt ? `Deleted${c.deletedBy ? ` by ${c.deletedBy}` : ""} on ${longDay(c.deletedAt.slice(0, 10))}` : c.active ? "Active - offered on jobs" : "Not active"}</span>
                     {creds.map((x) => <span key={x.key} className="text-muted">{x.label} {x.value}</span>)}
                     {pl && <span className={tone(pl.tone)}>{pl.pill}</span>}
                   </p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" onClick={() => setLogging((v) => !v)} className="nl-btn nl-btn--primary nl-btn--sm">Log an invoice</button>
+                {!c.deletedAt && <button type="button" onClick={() => setLogging((v) => !v)} className="nl-btn nl-btn--primary nl-btn--sm">Log an invoice</button>}
                 {c.phone && <a href={`tel:${c.phone.replace(/[^\d+]/g, "")}`} className="nl-btn nl-btn--secondary nl-btn--sm">Call</a>}
                 {c.email && <a href={`mailto:${c.email}`} className="nl-btn nl-btn--secondary nl-btn--sm">Email</a>}
                 {site && <a href={site} target="_blank" rel="noopener noreferrer" className="nl-btn nl-btn--secondary nl-btn--sm">Website</a>}
-                {canEdit(c) && <button type="button" onClick={() => onEdit(c)} className="nl-btn nl-btn--secondary nl-btn--sm">Edit</button>}
-                {site && (
+                {canEdit(c) && !c.deletedAt && <button type="button" onClick={() => onEdit(c)} className="nl-btn nl-btn--secondary nl-btn--sm">Edit</button>}
+                {canEdit(c) && !c.deletedAt && <button type="button" onClick={() => setDeleting({ asking: true, busy: false, err: null })} className="nl-btn nl-btn--secondary nl-btn--sm">Delete</button>}
+                {site && !c.deletedAt && (
                   <button type="button" disabled={logo.busy} onClick={() => void refreshLogo()} className="nl-btn nl-fs-ghost nl-btn--sm">
                     {logo.busy && <span className="nl-bo-spin" aria-hidden />}
                     {logo.busy ? "Reading their website…" : c.logoUrl ? "Refresh logo" : "Find their logo"}
@@ -151,6 +164,18 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
               </div>
               {logo.note && <p className="nl-fs-hint mt-2">{logo.note}</p>}
             </FloatCard>
+
+            {deleting.asking && (
+              <FloatCard>
+                <FloatCardHead title={`Delete ${c.name}?`} />
+                <p className="m-0 -mt-1 text-[13.5px]">Their past jobs keep their name. They come off the contractor list and won&apos;t be offered on jobs.</p>
+                {deleting.err && <p className="nl-fs-err mt-2" role="alert">{deleting.err}</p>}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {!deleting.err && <button type="button" disabled={deleting.busy} onClick={() => void removeThem()} className="nl-btn nl-btn--danger nl-btn--sm">{deleting.busy ? "Deleting…" : "Delete them"}</button>}
+                  <button type="button" disabled={deleting.busy} onClick={() => setDeleting({ asking: false, busy: false, err: null })} className="nl-btn nl-btn--secondary nl-btn--sm">{deleting.err ? "OK" : "Cancel"}</button>
+                </div>
+              </FloatCard>
+            )}
 
             <div className="nl-ct-figs4">
               {([
@@ -174,6 +199,7 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
                 <LogInvoice
                   contractor={c}
                   bare
+                  canSaveBack={canEdit(c)}
                   onClose={() => setLogging(false)}
                   onSaved={() => { setLogging(false); setNonce((n) => n + 1); onChanged?.(); }}
                 />
@@ -254,6 +280,21 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
                 {c.createdBy && <p className="nl-fs-hint mt-3">Added by {c.createdBy}.</p>}
               </FloatCard>
             </div>
+
+            {/* Where to pay them (Stuart Roper, 26 Oct 2026). The account
+                number is the last four here; the whole of it is in Edit. */}
+            <FloatCard>
+              <FloatCardHead title="Bank Details" aside="For paying their invoices" />
+              {c.bankAccountName || c.bankSortCode || c.bankAccountLast4 ? (
+                <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-2.5 text-[13px] sm:grid-cols-3">
+                  <Line k="Account name" v={c.bankAccountName || "Not given"} />
+                  <Line k="Sort code" v={c.bankSortCode ? sortCodeWords(c.bankSortCode) : "Not given"} />
+                  <Line k="Account number" v={c.bankAccountLast4 ? maskedAccount(c.bankAccountLast4).replace(/^e/, "E") : "Not given"} />
+                </dl>
+              ) : (
+                <p className="m-0 text-[13.5px] text-muted">No bank details on file.{canEdit(c) && !c.deletedAt ? " Add them with Edit, or with their next invoice." : ""}</p>
+              )}
+            </FloatCard>
 
             <FloatCard>
               <FloatCardHead title="Booked In" />
@@ -349,6 +390,7 @@ export default function ContractorProfile({ id, ownerName, onClose, onEdit, onCh
               {logging && (
                 <LogInvoice
                   contractor={c}
+                  canSaveBack={canEdit(c)}
                   onClose={() => setLogging(false)}
                   onSaved={() => { setLogging(false); setNonce((n) => n + 1); onChanged?.(); }}
                 />

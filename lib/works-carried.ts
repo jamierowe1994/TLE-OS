@@ -4,7 +4,7 @@ import { londonDayOffset, londonTime } from "@/lib/london-time";
 import { lastImport, openTasks, type RexpmTask } from "@/lib/rexpm-tasks";
 import type { Kind, Urgency } from "@/lib/works-catalogue";
 import type { WorksSummary } from "@/lib/works-orders";
-import { heldComplianceBook } from "@/lib/compliance-cache";
+import { heldComplianceBookStrict } from "@/lib/compliance-cache";
 import type { CertKey } from "@/lib/compliance";
 
 /**
@@ -19,6 +19,13 @@ import type { CertKey } from "@/lib/compliance";
  * Taking one on raises a works order with the task's id, and the carried
  * row goes. No email goes when that happens: the job was reported weeks
  * ago and the people involved already know about it.
+ *
+ * Or it is closed here with a note (Sean McMahon, 26 Oct 2026: "historic
+ * maintenance issues that are just clogging up my system... just put a note
+ * on it, close it down"). Nothing is written to REX PM: the close is ours,
+ * in os_carried_closed, and takes the job off the board and out of every
+ * open-jobs count - the board, Mine, the home's page and the Overview all
+ * read through carriedJobs. Reopen puts it straight back.
  */
 
 export interface CarriedJob {
@@ -143,6 +150,13 @@ export interface CarriedDone extends CarriedJob {
   evidence: string;
 }
 
+/** An old-system job closed here by hand, with who, when and why. */
+export interface CarriedClosed extends CarriedJob {
+  note: string;
+  closedBy: string;
+  closedAt: string;
+}
+
 /** Which certificate finishes which planned job, and how long one usually lasts. */
 const CERT_FOR: Record<string, { key: CertKey; types: string[]; months: number; label: string }> = {
   "Gas safety (CP12)": { key: "gas", types: ["gas_safety"], months: 12, label: "Gas safety certificate" },
@@ -183,14 +197,18 @@ async function doneOnCertificates(jobs: CarriedJob[], now: Date): Promise<Map<st
   if (!planned.length) return out;
   const today = ymdOf(now);
   const ids = [...new Set(planned.flatMap(({ j }) => [j.propertyId, j.osPropertyId]).filter((v): v is string => Boolean(v)))];
+  /* Neither read is excused any more (26 Oct 2026, Sean's 89 that became
+     100-odd on a refresh): a failed read used to count as "no certificates",
+     which put every job a certificate had finished back on the board for that
+     one load. Now a failure is thrown, and said on the page. */
   const [rows, held] = await Promise.all([
     ids.length
       ? q<{ property_id: string; type_id: string; expiry: string; issue: string | null; added_at: Date }>(
           `SELECT property_id, type_id, expiry::text AS expiry, issue::text AS issue, added_at FROM os_certificates WHERE property_id = ANY($1)`,
           [ids]
-        ).catch(() => [])
+        )
       : Promise.resolve([]),
-    heldComplianceBook().catch(() => null),
+    heldComplianceBookStrict(),
   ]);
   const homes = new Map((held?.book.properties ?? []).map((p) => [String(p.id), p]));
 
@@ -258,18 +276,33 @@ const SCOTTISH = /\b(AB|DD|DG|EH|FK|G|HS|IV|KA|KW|KY|ML|PA|PH|TD|ZE)\d{1,2}[A-Z]
 /** Work a certificate does not prove was done. */
 const OTHER_WORK = /(replace|repair|install|fix|fit|service|servicing|shower|fridge|freezer|socket|battery|leak|remedial|quote|boiler (?!cert))/i;
 
-/** The open REX PM jobs not yet taken on here, and the ones a certificate has since finished. */
-export async function carriedJobs(now: Date = new Date()): Promise<{ jobs: CarriedJob[]; done: CarriedDone[]; readAt: string | null }> {
-  if (!hasDb()) return { jobs: [], done: [], readAt: null };
+/** The open REX PM jobs not yet taken on here, the ones a certificate has since finished, and the ones closed here by hand. */
+export async function carriedJobs(now: Date = new Date()): Promise<{ jobs: CarriedJob[]; done: CarriedDone[]; closed: CarriedClosed[]; readAt: string | null; certsUnchecked?: boolean }> {
+  if (!hasDb()) return { jobs: [], done: [], closed: [], readAt: null };
   const read = await lastImport("maintenance");
-  if (!read) return { jobs: [], done: [], readAt: null };
-  const [tasks, taken] = await Promise.all([
+  if (!read) return { jobs: [], done: [], closed: [], readAt: null };
+  const [tasks, taken, shut] = await Promise.all([
     openTasks("maintenance"),
     q<{ rexpm_task_id: string }>(`SELECT rexpm_task_id FROM os_works_orders WHERE rexpm_task_id IS NOT NULL AND status <> 'cancelled'`),
+    q<{ task_id: string; note: string; closed_by: string; closed_at: Date }>(`SELECT task_id, note, closed_by, closed_at FROM os_carried_closed WHERE reopened_at IS NULL`),
   ]);
   const takenIds = new Set(taken.map((r) => r.rexpm_task_id));
-  const all = tasks.filter((t) => !isTest(t) && !takenIds.has(t.id)).map((t) => toCarried(t, now));
-  const finished = await doneOnCertificates(all, now).catch(() => new Map<string, string>());
+  const closedBy = new Map(shut.map((r) => [r.task_id, r]));
+  const live = tasks.filter((t) => !isTest(t) && !takenIds.has(t.id)).map((t) => toCarried(t, now));
+  const closed: CarriedClosed[] = live
+    .filter((j) => closedBy.has(j.taskId))
+    .map((j) => { const r = closedBy.get(j.taskId)!; return { ...j, note: r.note, closedBy: r.closed_by, closedAt: new Date(r.closed_at).toISOString() }; })
+    .sort((a, b) => b.closedAt.localeCompare(a.closedAt));
+  const all = live.filter((j) => !closedBy.has(j.taskId));
+  /* A certificate check that could not be made leaves those jobs on the
+     board, and the board says so (certsUnchecked) rather than quietly
+     counting a dozen more than the last load did. */
+  let certsUnchecked = false;
+  const finished = await doneOnCertificates(all, now).catch((e) => {
+    console.error("[works-carried] certificate check failed", e instanceof Error ? e.message : e);
+    certsUnchecked = true;
+    return new Map<string, string>();
+  });
   const jobs = all.filter((j) => !finished.has(j.taskId));
   const done: CarriedDone[] = all.filter((j) => finished.has(j.taskId)).map((j) => ({ ...j, evidence: finished.get(j.taskId)! }));
   /* Late ones first, latest first by how late; then the rest by when they were reported, oldest first, undated last. */
@@ -277,7 +310,39 @@ export async function carriedJobs(now: Date = new Date()): Promise<{ jobs: Carri
     Number(b.overdue) - Number(a.overdue)
     || (a.overdue ? (a.dueAt ?? "").localeCompare(b.dueAt ?? "") : 0)
     || (a.reportedOn ?? "9999").localeCompare(b.reportedOn ?? "9999"));
-  return { jobs, done, readAt: read.at };
+  return { jobs, done, closed, readAt: read.at, ...(certsUnchecked ? { certsUnchecked } : {}) };
+}
+
+/** Whether a task is an open old-system maintenance job - the only kind that can be closed here. */
+async function openMaintenanceTask(taskId: string): Promise<boolean> {
+  const rows = await q<{ id: string }>(`SELECT id FROM os_rexpm_tasks WHERE id = $1 AND kind = 'maintenance' AND state = 'open'`, [taskId]);
+  return rows.length > 0;
+}
+
+/**
+ * Close an old-system job here, with the reason (Sean McMahon, 26 Oct 2026).
+ * Ours alone - REX PM is never written to. A second close of the same job
+ * replaces the note and the name, so the row always says the latest.
+ */
+export async function closeCarried(taskId: string, note: string, by: { name: string; id: string | null }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const why = note.trim().replace(/\s+/g, " ");
+  if (why.length < 3) return { ok: false, error: "Say why it's being closed, in a few words." };
+  if (why.length > 500) return { ok: false, error: "Keep the note under 500 characters." };
+  if (!(await openMaintenanceTask(taskId))) return { ok: false, error: "That job isn't open in the old system any more." };
+  if (await alreadyTakenOn(taskId)) return { ok: false, error: "Someone has taken this job on, so close it from the job itself." };
+  await q(
+    `INSERT INTO os_carried_closed (task_id, note, closed_by, closed_by_id, closed_at, reopened_at, reopened_by)
+     VALUES ($1, $2, $3, $4, NOW(), NULL, '')
+     ON CONFLICT (task_id) DO UPDATE SET note = $2, closed_by = $3, closed_by_id = $4, closed_at = NOW(), reopened_at = NULL, reopened_by = ''`,
+    [taskId, why, by.name, by.id]
+  );
+  return { ok: true };
+}
+
+/** Put a closed job back on the board. The row stays, stamped, so who closed it and why is not lost. */
+export async function reopenCarried(taskId: string, by: string): Promise<boolean> {
+  const rows = await q<{ task_id: string }>(`UPDATE os_carried_closed SET reopened_at = NOW(), reopened_by = $2 WHERE task_id = $1 AND reopened_at IS NULL RETURNING task_id`, [taskId, by]);
+  return rows.length > 0;
 }
 
 /** The board's figures with the carried jobs counted in, the way REX PM counts them. */

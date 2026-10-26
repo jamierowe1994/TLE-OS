@@ -5,6 +5,7 @@ import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { accountsInvoiceEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
+import { bankForInvoice } from "@/lib/contractor-bank";
 import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
 import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
@@ -255,7 +256,9 @@ export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promis
      inbox. An accounts inbox, once set, still wins. */
   const address = accountsEmail.trim() || (await invoiceSettings()).complianceEmail.trim();
   if (!address.includes("@")) return { to: "accounts", sent: false, reason: "no accounts or compliance inbox set under Maintenance, Invoices, Who invoices are from" };
-  const mail = accountsInvoiceEmail(o);
+  /* Where to pay it (Stuart Roper, 26 Oct 2026): the invoice's own details, else the contractor's record. */
+  const bank = await bankForInvoice(o).catch(() => null);
+  const mail = accountsInvoiceEmail(o, bank);
   if (o.rehearsal) return keep(o.id, "accounts", address, mail.subject, mail.html);
   try {
     /* The invoice itself goes with it, so it can be keyed into PayProp

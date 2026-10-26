@@ -1523,9 +1523,10 @@ TLE_EMAILS.push(
     fires: "lib/works-emails → tellAccounts",
     to: "The accounts inbox set under Maintenance, Invoices",
     summary:
-      "A figure to key into PayProp, not a receipt: nothing in it has been paid. Says who is owed, against which job and which property, and drops off the accounts list once it is marked paid.",
+      "A figure to key into PayProp, not a receipt: nothing in it has been paid. Says who is owed, against which job and which property, and where to pay them: the bank details given with the invoice, or the contractor's record. Drops off the accounts list once it is marked paid.",
     render: () => {
-      const m = accountsInvoiceEmail(JOB_SAMPLE);
+      /* With the bank details to pay to (26 Oct 2026); an invented account. */
+      const m = accountsInvoiceEmail(JOB_SAMPLE, { accountName: "R. Holt Heating Ltd", sortCode: "401020", accountNumber: "12345678" });
       return { subject: m.subject, html: m.html };
     },
   },
