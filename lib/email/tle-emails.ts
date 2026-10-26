@@ -557,7 +557,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     summary:
       "The legal one: the tenant is entitled to a copy and by law must have it within 30 days, which Michael does by hand in Propoly today. The second line says nothing is wrong, because a document arriving unannounced from a letting agent reads as a problem and produces a phone call.",
     doc: CERTIFICATE_SHARED_TENANT,
-    render: (o) => blocksAs("tenant")(withSample(o ?? CERTIFICATE_SHARED_TENANT))(),
+    render: (o) => blocksAs("tenant")(withSample(o ?? CERTIFICATE_SHARED_TENANT, { firstName: "Sophie", expires: "12 September 2027" }))(),
   },
   {
     id: "certificate-shared-contractor",
