@@ -171,8 +171,9 @@
 }
 
 /* ── Halloween Steve (lib/steve-season: 26-31 October) ─────────────────────
-   Fangs under his eyes, a vampire's cape behind him that sways, and on the
-   big one in the corner a bat that flits about. */
+   Fangs under his eyes and a vampire's cape behind him that sways. (A bat
+   flitting about the corner went on 26 Oct: it flew off the page's edge
+   and was cut off.) */
 .sorb-gaze { position: relative; }
 .sorb-fangs {
   position: absolute; left: 50%; top: calc(100% + var(--s) * 0.06); translate: -50% 0;
@@ -196,20 +197,6 @@
   0%, 100% { transform: rotate(-2.5deg) scaleX(1); }
   50% { transform: rotate(2.5deg) scaleX(1.04); }
 }
-.sorb-bat {
-  position: absolute; z-index: 2; pointer-events: none; width: calc(var(--s) * 0.36); height: calc(var(--s) * 0.18);
-  left: -22%; top: -14%; fill: #1c1420; opacity: 0;
-  animation: sorb-bat 7s ease-in-out infinite;
-}
-@keyframes sorb-bat {
-  0%, 52%, 100% { opacity: 0; transform: translate(0, 0) scale(0.6); }
-  58% { opacity: 1; transform: translate(-6px, -4px) scale(1) scaleY(0.7); }
-  64% { opacity: 1; transform: translate(-12px, -14px) scale(1) scaleY(1.1); }
-  70% { opacity: 1; transform: translate(-4px, -22px) scale(0.95) scaleY(0.7); }
-  78% { opacity: 1; transform: translate(10px, -26px) scale(0.9) scaleY(1.1); }
-  86% { opacity: 0; transform: translate(26px, -34px) scale(0.6); }
-}
 @media (prefers-reduced-motion: reduce) {
-  .sorb-cape, .sorb-bat { animation: none; }
-  .sorb-bat { opacity: 1; }
+  .sorb-cape { animation: none; }
 }

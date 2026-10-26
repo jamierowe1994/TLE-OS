@@ -193,11 +193,6 @@ export default function SteveOrb({
           <path className="sorb-cape-in" d="M50 44 L21 12 L19 38 C14 56 11 74 10 90 L28 86 L50 90 L72 86 L90 90 C89 74 86 56 81 38 L79 12 Z" />
         </svg>
       )}
-      {halloween && size >= 50 && (
-        <svg className="sorb-bat" viewBox="0 0 24 12" aria-hidden>
-          <path d="M12 4c1-2 2-2 2-2l.5 2c2.5-2 5-3 9.5-2-2 1-3 3-3 5-1.5-1-3-1-4 .5-1-1-2.5-.5-3 .5-.5-1-2-1.5-3-.5-1-1.5-2.5-1.5-4-.5 0-2-1-4-3-5 4.5-1 7 0 9.5 2l.5-2s1 0 2 2z" />
-        </svg>
-      )}
       <span ref={ball} className="sorb-ball">
         <span className="sorb-o o1"><i /></span>
         <span className="sorb-o o2"><i /></span>
