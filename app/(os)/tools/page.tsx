@@ -1,5 +1,4 @@
-import PageHeader from "@/components/PageHeader";
-import ToolsGrid from "@/components/ToolsGrid";
+import ToolsHub from "@/components/new-look/tools/ToolsHub";
 
 /**
  * Tools — the hub, and the front of the rail.
@@ -22,20 +21,13 @@ import ToolsGrid from "@/components/ToolsGrid";
  * category we have not built and reads as something broken.
  *
  * The grid is a client component because entitlement is per person and has to
- * be fetched. The page around it stays server-rendered so the title and blurb
- * arrive with the document rather than after it.
+ * be fetched. Since the new look (26 Oct 2026) the header comes with it, as
+ * which look a person gets is only known in the browser.
  */
 
 export const metadata = { title: "Tools" };
 
-export default function ToolsHub() {
-  return (
-    <>
-      <PageHeader
-        title="Tools"
-        blurb="The kit that sits alongside your book. Some comes with your package, some is bought separately."
-      />
-      <ToolsGrid />
-    </>
-  );
+export default function ToolsPage() {
+  /* The old look or the new (lib/new-look "tools"), decided per person in the browser. */
+  return <ToolsHub />;
 }

@@ -52,6 +52,7 @@ export const LOOK_SCREENS = [
   /* One job's own page (James, 25 Oct 2026: "it pulled through this old view... redesign this with the new style in mind"). */
   { id: "job", label: "Job page", what: "One repair or planned job: the head, the stage it's at, the progress and its actions, in the new style. Off, the page as it is." },
   { id: "contractors", label: "Contractors", what: "The contractor list and each contractor's details." },
+  { id: "tools", label: "Tools", what: "The Tools page in the new style: each group's tools as tiles, with Learning and its Library. Off, the page as it is." },
   { id: "finances", label: "Finances", what: "Income, costs and the figures behind them." },
   { id: "compliance", label: "Compliance", what: "Certificates across the book: what's in date, due and missing." },
   { id: "plc", label: "PLC", what: "Pre-let checks: the queue and the review screen." },
