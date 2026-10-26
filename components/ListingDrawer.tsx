@@ -44,7 +44,7 @@ import { searchMatches } from "@/lib/search-match";
  */
 const LISTING_OFFERS_LIVE = false;
 import type { Landlord } from "@/lib/rex-landlord";
-import { DIARY } from "@/lib/diary";
+import { DIARY, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { setOpenListing } from "@/lib/open-record";
 import type { TenancyLink } from "@/lib/tenancy-link";
@@ -77,7 +77,7 @@ import ListingEnquiries from "@/components/listing/ListingEnquiries";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import BookSlot from "@/components/viewings/BookSlot";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
-import { apptStartIso } from "@/components/viewings/ChangeViewing";
+import ChangeViewing, { apptFromViewing, apptStartIso } from "@/components/viewings/ChangeViewing";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -737,6 +737,9 @@ function ListingDrawerBody({
   type LiveViewing = { id: string; startsAt: string; endsAt: string | null; mins: number; kind: string; title: string; type: string | null; status: string | null; cancelled: boolean; agent: string | null; contacts: { id: string; name: string; email: string | null; phone: string | null; leadId?: string | null }[]; feedbackId: string | null; description: string | null };
   const [viewings, setViewings] = useState<{ upcoming: LiveViewing[]; past: LiveViewing[] } | null>(null);
   const [openViewing, setOpenViewing] = useState<string | null>(null);
+  /* Change time on a viewing, from the listing (James, 26 Oct 2026: "you'll
+     be able to rearrange viewings"): the same mover the dashboard's diary uses. */
+  const [changingViewing, setChangingViewing] = useState<Appt | null>(null);
   const [liveApps, setLiveApps] = useState<{ id: string; statusLabel: string; movedIn?: boolean; applicants: string; offerAmount: number | null; dateReceived: number | null }[] | null>(null);
   const [topPick, setTopPick] = useState<number | null>(null);
   /* The landlord–property–tenant link, made the moment an offer is accepted
@@ -1156,6 +1159,28 @@ function ListingDrawerBody({
 
   // What's already happened here, from the shared diary — same entries the
   // calendar shows, filtered to this property.
+
+  /* A viewing still to come, in a diary the OS can move it in. */
+  const movable = (v: LiveViewing) => !v.cancelled && new Date(v.startsAt).getTime() > Date.now() && /^(rex|os)-/.test(v.id);
+  const changeTime = (v: LiveViewing) => {
+    setOpenViewing(null);
+    setChangingViewing(
+      apptFromViewing(
+        {
+          id: v.id,
+          startsAt: v.startsAt,
+          mins: v.mins,
+          who: v.contacts.map((c) => c.name).filter(Boolean).join(" and ") || "The applicant",
+          email: v.contacts.find((c) => c.email)?.email ?? null,
+          phone: v.contacts.find((c) => c.phone)?.phone ?? null,
+          agent: v.agent,
+          leadId: v.contacts.find((c) => c.leadId)?.leadId ?? null,
+          unaccompanied: /unaccompanied/i.test(`${v.type ?? ""} ${v.title}`),
+        },
+        { address: listing.name, listingId: String(listing.id), propertyId: listing.propertyId ? String(listing.propertyId) : null }
+      )
+    );
+  };
 
   /* One diary entry, opening out to its details on a click. */
   const viewingRow = (v: LiveViewing, inSlot = false) => {
@@ -2177,6 +2202,7 @@ function ListingDrawerBody({
             tenant={listing.tenant ?? null}
             landlord={landlord.status === "known" ? landlord.landlord : null}
             onApply={(p) => { setOpenViewing(null); applyFor(p); }}
+            onChangeTime={movable(v) ? () => changeTime(v) : undefined}
             onCancelled={() => {
               /* Shown as cancelled straight away; the tab's next read agrees. */
               setViewings((cur) => cur && {
@@ -2196,7 +2222,16 @@ function ListingDrawerBody({
         home={{ id: String(listing.id), name: listing.name, locality: listing.locality, rent: listing.rent, image: listing.image, propertyId: listing.propertyId ?? null }}
         occupant={listing.tenant ?? null}
         onBooked={(v) => setBooked((cur) => [{ when: v.when, who: v.who }, ...cur])}
+        /* Already booked in here, so the agent moved that one instead: read the tab again. */
+        onMoved={() => setActivityKey((k) => k + 1)}
       />
+      {changingViewing && (
+        <ChangeViewing
+          appt={changingViewing}
+          onClose={() => setChangingViewing(null)}
+          onChanged={() => setActivityKey((k) => k + 1)}
+        />
+      )}
       {lightbox != null && <PhotoLightbox photos={photos} start={lightbox} name={listing.name} onClose={() => setLightbox(null)} />}
       {pushing != null && (
         <PushCeremony
@@ -2642,6 +2677,11 @@ function ListingDrawerBody({
                 {!inSlot && (
                   <button type="button" className="nl-link" title="Book more people in straight after this one" onClick={() => setBlockAnchor({ viewingId: v.id, listingId: String(listing.id), property: listing.name, locality: listing.locality, startsAt: v.startsAt, minutes: v.mins || 15, unaccompanied: /unaccompanied/i.test(`${v.type ?? ""} ${v.title}`), who })}>
                     Add after
+                  </button>
+                )}
+                {movable(v) && (
+                  <button type="button" className="nl-link" title="Move this viewing to another time" onClick={() => changeTime(v)}>
+                    Change time
                   </button>
                 )}
                 <button type="button" className="nl-link" onClick={() => setOpenViewing(v.id)}>Open</button>

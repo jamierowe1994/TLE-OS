@@ -64,6 +64,7 @@ export default function ViewingSheet({
   landlord,
   onApply,
   onCancelled,
+  onChangeTime,
   propertyId,
   listingId,
   onClose,
@@ -79,6 +80,8 @@ export default function ViewingSheet({
   onApply?: (p: { id: string; name: string; phone?: string | null }) => void;
   /** Given, a booked viewing still to come offers Cancel viewing (Lorna, 15 Oct 2026). */
   onCancelled?: (said: string) => void;
+  /** Given, a viewing still to come offers Change time (James, 26 Oct 2026: "you'll be able to rearrange viewings"). */
+  onChangeTime?: () => void;
   /** The home, for its key numbers (Sean McMahon, 22 Oct 2026: "show the key numbers"). */
   propertyId?: string | null;
   listingId?: string | null;
@@ -154,9 +157,14 @@ export default function ViewingSheet({
             {v.cancelled ? " · cancelled" : past ? (v.feedbackId ? " · feedback in" : " · been") : ` · ${v.status ?? "booked"}`}
           </p>
           {v.description && <p className="mt-2 whitespace-pre-line text-[12px] leading-relaxed text-muted">{v.description}</p>}
-          {onCancelled && !past && !v.cancelled && (v.id.startsWith("rex-") || v.id.startsWith("os-")) && (
+          {(onCancelled || onChangeTime) && !past && !v.cancelled && (v.id.startsWith("rex-") || v.id.startsWith("os-")) && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <CancelViewing
+              {onChangeTime && (
+                <button type="button" onClick={onChangeTime} className={pill}>
+                  Change time
+                </button>
+              )}
+              {onCancelled && <CancelViewing
                 target={{
                   id: v.id,
                   startsAt: v.startsAt,
@@ -168,7 +176,7 @@ export default function ViewingSheet({
                 }}
                 onDone={onCancelled}
                 className={pill}
-              />
+              />}
             </div>
           )}
         </section>

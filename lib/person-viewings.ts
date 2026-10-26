@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import { testListing, testViewingsForTenant } from "@/lib/test-overlay";
+import { isTestId, testListing, testViewingsForListing, testViewingsForTenant } from "@/lib/test-overlay";
+import { viewingCancelledAlready } from "@/lib/viewing-cancelled";
 import { lastSent, sentWords } from "@/lib/confirmations";
 
 /**
@@ -170,4 +171,110 @@ export async function viewingsForPerson(p: { contactId?: string | null; email?: 
     past: live.filter((v) => new Date(v.startsAt).getTime() < now).sort((a, b) => b.startsAt.localeCompare(a.startsAt)),
     cancelled,
   };
+}
+
+/** One viewing still to come for this person on this listing - enough to say so, and to move it. */
+export interface UpcomingHere {
+  id: string;
+  startsAt: string;
+  mins: number;
+  who: string;
+  email: string | null;
+  phone: string | null;
+  agent: string | null;
+  leadId: string | null;
+  unaccompanied: boolean;
+}
+
+/**
+ * IS THIS PERSON ALREADY BOOKED IN HERE? (Stuart Roper, 26 Oct 2026: "I
+ * booked a viewing for Thursday by accident and then tried to correct it for
+ * Wednesday. What it did is create a second appointment for Wednesday, but
+ * kept the one on Thursday.") Booking again is what made the second one, so
+ * the booker asks first and offers to move the one there is.
+ *
+ * Their viewings on THIS listing that are still to come and not called off:
+ * REX's (by contact id, or by email) and the OS's own bookings (by lead, or
+ * by email). An email alone is not enough where a first name is known and
+ * differs - every test person shares the tester's address, and a couple can
+ * share one. Reads only.
+ */
+export async function upcomingHereFor(p: { listingId: string; leadId?: string | null; contactId?: string | null; email?: string | null; name?: string | null }): Promise<UpcomingHere[]> {
+  const listingId = (p.listingId ?? "").trim();
+  const leadId = (p.leadId ?? "").trim();
+  const contactId = (p.contactId ?? "").trim();
+  const email = (p.email ?? "").trim().toLowerCase();
+  const first = (s: string | null | undefined) => (s ?? "").trim().split(/\s+/)[0].toLowerCase();
+  const wantFirst = first(p.name);
+  const sameName = (who: string | null | undefined) => !wantFirst || !first(who) || first(who) === wantFirst;
+  if (!hasDb() || !listingId || (!leadId && !contactId && !email)) return [];
+
+  const out = new Map<string, UpcomingHere>();
+
+  /* REX's diary, as the ledger holds it. */
+  if (!isTestId(listingId) && (contactId || email)) {
+    const wants: string[] = [];
+    if (contactId) wants.push(JSON.stringify([{ id: contactId }]));
+    if (email) wants.push(JSON.stringify([{ email }]));
+    const rows = await q<{ id: string; starts_at: Date; mins: number; agent: string | null; title: string; payload: { type?: string | null } | null; contacts: { id?: string; name?: string; email?: string | null; phone?: string | null }[] }>(
+      `SELECT id, starts_at, mins, agent, title, payload, contacts FROM os_viewings
+        WHERE kind = 'viewing' AND NOT cancelled AND starts_at > NOW() AND listing_id = $1
+          AND (${wants.map((_, i) => `contacts @> $${i + 2}::jsonb`).join(" OR ")})
+        ORDER BY starts_at`,
+      [listingId, ...wants]
+    ).catch(() => []);
+    for (const r of rows) {
+      const c = r.contacts.find((x) => (contactId && String(x.id ?? "") === contactId) || (email && (x.email ?? "").toLowerCase() === email && sameName(x.name)));
+      if (!c) continue;
+      out.set(r.id, {
+        id: r.id,
+        startsAt: iso(r.starts_at),
+        mins: r.mins ?? 30,
+        who: c.name || p.name || "",
+        email: c.email ?? null,
+        phone: c.phone ?? null,
+        agent: r.agent,
+        leadId: leadId || null,
+        unaccompanied: /unaccompanied/i.test(`${r.payload?.type ?? ""} ${r.title}`),
+      });
+    }
+  }
+
+  /* The OS's own bookings, whether or not REX took the copy - and a test
+     listing's viewings, which only ever live here. */
+  const testIds = isTestId(listingId) ? (await testViewingsForListing(Number(listingId)).catch(() => [])).map((v) => v.appointmentId) : [];
+  const own = await q<{ id: string; starts_at: Date; mins: number; who: string; author_name: string; rex_event_id: string | null; lead_id: string | null; contact_email: string | null; booking: (OsBooking & { applicantPhone?: string | null }) | null }>(
+    `SELECT id, starts_at, mins, who, author_name, rex_event_id, lead_id, contact_email, booking
+       FROM os_appointments
+      WHERE kind = 'viewing' AND cancelled_at IS NULL AND starts_at > NOW()
+        AND (booking->>'listingId' = $1 OR id = ANY($2::text[]))
+      ORDER BY starts_at`,
+    [listingId, testIds]
+  ).catch(() => []);
+  for (const a of own) {
+    const b = a.booking;
+    const theirLead = a.lead_id ?? b?.leadId ?? null;
+    const theirEmail = (a.contact_email ?? b?.applicantEmail ?? "").toLowerCase();
+    const who = a.who || b?.applicantName || "";
+    const match = (leadId && theirLead === leadId) || (email && theirEmail === email && sameName(who));
+    if (!match) continue;
+    const id = a.rex_event_id ? `rex-${a.rex_event_id}` : `os-${a.id}`;
+    if (out.has(id)) continue;
+    out.set(id, {
+      id,
+      startsAt: iso(a.starts_at),
+      mins: a.mins ?? 30,
+      who,
+      email: theirEmail || null,
+      phone: b?.applicantPhone ?? null,
+      agent: a.author_name || null,
+      leadId: theirLead,
+      unaccompanied: Boolean(b?.unaccompanied),
+    });
+  }
+
+  /* Called off in the OS a moment ago: the ledger may not have heard yet. */
+  const live: UpcomingHere[] = [];
+  for (const v of out.values()) if (!(await viewingCancelledAlready(v.id).catch(() => null))) live.push(v);
+  return live.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 }
