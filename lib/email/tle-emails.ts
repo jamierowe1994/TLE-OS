@@ -1357,7 +1357,12 @@ TLE_EMAILS.push(
   worksEntry("works-landlord-arranged", "Arranged to the Landlord", "landlord", "Step 6: once a date is set", "The landlord", "Who's booked and when, and that nothing is needed from them.", WORKS_LANDLORD_ARRANGED as unknown as EmailDoc),
   worksEntry("works-contractor-done-request", "All Done? to the Contractor", "contractor", "Step 7: the day after the booked date", "The contractor", "One page to mark it done, add photos and drop in the invoice, which goes straight to accounts.", WORKS_CONTRACTOR_DONE_REQUEST as unknown as EmailDoc),
   worksEntry("works-tenant-happy", "Are You Happy? to the Tenant", "tenant", "Step 8: when the job is marked done", "The tenant", "A yes and a no. A no comes straight back to the agent.", WORKS_TENANT_HAPPY as unknown as EmailDoc),
-  worksEntry("invoice-sent", "Invoice to the Landlord", "landlord", "When an invoice is sent from Maintenance, Invoices", "Whoever the invoice is to - usually the landlord", "The figure, the due date and the button that opens the invoice page.", INVOICE_SENT as unknown as EmailDoc, "Invoices"),
+  /* The invoice route fills address as " at <property>" (or nothing), so its
+     preview carries the same shape rather than the works jobs' bare address. */
+  {
+    ...worksEntry("invoice-sent", "Invoice to the Landlord", "landlord", "When an invoice is sent from Maintenance, Invoices", "Whoever the invoice is to - usually the landlord", "The figure, the due date and the button that opens the invoice page.", INVOICE_SENT as unknown as EmailDoc, "Invoices"),
+    render: (o) => blocks(withSample(o ?? (INVOICE_SENT as unknown as EmailDoc), { ...WORKS_SAMPLE, address: ` at ${WORKS_SAMPLE.address}` }), "landlord")(),
+  },
 );
 
 /* One worked visit, so the inspection emails preview as real ones. */

@@ -920,15 +920,16 @@ export const WORKS_LANDLORD_APPROVAL = {
   preheader: "A quote over your pre-authorised spend. One reply and it goes ahead.",
   mode: "blocks",
   blocks: [
-    H("wl1", "A quote for your approval"),
-    T("wl2", "Hi {{landlordName}},<br><br>We've had a quote of <strong>{{quote}}</strong> for <strong>{{title}}</strong> at {{address}} (job #{{ref}}). That's over the {{authority}} you've pre-authorised us to spend, so we need your yes before it goes ahead."),
+    H("wl1", "A Quote for Your Approval"),
+    T("wl2", "Hi {{landlordName}},<br><br>A quote has come in that's over what you've pre-authorised us to spend, so we need your yes before it goes ahead."),
+    FACTS("wl2a", [["Your property", "{{address}}"], ["The job", "{{title}} (#{{ref}})"], ["Quote", "{{quote}}"], ["You've pre-authorised", "{{authority}}"]]),
     T("wl3", "{{description}}"),
-    T("wl4", "Reply <strong>yes</strong> to this email, or ring {{agentPhone}}, and we'll book it in. If you'd rather get another quote, say so and we will."),
+    T("wl4", "Reply <strong>yes</strong> to this email, or ring {{agentPhone}}, and we'll book it in. If you'd rather we got another quote first, just say."),
     SP("wl5", 8),
-    T("wl6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wl6", "Thanks,<br>{{agentName}}"),
     FOOT("wl7", "You're getting this because The Letting Experts manage this property for you."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repairs" },
 } as const;
 
 /**
@@ -942,17 +943,18 @@ export const INVOICE_SENT = {
   preheader: "Due {{dueDate}}. The invoice is one click away.",
   mode: "blocks",
   blocks: [
-    H("in1", "Invoice {{number}}"),
-    T("in2", "Hi {{toName}},<br><br>Please find your invoice for <strong>{{reference}}</strong>{{address}}. The total is <strong>{{total}}</strong>, due by <strong>{{dueDate}}</strong>."),
-    SP("in3", 8),
+    H("in1", "Your Invoice"),
+    T("in2", "Hi {{toName}},<br><br>Here's your invoice for <strong>{{reference}}</strong>{{address}}."),
+    FACTS("in2a", [["Invoice", "{{number}}"], ["Total", "{{total}}"], ["Due by", "{{dueDate}}"]]),
+    SP("in3", 4),
     BTN("in4", "View the invoice", "{{link}}"),
     SP("in5", 8),
-    T("in6", "Payment details are on the invoice. If anything on it isn't right, reply to this email and we'll sort it before you pay."),
-    SP("in7", 8),
-    T("in8", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}}"),
+    T("in6", "Payment details are on the invoice. If anything on it isn't right, just reply and we'll sort it before you pay."),
+    SP("in7", 4),
+    T("in8", "Thanks,<br>{{agentName}} · {{agentPhone}}"),
     FOOT("in9", "You're getting this because The Letting Experts have raised an invoice to you."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Invoice" },
 } as const;
 
 /* The report to the landlord, the moment it is logged (workflow step 1). */
@@ -961,15 +963,17 @@ export const WORKS_LANDLORD_REPORT = {
   preheader: "What the tenant has told us, and what happens next.",
   mode: "blocks",
   blocks: [
-    H("wlr1", "A repair has been reported"),
-    T("wlr2", "Hi {{landlordName}},<br><br>Your tenant has reported the following at <strong>{{address}}</strong>. We've logged it as job #{{ref}} and marked it <strong>{{urgency}}</strong>."),
-    T("wlr3", "<strong>{{title}}</strong><br>{{category}}<br><br>{{description}}"),
-    T("wlr4", "There are two ways we can go from here: you arrange it with your own contractor, or we arrange it for you with one of ours and keep you posted at each step. Reply to this email or ring {{agentPhone}} and tell us which you'd prefer."),
+    H("wlr1", "A Repair Has Been Reported"),
+    T("wlr2", "Hi {{landlordName}},<br><br>Your tenant has reported a problem at your property. We've logged it, and this is what they told us."),
+    FACTS("wlr2a", [["Your property", "{{address}}"], ["Reported", "{{title}} (#{{ref}})"], ["Type", "{{category}}"], ["Urgency", "{{urgency}}"]]),
+    T("wlr3", "{{description}}"),
+    T("wlr4", "There are two ways forward:<br><strong>You arrange it</strong> with your own contractor, or<br><strong>We arrange it</strong> with one of ours and keep you posted at each step."),
+    T("wlr4a", "Reply to this email or ring {{agentPhone}} and tell us which you'd prefer."),
     SP("wlr5", 8),
-    T("wlr6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wlr6", "Thanks,<br>{{agentName}}"),
     FOOT("wlr7", "You're getting this because The Letting Experts manage this property for you."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repairs" },
 } as const;
 
 /* A price first, before any works order (Sean McMahon, 20 Oct 2026: "ideally
@@ -1024,8 +1028,9 @@ export const WORKS_LANDLORD_INVOICE = {
   preheader: "Pay it from the rent, pay the contractor yourself, or ask us a question.",
   mode: "blocks",
   blocks: [
-    H("wli1", "An invoice for you to authorise"),
-    T("wli2", "Hi {{landlordName}},<br><br>{{contractorName}} have sent their invoice for <strong>{{title}}</strong> at {{address}} (job #{{ref}}). The total is <strong>{{invoice}}</strong>."),
+    H("wli1", "An Invoice to Authorise"),
+    T("wli2", "Hi {{landlordName}},<br><br>The contractor has sent their invoice for the work at your property."),
+    FACTS("wli2a", [["Your property", "{{address}}"], ["The job", "{{title}} (#{{ref}})"], ["Contractor", "{{contractorName}}"], ["Total", "{{invoice}}"]]),
     T("wli3", "How would you like it paid? Nothing is paid until you tell us."),
     SP("wli4", 4),
     BTN("wli5", "Authorise to pay from the rent", "{{invoicePayLink}}"),
@@ -1034,12 +1039,12 @@ export const WORKS_LANDLORD_INVOICE = {
     SP("wli8", 4),
     BTN("wli9", "Raise a query", "{{invoiceQueryLink}}"),
     SP("wli10", 8),
-    T("wli11", "You can see the invoice itself on the same page. If you'd rather talk it through, ring {{agentPhone}}."),
-    SP("wli12", 8),
-    T("wli13", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wli11", "The invoice itself is on the same page. If you'd rather talk it through, ring {{agentPhone}}."),
+    SP("wli12", 4),
+    T("wli13", "Thanks,<br>{{agentName}}"),
     FOOT("wli14", "You're getting this because The Letting Experts manage this property for you."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repair invoice" },
 } as const;
 
 /* The report to a contractor, asking if they'll take it (step 4). */
@@ -1122,14 +1127,15 @@ export const WORKS_LANDLORD_ARRANGED = {
   preheader: "{{contractorName}} is booked. Nothing for you to do.",
   mode: "blocks",
   blocks: [
-    H("wla1", "It's arranged"),
-    T("wla2", "Hi {{landlordName}},<br><br><strong>{{contractorName}}</strong> is booked to attend {{address}} on <strong>{{scheduledAt}}</strong> for <strong>{{title}}</strong> (job #{{ref}}). The tenant knows to expect them."),
+    H("wla1", "It's Arranged"),
+    T("wla2", "Hi {{landlordName}},<br><br>A contractor is booked and the tenant knows to expect them. There's nothing you need to do."),
+    FACTS("wla2a", [["Your property", "{{address}}"], ["The job", "{{title}} (#{{ref}})"], ["Contractor", "{{contractorName}}"], ["Booked for", "{{scheduledAt}}"]]),
     T("wla3", "We'll let you know when it's done, and send the invoice once we have the contractor's. Anything over your pre-authorised {{authority}} we'd have asked you about first."),
     SP("wla4", 8),
-    T("wla5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("wla5", "Thanks,<br>{{agentName}}"),
     FOOT("wla6", "You're getting this because The Letting Experts manage this property for you."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Repairs" },
 } as const;
 
 /* To the contractor after the visit: mark it done, drop in the photos and the invoice (step 7). */
@@ -1227,15 +1233,16 @@ export const INSPECTION_LANDLORD_BOOKED = {
   preheader: "A routine visit to your property is in the diary.",
   mode: "blocks",
   blocks: [
-    H("ilb1", "A visit is booked"),
-    T("ilb2", "Hi {{landlordName}},<br><br>Just to let you know, <strong>{{inspector}}</strong> will be calling at {{address}} on <strong>{{whenPretty}}</strong> for a routine property visit, to check the property is being looked after and to pick up anything that needs putting right."),
-    T("ilb3", "Once we have been round we will send you a short report of how the property is and anything that needs doing."),
-    T("ilb4", "If there is anything you would like us to look at while we are there, just reply to this email."),
+    H("ilb1", "A Visit Is Booked"),
+    T("ilb2", "Hi {{landlordName}},<br><br>Just to let you know, we've booked a routine visit to check your property is being looked after and to pick up anything that needs putting right."),
+    FACTS("ilb2a", [["Your property", "{{address}}"], ["When", "{{whenPretty}}"], ["Visiting", "{{inspector}}"]]),
+    T("ilb3", "Once we've been round, we'll send you a short report of how the property is and anything that needs doing."),
+    T("ilb4", "Anything you'd like us to look at while we're there? Just reply to this email."),
     SP("ilb5", 8),
-    T("ilb6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("ilb6", "Thanks,<br>{{agentName}}"),
     FOOT("ilb7", "You're getting this because The Letting Experts manage this property for you."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Property visit" },
 } as const;
 
 /* To the landlord after the visit: how their property is. */
@@ -1244,19 +1251,21 @@ export const INSPECTION_LANDLORD_REPORT = {
   preheader: "How your property is being kept, and anything that needs doing.",
   mode: "blocks",
   blocks: [
-    H("ilr1", "We've been round"),
-    T("ilr2", "Hi {{landlordName}},<br><br>{{inspector}} visited {{address}} on {{whenPretty}}. Overall the property is <strong>{{conditionWord}}</strong>."),
+    H("ilr1", "We've Been Round"),
+    T("ilr2", "Hi {{landlordName}},<br><br>Here's how we found your property. Overall it's <strong>{{conditionWord}}</strong>."),
+    FACTS("ilr2a", [["Your property", "{{address}}"], ["Visited", "{{whenPretty}}"], ["Visited by", "{{inspector}}"]]),
     T("ilr3", "{{summary}}"),
-    T("ilr4", "<strong>What we found</strong><br>{{findings}}"),
+    H2("ilr4a", "What We Found"),
+    T("ilr4", "{{findings}}"),
     SP("ilr5", 8),
     BTN("ilr6", "See the full report", "{{reportLink}}"),
     SP("ilr7", 8),
-    T("ilr8", "Anything marked for you to decide on will come to you as a separate quote before any work starts. Everything else we will handle."),
-    SP("ilr9", 8),
-    T("ilr10", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    T("ilr8", "Anything marked for you to decide on will come to you as a separate quote before any work starts. Everything else, we'll handle."),
+    SP("ilr9", 4),
+    T("ilr10", "Thanks,<br>{{agentName}}"),
     FOOT("ilr11", "You're getting this because The Letting Experts manage this property for you."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Property visit" },
 } as const;
 
 /**
