@@ -1445,7 +1445,9 @@ export function renderLandlordSignIn(input: { firstName: string; link: string })
     "Here is your link to your property file with The Letting Experts:",
     input.link,
     "",
-    "It works once and lasts 24 hours. If you didn't ask for this, ignore it.",
+    "It works once and lasts 24 hours. If it has run out, ask for another from the sign-in page.",
+    "",
+    "If you didn't ask for this, you can ignore it. Nothing happens unless the link is opened.",
     "",
     "The Letting Experts",
   ].join("\n");

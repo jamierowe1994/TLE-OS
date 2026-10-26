@@ -728,21 +728,19 @@ export const LANDLORD_SIGN_IN = {
   preheader: "One click and you are in. The link works once and lasts a day.",
   mode: "blocks",
   blocks: [
-    H("ls1", "Here is your link"),
+    H("ls1", "Here Is Your Link"),
     T(
       "ls2",
-      "Hi {{firstName}},<br><br>Open the button below and you are into your property file with The Letting Experts: your properties, your certificates and everything happening on them."
+      "Hi {{firstName}},<br><br>The button below takes you into your property file with The Letting Experts: your properties, your certificates and everything happening on them."
     ),
-    SP("ls3", 8),
+    FACTS("ls11", [["Works", "Once"], ["Lasts", "24 hours"]]),
     BTN("ls4", "Open my property file", "{{link}}"),
     SP("ls5", 8),
-    T("ls6", "The link works once and lasts 24 hours. If it has run out, ask for another from the sign-in page."),
+    T("ls6", "If it has run out, ask for another from the sign-in page."),
     T("ls7", "If you didn't ask for this, you can ignore it. Nothing happens unless the link is opened."),
-    SP("ls8", 8),
-    T("ls9", "The Letting Experts"),
     FOOT("ls10", "You're getting this because a sign-in was requested for this address at The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Sign in" },
 } as const;
 
 export const TENANT_SIGN_IN = {
@@ -1279,14 +1277,14 @@ export const LANDLORD_CONTRACT_PACK = {
   preheader: "Everything from your appraisal in one place.",
   mode: "blocks",
   blocks: [
-    H("lcp1", "Thank you for having us round"),
+    H("lcp1", "Thank You for Having Us Round"),
     /* James, 17 Sep 2026: one short note, the four things as a list, the
        contract mentioned at the end rather than a section of its own. The
        first line of the address only - the whole thing, postcode and all,
        read like a form. */
     T(
       "lcp2",
-      "Hi {{firstName}},<br><br>Thank you for showing {{agentName}} round <strong>{{address}}</strong>. As promised, everything you need is in one place:"
+      "Hi {{firstName}},<br><br>Thank you for showing {{agentName}} round <strong>{{address}}</strong>. As promised, everything from your appraisal is in one place:"
     ),
     T(
       "lcp3",
@@ -1297,14 +1295,10 @@ export const LANDLORD_CONTRACT_PACK = {
        contract under it. The bare /present link opened another copy. */
     BTN("lcp4", "Open your property file", "{{link}}"),
     SP("lcp5", 8),
-    T(
-      "lcp6",
-      "You will also find the contract there for you to look through. Let {{agentFirst}} know if you have any questions - just reply to this email."
-    ),
-    T("lcp7", "The Letting Experts"),
+    T("lcp6", "Your contract is there too, for you to look through. Any questions, just reply. It comes straight to {{agentFirst}}."),
     FOOT("lcp8", "You're getting this because you had a market appraisal with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your appraisal" },
 } as const;
 
 /**
@@ -1318,22 +1312,19 @@ export const LANDLORD_TERMS_ONLY = {
   preheader: "One thing to sign before {{address}} goes on the market.",
   mode: "blocks",
   blocks: [
-    H("lto1", "Your Terms of Business"),
+    H("lto1", "Your Terms of Business Are Ready"),
     T(
       "lto2",
-      "Hi {{firstName}},<br><br>Thank you for choosing The Letting Experts to let <strong>{{address}}</strong> at <strong>{{rent}} a month</strong> on {{serviceLine}}."
+      "Hi {{firstName}},<br><br>Thank you for choosing The Letting Experts to let your home on {{serviceLine}}. Before we can put it on the market, we need your signature on our terms of business."
     ),
-    T(
-      "lto3",
-      "Before we can put it on the market, we need your signature on our terms of business. They are waiting in your property file, along with everything else we hold for the home."
-    ),
+    FACTS("lto9", [["Your home", "{{address}}"], ["Rent", "{{rent}} a month"]]),
+    T("lto3", "They are waiting in your property file, along with everything else we hold for the home."),
     BTN("lto4", "Open your property file", "{{link}}"),
     SP("lto5", 8),
-    T("lto6", "If anything in them doesn't look right, just reply to this email and {{agentFirst}} will sort it."),
-    T("lto7", "The Letting Experts"),
+    T("lto6", "If anything doesn't look right, just reply and {{agentFirst}} will sort it."),
     FOOT("lto8", "You're getting this because you're letting your property with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Terms of business" },
 } as const;
 
 /**
@@ -1346,15 +1337,17 @@ export const LANDLORD_MESSAGE_REPLY = {
   preheader: "{{preview}}",
   mode: "blocks",
   blocks: [
-    H("lmr1", "A reply from {{agentFirst}}"),
+    H("lmr1", "A Reply from {{agentFirst}}"),
     T("lmr2", "Hi {{firstName}},<br><br>{{agentFirst}} has replied to your message about <strong>{{address}}</strong>:"),
-    T("lmr3", "<span style=\"display:block;border-left:3px solid #e7ddd9;padding:4px 0 4px 14px;color:#3b3b3c\">{{bodyHtml}}</span>"),
+    /* The reply itself, set off by a thin coral rule - the landlord look's
+       accent - so it reads as their words, not ours. */
+    T("lmr3", "<span style=\"display:block;border-left:2px solid #eb8c6d;padding:2px 0 2px 16px;color:#141413\">{{bodyHtml}}</span>"),
     BTN("lmr4", "Open your messages", "{{link}}"),
     SP("lmr5", 8),
-    T("lmr6", "The Letting Experts"),
+    T("lmr6", "Or just reply to this email. It comes straight to {{agentFirst}}."),
     FOOT("lmr7", "You're getting this because you messaged The Letting Experts from your property file."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "A reply" },
 } as const;
 
 /**
@@ -1372,16 +1365,16 @@ export const LANDLORD_DOCS_NUDGE = {
     H("ldn1", "Just the Paperwork Left"),
     T(
       "ldn2",
-      "Hi {{firstName}},<br><br>We have been round and taken the photographs for <strong>{{address}}</strong>, so the advert is nearly ready. The last thing we need from you is {{what}}."
+      "Hi {{firstName}},<br><br>We've been round and taken the photographs, so the advert is nearly ready. All we need now is your paperwork."
     ),
-    T("ldn3", "You can send them from your property file - photographs of them are fine, straight off your phone."),
+    FACTS("ldn9", [["Your home", "{{address}}"], ["Still needed", "{{whatCap}}"]]),
+    T("ldn3", "You can send them from your property file. Photos straight off your phone are fine."),
     BTN("ldn4", "Send your documents", "{{link}}"),
     SP("ldn5", 8),
-    T("ldn6", "Anything you cannot find, reply to this email and we will help you get hold of it."),
-    T("ldn7", "The Letting Experts"),
+    T("ldn6", "Can't find something? Just reply and we'll help you get hold of it."),
     FOOT("ldn8", "You're getting this because The Letting Experts are letting your property."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your documents" },
 } as const;
 
 /**
@@ -1423,17 +1416,15 @@ export const LANDLORD_TERMS_SIGNED = {
   mode: "blocks",
   blocks: [
     H("lts1", "All Signed"),
-    T(
-      "lts2",
-      "Hi {{firstName}},<br><br>Everyone has now signed the terms of business for <strong>{{address}}</strong>, so we're ready to get started."
-    ),
-    BTN("lts3", "Your signed copy", "{{link}}"),
+    T("lts2", "Hi {{firstName}},<br><br>That's everything signed, so we're ready to get started."),
+    FACTS("lts8", [["Your home", "{{address}}"], ["Terms of business", "Signed by everyone"]]),
+    T("lts9", "Your signed copy is kept for you, whenever you need it."),
+    BTN("lts3", "View your signed copy", "{{link}}"),
     SP("lts4", 8),
-    T("lts5", "{{agentFirst}} will be in touch about what happens next. Any questions, just reply to this email."),
-    T("lts6", "The Letting Experts"),
+    T("lts5", "{{agentFirst}} will be in touch about what happens next. Any questions before then, just reply."),
     FOOT("lts7", "You're getting this because you signed terms of business with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Terms of business" },
 } as const;
 
 export const LANDLORD_CONTRACT_NUDGE = {
@@ -1441,19 +1432,19 @@ export const LANDLORD_CONTRACT_NUDGE = {
   preheader: "It's ready and waiting - about two minutes to sign.",
   mode: "blocks",
   blocks: [
-    H("lcn1", "Your contract is ready to sign"),
+    H("lcn1", "Your Contract Is Ready to Sign"),
     T(
       "lcn2",
-      "Hi {{firstName}},<br><br>Just a reminder that your contract for <strong>{{address}}</strong> is ready and waiting in your property file. {{agentFirst}} has already signed their half."
+      "Hi {{firstName}},<br><br>Just a reminder that your contract is ready and waiting in your property file. {{agentFirst}} has already signed their half."
     ),
-    T("lcn3", "It takes about two minutes, and the button takes you straight to it."),
+    FACTS("lcn9", [["Your home", "{{address}}"], ["Takes about", "Two minutes"]]),
+    T("lcn3", "The button takes you straight to it."),
     BTN("lcn4", "Sign your contract", "{{link}}"),
     SP("lcn5", 8),
-    T("lcn6", "Any questions at all, just reply to this email and it comes straight to {{agentFirst}}."),
-    T("lcn7", "The Letting Experts"),
+    T("lcn6", "Any questions, just reply. It comes straight to {{agentFirst}}."),
     FOOT("lcn8", "You're getting this because your terms of business with The Letting Experts are waiting for your signature."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your contract" },
 } as const;
 
 /**
@@ -1470,24 +1461,19 @@ export const LANDLORD_QUESTIONS_CHASE = {
   preheader: "{{leftCap}} to go, and it picks up where you left off.",
   mode: "blocks",
   blocks: [
-    H("lqc1", "Nearly there"),
+    H("lqc1", "Nearly There"),
     T(
       "lqc2",
-      "Hi {{firstName}},<br><br>Thank you again for signing with us for <strong>{{address}}</strong>. There are just a few things about the property that only you know - where the stopcock is, how many sets of keys there are, how you'd like pet requests handled - and there are <strong>{{left}}</strong> left to go."
+      "Hi {{firstName}},<br><br>Thank you again for signing with us. There are just a few things about the home that only you know, like where the stopcock is, how many sets of keys there are and how you'd like pet requests handled."
     ),
-    T(
-      "lqc3",
-      "It picks up exactly where you left off, and each part takes a minute or two. We use the answers to get the home ready to let, so finishing them is what lets us get going."
-    ),
-    SP("lqc4", 8),
+    FACTS("lqc11", [["Your home", "{{address}}"], ["Left to go", "{{leftCap}}"], ["Each part takes", "A minute or two"]]),
+    T("lqc3", "It picks up exactly where you left off. Your answers are what we use to get the home ready to let."),
     BTN("lqc5", "Carry on with the questions", "{{link}}"),
-    T("lqc6", "That button signs you straight in. It works once and lasts 24 hours."),
     SP("lqc7", 8),
-    T("lqc8", "If anything is unclear, just reply to this email and we'll help."),
-    T("lqc9", "The Letting Experts"),
+    T("lqc6", "The button signs you straight in. It works once and lasts 24 hours. If anything is unclear, just reply and we'll help."),
     FOOT("lqc10", "You're getting this because you signed terms of business with The Letting Experts and your property questions aren't finished yet."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your property" },
 } as const;
 
 /**
