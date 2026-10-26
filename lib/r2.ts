@@ -213,6 +213,37 @@ export const SCOPES = {
     ],
     maxBytes: 10 * 1024 * 1024,
   },
+  /**
+   * Anything somebody puts on a maintenance job with "Add a file or photo"
+   * (James, 26 Oct 2026: "anyone can upload any file ... without being
+   * stopped"). A contractor's Word report, a spreadsheet of readings, an
+   * email chain: working files, not evidence. Kept apart from `document` for
+   * the reason `library` and `support` are - a certificate is still a PDF or
+   * a photograph, filed through Add a Certificate - and it needs no type and
+   * no expiry. 10MB: the most a single upload can carry past middleware.
+   */
+  working: {
+    prefix: "working",
+    types: [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/gif",
+      "text/plain",
+      "text/csv",
+      "message/rfc822",
+      "application/vnd.ms-outlook",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ],
+    maxBytes: 10 * 1024 * 1024,
+  },
 } as const;
 
 export type Scope = keyof typeof SCOPES;

@@ -198,7 +198,9 @@ export default function WorksOrderPage() {
     if (!o) return false;
     const fd = new FormData();
     fd.append("file", file);
-    fd.append("scope", "document");
+    /* The new look's Add a File takes any working file (lib/r2 "working");
+       an invoice or a quote, and the page as it was, stay on "document". */
+    fd.append("scope", look && !kind ? "working" : "document");
     fd.append("ref", `works-${o.ref}`);
     setBusy(true);
     setErr(null);

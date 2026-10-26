@@ -181,3 +181,31 @@
   [data-look="new"] .nl-fs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
   [data-look="new"] .nl-fs-body::-webkit-scrollbar { display: none; }
 }
+
+/* White, not grey (James, 26 Oct 2026): every box and drop-down inside the
+   floating screens sits on white, whatever component drew it. */
+[data-look="new"] .nl-fs .bg-box { background: var(--page); }
+[data-look="new"] .nl-fs-choice { background: var(--page); }
+[data-look="new"] .nl-fs-choice-i { background: color-mix(in srgb, var(--primary) 12%, var(--page)); color: var(--accent-dark); }
+
+/* Tiles: one per category, straight on the dark, tapped on and off. */
+[data-look="new"] .nl-fs-lb em { font-style: normal; opacity: 0.75; }
+[data-look="new"] .nl-fs-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+[data-look="new"] .nl-fs-tile {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-height: 92px; padding: 14px 14px 12px;
+  font: inherit; text-align: left; color: var(--ink); cursor: pointer;
+  background: var(--page); border: 0; border-radius: 16px; box-shadow: 0 16px 32px -24px rgba(0, 0, 0, 0.55);
+  transition: transform 0.25s var(--nl-ease), box-shadow 0.2s;
+}
+[data-look="new"] .nl-fs-tile:hover { transform: translateY(-2px); }
+[data-look="new"] .nl-fs-tile:active { transform: scale(0.97); }
+[data-look="new"] .nl-fs-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-fs-tile.is-on { box-shadow: 0 0 0 2px var(--primary), 0 16px 32px -24px rgba(0, 0, 0, 0.55); }
+[data-look="new"] .nl-fs-tile-i {
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--page)); color: var(--accent-dark); transition: background-color 0.2s, color 0.2s, transform 0.3s var(--nl-ease);
+}
+[data-look="new"] .nl-fs-tile.is-on .nl-fs-tile-i { background: var(--primary); color: var(--on-primary); transform: rotate(-6deg) scale(1.06); }
+[data-look="new"] .nl-fs-tile-t { font-size: 13.5px; line-height: 18px; font-weight: 500; }
+[data-look="new"] .nl-fs-tile-tick { position: absolute; top: 12px; right: 12px; color: var(--accent-dark); }
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-fs-tile, [data-look="new"] .nl-fs-tile-i { transition: none; } }

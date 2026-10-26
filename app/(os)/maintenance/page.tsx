@@ -306,6 +306,7 @@ export default function Maintenance() {
 
         {raising && (
           <RaiseJob
+            look="float"
             kind={raising}
             contractors={data?.contractors ?? []}
             onClose={() => setRaising(null)}
