@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Mast } from "@/components/new-look/Parts";
-import { STEPS_FOR } from "@/lib/showroom/content";
+import { JOURNEYS as TOUR } from "@/lib/learning/systems";
+import { GuidesCover, SystemsCover } from "./Covers";
 
 /**
  * Tools > Learning (James, 26 Oct 2026): two ways in. Guides, the library of
@@ -12,7 +13,8 @@ import { STEPS_FOR } from "@/lib/showroom/content";
  * into tools and see."
  */
 
-const stops = STEPS_FOR.tenant.length + STEPS_FOR.landlord.length + STEPS_FOR.agent.length;
+/** Files across every journey of the Systems tour (lib/learning/systems); 0 until it is written. */
+const files = TOUR.reduce((n, j) => n + j.folders.reduce((m, f) => m + f.files.length, 0), 0);
 
 export function Back({ href, label }: { href: string; label: string }) {
   return (
@@ -45,10 +47,7 @@ export default function LearningHub() {
       <div className="nl-lr-doors">
         <Link href="/tools/learning/guides" className="nl-lr-door is-guides" style={{ animationDelay: "80ms" }}>
           <span className="nl-lr-door-art" aria-hidden>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4.5 5.5c2.5-1 5-1 7.5.5v13c-2.5-1.5-5-1.5-7.5-.5z" />
-              <path d="M19.5 5.5c-2.5-1-5-1-7.5.5v13c2.5-1.5 5-1.5 7.5-.5z" />
-            </svg>
+            <GuidesCover />
           </span>
           <span className="nl-lr-door-text">
             <span className="nl-lr-door-kicker">
@@ -61,13 +60,10 @@ export default function LearningHub() {
         </Link>
         <Link href="/tools/learning/systems" className="nl-lr-door is-systems" style={{ animationDelay: "160ms" }}>
           <span className="nl-lr-door-art" aria-hidden>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4.5" width="18" height="12" rx="2" />
-              <path d="M8.5 20h7M12 16.5V20" />
-            </svg>
+            <SystemsCover />
           </span>
           <span className="nl-lr-door-text">
-            <span className="nl-lr-door-kicker">{stops} stops</span>
+            <span className="nl-lr-door-kicker">{files > 0 ? `${files} files across three journeys` : "Three journeys"}</span>
             <span className="nl-lr-door-name">Systems</span>
             <span className="nl-lr-door-blurb">A tour of the system: what the tenant and the landlord see, the emails they get, and what you press to set it off.</span>
             <span className="nl-lr-door-go">Take the tour <Arrow /></span>

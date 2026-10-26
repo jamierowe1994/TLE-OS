@@ -97,6 +97,21 @@ const nextConfig: NextConfig = {
       { source: "/admin/portals/:folder", destination: "/admin/process/:folder", permanent: true },
     ];
   },
+  /**
+   * The Systems tour's own demo pages (app/learning-demo, 26 Oct 2026) are
+   * shown in a frame on our own pages and nowhere else.
+   */
+  async headers() {
+    return [
+      {
+        source: "/learning-demo/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
