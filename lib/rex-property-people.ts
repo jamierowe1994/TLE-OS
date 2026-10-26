@@ -1,5 +1,6 @@
 import "server-only";
 import { rexCall, rexRows, rexConfigured } from "@/lib/rex";
+import { relnKind } from "@/lib/rex-reln";
 
 /**
  * Who is on a property, read from REX directly.
@@ -53,7 +54,7 @@ function partiesOf(listing: Row, type: string): Person[] {
   if (!Array.isArray(relns)) return [];
   const out: Person[] = [];
   for (const x of relns as Row[]) {
-    if (str((x.reln_type as Row | null)?.id) !== type) continue;
+    if (relnKind(x) !== type) continue;
     const p = person(x.contact as Row | null);
     if (p && !out.some((o) => o.contactId === p.contactId)) out.push(p);
   }

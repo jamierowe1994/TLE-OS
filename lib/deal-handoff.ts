@@ -1,6 +1,7 @@
 import "server-only";
 import { rexCall } from "@/lib/rex";
 import { getApplications, type Application } from "@/lib/applications";
+import { isOwnerReln } from "@/lib/rex-reln";
 
 /**
  * Offer accepted → the deal, and everything it needs to carry.
@@ -213,7 +214,8 @@ async function landlordOf(listingId: number): Promise<{ landlord: HandoffParty |
   const related = (l.related ?? {}) as Row;
 
   const relns = (related.contact_reln_listing ?? []) as Row[];
-  const owner = relns.find((r) => str((r.reln_type as Row | null)?.id) === "owner");
+  /* "Listing Owner" or a sub-type of it ("Landlord", 68 Main Street, 26 Oct 2026). */
+  const owner = relns.find((r) => isOwnerReln(r));
   const c = (owner?.contact ?? null) as Row | null;
 
   const docs = ((related.listing_documents ?? []) as Row[])

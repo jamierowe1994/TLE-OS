@@ -14,6 +14,7 @@ import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 import { allAgents } from "@/lib/rex-agents";
 import { listTegPeople, normEmail } from "@/lib/teg-people";
 import { withoutRemoved } from "@/lib/certificate-remove";
+import { relnKind } from "@/lib/rex-reln";
 
 /**
  * The compliance book, live from REX.
@@ -391,7 +392,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     const landlords: string[] = [];
     const tenants: string[] = [];
     for (const x of relns as Row[]) {
-      const type = String(((x.reln_type as Row | null)?.id ?? ""));
+      const type = relnKind(x);
       const name = String((x.contact as Row | null)?.name ?? "").trim();
       if (!name) continue;
       if (type === "owner" && !landlords.includes(name)) landlords.push(name);

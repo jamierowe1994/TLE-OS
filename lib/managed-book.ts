@@ -11,6 +11,7 @@ import { addrOf, parseAddress, postcodeOf, sameDoor, sameHome, type Parsed } fro
 import { q } from "@/lib/db";
 import { introOnlyIds } from "@/lib/intro-only";
 import { tidyAddressLine } from "@/lib/address-tidy";
+import { relnKind } from "@/lib/rex-reln";
 import type {
   ManagedBook,
   ManagedCounts,
@@ -85,8 +86,8 @@ function partiesOf(r: Row, type: string): Party[] {
   if (!Array.isArray(relns)) return [];
   const out: Party[] = [];
   for (const x of relns as Row[]) {
-    const t = str((x.reln_type as Row | null)?.id);
-    if (t !== type) continue;
+    /* A sub-type counts as its parent: "Landlord" is an owner (lib/rex-reln). */
+    if (relnKind(x) !== type) continue;
     const p = party(x.contact as Row | null);
     if (p && !out.some((o) => o.contactId === p.contactId)) out.push(p);
   }

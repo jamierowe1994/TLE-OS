@@ -6,6 +6,7 @@ import { listAppraisals } from "@/lib/appraisal-store";
 import { watchedDistricts } from "@/lib/radar";
 import { SIGNALS, isOurs, isPrivateLister, type SignalKey } from "@/lib/radar-signals";
 import { logActivity } from "@/lib/bond";
+import { relnKind } from "@/lib/rex-reln";
 
 /**
  * Nudges: the daily call list, from our own book.
@@ -145,7 +146,7 @@ function propertyOf(p: Record<string, unknown> | null | undefined): { id: string
 function ownerOf(relns: unknown): Contact | null {
   if (!Array.isArray(relns)) return null;
   for (const r of relns as Array<Record<string, unknown>>) {
-    const type = ((r.reln_type as Record<string, unknown> | undefined)?.id ?? r.reln_type) as string | undefined;
+    const type = relnKind(r);
     if (type && type !== "owner") continue;
     const c = (r.contact ?? {}) as Record<string, unknown>;
     const name = str(c.name) ?? [str(c.first_name), str(c.last_name)].filter(Boolean).join(" ");

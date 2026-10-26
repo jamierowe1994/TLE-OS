@@ -1,6 +1,7 @@
 import "server-only";
 import { listingRead } from "@/lib/listing-details";
 import { hasDb, q } from "@/lib/db";
+import { isOwnerReln } from "@/lib/rex-reln";
 
 /**
  * The landlord of a property — the REAL one.
@@ -173,7 +174,7 @@ export async function landlordForListing(listingId: string): Promise<LandlordAns
   const related = ((res.result ?? {}) as Row).related as Row | undefined;
   const relns = (related?.contact_reln_listing ?? []) as Row[];
   const owner = Array.isArray(relns)
-    ? relns.find((r) => str((r?.reln_type as Row | null)?.id) === "owner")
+    ? relns.find((r) => isOwnerReln(r))
     : undefined;
   const c = (owner?.contact ?? null) as Row | null;
 

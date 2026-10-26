@@ -15,6 +15,7 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { sameHome } from "@/lib/address-parse";
 import { letTenants } from "@/lib/let-tenants";
 import { dealForLet, type LetDeal } from "@/lib/let-deal";
+import { isOwnerReln } from "@/lib/rex-reln";
 
 /**
  * Who is on a let, read on the server from the let itself - never from the
@@ -244,7 +245,7 @@ async function otherOwners(listingId: string, firstId: string | null): Promise<L
   const seen = new Set<string>(firstId ? [firstId] : []);
   const out: LetParty[] = [];
   for (const r of Array.isArray(relns) ? relns : []) {
-    if (s((r?.reln_type as Row | null)?.id) !== "owner") continue;
+    if (!isOwnerReln(r)) continue;
     const c = (r.contact ?? null) as Row | null;
     const cid = s(c?.id);
     const name = s(c?.name);
