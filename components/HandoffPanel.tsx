@@ -42,6 +42,9 @@ export interface Handoff {
   listingId: number | null;
   property: string;
   landlord: Party | null;
+  /** Where the landlord was found: the listing, or the home when the listing names nobody (lib/deal-handoff). */
+  landlordFrom?: "listing" | "changed" | "property" | "record" | "joint" | null;
+  landlordNote?: string | null;
   tenants: (Party & { isPrimary: boolean })[];
   rentPcm: number | null;
   startDate: string | null;
@@ -196,7 +199,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
   const required = h.certificates.filter((c) => c.required);
   const certsGood = required.filter((c) => c.validAtStart && c.attached).length;
   const summary = [
-    h.landlord?.name ?? (applicationId.startsWith("swap:") ? "A change of tenants: the landlord is already in Propoly" : "No landlord on the listing"),
+    h.landlord?.name ?? (applicationId.startsWith("swap:") ? "A change of tenants: the landlord is already in Propoly" : "No landlord on the listing or the home"),
     h.rentPcm != null ? `${gbp(h.rentPcm)} pcm${h.startDate ? ` from ${niceDay(h.startDate)}` : ""}` : null,
     required.length ? `${certsGood} of ${required.length} certificates` : null,
   ].filter(Boolean).join(" · ");
@@ -242,9 +245,22 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
                 ) : (
                   <span className="block text-[11px] text-accent-dark">No email address</span>
                 )}
+                {h.landlord.phone ? (
+                  <span className="block text-[11px] text-muted">{h.landlord.phone}</span>
+                ) : (
+                  <span className="block text-[11px] text-accent-dark">No mobile number</span>
+                )}
+                {/* Where they came from, so the agent can check them before the push
+                    (26 Oct 2026): a landlord off the home rather than the listing is
+                    the one the push sends, and may be out of date. */}
+                {h.landlordNote ? (
+                  <span className={`mt-1 block text-[11px] ${h.landlordFrom && h.landlordFrom !== "listing" ? "font-semibold text-[#8a5a12]" : "text-muted"}`}>
+                    {h.landlordNote}
+                  </span>
+                ) : null}
               </>
             ) : (
-              <span className="text-accent-dark">Nobody attached to the listing</span>
+              <span className="text-accent-dark">Nobody on the listing or the home</span>
             )}
           </dd>
         </div>

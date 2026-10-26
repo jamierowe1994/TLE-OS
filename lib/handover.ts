@@ -5,7 +5,7 @@ import { propolyConfigured, propolyGet, propolyPatch, propolyPost } from "@/lib/
 import { osAddressForRexProperty } from "@/lib/os-property-address";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { switchOn } from "@/lib/switches";
-import { handoffFor, type Handoff } from "@/lib/deal-handoff";
+import { handoffFor, landlordsForListing, type Handoff } from "@/lib/deal-handoff";
 import { findUserById } from "@/lib/users";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { HOLDING_FEE_WORDING, SITE, WEEK_AHEAD_LINES } from "@/lib/email/tle-documents";
@@ -257,16 +257,14 @@ export async function runHandover(
       throw new Stop();
     }
     const listing = (listingRes.result ?? {}) as Row;
-    const related = (listing.related ?? {}) as Row;
-    const owners = ((related.contact_reln_listing ?? []) as Row[])
-      /* Howard's test is the PARENT type (9 Oct 2026, his current export):
-         a joint or company owner has its own reln type under "owner". */
-      .filter((r) => {
-        const t = (r.reln_type ?? null) as Row | null;
-        return [str(t?.id), str((t?.parent_type as Row | null)?.id)].some((x) => (x ?? "").toLowerCase() === "owner");
-      })
-      .map((r) => (r.contact ?? null) as Row | null)
-      .filter((c): c is Row => Boolean(c));
+    /* The listing's owners (Howard's test is the PARENT type, 9 Oct 2026: a
+       joint or company owner has its own reln type under "owner"), else the
+       landlord found on the home (26 Oct 2026) - the same finder the packet
+       used, so the push sends the landlord the agent checked. */
+    const found = packet.listingId
+      ? await landlordsForListing(listing, { listingId: packet.listingId, swap: Boolean(packet.swap) })
+      : { owners: [] as Row[], from: null, note: null };
+    const owners = found.owners;
     const uniqueOwners: Row[] = [];
     const seen = new Set<string>();
     for (const c of owners) {
@@ -282,8 +280,11 @@ export async function runHandover(
       detail: packet.swap
         ? "A change of tenants: the home and its landlord are already in Propoly, so only the new deal and its tenants go over."
         : uniqueOwners.length
-          ? `${uniqueOwners.length} owner${uniqueOwners.length === 1 ? "" : "s"} on the listing: ${uniqueOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
-          : "No owner is attached to the listing, so there is no landlord to create.",
+          ? found.from === "listing"
+            ? `${uniqueOwners.length} owner${uniqueOwners.length === 1 ? "" : "s"} on the listing: ${uniqueOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
+            : `${found.note} ${uniqueOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
+          : "No landlord on the listing or the home, so there is no landlord to create.",
+      ...(found.from && found.from !== "listing" ? { response: { landlordFrom: found.from, owners: uniqueOwners.map((c) => ({ id: str(c.id), name: str(c.name), email: str(c.email_address) })) } } : {}),
     });
     if (!uniqueOwners.length && !packet.swap) {
       status = "failed";
@@ -443,9 +444,12 @@ export async function runHandover(
         await rec.add({ id: `landlord:${str(c.id)}`, label: `Landlord: ${name}`, state: "ok", detail: `Already in Propoly (${uuid}).`, response: { uuid } });
         continue;
       }
-      /* Not there: Howard reads the contact for its parts, then creates. */
-      const contact = await rexCall("Contacts", "read", { id: str(c.id) });
-      const cc = ((contact.ok ? contact.result : null) ?? c) as Row;
+      /* Not there: Howard reads the contact for its parts, then creates. A
+         landlord found in the OS has no REX contact to read (a "record:",
+         "changed:" or "person:" id), so their own name and number stand. */
+      const rexContact = /^\d+$/.test(String(c.id ?? ""));
+      const contact = rexContact ? await rexCall("Contacts", "read", { id: String(c.id) }) : null;
+      const cc = ((contact?.ok ? contact.result : null) ?? c) as Row;
       const payload = { landlord: landlordPayload(cc, name, email) };
       if (!live) {
         await rec.add({ id: `landlord:${str(c.id)}`, label: `Landlord: ${name}`, state: "would", detail: `Not in Propoly. Would create with these details.`, request: payload });
