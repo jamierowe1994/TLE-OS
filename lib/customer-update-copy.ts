@@ -310,7 +310,7 @@ export function updateCopy(kind: UpdateKind, role: "tenant" | "landlord", c: Cop
       o = {
         subject: `A reminder about your move-in money - ${c.address}`,
         preheader: "The deposit and first month's rent are due before the keys.",
-        heading: "A Reminder About Your Move-in Money",
+        heading: "A Reminder About Your Move-In Money",
         body: `We're sending you a reminder that the deposit and the first month's rent for ${at} need to reach us before your move${moving}.`,
         nextLine: "The amounts and the payment details are in the email we sent with your agreement. The keys are handed over once both have arrived.",
       };

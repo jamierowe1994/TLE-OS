@@ -95,7 +95,7 @@ async function render(vars: ReminderVars, rec: PassportRecord | null, opts: { ap
     whereLine: rec && stuckOnShareCode(d, rules)
       ? `You stopped at your share code. If you don't have one yet, you can get it in a few minutes at <a href="https://www.gov.uk/prove-right-to-rent" style="color:inherit;">gov.uk/prove-right-to-rent</a>, then just pop it in.`
       : "",
-    buttonLabel: started ? "Pick Up Where I Left Off" : "Start My Passport",
+    buttonLabel: started ? "Pick up where I left off" : "Start my passport",
     link: resumeLink(vars.link),
   });
 }

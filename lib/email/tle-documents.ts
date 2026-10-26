@@ -580,8 +580,9 @@ export const CUSTOMER_UPDATE = {
     T("cu5", "Any questions, just reply to this email.<br><br>{{agentName}}<br>The Letting Experts"),
     FOOT("cu6", "{{footLine}}"),
   ],
-  /* The kicker shows on the landlord look only; the tenant's copy of this
-     document (update-tenant) renders without it. */
+  /* The kicker shows on both looks: beside the mark on the landlord's copy
+     (update-landlord), as the stamp in the band on the tenant's (update-tenant),
+     where {{heading}} becomes the band's title. */
   branding: { showSignoff: false, kicker: "An update" },
 } as const;
 
@@ -1715,8 +1716,8 @@ export const TENANT_PASSPORT_THANKS = {
   preheader: "Your profile is finished and with your agent. Log in any time.",
   mode: "blocks",
   blocks: [
-    H("tpt1", "Thank you for your passport"),
-    T("tpt2", "Hi {{firstName}},<br><br>Thank you for filling out your tenant passport. Your profile is complete and it's with {{agentName}} now."),
+    H("tpt1", "Stamped and Ready to Rent"),
+    T("tpt2", "Hi {{firstName}},<br><br>That's your tenant passport done. Thank you for filling it in. Your profile is complete and it's with {{agentName}} now."),
     T("tpt3", "If you're successful, your agent will be in touch shortly about the next steps."),
     T("tpt4", "You can log in to your account at any time to check or update your details."),
     SP("tpt5", 8),
@@ -1725,7 +1726,11 @@ export const TENANT_PASSPORT_THANKS = {
     T("tpt8", "Thanks again,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("tpt9", "You're getting this because you completed a tenant passport with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: {
+    showSignoff: false,
+    kicker: "Passport complete",
+    heroImage: { src: `${SITE}/email/tenant/passport-ready-to-rent.png`, width: 150, alt: "A tenant passport, stamped Ready to Rent" },
+  },
 } as const;
 
 /**
@@ -1784,17 +1789,20 @@ export const TENANT_PASSPORT_NUDGE_1 = {
   preheader: "About ten minutes, and you can stop and come back to it.",
   mode: "blocks",
   blocks: [
-    H("tpn1", "Ten minutes, once"),
-    T("tpn2", "Hi {{firstName}},<br><br>Just a nudge: your tenant passport is still waiting to be started. It takes about ten minutes, and it saves your place with any home you want to apply for."),
+    H("tpn1", "Just a Gentle Nudge"),
+    T("tpn2", "Hi {{firstName}},<br><br>Your tenant passport is still here, waiting to be started. It takes about ten minutes, and it saves your place with any home you want to apply for."),
     SP("tpn3", 8),
     BTN("tpn4", "Start my passport", "{{link}}"),
     SP("tpn5", 8),
-    T("tpn6", "You can stop part way and pick it up later. Nothing in it goes to a landlord unless you apply."),
-    SP("tpn7", 8),
-    T("tpn8", "The Letting Experts"),
+    T("tpn6", "You can stop part way and pick it up later. <strong>Nothing in it goes to a landlord unless you apply.</strong>"),
+    T("tpn8", "Speak soon,<br>The Letting Experts"),
     FOOT("tpn9", "You're getting this because we invited you to start a tenant passport with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: {
+    showSignoff: false,
+    kicker: "Tenant passport",
+    heroImage: { src: `${SITE}/email/tenant/passport-ready-to-rent.png`, width: 150, alt: "A tenant passport, stamped Ready to Rent" },
+  },
 } as const;
 
 /**
@@ -1815,7 +1823,9 @@ export const TENANT_PASSPORT_REMINDER = {
   preheader: "Finish your tenant passport and all that's left is picking a day and time.",
   mode: "blocks",
   blocks: [
-    H("tpr1", "Nearly There"),
+    /* Not "Nearly There": the day-later reminder after Automate passport also
+       goes to people who haven't typed a word. */
+    H("tpr1", "Whenever You're Ready"),
     T("tpr2", "Hi {{firstName}},<br><br>{{introLine}}"),
     T("tpr3", "{{nextLine}}"),
     T("tpr4", "{{whereLine}}"),
@@ -1823,10 +1833,14 @@ export const TENANT_PASSPORT_REMINDER = {
     BTN("tpr6", "{{buttonLabel}}", "{{link}}"),
     SP("tpr7", 8),
     T("tpr8", "Any questions at all, just reply to this email and it comes straight to me."),
-    T("tpr9", "{{agentName}}<br>The Letting Experts"),
+    T("tpr9", "Speak soon,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("tpr10", "You're getting this because you asked about a home with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: {
+    showSignoff: false,
+    kicker: "Tenant passport",
+    heroImage: { src: `${SITE}/email/tenant/passport-ready-to-rent.png`, width: 150, alt: "A tenant passport, stamped Ready to Rent" },
+  },
 } as const;
 
 /** A week after the invite, still nothing. The why, not a louder reminder. */
@@ -1835,18 +1849,24 @@ export const TENANT_PASSPORT_NUDGE_2 = {
   preheader: "Why your tenant passport is worth ten minutes now.",
   mode: "blocks",
   blocks: [
-    H("tpm1", "One form, every application"),
+    H("tpm1", "One Form, Every Home"),
     T("tpm2", "Hi {{firstName}},<br><br>When you find a home you want, the landlord needs the same things every time: who you are, where you've lived, what you do, and your right to rent in the UK."),
     T("tpm3", "Your tenant passport is where those go, <strong>once</strong>. After that, applying for a home is one tap, and good homes go to the applications that are ready first."),
     SP("tpm4", 8),
     BTN("tpm5", "Start my passport", "{{link}}"),
     SP("tpm6", 8),
-    T("tpm7", "It stays yours, and nothing in it is shared with a landlord unless you apply for their property. If you've found somewhere already, just reply and let us know."),
-    SP("tpm8", 8),
-    T("tpm9", "The Letting Experts"),
+    T("tpm7", "It stays yours, and nothing in it is shared with a landlord unless you apply for their property."),
+    /* The way out stays (nudge 2 is the last one): somebody who has found
+       a home should be able to say so and be glad, not feel chased. */
+    T("tpm11", "Found somewhere already? Congratulations. Just reply and let us know."),
+    T("tpm9", "All the best,<br>The Letting Experts"),
     FOOT("tpm10", "You're getting this because we invited you to start a tenant passport with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: {
+    showSignoff: false,
+    kicker: "Tenant passport",
+    heroImage: { src: `${SITE}/email/tenant/passport-ready-to-rent.png`, width: 150, alt: "A tenant passport, stamped Ready to Rent" },
+  },
 } as const;
 
 /**
@@ -2064,21 +2084,25 @@ export const REFERENCING_INVITE = {
   preheader: "What we'll ask, why, and what to have to hand.",
   mode: "blocks",
   blocks: [
-    H("ri1", "Time to get referenced"),
-    T("ri2", "Hi {{firstName}},<br><br>The next step for <strong>{{address}}</strong> is referencing. It's how the landlord knows the rent is affordable and that you've been a good tenant before."),
-    H2("ri3", "What we'll ask"),
+    H("ri1", "Next Up: Your References"),
+    T("ri2", "Hi {{firstName}},<br><br>The landlord has said yes, so the next step is referencing. It's how the landlord knows the rent is affordable and that you've been a good tenant before."),
+    FACTS("ri14", [
+      ["The home", "{{address}}"],
+      ["How long it takes", "About fifteen minutes"],
+      ["Back in", "Usually two or three working days after the last form goes in"],
+    ]),
+    H2("ri3", "What We'll Ask"),
     T("ri4", "Your employment and income<br>Where you've lived for the last three years, and who your landlords were<br>A credit check<br>Your right to rent in the UK"),
-    H2("ri5", "What to have to hand"),
+    H2("ri5", "What to Have to Hand"),
     T("ri6", "Your last three months of payslips, or accounts if you're self-employed<br>Your employer's contact email<br>Your current landlord's contact email<br>The dates you moved in and out of each address"),
     SP("ri7", 8),
     BTN("ri8", "Start my referencing", "{{link}}"),
     SP("ri9", 8),
-    T("ri10", "It takes about fifteen minutes. References usually come back within two or three working days of the last form going in. {{adultsLine}}"),
-    SP("ri11", 8),
-    T("ri12", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    T("ri10", "{{adultsLine}}"),
+    T("ri12", "Speak soon,<br>{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
     FOOT("ri13", "You're getting this because a landlord accepted your application through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Referencing" },
 } as const;
 
 /** To the guarantor, not the tenant. {{tenantName}} {{rent}} {{termLine}} */
@@ -2087,21 +2111,24 @@ export const GUARANTOR_INVITE = {
   preheader: "What being a guarantor means, before you say yes.",
   mode: "blocks",
   blocks: [
-    H("gi1", "Would you be a guarantor?"),
-    T("gi2", "Hi {{firstName}},<br><br><strong>{{tenantName}}</strong> is renting <strong>{{address}}</strong> through The Letting Experts, at {{rent}}, and has named you as their guarantor. {{termLine}}"),
-    H2("gi3", "What it means"),
+    H("gi1", "Would You Be a Guarantor?"),
+    T("gi2", "Hi {{firstName}},<br><br><strong>{{tenantName}}</strong> is renting a home through The Letting Experts and has named you as their guarantor. {{termLine}}"),
+    FACTS("gi14", [
+      ["The home", "{{address}}"],
+      ["Rent", "{{rent}}"],
+    ]),
+    H2("gi3", "What It Means"),
     T("gi4", "A guarantor agrees to pay the rent, or the cost of damage beyond the deposit, if the tenant doesn't. It's a real commitment, so please read the agreement properly before you sign anything."),
-    H2("gi5", "What happens next"),
+    H2("gi5", "What Happens Next"),
     T("gi6", "You'll be referenced in your own right, with your own form: your income, your address history and a credit check. <strong>Your details stay private.</strong> {{tenantName}} won't see them."),
     SP("gi7", 8),
     BTN("gi8", "Read more and start", "{{link}}"),
     SP("gi9", 8),
     T("gi10", "If you weren't expecting this, or you'd rather not, reply and tell us. Nothing happens unless you fill in the form."),
-    SP("gi11", 8),
-    T("gi12", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    T("gi12", "Thank you,<br>{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
     FOOT("gi13", "You're getting this because a tenant named you as their guarantor with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Guarantor" },
 } as const;
 
 /** Three days, form still empty or part done. {{missingList}} */
@@ -2110,7 +2137,7 @@ export const REFERENCING_CHASE = {
   preheader: "What's still missing, and why it's worth doing today.",
   mode: "blocks",
   blocks: [
-    H("rc1", "Nearly there with your references"),
+    H("rc1", "Nearly There"),
     T("rc2", "Hi {{firstName}},<br><br>Your referencing for <strong>{{address}}</strong> isn't finished yet. This is what's still missing:"),
     T("rc3", "{{missingList}}"),
     SP("rc4", 8),
@@ -2118,11 +2145,10 @@ export const REFERENCING_CHASE = {
     SP("rc6", 8),
     T("rc7", "The landlord is holding the home for you while references are done, so the sooner these are in, the sooner you have a moving date."),
     T("rc8", "Stuck on something, like a landlord who won't reply? Tell me and I'll help."),
-    SP("rc9", 8),
-    T("rc10", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    T("rc10", "Speak soon,<br>{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
     FOOT("rc11", "You're getting this because your referencing with The Letting Experts isn't finished yet."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Referencing" },
 } as const;
 
 /**

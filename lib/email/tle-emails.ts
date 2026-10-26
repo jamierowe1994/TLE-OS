@@ -1715,7 +1715,7 @@ TLE_EMAILS.push(
       introLine: "Thanks again for asking about 14 Ruskin Place. You've made a great start on your tenant passport, and everything you've filled in so far is saved.",
       nextLine: "Finish it, and all that's left is to pick a date and time for your viewing that suits you.",
       whereLine: `You stopped at your share code. If you don't have one yet, you can get it in a few minutes at <a href="https://www.gov.uk/prove-right-to-rent" style="color:inherit;">gov.uk/prove-right-to-rent</a>, then just pop it in.`,
-      buttonLabel: "Pick Up Where I Left Off",
+      buttonLabel: "Pick up where I left off",
     }
   ),
   tenantEntry(
