@@ -1412,10 +1412,14 @@ export function renderAgentComplianceChase(input: { firstName: string; lines: st
   return { subject: m.subject, html: m.html };
 }
 
-/** The sign-in link email, filled for one landlord and ready to send. */
+/** The sign-in link email, filled for one tenant and ready to send. The text part says what the HTML says. */
 export function renderTenantSignIn(input: { firstName: string; link: string }): { subject: string; html: string; text: string } {
   const { subject, html } = renderTleEmail("tenant-sign-in", { firstName: input.firstName, link: input.link });
-  return { subject, html, text: `Hi ${input.firstName},\n\nHere is your link to your account with The Letting Experts. It works once and lasts 24 hours.\n\n${input.link}\n\nIf you didn't ask for this, you can ignore it.\n\nThe Letting Experts` };
+  return {
+    subject,
+    html,
+    text: `Hi ${input.firstName},\n\nHere's your way in to your account with The Letting Experts: where your tenancy is up to, what happens next, and your passport. The link works once and lasts 24 hours.\n\n${input.link}\n\nIf it has run out, ask for another from the sign-in page. If you didn't ask for this, you can ignore it. Nothing happens unless the link is opened.\n\nSee you inside,\nThe Letting Experts`,
+  };
 }
 
 export function renderLandlordSignIn(input: { firstName: string; link: string }): {
