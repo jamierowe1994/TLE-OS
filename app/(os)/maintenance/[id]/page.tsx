@@ -413,6 +413,7 @@ export default function WorksOrderPage() {
         unsent={unsent}
         resendOrder={resendOrder}
         pickContractor={pickContractor}
+        setJobData={(order, events) => setJob((cur) => ({ state: "ready", data: { order, events, canPayrun: cur.state === "ready" ? cur.data.canPayrun : false } }))}
       />
     );
   }

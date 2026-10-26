@@ -804,6 +804,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS os_works_quote_asks_one ON os_works_quote_asks
 -- was changed after it went says the new one hasn't had it, with a button.
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS order_sent_to      TEXT;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS order_sent_to_name TEXT NOT NULL DEFAULT '';
+-- Chasing a contractor who hasn't come back (Sean McMahon, 26 Oct 2026: "a
+-- reminder, then a final reminder ... unless you come back to us within the
+-- next 48 hours, we have to cancel this job"). One row per job, the chase on
+-- it now. lib/works-chase.
+--   next_kind  reminder | final | silent (48 hours after the final) | null
+--   stopped_at set the moment the contractor comes back, the job closes or
+--              moves to someone else, or a person stops it. Never deleted.
+CREATE TABLE IF NOT EXISTS os_works_chases (
+  order_id         TEXT PRIMARY KEY,
+  contractor_id    TEXT NOT NULL,
+  contractor_name  TEXT NOT NULL DEFAULT '',
+  first_days       INTEGER,
+  final_days       INTEGER,
+  set_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  set_by           TEXT NOT NULL DEFAULT '',
+  set_by_id        TEXT,
+  next_kind        TEXT,
+  next_at          TIMESTAMPTZ,
+  reminded_at      TIMESTAMPTZ,
+  final_at         TIMESTAMPTZ,
+  silent_at        TIMESTAMPTZ,
+  stopped_at       TIMESTAMPTZ,
+  stopped_why      TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_works_chases_due ON os_works_chases (next_at) WHERE stopped_at IS NULL;
 
 -- REX PM's own task lists, read off its screens (1 Oct 2026). REX refused API
 -- access, so this is the stopgap: inspections (and next tenancy reviews) are

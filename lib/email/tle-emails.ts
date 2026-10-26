@@ -79,6 +79,8 @@ import {
   WORKS_TENANT_PLANNED_NOTICE,
   WORKS_LANDLORD_ARRANGED,
   WORKS_CONTRACTOR_DONE_REQUEST,
+  WORKS_CONTRACTOR_CHASE,
+  WORKS_CONTRACTOR_CHASE_FINAL,
   WORKS_TENANT_HAPPY,
   INSPECTION_TENANT_ACCESS,
   INSPECTION_TENANT_BOOKED,
@@ -1329,6 +1331,8 @@ const WORKS_SAMPLE: Record<string, string> = {
   dueDay: "Monday 26 April 2027", tenantsList: "Sophie Turner (Room 1) · 07700 900456 · sophie@example.com<br>Raj Patel (Room 2) · 07700 900789",
   bookingLine: "Once you've agreed a time with the tenants, press the button and tell us the date and time.", buttonLabel: "Let us know the date and time",
   invoice: "£264", invoicePayLink: `${SITE}/invoice/ok/sample?answer=pay`, invoiceDirectLink: `${SITE}/invoice/ok/sample?answer=direct`, invoiceQueryLink: `${SITE}/invoice/ok/sample?answer=query`,
+  sentOn: "Monday 19 October", followedUp: " and followed up on Monday 26 October", cancelBy: "Thursday 29 October at 10:00",
+  chaseLine: "We haven't heard back yet. Could you let us know the date you're going?", chaseButton: "Give us a date",
   contractorLink: `${SITE}/contractor/sample`, happyLink: `${SITE}/repair/sample?happy=yes`, notHappyLink: `${SITE}/repair/sample?happy=no`,
 };
 const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc, group = "Maintenance"): CatalogEntry => ({
@@ -1354,6 +1358,8 @@ TLE_EMAILS.push(
   worksEntry("works-tenant-found", "We've Found Someone to the Tenant", "tenant", "Step 5: the moment a contractor confirms, alongside the works order", "The tenant", "Who's coming, that they'll be in touch to arrange access, and what to do if they aren't.", WORKS_TENANT_FOUND as unknown as EmailDoc),
   worksEntry("works-landlord-arranged", "Arranged to the Landlord", "landlord", "Step 6: once a date is set", "The landlord", "Who's booked and when, and that nothing is needed from them.", WORKS_LANDLORD_ARRANGED as unknown as EmailDoc),
   worksEntry("works-contractor-done-request", "All Done? to the Contractor", "contractor", "Step 7: the day after the booked date", "The contractor", "One page to mark it done, add photos and drop in the invoice, which goes straight to accounts.", WORKS_CONTRACTOR_DONE_REQUEST as unknown as EmailDoc),
+  worksEntry("works-contractor-chase", "Reminder to the Contractor", "contractor", "When the agent presses Send a reminder now, or the reminders they set come due, on a job the contractor hasn't come back on", "The contractor on the job", "A polite nudge: when the works order went, what we need (a date, or word it's done), the job, the tenants, and the button to their page.", WORKS_CONTRACTOR_CHASE as unknown as EmailDoc),
+  worksEntry("works-contractor-chase-final", "Final Reminder to the Contractor", "contractor", "After the reminder, on the date the agent picked, if the contractor still hasn't come back", "The contractor on the job", "Unless they come back within 48 hours the job is cancelled with them, placed elsewhere and not paid. The job and the button to their page. Nothing is cancelled on its own: the agent is told and decides.", WORKS_CONTRACTOR_CHASE_FINAL as unknown as EmailDoc),
   worksEntry("works-tenant-happy", "Are You Happy? to the Tenant", "tenant", "Step 8: when the job is marked done", "The tenant", "A yes and a no. A no comes straight back to the agent.", WORKS_TENANT_HAPPY as unknown as EmailDoc),
   /* The invoice route fills address as " at <property>" (or nothing), so its
      preview carries the same shape rather than the works jobs' bare address. */

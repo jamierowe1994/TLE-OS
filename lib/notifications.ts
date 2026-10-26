@@ -226,7 +226,32 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     [me.email]
   ).catch(() => []);
 
+  /* A contractor who hasn't come back 48 hours after the final reminder
+     (lib/works-chase, Sean McMahon, 26 Oct 2026): whoever set the chase up,
+     and whoever raised the job. Nothing is cancelled on its own, so it waits
+     here until they decide, the contractor answers, or the job moves on. */
+  const silent = await q<{ order_id: string; contractor_name: string; silent_at: Date; ref: number; title: string; property_name: string }>(
+    `SELECT c.order_id, c.contractor_name, c.silent_at, w.ref, w.title, w.property_name
+       FROM os_works_chases c JOIN os_works_orders w ON w.id = c.order_id
+      WHERE c.stopped_at IS NULL AND c.silent_at IS NOT NULL AND NOT w.rehearsal
+        AND w.status IN ('reported', 'approved', 'scheduled') AND w.contractor_id = c.contractor_id
+        AND (c.set_by_id = $1 OR LOWER(w.raised_by) = LOWER($2) OR LOWER(w.raised_by) = LOWER($3))
+      ORDER BY c.silent_at DESC LIMIT 10`,
+    [me.id, me.name ?? "", me.email]
+  ).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const s of silent) {
+    out.push({
+      id: `chase-silent:${s.order_id}:${new Date(s.silent_at).toISOString()}`,
+      kind: "reminder",
+      at: new Date(s.silent_at).toISOString(),
+      title: `No word from ${s.contractor_name || "the contractor"}`,
+      body: `Job #${s.ref}, ${s.title}, ${s.property_name}. 48 hours since the final reminder. Nothing has been cancelled: place it elsewhere, or keep waiting.`,
+      href: `/maintenance/${encodeURIComponent(s.order_id)}?chase=1`,
+      tone: "warn",
+    });
+  }
   for (const s of stillLooking) {
     const who = s.name || s.email;
     out.push({
