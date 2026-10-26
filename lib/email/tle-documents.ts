@@ -522,16 +522,16 @@ export const TENANT_OFFER_COPY = {
   preheader: "What {{agentName}} has put forward for you. Reply if anything is wrong.",
   mode: "blocks",
   blocks: [
-    H("oc1", "Your offer is in"),
-    T("oc2", "Hi {{firstName}},<br><br>Here is the offer {{agentName}} has put forward for you on <strong>{{address}}</strong>."),
-    T("oc3", "{{summaryList}}"),
-    T("oc4", "If anything here isn't right, reply to this email and {{agentName}} will put it right before the landlord decides."),
+    H("oc1", "Your Offer Is In"),
+    T("oc2", "Hi {{firstName}},<br><br>Here's the offer {{agentName}} has put forward for you on <strong>{{address}}</strong>."),
+    { type: "facts", id: "oc3", text: "{{summaryList}}" },
+    T("oc4", "Give it a quick read. If anything isn't right, just reply and {{agentName}} will put it right before the landlord decides."),
     T("oc5", "We usually hear back within a day, and we'll tell you as soon as we do."),
     SP("oc6", 8),
-    T("oc7", "{{agentName}}<br>The Letting Experts"),
+    T("oc7", "Fingers crossed,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("oc8", "You're getting this because you made an offer through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your offer" },
 } as const;
 
 /**
@@ -599,17 +599,18 @@ export const APPLICATION_FORM_INVITE = {
   preheader: "The application form for {{address}}. About ten minutes, and it goes straight to {{agentName}}.",
   mode: "blocks",
   blocks: [
-    H("af1", "Apply for {{address}}"),
-    T("af2", "Hi,<br><br>Here is the application form for <strong>{{address}}</strong>, advertised at {{rent}}."),
+    H("af1", "Ready When You Are"),
+    T("af2", "Hi,<br><br>Here's the application form for this home:"),
+    FACTS("af10", [["The home", "{{address}}"], ["Advertised rent", "{{rent}}"]]),
     T("af3", "It takes about ten minutes. Everyone over 18 who will live there fills in their own part, because the right to rent check is a legal one for every adult. It goes straight to {{agentName}}, who puts it to the landlord."),
     SP("af4", 8),
-    BTN("af5", "Start the application", "{{link}}"),
+    BTN("af5", "Start my application", "{{link}}"),
     SP("af6", 8),
     T("af7", "Nothing is owed by applying. A holding deposit is only asked for once the landlord says yes."),
-    T("af8", "Any questions, just reply to this email.<br><br>{{agentName}}<br>The Letting Experts"),
+    T("af8", "Any questions, just reply to this email.<br><br>Good luck,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("af9", "You're getting this because you asked about a home with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Application form" },
 } as const;
 
 /**
@@ -623,17 +624,18 @@ export const OFFER_LINK_INVITE = {
   preheader: "Your offer for {{address}}. About ten minutes, and it goes straight to {{agentName}}.",
   mode: "blocks",
   blocks: [
-    H("ol1", "Make an Offer on {{address}}"),
-    T("ol2", "Hi,<br><br>Here is the offer form for <strong>{{address}}</strong>, advertised at {{rent}}."),
+    H("ol1", "Make Your Offer"),
+    T("ol2", "Hi,<br><br>Here's the offer form for this home:"),
+    FACTS("ol10", [["The home", "{{address}}"], ["Advertised rent", "{{rent}}"]]),
     T("ol3", "Put in the rent you'd like to offer and the day you'd like to move in. Everyone over 18 who will live there fills in their own part, because the right to rent check is a legal one for every adult. It takes about ten minutes and goes straight to {{agentName}}, who puts it to the landlord."),
     SP("ol4", 8),
     BTN("ol5", "Make my offer", "{{link}}"),
     SP("ol6", 8),
-    T("ol7", "Offers can be at or below the advertised rent, not above it. Nothing is owed by making an offer."),
-    T("ol8", "Any questions, just reply to this email.<br><br>{{agentName}}<br>The Letting Experts"),
+    T("ol7", "<strong>Offers can be at or below the advertised rent, not above it.</strong> Nothing is owed by making an offer."),
+    T("ol8", "Any questions, just reply to this email.<br><br>Fingers crossed,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("ol9", "You're getting this because you asked about a home with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Offer form" },
 } as const;
 
 /**
@@ -1625,23 +1627,23 @@ export const APPLICATION_ACCEPTED_TENANT = {
   preheader: "Subject to references and contracts. Here is what happens next.",
   mode: "blocks",
   blocks: [
-    H("aat1", "Your application has been accepted"),
+    H("aat1", "Your Application Is Accepted"),
     T(
       "aat2",
-      "Dear {{tenantName}},<br><br>Congratulations, the landlord has accepted your application for <strong>{{address}}</strong>, subject to references and contracts. Please find the agreed details below:"
+      "Dear {{tenantName}},<br><br>Congratulations, the landlord has accepted your application for <strong>{{address}}</strong>, subject to references and contracts. Here's what was agreed:"
     ),
-    T("aat3", "{{detailsList}}"),
+    { type: "facts", id: "aat3", text: "{{detailsList}}" },
     T("aat4", "{{payLine}}"),
     T(
       "aat5",
-      "Please do this as a matter of urgency: until the payment is made and the references are returned, the landlord reserves the right to progress another application."
+      "Please do this as soon as you can: until the payment is made and the references are returned, the landlord can still go ahead with another application."
     ),
-    T("aat6", "If you have any questions, please get in touch."),
+    T("aat6", "Any questions, just get in touch."),
     SP("aat7", 8),
-    T("aat8", "{{agentName}}<br>{{agentPhone}}<br>{{agentEmail}}<br>The Letting Experts"),
+    T("aat8", "Speak soon,<br>{{agentName}}<br>{{agentPhone}}<br>{{agentEmail}}<br>The Letting Experts"),
     FOOT("aat9", "You're getting this because you applied for a property through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your application" },
 } as const;
 
 /* ──────────────── The tenant process: the emails the map planned ────────────────
@@ -1672,18 +1674,19 @@ export const TENANT_ENQUIRY_REPLY = {
   preheader: "Is it still available, what it costs to move in, and what happens next.",
   mode: "blocks",
   blocks: [
-    H("ter1", "Thanks for your enquiry"),
-    T("ter2", "Hi {{firstName}},<br><br>Thanks for asking about <strong>{{address}}</strong>. {{availableLine}} The rent is <strong>{{rent}}</strong>."),
-    H2("ter3", "What it costs to move in"),
+    H("ter1", "Nice Pick"),
+    T("ter2", "Hi {{firstName}},<br><br>Thanks for asking about <strong>{{address}}</strong>. {{availableLine}}"),
+    FACTS("ter15", [["The rent", "{{rent}}"]]),
+    H2("ter3", "What It Costs to Move In"),
     T("ter4", "{{moveInList}}"),
     T("ter5", "{{feesLine}}"),
-    H2("ter6", "What happens next"),
+    H2("ter6", "What Happens Next"),
     T("ter7", "Before we book any viewings, I'll be in touch to find out a little more about you and what you need, so we only show you homes that suit you. If you have any questions in the meantime, just reply to this email."),
     SP("ter12", 8),
-    T("ter13", "{{agentName}}<br>The Letting Experts"),
+    T("ter13", "Speak soon,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("ter14", "You're getting this because you asked The Letting Experts about a property."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your enquiry" },
 } as const
 
 /** Added without a property: the search, not an enquiry. {{onNowLine}} */
@@ -1692,18 +1695,21 @@ export const TENANT_ADDED_WELCOME = {
   preheader: "Tell us what you're after and we'll send you the homes that fit.",
   mode: "blocks",
   blocks: [
-    H("taw1", "Let's find you a home"),
-    T("taw2", "Hi {{firstName}},<br><br>Thanks for registering with The Letting Experts. I'm {{agentName}}, and I'll be looking after your search."),
-    H2("taw3", "What we need to know"),
-    T("taw4", "<strong>Your budget</strong>, per month<br><strong>Where</strong> you'd like to live<br><strong>When</strong> you want to move<br><strong>Who</strong> is moving in, and any pets"),
+    H("taw1", "Let's Find You a Home"),
+    T("taw2", "Hi {{firstName}},<br><br>Thanks for registering with The Letting Experts. I'm {{agentName}}, and I'll be looking after your search. To get going, I just need to know four things:"),
+    FACTS("taw4", [
+      ["Your budget", "What you'd like to pay each month"],
+      ["Where", "The areas you'd like to live in"],
+      ["When", "The date you'd like to move"],
+      ["Who", "Who's moving in, and any pets"],
+    ]),
     T("taw5", "Reply to this email with those and I'll start looking."),
-    SP("taw8", 8),
     T("taw9", "{{onNowLine}} As soon as something fits, I'll send it over the same day."),
     SP("taw10", 8),
-    T("taw11", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    T("taw11", "Speak soon,<br>{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
     FOOT("taw12", "You're getting this because you registered to look for a home with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your search" },
 } as const;
 
 /**
@@ -1882,17 +1888,17 @@ export const TENANT_MATCHES = {
   preheader: "Picked for your budget, your area and when you want to move.",
   mode: "blocks",
   blocks: [
-    H("tm1", "Homes that fit"),
+    H("tm1", "Picked Out for You"),
     T("tm2", "Hi {{firstName}},<br><br>{{introLine}}"),
     /* The homes as cards (1 Oct 2026): tables, so a raw-HTML block rather
        than a text one, whose paragraph would wrap a table. */
     { type: "code", id: "tm3", html: "{{homesList}}" },
     T("tm4", "Reply with the ones you'd like to see and I'll book them in. Homes like these tend to let within a couple of weeks, so the sooner the better."),
     SP("tm9", 8),
-    T("tm10", "{{agentName}}<br>The Letting Experts"),
+    T("tm10", "Happy hunting,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("tm11", "You're getting this because you're looking for a home with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Homes for you" },
 } as const;
 
 /** Four days of silence after the homes went. {{homesList}} */
@@ -1901,18 +1907,17 @@ export const TENANT_MATCHES_AGAIN = {
   preheader: "Has anything changed? Here's what has come on since.",
   mode: "blocks",
   blocks: [
-    H("tma1", "Anything close?"),
+    H("tma1", "Anything Catch Your Eye?"),
     T("tma2", "Hi {{firstName}},<br><br>I sent you some homes a few days ago and haven't heard back, so I wanted to check they were the right sort of thing."),
     T("tma3", "If your budget, your area or your moving date has changed, reply and tell me and I'll look again. In the meantime, here's what has come on since:"),
     T("tma4", "{{homesList}}"),
     T("tma5", "Reply with any you'd like to see and I'll book them in."),
-    SP("tma8", 8),
-    T("tma9", "If you've found somewhere already, congratulations. Reply and let me know and I'll stop sending."),
+    T("tma9", "Found somewhere already? Congratulations. Reply and let me know and I'll stop sending."),
     SP("tma10", 8),
-    T("tma11", "{{agentName}}<br>The Letting Experts"),
+    T("tma11", "Speak soon,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("tma12", "You're getting this because you're looking for a home with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your search" },
 } as const
 
 /**
@@ -1927,19 +1932,19 @@ export const TENANT_HOME_ALERT = {
   preheader: "Fresh on the market, and they fit what you're looking for.",
   mode: "blocks",
   blocks: [
-    H("tha1", "New homes for you"),
+    H("tha1", "Fresh on the Market"),
     T("tha2", "Hi {{firstName}},<br><br>{{introLine}}"),
     T("tha3", "{{homesList}}"),
     SP("tha4", 8),
-    BTN("tha5", "See them in your tenant area", "{{link}}"),
+    BTN("tha5", "Show me the homes", "{{link}}"),
     SP("tha6", 8),
     T("tha7", "Like the look of one? Open it and press Enquire, and we'll come back to you with times to view. Good homes tend to go within days."),
     T("tha8", "Want something different? Change your search on Find a home and save the alert again. Or <a href=\"{{stopLink}}\" style=\"color:#56423e\">stop these emails</a>."),
     SP("tha9", 8),
-    T("tha10", "The Letting Experts"),
+    T("tha10", "Happy hunting,<br>The Letting Experts"),
     FOOT("tha11", "You're getting this because you asked for new-home alerts in your tenant area. You can stop them at any time."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Home alert" },
 } as const;
 
 /** 7am on the day. {{timePretty}} {{meetLine}} {{contactLine}} {{mapLink}} */
@@ -2021,19 +2026,19 @@ export const APPLICATION_RECEIVED = {
   preheader: "What happens now, and when you'll hear.",
   mode: "blocks",
   blocks: [
-    H("ar1", "We have your application"),
+    H("ar1", "Got It - Over to the Landlord"),
     T("ar2", "Hi {{firstName}},<br><br>Thank you. Your application for <strong>{{address}}</strong> is in. {{offerLine}}"),
-    H2("ar3", "What happens now"),
+    H2("ar3", "What Happens Now"),
     T("ar4", "We put your application to the landlord. Landlords usually answer within a working day, and <strong>you'll hear from us the moment they do</strong>, whichever way it goes."),
-    H2("ar5", "If it's a yes"),
+    H2("ar5", "If It's a Yes"),
     T("ar6", "{{holdingFeeLine}} Then referencing starts, so it helps to have these ready:"),
     T("ar7", "Your last three months of payslips, or accounts if you're self-employed<br>Your employer's contact email<br>Your current landlord's contact email<br>The dates of your addresses for the last three years"),
     T("ar8", "If anything has changed since you applied, reply and tell me."),
     SP("ar9", 8),
-    T("ar10", "{{agentName}}<br>The Letting Experts"),
+    T("ar10", "Fingers crossed,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("ar11", "You're getting this because you applied for a property through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your application" },
 } as const
 
 /** The landlord said no. {{reasonLine}} {{homesList}} */
@@ -2042,17 +2047,17 @@ export const APPLICATION_DECLINED = {
   preheader: "The landlord has gone another way. Here's what's next.",
   mode: "blocks",
   blocks: [
-    H("ad1", "Not this one"),
+    H("ad1", "Not This Time"),
     T("ad2", "Hi {{firstName}},<br><br>I'm sorry to tell you the landlord has decided not to go ahead with your application for <strong>{{address}}</strong>. {{reasonLine}}"),
     T("ad3", "It happens, and it isn't the end of your search. Your details are still with us, so your next application can go in quickly."),
-    H2("ad4", "Homes on now, nearby"),
+    H2("ad4", "Homes on Now, Nearby"),
     T("ad5", "{{homesList}}"),
     T("ad6", "Reply with any you'd like to see and I'll book it in straight away."),
     SP("ad7", 8),
-    T("ad8", "{{agentName}}<br>The Letting Experts"),
+    T("ad8", "All the best,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("ad9", "You're getting this because you applied for a property through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your application", mast: "oat" },
 } as const
 
 /** The landlord said yes. {{holdingFee}} {{holdingFeeLine}} {{weekAheadList}} */
@@ -2061,21 +2066,21 @@ export const APPLICATION_ITS_YOURS = {
   preheader: "Your offer is accepted. Here's the holding fee and what happens next.",
   mode: "blocks",
   blocks: [
-    H("ay1", "The landlord has said yes"),
+    H("ay1", "It's a Yes from the Landlord"),
     T("ay2", "Hi {{firstName}},<br><br>Congratulations. The landlord has accepted your application for <strong>{{address}}</strong>, subject to references and the tenancy agreement."),
-    H2("ay3", "The holding fee"),
+    H2("ay3", "The Holding Fee"),
     T("ay4", "{{holdingFeeLine}}"),
-    H2("ay5", "What happens next, in order"),
+    H2("ay5", "What Happens Next, in Order"),
     T("ay6", "{{weekAheadList}}"),
     SP("ay7", 8),
     BTN("ay8", "See my tenancy", "{{link}}"),
     SP("ay9", 8),
     T("ay10", "Your tenancy page shows where each step is up to, so you never have to ring to find out. If anything is unclear, reply to this email."),
     SP("ay11", 8),
-    T("ay12", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    T("ay12", "Speak soon,<br>{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
     FOOT("ay13", "You're getting this because you applied for a property through The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: { showSignoff: false, kicker: "Your new home" },
 } as const;
 
 /** Referencing opens. {{adultsLine}} */

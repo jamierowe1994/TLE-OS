@@ -953,7 +953,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
           tenantName: "Sophie Turner",
           address: "8 Recreation Terrace, Nottingham NG2 3AB",
           detailsList:
-            "Offer amount: £1,250 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Turner, Daniel Turner",
+            "Offer amount: <strong>£1,250 pcm</strong><br>Start date: <strong>01/10/2026</strong><br>Length of tenancy: <strong>12 months</strong><br>Conditions: <strong>none</strong><br>Date received: <strong>16/09/2026</strong><br>Has pets: <strong>No</strong><br>Number of occupants: <strong>2</strong><br>Tenant names: <strong>Sophie Turner, Daniel Turner</strong>",
           payLine:
             "You will now receive an invite from Propoly to pay the holding fee, if applicable, and to complete your referencing information.",
           agentName: "Sam Whitaker",
