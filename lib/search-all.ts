@@ -13,6 +13,8 @@ import { peopleLike } from "@/lib/rex-people-store";
 import { leadSide, type Lead } from "@/lib/leads-sample";
 import { searchLikes, searchMatches, searchRank, searchTokens } from "@/lib/search-match";
 import { postcodeOf, sameHome, STREET_SUFFIX } from "@/lib/address-parse";
+import { keysMatching, type KeyHit } from "@/lib/key-index";
+import { isOsPropertyId } from "@/lib/os-properties";
 
 /**
  * Search for anything (10 Oct 2026) - the pop-up behind Search in the sidebar.
@@ -29,7 +31,8 @@ import { postcodeOf, sameHome, STREET_SUFFIX } from "@/lib/address-parse";
  *                 managed homes, market appraisals, notes on a landlord's file
  *   Back office   lets in progress, certificates, Section 13/8 notices,
  *                 inspections, invoices
- *   Portfolio     listings, managed homes, notes on a listing
+ *   Portfolio     listings, managed homes, notes on a listing, and a home
+ *                 by its key number ("FM23", 26 Oct 2026)
  *   Works orders  every job: ref, title, what was reported, the home, who
  *
  * SCOPE. rexUserId null is the whole business; otherwise an agent searches
@@ -186,7 +189,7 @@ export async function searchAll(
   const db = hasDb();
   const sql = <R extends Record<string, unknown>>(text: string, params: unknown[]) => (db ? q<R>(text, params).catch(() => [] as R[]) : Promise.resolve([] as R[]));
 
-  const [book, managed, leads, compliance, deals, applications, known] = await Promise.all([
+  const [book, managed, leads, compliance, deals, applications, known, keyed] = await Promise.all([
     bookFor(rexUserId).catch(() => null),
     managedBookFor(rexUserId).then((m) => m.book).catch(() => null),
     cachedLeads(rexUserId),
@@ -194,6 +197,7 @@ export async function searchAll(
     getAllPropolyDeals().catch(() => null),
     getApplications(200, rexUserId).catch(() => []),
     peopleLike(needle).catch(() => []),
+    keysMatching(needle).catch(() => [] as KeyHit[]),
   ]);
 
   const listings = book?.listings ?? [];
@@ -295,6 +299,45 @@ export async function searchAll(
     const pid = (l as { propertyId?: string | null }).propertyId ?? null;
     if (searchMatches(needle, l.name, l.locality) || (/^\d{5,}$/.test(needle.trim()) && (String(l.id).includes(needle.trim()) || String(pid ?? "").includes(needle.trim())))) {
       add(listingRow(l, imageByListing.get(String(l.id)) ?? null), `${l.name}, ${l.locality}`);
+    }
+  }
+
+  /* ── Key numbers (26 Oct 2026) ────────────────────────────────────────
+     "FM23" typed: the home that key is on, from the homes in this person's
+     book only - which also keeps out the Warwickshire keys sharing REX's
+     register (lib/key-index). One row per home; the key itself leads
+     Portfolio, a key it only starts ("FM2") sits with the addresses. */
+  const keyLeads = new Set<string>();
+  if (keyed.length) {
+    const keyOf = new Map<string, KeyHit>();
+    for (const k of keyed) if (!keyOf.has(k.home)) keyOf.set(k.home, k);
+    /* The OS's own homes (pm-…) carry REX's property id on their record. */
+    const own = homes.map((h) => h.propertyId).filter((p): p is string => Boolean(p) && isOsPropertyId(p as string));
+    const rexOf = new Map<string, string>();
+    if (own.length) {
+      for (const r of await sql<{ id: string; rex_property_id: string | null }>(`SELECT id, rex_property_id FROM os_properties WHERE id = ANY($1)`, [own])) {
+        if (r.rex_property_id) rexOf.set(r.id, String(r.rex_property_id));
+      }
+    }
+    const keyFor = (pid: string | null | undefined) => (pid ? keyOf.get(pid) ?? keyOf.get(rexOf.get(pid) ?? "") : undefined);
+    /* A bare short number ("28") is a house number as often as a key: its
+       key sits with the addresses rather than ahead of 28 Benson Road. */
+    const sure = /[a-z]/i.test(needle) || needle.replace(/\D/g, "").length >= 4;
+    const done = new Set<string>();
+    const keyRow = (row: Row, pid: string, k: KeyHit, address: string) => {
+      if (done.has(pid)) return;
+      done.add(pid);
+      if (k.rank === 2 && sure) keyLeads.add(row.id);
+      add({ ...row, label: `Key ${k.label}`, score: k.rank === 2 && sure ? 6 : 1 }, address);
+    };
+    for (const h of homes) {
+      const k = keyFor(h.propertyId);
+      if (k && h.propertyId) keyRow(homeRow(h), h.propertyId, k, `${h.name}, ${h.locality}`);
+    }
+    for (const l of listings) {
+      const pid = (l as { propertyId?: string | null }).propertyId ?? null;
+      const k = keyFor(pid);
+      if (k && pid && !homeIds.has(String(l.id))) keyRow(listingRow(l, imageByListing.get(String(l.id)) ?? null), pid, k, `${l.name}, ${l.locality}`);
     }
   }
 
@@ -431,8 +474,9 @@ export async function searchAll(
   /* One row per thing: a hand-typed lead the cache also holds shows once. */
   const seen = new Set<string>();
   const place = typedAPlace(needle, out);
-  /* A home typed: its listing leads Portfolio, before the managed home. */
-  const lead = (x: FoundItem) => (place && x.id.startsWith("listing:") ? 1 : 0);
+  /* A key typed: its home leads Portfolio. A home typed: its listing leads,
+     before the managed home. */
+  const lead = (x: FoundItem) => (keyLeads.has(x.id) ? 2 : place && x.id.startsWith("listing:") ? 1 : 0);
   const groups = (place ? PLACE_ORDER : GROUP_ORDER).map((group) => {
     const all = out
       .filter((x) => x.group === group)
