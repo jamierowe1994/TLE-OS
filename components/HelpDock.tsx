@@ -105,6 +105,9 @@ const SLEEP_MS = 120_000;
  * out. Every fidget returns him to idle on its own, and all of them live in the
  * same timer list as the phone and the nap, so opening him clears the lot.
  */
+/* The ink Steve's idle fidgets that close his eyes; the orb dozes on its own clock instead. */
+const DOZY: Mood[] = ["bored", "yawn", "asleep", "texting"];
+
 const FIDGETS: Array<{ mood: Mood; at: number; jitter: number; for: number }> = [
   { mood: "bored", at: 16_000, jitter: 6_000, for: 4_800 },
   { mood: "bored", at: 34_000, jitter: 6_000, for: 4_800 },
@@ -386,6 +389,33 @@ function Dock() {
   const dockBtn = useRef<HTMLButtonElement | null>(null);
   const [dockHover, setDockHover] = useState(false);
   const peek = useStevePeek(dockBtn, orb && !open) && !dockHover;
+  /* As the orb his eyes are open; five minutes with nobody moving, typing or
+     scrolling and he dozes off, and the next movement wakes him (James,
+     26 Oct 2026: "he gets a bit bored and shuts his eyes"). */
+  const [drowsy, setDrowsy] = useState(false);
+  useEffect(() => {
+    if (!orb) return;
+    let doze = 0;
+    let last = 0;
+    const wake = () => {
+      setDrowsy(false);
+      window.clearTimeout(doze);
+      doze = window.setTimeout(() => setDrowsy(true), 5 * 60_000);
+    };
+    const moved = () => {
+      const now = Date.now();
+      if (now - last < 500) return;
+      last = now;
+      wake();
+    };
+    const kinds = ["pointermove", "pointerdown", "keydown", "wheel", "touchstart", "scroll"] as const;
+    kinds.forEach((k) => window.addEventListener(k, moved, { passive: true, capture: true }));
+    wake();
+    return () => {
+      window.clearTimeout(doze);
+      kinds.forEach((k) => window.removeEventListener(k, moved, { capture: true }));
+    };
+  }, [orb]);
   /* The orb's chat card (components/steve/OrbPanel): which screen, whether it
      is the wide side panel, its conversations, and his hello. */
   const [orbView, setOrbView] = useState<OrbView>("home");
@@ -2364,8 +2394,8 @@ function Dock() {
         <span ref={landing} className="block origin-bottom" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("os-steve-land"); }}>
           {/* New look: 56px of Steve, 26px in and 18px up, as the design has him (23 Oct 2026). The face is 78% of this box. */}
           <AssistantCharacter
-            mood={orb && open ? (busy ? "thinking" : "idle") : mood}
-            rest={orb && !open && !peek ? "closed" : undefined}
+            mood={orb && open ? (busy ? "thinking" : "idle") : orb && DOZY.includes(mood) ? "idle" : mood}
+            rest={orb && !open && !peek && drowsy ? "closed" : undefined}
             size={lookNew ? 72 : 76}
             loop={performing}
           />
