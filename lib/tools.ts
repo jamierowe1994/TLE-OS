@@ -49,7 +49,7 @@
  */
 export type ToolStatus = "live" | "building" | "locked";
 export type ToolAccess = "included" | "paid";
-export type ToolGroupKey = "prospecting" | "money";
+export type ToolGroupKey = "prospecting" | "money" | "learning";
 
 export interface ToolGroup {
   key: ToolGroupKey;
@@ -60,7 +60,7 @@ export interface ToolGroup {
 export const TOOL_GROUPS: ToolGroup[] = [
   {
     key: "money",
-    label: "Getting paid",
+    label: "Getting Paid",
     blurb:
       "Raising what you are owed, and knowing what the book is going to earn.",
   },
@@ -68,7 +68,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
     key: "prospecting",
     label: "Prospecting",
     blurb:
-      "Everything that happens before somebody puts their hand up — finding the doors nobody has knocked on yet.",
+      "Everything that happens before somebody puts their hand up: finding the doors nobody has knocked on yet.",
+  },
+  {
+    key: "learning",
+    label: "Learning",
+    blurb: "Getting better at the job: the training, the guides and the know-how, all in one place.",
   },
 ];
 
@@ -158,6 +163,19 @@ export const TOOLS: Tool[] = [
        separately is James's call; until then it comes with the package. */
     access: "included",
     group: "prospecting",
+  },
+  {
+    /* James, 26 Oct 2026: one tile under Learning that takes them in, to
+       Guides (Francesca's library of documents) and Systems (a tour of the
+       OS from every side), so they can see how things work for themselves. */
+    key: "learning",
+    name: "Learning",
+    blurb: "The guides worth reading and a tour of the system from every side, to dip into whenever you need it.",
+    icon: "note",
+    href: "/tools/learning",
+    status: "live",
+    access: "included",
+    group: "learning",
   },
 ];
 

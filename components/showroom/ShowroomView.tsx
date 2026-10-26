@@ -284,7 +284,7 @@ function srcOf(s: ShowroomScreen, token: string): string {
   return s.stage ? `/tenant/demo/stage?to=${s.stage}&back=${encodeURIComponent(path)}` : path;
 }
 
-function Screens({
+export function Screens({
   side,
   screens,
   token,
@@ -427,7 +427,7 @@ export function PhoneCode({ path, origin, label }: { path: string; origin: strin
  * (lib/agent-guides), one at a time with the guide's own words, and a button
  * that opens the whole guide over the page.
  */
-function GuideShots({ guideId, href }: { guideId: string; href?: string }) {
+export function GuideShots({ guideId, href }: { guideId: string; href?: string }) {
   const guide = AGENT_GUIDES.find((g) => g.id === guideId);
   const shots = (guide?.steps ?? []).filter((s) => s.image);
   const [i, setI] = useState(0);

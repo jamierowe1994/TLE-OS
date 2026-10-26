@@ -31,9 +31,9 @@ import { TOOL_GROUPS, toolsInGroup, type Tool } from "@/lib/tools";
  * one they will remember and mention.
  */
 
-type Reason = "entitled" | "not-pro" | "unknown-person" | "unavailable";
+export type Reason = "entitled" | "not-pro" | "unknown-person" | "unavailable";
 
-interface Access {
+export interface Access {
   entitled: boolean;
   reason: Reason;
   hasAccount: boolean;
@@ -43,7 +43,7 @@ interface Access {
 }
 
 /** What the card says about access, in an agent's words. */
-function accessLine(a: Access): { text: string; strong: boolean } | null {
+export function accessLine(a: Access): { text: string; strong: boolean } | null {
   switch (a.reason) {
     case "entitled":
       return a.hasAccount
@@ -154,7 +154,8 @@ function ToolCard({ tool, access, admin }: { tool: Tool; access: Access | null; 
   );
 }
 
-export default function ToolsGrid() {
+/** Who is looking: whether they are an admin (Bond's preview) and their Launch Pad licence. Shared with the new look's tiles. */
+export function useToolAccess(): { access: Access | null; admin: boolean } {
   const [access, setAccess] = useState<Access | null>(null);
   const [admin, setAdmin] = useState(false);
 
@@ -194,9 +195,16 @@ export default function ToolsGrid() {
     };
   }, []);
 
+  return { access, admin };
+}
+
+export default function ToolsGrid() {
+  const { access, admin } = useToolAccess();
+
   return (
     <>
-      {TOOL_GROUPS.map((group) => {
+      {/* Learning is new-look only (lib/new-look "tools"): off, the page is as it was. */}
+      {TOOL_GROUPS.filter((g) => g.key !== "learning").map((group) => {
         const tools = toolsInGroup(group.key);
         if (tools.length === 0) return null;
         return (

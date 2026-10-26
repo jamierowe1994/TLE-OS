@@ -3204,6 +3204,13 @@ CREATE TABLE IF NOT EXISTS os_recent_files (
   PRIMARY KEY (user_id, ref)
 );
 CREATE INDEX IF NOT EXISTS os_recent_files_user ON os_recent_files (user_id, visited_at DESC);
+-- Which Guides (Tools > Learning) were opened, by whom and when: the "Most Opened" row. 26 Oct 2026.
+CREATE TABLE IF NOT EXISTS os_guide_opens (
+  entry_id  TEXT NOT NULL,
+  user_id   TEXT NOT NULL,
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_guide_opens_at ON os_guide_opens (opened_at DESC);
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS service_basis TEXT;
 -- REX PM's own "Active letting agreement" list, read off its Properties screen
 -- (2 Oct 2026): pm_managed is the book REX PM's dashboard counts (527 that
