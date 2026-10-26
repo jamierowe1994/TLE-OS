@@ -2,22 +2,26 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Tabs } from "@/components/new-look/Parts";
 import { LEARNING_PAGES, type LearningPage } from "@/lib/learning/pages";
 import type { Folder, Journey, JourneyId, SysFile } from "@/lib/learning/systems-types";
 import PopGuide from "./PopGuide";
 
 /**
- * One journey of the Systems tour as a computer window (Tools > Learning >
- * Systems, James, 26 Oct 2026): "it's almost like they click into a file...
- * make it feel more like a computer screen. We're clicking into files to get
- * to the right thing, and then we go through that section."
+ * One journey of the Systems tour (Tools > Learning > Systems, James, 26 Oct
+ * 2026): "it's almost like they click into a file... We're clicking into files
+ * to get to the right thing." Then, the same day: no window inside a window -
+ * "just have them as folders on the screen, and they click in and then click
+ * out... When they click on one of them, it will pop out."
  *
- * Title bar, a breadcrumb, the journey's folders down the side and a folder's
- * files as big tiles. A file opens out of its tile: the customer's screen in a
- * device frame, the email as it lands, or the process with its summary; the
- * pop-out guide (./PopGuide) steps through it on the right. The place is in
- * the address (?folder=&file=), Esc closes a file and the arrow keys step the
- * guide. The content is lib/learning/systems; the look app/new-look/systems.css.
+ * So: the journey's folders as big drawn folders on the page; click one and
+ * its files show, with the folders as tabs across the top to hop between them;
+ * click a file and it pops out over the darkened page (the floating-stage
+ * look): the customer's screen in a device frame, the email as it lands, or
+ * the process with its summary, with the pop-out guide (./PopGuide) stepping
+ * through it beside it. The place is in the address (?folder=&file=), Esc
+ * closes a file then the folder, and the arrow keys step the guide. The
+ * content is lib/learning/systems; the look app/new-look/systems.css.
  */
 
 const FALLBACK_NAME: Record<JourneyId, string> = {
@@ -367,6 +371,32 @@ function viewsOf(file: SysFile): View[] {
 
 /* ── the explorer ───────────────────────────────────────────────────────── */
 
+const FOLDER_TONES = ["clay", "sage", "brown", "coral", "sky", "olive"] as const;
+
+/* A drawn folder, papers peeking out, for the folders on the page. */
+function FolderArt({ files }: { files: SysFile[] }) {
+  const kinds = files.slice(0, 3).map((f) => f.kind);
+  return (
+    <svg className="nl-sx-fold-svg" width="200" height="132" viewBox="0 0 200 132" fill="none" aria-hidden>
+      <ellipse cx="100" cy="124" rx="74" ry="6" fill="currentColor" opacity=".1" />
+      <path d="M30 30a8 8 0 0 1 8-8h38l10 10h76a8 8 0 0 1 8 8v8H30z" fill="currentColor" opacity=".28" />
+      {kinds.map((k, n) => (
+        <g key={n} className={`nl-sx-fold-paper is-${n}`}>
+          <rect x={52 + n * 22} y={20 - n * 2} width="70" height="78" rx="5" fill="#fff" stroke="currentColor" strokeWidth="1.3" />
+          {k === "email" ? (
+            <path d={`M${60 + n * 22} ${30 - n * 2}l27 17 27-17`} stroke="currentColor" strokeWidth="1.3" opacity=".6" />
+          ) : (
+            <rect x={60 + n * 22} y={28 - n * 2} width="30" height="16" rx="2" fill="var(--primary)" opacity=".8" />
+          )}
+          <path d={`M${60 + n * 22} ${52 - n * 2}h50M${60 + n * 22} ${60 - n * 2}h40M${60 + n * 22} ${68 - n * 2}h46`} stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity=".45" />
+        </g>
+      ))}
+      <path className="nl-sx-fold-front" d="M24 52a8 8 0 0 1 8-8h136a8 8 0 0 1 8 8l-6 58a8 8 0 0 1-8 7H38a8 8 0 0 1-8-7z" fill="currentColor" />
+      <path d="M44 66h40" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity=".55" />
+    </svg>
+  );
+}
+
 export default function Explorer({ side, journey, initialFolder, initialFile }: { side: JourneyId; journey: Journey | null; initialFolder: string | null; initialFile: string | null }) {
   const folders: Folder[] = journey?.folders ?? [];
   const name = journey?.name ?? FALLBACK_NAME[side];
@@ -374,27 +404,26 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
 
   const start = useMemo(() => {
     const withFile = initialFile ? folders.find((f) => f.files.some((x) => x.id === initialFile)) : undefined;
-    const folder = withFile ?? folders.find((f) => f.id === initialFolder) ?? folders[0];
+    const folder = withFile ?? folders.find((f) => f.id === initialFolder);
     return { folder: folder?.id ?? null, file: withFile ? initialFile : null };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* No folder chosen: the folders on the page. */
   const [folderId, setFolderId] = useState<string | null>(start.folder);
   const [fileId, setFileId] = useState<string | null>(start.file);
   const [closing, setClosing] = useState(false);
-  const [origin, setOrigin] = useState<string>("50% 0%");
+  const [origin, setOrigin] = useState<string>("50% 30%");
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState<"next" | "back">("next");
   const [small, setSmall] = useState(false);
   const [viewKey, setViewKey] = useState<string | null>(null);
 
-  const pane = useRef<HTMLDivElement>(null);
-  const main = useRef<HTMLDivElement>(null);
-  const win = useRef<HTMLDivElement>(null);
   const fileHead = useRef<HTMLHeadingElement>(null);
   const lastTile = useRef<string | null>(null);
+  const lastFolder = useRef<string | null>(null);
 
-  const folder = folders.find((f) => f.id === folderId) ?? folders[0] ?? null;
+  const folder = folders.find((f) => f.id === folderId) ?? null;
   const file = folder?.files.find((x) => x.id === fileId) ?? null;
   const views = useMemo(() => (file ? viewsOf(file) : []), [file]);
   const view = views.find((v) => v.key === viewKey) ?? views[0] ?? null;
@@ -414,63 +443,50 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
     }
   }, [folder, file]);
 
-  /* On a phone the folders are a row of chips: keep the open one in view. */
+  /* The page stays put under a popped-out file. */
   useEffect(() => {
-    const on = win.current?.querySelector<HTMLElement>(".nl-sx-folder.is-on");
-    const row = on?.closest("ul");
-    if (!on || !row || row.scrollWidth <= row.clientWidth) return;
-    const l = on.offsetLeft - row.offsetLeft;
-    if (l < row.scrollLeft || l + on.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollTo({ left: Math.max(0, l - 16), behavior: quiet() ? "auto" : "smooth" });
-  }, [folderId]);
+    if (!file) return;
+    const was = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = was;
+    };
+  }, [file]);
 
-  const toTop = useCallback(() => {
-    main.current?.scrollTo({ top: 0 });
-    const top = win.current?.getBoundingClientRect().top ?? 0;
-    if (top < 0) win.current?.scrollIntoView({ block: "start", behavior: quiet() ? "auto" : "smooth" });
+  const openFolder = useCallback((id: string | null) => {
+    if (id) lastFolder.current = id;
+    setFolderId(id);
+    setFileId(null);
+    setClosing(false);
+    if (!id) {
+      window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-folder="${lastFolder.current}"]`)?.focus({ preventScroll: true }));
+    }
   }, []);
 
-  const openFolder = useCallback(
-    (id: string) => {
-      setFolderId(id);
-      setFileId(null);
-      setClosing(false);
-      toTop();
-    },
-    [toTop]
-  );
-
-  const openFile = useCallback(
-    (f: SysFile, tile: HTMLElement | null) => {
-      const box = pane.current?.getBoundingClientRect();
-      const r = tile?.getBoundingClientRect();
-      if (box && r) setOrigin(`${Math.round(r.left + r.width / 2 - box.left)}px ${Math.round(r.top + r.height / 2 - box.top)}px`);
-      lastTile.current = f.id;
-      setFileId(f.id);
-      setStep(0);
-      setDir("next");
-      setSmall(false);
-      setViewKey(null);
-      setClosing(false);
-      toTop();
-      window.requestAnimationFrame(() => fileHead.current?.focus({ preventScroll: true }));
-    },
-    [toTop]
-  );
+  const openFile = useCallback((f: SysFile, tile: HTMLElement | null) => {
+    /* It grows from the side of the screen its tile was on. */
+    const r = tile?.getBoundingClientRect();
+    if (r) setOrigin(`${Math.round(((r.left + r.width / 2) / window.innerWidth) * 100)}% ${Math.round(((r.top + r.height / 2) / window.innerHeight) * 100)}%`);
+    lastTile.current = f.id;
+    setFileId(f.id);
+    setStep(0);
+    setDir("next");
+    setSmall(false);
+    setViewKey(null);
+    setClosing(false);
+    window.requestAnimationFrame(() => fileHead.current?.focus({ preventScroll: true }));
+  }, []);
 
   const closeFile = useCallback(() => {
     if (!fileId) return;
     const done = () => {
       setFileId(null);
       setClosing(false);
-      window.requestAnimationFrame(() => {
-        const t = pane.current?.querySelector<HTMLElement>(`[data-file="${lastTile.current}"]`);
-        t?.focus({ preventScroll: true });
-        t?.scrollIntoView({ block: "nearest" });
-      });
+      window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-file="${lastTile.current}"]`)?.focus({ preventScroll: true }));
     };
     if (quiet()) return done();
     setClosing(true);
-    window.setTimeout(done, 200);
+    window.setTimeout(done, 220);
   }, [fileId]);
 
   const goStep = useCallback(
@@ -487,14 +503,21 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!file) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") {
-        e.preventDefault();
-        closeFile();
-      } else if (e.key === "ArrowRight") {
+        if (file) {
+          e.preventDefault();
+          closeFile();
+        } else if (folder) {
+          e.preventDefault();
+          openFolder(null);
+        }
+        return;
+      }
+      if (!file) return;
+      if (e.key === "ArrowRight") {
         e.preventDefault();
         setSmall(false);
         goStep(step + 1);
@@ -506,176 +529,144 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [file, step, goStep, closeFile]);
+  }, [file, folder, step, goStep, closeFile, openFolder]);
 
   return (
     <div data-look="new" className="nl-page nl-sx">
       <Link href="/tools/learning/systems" className="nl-sx-back">
         <Chev back size={15} /> Systems
       </Link>
+      <header className="nl-sx-head">
+        <p className="nl-eyebrow">{journey ? `${total} ${total === 1 ? "file" : "files"} in ${folders.length} ${folders.length === 1 ? "folder" : "folders"}` : "Systems"}</p>
+        <h1 className="nl-sx-title">{name}</h1>
+        {journey?.says && <p className="nl-sx-says">{journey.says}</p>}
+      </header>
 
-      <div ref={win} className={`nl-sx-win${file ? " is-open" : ""}${file && small ? " is-guide-small" : ""}`}>
-        <div className="nl-sx-bar">
-          <span className="nl-sx-lights" aria-hidden>
-            <i />
-            <i />
-            <i />
+      {!journey || !folders.length ? (
+        <div className="nl-sx-empty">
+          <span className="nl-sx-empty-art">
+            <FolderGlyph />
           </span>
-          <span className="nl-sx-bar-title">{name}</span>
-          <span className="nl-sx-bar-n">{journey ? `${total} ${total === 1 ? "file" : "files"}` : ""}</span>
+          <p className="nl-sx-empty-title">Being Written</p>
+          <p className="nl-sx-empty-says">This journey&apos;s folders are on their way. Have a look at another journey for now.</p>
+          <Link href="/tools/learning/systems" className="nl-sx-go">
+            Back to Systems <Chev />
+          </Link>
         </div>
-
-        <nav className="nl-sx-crumbs" aria-label="Where you are">
-          <ol>
-            <li>
-              <Link href="/tools/learning/systems">Systems</Link>
+      ) : !folder ? (
+        /* The folders, on the page. */
+        <ul className="nl-sx-folders" aria-label="Folders">
+          {folders.map((f, i) => (
+            <li key={f.id} style={{ animationDelay: `${60 + i * 80}ms` }}>
+              <button type="button" className={`nl-sx-fold is-${FOLDER_TONES[i % FOLDER_TONES.length]}`} data-folder={f.id} onClick={() => openFolder(f.id)}>
+                <span className="nl-sx-fold-art">
+                  <FolderArt files={f.files} />
+                </span>
+                <span className="nl-sx-fold-text">
+                  <span className="nl-sx-fold-n">{f.files.length === 1 ? "1 file" : `${f.files.length} files`}</span>
+                  <span className="nl-sx-fold-name">{f.name}</span>
+                  <span className="nl-sx-fold-blurb">{f.blurb}</span>
+                  <span className="nl-sx-fold-go">
+                    Open the folder <Chev />
+                  </span>
+                </span>
+              </button>
             </li>
-            <li>
-              {folder ? (
-                <button type="button" onClick={() => folders[0] && openFolder(folders[0].id)}>
-                  {name}
-                </button>
-              ) : (
-                <span aria-current="page">{name}</span>
-              )}
-            </li>
-            {folder && (
-              <li>
-                {file ? (
-                  <button type="button" onClick={closeFile}>
-                    {folder.name}
+          ))}
+        </ul>
+      ) : (
+        /* Inside a folder: the folders as tabs, the files as tiles. */
+        <section key={folder.id} className="nl-sx-folderview" aria-labelledby="nl-sx-folder-title">
+          <div className="nl-sx-tabsrow">
+            <button type="button" className="nl-sx-up" onClick={() => openFolder(null)}>
+              <Chev back /> All folders
+            </button>
+            <Tabs
+              label="Folders"
+              className="nl-sx-tabs"
+              value={folder.id}
+              onChange={(id) => openFolder(id)}
+              items={folders.map((f) => ({ id: f.id, label: f.name, count: f.files.length }))}
+            />
+          </div>
+          <header className="nl-sx-folder-head">
+            <h2 id="nl-sx-folder-title" className="nl-sx-h">
+              {folder.name}
+            </h2>
+            <p className="nl-sx-folder-blurb">{folder.blurb}</p>
+          </header>
+          {folder.files.length ? (
+            <ul className="nl-sx-tiles">
+              {folder.files.map((f, i) => (
+                <li key={f.id} style={{ animationDelay: `${40 + i * 45}ms` }}>
+                  <button type="button" className={`nl-sx-tile is-${f.kind}`} data-file={f.id} onClick={(e) => openFile(f, e.currentTarget)}>
+                    <span className="nl-sx-tile-art">
+                      <TileArt kind={f.kind} />
+                      <em>{KIND_WORD[f.kind]}</em>
+                    </span>
+                    <span className="nl-sx-tile-text">
+                      <span className="nl-sx-tile-when">{f.when}</span>
+                      <span className="nl-sx-tile-name">{f.name}</span>
+                      <span className="nl-sx-tile-blurb">{f.blurb}</span>
+                    </span>
                   </button>
-                ) : (
-                  <span aria-current="page">{folder.name}</span>
-                )}
-              </li>
-            )}
-            {file && (
-              <li>
-                <span aria-current="page">{file.name}</span>
-              </li>
-            )}
-          </ol>
-        </nav>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="nl-sx-none">Nothing in this folder yet.</p>
+          )}
+        </section>
+      )}
 
-        {!journey || !folders.length ? (
-          <div className="nl-sx-empty">
-            <span className="nl-sx-empty-art">
-              <FolderGlyph />
-            </span>
-            <p className="nl-sx-empty-title">Being Written</p>
-            <p className="nl-sx-empty-says">This journey&apos;s folders are on their way. Have a look at another journey for now.</p>
-            <Link href="/tools/learning/systems" className="nl-sx-go">
-              Back to Systems <Chev />
-            </Link>
-          </div>
-        ) : (
-          <div className="nl-sx-body">
-            <nav className="nl-sx-side" aria-label="Folders">
-              <p className="nl-sx-side-h">Folders</p>
-              <ul>
-                {folders.map((f) => (
-                  <li key={f.id}>
-                    <button type="button" className={`nl-sx-folder${f.id === folder?.id ? " is-on" : ""}`} aria-current={f.id === folder?.id ? "true" : undefined} title={file ? f.name : undefined} onClick={() => openFolder(f.id)}>
-                      <FolderGlyph />
-                      <span className="nl-sx-folder-name">{f.name}</span>
-                      <span className="nl-sx-folder-n">{f.files.length}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-
-            <div ref={pane} className="nl-sx-pane">
-              <div ref={main} className="nl-sx-main">
-                {!file && folder && (
-                  <section key={folder.id} className="nl-sx-folderview" aria-labelledby="nl-sx-folder-title">
-                    <header className="nl-sx-folder-head">
-                      <h2 id="nl-sx-folder-title" className="nl-sx-h">
-                        {folder.name}
-                      </h2>
-                      <p className="nl-sx-folder-blurb">{folder.blurb}</p>
-                    </header>
-                    {folder.files.length ? (
-                      <ul className="nl-sx-tiles">
-                        {folder.files.map((f, i) => (
-                          <li key={f.id} style={{ animationDelay: `${40 + i * 45}ms` }}>
-                            <button type="button" className={`nl-sx-tile is-${f.kind}`} data-file={f.id} onClick={(e) => openFile(f, e.currentTarget)}>
-                              <span className="nl-sx-tile-art">
-                                <TileArt kind={f.kind} />
-                                <em>{KIND_WORD[f.kind]}</em>
-                              </span>
-                              <span className="nl-sx-tile-text">
-                                <span className="nl-sx-tile-when">{f.when}</span>
-                                <span className="nl-sx-tile-name">{f.name}</span>
-                                <span className="nl-sx-tile-blurb">{f.blurb}</span>
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="nl-sx-none">Nothing in this folder yet.</p>
-                    )}
-                  </section>
-                )}
-
-                {file && (
-                  <section
-                    key={file.id}
-                    className={`nl-sx-file${closing ? " is-closing" : ""}${small ? " is-small" : ""}`}
-                    style={{ transformOrigin: origin }}
-                    aria-labelledby="nl-sx-file-title"
-                  >
-                    <header className="nl-sx-file-head">
-                      <button type="button" className="nl-sx-up" onClick={closeFile}>
-                        <Chev back /> {folder?.name}
-                      </button>
-                      <div className="nl-sx-file-row">
-                        <span className={`nl-sx-file-art is-${file.kind}`}>
-                          <KindGlyph kind={file.kind} size={28} />
-                        </span>
-                        <div className="nl-sx-file-words">
-                          <p className="nl-sx-file-when">
-                            {KIND_WORD[file.kind]} <span aria-hidden>·</span> {file.when}
-                          </p>
-                          <h2 id="nl-sx-file-title" ref={fileHead} tabIndex={-1} className="nl-sx-h">
-                            {file.name}
-                          </h2>
-                          <p className="nl-sx-file-blurb">{file.blurb}</p>
-                        </div>
-                        <button type="button" className="nl-sx-x" onClick={closeFile} aria-label="Close the file" title="Close (Esc)">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" aria-hidden>
-                            <path d="M6 6l12 12M18 6L6 18" />
-                          </svg>
-                        </button>
-                      </div>
-                      {views.length > 1 && (
-                        <div className="nl-sx-views" role="tablist" aria-label="What to show">
-                          {views.map((v) => (
-                            <button key={v.key} type="button" role="tab" aria-selected={v.key === view?.key} className="nl-sx-viewbtn" onClick={() => setViewKey(v.key)}>
-                              {v.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </header>
-                    <div className="nl-sx-stage" key={view?.key}>
-                      {view?.draw(narrow)}
-                    </div>
-                  </section>
-                )}
-              </div>
-
-              {file && !closing && (
-                <div className={`nl-sx-dock${small ? " is-small" : ""}`}>
-                  <PopGuide file={file} step={step} dir={dir} onStep={goStep} small={small} onSmall={setSmall} />
+      {file && folder && (
+        /* The file, popped out over the darkened page, its guide beside it. */
+        <div className={`nl-sx-pop${closing ? " is-closing" : ""}${small ? " is-guide-small" : ""}`} role="dialog" aria-modal="true" aria-labelledby="nl-sx-file-title">
+          <button type="button" className="nl-sx-pop-scrim" aria-label="Close the file" onClick={closeFile} />
+          <div className="nl-sx-pop-grid">
+            <section key={file.id} className="nl-sx-file" style={{ transformOrigin: origin }}>
+              <header className="nl-sx-file-head">
+                <div className="nl-sx-file-row">
+                  <span className={`nl-sx-file-art is-${file.kind}`}>
+                    <KindGlyph kind={file.kind} size={28} />
+                  </span>
+                  <div className="nl-sx-file-words">
+                    <p className="nl-sx-file-when">
+                      {folder.name} <span aria-hidden>·</span> {file.when}
+                    </p>
+                    <h2 id="nl-sx-file-title" ref={fileHead} tabIndex={-1} className="nl-sx-h">
+                      {file.name}
+                    </h2>
+                    <p className="nl-sx-file-blurb">{file.blurb}</p>
+                  </div>
+                  <button type="button" className="nl-sx-x" onClick={closeFile} aria-label="Close the file" title="Close (Esc)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" aria-hidden>
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
                 </div>
-              )}
-            </div>
+                {views.length > 1 && (
+                  <div className="nl-sx-views" role="tablist" aria-label="What to show">
+                    {views.map((v) => (
+                      <button key={v.key} type="button" role="tab" aria-selected={v.key === view?.key} className="nl-sx-viewbtn" onClick={() => setViewKey(v.key)}>
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </header>
+              <div className="nl-sx-stage" key={view?.key}>
+                {view?.draw(narrow)}
+              </div>
+            </section>
+            {!closing && (
+              <div className={`nl-sx-dock${small ? " is-small" : ""}`}>
+                <PopGuide file={file} step={step} dir={dir} onStep={goStep} small={small} onSmall={setSmall} />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
