@@ -804,6 +804,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS os_works_quote_asks_one ON os_works_quote_asks
 -- was changed after it went says the new one hasn't had it, with a button.
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS order_sent_to      TEXT;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS order_sent_to_name TEXT NOT NULL DEFAULT '';
+-- Who to pay, as given with the invoice (Stuart Roper, 26 Oct 2026: "I've
+-- uploaded an invoice, but there's nowhere to put the contractor's bank
+-- details"). Kept on the job so the payment goes where that invoice said,
+-- whatever the contractor's record says later. lib/contractor-bank.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_bank_name    TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_bank_sort    TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_bank_account TEXT NOT NULL DEFAULT '';
+-- The contractor's own bank details (Stuart Roper, 26 Oct 2026), and a
+-- delete that hides them rather than losing them (James, 26 Oct 2026: "make
+-- sure we can actually delete a contractor off"). A deleted contractor is off
+-- every list and picker; their past jobs and invoices keep the name they had.
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS bank_account_name   TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS bank_sort_code      TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS bank_account_number TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS deleted_at          TIMESTAMPTZ;
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS deleted_by          TEXT NOT NULL DEFAULT '';
 
 -- REX PM's own task lists, read off its screens (1 Oct 2026). REX refused API
 -- access, so this is the stopgap: inspections (and next tenancy reviews) are
@@ -848,6 +864,21 @@ ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DE
 ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS reported_by TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS reported_on DATE;
 ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS task_category TEXT NOT NULL DEFAULT '';
+-- An old-system maintenance job closed here with a note (Sean McMahon, 26 Oct
+-- 2026: "historic maintenance issues that are just clogging up my system...
+-- just put a note on it, close it down"). Ours alone: nothing is written to
+-- REX PM. A closed job leaves the board and every open-jobs count until it is
+-- reopened; reopening keeps the row and stamps reopened_at, so who closed it
+-- and why stays on record. lib/works-carried.
+CREATE TABLE IF NOT EXISTS os_carried_closed (
+  task_id      TEXT PRIMARY KEY,
+  note         TEXT NOT NULL,
+  closed_by    TEXT NOT NULL DEFAULT '',
+  closed_by_id TEXT,
+  closed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reopened_at  TIMESTAMPTZ,
+  reopened_by  TEXT NOT NULL DEFAULT ''
+);
 
 -- A tenancy review done in the OS (1 Oct 2026): what was decided at the
 -- anniversary - rent up, no change, renewed, or the tenancy ending - and the

@@ -11,6 +11,7 @@ import { FloatCard, FloatCardHead, FloatFoot } from "@/components/new-look/Float
 import { PAYRUN_LABEL, PAYRUN_LINE, PayrunTrack, awaitingPay } from "@/components/maintenance/works-ui";
 import { AskForQuotes, QuoteBoard } from "@/components/maintenance/QuoteAsks";
 import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
+import { maskedAccount, readBank, sortCodeWords } from "@/lib/bank";
 
 /**
  * The Now card on a job: one thing at a time, in the order James and
@@ -858,6 +859,16 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
   /* Credentials in their own boxes, grouped (James, 21 Oct 2026). The cover
      is typed in pounds and kept in pence. */
   const [cover, setCover] = useState(initial.publicLiabilityCoverPence != null ? String(initial.publicLiabilityCoverPence / 100) : "");
+  /* Bank details (Stuart Roper, 26 Oct 2026), the new look's form only. The
+     account number is whole here when the record was opened by somebody who
+     may edit it; opened from the list it is the last four, and the box is
+     sent only once something is typed in it, so it is never wiped unseen. */
+  const [bank, setBank] = useState({
+    name: initial.bankAccountName ?? "",
+    sort: initial.bankSortCode ? sortCodeWords(initial.bankSortCode) : "",
+    acct: initial.bankAccountNumber ?? "",
+    typed: false,
+  });
   const group = (title: string, blurb: string) => (
     <div className="border-t border-line/60 pt-4 sm:col-span-2 lg:col-span-3">
       <h3 className="text-[14px]">{title}</h3>
@@ -868,7 +879,18 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
     if (!c.name?.trim() || !c.trade?.trim()) return setErr("A name and a trade, at least.");
     const coverPounds = Number(cover.replace(/[£,\s]/g, ""));
     if (!compact && cover.trim() && (!Number.isFinite(coverPounds) || coverPounds < 0)) return setErr("The cover should be an amount in pounds, e.g. 5,000,000.");
-    const body = compact ? c : { ...c, publicLiabilityExpiry: c.publicLiabilityExpiry || null, publicLiabilityCoverPence: cover.trim() ? Math.round(coverPounds * 100) : null };
+    let body: Record<string, unknown> = compact ? c : { ...c, publicLiabilityExpiry: c.publicLiabilityExpiry || null, publicLiabilityCoverPence: cover.trim() ? Math.round(coverPounds * 100) : null };
+    if (look === "float" && !compact) {
+      const sendAcct = bank.typed || Boolean(initial.bankAccountNumber);
+      const held = !sendAcct && initial.bankAccountLast4 ? "00000000" : bank.acct;
+      /* Checked here as the server checks it, so the box that is wrong is said before anything goes. */
+      const cleared = !bank.name.trim() && !bank.sort.trim() && !bank.acct.trim();
+      if (!cleared) {
+        const check = readBank({ accountName: bank.name, sortCode: bank.sort, accountNumber: held });
+        if (!check.ok) return setErr(check.error);
+      }
+      body = { ...body, bankAccountName: bank.name, bankSortCode: bank.sort, ...(sendAcct ? { bankAccountNumber: bank.acct } : {}) };
+    }
     setBusy(true);
     const r = await fetch("/api/contractors", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((x) => x.json()).catch(() => null);
     setBusy(false);
@@ -913,6 +935,15 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
             {box("policy", "Policy number", <input value={c.publicLiabilityNumber ?? ""} onChange={(e) => setC({ ...c, publicLiabilityNumber: e.target.value })} className={fl} />)}
             {box("expires", "Expires", <div className="mt-1"><FieldDate value={c.publicLiabilityExpiry ?? ""} onChange={(v) => setC({ ...c, publicLiabilityExpiry: v || null })} placeholder="The policy's end date" clearable /></div>)}
             {box("cover", "Cover", <input value={cover} onChange={(e) => setCover(e.target.value)} inputMode="decimal" placeholder="£ e.g. 5,000,000" className={fl} />)}
+          </div>
+        </FloatCard>
+        <FloatCard>
+          <FloatCardHead title="Bank Details" aside="For paying their invoices" />
+          <p className="nl-fs-hint -mt-1 mb-3">Goes to accounts with each invoice of theirs. A UK account: six-digit sort code, eight-digit account number.</p>
+          <div className="nl-fs-grid">
+            {box("bankname", "Name on the account", <input value={bank.name} onChange={(e) => setBank({ ...bank, name: e.target.value })} placeholder="As the bank has it" autoComplete="off" className={fl} />, true)}
+            {box("banksort", "Sort code", <input value={bank.sort} onChange={(e) => setBank({ ...bank, sort: e.target.value })} inputMode="numeric" placeholder="12-34-56" autoComplete="off" className={fl} />)}
+            {box("bankacct", "Account number", <input value={bank.acct} onChange={(e) => setBank({ ...bank, acct: e.target.value, typed: true })} inputMode="numeric" placeholder={!bank.typed && initial.bankAccountLast4 ? `${maskedAccount(initial.bankAccountLast4).replace(/^e/, "E")} - type to change` : "8 digits"} autoComplete="off" className={fl} />)}
           </div>
         </FloatCard>
         <FloatCard>

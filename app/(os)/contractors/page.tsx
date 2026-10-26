@@ -424,6 +424,7 @@ export default function ContractorsPage() {
           <RaiseInvoiceSheet
             contractors={all}
             me={data?.me ?? null}
+            canCorporate={Boolean(data?.canCorporate)}
             onClose={() => setRaising(false)}
             onSaved={(orderId) => { setRaising(false); setLogged(orderId); setTab("pay"); load(); }}
           />

@@ -10,6 +10,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import ContractorMark from "@/components/contractors/ContractorMark";
 import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
 import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
+import { digits, maskedAccount, readBank, sortCodeWords } from "@/lib/bank";
 
 /**
  * Their invoice, for work done without a job on the OS. It goes on as a
@@ -21,7 +22,13 @@ import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatFoot } from "@/
  * from inside a contractor's record. `bare` drops its own frame and heading
  * when the caller draws them.
  */
-export function LogInvoice({ contractor, onClose, onSaved, bare = false, look }: { contractor: Contractor; onClose: () => void; onSaved: (orderId: string) => void; bare?: boolean; /** The new look's floating boxes: the same fields and save, as cards for a FloatSheet. */ look?: "float" }) {
+export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, canSaveBack = false }: {
+  contractor: Contractor; onClose: () => void; onSaved: (orderId: string) => void; bare?: boolean;
+  /** The new look's floating boxes: the same fields and save, as cards for a FloatSheet. */
+  look?: "float";
+  /** Whether this person may edit the contractor, so may save changed bank details back to them. The server checks again. */
+  canSaveBack?: boolean;
+}) {
   const [props, setProps] = useState<Property[] | null>(null);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Property | null>(null);
@@ -30,6 +37,17 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look }:
   const [ref, setRef] = useState("");
   const [doneOn, setDoneOn] = useState("");
   const [payee, setPayee] = useState<"contractor" | "agent">("contractor");
+  /* Where to pay them (Stuart Roper, 26 Oct 2026: "there's nowhere to put the
+     contractor's bank details"). Filled from their record - the account
+     number as its last four, kept unless a new one is typed - and changes
+     can be saved back to them. */
+  const heldSort = digits(contractor.bankSortCode);
+  const heldLast4 = contractor.bankAccountLast4 ?? "";
+  const [bankName, setBankName] = useState(contractor.bankAccountName ?? "");
+  const [bankSort, setBankSort] = useState(heldSort ? sortCodeWords(heldSort) : "");
+  const [bankAcct, setBankAcct] = useState("");
+  const [saveBack, setSaveBack] = useState(false);
+  const bankChanged = bankName.trim() !== (contractor.bankAccountName ?? "").trim() || digits(bankSort) !== heldSort || bankAcct.trim() !== "";
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -83,6 +101,12 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look }:
     if (!title.trim()) return setErr("Say what the work was.");
     if (!amount.trim()) return setErr("The invoice needs its total.");
     if (!file) return setErr("Attach the invoice itself - the PDF or a photo of it.");
+    if (payee === "contractor") {
+      const keepsNumber = !bankAcct.trim() && heldLast4 && digits(bankSort) === heldSort;
+      if (!bankAcct.trim() && heldLast4 && digits(bankSort) !== heldSort && bankSort.trim()) return setErr("Type the account number too, since the sort code has changed.");
+      const check = readBank({ accountName: bankName, sortCode: bankSort, accountNumber: keepsNumber ? "00000000" : bankAcct });
+      if (!check.ok) return setErr(check.error);
+    }
     const fd = new FormData();
     fd.append("contractorId", contractor.id);
     fd.append("propertyId", picked?.id ?? "");
@@ -94,6 +118,12 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look }:
     fd.append("ref", ref.trim());
     fd.append("payee", payee);
     if (doneOn) fd.append("completedAt", doneOn);
+    if (payee === "contractor") {
+      fd.append("bankName", bankName);
+      fd.append("bankSort", bankSort);
+      fd.append("bankAccount", bankAcct);
+      if (saveBack && bankChanged) fd.append("saveBank", "1");
+    }
     fd.append("file", file);
     setBusy(true);
     const r = await fetch("/api/contractors/invoice", { method: "POST", body: fd }).then((x) => x.json()).catch(() => null);
@@ -101,6 +131,30 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look }:
     if (!r?.ok) return setErr(r?.error ?? "Could not log the invoice.");
     onSaved(String(r.order?.id ?? ""));
   }
+
+  /* The bank boxes, the same in both looks bar the classes. Only when the contractor is being paid. */
+  const bankBoxes = (fl: string, lb: string, hint: string, wrap: string) => (
+    <>
+      <div className={wrap}>
+        <div className="sm:col-span-2"><label className={lb}>Name on the account</label><input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="As the bank has it" autoComplete="off" className={`${fl} mt-1`} /></div>
+        <div><label className={lb}>Sort code</label><input value={bankSort} onChange={(e) => setBankSort(e.target.value)} inputMode="numeric" placeholder="12-34-56" autoComplete="off" className={`${fl} mt-1`} /></div>
+        <div><label className={lb}>Account number</label><input value={bankAcct} onChange={(e) => setBankAcct(e.target.value)} inputMode="numeric" placeholder={heldLast4 ? `${maskedAccount(heldLast4).replace(/^e/, "E")} - type to change` : "8 digits"} autoComplete="off" className={`${fl} mt-1`} /></div>
+      </div>
+      <p className={hint}>
+        {heldLast4 || contractor.bankAccountName
+          ? `From ${contractor.name}'s record. Change them here if this invoice says otherwise.`
+          : `Nothing on ${contractor.name}'s record yet. They go to accounts with the invoice.`}
+      </p>
+      {bankChanged && (canSaveBack ? (
+        <label className="mt-2 flex items-center gap-2 text-[13px]">
+          <input type="checkbox" checked={saveBack} onChange={(e) => setSaveBack(e.target.checked)} className="h-4 w-4 accent-[var(--accent-dark)]" />
+          Save these to {contractor.name}&apos;s record too
+        </label>
+      ) : (
+        <p className={hint}>Used for this invoice only. Whoever keeps {contractor.name}&apos;s record can update it.</p>
+      ))}
+    </>
+  );
 
   if (look === "float") {
     const fl = "nl-fs-input";
@@ -160,6 +214,12 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look }:
             <label className="nl-fs-tick-row"><input type="radio" name={`payee-${contractor.id}`} checked={payee === "agent"} onChange={() => setPayee("agent")} /><b>I paid them myself - reimburse me</b></label>
           </div>
         </FloatCard>
+        {payee === "contractor" && (
+          <FloatCard>
+            <FloatCardHead title="Their Bank Details" aside="For accounts to pay them" />
+            {bankBoxes("nl-fs-input", "nl-fs-label", "nl-fs-hint", "grid gap-3 sm:grid-cols-2")}
+          </FloatCard>
+        )}
         <FloatFoot left={err ? <span className="nl-fs-err" role="alert">{err}</span> : <span>Goes on the home as a finished job. Accounts are told.</span>}>
           <button type="button" onClick={onClose} className="nl-btn nl-fs-ghost">Cancel</button>
           <button type="button" disabled={busy} onClick={() => void save()} className="nl-btn nl-btn--primary">{busy ? "Logging…" : "Log the invoice"}</button>
@@ -213,6 +273,12 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look }:
           <label className="flex items-center gap-2"><input type="radio" name={`payee-${contractor.id}`} checked={payee === "contractor"} onChange={() => setPayee("contractor")} />Pay {contractor.name}</label>
           <label className="flex items-center gap-2"><input type="radio" name={`payee-${contractor.id}`} checked={payee === "agent"} onChange={() => setPayee("agent")} />I paid them myself - reimburse me</label>
         </div>
+        {payee === "contractor" && (
+          <div className="rounded-xl border border-line/70 p-3.5 sm:col-span-2">
+            <p className="m-0 text-[13px] font-medium">Their bank details</p>
+            {bankBoxes(field, "block text-[11px] text-muted", "mt-1.5 text-[11.5px] text-muted", "mt-2 grid gap-3 sm:grid-cols-2")}
+          </div>
+        )}
       </div>
       {err && <p className="mt-3 text-[12px] text-accent-dark">{err}</p>}
       <div className="mt-4 flex justify-end gap-2">
@@ -325,7 +391,7 @@ export function RaiseInvoiceDrawer({ open, contractors, me, onClose, onSaved }: 
           {picked && (
             <section className="mt-4 rounded-2xl border border-line/70 bg-white p-4 sm:p-5">
               <p className="mb-3 text-[10.5px] font-semibold uppercase tracking-wide text-muted">2 · The invoice</p>
-              <LogInvoice key={picked.id} contractor={picked} bare onClose={close} onSaved={onSaved} />
+              <LogInvoice key={picked.id} contractor={picked} bare canSaveBack={!!picked.ownerId && picked.ownerId === me} onClose={close} onSaved={onSaved} />
             </section>
           )}
         </div>
@@ -340,9 +406,11 @@ export function RaiseInvoiceDrawer({ open, contractors, me, onClose, onSaved }: 
  * from, picked out of the book this person can see, then the same LogInvoice
  * and its same save - as two screens. Mount it only while it is open.
  */
-export function RaiseInvoiceSheet({ contractors, me, onClose, onSaved }: {
+export function RaiseInvoiceSheet({ contractors, me, canCorporate = false, onClose, onSaved }: {
   contractors: Pickable[];
   me: string | null;
+  /** May keep the company's contractors, so may save bank details back to one. */
+  canCorporate?: boolean;
   onClose: () => void;
   onSaved: (orderId: string) => void;
 }) {
@@ -382,7 +450,7 @@ export function RaiseInvoiceSheet({ contractors, me, onClose, onSaved }: {
               <button type="button" onClick={() => setPicked(null)} className="nl-link shrink-0">Change</button>
             </div>
           </FloatCard>
-          <LogInvoice key={picked.id} contractor={picked} look="float" onClose={onClose} onSaved={onSaved} />
+          <LogInvoice key={picked.id} contractor={picked} look="float" canSaveBack={picked.ownerId ? picked.ownerId === me : canCorporate} onClose={onClose} onSaved={onSaved} />
         </>
       ) : contractors.length === 0 ? (
         <FloatCard><p className="m-0 text-[13.5px] text-muted">There are no contractors in your book yet. Add them first with Add one.</p></FloatCard>

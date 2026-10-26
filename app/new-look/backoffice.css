@@ -143,6 +143,9 @@
 [data-look="new"] .nl-bo-job-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
 [data-look="new"] .nl-bo-job-next { font-size: 13px; line-height: 19px; color: var(--muted); }
 [data-look="new"] .nl-bo-job-next.is-hot { color: var(--accent-dark); font-weight: 500; }
+/* Old-system jobs closed here with a note (26 Oct 2026): the note under the job, Reopen on the right. */
+[data-look="new"] .nl-bo-closed { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 12px; }
+[data-look="new"] .nl-bo-closed .nl-bo-job-title { white-space: normal; }
 @media (max-width: 900px) {
   [data-look="new"] .nl-bo-job { grid-template-columns: 52px minmax(0, 1fr); gap: 6px 12px; }
   [data-look="new"] .nl-bo-job-tags, [data-look="new"] .nl-bo-job-next { grid-column: 2; }
