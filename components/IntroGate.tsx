@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * The load-in moment.
@@ -14,7 +15,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
  * Short on purpose. A splash screen is a greeting, not a toll gate — it holds
  * for a beat and a half, and any click, key or scroll goes straight through.
  * Reduced motion skips it entirely, and it only shows once per session.
+ *
+ * The new look (lib/new-look "entrance", James, 26 Oct 2026): no painting.
+ * The name letters in one by one, a short coral line draws under it, and it
+ * lifts away as the page underneath pops in. Still once a visit - a refresh
+ * never plays it again. (A hand-drawn cursive line was tried first and
+ * dropped the same day.)
  */
+
 
 /** James's own paintings (13 Sep 2026), not the stock line drawings. */
 const ART = [
@@ -37,6 +45,7 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
   const [show, setShow] = useState(false);
   const [fading, setFading] = useState(false);
   const done = useRef(false);
+  const look = useNewLook("entrance");
 
   /* Picked once per mount, and NOT during render on the server: the server
      and the browser would choose different pictures and React would keep the
@@ -44,6 +53,8 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
   const [pick, setPick] = useState<{ art: string; line: string } | null>(null);
 
   useEffect(() => {
+    /* ?entrance=again plays it once more, to look at it. */
+    if (new URLSearchParams(window.location.search).get("entrance") === "again") sessionStorage.removeItem("os-intro-seen");
     if (
       sessionStorage.getItem("os-intro-seen") ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -63,14 +74,19 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
       done.current = true;
       sessionStorage.setItem("os-intro-seen", "1");
       setFading(true);
+      /* The page underneath pops in as the cover fades (app/globals.css). */
+      const root = document.documentElement;
+      root.dataset.entrance = "pop";
       window.setTimeout(() => setShow(false), 650);
+      window.setTimeout(() => { if (root.dataset.entrance === "pop") delete root.dataset.entrance; }, 1800);
     },
     []
   );
 
   /* It leaves on its own, and on any sign of impatience. */
   useEffect(() => {
-    if (!show) return;
+    /* The new look leaves when its name has landed (EntranceMark says when). */
+    if (!show || look !== false) return;
     const t = window.setTimeout(dismiss, 2100);
     const go = () => dismiss();
     window.addEventListener("keydown", go);
@@ -80,12 +96,42 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
       window.removeEventListener("keydown", go);
       window.removeEventListener("wheel", go);
     };
-  }, [show, dismiss]);
+  }, [show, dismiss, look]);
+
+  /* Any key or scroll goes straight through the new one too. */
+  useEffect(() => {
+    if (!show || look !== true) return;
+    const go = () => dismiss();
+    window.addEventListener("keydown", go);
+    window.addEventListener("wheel", go, { passive: true });
+    return () => {
+      window.removeEventListener("keydown", go);
+      window.removeEventListener("wheel", go);
+    };
+  }, [show, dismiss, look]);
 
   return (
     <>
       {children}
-      {show && pick && (
+      {/* Until the switch has answered, a plain cover, so neither the page
+          nor the wrong entrance flashes. */}
+      {show && look !== false && (
+        <div
+          onClick={dismiss}
+          className={`fixed inset-0 z-[250] cursor-pointer bg-page transition-opacity duration-700 ${fading ? "pointer-events-none opacity-0" : "opacity-100"}`}
+        >
+          <h1 className="sr-only">Welcome to TLE OS</h1>
+          {look === true && <EntranceMark onDone={dismiss} />}
+          <button
+            type="button"
+            onClick={dismiss}
+            className="absolute bottom-8 right-8 text-xs font-semibold text-muted transition-colors hover:text-ink"
+          >
+            Skip →
+          </button>
+        </div>
+      )}
+      {show && look === false && pick && (
         <div
           onClick={dismiss}
           className={`os-type fixed inset-0 z-[100] flex cursor-pointer flex-col items-center justify-center gap-7 bg-page px-6 transition-opacity duration-700 ${
@@ -120,5 +166,24 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </>
+  );
+}
+
+/** The name, a letter at a time, the coral line under it, then onDone. */
+function EntranceMark({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    const t = window.setTimeout(onDone, 1700);
+    return () => window.clearTimeout(t);
+  }, [onDone]);
+  const letters = ["T", "L", "E", " ", "O", "S"];
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-5" aria-hidden>
+      <div className="entrance-mark">
+        {letters.map((c, i) => (
+          <span key={i} className={i > 3 ? "is-os" : undefined} style={{ animationDelay: `${i * 70}ms` }}>{c === " " ? "\u00a0" : c}</span>
+        ))}
+      </div>
+      <i className="entrance-rule" />
+    </div>
   );
 }
