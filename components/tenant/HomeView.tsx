@@ -60,6 +60,18 @@ const dayTime = (iso: string) => {
   return `${day}, ${t}`;
 };
 
+/** The next 1st of the month on the UK calendar, "1 December"; today when it
+ *  is the 1st. Worked out on every render: this said "Next: 1 November" in
+ *  plain text until 26 Oct 2026, which would have been wrong from November. */
+function nextFirst(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "numeric", day: "numeric" }).formatToParts(now);
+  const n = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const y = n("year");
+  const m = n("month") - 1;
+  const at = new Date(Date.UTC(y, n("day") === 1 ? m : m + 1, 1));
+  return `1 ${at.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" })}`;
+}
+
 export default function HomeView({ v, welcome, base, q = "", sample = false }: { v: TenantHome; welcome: boolean; base: string; q?: string; sample?: boolean }) {
   const to = (path: string) => `${base}${path}${q}`;
   /* A view-relative href: "/tenant/x" becomes the sample's or the real
@@ -302,7 +314,7 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
               <>
                 <p className="text-[34px] font-bold leading-none">{money(d.rentPcm)} <span className="text-[14px] font-normal text-muted">/ month</span></p>
                 <p className="mt-4 text-[13px] text-muted">
-                  {phase === "living" ? "Goes out on the 1st by standing order. Next: 1 November." : "First payment when your agreement is signed. Your standing order is set up then."}
+                  {phase === "living" ? `Goes out on the 1st by standing order. Next: ${nextFirst()}.` : "First payment when your agreement is signed. Your standing order is set up then."}
                 </p>
               </>
             ) : (
