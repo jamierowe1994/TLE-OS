@@ -56,7 +56,7 @@ import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-re
 import { useListingTerms } from "@/lib/use-listing-terms";
 import { fetchMe } from "@/lib/me";
 import RexWaitingChip from "@/components/RexWaitingChip";
-import { Badge, Ico, Menu, Tabs } from "@/components/new-look/Parts";
+import { Badge, FillText, Ico, Menu, Tabs } from "@/components/new-look/Parts";
 import PhotoGrid from "@/components/new-look/PhotoGrid";
 import EditAdvert from "@/components/new-look/advert/EditAdvert";
 import { useNewLook } from "@/lib/use-new-look";
@@ -320,7 +320,6 @@ function ListingDrawerBody({
   const [descDraft, setDescDraft] = useState("");
   const [descSave, setDescSave] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [descErr, setDescErr] = useState<string | null>(null);
-  const [descMore, setDescMore] = useState(false);
   const [gridFrom, setGridFrom] = useState<DOMRect | null>(null);
   const heroRef = useRef<HTMLButtonElement>(null);
   const [portalStats, setPortalStats] = useState(false);
@@ -2906,12 +2905,7 @@ function ListingDrawerBody({
                 ) : live === null && !liveFailed ? (
                   <p className="nl-meta">Reading the advert…</p>
                 ) : (live?.body ?? shownBody ?? "").trim() ? (
-                  <>
-                    <div className={`nl-clamp${descMore ? " is-open" : ""}${(live?.body ?? shownBody ?? "").length < 260 ? " is-short" : ""}`}>{(live?.body ?? shownBody ?? "").trim()}</div>
-                    {(live?.body ?? shownBody ?? "").length >= 260 && (
-                      <button type="button" className="nl-link self-start" onClick={() => setDescMore((m) => !m)}>{descMore ? "View less" : "View more"}</button>
-                    )}
-                  </>
+                  <FillText text={(live?.body ?? shownBody ?? "").trim()} />
                 ) : (
                   <p className="nl-meta">No description written yet. Edit the advert, or ask Steve to fill it in.</p>
                 )}

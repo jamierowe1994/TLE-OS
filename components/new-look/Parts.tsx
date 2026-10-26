@@ -227,3 +227,43 @@ export function Ico({ name, size = 16 }: { name: "plus" | "download" | "pen" | "
     </svg>
   );
 }
+
+/**
+ * Text that fills the box it sits in (James, 26 Oct 2026: "it's always half
+ * empty"). The box's height comes from its row - the cell beside it - never
+ * from the text, so on a tall screen it shows more lines and on a small one
+ * fewer, always whole lines to the bottom. View more only shows when the rest
+ * would run off the bottom.
+ */
+export function FillText({ text }: { text: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ over: boolean; height: number | null }>({ over: false, height: null });
+  const [open, setOpen] = useState(false);
+  useLayoutEffect(() => {
+    const b = box.current;
+    const t = body.current;
+    if (!b || !t || open) return;
+    const measure = () => {
+      const line = parseFloat(getComputedStyle(t).lineHeight) || 26;
+      const room = b.clientHeight;
+      const over = t.scrollHeight > room + 1;
+      /* Whole lines only, leaving the last line's room for View more. */
+      const lines = Math.max(1, Math.floor((over ? room - 34 : room) / line));
+      const height = over ? lines * line : null;
+      setFit((f) => (f.over === over && f.height === height ? f : { over, height }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(b);
+    return () => ro.disconnect();
+  }, [text, open]);
+  return (
+    <div ref={box} className={`nl-fill${open ? " is-open" : ""}${fit.over && !open ? " is-over" : ""}`}>
+      <div ref={body} className="nl-fill-text" style={!open && fit.height ? { maxHeight: fit.height } : undefined}>{text}</div>
+      {(fit.over || open) && (
+        <button type="button" className="nl-link nl-fill-more" onClick={() => setOpen((o) => !o)}>{open ? "View less" : "View more"}</button>
+      )}
+    </div>
+  );
+}

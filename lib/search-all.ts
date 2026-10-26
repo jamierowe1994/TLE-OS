@@ -12,7 +12,7 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
 import { peopleLike } from "@/lib/rex-people-store";
 import { leadSide, type Lead } from "@/lib/leads-sample";
 import { searchLikes, searchMatches, searchRank, searchTokens } from "@/lib/search-match";
-import { sameHome } from "@/lib/address-parse";
+import { postcodeOf, sameHome, STREET_SUFFIX } from "@/lib/address-parse";
 
 /**
  * Search for anything (10 Oct 2026) - the pop-up behind Search in the sidebar.
@@ -44,6 +44,28 @@ import { sameHome } from "@/lib/address-parse";
 
 export type Group = "tenant" | "landlord" | "backoffice" | "portfolio" | "works";
 export const GROUP_ORDER: Group[] = ["tenant", "landlord", "backoffice", "portfolio", "works"];
+
+/* WHAT WAS TYPED SETS THE ORDER (James, 26 Oct 2026). A home - "room 5",
+   "16 mary rae", a street, a postcode - shows the home's own records first:
+   listings (always the shortest list), the managed homes, back office, works
+   orders, and the people last. A name keeps people first, then the homes.
+   "If you're looking for a tenant in a property, you search the tenant's
+   name." */
+const PLACE_ORDER: Group[] = ["portfolio", "backoffice", "works", "landlord", "tenant"];
+const UNIT_WORD = /^(flat|room|apartment|apt|unit|studio)$/;
+
+function typedAPlace(needle: string, out: FoundItem[]): boolean {
+  const t = needle.trim();
+  /* A phone number or an email is a person, however many digits. */
+  if (t.includes("@") || /^[\d\s+()-]{5,}$/.test(t)) return false;
+  const words = searchTokens(t);
+  if (postcodeOf(t) || words.some((w) => /\d/.test(w) || UNIT_WORD.test(w) || STREET_SUFFIX.test(w))) return true;
+  /* Words only: a name when somebody's own name answers it, a place when
+     only homes do ("mary rae", "bellshill"). */
+  const person = out.some((x) => (x.group === "tenant" || x.group === "landlord") && x.label !== "Note" && searchMatches(t, x.title));
+  const home = out.some((x) => (x.group === "portfolio" || x.group === "backoffice" || x.group === "works") && searchMatches(t, x.title, x.place));
+  return !person && home;
+}
 
 export interface FoundItem {
   id: string;
@@ -408,11 +430,14 @@ export async function searchAll(
 
   /* One row per thing: a hand-typed lead the cache also holds shows once. */
   const seen = new Set<string>();
-  const groups = GROUP_ORDER.map((group) => {
+  const place = typedAPlace(needle, out);
+  /* A home typed: its listing leads Portfolio, before the managed home. */
+  const lead = (x: FoundItem) => (place && x.id.startsWith("listing:") ? 1 : 0);
+  const groups = (place ? PLACE_ORDER : GROUP_ORDER).map((group) => {
     const all = out
       .filter((x) => x.group === group)
       .map((x, i) => ({ x, i }))
-      .sort((a, b) => b.x.score - a.x.score || a.i - b.i)
+      .sort((a, b) => lead(b.x) - lead(a.x) || b.x.score - a.x.score || a.i - b.i)
       .map((y) => y.x)
       .filter((x) => {
         if (seen.has(x.id)) return false;
