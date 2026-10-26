@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { appraisalRefusal } from "@/lib/appraisal-access";
+import type { NextRequest } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { withLiveStages } from "@/lib/appraisal-stage";
@@ -29,6 +31,9 @@ export const runtime = "nodejs";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const bare = new URL(req.url).searchParams.get("bare") === "1";
   try {
     const ma = await getAppraisal(id);

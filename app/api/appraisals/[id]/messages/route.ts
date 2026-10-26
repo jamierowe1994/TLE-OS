@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appraisalRefusal } from "@/lib/appraisal-access";
 import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
@@ -25,6 +26,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const me = await who(req);
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const messages = await threadFor(id);
   /* Opening the panel is reading it - but never while viewing as somebody
      else, which would clear their "new" for them. */
@@ -48,6 +52,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const me = await who(req);
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const ma = await getAppraisal(id);
   if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
   const { text } = (await req.json().catch(() => ({}))) as { text?: string };

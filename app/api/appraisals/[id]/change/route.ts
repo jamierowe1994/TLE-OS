@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appraisalRefusal } from "@/lib/appraisal-access";
 import { whoIs } from "@/lib/admin";
 import { cancelAppraisal, rearrangeAppraisal } from "@/lib/appraisal-change";
 import { withLiveStages } from "@/lib/appraisal-stage";
@@ -32,6 +33,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!actor) return NextResponse.json({ ok: false, said: "Sign in first." }, { status: 401 });
 
   const { id } = await params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const b = (await req.json().catch(() => ({}))) as { action?: string; startsAt?: string; minutes?: number };
   if (b.action !== "cancel" && b.action !== "move") {
     return NextResponse.json({ ok: false, said: "Cancel or rearrange?" }, { status: 400 });

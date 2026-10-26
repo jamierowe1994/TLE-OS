@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appraisalRefusal } from "@/lib/appraisal-access";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { getAppraisal } from "@/lib/appraisal-store";
@@ -38,6 +39,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: true, items: [] });
   const { id } = await params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const ma = await getAppraisal(id).catch(() => null);
   if (!ma) return NextResponse.json({ ok: false, error: "That appraisal isn't here any more." }, { status: 404 });
   const to = (ma.landlordEmail ?? "").trim().toLowerCase();

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appraisalRefusal } from "@/lib/appraisal-access";
 import { whoIs } from "@/lib/admin";
 import { deletePhoto, listPhotos, photoUrl, storePhoto } from "@/lib/property-photos";
 
@@ -18,6 +19,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const one = (req.nextUrl.searchParams.get("photo") ?? "").trim();
   if (one) {
     const url = await photoUrl(id, one);
@@ -31,6 +35,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   let form: FormData;
   try {
     form = await req.formData();
@@ -48,6 +55,9 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const one = (req.nextUrl.searchParams.get("photo") ?? "").trim();
   if (!one) return NextResponse.json({ ok: false, error: "Which photograph?" }, { status: 400 });
   return NextResponse.json({ ok: await deletePhoto(id, one) });

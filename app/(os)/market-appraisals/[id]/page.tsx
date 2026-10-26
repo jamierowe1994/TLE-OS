@@ -90,6 +90,8 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
      is not there — the two must stay separate, or the page flashes "No such
      appraisal" at somebody who has just this second booked one. */
   const [booked, setBooked] = useState<MarketAppraisal | null | undefined>(undefined);
+  /* Another agent's appraisal (lib/appraisal-access, 26 Oct 2026): said so, not "no such appraisal". */
+  const [notYours, setNotYours] = useState(false);
   const ma = booked ?? null;
   /* The Auto save chip beside the back link (23 Sep 2026). The documents
      checklist, the photographs, the take-on pop-out and the property file
@@ -101,7 +103,10 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     /* This one record, not the whole list (2 Oct 2026) - the list read paid
        for the signals of every other file on every save. */
     fetch(`/api/appraisals/${encodeURIComponent(id)}`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (!gone) setNotYours(r.status === 403);
+        return r.ok ? r.json() : null;
+      })
       .then((j: { appraisal?: MarketAppraisal | null } | null) => {
         if (gone) return;
         setBooked(j?.appraisal ?? null);
@@ -257,8 +262,8 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           </Link>
         </div>
         <div className="py-12">
-          <h1 className="nl-section-title">No Such Appraisal</h1>
-          <p className="nl-meta mt-2">It may have been removed, or the link is wrong.</p>
+          <h1 className="nl-section-title">{notYours ? "Another Agent's Appraisal" : "No Such Appraisal"}</h1>
+          <p className="nl-meta mt-2">{notYours ? "Market appraisals are open to the agent on them, the office and the owners." : "It may have been removed, or the link is wrong."}</p>
         </div>
       </div>
     );
@@ -275,8 +280,8 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   if (!ma) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
-        <p className="hand text-[20px]">No such appraisal</p>
-        <p className="mt-2 text-[12.5px] text-muted">It may have been removed, or the link is wrong.</p>
+        <p className="hand text-[20px]">{notYours ? "Another agent's appraisal" : "No such appraisal"}</p>
+        <p className="mt-2 text-[12.5px] text-muted">{notYours ? "Market appraisals are open to the agent on them, the office and the owners." : "It may have been removed, or the link is wrong."}</p>
         <Link href="/market-appraisals" className="mt-4 inline-block text-[12.5px] underline">
           Back to Market Appraisals
         </Link>

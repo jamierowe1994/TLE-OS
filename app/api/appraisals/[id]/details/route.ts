@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appraisalRefusal } from "@/lib/appraisal-access";
 import { whoIs } from "@/lib/admin";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { readAnswers } from "@/lib/property-answers-store";
@@ -27,6 +28,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const ma = await getAppraisal(id);
   if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
 
@@ -73,6 +77,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req as NextRequest, id);
+  if (refused) return refused;
   const ma = await getAppraisal(id);
   if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
   const body = (await req.json().catch(() => ({}))) as { fields?: Record<string, string>; advert?: { heading: string; body: string } | null };

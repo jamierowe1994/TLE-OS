@@ -9,6 +9,7 @@ import { findUserById } from "@/lib/users";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { maskContactFields, sameName, seesContactLists } from "@/lib/contact-mask";
+import { appraisalRefusal, appraisalViewer, seesAppraisal } from "@/lib/appraisal-access";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import { followFile } from "@/lib/intro-only";
 import type { NextRequest } from "next/server";
@@ -52,6 +53,8 @@ export async function GET(req: NextRequest) {
     const { actor, subject } = await whoIs(req);
     const full = !actor || seesContactLists(actor.role);
     const myName = (subject ?? actor)?.name ?? "";
+    /* Agents see their own appraisals only; the office and owners see everyone's (lib/appraisal-access, 26 Oct 2026). */
+    const viewer = await appraisalViewer(req);
     /* The staged list is held for 30 s and rebuilt behind the reader up to
        two minutes (lib/appraisal-stage, stagedAppraisals); the unread counts
        are one cheap query and stay live on every call. One record is
@@ -69,7 +72,7 @@ export async function GET(req: NextRequest) {
     ]);
     /* New landlord messages, for the "new message" pill on the list and the file. */
     return NextResponse.json({
-      appraisals: rows.filter((a: { leadId?: string | null }) => !(a.leadId && othersTests.has(a.leadId))).map((a: { id: string; agent?: string | null }) => ({
+      appraisals: rows.filter((a: { leadId?: string | null; agent?: string | null }) => !(a.leadId && othersTests.has(a.leadId)) && seesAppraisal(viewer, a.agent)).map((a: { id: string; agent?: string | null }) => ({
         ...(full || sameName(a.agent, myName) ? a : maskContactFields(a)),
         unreadMessages: unread.get(a.id) ?? 0,
       })),
@@ -229,6 +232,9 @@ export async function PATCH(req: NextRequest) {
 
   const id = (b.id ?? "").trim();
   if (!id) return NextResponse.json({ error: "Which appraisal?" }, { status: 400 });
+  /* Another agent's appraisal is closed to an agent (lib/appraisal-access, 26 Oct 2026). */
+  const refused = await appraisalRefusal(req, id);
+  if (refused) return refused;
 
   if ("outcome" in b) {
     const outcome = b.outcome === "won" || b.outcome === "lost" ? b.outcome : b.outcome === null ? null : undefined;
