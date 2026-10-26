@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { SteveMood } from "@/components/SteveFace";
+import { steveSeason, type SteveSeason } from "@/lib/steve-season";
 
 /**
  * Steve as an orb (25 Oct 2026, James: "a bit of a ball ... almost like a
@@ -94,6 +95,10 @@ export default function SteveOrb({
   const ball = useRef<HTMLSpanElement>(null);
   const gaze = useRef<HTMLSpanElement>(null);
   const [hover, setHover] = useState(false);
+  /* His costume for the time of year, read once in the browser (lib/steve-season). */
+  const [season, setSeason] = useState<SteveSeason>(null);
+  useEffect(() => setSeason(steveSeason()), []);
+  const halloween = season === "halloween";
 
   /* The swirl's speed follows the mood (and the pointer), eased. */
   useEffect(() => {
@@ -173,7 +178,7 @@ export default function SteveOrb({
   return (
     <span
       ref={ref}
-      className={`sorb sorb--${mood}${hover ? " is-hover" : ""}${track ? " is-tracking" : ""} ${className}`}
+      className={`sorb sorb--${mood}${hover ? " is-hover" : ""}${track ? " is-tracking" : ""}${halloween ? " is-halloween" : ""} ${className}`}
       style={{ width: size, height: size, ["--s" as string]: `${size}px`, ...(swell ? { transform: `scale(${swell})`, transition: "transform 90ms linear" } : {}) }}
       role="img"
       aria-label={label}
@@ -181,6 +186,18 @@ export default function SteveOrb({
       onPointerLeave={() => setHover(false)}
       onPointerDown={poke}
     >
+      {/* Halloween: a vampire's cape, high collar behind his head, swaying. */}
+      {halloween && size >= 40 && (
+        <svg className="sorb-cape" viewBox="0 0 100 100" aria-hidden>
+          <path className="sorb-cape-out" d="M50 40 L17 3 L14 36 C8 56 4 78 2 98 L26 92 L50 98 L74 92 L98 98 C96 78 92 56 86 36 L83 3 Z" />
+          <path className="sorb-cape-in" d="M50 44 L21 12 L19 38 C14 56 11 74 10 90 L28 86 L50 90 L72 86 L90 90 C89 74 86 56 81 38 L79 12 Z" />
+        </svg>
+      )}
+      {halloween && size >= 50 && (
+        <svg className="sorb-bat" viewBox="0 0 24 12" aria-hidden>
+          <path d="M12 4c1-2 2-2 2-2l.5 2c2.5-2 5-3 9.5-2-2 1-3 3-3 5-1.5-1-3-1-4 .5-1-1-2.5-.5-3 .5-.5-1-2-1.5-3-.5-1-1.5-2.5-1.5-4-.5 0-2-1-4-3-5 4.5-1 7 0 9.5 2l.5-2s1 0 2 2z" />
+        </svg>
+      )}
       <span ref={ball} className="sorb-ball">
         <span className="sorb-o o1"><i /></span>
         <span className="sorb-o o2"><i /></span>
@@ -194,6 +211,12 @@ export default function SteveOrb({
           <span ref={gaze} className="sorb-gaze">
             <i />
             <i />
+            {halloween && size >= 28 && (
+              <b className="sorb-fangs">
+                <em />
+                <em />
+              </b>
+            )}
           </span>
         </span>
       )}
