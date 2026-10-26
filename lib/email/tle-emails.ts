@@ -25,7 +25,7 @@
  */
 
 import { renderTemplate } from "@/lib/email/render.js";
-import { landlordLook, tleBrand, type EmailAudience } from "@/lib/campaign-mail";
+import { landlordLook, tenantLook, tleBrand, type EmailAudience } from "@/lib/campaign-mail";
 import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
@@ -351,7 +351,7 @@ export async function renderTleEmailLive(id: string, vars: Record<string, string
 const blocks = (doc: EmailDoc, audience?: EmailAudience) => (override?: EmailDoc) =>
   renderTemplate(
     { ...doc, ...(override ?? {}), branding: doc.branding },
-    { brand: { ...tleBrand(audience), ...(audience === "landlord" ? landlordLook() : {}), ...(doc.branding ?? {}) } }
+    { brand: { ...tleBrand(audience), ...(audience === "landlord" ? landlordLook() : audience === "tenant" ? tenantLook() : {}), ...(doc.branding ?? {}) } }
   ) as { subject: string; html: string };
 const blocksAs = (audience: EmailAudience) => (doc: EmailDoc) => blocks(doc, audience);
 

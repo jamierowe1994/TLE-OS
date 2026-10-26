@@ -146,6 +146,17 @@ export function landlordLook() {
   };
 }
 
+/**
+ * The tenant look (James, 26 Oct 2026: "the same thing for the tenant ones...
+ * these are tenants, I think we can get away with a bit more"). The landlord
+ * look's type, colours and footer, with a coloured band at the top carrying
+ * the title (branding.mast picks manilla, sage, oat or ivory) and a pill
+ * button. Tenant emails only.
+ */
+export function tenantLook() {
+  return { ...landlordLook(), look: "tenant", buttonRadius: 999, contentPad: 34 };
+}
+
 type Recipient = { name?: string; email?: string; address?: string };
 
 let n = 0;

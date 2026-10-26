@@ -487,34 +487,26 @@ export const TENANT_PASSPORT_INVITE = {
   preheader: "Fill it in once and it is ready for every property you apply for.",
   mode: "blocks",
   blocks: [
-    H("tp1", "You're booked in"),
-    T(
-      "tp2",
-      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> is confirmed for <strong>{{whenPretty}}</strong>. {{meetLine}}"
-    ),
-    SP("tp3", 8),
-    DIV("tp4"),
-    H2("tp5", "While you're waiting: your tenant passport"),
+    H("tp1", "You're Booked In"),
+    T("tp2", "Hi {{firstName}},<br><br>Your viewing is confirmed. {{meetLine}}"),
+    FACTS("tp3", [["The home", "{{address}}"], ["When", "{{whenPretty}}"]]),
+    H2("tp5", "While You Wait: Your Tenant Passport"),
     T(
       "tp6",
-      "If you decide to apply, the same details get asked for every time - who you are, where you've lived, what you do, and your right to rent in the UK. Your passport is where you put them once."
+      "If you decide to apply, the same things get asked every time: who you are, where you've lived, what you do, and your right to rent in the UK. Your passport is where you put them once, and it's yours to keep."
     ),
-    T(
-      "tp7",
-      "It takes about ten minutes, you can stop and come back to it, and it stays yours. <strong>Nothing in it is shared with a landlord unless you apply for their property.</strong>"
-    ),
-    SP("tp8", 8),
-    BTN("tp9", "Start your passport", "{{link}}"),
+    T("tp7", "About ten minutes, and you can stop and come back whenever you like. <strong>Nothing in it is shared with a landlord unless you apply for their home.</strong>"),
+    BTN("tp9", "Start my passport", "{{link}}"),
     SP("tp10", 8),
-    T(
-      "tp11",
-      "Doing it now means that if this is the one, your application goes in the same day rather than waiting on documents. Good properties move quickly, and the completed applications go first."
-    ),
-    SP("tp12", 8),
-    T("tp13", "The Letting Experts"),
+    T("tp11", "If this one's the one, a finished passport means your application can go in the same day. Good homes go quickly, and complete applications go first."),
+    T("tp13", "See you there,<br>{{agentName}}"),
     FOOT("tp14", "You're getting this because you booked a viewing with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: {
+    showSignoff: false,
+    kicker: "Viewing booked",
+    heroImage: { src: `${SITE}/email/tenant/passport-ready-to-rent.png`, width: 150, alt: "A tenant passport, stamped Ready to Rent" },
+  },
 } as const;
 
 /**
@@ -658,31 +650,27 @@ export const TENANT_PASSPORT_REQUEST = {
   preheader: "About ten minutes, filled in once, and it answers every home you apply for.",
   mode: "blocks",
   blocks: [
-    H("pr1", "Your tenant passport"),
+    H("pr1", "Let's Get You Ready to Rent"),
     T(
       "pr2",
-      "Hi {{firstName}},<br><br>Thanks for getting in touch with The Letting Experts. Before we arrange any viewings, we ask everyone to fill in a short tenant passport. It tells {{agentName}} about you and what you need, so we only book you in to see homes that suit you."
+      "Hi {{firstName}},<br><br>Thanks for getting in touch. Before we book any viewings, we ask everyone to fill in a tenant passport. Think of it as your renting CV: fill it in once, and it answers every home you apply for."
     ),
-    SP("pr3", 8),
-    DIV("pr4"),
-    H2("pr5", "What it asks"),
-    T(
-      "pr6",
-      "Who is moving in, what you do and what you earn, where you've lived, any pets, and your right to rent in the UK. The same things every application asks, so you only answer them once."
-    ),
-    T(
-      "pr7",
-      "It takes about ten minutes, you can stop and come back to it, and it stays yours. <strong>Nothing in it is shared with a landlord unless you apply for their property.</strong>"
-    ),
-    SP("pr8", 8),
-    BTN("pr9", "Start your passport", "{{link}}"),
+    FACTS("pr6", [
+      ["1 · You fill it in", "About ten minutes. Stop and come back whenever you like."],
+      ["2 · We take a look", "So we only book you in for homes that suit you."],
+      ["3 · Ready to rent", "Viewings booked, and your application is good to go."],
+    ]),
+    T("pr7", "It asks who's moving in, what you do, where you've lived, any pets and your right to rent. <strong>Nothing in it is shared with a landlord unless you apply for their home.</strong>"),
+    BTN("pr9", "Start my passport", "{{link}}"),
     SP("pr10", 8),
-    T("pr11", "Once it's done, {{agentName}} will look through it and be in touch about viewings."),
-    SP("pr12", 8),
-    T("pr13", "The Letting Experts"),
+    T("pr11", "Any questions, just reply. It comes straight to us.<br><br>Speak soon,<br>The Letting Experts"),
     FOOT("pr14", "You're getting this because you enquired with The Letting Experts."),
   ],
-  branding: { showSignoff: false },
+  branding: {
+    showSignoff: false,
+    kicker: "Tenant passport",
+    heroImage: { src: `${SITE}/email/tenant/passport-ready-to-rent.png`, width: 150, alt: "A tenant passport, stamped Ready to Rent" },
+  },
 } as const;
 
 /**
