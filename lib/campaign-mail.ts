@@ -258,6 +258,11 @@ export function renderStep(
 }
 
 const BUTTON_LINE = /^\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)$/;
+/* A title: one line starting "# " (26 Oct 2026, the landlord emails). */
+const TITLE_LINE = /^#\s+([^\n]+)$/;
+/* One key fact per line, as the composer shows it: "Date: **Tuesday 20
+   October**". A paragraph made only of these is the facts as rows. */
+const FACT_LINE = /^([A-Z][A-Za-z' ]{0,23}):\s+\*\*(.+?)\*\*$/;
 
 /**
  * The same words for a plain-text part: the marks renderPlain draws taken back
@@ -268,7 +273,10 @@ export function plainTextOf(text: string): string {
     .split(/(\n{2,})/)
     .map((p) => {
       const button = p.trim().match(BUTTON_LINE);
-      return button ? `${button[1]}: ${button[2]}` : p.replace(/\*\*(.+?)\*\*/g, "$1");
+      if (button) return `${button[1]}: ${button[2]}`;
+      const title = p.trim().match(TITLE_LINE);
+      if (title) return title[1];
+      return p.replace(/\*\*(.+?)\*\*/g, "$1");
     })
     .join("");
 }
@@ -287,13 +295,25 @@ export function renderPlain(subject: string, text: string, opts: { landlord?: bo
     .map((p) => p.trim())
     .filter(Boolean);
   const blocks: Record<string, unknown>[] = [
-    ...paras.map((p) => {
+    ...paras.map((p, i) => {
       /* Two marks an agent can type and read in the composer (James, 16 Sep
          2026): a paragraph that is only [Label](https://...) becomes a button,
          and **words** go bold - the date, the address, who is coming. */
       const button = p.match(BUTTON_LINE);
       if (button) {
         return { type: "button", id: id(), text: button[1], url: button[2], align: "left", color: "", pad: { t: 16, r: 22, b: 16, l: 22 } };
+      }
+      /* "# Words" as the opening line is the email's title, as the block
+         emails have one (26 Oct 2026). Only first, so a stray # further down
+         stays words. */
+      const title = i === 0 ? p.match(TITLE_LINE) : null;
+      if (title) return { type: "heading", id: id(), text: title[1], align: "left", color: "", size: 30 };
+      /* On the landlord look, a paragraph that is only "Label: **value**"
+         lines is the key facts as rows (the "facts" block): the date, the
+         time, the address, the rent. Elsewhere it stays bold lines. */
+      const lines = p.split("\n").map((l) => l.trim());
+      if (opts.landlord && lines.every((l) => FACT_LINE.test(l))) {
+        return { type: "facts", id: id(), text: lines.map((l) => { const m = l.match(FACT_LINE)!; return `${m[1]}|${m[2]}`; }).join("\n") };
       }
       return { type: "text", id: id(), text: p.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"), bg: "" };
     }),

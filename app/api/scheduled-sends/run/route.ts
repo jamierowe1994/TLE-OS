@@ -12,6 +12,7 @@ import { RexWriteBlocked } from "@/lib/rex";
 import { findUserById } from "@/lib/users";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { plainTextOf, renderPlain } from "@/lib/campaign-mail";
+import { APPRAISAL_KICKERS } from "@/lib/appraisal-email";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { VIDEO_CHASE_KIND, videoRecorded } from "@/lib/video-chase";
@@ -300,7 +301,9 @@ export async function POST(req: NextRequest) {
       if (!queuer) {
         throw new Error("Whoever queued this no longer has an account here, so it cannot go out in their name.");
       }
-      const mail = renderPlain(row.subject, row.body);
+      /* The pre-appraisal goes to the landlord: their letterhead. Every other
+         kind on this road keeps the plain one (26 Oct 2026). */
+      const mail = renderPlain(row.subject, row.body, row.kind === "pre-appraisal" ? { landlord: true, kicker: APPRAISAL_KICKERS.pre } : {});
       const out = await sendAsAgent({
         me: queuer,
         to: row.to_email,

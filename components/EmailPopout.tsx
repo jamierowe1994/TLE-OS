@@ -25,6 +25,7 @@ export default function EmailPopout({
   onClose,
   onSent,
   extra,
+  kind,
 }: {
   title: string;
   to?: string | null;
@@ -37,6 +38,8 @@ export default function EmailPopout({
   onSent: () => void;
   /** An extra action for the footer (the calendar file on a confirmation). */
   extra?: React.ReactNode;
+  /** Which appraisal email, for the label on the landlord letterhead. */
+  kind?: "confirm" | "pre" | "post";
 }) {
   const [subj, setSubj] = useState(subject);
   const [text, setText] = useState(body);
@@ -50,7 +53,7 @@ export default function EmailPopout({
       const res = await fetch("/api/appraisal-email", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ to, contactId, subject: subj, text }),
+        body: JSON.stringify({ to, contactId, subject: subj, text, kind }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Send failed.");

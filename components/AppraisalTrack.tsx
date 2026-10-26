@@ -1112,6 +1112,7 @@ export default function AppraisalTrack({
 
       {composing && invite && (
         <EmailPopout
+          kind={composing}
           title={
             composing === "confirm"
               ? "Confirming the appointment"

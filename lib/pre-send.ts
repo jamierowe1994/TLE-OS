@@ -6,7 +6,7 @@ import { createPresentation, presentationsFor } from "@/lib/present-store";
 import { presentAgentFor } from "@/lib/rex-agents";
 import { agentProfile } from "@/lib/agent-profile";
 import { STANDARD_FEES, firstNameOf, type PresentDeck } from "@/lib/present";
-import { bodyFor, subjectFor, type AppraisalInvite } from "@/lib/appraisal-email";
+import { APPRAISAL_KICKERS, bodyFor, subjectFor, type AppraisalInvite } from "@/lib/appraisal-email";
 import { renderPlain } from "@/lib/campaign-mail";
 import { sendAsAgent, type AgentSendResult } from "@/lib/send-as-agent";
 import { sendEmail } from "@/lib/resend";
@@ -243,7 +243,7 @@ export async function sendPreNow(opts: { ma: MarketAppraisal; me: OsUser; origin
     [id]
   );
   if (!claimed[0]) return { sent: true, at: null, detail: "It is on its way." };
-  const mail = renderPlain(claimed[0].subject, claimed[0].body);
+  const mail = renderPlain(claimed[0].subject, claimed[0].body, { landlord: true, kicker: APPRAISAL_KICKERS.pre });
   const out = await sendAsAgent({ me: sender, to: claimed[0].to_email, subject: mail.subject, html: mail.html }).catch(
     (e): AgentSendResult => ({ sent: false, via: null, timeline: false, reason: "refused", detail: e instanceof Error ? e.message : "It did not send." })
   );

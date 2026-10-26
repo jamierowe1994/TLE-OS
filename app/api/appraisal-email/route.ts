@@ -4,6 +4,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { renderPlain } from "@/lib/campaign-mail";
 import { sendAsAgent } from "@/lib/send-as-agent";
+import { APPRAISAL_KICKERS, type AppraisalEmailKind } from "@/lib/appraisal-email";
 
 /**
  * The appraisal emails: confirming the appointment, before the visit, after it.
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
   const me = userId ? await findUserById(userId) : null;
   if (!me) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
-  let body: { contactId?: string; to?: string; subject?: string; text?: string; name?: string };
+  let body: { contactId?: string; to?: string; subject?: string; text?: string; name?: string; kind?: string };
   try {
     body = await req.json();
   } catch {
@@ -71,7 +72,11 @@ export async function POST(req: NextRequest) {
 
   /* On the letterhead, not as a wall of plain text. The agent writes the
      words; the logo, the type and the footer are not theirs to remember. */
-  const mail = renderPlain(subject, text);
+  /* Every email on this road goes to the landlord (components/EmailPopout,
+     opened from AppraisalTrack), so it is on their letterhead; `kind` says
+     which one, for the label top right (26 Oct 2026). */
+  const kicker = body.kind && body.kind in APPRAISAL_KICKERS ? APPRAISAL_KICKERS[body.kind as AppraisalEmailKind] : undefined;
+  const mail = renderPlain(subject, text, { landlord: true, kicker });
   const sent = await sendAsAgent({
     me,
     to,

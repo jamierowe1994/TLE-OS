@@ -33,6 +33,18 @@ export type AppraisalInvite = {
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
 
 /**
+ * The small label top right on the landlord letterhead (renderPlain's
+ * `kicker`, 26 Oct 2026), one per appraisal email, so every road that sends
+ * one - the composer, the queue, the confirmation sheet - says the same.
+ */
+export const APPRAISAL_KICKERS = {
+  confirm: "Market appraisal",
+  pre: "Before the visit",
+  post: "Your valuation",
+} as const;
+export type AppraisalEmailKind = keyof typeof APPRAISAL_KICKERS;
+
+/**
  * The day and the time apart, so each can sit on its own line. From the ISO
  * start where there is one, pinned to UK time so a browser elsewhere cannot
  * move it; otherwise split out of whenPretty, which reads "Tuesday 20 October
@@ -72,15 +84,20 @@ export function bodyFor(i: AppraisalInvite): string {
   const when = day ? ` on **${day}${time ? ` at ${time}` : ""}**` : "";
   const weekday = weekdayOf(i);
 
+  /* The visit's date and time stay as the FIRST " on **...**" in the words:
+     the queue reads them back to spot a visit moved after this was written
+     (preAppraisalStillStands in app/api/scheduled-sends/run). */
   const deck = i.presentationUrl
-    ? `Before we meet, I've put together a short pre-presentation for you. It covers who's coming, what happens on the day, how long it takes, and a few things that might help with any questions you have about the valuation.
+    ? `I've put together a short pre-presentation for you. It covers who's coming, what happens on the day and how long it takes, plus a few things that might help with any questions you have about the valuation.
 
 [View your pre-presentation](${i.presentationUrl})
 
-It opens straight away, there's nothing to sign up for.`
+It opens straight away. There's nothing to sign up for.`
     : `It usually takes ${lengthWords(i.minutes)}. I'll walk round with you, take a few notes, and we'll talk through what it should let for and how quickly.`;
 
-  return `Hi ${first(i.landlordName)},
+  return `# ${i.presentationUrl ? "A Quick Look Before We Meet" : "Before We Meet"}
+
+Hi ${first(i.landlordName)},
 
 I'm looking forward to seeing you at **${i.address}**${when}.
 
@@ -200,9 +217,19 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
     f.feePercent != null && `Our fee: **${incVat(f.feePercent)}% of the rent, including VAT**`,
   ].filter(Boolean) as string[];
 
-  const lines: string[] = [`Hi ${first(i.landlordName)},`, "", `Thanks for showing me round ${i.address}.`, ""];
+  const lines: string[] = [
+    `# ${facts.length ? "Your Valuation in Writing" : "Thanks for Showing Me Round"}`,
+    "",
+    `Hi ${first(i.landlordName)},`,
+    "",
+    facts.length
+      ? `Thanks for showing me round ${i.address}. Here's where we landed, so you have it in writing:`
+      : `Thanks for showing me round ${i.address}.`,
+    "",
+  ];
 
-  if (facts.length) lines.push("Here's where we landed:", "", facts.join("\n"), "");
+  /* "Label: **value**" lines, which the landlord letterhead draws as rows. */
+  if (facts.length) lines.push(facts.join("\n"), "");
 
   if (f.fileUrl) {
     lines.push(
@@ -210,11 +237,11 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
       "",
       `[View your presentation](${f.fileUrl})`,
       "",
-      "Have a look and let me know what you think. If you have any questions, just reply to this email.",
+      "Have a look and let me know what you think. Any questions, just reply to this email and they come straight to me.",
       ""
     );
   } else {
-    lines.push("Have a think and let me know what you'd like to do. If you have any questions, just reply to this email.", "");
+    lines.push("Have a think and let me know what you'd like to do. Any questions, just reply to this email and they come straight to me.", "");
   }
 
   lines.push("Kind regards,", i.agentName, "The Letting Experts");
@@ -273,17 +300,29 @@ function lengthWords(mins: number): string {
  * missed. Without them - a preview on a screen that cannot sign a link - the
  * words stay as they were.
  */
-export function confirmBodyFor(i: AppraisalInvite, calendarLines?: string): string {
+export function confirmBodyFor(i: AppraisalInvite, calendarLines?: string, moved = false): string {
   const { day, time } = dayAndTime(i);
+  /* "Label: **value**" on their own lines: rows on the landlord letterhead,
+     still plain lines in the composer and a text-only inbox. */
   const rows = [
     day && `Date: **${day}**`,
     time && `Time: **${time}**`,
     `Where: **${i.address}**`,
-    `With: **${i.agentName}**`,
+    `Your agent: **${i.agentName}**`,
   ].filter(Boolean);
-  return `Hi ${first(i.landlordName)},
+  /* Rearranged: it says so, title first (lib/appraisal-confirm). */
+  const opening = moved
+    ? `# Your Market Appraisal Has Moved
 
-Thanks for booking in. Putting this in writing so you have it:
+Hi ${first(i.landlordName)},
+
+Your market appraisal has a new time. Here are the details, so you have them in writing:`
+    : `# Your Market Appraisal Is Booked
+
+Hi ${first(i.landlordName)},
+
+Thanks for booking in. Here are the details in writing, so they're easy to find later:`;
+  return `${opening}
 
 ${rows.join("\n")}
 
@@ -291,7 +330,7 @@ ${calendarLines ? `It takes ${lengthWords(i.minutes)}. Press the button to put i
 
 ${calendarLines}` : `It takes ${lengthWords(i.minutes)}, and the calendar invite is attached so it goes straight in your diary.`}
 
-There's nothing you need to do before then. I'm also sending you a short pre-presentation so you know who's coming and what happens on the day.
+There's nothing you need to do before then. I'll also send you a short pre-presentation, so you know who's coming and what happens on the day.
 
 If the time stops working, just ${i.agentPhone ? `reply or ring me on ${i.agentPhone}` : "reply to this email"} and we'll move it.
 

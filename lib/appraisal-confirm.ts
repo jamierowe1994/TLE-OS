@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { getAppraisal } from "@/lib/appraisal-store";
-import { confirmBodyFor, confirmSubjectFor, icsFor, type AppraisalInvite } from "@/lib/appraisal-email";
+import { APPRAISAL_KICKERS, confirmBodyFor, confirmSubjectFor, icsFor, type AppraisalInvite } from "@/lib/appraisal-email";
 import { renderPlain } from "@/lib/campaign-mail";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
@@ -47,6 +47,9 @@ export interface ConfirmationResult {
 }
 
 const PROFILE_KEY = "tle-profile-v1";
+
+/* Every email here goes to the landlord: on their letterhead (26 Oct 2026). */
+const LANDLORD = { landlord: true, kicker: APPRAISAL_KICKERS.confirm } as const;
 
 /** The agent's phone, from the profile they filled in. Empty when they did not. */
 async function phoneOf(userId: string): Promise<string> {
@@ -139,13 +142,10 @@ async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsave
         uid: `ma-${full.id}`,
       }, origin)
     : null;
-  let text = confirmBodyFor(invite, links ? calendarLinesFor(links) : undefined);
-  if (moved) {
-    /* A second "Confirmed" with a different time and nothing else reads as
-       two appointments. Say it moved. Wording for James to approve. */
-    subject = subject.replace(/^Confirmed - /, "Moved - ");
-    text = text.replace("Thanks for booking in. Putting this in writing so you have it:", "Your market appraisal has moved. Here are the new details, so you have them in writing:");
-  }
+  /* A second "Confirmed" with a different time and nothing else reads as
+     two appointments. Say it moved, in the title and the words. */
+  const text = confirmBodyFor(invite, links ? calendarLinesFor(links) : undefined, moved);
+  if (moved) subject = subject.replace(/^Confirmed - /, "Moved - ");
   return { full, invite, prev, moved, subject, text, links };
 }
 
@@ -157,7 +157,7 @@ export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me:
     to: to.includes("@") ? to : null,
     toName: full.landlord,
     subject,
-    html: renderPlain(subject, text).html,
+    html: renderPlain(subject, text, LANDLORD).html,
     blocked: !full.appointmentAt
       ? "There is no time on this appraisal, so there is nothing to confirm yet."
       : !to.includes("@")
@@ -196,7 +196,7 @@ export async function sendBookingConfirmation(input: {
   }
 
   const subject = (input.subject ?? "").trim() || templSubject;
-  const html = input.html ? cleanEmailHtml(input.html) : renderPlain(subject, text).html;
+  const html = input.html ? cleanEmailHtml(input.html) : renderPlain(subject, text, LANDLORD).html;
   const ics = links ? null : icsFor(invite, new Date().toISOString());
 
   /* From the agent's own Outlook where that is armed, our sender otherwise:
@@ -257,7 +257,7 @@ export async function draftCancelNotice(input: { id: string; me: OsUser }): Prom
     to: to.includes("@") ? to : null,
     toName: p.full.landlord,
     subject: p.subject,
-    html: renderPlain(p.subject, p.text).html,
+    html: renderPlain(p.subject, p.text, LANDLORD).html,
     blocked: !p.full.cancelledAt
       ? "This appraisal is booked, not cancelled, so there is nothing to tell them."
       : !to.includes("@")
@@ -278,7 +278,7 @@ export async function sendCancelNotice(input: { id: string; me: OsUser; subject?
     return { sent: false, to, reason: `Already sent to ${p.prev!.to} on ${sentWords(p.prev!.sentAt)}.`, alreadySent: true };
   }
   const subject = (input.subject ?? "").trim() || p.subject;
-  const html = input.html ? cleanEmailHtml(input.html) : renderPlain(subject, p.text).html;
+  const html = input.html ? cleanEmailHtml(input.html) : renderPlain(subject, p.text, LANDLORD).html;
   const out = await sendAsAgent({ me: input.me, to, toName: p.full.landlord, subject, html });
   if (!out.sent) return { sent: false, to, reason: out.detail };
   await recordSent(cancelKey(p.full), { sentAt: new Date().toISOString(), startsAt: p.was, to, subject, by: input.me.email });
