@@ -23,6 +23,7 @@ export const LABEL: Record<string, string> = {
   spacer: "Space",
   quote: "Quote",
   faq: "Q&A",
+  facts: "Key facts",
   social: "Social links",
   logo: "Logo",
   code: "HTML / Embed",
@@ -327,6 +328,20 @@ export function Inspector({ block, patch, uploadImage }: { block: Block; patch: 
               value={s("html")}
               onChange={(e) => patch("html", e.target.value)}
               rows={12}
+              spellCheck={false}
+              className={`${inputCls} font-mono text-[11.5px] leading-relaxed`}
+            />
+          </Field>
+        </Group>
+      )}
+
+      {t === "facts" && (
+        <Group title="Content">
+          <Field label="Rows" hint="One per line: the label, a | , then the value. A row whose value is still a {{placeholder}} is left out when it sends.">
+            <textarea
+              value={s("text")}
+              onChange={(e) => patch("text", e.target.value)}
+              rows={6}
               spellCheck={false}
               className={`${inputCls} font-mono text-[11.5px] leading-relaxed`}
             />
