@@ -15,7 +15,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import FloatSheet, { FloatChoice, FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
 import CategoryIcon from "@/components/maintenance/CategoryIcon";
 
-type Group = "property" | "what" | "urgency" | "when" | "tenant" | "landlord" | "check";
+type Group = "property" | "what" | "urgency" | "when" | "contractor" | "tenant" | "access" | "landlord" | "check";
 
 /** A tenant on a planned job, ticked in or out of the works order. */
 type TenantRow = JobTenant & { on: boolean };
@@ -93,6 +93,10 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     draft?.tenants ?? (draft?.tenant ? [{ name: draft.tenant, phone: draft.tenantPhone ?? "", email: draft.tenantEmail ?? "", on: true }] : [])
   );
   const [adding, setAdding] = useState<JobTenant | null>(null);
+  /* A tenant's name, number or email put right on the spot (James, 27 Oct
+     2026: "if we spot something that's wrong, we should be able to change it
+     on the fly"). For this job's works order and emails. */
+  const [editing, setEditing] = useState<number | null>(null);
   const [landlordEmail, setLandlordEmail] = useState(draft?.landlordEmail ?? "");
   const [landlordMobile, setLandlordMobile] = useState(draft?.landlordMobile ?? "");
   const [landlordName, setLandlordName] = useState(draft?.landlordName ?? "");
@@ -214,6 +218,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const lead = planned ? 0 : Math.min(reporter, Math.max(0, ticked.length - 1));
   const onJobCount = ticked.length;
   const onJob = useMemo(() => (lead > 0 ? [ticked[lead], ...ticked.filter((_, i) => i !== lead)] : ticked), [ticked, lead]);
+  /* Which tenant reported it is marked on their own row, on the tenants
+     screen (James, 27 Oct 2026: "I can't seem to see where that sits"). */
+  const canMarkReporter = !planned && reportedBy === "Tenant" && onJobCount > 1;
 
   /* A planned job carries the date the certificate we hold runs out, so
      picking the home and the category fills it in - the soonest of them, when
@@ -307,17 +314,22 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
        Tenants and access   required  someone to ring, or a way in
        The landlord         optional  nothing goes to them when a job is raised;
                                       telling them is the job's first step after */
+  /* Shorter screens, more of them (James, 27 Oct 2026: "I would rather there
+     be more steps and shorter phases"): the urgency on its own, then the
+     contractor; the tenants on their own, then access and telling them. */
   const steps: { id: Group; title: string; blurb: string; required: boolean; why: string }[] = [
     ...(picked && !moving ? [] : [{ id: "property" as const, title: "Which property", blurb: moving ? "Pick the right home. Its tenants and landlord fill in again." : "Start typing the address.", required: true, why: "So the job sits on the right home and the contractor knows where to go." }]),
     kind === "repair"
-      ? { id: "what", title: "What's wrong", blurb: "In a few words, then whatever the tenant told you.", required: true, why: "So the contractor knows what they're coming to, and the category picks the trade." }
+      ? { id: "what", title: "What's wrong", blurb: "In a few words, then whatever the tenant told you, and the kind of job.", required: true, why: "So the contractor knows what they're coming to, and the category picks the trade." }
       : { id: "what", title: "The job", blurb: "What needs doing, every category the visit covers, and anything the contractor should know.", required: true, why: "So the contractor knows what the visit covers, and the category picks the trade." },
     kind === "repair"
-      ? { id: "urgency", title: "Urgency and contractor", blurb: "How soon a contractor has to attend, and who is doing it.", required: true, why: "The urgency sets how soon the contractor has to attend, and when the job is late." }
-      : { id: "when", title: "Expiry and contractor", blurb: "When the current certificate runs out, and who is doing it.", required: true, why: "The expiry date is the deadline the job is chased against." },
+      ? { id: "urgency", title: "How urgent", blurb: "How soon a contractor has to attend, and who told us about it.", required: true, why: "The urgency sets how soon the contractor has to attend, and when the job is late." }
+      : { id: "when", title: "Expiry date", blurb: "When the current certificate runs out, and where the job came from.", required: true, why: "The expiry date is the deadline the job is chased against." },
+    { id: "contractor", title: "Contractor", blurb: planned ? "Who's doing it, and the date if one is already agreed." : "Who's doing it, anyone else to price it, and the date if one is already agreed.", required: false, why: "" },
     planned
-      ? { id: "tenant", title: "Tenants and access", blurb: "The contractor arranges a time with them directly. Untick anyone who shouldn't be on it.", required: true, why: "The contractor needs someone to ring, or a way in, to arrange the visit." }
-      : { id: "tenant", title: "Tenants and access", blurb: "Every tenant goes on the works order so the contractor can ring them. Untick anyone who shouldn't be on it.", required: true, why: "The contractor needs someone to ring, or a way in, to arrange the visit." },
+      ? { id: "tenant", title: "Tenants", blurb: "Everyone ticked goes on the works order. The contractor arranges a time with them directly.", required: true, why: "The contractor needs someone to ring to arrange the visit. Put right anything that's wrong with Edit." }
+      : { id: "tenant", title: "Tenants", blurb: "Everyone ticked goes on the works order so the contractor can ring them.", required: true, why: "The contractor needs someone to ring to arrange the visit. Put right anything that's wrong with Edit." },
+    { id: "access", title: "Access and the tenants", blurb: "How the contractor gets in, and whether the tenants hear from us.", required: true, why: "The contractor needs someone to ring, or a way in." },
     { id: "landlord", title: "The landlord", blurb: "Who the job is reported to, and how they hear about it. Nothing goes to them when you raise it.", required: false, why: "" },
     contractor
       ? { id: "check", title: `Send to ${contractor.name}`, blurb: "This is the works order they'll get. Nothing goes until you press Send.", required: false, why: "" }
@@ -335,7 +347,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     }
     if (id === "urgency") return kind === "repair" && !urgency ? "How urgent is it? Pick one." : null;
     if (id === "when") return planned && !dueAt ? "When does it expire?" : null;
-    if (id === "tenant") return reachable ? null : "Add someone the contractor can ring, or access notes for how to get in.";
+    if (id === "access") return reachable ? null : "Add someone the contractor can ring, or access notes for how to get in.";
     return null;
   }
   /* The optional steps passed by with Skip for now. Going through one again
@@ -343,6 +355,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const [skipped, setSkipped] = useState<Set<Group>>(new Set());
   const [step, setStep] = useState(draft?.step ?? 0);
   const [dir, setDir] = useState<1 | -1>(1);
+  /* The furthest screen reached, so the step list can go back to any of them. */
+  const [furthest, setFurthest] = useState(draft?.step ?? 0);
+  useEffect(() => setFurthest((f) => Math.max(f, step)), [step]);
   const here = steps[Math.min(step, steps.length - 1)];
   const at = (g: Group) => !stepped || here.id === g;
   const last = step >= steps.length - 1;
@@ -432,6 +447,73 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const contractorHasEmail = !!contractor?.email?.includes("@");
   const back = () => (moving ? backToCheck() : step === 0 ? onClose() : go(-1));
 
+  const checkSkipped = stepped && at("check") && skipped.size > 0 && (
+            <div className={F ? "nl-fs-card sm:col-span-2" : "rounded-xl border border-dashed border-line bg-white px-4 py-3 sm:col-span-2"}>
+              <p className="text-[12.5px] font-semibold">Skipped for now</p>
+              <ul className="mt-1.5 space-y-1.5">
+                {steps.filter((x) => skipped.has(x.id)).map((x) => (
+                  <li key={x.id} className="flex items-center justify-between gap-3 text-[12px]">
+                    <span className="min-w-0 text-muted">{x.title}: not checked. It goes as it&apos;s on file and the job notes it was skipped, so you can fill it in there.</span>
+                    <button type="button" onClick={() => jump(x.id)} className="shrink-0 text-[11.5px] font-semibold underline underline-offset-2 hover:text-accent-dark">Add now</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+  const checkSummary = stepped && at("check") && (
+            <dl className={F ? "nl-fs-card is-tight m-0 divide-y divide-line/50 text-[12.5px] sm:col-span-2" : "divide-y divide-line/50 overflow-hidden rounded-xl border border-line/60 bg-white text-[12.5px] sm:col-span-2"}>
+              {([
+                ["Property", "property", [picked ? `${picked.name}${picked.locality ? `, ${picked.locality}` : ""}` : manual.trim() || "—"].join("")],
+                [steps.find((x) => x.id === "what")!.title, "what", [title || "—", category, description].filter(Boolean).join(" · ")],
+                kind === "repair"
+                  ? ["Urgency", "urgency", [URGENCIES.find((u) => u.id === urgency)?.label ?? "urgency not picked", `reported by ${reportedBy.toLowerCase()}`].join(" · ")]
+                  : ["Expiry", "when", dueAt ? `expires ${sayDate(dueAt)}` : "—"],
+                ["Contractor", "contractor", [contractor?.name ?? "no contractor yet", scheduledAt ? `booked ${sayDate(scheduledAt, true)}` : null].filter(Boolean).join(" · ")],
+                ["Tenants", "tenant", onJob.length ? onJob.map((t, i) => `${t.name}${t.room ? ` (${t.room})` : ""}${i === 0 && canMarkReporter ? " - reported it" : ""}`).join(", ") : "none on the works order"],
+                ["Access", "access", [
+                  planned
+                    ? tellTenants ? (onJob.some((t) => t.email) ? "tenants told who will be in touch" : "no emails to tell the tenants") : "tenants not told"
+                    : tellTenants ? (onJob.some((t) => t.email) ? (contractor ? `tenants told ${contractor.name} will be in touch` : "tenants told once it goes to a contractor") : "no emails to tell the tenants") : "tenants not told - discreet",
+                  access ? `access: ${access}` : null,
+                ].filter(Boolean).join(" · ")],
+                ["Landlord", "landlord", landlordSkipped ? "Skipped - not involved, not emailed" : [landlordName || "—", landlordEmail ? `emailed at ${landlordEmail}` : "not emailed", landlordMobile || null].filter(Boolean).join(" · ")],
+              ] as [string, Group, string][]).map(([k, g, v]) => (
+                <div key={g} className={F ? "flex items-start gap-3 py-3" : "flex items-start gap-3 px-3.5 py-2.5"}>
+                  <div className="min-w-0 flex-1">
+                    <dt className={F ? "flex items-center gap-2 text-[12px] text-muted" : "flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted"}>
+                      {k}
+                      {skipped.has(g) && <span className={F ? "text-[11.5px] text-[var(--warning)]" : "rounded-full border border-line/80 px-2 py-0.5 text-[9.5px]"}>Skipped</span>}
+                    </dt>
+                    <dd className={F ? "m-0 mt-0.5 break-words text-[13.5px]" : "mt-0.5 break-words"}>{skipped.has(g) ? `Not checked - as on file: ${v}` : v}</dd>
+                  </div>
+                  <button type="button" onClick={() => jump(g)} className="shrink-0 text-[11px] text-muted underline underline-offset-2 hover:text-ink">{skipped.has(g) ? "Add now" : "Change"}</button>
+                </div>
+              ))}
+            </dl>
+          );
+  const checkOrder = stepped && at("check") && canSend && (
+            <div className={card("sm:col-span-2")}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className={label}>The works order</p>
+                <p className="text-[11.5px] text-muted">To {contractor!.name}{contractorHasEmail ? ` · ${contractor!.email}` : ""}</p>
+              </div>
+              {!contractorHasEmail ? (
+                <p className="mt-1 rounded-xl border border-accent-dark/40 bg-accent-soft/40 px-4 py-3 text-[12.5px]">{contractor!.name} has no email in the book, so nothing can be sent. Plan it and ring them, or add their email on the Contractors list.</p>
+              ) : !preview || preview.key !== previewKey ? (
+                <div className="mt-1 flex h-40 items-center justify-center gap-2 rounded-xl border border-line/60 bg-white text-[12px] text-muted">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent-dark" aria-hidden /> Writing the works order…
+                </div>
+              ) : "error" in preview ? (
+                <p className="mt-1 rounded-xl border border-line/60 bg-white px-4 py-3 text-[12.5px] text-accent-dark">{preview.error}</p>
+              ) : (
+                <div className="mt-1 overflow-hidden rounded-xl border border-line/60 bg-white">
+                  <p className="border-b border-line/50 px-4 py-2.5 text-[12.5px]"><span className="text-muted">Subject:</span> {preview.subject}</p>
+                  <iframe title="The works order" srcDoc={preview.html} sandbox="" className="block h-[380px] w-full bg-white" />
+                </div>
+              )}
+            </div>
+          );
+
   const fields = (
     <>
           {at("property") && (
@@ -472,7 +554,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           </div>
           )}
 
-          {at("what") && (
+          {at("what") && !F && (
           <div className={card("sm:col-span-2")}>
             <label className={label}>{kind === "repair" ? "What is wrong" : "The job"}</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === "repair" ? "Boiler not firing, no hot water" : "Annual gas safety"} className={`mt-1 ${field}`} />
@@ -480,29 +562,42 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           )}
 
           {at("what") && F && (
-            /* The floating look: every category as a tile to tap, with its
-               icon, straight on the dark - the same ticks, the same field. */
-            <div className="sm:col-span-2">
-              <p className="nl-fs-lb mb-2">{planned ? "What the visit covers" : "What kind of job"} <em>- tick as many as it needs</em></p>
-              <div className="nl-fs-tiles" role="group" aria-label="Category">
-                {cats.map((c) => {
-                  const on = picks.includes(c);
-                  return (
-                    <button
-                      key={c}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => setCategory(joinCategories(on ? picks.filter((x) => x !== c) : [...picks, c]))}
-                      className={`nl-fs-tile${on ? " is-on" : ""}`}
-                    >
-                      <span className="nl-fs-tile-i"><CategoryIcon name={c} /></span>
-                      <span className="nl-fs-tile-t">{c}</span>
-                      {on && (
-                        <svg className="nl-fs-tile-tick" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-                      )}
-                    </button>
-                  );
-                })}
+            /* The floating look, across the width (James, 27 Oct 2026): what's
+               wrong and the detail on the left, every category as a tile to
+               tap on the right - the same ticks, the same field. */
+            <div className="grid gap-3 sm:col-span-2 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+              <div className="grid content-start gap-3">
+                <div className={card("")}>
+                  <label className={label}>{kind === "repair" ? "What is wrong" : "The job"}</label>
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === "repair" ? "Boiler not firing, no hot water" : "Annual gas safety"} className={`mt-1 ${field}`} />
+                </div>
+                <div className={card("")}>
+                  <label className={label}>Detail<em> - optional</em></label>
+                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={5} placeholder={kind === "repair" ? "What the tenant said, where it is, when it started." : "Anything the contractor needs to know."} className={`mt-1 ${field}`} />
+                </div>
+              </div>
+              <div>
+                <p className="nl-fs-lb mb-2">{planned ? "What the visit covers" : "What kind of job"} <em>- tick as many as it needs</em></p>
+                <div className="nl-fs-tiles" role="group" aria-label="Category">
+                  {cats.map((c) => {
+                    const on = picks.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setCategory(joinCategories(on ? picks.filter((x) => x !== c) : [...picks, c]))}
+                        className={`nl-fs-tile${on ? " is-on" : ""}`}
+                      >
+                        <span className="nl-fs-tile-i"><CategoryIcon name={c} /></span>
+                        <span className="nl-fs-tile-t">{c}</span>
+                        {on && (
+                          <svg className="nl-fs-tile-tick" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -527,11 +622,12 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           )}
 
           {at("urgency") && kind === "repair" && (F ? (
+            /* Side by side, and the one picked is filled in its own colour -
+               red, coral, sage - not a thin ring (James, 27 Oct 2026). */
             <div className="sm:col-span-2">
-              <p className="nl-fs-lb mb-2">How urgent{!urgency && " - pick one"}</p>
-              <div className="nl-fs-choices">
+              <div className="nl-rj-urg" role="radiogroup" aria-label="How urgent">
                 {URGENCIES.map((u) => (
-                  <FloatChoice key={u.id} on={urgency === u.id} onClick={() => setUrgency(u.id)} icon={<CategoryIcon name={u.id === "emergency" ? "bolt" : u.id === "urgent" ? "clock" : "calendar"} />} title={u.label} text={u.blurb} aside={<span className="text-muted">{u.within}</span>} />
+                  <FloatChoice key={u.id} on={urgency === u.id} tone={u.id === "emergency" ? "red" : u.id === "urgent" ? "coral" : "sage"} onClick={() => setUrgency(u.id)} icon={<CategoryIcon name={u.id === "emergency" ? "bolt" : u.id === "urgent" ? "clock" : "calendar"} />} title={u.label} text={u.blurb} aside={<span>Within {u.within}</span>} />
                 ))}
               </div>
             </div>
@@ -540,7 +636,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               <label className={label}>How urgent{!urgency && <span className="font-normal normal-case tracking-normal"> - pick one</span>}</label>
               <div className="mt-1 flex gap-1.5">
                 {URGENCIES.map((u) => (
-                  <button key={u.id} type="button" onClick={() => setUrgency(u.id)} title={u.blurb} className={`flex-1 rounded-lg border px-2 py-2 text-[11.5px] ${urgency === u.id ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark" : "border-line/80 text-muted"}`}>
+                  <button key={u.id} type="button" onClick={() => setUrgency(u.id)} title={u.blurb} className={`flex-1 rounded-lg border px-2 py-2 text-[11.5px] transition-colors ${urgency === u.id ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80 text-muted hover:border-ink/40"}`}>
                     {u.label}
                     <span className="block text-[9.5px] font-normal opacity-70">{u.within}</span>
                   </button>
@@ -549,7 +645,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             </div>
           ))}
 
-          {at("what") && (
+          {at("what") && !F && (
           <div className={card("sm:col-span-2")}>
             <label className={label}>Detail{F ? <em> - optional</em> : <span className="font-normal normal-case tracking-normal"> - optional</span>}</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder={kind === "repair" ? "What the tenant said, where it is, when it started." : "Anything the contractor needs to know."} className={`mt-1 ${field}`} />
@@ -578,7 +674,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           </div>
           )}
 
-          {at(planned ? "when" : "urgency") && (
+          {at("contractor") && (
             <div className={F ? "grid gap-3 sm:col-span-2 sm:grid-cols-2" : "grid gap-x-5 gap-y-4 sm:col-span-2 sm:grid-cols-2"}>
               <div className={card("")}>
                 <label className={label}>Contractor{opt}</label>
@@ -624,7 +720,67 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           )}
 
           {/* ── the tenants: every one in the house, on either kind of job ── */}
-          {at("tenant") && (
+          {at("tenant") && F && (
+            <div className={card("sm:col-span-2")}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <label className={label}>{rows.length > 1 ? `On the works order - ${onJob.length} of ${rows.length}` : "On the works order"}</label>
+                {canMarkReporter && <span className="text-[12px] text-muted">Reported by a tenant - mark which one</span>}
+              </div>
+              {rows.length > 0 && (
+                <ul className="m-0 mt-1 list-none p-0">
+                  {rows.map((t, i) => {
+                    const tickAt = t.on ? rows.slice(0, i).filter((x) => x.on).length : -1;
+                    const isReporter = canMarkReporter && tickAt === lead;
+                    const setRow = (patch: Partial<TenantRow>) => setRows((cur) => cur.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                    return (
+                      <li key={i} className={`nl-rj-ten${t.on ? "" : " is-off"}`}>
+                        <input type="checkbox" checked={t.on} aria-label={`${t.name || "This tenant"} on the works order`} onChange={(e) => setRow({ on: e.target.checked })} />
+                        <div className="nl-rj-ten-b">
+                          <b>{t.name || "No name"}{t.room ? <span className="font-normal text-muted"> · {t.room}</span> : null}</b>
+                          <small>{[t.phone || "no number", t.email || "no email"].join(" · ")}</small>
+                        </div>
+                        <div className="nl-rj-ten-x">
+                          {canMarkReporter && t.on && (
+                            <button type="button" aria-pressed={isReporter} onClick={() => setReporter(tickAt)} className={`nl-rj-pill${isReporter ? " is-on" : ""}`}>
+                              {isReporter ? "Reported it" : "Reported it?"}
+                            </button>
+                          )}
+                          {editing !== i && <button type="button" aria-expanded={false} onClick={() => setEditing(i)} className="nl-rj-pill">Edit</button>}
+                        </div>
+                        {editing === i && (
+                          <div className="nl-rj-edit">
+                            <input value={t.name} onChange={(e) => setRow({ name: e.target.value })} placeholder="Name" aria-label="Name" className={field} />
+                            <input value={t.phone} onChange={(e) => setRow({ phone: e.target.value })} placeholder="Number" aria-label="Number" className={field} />
+                            <input type="email" value={t.email} onChange={(e) => setRow({ email: e.target.value })} placeholder="Email" aria-label="Email" className={field} />
+                            <p className="nl-rj-edit-f m-0">
+                              <span>For this job: the works order and the emails use what&apos;s here.</span>
+                              <button type="button" onClick={() => setEditing(null)} className="nl-rj-pill">Done</button>
+                            </p>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {filled !== null && rows.length === 0 && !adding && <p className="mt-1 text-[12px] text-muted">Nobody on file for this home. Add who the contractor should ring.</p>}
+              {adding ? (
+                <div className="nl-rj-edit mt-2" style={{ gridColumn: "auto" }}>
+                  <input value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} placeholder="Name" className={field} />
+                  <input value={adding.phone} onChange={(e) => setAdding({ ...adding, phone: e.target.value })} placeholder="Number" className={field} />
+                  <input type="email" value={adding.email} onChange={(e) => setAdding({ ...adding, email: e.target.value })} placeholder="Email" className={field} />
+                  <div className="nl-rj-edit-f justify-end">
+                    <button type="button" onClick={() => setAdding(null)} className="nl-btn nl-fs-ghost nl-btn--sm">Cancel</button>
+                    <button type="button" disabled={!adding.name.trim() && !adding.phone.trim()} onClick={() => { setRows((cur) => [...cur, { ...adding, on: true }]); setAdding(null); }} className="nl-btn nl-btn--primary nl-btn--sm">Add</button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setAdding({ name: "", phone: "", email: "" })} className="nl-btn nl-btn--secondary nl-btn--sm mt-2">+ Add someone</button>
+              )}
+              {planned && <p className={hint}>The contractor rings them. On the next screen you can tell them first who&apos;ll be in touch.</p>}
+            </div>
+          )}
+          {at("tenant") && !F && (
             <div className={card("sm:col-span-2")}>
               <label className={label}>{rows.length > 1 ? `Tenants on the works order (${onJob.length} of ${rows.length})` : "Tenant on the works order"}</label>
               {rows.length > 0 && (
@@ -656,17 +812,17 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               ) : (
                 <button type="button" onClick={() => setAdding({ name: "", phone: "", email: "" })} className={F ? "nl-btn nl-btn--secondary nl-btn--sm mt-2" : "mt-2 rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] hover:border-ink/40"}>+ Add someone</button>
               )}
-              {planned && <p className={hint}>The contractor rings them. Tick below to tell them first who&apos;ll be in touch, and you can send them the booking once it&apos;s made.</p>}
+              {planned && <p className={hint}>The contractor rings them. On the next screen you can tell them first who&apos;ll be in touch, and you can send them the booking once it&apos;s made.</p>}
             </div>
           )}
-          {at("tenant") && !planned && reportedBy === "Tenant" && onJobCount > 1 && (
+          {at("tenant") && !F && canMarkReporter && (
             <div className={card("")}>
               <label className={label}>Which of them reported it</label>
               <FieldSelect className="mt-1" value={String(lead)} onChange={(v) => setReporter(Number(v))} options={ticked.map((t, i) => ({ value: String(i), label: t.name || "No name", sub: [t.room, t.phone, t.email].filter(Boolean).join(" · ") }))} />
               <p className={hint}>They&apos;re the job&apos;s lead tenant: the booking and the follow-up go to them.</p>
             </div>
           )}
-          {at("tenant") && (
+          {at("access") && (
             <label className={F ? `nl-fs-card nl-fs-tick-row sm:col-span-2${tellTenants ? " is-on" : ""}` : `flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 sm:col-span-2 ${tellTenants ? "border-accent-dark/50 bg-accent-soft/30" : "border-line/70 bg-white"}`}>
               <input type="checkbox" checked={tellTenants} onChange={(e) => setTellTenants(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--accent-dark)]" />
               <span className="min-w-0">
@@ -683,7 +839,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               </span>
             </label>
           )}
-          {at("tenant") && (
+          {at("access") && (
           <div className={card("sm:col-span-2")}>
             <label className={label}>Access notes{onJob.some((t) => t.phone.trim() || t.email.trim()) ? opt : F ? <em> - needed when there&apos;s nobody to ring</em> : <span className="font-normal normal-case tracking-normal"> - needed when there&apos;s nobody to ring</span>}</label>
             <input value={access} onChange={(e) => setAccess(e.target.value)} placeholder="Key safe, tenant works days, dog in the garden" className={`mt-1 ${field}`} />
@@ -748,71 +904,18 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           )}
 
           {/* ── the last screen: check it, and on a planned job, the works order ── */}
-          {stepped && at("check") && skipped.size > 0 && (
-            <div className={F ? "nl-fs-card sm:col-span-2" : "rounded-xl border border-dashed border-line bg-white px-4 py-3 sm:col-span-2"}>
-              <p className="text-[12.5px] font-semibold">Skipped for now</p>
-              <ul className="mt-1.5 space-y-1.5">
-                {steps.filter((x) => skipped.has(x.id)).map((x) => (
-                  <li key={x.id} className="flex items-center justify-between gap-3 text-[12px]">
-                    <span className="min-w-0 text-muted">{x.title}: not checked. It goes as it&apos;s on file and the job notes it was skipped, so you can fill it in there.</span>
-                    <button type="button" onClick={() => jump(x.id)} className="shrink-0 text-[11.5px] font-semibold underline underline-offset-2 hover:text-accent-dark">Add now</button>
-                  </li>
-                ))}
-              </ul>
+          {stepped && at("check") && F ? (
+            /* Across the width: what's going on the left, the works order as
+               the contractor gets it on the right. */
+            <div className={`nl-rj-check sm:col-span-2${canSend ? "" : " is-solo"}`}>
+              <div>{checkSkipped}{checkSummary}</div>
+              {canSend ? <div>{checkOrder}</div> : null}
             </div>
-          )}
-          {stepped && at("check") && (
-            <dl className={F ? "nl-fs-card is-tight m-0 divide-y divide-line/50 text-[12.5px] sm:col-span-2" : "divide-y divide-line/50 overflow-hidden rounded-xl border border-line/60 bg-white text-[12.5px] sm:col-span-2"}>
-              {([
-                ["Property", "property", [picked ? `${picked.name}${picked.locality ? `, ${picked.locality}` : ""}` : manual.trim() || "—"].join("")],
-                [steps.find((x) => x.id === "what")!.title, "what", [title || "—", category, description].filter(Boolean).join(" · ")],
-                kind === "repair"
-                  ? ["Urgency and contractor", "urgency", [URGENCIES.find((u) => u.id === urgency)?.label ?? "urgency not picked", `reported by ${reportedBy.toLowerCase()}`, contractor?.name ?? "no contractor yet", scheduledAt ? `booked ${sayDate(scheduledAt, true)}` : null].filter(Boolean).join(" · ")]
-                  : ["Expiry and contractor", "when", [dueAt ? `expires ${sayDate(dueAt)}` : "—", contractor?.name ?? "no contractor yet", scheduledAt ? `booked ${sayDate(scheduledAt, true)}` : null].filter(Boolean).join(" · ")],
-                ["Tenants", "tenant", [
-                  onJob.length ? onJob.map((t) => `${t.name}${t.room ? ` (${t.room})` : ""}`).join(", ") : "none on the works order",
-                  planned
-                    ? tellTenants ? (onJob.some((t) => t.email) ? "told who will be in touch about access" : "no emails to tell them") : null
-                    : tellTenants ? (onJob.some((t) => t.email) ? "told a contractor is coming" : "no emails to tell them") : "not told - discreet",
-                  access ? `access: ${access}` : null,
-                ].filter(Boolean).join(" · ")],
-                ["Landlord", "landlord", landlordSkipped ? "Skipped - not involved, not emailed" : [landlordName || "—", landlordEmail ? `emailed at ${landlordEmail}` : "not emailed", landlordMobile || null].filter(Boolean).join(" · ")],
-              ] as [string, Group, string][]).map(([k, g, v]) => (
-                <div key={g} className={F ? "flex items-start gap-3 py-3" : "flex items-start gap-3 px-3.5 py-2.5"}>
-                  <div className="min-w-0 flex-1">
-                    <dt className={F ? "flex items-center gap-2 text-[12px] text-muted" : "flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted"}>
-                      {k}
-                      {skipped.has(g) && <span className={F ? "text-[11.5px] text-[var(--warning)]" : "rounded-full border border-line/80 px-2 py-0.5 text-[9.5px]"}>Skipped</span>}
-                    </dt>
-                    <dd className={F ? "m-0 mt-0.5 break-words text-[13.5px]" : "mt-0.5 break-words"}>{skipped.has(g) ? `Not checked - as on file: ${v}` : v}</dd>
-                  </div>
-                  <button type="button" onClick={() => jump(g)} className="shrink-0 text-[11px] text-muted underline underline-offset-2 hover:text-ink">{skipped.has(g) ? "Add now" : "Change"}</button>
-                </div>
-              ))}
-            </dl>
-          )}
-          {stepped && at("check") && canSend && (
-            <div className={card("sm:col-span-2")}>
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className={label}>The works order</p>
-                <p className="text-[11.5px] text-muted">To {contractor!.name}{contractorHasEmail ? ` · ${contractor!.email}` : ""}</p>
-              </div>
-              {!contractorHasEmail ? (
-                <p className="mt-1 rounded-xl border border-accent-dark/40 bg-accent-soft/40 px-4 py-3 text-[12.5px]">{contractor!.name} has no email in the book, so nothing can be sent. Plan it and ring them, or add their email on the Contractors list.</p>
-              ) : !preview || preview.key !== previewKey ? (
-                <div className="mt-1 flex h-40 items-center justify-center gap-2 rounded-xl border border-line/60 bg-white text-[12px] text-muted">
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent-dark" aria-hidden /> Writing the works order…
-                </div>
-              ) : "error" in preview ? (
-                <p className="mt-1 rounded-xl border border-line/60 bg-white px-4 py-3 text-[12.5px] text-accent-dark">{preview.error}</p>
-              ) : (
-                <div className="mt-1 overflow-hidden rounded-xl border border-line/60 bg-white">
-                  <p className="border-b border-line/50 px-4 py-2.5 text-[12.5px]"><span className="text-muted">Subject:</span> {preview.subject}</p>
-                  <iframe title="The works order" srcDoc={preview.html} sandbox="" className="block h-[380px] w-full bg-white" />
-                </div>
-              )}
-            </div>
-          )}
+          ) : (<>
+          {checkSkipped}
+          {checkSummary}
+          {checkOrder}
+          </>)}
     </>
   );
 
@@ -824,17 +927,28 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
 
   if (F) {
     const sendTo = canSend && contractorHasEmail;
+    /* What each screen came to, under its name in the step list. */
+    const answerOf = (id: Group): string => {
+      if (id === "property") return picked?.name ?? manual.trim();
+      if (id === "what") return [title.trim(), picks.join(", ")].filter(Boolean).join(" · ");
+      if (id === "urgency") return URGENCIES.find((u) => u.id === urgency)?.label ?? "";
+      if (id === "when") return dueAt ? `Expires ${sayDate(dueAt)}` : "";
+      if (id === "contractor") return contractor?.name ?? (step > steps.findIndex((x) => x.id === "contractor") ? "None yet" : "");
+      if (id === "tenant") return rows.length ? `${onJob.length} of ${rows.length} on it` : "";
+      if (id === "access") return step > steps.findIndex((x) => x.id === "access") ? (tellTenants ? "Tenants told" : "Tenants not told") : "";
+      if (id === "landlord") return landlordSkipped ? "Not involved" : landlordName;
+      return "";
+    };
     return (
       <FloatSheet
         title={kind === "repair" ? "Report a Repair" : "Plan a Certificate"}
+        size="xl"
         step={step + 1}
         steps={sent ? undefined : steps.length}
         onBack={sent ? undefined : moving || step > 0 ? back : undefined}
         onClose={onClose}
         dismissible={!busy}
         screenKey={sent ? "sent" : `${here.id}${moving ? "-moving" : ""}`}
-        question={sent ? undefined : here.title}
-        lede={sent ? undefined : here.blurb}
         foot={sent ? undefined : (
           <FloatFoot
             left={err ? <span className="nl-fs-err" role="alert">{err}</span> : here.id === "check" ? <span>{canSend ? "Nothing goes until you press Send." : "Pick a contractor on the job when you're ready."}</span> : (
@@ -891,12 +1005,43 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                 : "Pick a contractor on the job when you're ready."}
           </FloatDone>
         ) : (
-          <>
-            {here.id !== "check" && (
-              <p className="nl-fs-say">{here.required ? here.why : "You can skip this for now and add it on the job later."}</p>
-            )}
-            <div className="nl-fs-cols" onKeyDown={onEnter}>{fields}</div>
-          </>
+          <div className="nl-rj">
+            {/* Every step by name, where you are, and what each came to, so
+                nothing sits out of sight (James, 27 Oct 2026). */}
+            <ol className="nl-rj-rail" aria-label="Steps">
+              {steps.map((x, i) => {
+                const isHere = i === step;
+                const done = i < step || (i <= furthest && !isHere && !missing(x.id));
+                return (
+                  <li key={x.id}>
+                    <button
+                      type="button"
+                      disabled={i > furthest}
+                      aria-current={isHere ? "step" : undefined}
+                      onClick={() => { if (!isHere) jump(x.id); }}
+                      className={`${isHere ? "is-here" : done ? "is-done" : ""}${skipped.has(x.id) ? " is-skipped" : ""}`}
+                    >
+                      <span className="nl-rj-n">
+                        {done && !isHere && !skipped.has(x.id)
+                          ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                          : i + 1}
+                      </span>
+                      <span className="nl-rj-t">{x.title}</span>
+                      <span className="nl-rj-a">{skipped.has(x.id) ? "Skipped for now" : answerOf(x.id) || (x.required ? "Required" : "Optional")}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <div className="nl-rj-main">
+              <p className="nl-fs-q">{here.title}</p>
+              <p className="nl-fs-lede">{here.blurb}</p>
+              {here.id !== "check" && (
+                <p className="nl-fs-say">{here.required ? here.why : "You can skip this for now and add it on the job later."}</p>
+              )}
+              <div className="nl-fs-cols" onKeyDown={onEnter}>{fields}</div>
+            </div>
+          </div>
         )}
       </FloatSheet>
     );

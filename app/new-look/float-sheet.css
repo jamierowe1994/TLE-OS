@@ -23,6 +23,12 @@
 [data-look="new"].nl-fs-wrap:not([data-shown="true"]) .nl-fs { pointer-events: none; }
 [data-look="new"] .nl-fs-stack { width: min(640px, 100%); flex: none; display: flex; flex-direction: column; }
 [data-look="new"] .nl-fs.is-lg .nl-fs-stack { width: min(880px, 100%); }
+/* The width of the screen, for a flow with its steps listed beside it
+   (James, 27 Oct 2026: "we're only using a very small portion of the screen
+   and then wondering why we've got no room"). */
+[data-look="new"] .nl-fs.is-xl { padding-top: calc(3vh + env(safe-area-inset-top, 0px)); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+[data-look="new"] .nl-fs.is-xl .nl-fs-stack { width: min(1180px, 100%); }
+[data-look="new"] .nl-fs.is-xl .nl-fs-body { padding-top: 16px; }
 
 /* The boxes float in, one after another. `backwards` so a finished one holds no
    transform: a field's pop-up list then sits over the box below it. */
@@ -178,9 +184,34 @@
 @media (min-width: 761px) {
   [data-look="new"] .nl-fs { overflow: hidden; }
   [data-look="new"] .nl-fs-stack { flex: 0 1 auto; min-height: 0; max-height: 100%; }
-  [data-look="new"] .nl-fs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-  [data-look="new"] .nl-fs-body::-webkit-scrollbar { display: none; }
+  /* A scrollbar you can see (27 Oct 2026): hidden, the boxes past the bottom
+     edge of a small laptop went unseen and nobody knew to scroll. */
+  [data-look="new"] .nl-fs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.45) transparent; padding-right: 6px; margin-right: -6px; }
+  [data-look="new"] .nl-fs-body::-webkit-scrollbar { width: 6px; }
+  [data-look="new"] .nl-fs-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.45); border-radius: 6px; }
 }
+
+/* "More below": over the bottom of the boxes while any are out of sight. */
+[data-look="new"] .nl-fs-more { position: relative; z-index: 3; height: 0; display: flex; justify-content: center; }
+[data-look="new"] .nl-fs-more button {
+  position: absolute; bottom: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 0; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600; background: var(--ink); color: var(--page); box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.6);
+  animation: nl-fs-nudge 1.6s var(--nl-ease) 0.4s 2;
+}
+@keyframes nl-fs-nudge { 50% { transform: translateY(3px); } }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-fs-more { position: fixed; left: 0; right: 0; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); height: 0; }
+}
+
+/* Picked is filled in, not a thin ring (James, 27 Oct 2026: "it's not that
+   obvious which one they've clicked"). Coral unless the choice has a tone. */
+[data-look="new"] .nl-fs-choice.is-on { --fill: var(--primary); --on-fill: var(--on-primary); background: var(--fill); color: var(--on-fill); box-shadow: 0 0 0 2px var(--fill), 0 16px 32px -20px rgba(0, 0, 0, 0.6); }
+[data-look="new"] .nl-fs-choice.is-on.is-red { --fill: var(--accent-dark); --on-fill: #fff; }
+[data-look="new"] .nl-fs-choice.is-on.is-sage { --fill: var(--sage-deep); --on-fill: #fff; }
+[data-look="new"] .nl-fs-choice.is-on .nl-fs-choice-t span,
+[data-look="new"] .nl-fs-choice.is-on .nl-fs-choice-a,
+[data-look="new"] .nl-fs-choice.is-on .nl-fs-choice-a .text-muted { color: var(--on-fill); opacity: 0.92; }
+[data-look="new"] .nl-fs-choice.is-on .nl-fs-choice-i { background: rgba(255, 255, 255, 0.22); color: var(--on-fill); }
 
 /* White, not grey (James, 26 Oct 2026): every box and drop-down inside the
    floating screens sits on white, whatever component drew it. */
@@ -200,12 +231,101 @@
 [data-look="new"] .nl-fs-tile:hover { transform: translateY(-2px); }
 [data-look="new"] .nl-fs-tile:active { transform: scale(0.97); }
 [data-look="new"] .nl-fs-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-[data-look="new"] .nl-fs-tile.is-on { box-shadow: 0 0 0 2px var(--primary), 0 16px 32px -24px rgba(0, 0, 0, 0.55); }
+[data-look="new"] .nl-fs-tile.is-on { background: var(--primary); color: var(--on-primary); box-shadow: 0 0 0 2px var(--primary), 0 16px 32px -20px rgba(0, 0, 0, 0.6); }
 [data-look="new"] .nl-fs-tile-i {
   display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px;
   background: color-mix(in srgb, var(--primary) 12%, var(--page)); color: var(--accent-dark); transition: background-color 0.2s, color 0.2s, transform 0.3s var(--nl-ease);
 }
-[data-look="new"] .nl-fs-tile.is-on .nl-fs-tile-i { background: var(--primary); color: var(--on-primary); transform: rotate(-6deg) scale(1.06); }
+[data-look="new"] .nl-fs-tile.is-on .nl-fs-tile-i { background: rgba(255, 255, 255, 0.24); color: var(--on-primary); transform: rotate(-6deg) scale(1.06); }
 [data-look="new"] .nl-fs-tile-t { font-size: 13.5px; line-height: 18px; font-weight: 500; }
-[data-look="new"] .nl-fs-tile-tick { position: absolute; top: 12px; right: 12px; color: var(--accent-dark); }
+[data-look="new"] .nl-fs-tile-tick { position: absolute; top: 12px; right: 12px; color: var(--on-primary); }
 @media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-fs-tile, [data-look="new"] .nl-fs-tile-i { transition: none; } }
+
+/* ── Report a repair / Plan a certificate, the full-width layout ──────────
+   (James, 27 Oct 2026). The steps down the left on the dark, each with what
+   was answered, so it's plain where you are and what is still to come; the
+   screen's own boxes on the right. On a phone the list folds away and the
+   progress line above does the job. */
+[data-look="new"] .nl-rj { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 20px; align-items: start; }
+[data-look="new"] .nl-rj-rail { position: sticky; top: 0; display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+[data-look="new"] .nl-rj-rail button {
+  width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px 10px; align-items: start; text-align: left; cursor: pointer;
+  font: inherit; color: rgba(255, 255, 255, 0.78); background: transparent; border: 0; border-radius: 12px; padding: 8px 10px;
+  transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-rj-rail button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: #fff; }
+[data-look="new"] .nl-rj-rail button:disabled { cursor: default; color: rgba(255, 255, 255, 0.42); }
+[data-look="new"] .nl-rj-rail button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+[data-look="new"] .nl-rj-rail .is-here { background: var(--page); color: var(--ink); }
+[data-look="new"] .nl-rj-rail .is-here:hover:not(:disabled) { background: var(--page); color: var(--ink); }
+[data-look="new"] .nl-rj-n {
+  grid-row: span 2; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; margin-top: 1px;
+  font-family: var(--nl-mono); font-size: 11px; border: 1px solid rgba(255, 255, 255, 0.35);
+}
+[data-look="new"] .nl-rj-rail .is-done .nl-rj-n { background: var(--sage-deep); border-color: var(--sage-deep); color: #fff; }
+[data-look="new"] .nl-rj-rail .is-here .nl-rj-n { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+[data-look="new"] .nl-rj-rail .is-skipped .nl-rj-n { border-style: dashed; }
+[data-look="new"] .nl-rj-t { font-size: 13.5px; line-height: 19px; font-weight: 500; }
+[data-look="new"] .nl-rj-a { font-size: 12px; line-height: 16px; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-rj-main { min-width: 0; display: grid; gap: 12px; align-content: start; }
+[data-look="new"] .nl-rj-main .nl-fs-q { font-size: 24px; }
+[data-look="new"] .nl-rj-main .nl-fs-lede { margin: -4px 0 2px; }
+[data-look="new"] .nl-rj-main .nl-fs-cols { gap: 12px; }
+[data-look="new"] .nl-fs.is-xl .nl-fs-card { padding: 14px 16px; }
+/* Compact tiles in the wide sheet: icon and name on one line, so every
+   category fits a small laptop without scrolling. */
+[data-look="new"] .nl-fs.is-xl .nl-fs-tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+[data-look="new"] .nl-fs.is-xl .nl-fs-tile { flex-direction: row; align-items: center; min-height: 46px; gap: 9px; padding: 7px 28px 7px 8px; border-radius: 12px; }
+[data-look="new"] .nl-fs.is-xl .nl-fs-tile-i { width: 30px; height: 30px; border-radius: 9px; flex: none; }
+[data-look="new"] .nl-fs.is-xl .nl-fs-tile-t { font-size: 13px; line-height: 16px; }
+[data-look="new"] .nl-fs.is-xl .nl-fs-tile-tick { top: 50%; right: 10px; transform: translateY(-50%); }
+/* The urgencies side by side, each filled in its own colour once picked. */
+[data-look="new"] .nl-rj-urg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+[data-look="new"] .nl-rj-urg .nl-fs-choice { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; padding: 14px 16px; min-height: 128px; }
+[data-look="new"] .nl-rj-urg .nl-fs-choice.has-icon { grid-template-columns: minmax(0, 1fr); }
+[data-look="new"] .nl-rj-urg .nl-fs-choice-a { order: -1; justify-self: start; font-family: var(--nl-mono); font-size: 11.5px; }
+/* A tenant: ticked onto the works order, who reported it, edited in place. */
+[data-look="new"] .nl-rj-ten { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 10px 0; }
+[data-look="new"] .nl-rj-ten + .nl-rj-ten { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-rj-ten input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-dark); }
+[data-look="new"] .nl-rj-ten-b { min-width: 0; }
+[data-look="new"] .nl-rj-ten-b b { display: block; font-weight: 600; font-size: 14px; line-height: 20px; }
+[data-look="new"] .nl-rj-ten-b small { display: block; font-size: 12.5px; line-height: 17px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-rj-ten.is-off .nl-rj-ten-b { opacity: 0.45; }
+[data-look="new"] .nl-rj-ten-x { display: flex; align-items: center; gap: 6px; }
+[data-look="new"] .nl-rj-pill {
+  font: inherit; font-size: 12px; line-height: 16px; padding: 5px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--line-strong); background: var(--page); color: var(--muted);
+}
+[data-look="new"] .nl-rj-pill:hover { color: var(--ink); border-color: var(--ink); }
+[data-look="new"] .nl-rj-pill.is-on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+[data-look="new"] .nl-rj-edit { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+[data-look="new"] .nl-rj-edit .nl-fs-input { padding: 8px 10px; font-size: 13.5px; }
+[data-look="new"] .nl-rj-edit-f { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+/* The last screen: what's being sent on the left, the works order on the right. */
+[data-look="new"] .nl-rj-check { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 12px; align-items: start; }
+[data-look="new"] .nl-rj-check > div { display: grid; gap: 12px; min-width: 0; }
+@media (max-width: 1060px) {
+  [data-look="new"] .nl-rj { grid-template-columns: 200px minmax(0, 1fr); gap: 16px; }
+  [data-look="new"] .nl-rj-a { display: none; }
+  [data-look="new"] .nl-rj-check { grid-template-columns: minmax(0, 1fr); }
+}
+@media (min-width: 761px) {
+  [data-look="new"] .nl-fs.is-xl .nl-fs-prog { display: none; }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-rj { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-rj-rail { display: none; }
+  [data-look="new"] .nl-rj-urg { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-rj-urg .nl-fs-choice { min-height: 0; }
+  [data-look="new"] .nl-rj-edit { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-rj-ten { grid-template-columns: auto minmax(0, 1fr); }
+  [data-look="new"] .nl-rj-ten-x { grid-column: 2; }
+}
+[data-look="new"] .nl-rj-main .nl-fs-lb { margin: 0 0 8px; }
+/* No contractor yet, so no works order: the check runs across the width. */
+[data-look="new"] .nl-rj-check.is-solo { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  [data-look="new"] .nl-rj-check.is-solo dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+  [data-look="new"] .nl-rj-check.is-solo dl > div:nth-child(2) { border-top-width: 0; }
+}

@@ -90,7 +90,14 @@ async function contractorOf(id: string | null): Promise<{ name: string; contact:
   return rows[0] ?? null;
 }
 
-const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
+/* REX keeps many tenants as an initial and a surname ("C Cahill"), and the
+   first word alone greeted them "Hi C" (Lianna, 27 Oct 2026, job 1079). An
+   initial keeps the whole name instead. */
+const first = (name: string) => {
+  const words = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "there";
+  return words[0].replace(/\.$/, "").length > 1 ? words[0] : words.join(" ");
+};
 /* Coerced: a preview can carry a tenant with no phone or email, and
    undefined.replace crashed the whole preview (Rig run 4, P-064). */
 const esc = (v: string | null | undefined) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

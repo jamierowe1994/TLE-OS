@@ -61,8 +61,9 @@ export interface FloatSheetProps {
   lede?: React.ReactNode;
   /** The footer box. Or draw <FloatFoot> as the last child. */
   foot?: React.ReactNode;
-  /** md is the design's 640px; lg is wider, for a record. */
-  size?: "md" | "lg";
+  /** md is the design's 640px; lg is wider, for a record; xl takes the
+   *  screen's width, for a flow with a step list beside it. */
+  size?: "md" | "lg" | "xl";
   /** False while something is saving: Escape and the dark do nothing. */
   dismissible?: boolean;
   /** Changes when the screen changes, so the boxes float in again and focus moves to the new one. */
@@ -79,6 +80,10 @@ export default function FloatSheet({ open = true, title, onClose, step, steps, o
   const stack = useRef<HTMLDivElement | null>(null);
   const back = useRef<HTMLElement | null>(null);
   const [instant, setInstant] = useState(false);
+  /* More boxes below the fold. The middle scrolls on its own on a laptop, and
+     on a small screen the boxes past the bottom edge went unseen - nobody knew
+     to scroll (James, 27 Oct 2026) - so a "More below" sits over the foot. */
+  const [more, setMore] = useState(false);
   const titleId = useId();
   const dismiss = useRef(dismissible);
   dismiss.current = dismissible;
@@ -128,6 +133,42 @@ export default function FloatSheet({ open = true, title, onClose, step, steps, o
     }, 60);
     return () => window.clearTimeout(t);
   }, [open, shown, screenKey]);
+
+  /* Whichever is scrolling - the middle on a laptop, the whole sheet on a
+     phone - and whether anything is still hidden below it. */
+  const scroller = useCallback((): HTMLElement | null => {
+    const b = body.current;
+    const r = root.current;
+    if (b && b.scrollHeight - b.clientHeight > 2 && getComputedStyle(b).overflowY !== "visible") return b;
+    return r;
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const check = () => {
+      const el = scroller();
+      setMore(Boolean(el && el.scrollHeight - el.scrollTop - el.clientHeight > 24));
+    };
+    check();
+    const b = body.current;
+    const r = root.current;
+    b?.addEventListener("scroll", check, { passive: true });
+    r?.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+    if (b) { ro?.observe(b); for (const c of Array.from(b.children)) ro?.observe(c); }
+    const t = window.setTimeout(check, 600);
+    return () => {
+      b?.removeEventListener("scroll", check);
+      r?.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+      ro?.disconnect();
+      window.clearTimeout(t);
+    };
+  }, [open, screenKey, scroller, children]);
+  const scrollOn = () => {
+    const el = scroller();
+    el?.scrollBy({ top: Math.max(160, el.clientHeight * 0.75), behavior: "smooth" });
+  };
 
   /* Escape closes; Tab goes round inside. */
   useEffect(() => {
@@ -208,6 +249,14 @@ export default function FloatSheet({ open = true, title, onClose, step, steps, o
               {lede && <p className="nl-fs-lede">{lede}</p>}
               {children}
             </div>
+            {more && (
+              <div className="nl-fs-more">
+                <button type="button" onClick={scrollOn}>
+                  More below
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14M6 13l6 6 6-6" /></svg>
+                </button>
+              </div>
+            )}
             {foot}
           </div>
         </div>
@@ -247,12 +296,14 @@ export function FloatFoot({ left, children }: { left?: React.ReactNode; children
   );
 }
 
-/** Each choice its own card. `on` draws the coral ring. */
-export function FloatChoice({ title, text, icon, on = false, disabled = false, onClick, aside }: {
+/** Each choice its own card. `on` fills it in, coral unless a `tone` says otherwise. */
+export function FloatChoice({ title, text, icon, on = false, disabled = false, onClick, aside, tone }: {
   title: React.ReactNode; text?: React.ReactNode; icon?: React.ReactNode; on?: boolean; disabled?: boolean; onClick: () => void; aside?: React.ReactNode;
+  /** The colour it fills with once picked: coral unless said (an emergency red, a routine sage). */
+  tone?: "coral" | "red" | "sage";
 }) {
   return (
-    <button type="button" className={`nl-fs-choice${on ? " is-on" : ""}${icon ? " has-icon" : ""}`} aria-pressed={on} disabled={disabled} onClick={onClick}>
+    <button type="button" className={`nl-fs-choice${on ? " is-on" : ""}${icon ? " has-icon" : ""}${tone ? ` is-${tone}` : ""}`} aria-pressed={on} disabled={disabled} onClick={onClick}>
       {icon && <span className="nl-fs-choice-i" aria-hidden>{icon}</span>}
       <span className="nl-fs-choice-t">
         <b>{title}</b>
