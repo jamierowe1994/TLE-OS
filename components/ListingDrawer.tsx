@@ -251,7 +251,7 @@ export default function ListingDrawer(props: Omit<Parameters<typeof ListingDrawe
 }
 
 function ListingDrawerBody({
-  listing,
+  listing: listingIn,
   backHref = "/listings",
   onStep,
   stepLabel,
@@ -284,6 +284,17 @@ function ListingDrawerBody({
   /** Drawn in the new look (lib/new-look "listing"): sections as tabs on the page. */
   newLook?: boolean;
 }) {
+  /* A changed address shows at once (James, 27 Oct 2026): the name every
+     part of the page uses is REX's, which Change address now rewrites, and
+     the board's copy only catches up on its next read. */
+  const [addrNow, setAddrNow] = useState<{ id: string; name: string; locality: string } | null>(null);
+  const listing = useMemo(
+    () => (listingIn && addrNow && addrNow.id === String(listingIn.id) ? { ...listingIn, name: addrNow.name, locality: addrNow.locality } : listingIn),
+    [listingIn, addrNow]
+  );
+  const onAddress = useCallback((a: { name: string; locality: string }) => {
+    if (listingIn) setAddrNow({ id: String(listingIn.id), ...a });
+  }, [listingIn]);
   /* The pop-out open over the page, if any. Kept in the address (?tab=), so
      a link or a reload opens it again. */
   const [tab, setTab] = useState<TabKey | null>(() => {
@@ -1446,6 +1457,8 @@ function ListingDrawerBody({
       <EditAdvert
         listingId={String(listing.id)}
         address={[listing.name, listing.locality].filter(Boolean).join(", ")}
+        propertyId={listing.propertyId ? String(listing.propertyId) : null}
+        onAddress={onAddress}
         initial={live && liveLocks ? { details: live, locks: liveLocks } : null}
         canEdit={editCanPress}
         lockedNote={editCanPress ? null : lockedSentence(editArea, editLevel)}
@@ -1716,6 +1729,13 @@ function ListingDrawerBody({
               </div>
             )}
 
+            {t === "marketing" && (
+              <div className="mb-4 rounded-xl border border-line/50 bg-white p-4">
+                <p className="text-[10px] uppercase tracking-wider text-muted">The address</p>
+                <p className="mt-1 text-[14px] text-ink">{[listing.name, listing.locality].filter(Boolean).join(", ")}</p>
+                <OsAddressLine compact propertyId={listing.propertyId ? String(listing.propertyId) : null} listingId={String(listing.id)} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} onChanged={onAddress} />
+              </div>
+            )}
             {t === "marketing" && (
               <ListingMarketing
                 listingId={String(listing.id)}
@@ -3044,7 +3064,7 @@ function ListingDrawerBody({
               {/* The home itself: the address on file, its keys, whose it is. */}
               <section className="nl-cell span2">
                 <h3 className="nl-block-title">The Home</h3>
-                <OsAddressLine propertyId={listing.propertyId ? String(listing.propertyId) : null} listingId={String(listing.id)} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} />
+                <OsAddressLine propertyId={listing.propertyId ? String(listing.propertyId) : null} listingId={String(listing.id)} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} onChanged={onAddress} />
                 {Number(listing.id) > 0 && listing.propertyId && <HomeKeys propertyId={String(listing.propertyId)} listingId={listing.id} />}
                 <div className="flex flex-wrap items-center gap-2">
                   {listing.tenant && <Badge tone="info">Tenanted</Badge>}
@@ -3382,7 +3402,7 @@ function ListingDrawerBody({
             <p className="mt-1 text-[13px] text-muted">
               {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
             </p>
-            <OsAddressLine propertyId={listing.propertyId ? String(listing.propertyId) : null} listingId={String(listing.id)} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} />
+            <OsAddressLine propertyId={listing.propertyId ? String(listing.propertyId) : null} listingId={String(listing.id)} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} onChanged={onAddress} />
             {/* The key numbers, from REX's key register (James, 22 Oct 2026). */}
             {Number(listing.id) > 0 && listing.propertyId && (
               <div className="mt-3">

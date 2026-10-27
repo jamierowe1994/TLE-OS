@@ -42,7 +42,7 @@ export function addressParts(raw: string): AddressParts | { error: string } {
 }
 
 /** The OS record behind a Portfolio row, when the row was built from one. */
-export async function osRecordFor(p: ManagedProperty): Promise<{ id: string; address: string; linked: boolean } | null> {
+export async function osRecordFor(p: ManagedProperty): Promise<{ id: string; address: string; linked: boolean; rexPropertyId: string | null } | null> {
   if (!hasDb()) return null;
   const pm = /^pm-/i.test(String(p.propertyId ?? ""));
   const linkedRow = /^pm-link-/.test(p.listingId);
@@ -54,7 +54,7 @@ export async function osRecordFor(p: ManagedProperty): Promise<{ id: string; add
         [p.propertyId]
       );
   const r = rows[0];
-  return r ? { id: r.id, address: r.address, linked: Boolean(r.rex_property_id) } : null;
+  return r ? { id: r.id, address: r.address, linked: Boolean(r.rex_property_id), rexPropertyId: r.rex_property_id ? String(r.rex_property_id) : null } : null;
 }
 
 /** Save it. Returns what it said before, for the log. */

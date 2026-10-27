@@ -12,6 +12,7 @@ import SteveFace from "@/components/SteveFace";
 import { Ico } from "@/components/new-look/Parts";
 import { OPTIONS, RECOMMENDED, isRequired, type RequirementInput } from "@/lib/listing-requirements";
 import { useAdvertDraft } from "./useAdvertDraft";
+import OsAddressLine from "@/components/OsAddressLine";
 
 /**
  * EDIT THE ADVERT, in the new look (lib/new-look "advert", 23 Oct 2026).
@@ -61,6 +62,8 @@ const ORDER: StepId[] = ["home", "let", "bills", "epc", "advert", "photos"];
 export default function EditAdvert({
   listingId,
   address,
+  propertyId,
+  onAddress,
   initial,
   canEdit,
   lockedNote,
@@ -72,6 +75,9 @@ export default function EditAdvert({
   listingId: string;
   /** The eyebrow over the title: the home's address. */
   address: string;
+  /** The home behind it, so the address can be changed from here (27 Oct 2026). */
+  propertyId?: string | null;
+  onAddress?: (a: { name: string; locality: string }) => void;
   initial?: { details: ListingDetails; locks: Locks } | null;
   canEdit: boolean;
   lockedNote: string | null;
@@ -574,6 +580,7 @@ export default function EditAdvert({
         <header className="nl-adv-head">
           <div className="nl-adv-headtext">
             <div className="nl-eyebrow">{address}</div>
+            {propertyId && <OsAddressLine compact propertyId={propertyId} listingId={listingId} shown={address} onChanged={onAddress} />}
             <h2 className="nl-adv-title">Edit the Advert</h2>
             <p className="nl-meta">The facts, the advert and the photos. What a tenant sees, one step at a time.</p>
           </div>

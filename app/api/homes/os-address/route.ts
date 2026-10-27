@@ -6,6 +6,8 @@ import { bookFor } from "@/lib/listings-cache";
 import { forgetBooks, managedBookFor } from "@/lib/managed-book-cache";
 import { addressParts, osHomeAddress, osRecordFor, saveOsAddress, saveOsHomeAddress } from "@/lib/os-property-address";
 import { record } from "@/lib/audit";
+import { forgetListingAddress, pushAddressToRex, type RexAddressOutcome } from "@/lib/rex-address";
+import { isTestId } from "@/lib/test-overlay";
 
 /**
  * GET ?property=<REX property id> → the address the OS holds for a home that
@@ -44,7 +46,12 @@ export async function GET(req: NextRequest) {
  * write Steve's address card makes (lib/assistant-actions doAddress): a home
  * with its own OS record changes that record, any other home gets the OS's
  * address row for its REX property, which the Propoly push reads wherever the
- * back office has no town or postcode. Nothing is written to REX.
+ * back office has no town or postcode.
+ *
+ * And REX as well, since 27 Oct 2026 (lib/rex-address): the listing's name,
+ * the portals and every screen read the address off REX's property record,
+ * so a change kept in the OS alone left the old name showing everywhere.
+ * Never while viewing as somebody, and never for a test file.
  */
 export async function POST(req: NextRequest) {
   const who = await whoIs(req);
@@ -78,7 +85,23 @@ export async function POST(req: NextRequest) {
     before = (await saveOsHomeAddress(property, listingId ?? home?.listingId ?? null, parts, { id: me.id, name: me.name || me.email })).before;
     subject = `rex-property:${property}`;
   }
+  /* The REX property behind it: the one asked about, or the OS record's link. */
+  const rexId = /^\d+$/.test(property) ? property : rec?.rexPropertyId ?? null;
+  const test = isTestId(listingId) || isTestId(home?.listingId);
+  /* Null where there is no listing record to change: a test file, or a home
+     the OS keeps on its own. */
+  const rex: RexAddressOutcome | null = test || !rexId
+    ? null
+    : who.viewingAs
+      ? { ok: false, why: "Saved in the OS. You're viewing as somebody else, so the listing wasn't changed." }
+      : await pushAddressToRex(rexId, parts, { id: me.id }).catch(() => ({ ok: false as const, why: "Saved in the OS. The listing didn't answer, so it still shows the old address. Try again in a minute." }));
   await forgetBooks();
-  await record({ kind: "property_address_changed", actorId: me.id, actorEmail: me.email, subjectId: subject, detail: `${before ?? "(none)"} -> ${parts.address} (on screen)` });
-  return NextResponse.json({ ok: true, address: { address: parts.address, setBy: me.name || me.email, setAt: new Date().toISOString() }, alsoElsewhere: rec ? rec.linked : true });
+  forgetListingAddress(listingId ?? home?.listingId ?? null);
+  await record({ kind: "property_address_changed", actorId: me.id, actorEmail: me.email, subjectId: subject, detail: `${before ?? "(none)"} -> ${parts.address} (on screen)${!rex ? "" : rex.ok ? (rex.unchanged ? "; REX already had it" : `; REX now ${rex.name ?? "changed"}`) : `; REX not changed: ${rex.why}`}` });
+  return NextResponse.json({
+    ok: true,
+    address: { address: parts.address, setBy: me.name || me.email, setAt: new Date().toISOString() },
+    parts: { name: parts.name, locality: parts.locality, town: parts.town, postcode: parts.postcode },
+    rex: !rex ? null : rex.ok ? { ok: true, name: rex.name } : { ok: false, why: rex.why },
+  });
 }

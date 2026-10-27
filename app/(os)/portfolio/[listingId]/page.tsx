@@ -194,14 +194,16 @@ export default function PropertyPage() {
   const heroRef = useRef<HTMLButtonElement | null>(null);
   const tabAsked = useRef(false);
 
-  /* Same read as the Portfolio list, so arriving from it paints at once. */
+  /* Same read as the Portfolio list, so arriving from it paints at once.
+     Read again after Change address, so the new name shows (27 Oct 2026). */
+  const [bookRev, setBookRev] = useState(0);
   useEffect(() => {
     let live = true;
     readJson<Book>("/api/portfolio", (j) => Boolean(j?.ok))
-      .then((j) => { if (live) setBook(j.ok ? { state: "ready", data: j } : { state: "failed", error: j.error ?? "The book could not be read." }); })
-      .catch((e) => { if (live) setBook({ state: "failed", error: e instanceof Error ? e.message : "The book could not be read." }); });
+      .then((j) => { if (live) setBook((cur) => (j.ok ? { state: "ready", data: j } : bookRev && cur.state === "ready" ? cur : { state: "failed", error: j.error ?? "The book could not be read." })); })
+      .catch((e) => { if (live) setBook((cur) => (bookRev && cur.state === "ready" ? cur : { state: "failed", error: e instanceof Error ? e.message : "The book could not be read." })); });
     return () => { live = false; };
-  }, []);
+  }, [bookRev]);
   useEffect(() => {
     try {
       const sp = new URLSearchParams(window.location.search);
@@ -1131,7 +1133,7 @@ export default function PropertyPage() {
                 <p className="nl-rhead-sub">
                   {[sub, rentShown ?? (!(houseView && house && !lets) && !p.test ? noRent : null)].filter(Boolean).join(" · ")}
                 </p>
-                <div className="nl-prop-addr"><OsAddressLine propertyId={propertyId} listingId={p.listingId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} /></div>
+                <div className="nl-prop-addr"><OsAddressLine propertyId={propertyId} listingId={p.listingId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} onChanged={() => setBookRev((n) => n + 1)} /></div>
                 {house && (
                   <div className="nl-prop-rooms">
                     <button type="button" onClick={() => setRoom("house")} className={`nl-prop-room${room === "house" ? " is-on" : ""}`} aria-pressed={room === "house"}>
@@ -1619,7 +1621,7 @@ export default function PropertyPage() {
                 <p className="mt-1.5 text-[14px] text-muted">{noRent}</p>
               ) : null}
               <p className="mt-1 text-[13px] text-muted">{sub}</p>
-              <OsAddressLine propertyId={propertyId} listingId={p.listingId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />
+              <OsAddressLine propertyId={propertyId} listingId={p.listingId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} onChanged={() => setBookRev((n) => n + 1)} />
               {house && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button

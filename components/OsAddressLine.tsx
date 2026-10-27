@@ -2,16 +2,33 @@
 import { useEffect, useState } from "react";
 
 /**
- * The address the OS holds for a home, when somebody has changed it in the
- * OS (lib/os-property-address, 15 Oct 2026) - shown under the address the
- * page reads from the listings system, so nobody wonders which is right.
+ * A home's address, and Change address.
  *
  * Changeable here since 23 Oct 2026 (Kayleigh Wright: a missing town or
  * postcode on the back-office record stopped an offer reaching Propoly, and
- * only Steve could change it). Change address saves the OS's address, which
- * the Propoly push reads wherever the back office has no town or postcode.
+ * only Steve could change it). Since 27 Oct 2026 (James, after Lianna's 12
+ * South Chesters Lane) a change goes to the listing's own record too
+ * (lib/rex-address), so the name on the page, the board and the portals
+ * follow it; onChanged hands the page the new name at once.
+ *
+ * Where an older change was kept in the OS alone, the line under the address
+ * says so, and saving it again sends it on.
  */
-export default function OsAddressLine({ propertyId, listingId, shown }: { propertyId: string | null | undefined; listingId?: string | null; shown: string }) {
+export default function OsAddressLine({
+  propertyId,
+  listingId,
+  shown,
+  onChanged,
+  compact = false,
+}: {
+  propertyId: string | null | undefined;
+  listingId?: string | null;
+  shown: string;
+  /** The new name and "Town POSTCODE", once the listing holds them. */
+  onChanged?: (a: { name: string; locality: string }) => void;
+  /** Just the button and the field: for Edit the Advert, where the address is already over it. */
+  compact?: boolean;
+}) {
   const [held, setHeld] = useState<{ address: string; setBy: string; setAt: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -35,7 +52,13 @@ export default function OsAddressLine({ propertyId, listingId, shown }: { proper
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ property: String(propertyId), listingId: listingId ?? null, address: draft }),
     }).catch(() => null);
-    const j = (await r?.json().catch(() => null)) as { ok?: boolean; error?: string; address?: { address: string; setBy: string; setAt: string }; alsoElsewhere?: boolean } | null;
+    const j = (await r?.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+      address?: { address: string; setBy: string; setAt: string };
+      parts?: { name: string; locality: string };
+      rex?: { ok: boolean; why?: string };
+    } | null;
     setBusy(false);
     if (!j?.ok || !j.address) {
       setMsg({ ok: false, text: j?.error ?? "That didn't save. Try again." });
@@ -43,7 +66,10 @@ export default function OsAddressLine({ propertyId, listingId, shown }: { proper
     }
     setHeld(j.address);
     setEditing(false);
-    setMsg({ ok: true, text: j.alsoElsewhere ? "Saved in the OS. Change it on the back-office record too, so the listing and portals match." : "Saved." });
+    if (j.rex?.ok) {
+      if (j.parts) onChanged?.(j.parts);
+      setMsg({ ok: true, text: "Saved. The listing and the portals show the new address." });
+    } else setMsg({ ok: !j.rex, text: j.rex?.why ?? "Saved." });
   }
 
   if (!propertyId) return null;
@@ -51,18 +77,22 @@ export default function OsAddressLine({ propertyId, listingId, shown }: { proper
   const when = held ? new Date(held.setAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }) : "";
   return (
     <div className="mt-1 text-[12px] leading-relaxed text-muted" data-steve="home.os-address">
-      {held && !same && (
+      {!compact && held && !same && !msg && (
         <p>
-          <span className="font-semibold text-ink">Address in the OS:</span> {held.address}
-          <span> · changed by {held.setBy || "someone"} on {when}. Change it on the back-office record too.</span>
+          <span className="font-semibold text-ink">Changed to:</span> {held.address}
+          <span> · by {held.setBy || "someone"} on {when}. The listing still shows the old address - press Change address and Save to send it on.</span>
         </p>
       )}
       {editing ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <input
             value={draft}
+            autoFocus
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !busy && void save()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !busy) void save();
+              if (e.key === "Escape") { e.stopPropagation(); setEditing(false); }
+            }}
             placeholder="5 Canter Close, Liverpool, L9 9JE"
             aria-label="The whole address, with town and postcode"
             className="h-9 min-w-0 flex-1 basis-[260px] rounded-xl border border-line/70 bg-white px-3 text-[13px] text-ink outline-none focus:border-ink/40"
@@ -73,12 +103,12 @@ export default function OsAddressLine({ propertyId, listingId, shown }: { proper
           <button type="button" disabled={busy} onClick={() => { setEditing(false); setMsg(null); }} className="text-[12px] text-muted hover:text-ink">
             Cancel
           </button>
-          <span className="basis-full text-[11.5px]">The whole address, with the town and postcode.</span>
+          <span className="basis-full text-[11.5px]">The whole address, with the town and postcode. It changes on the listing and the portals too.</span>
         </div>
       ) : (
         <button
           type="button"
-          onClick={() => { setDraft(held?.address ?? shown); setEditing(true); setMsg(null); }}
+          onClick={() => { setDraft(held && !same ? held.address : shown); setEditing(true); setMsg(null); }}
           className="underline underline-offset-2 hover:text-ink"
         >
           Change address

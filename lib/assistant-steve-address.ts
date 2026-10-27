@@ -34,7 +34,7 @@ export async function addressBook(scope: Scope, role: string | null | undefined)
 export const proposeAddressChange: AssistantTool = {
   name: "propose_address_change",
   description:
-    "Change a home's address in the OS. Call it when somebody asks to edit, correct or fix a property's address (a missing town or postcode, a typo, a flat number). Give the home (listingId, or `find` with the address as they know it; the home open on their screen is used if neither) and newAddress: the WHOLE new address with town and postcode, e.g. 'Flat 2, 5 Canter Close, Liverpool, L9 9JE' - never invent a part. Call it FIRST, as soon as they ask how to change an address, WITHOUT newAddress: it says whether the OS holds this home's address and what it is now, so you never promise a change you cannot make. Then ask for the whole new address and call again with it. Shows the old and new address on a card; nothing changes until they say yes. Most homes' addresses also live on their back-office property record; it tells you when to say it needs changing there too.",
+    "Change a home's address in the OS. Call it when somebody asks to edit, correct or fix a property's address (a missing town or postcode, a typo, a flat number). Give the home (listingId, or `find` with the address as they know it; the home open on their screen is used if neither) and newAddress: the WHOLE new address with town and postcode, e.g. 'Flat 2, 5 Canter Close, Liverpool, L9 9JE' - never invent a part. Call it FIRST, as soon as they ask how to change an address, WITHOUT newAddress: it says whether the OS holds this home's address and what it is now, so you never promise a change you cannot make. Then ask for the whole new address and call again with it. Shows the old and new address on a card; nothing changes until they say yes. A yes changes the listing's own record too, so its name and the portals follow.",
   input_schema: {
     type: "object",
     properties: {
@@ -111,7 +111,7 @@ export const proposeAddressChange: AssistantTool = {
       note:
         `Shown to them: the old address (${before}) and the new (${parts.address}). Nothing has changed yet. Say both in one short line and end with exactly "Shall I change it?" - a yes, or the Change it button, saves it in the OS.` +
         (alsoElsewhere
-          ? " Say too that this home's address is also on its property record in the back office (where it was set up): once it's changed in the OS, change it there as well so the listing and the portals match. Until then, the push to Propoly uses the OS address wherever that record has no town or postcode. Never name REX."
+          ? " Say too that the listing's name and the portals change with it. Never name REX."
           : ""),
     };
   },

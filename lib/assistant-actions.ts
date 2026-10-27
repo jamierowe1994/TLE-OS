@@ -467,6 +467,8 @@ async function doAddress(p: Extract<ActionProposal, { kind: "address" }>, scope:
   const managed = (await managedBookFor(book.rex)).book.properties;
   let before: string | null;
   let subject: string;
+  let rexId: string | null = null;
+  let listingId: string | null = null;
   if (p.target.kind === "os-record") {
     const t = p.target;
     const home = managed.find((x) => x.listingId === t.homeId);
@@ -476,6 +478,7 @@ async function doAddress(p: Extract<ActionProposal, { kind: "address" }>, scope:
     if (!saved) return { ok: false, message: "That didn't save. Try again in a moment." };
     before = saved.before;
     subject = t.osPropertyId;
+    rexId = rec.rexPropertyId;
   } else {
     const t = p.target;
     const listings = (await bookFor(book.rex)).listings;
@@ -483,15 +486,23 @@ async function doAddress(p: Extract<ActionProposal, { kind: "address" }>, scope:
     if (!theirs) return { ok: false, message: "That home isn't in your book any more, so I haven't changed it." };
     before = (await saveOsHomeAddress(t.rexPropertyId, t.listingId, p.after, { id: me.id, name: me.name || me.email })).before ?? p.before;
     subject = `rex-property:${t.rexPropertyId}`;
+    rexId = t.rexPropertyId;
+    listingId = t.listingId;
   }
+  /* The listing's own record too (lib/rex-address, 27 Oct 2026), so its name
+     and the portals follow. */
+  const { pushAddressToRex, forgetListingAddress } = await import("@/lib/rex-address");
+  const { isTestId } = await import("@/lib/test-overlay");
+  const rex = rexId && !isTestId(listingId) ? await pushAddressToRex(rexId, p.after, { id: me.id }).catch(() => ({ ok: false as const, why: "The listing didn't answer." })) : null;
   await forgetBooks();
+  forgetListingAddress(listingId);
   const { record } = await import("@/lib/audit");
-  await record({ kind: "property_address_changed", actorId: me.id, actorEmail: me.email, subjectId: subject, detail: `${before ?? "(none)"} -> ${p.after.address}` });
+  await record({ kind: "property_address_changed", actorId: me.id, actorEmail: me.email, subjectId: subject, detail: `${before ?? "(none)"} -> ${p.after.address}${rex ? (rex.ok ? `; REX now ${rex.name ?? "changed"}` : `; REX not changed: ${rex.why}`) : ""}` });
   return {
     ok: true,
     message:
-      `Changed in the OS: ${p.after.address} (it was ${before ?? p.before}).` +
-      (p.alsoElsewhere ? " It's also on the home's property record in the back office, where it was set up - change it there too so the listing and the portals match." : ""),
+      `Changed: ${p.after.address} (it was ${before ?? p.before}).` +
+      (rex?.ok ? " The listing and the portals show it too." : rex ? ` ${rex.why}` : ""),
   };
 }
 
