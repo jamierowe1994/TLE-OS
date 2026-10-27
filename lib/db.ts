@@ -3308,6 +3308,24 @@ CREATE TABLE IF NOT EXISTS os_home_keys (
 );
 CREATE INDEX IF NOT EXISTS os_home_keys_home ON os_home_keys (home_key);
 
+-- Homes archived in the OS (James, 27 Oct 2026: Michael clears the old homes
+-- still coming through from REX and REX PM). lib/archived-homes takes them off
+-- the book and the compliance book on every read; REX is never written. keys
+-- holds every id the home answers to (listing ids, REX property id, pm- id).
+-- Put back = restored_at set, the row kept as the record.
+CREATE TABLE IF NOT EXISTS os_archived_homes (
+  id           TEXT PRIMARY KEY,
+  label        TEXT NOT NULL DEFAULT '',
+  keys         TEXT[] NOT NULL DEFAULT '{}',
+  listing_ids  TEXT[] NOT NULL DEFAULT '{}',
+  reason       TEXT NOT NULL DEFAULT '',
+  by_name      TEXT NOT NULL DEFAULT '',
+  by_email     TEXT NOT NULL DEFAULT '',
+  archived_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  restored_at  TIMESTAMPTZ,
+  restored_by  TEXT
+);
+
 -- What a person in the OS has said about a home (19 Oct 2026, Rhiannon's flat
 -- and Dan's tickets): is it an HMO, is there a gas supply, how is the water
 -- heated, and is its electrical certificate an EICR or an EIC (new build or

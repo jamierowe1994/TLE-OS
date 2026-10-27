@@ -119,7 +119,7 @@ export const ROLE_BLURB: Record<Role, string> = {
   support: "The pre-tenancy board only. Superseded by Pre-tenancy — use that instead.",
   pretenancy: "Kirstie. Lands on the pre-tenancy board; sees exactly what Compliance sees too (the compliance desk and the clean sweep), so the office can cover for each other.",
   marketing: "Campaigns, paid leads, templates and the file store. No business figures.",
-  compliance: "Michael and Josel. Land on the compliance desk; see exactly what Pre-tenancy sees too (the pre-tenancy board and the clean sweep), so the office can cover for each other.",
+  compliance: "Michael and Josel. Land on the compliance desk; see exactly what Pre-tenancy sees too (the pre-tenancy board and the clean sweep), so the office can cover for each other. They can also archive old homes that are not ours any more.",
   agent: "Their own book and nothing else.",
 };
 
@@ -143,7 +143,8 @@ export type Capability =
   | "edit:knowledge"    // feed Steve and the Guides shelf - Susan, Francesca, Michael, Kirstie
   | "see:agent-compliance" // every agent's personal compliance, and the list that defines it - Michael
   | "see:clean-sweep"     // the REX PM clean sweep: every home's facts and papers, checked one by one (24 Sep 2026)
-  | "work:plc";          // the PLC queue: first check, defer, decline. Final approval is a named list (30 Sep 2026)
+  | "work:plc"           // the PLC queue: first check, defer, decline. Final approval is a named list (30 Sep 2026)
+  | "archive:homes";     // take an old home off the OS, and put it back - Michael (27 Oct 2026)
 
 /*
  * The office (James, 30 Sep 2026): Kirstie, Michael and Josel cover for each
@@ -165,7 +166,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:wiring", "see:reports", "see:prelaunch", "see:pretenancy", "see:everything",
     "see:roles", "manage:people", "manage:roles", "manage:switches", "edit:knowledge",
-    "see:agent-compliance", "see:clean-sweep", "work:plc", "see:tracking",
+    "see:agent-compliance", "see:clean-sweep", "work:plc", "see:tracking", "archive:homes",
   ],
   /* Susan runs the business, so she sees all of it, unscoped — and since
      4 Sep she also has a short admin of her own. Seven entries, and the list
@@ -188,7 +189,7 @@ const MATRIX: Record<Role, Capability[]> = {
   super_admin: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:prelaunch", "see:pretenancy", "see:everything", "see:roles", "edit:knowledge",
-    "see:agent-compliance", "see:clean-sweep",
+    "see:agent-compliance", "see:clean-sweep", "archive:homes",
   ],
   /* The mirror image. A contractor brought in to debug REX needs the
      connections page and has no business reading anybody's earnings. */
@@ -211,7 +212,9 @@ const MATRIX: Record<Role, Capability[]> = {
      are on the Compliance page every agent already has. */
   /* The clean sweep (24 Sep 2026) sits with compliance too: the checker going
      home by home is given this role, and Kirstie oversees through her own. */
-  compliance: OFFICE,
+  /* Archiving old homes (James, 27 Oct 2026) is Michael's, not the office's:
+     Kirstie keeps OFFICE as it was. */
+  compliance: [...OFFICE, "archive:homes"],
   agent: [],
 };
 

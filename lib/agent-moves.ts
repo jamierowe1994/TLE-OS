@@ -110,7 +110,8 @@ function moved(p: ManagedProperty, m: AgentMove): ManagedProperty {
   return { ...p, agent: { id: m.toRexId, name: m.toName }, agentMovedFrom: p.agent?.name ?? null };
 }
 
-async function recount(book: ManagedBook, properties: ManagedProperty[]): Promise<ManagedBook> {
+/** The book's landlords and counts taken again over a changed list of homes (also lib/archived-homes). */
+export async function recountBook(book: ManagedBook, properties: ManagedProperty[]): Promise<ManagedBook> {
   const landlords = landlordsOf(currentLets(properties));
   const counts = { ...book.counts, ...countsOf(properties, landlords) };
   counts.rentsFromPayProp = currentLets(properties).filter((p) => p.rentSource === "payprop").length;
@@ -169,5 +170,5 @@ export async function withAgentMoves(book: ManagedBook, rexUserId: string | null
       touched = true;
     }
   }
-  return touched ? recount(book, kept) : book;
+  return touched ? recountBook(book, kept) : book;
 }

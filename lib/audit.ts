@@ -91,6 +91,9 @@ export type AuditKind =
   /* A home's type, gas supply, hot water or electrical certificate answered
      in the OS (19 Oct 2026, lib/home-facts). REX is not changed. */
   | "home_facts_set"
+  /* A home archived in the OS, or put back (27 Oct 2026, lib/archived-homes).
+     REX is not changed. */
+  | "home_archived"
   /* A key number recorded on a home in the OS, or taken off (20 Oct 2026,
      /api/property/keys). REX's key register is not changed. */
   | "home_key_set"

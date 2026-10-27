@@ -3,6 +3,7 @@ import { staleForWalk } from "@/lib/rex-outage";
 import { fetchComplianceBook, ukDayNumber, type ComplianceBook } from "@/lib/rex-compliance";
 import { londonDay, londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
+import { complianceWithoutArchived } from "@/lib/archived-homes";
 import { RULES } from "./staleness";
 
 /**
@@ -171,7 +172,18 @@ function asOfToday(book: ComplianceBook, builtAt: number): ComplianceBook {
  * `stale` tells the caller the answer is being refreshed behind them; it is
  * not an error and must not be shown as one.
  */
+/* Homes archived in the OS (lib/archived-homes, 27 Oct 2026) are taken off
+   on every read, so the desk, the tracker and the chases drop them at once. */
 export async function getComplianceBook(): Promise<{
+  book: ComplianceBook;
+  ageMs: number;
+  stale: boolean;
+}> {
+  const r = await bookAsHeld();
+  return { ...r, book: await complianceWithoutArchived(r.book) };
+}
+
+async function bookAsHeld(): Promise<{
   book: ComplianceBook;
   ageMs: number;
   stale: boolean;

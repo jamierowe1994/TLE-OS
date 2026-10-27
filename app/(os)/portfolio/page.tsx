@@ -19,6 +19,7 @@ import { headlineCerts, isOurs, statusOf, type CertStatus, type CompProperty } f
 import type { ManagedBook, ManagedLandlord, ManagedProperty } from "@/lib/portfolio-types";
 import PickOne from "@/components/PickOne";
 import PastTenancies from "@/components/portfolio/PastTenancies";
+import { ArchivedHomesList } from "@/components/portfolio/ArchiveHome";
 import Segmented from "@/components/Segmented";
 import ListSearch from "@/components/ListSearch";
 import SendLogins from "@/components/portfolio/SendLogins";
@@ -836,7 +837,7 @@ export default function Portfolio() {
               )}
 
               {/* ------------------------------------ the archive: past tenancies -- */}
-              {view === "past" && <div className="nl-holder"><PastTenancies search={q} /></div>}
+              {view === "past" && <div className="nl-holder"><ArchivedHomesList /><PastTenancies search={q} /></div>}
             </div>
           </>
         )}
@@ -1160,6 +1161,7 @@ export default function Portfolio() {
           {/* ------------------------------------ the archive: past tenancies -- */}
           {view === "past" && (
             <div className="mt-4">
+              <ArchivedHomesList />
               <PastTenancies search={q} />
             </div>
           )}

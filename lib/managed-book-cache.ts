@@ -9,6 +9,7 @@ import { withRecordService } from "./record-service";
 import { withChangedLandlords } from "./landlord-change";
 import { withTakeOns } from "./take-ons";
 import { withAgentMoves } from "./agent-moves";
+import { withoutArchived } from "./archived-homes";
 import { certificatesFor, type ComplianceBook } from "./rex-compliance";
 import type { ManagedBook } from "./portfolio-types";
 
@@ -181,7 +182,10 @@ export async function managedBookFor(rexUserId: string | null): Promise<{
   /* The service from the OS record over REX's unkept field (lib/record-service,
      20 Oct 2026). Management transfers (lib/take-ons, 19 Oct 2026) last: on
      Portfolio the moment they are saved, filling only what nothing else names. */
-  return { ...raw, book: await withTakeOns(await withChangedLandlords(await withRecordService(await withRecordLandlords(await withNotice(moved, rexUserId)))), rexUserId) };
+  const book = await withTakeOns(await withChangedLandlords(await withRecordService(await withRecordLandlords(await withNotice(moved, rexUserId)))), rexUserId);
+  /* Homes archived in the OS (lib/archived-homes, 27 Oct 2026) come off last,
+     over everything, with the landlords and counts taken again. */
+  return { ...raw, book: await withoutArchived(book) };
 }
 
 async function rawBookFor(rexUserId: string | null): Promise<{

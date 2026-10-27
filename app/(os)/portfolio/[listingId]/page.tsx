@@ -22,6 +22,7 @@ import SentEmails from "@/components/inspections/SentEmails";
 import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
 import HomeAgent from "@/components/portfolio/HomeAgent";
+import { ArchiveConfirm, ArchivedNotice } from "@/components/portfolio/ArchiveHome";
 import HomeKeys from "@/components/portfolio/HomeKeys";
 import HomeSource from "@/components/portfolio/HomeSource";
 import ContactBlock from "@/components/ContactBlock";
@@ -116,7 +117,7 @@ type SwapUnderWay = {
   plc: { state: string; label: string; who: string; short: string } | null;
 };
 
-type Book = { ok: boolean; error?: string; properties: ManagedProperty[]; everything?: boolean };
+type Book = { ok: boolean; error?: string; properties: ManagedProperty[]; everything?: boolean; canArchive?: boolean };
 type Works = { orders: WorksOrder[]; contractors: Contractor[]; carried: CarriedJob[]; canCorporate: boolean };
 type Visits = { inspections: Inspection[]; due: DueVisit[]; team: Person[]; me: Person | null };
 type Tenancy = {
@@ -197,6 +198,10 @@ export default function PropertyPage() {
   /* Same read as the Portfolio list, so arriving from it paints at once.
      Read again after Change address, so the new name shows (27 Oct 2026). */
   const [bookRev, setBookRev] = useState(0);
+  /* Archive this home (Michael, 27 Oct 2026): the ask under the head, and
+     whether the home that isn't in the book is one that was archived. */
+  const [archiveAsk, setArchiveAsk] = useState(false);
+  const [archivedHere, setArchivedHere] = useState(false);
   useEffect(() => {
     let live = true;
     readJson<Book>("/api/portfolio", (j) => Boolean(j?.ok))
@@ -532,8 +537,9 @@ export default function PropertyPage() {
   if (book.state === "ready" && (!home || !p) && look) {
     return (
       <div data-look="new" className="nl-page py-16">
-        <h1 className="nl-block-title">This home isn&apos;t in your book</h1>
-        <p className="nl-meta mt-1.5 max-w-xl">It may belong to another agent, or the link is wrong.</p>
+        <h1 className="nl-block-title">{archivedHere ? "This home is archived" : "This home isn't in your book"}</h1>
+        {!archivedHere && <p className="nl-meta mt-1.5 max-w-xl">It may belong to another agent, or the link is wrong.</p>}
+        {book.data.canArchive && <ArchivedNotice listingId={listingId} onFound={() => setArchivedHere(true)} onBack={() => { setArchivedHere(false); setBookRev((n) => n + 1); }} />}
         <Link href="/portfolio" className="nl-btn nl-btn--secondary nl-btn--sm mt-4">Back to Properties</Link>
       </div>
     );
@@ -550,8 +556,9 @@ export default function PropertyPage() {
   if (!home || !p) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
-        <p className="hand text-[20px]">This home isn&apos;t in your book</p>
-        <p className="mt-2 text-[12.5px] text-muted">It may belong to another agent, or the link is wrong.</p>
+        <p className="hand text-[20px]">{archivedHere ? "This home is archived" : "This home isn't in your book"}</p>
+        {!archivedHere && <p className="mt-2 text-[12.5px] text-muted">It may belong to another agent, or the link is wrong.</p>}
+        {book.state === "ready" && book.data.canArchive && <div className="text-left"><ArchivedNotice listingId={listingId} onFound={() => setArchivedHere(true)} onBack={() => { setArchivedHere(false); setBookRev((n) => n + 1); }} /></div>}
         <Link href="/portfolio" className="mt-4 inline-block text-[12.5px] underline">Back to Properties</Link>
       </div>
     );
@@ -968,6 +975,7 @@ export default function PropertyPage() {
       { label: "Add a document", sub: "An inventory, an agreement, anything else", disabled: p.test, onClick: () => goTab("documents") },
       { label: "Add a note", sub: "A call, an email, a query", disabled: !propertyId, onClick: () => goTab("notes", () => document.getElementById("home-note")?.focus({ preventScroll: true })) },
       ...(everything && !p.test && p.onRex !== false ? ["rule" as const, { label: "Open the record behind this home", href: rexListingUrl(p.listingId, "leased") }] : []),
+      ...(book.state === "ready" && book.data.canArchive && !p.test ? ["rule" as const, { label: "Archive this home", sub: "Not ours any more. Off the OS, the main record untouched", onClick: () => { setArchiveAsk(true); window.scrollTo({ top: 0, behavior: "smooth" }); } }] : []),
     ];
     const outstanding = certs.state === "ready" ? certs.data.outstanding : 0;
     /* How it stands: one line per board, each opening its tab. */
@@ -1174,6 +1182,15 @@ export default function PropertyPage() {
                 <Menu items={menu} label="More for this home" />
               </div>
             </div>
+
+            {archiveAsk && (
+              <ArchiveConfirm
+                listingIds={(houseView && house ? house.members : [p]).map((x) => String(x.listingId))}
+                label={houseView && house ? [house.name, house.locality].filter(Boolean).join(", ") : [p.name, p.locality].filter(Boolean).join(", ")}
+                onCancel={() => setArchiveAsk(false)}
+                onDone={() => { setArchiveAsk(false); setBookRev((n) => n + 1); }}
+              />
+            )}
 
             {(actionErr || p.held) && (
               <div className="nl-prop-notes">
@@ -1697,7 +1714,22 @@ export default function PropertyPage() {
                     <span className="pointer-events-none absolute bottom-3.5 left-3.5 right-3.5 truncate text-[11.5px] leading-snug text-muted">Back on Listings, same home</span>
                   </div>
                 ) : null}
+                {/* Michael, 27 Oct 2026: an old home that isn't ours any more comes off the OS. */}
+                {book.state === "ready" && book.data.canArchive && !p.test ? (
+                  <button type="button" onClick={() => setArchiveAsk(true)} className={tile}>{tileIcon("cross")}{tileText("Archive this home", "Not ours any more. Off the OS")}</button>
+                ) : null}
               </div>
+              {archiveAsk && (
+                <div className="mt-3">
+                  <ArchiveConfirm
+                    flat
+                    listingIds={(houseView && house ? house.members : [p]).map((x) => String(x.listingId))}
+                    label={houseView && house ? [house.name, house.locality].filter(Boolean).join(", ") : [p.name, p.locality].filter(Boolean).join(", ")}
+                    onCancel={() => setArchiveAsk(false)}
+                    onDone={() => { setArchiveAsk(false); setBookRev((n) => n + 1); }}
+                  />
+                </div>
+              )}
             </section>
 
           {/* ── 2. the facts and the people ────────────────────────────── */}

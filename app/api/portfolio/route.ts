@@ -60,6 +60,8 @@ export async function GET(req: NextRequest) {
          the office sees the whole book too, but has no need to pick an agent.
          An owner viewing as somebody sees what they would. */
       byAgent: scope.everything && Boolean(who?.actor && !who.viewingAs && can(who.actor.role, "admin:open")),
+      /* Archive an old home (lib/archived-homes, 27 Oct 2026): Michael and the owners, as themselves. */
+      canArchive: Boolean(who?.actor && !who.viewingAs && can(who.actor.role, "archive:homes")),
       ...book,
       ...(tests.length ? { properties: [...tests, ...book.properties] } : {}),
       ageMs,
