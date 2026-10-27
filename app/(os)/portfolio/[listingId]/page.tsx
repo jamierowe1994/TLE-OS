@@ -251,6 +251,30 @@ export default function PropertyPage() {
   const properties = book.state === "ready" ? book.data.properties : [];
   const everything = book.state === "ready" && Boolean(book.data.everything);
   const home = useMemo(() => properties.find((p) => String(p.listingId) === listingId) ?? null, [properties, listingId]);
+  /* AN OLD LINK TO A HOME'S OTHER RECORD (James, 27 Oct 2026, 33 Eastfield
+     Road). A REX PM record (pm-…) stands in the book only until REX shows the
+     let on the same property; then the let takes its place, and a tab or link
+     still on the record read "isn't in your book" with the tenancy one click
+     away. Such a record forwards to the let for its REX property in this
+     person's own book - only when there is exactly one, so a house of rooms
+     never lands on the wrong room. */
+  const [forward, setForward] = useState<"idle" | "checking" | "none">("idle");
+  useEffect(() => {
+    if (book.state !== "ready" || home || !listingId.startsWith("pm-")) return;
+    let live = true;
+    setForward("checking");
+    getJson<{ rexPropertyId: string | null }>(`/api/portfolio/forward?listing=${encodeURIComponent(listingId)}`)
+      .then((j) => {
+        if (!live) return;
+        const lets = j.rexPropertyId ? properties.filter((x) => String(x.propertyId) === j.rexPropertyId && String(x.listingId) !== listingId) : [];
+        if (lets.length !== 1) return setForward("none");
+        router.replace(`/portfolio/${encodeURIComponent(String(lets[0].listingId))}${window.location.search}`);
+      })
+      .catch(() => live && setForward("none"));
+    return () => {
+      live = false;
+    };
+  }, [book.state, home, listingId, properties, router]);
   const house: House | null = useMemo(() => {
     if (!home) return null;
     return houseByListing(housesIn(properties, R), R).get(String(home.listingId)) ?? null;
@@ -518,7 +542,7 @@ export default function PropertyPage() {
     loadDrafts();
   }, [loadDrafts]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (book.state === "loading") {
+  if (book.state === "loading" || (book.state === "ready" && !home && forward !== "none" && listingId.startsWith("pm-"))) {
     return (
       <div className="py-16">
         <Loading label="Opening the property…" />
