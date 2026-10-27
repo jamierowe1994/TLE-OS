@@ -72,6 +72,13 @@ export default function FieldDate({
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
   }, [open]);
+  /* Inside a box that scrolls by itself (the floating boxes, 27 Oct 2026) the
+     month opened half cut off at the foot: bring all of it into view. */
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => holder.current?.querySelector<HTMLElement>('[role="dialog"]')?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 60);
+    return () => window.clearTimeout(t);
+  }, [open]);
   /* Opening goes to the month of the date already chosen, and the time list
      to the time chosen (or nine o'clock), rather than the top of the list. */
   useEffect(() => {

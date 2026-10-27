@@ -33,6 +33,7 @@ import CancelAppointment, { canCancelGeneral } from "@/components/CancelAppointm
 import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/CancelViewing";
 import AppraisalChange, { canChangeAppraisalAppt } from "@/components/AppraisalChange";
 import { Badge, Ico } from "@/components/new-look/Parts";
+import FloatSheet, { FloatCard, FloatCardHead, FloatFoot } from "@/components/new-look/FloatSheet";
 
 /**
  * The quick look: what IS this, and what do I need to know before I go.
@@ -87,6 +88,7 @@ export default function AppointmentDrawer({
   newLook = false,
   inline = false,
   centred = false,
+  float = false,
 }: {
   appt: Appt | null;
   outcome?: Outcome;
@@ -109,6 +111,13 @@ export default function AppointmentDrawer({
   inline?: boolean;
   /** A box in the middle of a darkened screen, not a side panel (the dashboard, James 25 Oct 2026). */
   centred?: boolean;
+  /**
+   * The floating boxes (components/new-look/FloatSheet) - the Diary from
+   * 27 Oct 2026, James: "when we click on an appointment, it should pop out
+   * as an overview... with the new pop-out style", each part its own box over
+   * the darkened page. New look only; the same facts and buttons.
+   */
+  float?: boolean;
 }) {
   /* A slot: the viewings booked inside it, from the same diary (8 Oct 2026). */
   const { appts: diary } = useDiary();
@@ -119,15 +128,17 @@ export default function AppointmentDrawer({
     setSlotSaid(null);
   }, [appt?.id]);
   /* Every way out plays the card out first (lib/use-slide-over). */
-  const slide = useSlideOver(Boolean(appt) && !inline, closeNow, appt?.id);
+  /* The floating boxes play their own way in and out, and own Escape. */
+  const own = inline || (float && newLook);
+  const slide = useSlideOver(Boolean(appt) && !own, closeNow, appt?.id);
   const shown = slide.shown;
-  const onClose = inline ? closeNow : slide.close;
+  const onClose = own ? closeNow : slide.close;
   useEffect(() => {
-    if (!appt || inline) return;
+    if (!appt || own) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [appt, onClose, inline]);
+  }, [appt, onClose, own]);
 
   /* The property behind it, and its keys. Live REX entries carry no listing
      link, so the address text is the only join; matched conservatively,
@@ -219,8 +230,36 @@ export default function AppointmentDrawer({
         .sort((a, b) => apptStartIso(a).localeCompare(apptStartIso(b)));
     })();
     const anchor = anchorFromAppt({ ...appt, listingId: appt.listingId ?? match?.listingId ?? null });
-    const bodyParts = (<>
-            <dl className="nl-diary-dl">
+    /* Each part on its own, so the drawer and the drop can run them as one
+       list and the floating boxes can give each its own box. */
+    const whoTitle = appt.kind === "viewing" ? (past ? "Who viewed" : "Who's coming") : "Who it's with";
+    const whoBody = (<>
+                    {appt.who ? appt.who : <span className="nl-diary-quiet">Nobody named on this entry.</span>}
+                    {appt.contact && (appt.contact.phone || appt.contact.email) ? (
+                      <span className="mt-2 flex flex-wrap gap-2">
+                        {appt.contact.phone && (
+                          <>
+                            <a href={`tel:${appt.contact.phone.replace(/\s+/g, "")}`} className={nb}>
+                              <Ico name="phone" size={14} />
+                              {appt.contact.phone}
+                            </a>
+                            <WhatsAppButton phone={appt.contact.phone} name={appt.who || ""} className={nb}>
+                              WhatsApp
+                            </WhatsAppButton>
+                          </>
+                        )}
+                        {appt.contact.email && (
+                          <a href={`mailto:${appt.contact.email}`} className={nb}>
+                            <Ico name="mail" size={14} />
+                            Email
+                          </a>
+                        )}
+                      </span>
+                    ) : (
+                      appt.who && <span className="nl-diary-quiet block">No contact details on the calendar entry.</span>
+                    )}
+</>);
+    const whenRows = (<>
               <div>
                 <dt>When</dt>
                 <dd>
@@ -248,39 +287,14 @@ export default function AppointmentDrawer({
                   )}
                 </dd>
               </div>
-              {appt.kind !== "slot" && (
-                <div>
-                  <dt>{appt.kind === "viewing" ? (past ? "Who viewed" : "Who's coming") : "Who it's with"}</dt>
-                  <dd>
-                    {appt.who ? appt.who : <span className="nl-diary-quiet">Nobody named on this entry.</span>}
-                    {appt.contact && (appt.contact.phone || appt.contact.email) ? (
-                      <span className="mt-2 flex flex-wrap gap-2">
-                        {appt.contact.phone && (
-                          <>
-                            <a href={`tel:${appt.contact.phone.replace(/\s+/g, "")}`} className={nb}>
-                              <Ico name="phone" size={14} />
-                              {appt.contact.phone}
-                            </a>
-                            <WhatsAppButton phone={appt.contact.phone} name={appt.who || ""} className={nb}>
-                              WhatsApp
-                            </WhatsAppButton>
-                          </>
-                        )}
-                        {appt.contact.email && (
-                          <a href={`mailto:${appt.contact.email}`} className={nb}>
-                            <Ico name="mail" size={14} />
-                            Email
-                          </a>
-                        )}
-                      </span>
-                    ) : (
-                      appt.who && <span className="nl-diary-quiet block">No contact details on the calendar entry.</span>
-                    )}
-                  </dd>
-                </div>
-              )}
-              {atProperty && (
-                <>
+</>);
+    const diaryRow = (
+              <div>
+                <dt>Diary</dt>
+                <dd>{appt.agent || <span className="nl-diary-quiet">Not recorded</span>}</dd>
+              </div>
+    );
+    const propertyRows = atProperty ? (<>
                   <div>
                     <dt>Keys</dt>
                     <dd>
@@ -336,26 +350,14 @@ export default function AppointmentDrawer({
                       )}
                     </dd>
                   </div>
-                </>
-              )}
-              <div>
-                <dt>Diary</dt>
-                <dd>{appt.agent || <span className="nl-diary-quiet">Not recorded</span>}</dd>
-              </div>
-            </dl>
-
-            {appt.notes && (
-              <section>
-                <h3 className="nl-block-title">Notes</h3>
+</>) : null;
+    const notesBody = appt.notes ? (<>
                 <p className="nl-diary-notes">{appt.notes}</p>
-              </section>
-            )}
-
-            {appt.kind === "slot" && (
-              <section>
-                <h3 className="nl-block-title">
+</>) : null;
+    const slotTitle = (<>
                   Booked in This Slot <span className="nl-count">{slotInside.length}</span>
-                </h3>
+    </>);
+    const slotBody = appt.kind === "slot" ? (<>
                 {slotInside.length ? (
                   <ul className="nl-lines mt-2">
                     {slotInside.map((a) => (
@@ -370,12 +372,8 @@ export default function AppointmentDrawer({
                   <p className="nl-meta mt-2">Nobody booked in it yet. Book within slot to add the first tenant.</p>
                 )}
                 <p className="nl-meta mt-2">Held time - nobody is told about the slot itself.</p>
-              </section>
-            )}
-
-            {appt.kind !== "other" && appt.kind !== "travel" && appt.kind !== "slot" && (
-              <section>
-                <h3 className="nl-block-title">Confirmations</h3>
+</>) : null;
+    const confirmBody = appt.kind !== "other" && appt.kind !== "travel" && appt.kind !== "slot" ? (<>
                 {appt.confirmPending && (
                   <p className="nl-diary-warn mt-2 text-[13.5px]">
                     Booked in the OS. The confirmation to {appt.confirmPending} hasn&apos;t been sent yet
@@ -416,12 +414,8 @@ export default function AppointmentDrawer({
                   </ul>
                 )}
                 {missing.length > 0 && !past && <p className="nl-diary-warn mt-2 text-[12px]">{missing.length} still to send.</p>}
-              </section>
-            )}
-
-            {appt.kind === "viewing" && past && (
-              <section>
-                <h3 className="nl-block-title">After the Viewing</h3>
+</>) : null;
+    const afterBody = appt.kind === "viewing" && past ? (<>
                 {appt.feedback ? (
                   <>
                     <p className="mt-2 flex flex-wrap items-center gap-2">
@@ -438,6 +432,41 @@ export default function AppointmentDrawer({
                 ) : (
                   <p className="nl-meta mt-2">Nobody has written down what was said. Record it from the viewing file.</p>
                 )}
+</>) : null;
+    const bodyParts = (<>
+            <dl className="nl-diary-dl">
+              {whenRows}
+              {appt.kind !== "slot" && (
+                <div>
+                  <dt>{whoTitle}</dt>
+                  <dd>{whoBody}</dd>
+                </div>
+              )}
+              {propertyRows}
+              {diaryRow}
+            </dl>
+            {notesBody && (
+              <section>
+                <h3 className="nl-block-title">Notes</h3>
+                {notesBody}
+              </section>
+            )}
+            {slotBody && (
+              <section>
+                <h3 className="nl-block-title">{slotTitle}</h3>
+                {slotBody}
+              </section>
+            )}
+            {confirmBody && (
+              <section>
+                <h3 className="nl-block-title">Confirmations</h3>
+                {confirmBody}
+              </section>
+            )}
+            {afterBody && (
+              <section>
+                <h3 className="nl-block-title">After the Viewing</h3>
+                {afterBody}
               </section>
             )}
 </>);
@@ -486,7 +515,7 @@ export default function AppointmentDrawer({
               </>
             ) : appt.appraisalId ? (
               <>
-                {canChangeAppraisalAppt(appt) && <AppraisalChange key={appt.appraisalId} appraisalId={appt.appraisalId} buttonClass={nb} />}
+                {canChangeAppraisalAppt(appt) && <AppraisalChange key={appt.appraisalId} appraisalId={appt.appraisalId} buttonClass={nb} above={float} {...(float ? { noteClass: "order-first w-full text-right text-[12px] leading-[18px] text-accent-dark" } : {})} />}
                 <Link href={`/market-appraisals/${encodeURIComponent(appt.appraisalId)}`} className={np}>
                   Open the appraisal
                 </Link>
@@ -506,6 +535,70 @@ export default function AppointmentDrawer({
               </p>
             )}
 </>);
+    if (float) {
+      const boxTitle = appt.kind === "viewing" ? (past ? "Who Viewed" : "Who's Coming") : "Who It's With";
+      return (
+        <FloatSheet
+          title={`${meta.label}${appt.unaccompanied ? " (Unaccompanied)" : ""}`}
+          label={subject || meta.label}
+          size="lg"
+          onClose={closeNow}
+          screenKey={appt.id}
+          question={subject || meta.label}
+          lede={
+            <>
+              {when}, {time}
+              {past ? " · happened" : ""}
+            </>
+          }
+          foot={<FloatFoot>{footParts}</FloatFoot>}
+        >
+          <FloatCard>
+            <FloatCardHead title="When and Where" />
+            <dl className="nl-diary-dl">
+              {whenRows}
+              {diaryRow}
+            </dl>
+          </FloatCard>
+          {appt.kind !== "slot" && (
+            <FloatCard>
+              <FloatCardHead title={boxTitle} />
+              <div className="text-[14px] leading-[21px]">{whoBody}</div>
+            </FloatCard>
+          )}
+          {propertyRows && (
+            <FloatCard>
+              <FloatCardHead title="At the Property" />
+              <dl className="nl-diary-dl">{propertyRows}</dl>
+            </FloatCard>
+          )}
+          {notesBody && (
+            <FloatCard>
+              <FloatCardHead title="Notes" />
+              {notesBody}
+            </FloatCard>
+          )}
+          {slotBody && (
+            <FloatCard>
+              <FloatCardHead title={slotTitle} />
+              {slotBody}
+            </FloatCard>
+          )}
+          {confirmBody && (
+            <FloatCard>
+              <FloatCardHead title="Confirmations" />
+              {confirmBody}
+            </FloatCard>
+          )}
+          {afterBody && (
+            <FloatCard>
+              <FloatCardHead title="After the Viewing" />
+              {afterBody}
+            </FloatCard>
+          )}
+        </FloatSheet>
+      );
+    }
     if (inline) {
       return (
         <div className="nl-diary-inline" data-steve="appointment.inline">

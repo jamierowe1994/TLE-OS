@@ -57,6 +57,7 @@ export default function AppraisalChange({
   showRearrange = true,
   showCancel = true,
   noteClass = "w-full text-[11.5px] text-accent-dark",
+  above = false,
 }: {
   appraisalId: string;
   /** The record when the caller already has it (the file page). */
@@ -67,6 +68,8 @@ export default function AppraisalChange({
   showRearrange?: boolean;
   showCancel?: boolean;
   noteClass?: string;
+  /** Inside the floating boxes (the Diary, 27 Oct 2026): the booker opens over them. */
+  above?: boolean;
 }) {
   const [ma, setMa] = useState<ChangeableAppraisal | null>(appraisal);
   useEffect(() => setMa(appraisal), [appraisal]);
@@ -220,6 +223,7 @@ export default function AppraisalChange({
           agent={ma.agent ?? ""}
           editing={movingFrom ? { startsAt: movingFrom, minutes: 60 } : null}
           onBooked={onBooked}
+          above={above}
         />
       )}
     </>

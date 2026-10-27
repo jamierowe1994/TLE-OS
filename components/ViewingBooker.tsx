@@ -166,6 +166,7 @@ function ClassicViewingBooker({
   skipProperty = false,
   editing = null,
   onAddAnother,
+  above = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -208,6 +209,8 @@ function ClassicViewingBooker({
    * caller moves it rather than booking another.
    */
   editing?: { startsAt: string; minutes: number; unaccompanied?: boolean } | null;
+  /** Opened from inside the floating boxes (the Diary's pop-out, 27 Oct 2026): drawn over them, not under. */
+  above?: boolean;
   /**
    * "Add another viewing to this slot" (James, 8 Oct 2026): offered once a
    * viewing is booked, with the booking as the block's first viewing. The
@@ -1215,7 +1218,7 @@ function ClassicViewingBooker({
   // Portaled: this opens from inside drawers whose slide transition leaves a
   // transform on the aside — which would anchor `fixed` to the drawer.
   return createPortal(
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+    <div className={`fixed inset-0 ${above ? "z-[155]" : "z-[140]"} flex items-center justify-center p-4`}>
       <button
         aria-label="Close"
         onClick={onClose}

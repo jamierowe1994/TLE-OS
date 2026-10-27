@@ -80,8 +80,9 @@ type NlTab = "month" | "week";
 export default function Viewings() {
   const look = useNewLook("diary");
   const [nlTab, setNlTab] = useState<NlTab>("month");
-  /* The entry dropped down under its row in the new look, and the day under the month to bring into view. */
-  const [openRow, setOpenRow] = useState<string | null>(null);
+  /* The day under the month to bring into view. An entry opens as the floating
+     boxes in the new look (James, 27 Oct 2026: "it should pop out as an
+     overview"), no longer dropped down under its row as on 25 Oct. */
   const dayRef = useRef<HTMLDivElement | null>(null);
   /* Three views, not two. "Feedback" is the landlord's question - people have
      been round, what did they say - and it is asked per PROPERTY, which is a
@@ -236,6 +237,7 @@ export default function Viewings() {
 
       <AppointmentDrawer
         newLook={Boolean(look)}
+        float={Boolean(look)}
         appt={quick}
         onClose={() => setQuickId(null)}
         onOpenViewing={(a) => {
@@ -291,28 +293,10 @@ export default function Viewings() {
        failed read (the live-figures rule). */
     const sure = !loading && !error;
     /* A day opens under the month; the week's days and entries open there too. */
-    const showDay = (offset: number, openId: string | null = null) => {
+    const showDay = (offset: number) => {
       pickDay(offset);
       setNlTab("month");
-      setOpenRow(openId);
       window.setTimeout(() => dayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
-    };
-    const drop = {
-      openId: openRow,
-      onToggle: (a: Appt) => setOpenRow((cur) => (cur === a.id ? null : a.id)),
-      render: (a: Appt) => (
-        <AppointmentDrawer
-          newLook
-          inline
-          appt={a}
-          onClose={() => setOpenRow(null)}
-          onOpenViewing={(x) => setFullId(x.id)}
-          onChangeTime={(x) => setChanging(x)}
-          onAddToBlock={(anchor) => setBlockAnchor(anchor)}
-          sentExtra={sentExtra}
-          onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
-        />
-      ),
     };
     const dayList = byDay.get(selected) ?? [];
     const dayCount = counted(dayList);
@@ -450,7 +434,7 @@ export default function Viewings() {
                   {loading && !dayList.length ? (
                     loadingLine
                   ) : dayList.length ? (
-                    <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setOpenRow(a.id)} drop={drop} />
+                    <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />
                   ) : (
                     <p className="nl-empty">{selected < 0 ? "Nothing was booked that day." : "A clear day. Rare. Enjoy it."}</p>
                   )}
@@ -460,7 +444,7 @@ export default function Viewings() {
 
             {nlTab === "week" && (
               <div className="nl-diary-holder">
-                {loading && !DIARY.length ? loadingLine : <WeekGrid appts={scoped} onOpen={(a) => showDay(a.day, a.id)} onPrint={() => window.print()} onPickDay={(d) => showDay(d)} />}
+                {loading && !DIARY.length ? loadingLine : <WeekGrid appts={scoped} onOpen={(a) => setQuickId(a.id)} onPrint={() => window.print()} onPickDay={(d) => showDay(d)} />}
               </div>
             )}
           </div>

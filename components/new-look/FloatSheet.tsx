@@ -135,6 +135,11 @@ export default function FloatSheet({ open = true, title, onClose, step, steps, o
     const onKey = (e: KeyboardEvent) => {
       const r = root.current;
       if (!r) return;
+      /* Focus in something drawn over the boxes (a booker or an email sheet
+         opened from a card, 27 Oct 2026): its keys are its own. */
+      const at = document.activeElement;
+      if (at && at !== document.body && !r.contains(at) && at.closest("[role=dialog], .fixed")) return;
+      for (let n = r.closest(".nl-fs-wrap")?.nextElementSibling; n; n = n.nextElementSibling) if (n.matches(".fixed.inset-0")) return;
       if (e.key === "Escape") {
         if (e.defaultPrevented || !dismiss.current) return;
         e.preventDefault();

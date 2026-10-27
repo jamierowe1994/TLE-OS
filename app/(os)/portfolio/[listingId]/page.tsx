@@ -817,11 +817,16 @@ export default function PropertyPage() {
       {showAll && <AllActivity title={title} items={allActivity} reading={reading} onClose={() => setShowAll(false)} />}
 
       {/* ── the pop-ups ───────────────────────────────────────────────── */}
-      {action && (action.kind === "repair" || action.kind === "planned") && raiseHome && (
-        <Modal onClose={closeAction} wide>
+      {action && (action.kind === "repair" || action.kind === "planned") && raiseHome && (() => {
+        const raise = (
           <RaiseJob
             key={`${action.kind}-${action.draft?.id ?? "new"}`}
-            inline
+            inline={!look}
+            /* The new look plans a job as the Contractors page does: the
+               floating boxes over a darkened page, a box per category
+               (James, 27 Oct 2026). The home is this one, so it opens on
+               what's wrong. */
+            look={look ? "float" : undefined}
             kind={action.kind}
             home={raiseHome}
             draft={(action.draft?.data as RaiseDraft | undefined) ?? null}
@@ -836,8 +841,9 @@ export default function PropertyPage() {
               setOpenJob(o);
             }}
           />
-        </Modal>
-      )}
+        );
+        return look ? raise : <Modal onClose={closeAction} wide>{raise}</Modal>;
+      })()}
       {action?.kind === "inspection" && visits.state === "ready" && (
         <Modal onClose={closeAction} title={action.inspection.kind === "check_out" ? "Book the check-out" : "Book a property visit"} wide>
           <BookVisit
