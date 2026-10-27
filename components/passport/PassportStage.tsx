@@ -54,7 +54,7 @@ export default function PassportStage({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // The email window or the WhatsApp sheet open over it close first.
-      if (document.querySelector(".z-\\[150\\]")) return;
+      if (document.querySelector(".z-\\[150\\], [data-wa-sheet]")) return;
       onClose();
     };
     window.addEventListener("keydown", onKey);
