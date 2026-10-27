@@ -184,6 +184,12 @@ function SentList({ items, onClose, onOpen }: { items: Item[]; onClose: () => vo
   );
 }
 
+/** Every link in a sent email opens in its own tab, where the page it leads to can run. */
+const linksInNewTab = (html: string) => {
+  const base = '<base target="_blank">';
+  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (h) => h + base) : base + html;
+};
+
 function SentEmail({ appraisalId, emailId, onClose }: { appraisalId: string; emailId: string; onClose: () => void }) {
   const [email, setEmail] = useState<Email | null | "error">(null);
   useEffect(() => {
@@ -230,8 +236,15 @@ function SentEmail({ appraisalId, emailId, onClose }: { appraisalId: string; ema
         ) : deck ? (
           <iframe title="The pre-presentation as they see it" src={deck.href} className="min-h-0 w-full flex-1 rounded-2xl border border-line/80 bg-white" />
         ) : (
-          /* Same origin allowed, scripts still not: some browsers draw a fully sandboxed srcdoc as a blank page. */
-          <iframe title="The email as it went" srcDoc={email.html} sandbox="allow-same-origin" className="min-h-0 w-full flex-1 rounded-2xl border border-line/80 bg-white" />
+          /* Same origin allowed, scripts still not: some browsers draw a fully sandboxed srcdoc as a blank page.
+             Its links open in a new tab: followed inside this scriptless frame, the pack behind "View your
+             pre-presentation" drew as a blank page with only the logo (Rhiannon, 23 Oct 2026). */
+          <iframe
+            title="The email as it went"
+            srcDoc={linksInNewTab(email.html)}
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            className="min-h-0 w-full flex-1 rounded-2xl border border-line/80 bg-white"
+          />
         )}
       </div>
     </Modal>

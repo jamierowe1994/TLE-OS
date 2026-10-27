@@ -12,6 +12,7 @@ import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import { STEPS, stepOf, type StepId } from "@/lib/inspection-steps";
 import type { DueVisit, Finding, Inspection, InspectionEvent, InspectionRules } from "@/lib/inspections";
+import type { OffHome } from "@/lib/inspections-off";
 import ReportSheet from "@/components/inspections/ReportSheet";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
 import SentEmails, { emailWent } from "@/components/inspections/SentEmails";
@@ -57,6 +58,14 @@ const KINDS: { id: string; label: string }[] = [
   { id: "follow_up", label: "Re-visit" },
 ];
 const kindLabel = (k: string) => KINDS.find((x) => x.id === k)?.label ?? "Visit";
+/* Why a home isn't ours to visit (lib/inspections-off). */
+const OFF_REASONS: { id: string; label: string }[] = [
+  { id: "let_only", label: "Let only" },
+  { id: "rent_collect", label: "Rent collect only" },
+  { id: "not_ours", label: "Not with us any more" },
+  { id: "other", label: "Something else" },
+];
+const offLabel = (r: string) => OFF_REASONS.find((x) => x.id === r)?.label ?? "Not ours";
 const ROOMS = ["Outside", "Hallway", "Living room", "Kitchen", "Dining room", "Bedroom 1", "Bedroom 2", "Bedroom 3", "Bathroom", "En-suite", "WC", "Loft", "Garage", "Garden", "Communal areas", "Meters & alarms"];
 const ACTIONS: { id: string; label: string }[] = [
   { id: "none", label: "Nothing needed" },
@@ -112,6 +121,8 @@ type Board = {
   /** "rex-pm" while the due list is the tasks copied across (lib/rexpm-tasks). */
   source?: "rex-pm" | "os";
   readAt?: string | null;
+  /** Homes taken off the Due list by hand (lib/inspections-off). */
+  off?: OffHome[];
   /** Who is looking, and who can be sent on a visit (3 Oct 2026). */
   me?: Person;
   team?: Person[];
@@ -189,6 +200,26 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
     setTab("hand");
     setOpenId(r.inspection.id);
     return true;
+  }
+
+  /* Not ours to visit (Rhiannon Dodge, 23 Oct 2026): the home leaves Due
+     and is listed at the foot of it, where anybody can put it back. */
+  async function takeOff(d: DueVisit, reason: string, note: string): Promise<boolean> {
+    const r = await fetch("/api/inspections/off", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ homes: [d.osPropertyId, d.propertyId, d.listingId], propertyName: d.propertyName, locality: d.locality, reason, note }),
+    }).then((x) => x.json()).catch(() => null);
+    if (!r?.ok) { setError(r?.error ?? "Could not take it off."); return false; }
+    setError(null);
+    load();
+    return true;
+  }
+  async function putBack(id: string) {
+    const r = await fetch(`/api/inspections/off?id=${encodeURIComponent(id)}`, { method: "DELETE" }).then((x) => x.json()).catch(() => null);
+    if (!r?.ok) return setError(r?.error ?? "Could not put it back.");
+    setError(null);
+    load();
   }
 
   return (
@@ -287,17 +318,20 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
           Reading the book…
         </p>
       ) : tab === "due" ? (
-        due.length === 0 ? (
-          <Empty title="Nothing due." blurb="Every managed home has been visited inside the cadence, or is already in hand." />
-        ) : (
-          <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
-            <ul className="divide-y divide-line/50">
-              {due.map((d) => (
-                <DueRow key={d.key} d={d} onBook={() => void raise(d)} onMoveDue={(day, note) => raise(d, { day, note })} onDone={(day) => raise(d, undefined, day)} />
-              ))}
-            </ul>
-          </section>
-        )
+        <>
+          {due.length === 0 ? (
+            <Empty title="Nothing due." blurb="Every managed home has been visited inside the cadence, or is already in hand." />
+          ) : (
+            <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+              <ul className="divide-y divide-line/50">
+                {due.map((d) => (
+                  <DueRow key={d.key} d={d} onBook={() => void raise(d)} onMoveDue={(day, note) => raise(d, { day, note })} onDone={(day) => raise(d, undefined, day)} onTakeOff={(reason, note) => takeOff(d, reason, note)} />
+                ))}
+              </ul>
+            </section>
+          )}
+          {!!data.off?.length && <OffList rows={data.off} onPutBack={putBack} />}
+        </>
       ) : (
         <List rows={tab === "hand" ? inHand : done} onOpen={setOpenId} empty={tab === "hand" ? "Nothing in hand." : "Nothing finished yet."} />
       )}
@@ -308,9 +342,10 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
 }
 
 /** One home on the Due list: book it, or change when it is due. */
-function DueRow({ d, onBook, onMoveDue, onDone }: { d: DueVisit; onBook: () => void; onMoveDue: (day: string, note: string) => Promise<boolean>; onDone: (day: string) => Promise<boolean> }) {
+function DueRow({ d, onBook, onMoveDue, onDone, onTakeOff }: { d: DueVisit; onBook: () => void; onMoveDue: (day: string, note: string) => Promise<boolean>; onDone: (day: string) => Promise<boolean>; onTakeOff: (reason: string, note: string) => Promise<boolean> }) {
   const [editing, setEditing] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [offOpen, setOffOpen] = useState(false);
   return (
                 <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 py-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
                   <span className="min-w-0">
@@ -323,13 +358,16 @@ function DueRow({ d, onBook, onMoveDue, onDone }: { d: DueVisit; onBook: () => v
                   <span className={`col-start-1 text-[12px] md:col-start-auto ${d.daysAway < 0 ? "font-semibold text-accent-dark" : "text-muted"}`}>
                     {d.daysAway < 0 ? `${Math.abs(d.daysAway)} day${d.daysAway === -1 ? "" : "s"} over` : d.daysAway === 0 ? "Due today" : `Due ${day(d.dueAt)}`} · {d.why}
                     {d.managedBy ? <span className="block text-[10.5px] font-normal text-muted">With {d.managedBy}</span> : null}
-                    {!editing && !doneOpen && (
+                    {!editing && !doneOpen && !offOpen && (
                       <span className="flex flex-wrap gap-x-3">
                         <button type="button" onClick={() => setEditing(true)} className="text-[11px] font-normal text-muted underline">
                           Change due date
                         </button>
                         <button type="button" onClick={() => setDoneOpen(true)} className="text-[11px] font-normal text-muted underline">
                           Already done
+                        </button>
+                        <button type="button" onClick={() => setOffOpen(true)} className="text-[11px] font-normal text-muted underline">
+                          Not ours to visit
                         </button>
                       </span>
                     )}
@@ -341,6 +379,11 @@ function DueRow({ d, onBook, onMoveDue, onDone }: { d: DueVisit; onBook: () => v
                   {doneOpen && (
                     <div className="col-span-full">
                       <AlreadyDoneForm onSave={onDone} onDone={() => setDoneOpen(false)} />
+                    </div>
+                  )}
+                  {offOpen && (
+                    <div className="col-span-full">
+                      <TakeOffForm onSave={onTakeOff} onDone={() => setOffOpen(false)} />
                     </div>
                   )}
                   {editing && (
@@ -449,6 +492,88 @@ function AlreadyDoneForm({ onSave, onDone }: { onSave: (day: string) => Promise<
         <button type="button" onClick={onDone} className="text-[11.5px] text-muted underline">Cancel</button>
       </div>
     </div>
+  );
+}
+
+/**
+ * A due row for a home we don't visit (Rhiannon Dodge, 23 Oct 2026: a let
+ * only flat the old system still filed as managed). Why, then off the list.
+ */
+function TakeOffForm({ onSave, onDone }: { onSave: (reason: string, note: string) => Promise<boolean>; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const ready = !!reason && (reason !== "other" || note.trim().length > 0);
+  return (
+    <div className="mt-2 rounded-xl bg-accent-soft/30 p-3">
+      <p className="text-[12px] text-muted">Why isn&apos;t it ours to visit?</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {OFF_REASONS.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => setReason(r.id)}
+            aria-pressed={reason === r.id}
+            className={`rounded-full border px-3 py-1 text-[12px] ${reason === r.id ? "border-ink bg-ink text-page" : "border-line/80 bg-page text-ink"}`}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        maxLength={300}
+        placeholder={reason === "other" ? "Say why" : "Anything to add (optional)"}
+        className="mt-2 w-full rounded-xl border border-line/80 bg-page px-3 py-1.5 text-[12.5px]"
+      />
+      <p className="mt-1.5 text-[11px] text-muted">It comes off Inspections only, and can be put back from the foot of this list. Nobody is emailed.</p>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <PressButton
+          disabled={saving || !ready}
+          onClick={async () => {
+            setSaving(true);
+            const ok = await onSave(reason, note.trim());
+            setSaving(false);
+            if (ok) onDone();
+          }}
+          className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page"
+        >
+          {saving ? "Saving…" : "Take it off"}
+        </PressButton>
+        <button type="button" onClick={onDone} className="text-[11.5px] text-muted underline">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/** The homes taken off by hand: who, when and why, and Put back. */
+function OffList({ rows, onPutBack }: { rows: OffHome[]; onPutBack: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="mt-4 rounded-[22px] border border-line/50 bg-white px-5 py-3">
+      <button type="button" onClick={() => setOpen((x) => !x)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 text-left">
+        <span className="text-[12.5px] text-ink">Not Ours to Visit <span className="text-muted">· {rows.length} taken off by hand</span></span>
+        <span className="text-[11.5px] text-muted underline">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open && (
+        <ul className="mt-2 divide-y divide-line/50">
+          {rows.map((o) => (
+            <li key={o.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
+              <span className="min-w-0">
+                <span className="hand block truncate text-[13.5px]">{o.propertyName}</span>
+                <span className="block text-[11px] text-muted">
+                  {offLabel(o.reason)}{o.note ? ` · ${o.note}` : ""} · {o.by}, {day(o.at)}
+                </span>
+              </span>
+              <button type="button" onClick={() => onPutBack(o.id)} className="rounded-full border border-line/80 px-4 py-1.5 text-[12px] text-ink">
+                Put back
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

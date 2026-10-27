@@ -10,6 +10,7 @@ import { rexConfigured } from "@/lib/rex";
 import { factsByRexId } from "@/lib/os-properties";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { isOurs } from "@/lib/compliance";
+import { homesOff, withoutOff } from "@/lib/inspections-off";
 import { lastClosedByHome, lastImport, openTasks } from "@/lib/rexpm-tasks";
 import {
   createInspection, dueFromTasks, dueList, inspectionRules, listInspections, logEvent, moveInspection, openFindings, summarise,
@@ -57,11 +58,13 @@ export async function GET(req: NextRequest) {
   let inspections: Awaited<ReturnType<typeof listInspections>>;
   let rules: Awaited<ReturnType<typeof inspectionRules>>;
   let actions: Awaited<ReturnType<typeof openFindings>>;
+  let off: Awaited<ReturnType<typeof homesOff>>;
   try {
-    [inspections, rules, actions] = await Promise.all([
+    [inspections, rules, actions, off] = await Promise.all([
       listInspections({ kind, open, propertyId, strict: true }),
       inspectionRules(),
       openFindings(),
+      homesOff(),
     ]);
   } catch {
     return NextResponse.json({ ok: false, error: "The inspections couldn't be read just now, so nothing is shown rather than a list that might be wrong. Try again in a minute." }, { status: 503 });
@@ -126,6 +129,8 @@ export async function GET(req: NextRequest) {
           const prior = await lastClosedByHome("inspection");
           due = dueList(book.properties.filter((p) => ours.has(String(p.propertyId ?? p.listingId))), inspections, rules, hmoIds, prior);
         }
+        /* Homes an agent has taken off by hand (lib/inspections-off). */
+        due = withoutOff(due, off);
       } catch (e) {
         bookError = publicError(e, "REX didn't answer, so the due list is missing.");
       }
@@ -144,8 +149,12 @@ export async function GET(req: NextRequest) {
   const shownInspections = full
     ? inspections
     : inspections.map((i) => (ownHomes!.has(String(i.propertyId ?? "")) || ownHomes!.has(String(i.listingId ?? "")) ? i : maskContactFields(i)));
+  /* The homes taken off by hand that sit in this person's own book, or that
+     they took off themselves. */
+  const myName = (me.name || me.email).trim().toLowerCase();
+  const shownOff = ownHomes === null ? off : off.filter((o) => o.homes.some((h) => ownHomes!.has(h)) || o.by.trim().toLowerCase() === myName);
   return NextResponse.json({
-    ok: true, live: true, inspections: shownInspections, due, actions, rules,
+    ok: true, live: true, inspections: shownInspections, due, actions, rules, off: shownOff,
     me: { id: me.id, name: me.name || me.email },
     team: team.map((t) => ({ id: t.id, name: t.name })),
     summary: summarise(inspections, due),
