@@ -3,6 +3,7 @@ import { maskContactFields, seesContactLists } from "@/lib/contact-mask";
 import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
+import { widenForOverview } from "@/lib/overview-access";
 import { bookScope } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
@@ -35,8 +36,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const { actor, subject } = await whoIs(req);
+  const who = await whoIs(req);
+  const { actor, subject } = who;
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  /* Opened from its Overview tile: the same book the tile counted. */
+  await widenForOverview(req, who);
   if (!hasDb()) {
     return NextResponse.json({ ok: true, live: false, reason: "No database on this environment.", inspections: [], due: [], actions: [], rules: null, summary: null });
   }

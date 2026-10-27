@@ -17,8 +17,7 @@ import { GET as moveOutsGET } from "@/app/api/move-outs/route";
 import { GET as applicationsGET } from "@/app/api/applications/route";
 import { GET as listingsGET } from "@/app/api/listings/route";
 import { grantWholeBusiness } from "@/lib/scope";
-import { seesWholeOverview } from "@/lib/overview-access";
-import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { wholeOverviewFor } from "@/lib/overview-access";
 
 /**
  * The Overview board (1 Oct 2026): one tile per part of property management,
@@ -65,15 +64,12 @@ const settle = async <T,>(p: Promise<T>): Promise<Tile<T>> => {
 const todayLondon = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 
 export async function GET(req: NextRequest) {
-  const { actor, subject, viewingAs } = await whoIs(req);
+  const who = await whoIs(req);
+  const { actor, subject, viewingAs } = who;
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const today = todayLondon();
   const money = can(actor.role, "see:business") && !viewingAs;
-  /* An owner viewing as somebody sees THEIR Overview, so the grant follows
-     the person being viewed - and a view-as of someone with no account
-     (the REX id on the cookie) is never widened. */
-  const viewAsCookie = actor.role === "owner" && !!readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
-  const whole = viewingAs ? !!subject && (await seesWholeOverview(subject)) : !viewAsCookie && (await seesWholeOverview(actor));
+  const whole = await wholeOverviewFor(req, who);
   const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, whole);
   /* An answer that could not be read is an error on its tile, never zeros
      (Rig run 4, P-065, 10 Oct 2026): an agent the OS cannot place got "0 to
