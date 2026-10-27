@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import { Sheet, Spinner } from "./bits";
 
 /**
@@ -31,7 +31,7 @@ export function RadiusBox({ picked, onOpen }: { picked: RadiusPick | null; onOpe
       className="mt-2.5 flex h-12 w-full items-center gap-3 rounded-xl bg-card px-4 text-left active:bg-panel"
       style={picked ? { borderColor: "var(--accent)" } : undefined}
     >
-      <DoodleIcon name="target" size={18} className="text-muted" />
+      <AppIcon name="target" size={18} className="text-muted" />
       <span className={`min-w-0 flex-1 truncate text-[16px] ${picked ? "font-semibold" : "text-muted"}`}>
         {picked ? `Within ${picked.miles} ${picked.miles === 1 ? "mile" : "miles"} of ${picked.label}` : "Search by Radius"}
       </span>
@@ -108,7 +108,7 @@ export function RadiusSheet({ start, onPick, onClose }: { start: RadiusPick | nu
         className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-[15.5px] font-semibold text-white disabled:opacity-60"
         style={{ background: "var(--brown)" }}
       >
-        <DoodleIcon name="target" size={18} /> {busy === "here" ? "Finding you…" : "Use My Current Location"}
+        <AppIcon name="target" size={18} /> {busy === "here" ? "Finding you…" : "Use My Current Location"}
       </button>
 
       <p className="my-3 text-center text-[13px] text-muted">or</p>

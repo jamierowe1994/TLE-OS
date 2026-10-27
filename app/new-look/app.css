@@ -1,0 +1,353 @@
+/* ===========================================================================
+   THE PHONE APP IN THE NEW LOOK (lib/new-look "app", 27 Oct 2026).
+
+   James: "bring it in line with what we've already got ... removing all of the
+   illustrations ... minimalistic but gets to the point". The desktop's new look
+   (app/new-look.css) carried onto /agent: a white page, one tonal step for
+   cards on a 1px line, no shadows, the orange for the one action, sage for
+   "go", Bricolage titles, Source Serif figures, Inter for everything else,
+   text tabs on a hairline and badges as a dot and a word.
+
+   Everything sits under .m-app[data-applook="new"], which only the server
+   puts on (app/agent/layout) when the switch is on for the person - so the
+   pastel app underneath is untouched. The phone's own tokens (--m-*, in
+   ../agent/m.css) take the new values, so every screen that reads them
+   follows; the parts drawn differently are restyled below. The doubled
+   class outranks the desktop's :root[data-theme="dark"] [data-look="new"],
+   so a desktop dark choice never leaks onto a light phone.
+=========================================================================== */
+
+html .m-app.m-app[data-applook="new"] {
+  --m-bg: #ffffff;
+  --m-card: #fafaf9;
+  --m-line: #e9e9e6;
+  --m-line-strong: #d6d6d2;
+  --m-fill: #f0f0ee;
+  --m-on-card: #ffffff;
+  /* The one action is the desktop's orange, with ink on it as the design has it. */
+  --m-brown: #eb8c6d;
+  --m-brown-ink: #141413;
+  --m-ink: #141413;
+  --m-muted: #63625b;
+  --m-soft: #87867f;
+  --m-coral: #eb8c6d;
+  --m-pink: #eb8c6d;
+  /* The pink and sage washes become the one tonal step - calm, not pastel. */
+  --m-pink-wash: #f7f7f6;
+  --m-green-wash: #f7f7f6;
+  /* The coloured cards (Chats' General, Focus Hour) go to ink. */
+  --m-pink-grad: #141413;
+  --m-green: #66785b;
+  --m-sage-ink: #55684a;
+  --m-sand: #f5e3c7;
+
+  --ink: var(--m-ink);
+  --muted: var(--m-muted);
+  --faint: var(--m-soft);
+  --line: var(--m-line);
+  --line-strong: var(--m-line-strong);
+  --page: var(--m-bg);
+  --card: var(--m-card);
+  --panel: #f7f7f6;
+  --box: var(--m-fill);
+  --primary: #eb8c6d;
+  --on-primary: #141413;
+  --accent: #eb8c6d;
+  --accent-soft: #f5e3c7;
+  --accent-dark: #aa4a2b;
+  --sage-deep: #66785b;
+  --sage-ink: #55684a;
+  --sage-soft: #e3e3d3;
+  --info: #3d3d3a;
+  --info-soft: #e3dacc;
+  --warning: #8a531a;
+  --warning-soft: #f2e6d2;
+  --brown: var(--m-ink);
+  --font-heading: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.005em;
+}
+
+html .m-app.m-app[data-applook="new"][data-mtheme="dark"] {
+  --m-bg: #1f1e1d;
+  --m-card: #262624;
+  --m-line: #3a3936;
+  --m-line-strong: #4a4844;
+  --m-fill: #33322f;
+  --m-on-card: #1f1e1d;
+  --m-brown: #eb8c6d;
+  --m-brown-ink: #141413;
+  --m-ink: #faf9f5;
+  --m-muted: #b0aea5;
+  --m-soft: #87867f;
+  --m-pink-wash: #2a2927;
+  --m-green-wash: #2a2927;
+  --m-pink-grad: #33322f;
+  --m-green: #a9bf9a;
+  --m-sage-ink: #a9bf9a;
+  --m-sand: #3a2c1f;
+  --panel: #2a2927;
+  --accent-soft: #3a2c1f;
+  --accent-dark: #f0a283;
+  --sage-deep: #a9bf9a;
+  --sage-ink: #a9bf9a;
+  --sage-soft: #28301f;
+  --info: #d6d3cb;
+  --info-soft: #33302a;
+  --warning: #e0ac6a;
+  --warning-soft: #33281a;
+}
+
+/* The page behind the page: Safari and the iPhone tint their bars from it. */
+html:has(.m-app[data-applook="new"]),
+html:has(.m-app[data-applook="new"]) body {
+  background: #ffffff;
+}
+html:has(.m-app[data-applook="new"][data-mtheme="dark"]),
+html:has(.m-app[data-applook="new"][data-mtheme="dark"]) body {
+  background: #1f1e1d;
+}
+
+/* No paintings, anywhere in the app. The screens draw type-only heads in the
+   new look; this is the net under them, so none can slip through. */
+.m-app[data-applook="new"] img[src^="/illustrations/"] {
+  display: none !important;
+}
+
+/* ── type ───────────────────────────────────────────────────────────────── */
+.m-app[data-applook="new"] .m-title,
+.m-app[data-applook="new"] h1,
+.m-app[data-applook="new"] h2,
+.m-app[data-applook="new"] h3 {
+  font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+.m-app[data-applook="new"] .m-figure {
+  font-family: var(--font-serif4), Charter, Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.m-app[data-applook="new"] .m-guide-title {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+.m-app[data-applook="new"] .m-guide-num {
+  font-family: var(--font-serif4), Charter, Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+.m-app[data-applook="new"] .m-eyebrow {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--m-muted);
+}
+/* Times in the mono, as the desktop diary has them. */
+.m-app[data-applook="new"] .m-mono {
+  font-family: var(--font-jbmono), ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--m-muted);
+}
+/* A blurb in the serif, under a title. */
+.m-app[data-applook="new"] .m-blurb {
+  font-family: var(--font-serif4), Charter, Georgia, serif;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--m-muted);
+}
+
+/* ── boxes: one tonal step on a hairline, no shadows ────────────────────── */
+.m-app[data-applook="new"] .m-group {
+  background: var(--m-card);
+  border: 1px solid var(--m-line);
+  border-radius: 16px;
+}
+.m-app[data-applook="new"] [class*="shadow"] {
+  box-shadow: none !important;
+}
+
+/* ── buttons: the orange for the one action, outlines for the rest ──────── */
+.m-app[data-applook="new"] .m-btn {
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid var(--m-line-strong);
+  background: transparent;
+  font-size: 14.5px;
+  font-weight: 500;
+}
+.m-app[data-applook="new"] .m-group .m-btn:not(.m-btn-primary) {
+  background: var(--m-bg);
+}
+.m-app[data-applook="new"] .m-btn-primary,
+.m-app[data-applook="new"] .m-group .m-btn-primary {
+  border-color: transparent;
+  background: var(--m-brown);
+  color: var(--m-brown-ink);
+}
+.m-app[data-applook="new"] .m-round {
+  background: transparent;
+  border: 1px solid var(--m-line-strong);
+}
+
+/* ── chips become badges: a word on the tonal step ──────────────────────── */
+.m-app[data-applook="new"] .m-chip {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--m-fill);
+}
+
+/* ── search: square-ish, on a line ──────────────────────────────────────── */
+.m-app[data-applook="new"] .m-search {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--m-line-strong);
+  background: var(--m-bg);
+}
+.m-app[data-applook="new"] .m-search:focus-within {
+  border-color: var(--m-ink);
+}
+
+/* ── choices become text tabs on a hairline, the chosen one underlined ──── */
+.m-app[data-applook="new"] .m-seg {
+  gap: 22px;
+  border-bottom: 1px solid var(--m-line);
+}
+.m-app[data-applook="new"] .m-seg > button {
+  height: auto;
+  padding: 8px 0 10px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--m-muted);
+  font-size: 14px;
+  box-shadow: inset 0 -2px 0 transparent;
+}
+.m-app[data-applook="new"] .m-seg > button[aria-pressed="true"] {
+  background: transparent;
+  color: var(--m-ink);
+  box-shadow: inset 0 -2px 0 var(--m-ink);
+}
+
+/* ── motion: calm, as on the desktop - no overshoot, no bounce ──────────── */
+.m-app[data-applook="new"] .m-press {
+  transition: transform 160ms ease-out, background-color 160ms, opacity 160ms;
+}
+.m-app[data-applook="new"] .m-press:active {
+  transform: scale(0.985);
+}
+@keyframes m-new-page-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.m-app[data-applook="new"] .m-page {
+  animation: m-new-page-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@keyframes m-new-sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.m-app[data-applook="new"] .m-sheet-in {
+  animation: m-new-sheet-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── the bar at the foot ────────────────────────────────────────────────── */
+.m-app[data-applook="new"] .m-bar-tab {
+  color: var(--m-soft);
+}
+.m-app[data-applook="new"] .m-bar-tab[aria-current="page"] {
+  color: var(--m-ink);
+}
+.m-app[data-applook="new"] .m-bar-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--m-coral);
+}
+
+/* ── a type-only head: eyebrow, title, one line ─────────────────────────── */
+.m-app[data-applook="new"] .m-mast {
+  padding: 18px 0 22px;
+}
+.m-app[data-applook="new"] .m-mast h1 {
+  font-size: 34px;
+  line-height: 38px;
+  margin: 0;
+}
+.m-app[data-applook="new"] .m-mast p.m-blurb {
+  margin-top: 8px;
+}
+
+/* ── an empty list: a line in the serif, nothing drawn ──────────────────── */
+.m-app[data-applook="new"] .m-empty {
+  padding: 28px 2px;
+  font-family: var(--font-serif4), Charter, Georgia, serif;
+  font-size: 17px;
+  line-height: 25px;
+  color: var(--m-muted);
+}
+
+/* ── figures on hairlines, not tiles ────────────────────────────────────── */
+.m-app[data-applook="new"] .m-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--m-line);
+}
+.m-app[data-applook="new"] .m-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 14px 16px 0;
+  border-bottom: 1px solid var(--m-line);
+}
+.m-app[data-applook="new"] .m-stat:nth-child(even) {
+  padding-left: 16px;
+  border-left: 1px solid var(--m-line);
+}
+
+/* ── the search pill and its sort button ────────────────────────────────── */
+.m-app[data-applook="new"] .m-floatpill {
+  height: 46px !important;
+  border-radius: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--m-line-strong);
+  background: var(--m-bg) !important;
+}
+.m-app[data-applook="new"] .m-floatbox {
+  height: 50px;
+  border-radius: 14px;
+  background: var(--m-bg) !important;
+}
+.m-app[data-applook="new"] .m-sortbtn {
+  width: 46px !important;
+  height: 46px !important;
+  border-radius: 12px;
+  border: 1px solid var(--m-line-strong);
+  background: transparent !important;
+  color: var(--m-ink) !important;
+}
+
+/* What sat over the foot of a painted head (-mt-5) sits under the title now. */
+.m-app[data-applook="new"] .m-mast + * {
+  margin-top: 0 !important;
+}
+
+/* A tile (Tools, Guides): the tonal step on a hairline, a smaller round. */
+.m-app[data-applook="new"] .m-tile {
+  border: 1px solid var(--m-line);
+  border-radius: 18px;
+}
+
+/* Any card the screens paint with the card colour gets the hairline the
+   desktop's cards have, so a list reads on white. Inline-styled, so matched
+   on the style itself. */
+.m-app[data-applook="new"] [style*="background: var(--m-card)"]:not(.m-floatpill):not(.m-floatbox) {
+  border: 1px solid var(--m-line);
+}

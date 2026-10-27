@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import type { Appt } from "@/lib/diary";
-import { ErrorLine, HomeHero, Spinner, TopBar } from "../bits";
+import { ErrorLine, HomeHero, Spinner, TopBar, EmptyCard } from "../bits";
 import { KIND_LABEL, endOf, loadDiary, nowHm } from "../diary-bits";
 import SlideTabs from "@/components/app/SlideTabs";
 
@@ -106,7 +106,7 @@ export default function PhoneDiary() {
   return (
     <main>
       <TopBar />
-      <HomeHero title="Diary" line={LINE[view]} src="/illustrations/app/diary-cottage.webp" height={170} right={-14} bottom={14} />
+      <HomeHero title="Diary" line={LINE[view]} brief={null} src="/illustrations/app/diary-cottage.webp" height={170} right={-14} bottom={14} />
 
       <SlideTabs
         className="z-[1] -mt-5"
@@ -149,7 +149,7 @@ function Stepper({ title, line, onPrev, onNext, prevOff, nextOff }: { title: str
     <div className="mt-4 flex items-center gap-2 rounded-full p-1.5" style={{ background: "var(--m-card)" }}>
       <Arrow dir="back" onClick={onPrev} disabled={prevOff} />
       <span className="flex min-w-0 flex-1 items-center justify-center gap-2.5">
-        <DoodleIcon name="calendar" size={20} />
+        <AppIcon name="calendar" size={20} />
         <span className="min-w-0 text-center">
           <span className="block truncate text-[15.5px] font-semibold leading-tight">{title}</span>
           {line && <span className="block truncate text-[12.5px] text-muted">{line}</span>}
@@ -192,7 +192,7 @@ function Row({ a, done }: { a: Appt; done: boolean }) {
       </span>
       <Link href={`/agent/event/${encodeURIComponent(a.id)}`} className="m-press mb-2.5 flex min-w-0 flex-1 items-center gap-3 rounded-[20px] p-3" style={{ background: "var(--m-card)" }}>
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ background: t.wash, color: t.ink }}>
-          <DoodleIcon name={k.icon} size={20} />
+          <AppIcon name={k.icon} size={20} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15.5px] font-semibold">{title}</span>
@@ -214,11 +214,7 @@ function Timeline({ list, offset, max }: { list: Appt[]; offset: number; max?: n
   if (offset < -BACK || offset > AHEAD) return <Outside offset={offset} />;
   if (!list.length) {
     return (
-      <div className="mt-4 flex flex-col items-center rounded-[22px] px-6 py-7 text-center" style={{ background: "var(--m-card)" }}>
-        <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
-        <p className="mt-2 text-[16px] font-medium">Nothing Booked</p>
-        <p className="mt-1 text-[14px] text-muted">{offset === 0 ? "Nothing in your diary today." : "Nothing in your diary on this day."}</p>
-      </div>
+      <EmptyCard className="mt-4" title="Nothing Booked" line={offset === 0 ? "Nothing in your diary today." : "Nothing in your diary on this day."} />
     );
   }
   return (
@@ -333,7 +329,7 @@ function WeekView({ sel, setSel, byDay }: { sel: number; setSel: (n: number) => 
                   style={{ top: top + 2, height, background: t.wash }}
                 >
                   <span className="shrink-0" style={{ color: t.ink }}>
-                    <DoodleIcon name={k.icon} size={18} />
+                    <AppIcon name={k.icon} size={18} />
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-[14px] font-semibold leading-tight">{x.kind === "other" ? x.what : KIND_LABEL[x.kind] ?? x.what}</span>

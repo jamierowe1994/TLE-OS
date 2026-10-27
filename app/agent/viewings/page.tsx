@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import { feedbackLabel, type Appt } from "@/lib/diary";
-import { ErrorLine, Spinner, TopBar, HomeHero } from "../bits";
+import { ErrorLine, Spinner, TopBar, HomeHero, EmptyCard } from "../bits";
 import { endOf, loadDiary, nowHm } from "../diary-bits";
 import SlideTabs from "@/components/app/SlideTabs";
 import FloatSearch from "@/components/app/FloatSearch";
@@ -103,7 +103,7 @@ export default function PhoneViewings() {
     <main>
       <TopBar />
 
-      <HomeHero title="Viewings" line="Who you are showing round, and where." src="/illustrations/app/home-bungalow.webp" />
+      <HomeHero title="Viewings" line="Who you are showing round, and where." brief="Your viewings, day by day." src="/illustrations/app/home-bungalow.webp" />
 
       <div className="relative z-[1] -mt-5 flex">
         <FloatSearch
@@ -115,7 +115,7 @@ export default function PhoneViewings() {
       </div>
 
       <Link href="/agent/book" className="m-btn m-btn-primary m-press mt-4 w-full">
-        <DoodleIcon name="calendar" size={17} /> Book a Viewing
+        <AppIcon name="calendar" size={17} /> Book a Viewing
       </Link>
 
       <SlideTabs className="mt-4" value={tab} onChange={setTab} options={TABS.map((t) => ({ id: t.id, label: t.label }))} />
@@ -133,11 +133,7 @@ export default function PhoneViewings() {
       ) : !appts ? (
         <Spinner label="Loading your viewings" className="py-6" />
       ) : count === 0 ? (
-        <div className="mt-2 flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-          <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
-          <p className="mt-2 text-[16px] font-medium">Nothing Here</p>
-          <p className="mt-1 text-[14px] text-muted">{needle.trim() ? `No viewing matches "${needle.trim()}".` : tab === "today" ? "No viewings booked today." : "No viewings in this group."}</p>
-        </div>
+        <EmptyCard className="mt-2" title="Nothing Here" line={needle.trim() ? `No viewing matches "${needle.trim()}".` : tab === "today" ? "No viewings booked today." : "No viewings in this group."} />
       ) : (
         groups.map((g) => (
           <section key={g.day}>

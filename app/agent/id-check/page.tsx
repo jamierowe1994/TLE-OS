@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DocCamera, { type FrameShape } from "@/components/landlord/DocCamera";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import type { Appt } from "@/lib/diary";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import { ErrorLine, PhoneTop, SearchBox, Spinner } from "../bits";
@@ -287,7 +287,7 @@ export default function PhoneIdCheck() {
             className="mt-2.5 flex h-14 w-full items-center gap-3 rounded-2xl border bg-card px-4 text-left active:bg-panel"
             style={{ borderColor: fromCalendar ? "var(--accent)" : "var(--m-line)" }}
           >
-            <DoodleIcon name="calendar" size={18} className="text-muted" />
+            <AppIcon name="calendar" size={18} className="text-muted" />
             <span className="min-w-0 flex-1 text-[16px] text-muted">Search From Calendar</span>
             {today && today.length > 0 && <span className="figures text-[14px] text-muted">{today.length}</span>}
             <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0 text-muted" style={{ transform: fromCalendar ? "rotate(90deg)" : undefined, transition: "transform 200ms" }}>
@@ -402,7 +402,7 @@ export default function PhoneIdCheck() {
                 className="flex min-h-[72px] items-center gap-4 rounded-[20px] border border-[color:var(--m-line)] bg-card px-4 py-3 text-left active:bg-panel"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-dark">
-                  <DoodleIcon name={k === "other" ? "doc" : "user"} size={20} />
+                  <AppIcon name={k === "other" ? "doc" : "user"} size={20} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="hand block text-[18px] leading-tight">{DOCS[k].title}</span>
@@ -448,7 +448,7 @@ export default function PhoneIdCheck() {
                 ) : (
                   <div className="mt-2 grid grid-cols-1 gap-2">
                     <button type="button" onClick={() => setCamera(i)} className={primary} style={{ background: "var(--brown)" }}>
-                      <DoodleIcon name="camera" size={18} /> Take Photo
+                      <AppIcon name="camera" size={18} /> Take Photo
                     </button>
                     <button
                       type="button"

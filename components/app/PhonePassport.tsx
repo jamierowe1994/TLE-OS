@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import { Sheet } from "@/app/agent/bits";
 
 /**
@@ -84,7 +84,7 @@ export default function PhonePassport({
     <div className={className}>
       {state?.done ? (
         <p className="flex items-center gap-2 text-[14.5px] font-medium" style={{ color: "var(--m-sage-ink)" }}>
-          <DoodleIcon name="checklist" size={17} /> Rental passport done
+          <AppIcon name="checklist" size={17} /> Rental passport done
         </p>
       ) : (
         <button
@@ -96,7 +96,7 @@ export default function PhonePassport({
           disabled={state === null}
           className={`m-btn m-press w-full disabled:opacity-60 ${state?.sent || quiet ? "" : "m-btn-primary"}`}
         >
-          <DoodleIcon name="doc" size={17} />
+          <AppIcon name="doc" size={17} />
           {state === null ? "Checking their passport" : state.sent ? "Send Passport Again" : "Send Rental Passport"}
         </button>
       )}
@@ -120,7 +120,7 @@ export default function PhonePassport({
             </p>
           )}
           <button type="button" onClick={() => void send()} disabled={busy} className="m-btn m-btn-primary m-press mt-5 w-full disabled:opacity-60">
-            <DoodleIcon name="mail" size={17} /> {busy ? "Sending" : "Send It"}
+            <AppIcon name="mail" size={17} /> {busy ? "Sending" : "Send It"}
           </button>
           <button type="button" onClick={() => setAsking(false)} className="m-btn m-press mt-2 w-full">
             Not Now

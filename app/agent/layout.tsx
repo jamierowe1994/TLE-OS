@@ -3,9 +3,13 @@ import { cookies, headers } from "next/headers";
 import AppFrame from "@/components/app/AppFrame";
 import AppSeen from "@/components/app/AppSeen";
 import PageTracker from "@/components/PageTracker";
-import { M_THEME_COLOUR, M_THEME_COOKIE, type MTheme } from "@/lib/m-theme";
+import { M_LOOK_COOKIE, M_THEME_COOKIE, themeColour, type MTheme } from "@/lib/m-theme";
 import { M_NAV_COOKIE, parseNav } from "@/lib/m-nav";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { findUserById } from "@/lib/users";
+import { lookFor } from "@/lib/new-look-store";
 import "./m.css";
+import "../new-look/app.css";
 
 /**
  * THE AGENTS' APP (2 Oct 2026): what opens from the home screen.
@@ -57,12 +61,30 @@ async function chosenTheme(): Promise<MTheme | null> {
   return v === "light" || v === "dark" ? v : null;
 }
 
+/**
+ * The new look on the phone (lib/new-look "app", 27 Oct 2026), decided here on
+ * the server so the first paint is already the right one - a phone opening
+ * the app never sees the pastel look flash before the white one. A pin from
+ * ?look=new|old (the m-look cookie, set by AppFrame) wins on this phone only.
+ */
+async function newLook(): Promise<boolean> {
+  const jar = await cookies();
+  const pinned = jar.get(M_LOOK_COOKIE)?.value;
+  if (pinned === "new" || pinned === "old") return pinned === "new";
+  const id = verifySessionToken(jar.get(SESSION_COOKIE)?.value);
+  if (!id) return false;
+  const user = await findUserById(id).catch(() => null);
+  if (!user || user.locked) return false;
+  const on = await lookFor(user).catch(() => null);
+  return Boolean(on?.app);
+}
+
 export async function generateViewport(): Promise<Viewport> {
   return {
     width: "device-width",
     initialScale: 1,
     viewportFit: "cover",
-    themeColor: M_THEME_COLOUR[(await chosenTheme()) ?? "light"],
+    themeColor: themeColour((await chosenTheme()) ?? "light", await newLook()),
   };
 }
 
@@ -71,8 +93,11 @@ export default async function PhoneLayout({ children }: { children: React.ReactN
   const theme = await chosenTheme();
   /* The agent's own three icons on the bar (lib/m-nav), drawn first time. */
   const nav = parseNav((await cookies()).get(M_NAV_COOKIE)?.value);
+  const fresh = await newLook();
   return (
-    <div className="m-app min-h-dvh" data-mtheme={theme ?? "light"}>
+    /* data-look carries the desktop's new-look tokens and nl-* parts (app/new-look.css);
+       data-applook the phone's own (app/new-look/app.css). */
+    <div className="m-app min-h-dvh" data-mtheme={theme ?? "light"} data-look={fresh ? "new" : undefined} data-applook={fresh ? "new" : undefined}>
       {/* A page that never comes to life reloads itself, once (2 Oct 2026).
           James's home-screen app froze on the welcome screen: the phone had
           kept a page whose code a deploy had since replaced, so it drew but
@@ -84,7 +109,7 @@ export default async function PhoneLayout({ children }: { children: React.ReactN
       <AppSeen />
       {/* Which screens are opened and for how long (Admin > Tracking). */}
       <PageTracker />
-      <AppFrame inApp={inApp} theme={theme} nav={nav}>
+      <AppFrame inApp={inApp} theme={theme} nav={nav} fresh={fresh}>
         {children}
       </AppFrame>
     </div>
