@@ -561,12 +561,42 @@ function Rows({
   );
 }
 
+const NO_AGENT = "\u0000none";
+
+function agentsOn(d: Payload): { value: string; label: string; overdue: number }[] {
+  const all = [...d.outstanding, ...d.upcoming, ...(d.undated ?? []), ...(d.renewals ?? []), ...(d.nextTenancy ?? []), ...(d.notNeeded ?? [])];
+  const overdue = new Map<string, number>();
+  for (const r of d.outstanding) overdue.set(r.agent ?? NO_AGENT, (overdue.get(r.agent ?? NO_AGENT) ?? 0) + 1);
+  const names = [...new Set(all.map((r) => r.agent).filter((a): a is string => Boolean(a)))];
+  const out = names
+    .map((n) => ({ value: n, label: n, overdue: overdue.get(n) ?? 0 }))
+    .sort((a, b) => b.overdue - a.overdue || a.label.localeCompare(b.label));
+  if (all.some((r) => !r.agent)) out.push({ value: NO_AGENT, label: "No agent on record", overdue: overdue.get(NO_AGENT) ?? 0 });
+  return out;
+}
+
+function countsFor(base: Payload["counts"], outstanding: ChaseRow[], upcoming: ChaseRow[]): Payload["counts"] {
+  return {
+    ...base,
+    expired: outstanding.filter((r) => r.status === "expired").length,
+    missing: outstanding.filter((r) => r.status === "missing").length,
+    band30: upcoming.filter((r) => r.band === 30).length,
+    band14: upcoming.filter((r) => r.band === 14).length,
+    band7: upcoming.filter((r) => r.band === 7).length,
+    noAgent: [...outstanding, ...upcoming.filter((r) => r.band)].filter((r) => !r.agent).length,
+  };
+}
+
 export default function ComplianceTracker() {
   const [d, setD] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"outstanding" | "undated" | "notNeeded" | "renewals" | "nextTenancy" | "upcoming" | "queue">("outstanding");
   const [filed, setFiled] = useState<string[]>([]);
   const [find, setFind] = useState("");
+  /* One agent's homes (James, 27 Oct 2026): "filter by the agent on what's
+     overdue ... if he's on the phone to them, you need to sort out these
+     ones". "" is everybody; NO_AGENT is the homes with nobody to chase through. */
+  const [agent, setAgent] = useState("");
 
   /* Off the list the moment it is filed, so the number goes down while the
      book rebuilds behind it (a minute or two). A date already past stays:
@@ -632,9 +662,12 @@ export default function ComplianceTracker() {
     await reload();
   }
 
+  const ofAgent = (rows: ChaseRow[]) =>
+    !agent ? rows : rows.filter((r) => (agent === NO_AGENT ? !r.agent : r.agent === agent));
   const match = (rows: ChaseRow[]) => {
     const t = find.trim();
-    return t ? rows.filter((r) => searchMatches(t, r.property, r.locality, r.agent, r.landlord, r.certLabel)) : rows;
+    const mine = ofAgent(rows);
+    return t ? mine.filter((r) => searchMatches(t, r.property, r.locality, r.landlord, r.certLabel)) : mine;
   };
 
   useEffect(() => {
@@ -652,12 +685,19 @@ export default function ComplianceTracker() {
     };
   }, []);
 
+  /* Every agent with something on the book, the most overdue first, so the
+     names he rings most are at the top of the list. */
+  const agents = d ? agentsOn(d) : [];
+  /* The tiles follow the agent: the same sums lib/compliance-tracker does for
+     the whole book, over that agent's rows. */
+  const counts = d && agent ? countsFor(d.counts, ofAgent(d.outstanding), ofAgent(d.upcoming)) : d?.counts;
+
   const sent: Sent | null = d?.chases ? new Map(d.chases.map((c) => [c.key, { to: c.to, at: c.at }])) : null;
 
   return (
     <>
       <PageHeader
-        title="Compliance tracker"
+        title="Property Compliance"
         blurb={`What is overdue, what is coming up, and which agent to chase, across every home we manage.${d?.ageMs != null ? ` Figures ${asOf(d.ageMs).text}.` : ""}`}
       />
 
@@ -683,12 +723,12 @@ export default function ComplianceTracker() {
 
           <div className="fade-up mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
             {[
-              ["Expired", d.counts.expired, "past the date"],
-              ["No record", d.counts.missing, "we cannot say"],
-              ["30 days", d.counts.band30, "chase due"],
-              ["14 days", d.counts.band14, "chase due"],
-              ["7 days", d.counts.band7, "chase due"],
-              ["No agent", d.counts.noAgent, "nobody to chase through"],
+              ["Expired", counts!.expired, "past the date"],
+              ["No record", counts!.missing, "we cannot say"],
+              ["30 days", counts!.band30, "chase due"],
+              ["14 days", counts!.band14, "chase due"],
+              ["7 days", counts!.band7, "chase due"],
+              ["No agent", counts!.noAgent, "nobody to chase through"],
             ].map(([label, n, sub]) => (
               <div key={label as string} className="rounded-[22px] border border-line/50 bg-white p-4">
                 <p className="figures text-[22px] leading-none">{n as number}</p>
@@ -715,12 +755,12 @@ export default function ComplianceTracker() {
             <div className="mb-3 flex flex-wrap gap-2">
               {(
                 [
-                  ["outstanding", `Outstanding (${d.outstanding.length})`],
-                  ...((d.undated?.length ?? 0) > 0 ? [["undated", `On file, no date (${d.undated.length})`] as const] : []),
-                  ...((d.renewals?.length ?? 0) > 0 ? [["renewals", `Renewal applied for (${d.renewals.length})`] as const] : []),
-                  ...((d.nextTenancy?.length ?? 0) > 0 ? [["nextTenancy", `Next tenancy (${d.nextTenancy.length})`] as const] : []),
-                  ...((d.notNeeded?.length ?? 0) > 0 ? [["notNeeded", `Not needed (${d.notNeeded.length})`] as const] : []),
-                  ["upcoming", `Coming up (${d.upcoming.length})`],
+                  ["outstanding", `Outstanding (${ofAgent(d.outstanding).length})`],
+                  ...((d.undated?.length ?? 0) > 0 ? [["undated", `On file, no date (${ofAgent(d.undated).length})`] as const] : []),
+                  ...((d.renewals?.length ?? 0) > 0 ? [["renewals", `Renewal applied for (${ofAgent(d.renewals).length})`] as const] : []),
+                  ...((d.nextTenancy?.length ?? 0) > 0 ? [["nextTenancy", `Next tenancy (${ofAgent(d.nextTenancy).length})`] as const] : []),
+                  ...((d.notNeeded?.length ?? 0) > 0 ? [["notNeeded", `Not needed (${ofAgent(d.notNeeded).length})`] as const] : []),
+                  ["upcoming", `Coming up (${ofAgent(d.upcoming).length})`],
                   ["queue", `Chase queue (${d.queue.length})`],
                 ] as const
               ).map(([id, label]) => (
@@ -739,12 +779,34 @@ export default function ComplianceTracker() {
 
             {tab !== "queue" && (
               <div className="mb-3 flex flex-wrap items-center gap-3">
+                <select
+                  value={agent}
+                  onChange={(e) => setAgent(e.target.value)}
+                  aria-label="Agent"
+                  className="w-full rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12.5px] sm:w-auto sm:max-w-[260px]"
+                >
+                  <option value="">Every agent</option>
+                  {agents.map((a) => (
+                    <option key={a.value} value={a.value}>
+                      {a.label}{a.overdue ? ` (${a.overdue} overdue)` : ""}
+                    </option>
+                  ))}
+                </select>
                 <input
                   value={find}
                   onChange={(e) => setFind(e.target.value)}
-                  placeholder="Find an address, agent or landlord"
-                  className="w-full max-w-[340px] rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12.5px]"
+                  placeholder="Find a property, postcode or landlord"
+                  className="w-full rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12.5px] sm:max-w-[300px]"
                 />
+                {(agent || find) && (
+                  <button
+                    type="button"
+                    onClick={() => { setAgent(""); setFind(""); }}
+                    className="text-[12px] text-muted underline-offset-2 hover:text-ink hover:underline"
+                  >
+                    Clear
+                  </button>
+                )}
                 {filed.length > 0 && (
                   <p className="text-[11.5px] text-muted">
                     <span className="font-semibold text-ink">Filed:</span> {filed.join(" · ")}. On the home&apos;s file, sent to REX and ticked as checked.
@@ -755,7 +817,7 @@ export default function ComplianceTracker() {
             {tab === "outstanding" && (
               <Rows
                 rows={match(d.outstanding)}
-                empty={find ? "Nothing outstanding matches that." : "Nothing expired and nothing missing. That would be a first."}
+                empty={find || agent ? "Nothing outstanding matches that." : "Nothing expired and nothing missing. That would be a first."}
                 onFiled={onFiled}
                 onNotNeeded={onNotNeeded}
                 onRenewal={() => void reload()}

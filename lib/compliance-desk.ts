@@ -130,11 +130,14 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
   if (!hasDb()) return [];
   const [certs, docs] = await Promise.all([
     q<Record<string, unknown>>(
-      `SELECT c.id, c.property_name, c.type_id AS type_raw, c.type_id, c.expiry, c.name, c.r2_key, c.source, c.added_by, c.added_at,
-              k.state, k.note, k.by_name, k.at AS checked_at, k.told, k.told_at, tu.name AS told_name
+      `SELECT c.id, c.property_id, c.property_name, c.type_id AS type_raw, c.type_id, c.expiry, c.name, c.r2_key, c.source, c.added_by, c.added_at,
+              k.state, k.note, k.by_name, k.at AS checked_at, k.told, k.told_at, tu.name AS told_name, op.address AS op_address
          FROM os_certificates c
          LEFT JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id
          LEFT JOIN os_users tu ON tu.id = k.told
+         LEFT JOIN LATERAL (
+           SELECT p.address FROM os_properties p WHERE p.id = c.property_id OR p.rex_property_id = c.property_id LIMIT 1
+         ) op ON TRUE
         WHERE c.added_at >= $1::date AND (k.state IS NULL OR k.state <> 'verified')
         ORDER BY c.added_at`,
       [CHECKS_BEGAN]
@@ -153,6 +156,15 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
     ),
   ]);
 
+  /* The home behind each certificate (James, 27 Oct 2026). The upload doors
+     mostly file it by id alone - 24 of the 27 waiting that day said "A property
+     with no name on the record", so he could not tell which home he was
+     looking at, nor search for one. The compliance book names the home and its
+     agent; the property record covers a home the book does not hold. */
+  const held = await heldComplianceBook().catch(() => null);
+  const homes = new Map((held?.book.properties ?? []).map((p) => [p.id, p]));
+  const homeOf = (r: Record<string, unknown>) => homes.get(String(r.property_id ?? ""));
+
   const queried = (r: Record<string, unknown>) =>
     r.state === "queried" ? { note: String(r.note ?? ""), by: String(r.by_name ?? ""), at: isoOf(r.checked_at), told: r.told_at ? String(r.told_name ?? "") || null : null } : null;
 
@@ -161,14 +173,20 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       kind: "certificate",
       id: String(r.id),
       door: doorOf(String(r.source ?? "")),
-      property: String(r.property_name ?? "") || "A property with no name on the record",
+      property:
+        String(r.property_name ?? "").trim() ||
+        [homeOf(r)?.name, homeOf(r)?.locality].map((v) => (v ?? "").trim()).filter(Boolean).join(", ") ||
+        String(r.op_address ?? "").trim() ||
+        "A property with no name on the record",
       what: TYPE_WORDS[String(r.type_id)] ?? String(r.type_id),
       expiry: ymd(r.expiry),
       fileName: String(r.name ?? ""),
       fileKey: String(r.r2_key ?? ""),
       by: String(r.added_by ?? ""),
       source: String(r.source ?? ""),
-      agent: ["Agent", "REX"].includes(doorOf(String(r.source ?? ""))) ? String(r.added_by ?? "") || null : null,
+      /* The home's agent first - who he rings about it, and the name the
+         agent filter and Property Compliance share - then whoever filed it. */
+      agent: homeOf(r)?.agent?.trim() || (["Agent", "REX"].includes(doorOf(String(r.source ?? ""))) ? String(r.added_by ?? "") || null : null),
       addedAt: isoOf(r.added_at),
       queried: queried(r),
     })),
@@ -612,7 +630,7 @@ export async function verifiedToSend(): Promise<VerifiedItem[]> {
   const rows = await q<Record<string, unknown>>(
     `SELECT c.id, c.property_id, c.property_name, c.type_id, c.expiry::text AS expiry, c.issue::text AS issue, c.name, c.r2_key,
             (c.added_at AT TIME ZONE 'Europe/London')::date::text AS came_in, k.by_name, k.at AS verified_at,
-            h.at AS home_at, h.by AS home_by, h.send_id, h.names, a.at AS auto_at, a.names AS auto_names
+            h.at AS home_at, h.by AS home_by, h.send_id, h.names, a.at AS auto_at, a.names AS auto_names, op.address AS op_address
        FROM os_certificates c
        JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id AND k.state = 'verified'
        LEFT JOIN LATERAL (
@@ -626,10 +644,17 @@ export async function verifiedToSend(): Promise<VerifiedItem[]> {
            FROM os_certificate_sends s
           WHERE s.certificate_id = c.id AND s.role = 'tenant' AND s.sent
        ) a ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT p.address FROM os_properties p WHERE p.id = c.property_id OR p.rex_property_id = c.property_id LIMIT 1
+       ) op ON TRUE
       WHERE c.added_at >= $1::date AND (c.expiry >= $2::date OR coalesce(h.at, a.at) IS NOT NULL)`,
     [CHECKS_BEGAN, today]
   );
+  /* Named as on To verify: the book, then the property record. */
+  const held = await heldComplianceBook().catch(() => null);
+  const homes = new Map((held?.book.properties ?? []).map((p) => [p.id, p]));
   const out = rows.map((r): VerifiedItem => {
+    const home = homes.get(String(r.property_id ?? ""));
     const issue = r.issue ? String(r.issue) : null;
     /* An issue date after the day it came in, or in the future, is a typo: use the day it came in. */
     const fromIssue = Boolean(issue && issue <= today && issue <= String(r.came_in));
@@ -644,7 +669,11 @@ export async function verifiedToSend(): Promise<VerifiedItem[]> {
     return {
       id: String(r.id),
       propertyId: String(r.property_id ?? ""),
-      property: String(r.property_name ?? "") || "A property with no name on the record",
+      property:
+        String(r.property_name ?? "").trim() ||
+        [home?.name, home?.locality].map((v) => (v ?? "").trim()).filter(Boolean).join(", ") ||
+        String(r.op_address ?? "").trim() ||
+        "A property with no name on the record",
       what: TYPE_WORDS[String(r.type_id)] ?? String(r.type_id),
       expiry: String(r.expiry),
       fileName: String(r.name ?? ""),

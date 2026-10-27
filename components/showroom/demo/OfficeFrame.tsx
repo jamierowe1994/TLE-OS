@@ -45,12 +45,12 @@ function Item({ item, on, sub }: { item: NavItem; on: string; sub?: string }) {
 /** The compliance desk's own rail (app/(os)/compliance-desk/layout), for its screens. */
 const DESK: NavItem[] = [
   { href: "/compliance-desk", label: "Dashboard", icon: "home" },
-  { href: "/compliance-desk/properties", label: "Properties", icon: "shield" },
-  { href: "/compliance-desk/verify", label: "To verify", icon: "checklist" },
-  { href: "/compliance-desk/plc", label: "PLC queue", icon: "list" },
-  { href: "/compliance-desk/id-checks", label: "ID checks", icon: "user" },
-  { href: "/compliance-desk/agents", label: "Agents", icon: "user" },
-  { href: "/compliance-desk/works", label: "Works orders", icon: "setting" },
+  { href: "/compliance-desk/properties", label: "Property Compliance", icon: "shield" },
+  { href: "/compliance-desk/verify", label: "Gas & Electric Check", icon: "checklist" },
+  { href: "/compliance-desk/plc", label: "PLC Queue", icon: "list" },
+  { href: "/compliance-desk/id-checks", label: "ID Checks", icon: "user" },
+  { href: "/compliance-desk/agents", label: "Agent Compliance", icon: "user" },
+  { href: "/compliance-desk/works", label: "Works Orders", icon: "setting" },
 ];
 
 /** Kirstie's workspace rail (app/(os)/pre-tenancy/layout), for the pre-tenancy screens. Keep in step. */

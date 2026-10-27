@@ -7,6 +7,7 @@ import { useDesk } from "@/components/compliance-desk/useDesk";
 import RegisterCheck from "@/components/compliance-desk/RegisterCheck";
 import VerifiedList, { useVerified } from "@/components/compliance-desk/VerifiedList";
 import { useCallback, useEffect, useState } from "react";
+import { searchMatches } from "@/lib/search-match";
 import type { VerifyItem } from "@/lib/compliance-desk";
 
 /**
@@ -30,14 +31,28 @@ import type { VerifyItem } from "@/lib/compliance-desk";
  *   Sent        gone, with the record
  *
  * /compliance-desk/verified opens this page on Verified.
+ *
+ * GAS & ELECTRIC ON A TAB OF THEIR OWN (James, 27 Oct 2026): "the one where
+ * he checks the gas safety certificates and the electrical safety
+ * certificates, and then confirms them" could not be found among the EPCs and
+ * landlord uploads, and "To verify" did not say what it was. So the queue is
+ * two tabs: Gas & Electric (gas safety and EICR, the ones held out of REX until
+ * he verifies them, each with its register check) first, and Other Documents.
+ * An agent and a property filter sit over both: "if he's on the phone to them".
  */
 const LATE_AFTER_DAYS = 7;
 
-type Tab = "verify" | "verified" | "sent";
-const TAB_IDS: Tab[] = ["verify", "verified", "sent"];
+type Tab = "verify" | "other" | "verified" | "sent";
+const TAB_IDS: Tab[] = ["verify", "other", "verified", "sent"];
+const TAB_LABEL: Record<Tab, string> = { verify: "Gas & Electric", other: "Other Documents", verified: "Verified", sent: "Sent" };
+
+/** Gas safety and EICR: exactly the ones that carry the engineer's register check (lib/cert-register `readable`). */
+const isGasOrElectric = (r: VerifyItem) => Boolean(r.register);
+const NO_AGENT = "\u0000none";
 
 const BLURB: Record<Tab, string> = {
-  verify: "Every certificate an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. Verified, it moves to the Verified tab, ready to email the tenant; queried, the agent is emailed what you wrote. Gas and electrical ones come with the engineer's register number read off for you. Oldest first.",
+  verify: "Every gas safety certificate and EICR an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. They stay off REX and off the tenant's view until you do. The engineer's register number is read off for you: check it on the register, then verify. Verified, it moves to the Verified tab, ready to email the tenant; queried, the agent is emailed what you wrote. Oldest first.",
+  other: "Everything else waiting for your check: EPCs, licences, legionella, alarms and the landlords' uploads. Verified, it moves to the Verified tab; queried, the agent is emailed what you wrote. Oldest first.",
   verified: "Certificates you have verified, waiting to go to the tenants. They must have the renewed certificate within 28 days of the work, counted from the date on it (or the day it came in, if no date was filed). Email Tenant opens the email with the certificate attached: check it, change the words if you need to, and send.",
   sent: "Every verified certificate that has gone to the tenants, newest first. Each email is kept on the home's file as the record: View Record shows it exactly as it went.",
 };
@@ -48,6 +63,8 @@ export default function ToVerify() {
   const [tab, setTab] = useState<Tab>("verify");
   /* What the last Verified press did, with the way to the tab it went to. */
   const [moved, setMoved] = useState(false);
+  const [agent, setAgent] = useState("");
+  const [find, setFind] = useState("");
   useEffect(() => {
     try {
       const t = new URLSearchParams(window.location.search).get("tab");
@@ -74,20 +91,34 @@ export default function ToVerify() {
   }, [check, verified.reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!desk && !error) return <WorkspaceLoading />;
-  const rows = desk?.verify ?? [];
+  const all = desk?.verify ?? [];
+  const ofAgent = (list: VerifyItem[]) => (!agent ? list : list.filter((r) => (agent === NO_AGENT ? !r.agent : r.agent === agent)));
+  const gas = ofAgent(all.filter(isGasOrElectric));
+  const other = ofAgent(all.filter((r) => !isGasOrElectric(r)));
+  const checking = tab === "verify" || tab === "other";
+  const onTab = tab === "other" ? other : gas;
+  const t = find.trim();
+  const rows = t ? onTab.filter((r) => searchMatches(t, r.property, r.what, r.by, r.fileName)) : onTab;
   const queried = rows.filter((r) => r.queried).length;
+  /* Every agent with something waiting, the most first. */
+  const waitingBy = new Map<string, number>();
+  for (const r of all) waitingBy.set(r.agent ?? NO_AGENT, (waitingBy.get(r.agent ?? NO_AGENT) ?? 0) + 1);
+  const agents = [...waitingBy.entries()]
+    .filter(([a]) => a !== NO_AGENT)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const counts: Record<Tab, number | null> = {
-    verify: rows.length,
+    verify: gas.length,
+    other: other.length,
     verified: verified.items ? verified.waiting.length : null,
     sent: verified.items ? verified.sent.length : null,
   };
 
   return (
     <>
-      <PageHeader title="To Verify" blurb={BLURB[tab]} search={false} />
+      <PageHeader title="Gas & Electric Check" blurb={BLURB[tab]} search={false} />
 
       <div role="tablist" aria-label="Certificates" className="fade-up mt-5 flex max-w-full gap-1 overflow-x-auto rounded-full border border-line/70 bg-card p-1 sm:inline-flex">
-        {([["verify", "To Verify"], ["verified", "Verified"], ["sent", "Sent"]] as const).map(([id, label]) => (
+        {TAB_IDS.map((id) => [id, TAB_LABEL[id]] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -104,8 +135,36 @@ export default function ToVerify() {
         ))}
       </div>
 
+      {checking && all.length > 0 && (
+        <div className="fade-up mt-4 flex flex-wrap items-center gap-3">
+          <select
+            value={agent}
+            onChange={(e) => setAgent(e.target.value)}
+            aria-label="Agent"
+            className="w-full rounded-full border border-line/80 bg-card px-3.5 py-1.5 text-[12.5px] sm:w-auto sm:max-w-[260px]"
+          >
+            <option value="">Every agent</option>
+            {agents.map(([name, n]) => (
+              <option key={name} value={name}>{name} ({n})</option>
+            ))}
+            {waitingBy.has(NO_AGENT) && <option value={NO_AGENT}>No agent on record ({waitingBy.get(NO_AGENT)})</option>}
+          </select>
+          <input
+            value={find}
+            onChange={(e) => setFind(e.target.value)}
+            placeholder="Find a property"
+            className="w-full rounded-full border border-line/80 bg-card px-3.5 py-1.5 text-[12.5px] sm:max-w-[300px]"
+          />
+          {(agent || find) && (
+            <button type="button" onClick={() => { setAgent(""); setFind(""); }} className="text-[12px] text-muted underline-offset-2 hover:text-ink hover:underline">
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {error && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{error}</p>}
-      {tab === "verify" && said && !error && (
+      {checking && said && !error && (
         <div className={`mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl p-4 text-[12.5px] ${GREEN}`}>
           <span className="min-w-0 flex-1">{said}</span>
           {moved && (
@@ -115,21 +174,27 @@ export default function ToVerify() {
           )}
         </div>
       )}
-      {(tab !== "verify" && verified.error) && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{verified.error}</p>}
+      {(!checking && verified.error) && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{verified.error}</p>}
       {desk && !desk.stored && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-muted">{desk.reason}</p>}
 
-      {tab === "verify" && desk?.stored && rows.length === 0 && (
+      {checking && desk?.stored && rows.length === 0 && (
         <div className="fade-up mt-5 flex items-center gap-3 rounded-[22px] border border-line/70 bg-card p-5">
           <span className={`flex h-9 w-9 items-center justify-center rounded-full ${GREEN}`}><span className="h-2.5 w-2.5 rounded-full bg-[#56634a]" /></span>
-          <p className="text-[13.5px]">Nothing waiting. Every document that has come in has been checked.</p>
+          <p className="text-[13.5px]">
+            {agent || t
+              ? "Nothing waiting matches that."
+              : tab === "verify"
+                ? "No gas or electrical certificates waiting. Every one that has come in has been checked."
+                : "Nothing else waiting. Every document that has come in has been checked."}
+          </p>
         </div>
       )}
 
-      {tab === "verify" && rows.length > 0 && (
+      {checking && rows.length > 0 && (
         <>
           <p className="fade-up mt-4 text-[12.5px] text-muted">
             {rows.length} waiting{queried ? `, ${queried} of them queried and not yet put right` : ""}.
-            {desk?.registerAccuracy && desk.registerAccuracy.checked > 0
+            {tab === "verify" && desk?.registerAccuracy && desk.registerAccuracy.checked > 0
               ? ` Engineer numbers read right ${desk.registerAccuracy.matched} of ${desk.registerAccuracy.checked} times so far.`
               : ""}
           </p>
@@ -141,8 +206,8 @@ export default function ToVerify() {
         </>
       )}
 
-      {tab !== "verify" && !verified.items && !verified.error && <p className="mt-5 text-[12.5px] text-muted">Reading the verified certificates…</p>}
-      {tab !== "verify" && (
+      {!checking && !verified.items && !verified.error && <p className="mt-5 text-[12.5px] text-muted">Reading the verified certificates…</p>}
+      {(tab === "verified" || tab === "sent") && (
         <VerifiedList view={tab} waiting={verified.waiting} sent={verified.sent} ready={Boolean(verified.items) && verified.stored} reload={verified.reload} />
       )}
     </>

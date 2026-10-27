@@ -23,6 +23,11 @@ import type { RailGroup } from "@/components/WorkspaceRail";
  * Sections (7 Oct 2026) sits under To verify: the agents' Section 13 and
  * Section 8 checklists, waiting for his approval before he serves them.
  *
+ * Names that say what each one is (James, 27 Oct 2026: "we should label these
+ * better ... it needs to be more obvious what they are"): To verify is "Gas &
+ * Electric Check" - its first tab is gas and EICR, Other Documents its second -
+ * and Sections is "Section 8 & 13". Title Case throughout.
+ *
  * Same frame as Kirstie's (app/(os)/pre-tenancy/layout): the agent sidebar
  * gives way to this rail and it stays put while the pages beside it change.
  * Properties and Agents are the screens that already existed, drawn here so
@@ -33,13 +38,13 @@ const RAIL: RailGroup[] = [
     title: null,
     items: [
       { href: "/compliance-desk", label: "Dashboard", exact: true, icon: "home" },
-      { href: "/compliance-desk/properties", label: "Properties", icon: "shield" },
-      { href: "/compliance-desk/verify", label: "To verify", icon: "checklist", also: ["/compliance-desk/verified"] },
-      { href: "/compliance-desk/sections", label: "Sections", icon: "file-contract" },
-      { href: "/compliance-desk/plc", label: "PLC queue", icon: "list" },
-      { href: "/compliance-desk/id-checks", label: "ID checks", icon: "user" },
-      { href: "/compliance-desk/agents", label: "Agents", icon: "user" },
-      { href: "/compliance-desk/works", label: "Works orders", icon: "setting" },
+      { href: "/compliance-desk/properties", label: "Property Compliance", icon: "shield" },
+      { href: "/compliance-desk/verify", label: "Gas & Electric Check", icon: "checklist", also: ["/compliance-desk/verified"] },
+      { href: "/compliance-desk/sections", label: "Section 8 & 13", icon: "file-contract" },
+      { href: "/compliance-desk/plc", label: "PLC Queue", icon: "list" },
+      { href: "/compliance-desk/id-checks", label: "ID Checks", icon: "user" },
+      { href: "/compliance-desk/agents", label: "Agent Compliance", icon: "user" },
+      { href: "/compliance-desk/works", label: "Works Orders", icon: "setting" },
     ],
   },
   /* The REX PM clean sweep (24 Sep 2026) - the checker's screen, which

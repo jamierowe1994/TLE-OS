@@ -117,7 +117,7 @@ export default function Sections() {
   return (
     <>
       <PageHeader
-        title="Sections"
+        title="Section 8 & 13"
         blurb="Section 13 rent increases and Section 8 possession notices, sent in by the agents. Check each one, decide, and serve the approved ones through PayProp."
         search={false}
       />
