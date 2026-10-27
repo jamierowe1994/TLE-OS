@@ -9,6 +9,7 @@ import { refreshPropolyBooks, propolyDealsSavedAt } from "@/lib/business/propoly
 import { dayUsage } from "@/lib/business/propoly-meter";
 import { pollThreads } from "@/lib/mail-threads";
 import { scanPropolyMail } from "@/lib/propoly-mail";
+import { followNewLets } from "@/lib/record-service";
 
 /**
  * The Propoly watcher.
@@ -66,7 +67,10 @@ export async function POST(req: NextRequest) {
   try {
     const read = await refreshPropolyBooks();
     const result = await watchDeals({ origin: publicOrigin(req) });
-    return NextResponse.json({ ...result, read, mail: await mail, propolyMail: await propolyMail }, { status: result.ok ? 200 : 503 });
+    /* A home's service follows a new let that changes it (lib/record-service,
+       27 Oct 2026); from the saved copy just read, never throws. */
+    const serviceMoved = await followNewLets().catch((e) => ({ failed: publicError(e, "failed") }));
+    return NextResponse.json({ ...result, read, serviceMoved, mail: await mail, propolyMail: await propolyMail }, { status: result.ok ? 200 : 503 });
   } catch (e) {
     return NextResponse.json({ ok: false, reason: publicError(e, "watch failed") }, { status: 500 });
   }

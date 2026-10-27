@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { currentLets } from "@/lib/current-lets";
 import { countsOf, landlordsOf } from "@/lib/managed-book";
+import { getPropolyCompletes } from "@/lib/business/propoly-deals";
 import type { ManagedBook } from "@/lib/portfolio-types";
 
 /**
@@ -44,6 +45,74 @@ async function recordServices(): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   for (const [k, s] of levels) out.set(k, s.size === 1 ? LABEL[[...s][0]] : "");
   return out;
+}
+
+/* ---------------------------------------------------- a new let moves it on -- */
+
+/* Rhiannon Dodge, 23 Oct 2026, on Apartment 1, 76 Fore Street: "This let is
+   showing as a let only but it is managed." The record was settled on 25 Sep
+   from Susan's sheet and REX PM - tenant find, rightly, for the let of Sep
+   2025. The landlord took full management with the new let moving in on 1 Oct
+   2026 (Propoly, and PayProp's 12% fee), and nothing ever moved the record on,
+   so Portfolio and compliance kept saying let only. A completed Propoly let
+   that moved in after the record was decided now decides it. Nothing goes to
+   REX or Propoly; staff still change REX's own field by hand. */
+
+const LEVEL_OF: Record<string, string> = { full_managed: "managed", tenant_find: "market_only", rent_collect: "rent_collect" };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const addressKey = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const longDay = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
+
+/** "(decided 25 Sep 2026)" in the record's basis, as 2026-09-25. Null when it says no date. */
+function decidedOn(basis: string | null): string | null {
+  const m = /decided (\d{1,2}) ([A-Z][a-z]{2}) (\d{4})/.exec(basis ?? "");
+  const month = m ? MONTHS.indexOf(m[2]) : -1;
+  return m && month >= 0 ? `${m[3]}-${String(month + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}` : null;
+}
+
+/**
+ * Bring each record's service up to its latest completed Propoly let, where
+ * that let moved in after the record was decided and says otherwise. Reads
+ * the saved copy of Propoly's completed deals, never Propoly. Matched on the
+ * address alone, and only where exactly one active record has it. Run by the
+ * Propoly watcher (/api/pretenancy/watch). Returns the homes it moved on.
+ */
+export async function followNewLets(): Promise<string[]> {
+  if (!hasDb()) return [];
+  const completes = await getPropolyCompletes().catch(() => null);
+  if (!completes?.length) return [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  const latest = new Map<string, { date: string; level: string }>();
+  for (const d of completes) {
+    const level = LEVEL_OF[d.service ?? ""];
+    if (!level || !d.date || d.date > today || !d.address) continue;
+    const k = addressKey(d.address);
+    const held = latest.get(k);
+    if (!held || d.date > held.date) latest.set(k, { date: d.date.slice(0, 10), level });
+  }
+
+  const rows = await q<{ id: string; address: string; service_level: string | null; service_basis: string | null }>(
+    `SELECT id, address, service_level, service_basis FROM os_properties WHERE active`
+  );
+  const byAddress = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const k = addressKey(r.address);
+    byAddress.set(k, [...(byAddress.get(k) ?? []), r]);
+  }
+
+  const moved: string[] = [];
+  for (const [k, deal] of latest) {
+    const homes = byAddress.get(k);
+    if (homes?.length !== 1) continue;
+    const r = homes[0];
+    const decided = decidedOn(r.service_basis);
+    if (!decided || deal.date <= decided || r.service_level === deal.level) continue;
+    const basis = `The let moving in on ${longDay(deal.date)} is ${LABEL[deal.level]} in Propoly; it was ${LABEL[r.service_level ?? ""] ?? "not set"} (decided ${longDay(deal.date)})`;
+    await q(`UPDATE os_properties SET service_level = $2, service_basis = $3, updated_at = NOW() WHERE id = $1`, [r.id, deal.level, basis]);
+    moved.push(`${r.address}: ${LABEL[deal.level]}`);
+  }
+  return moved;
 }
 
 export async function withRecordService(book: ManagedBook): Promise<ManagedBook> {
