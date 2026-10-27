@@ -648,17 +648,29 @@ function ViewingLine({
   );
 }
 
-function Glance({ icon, title, sub }: { icon: string; title: string; sub: string }) {
-  return (
-    <li className="flex items-start gap-3">
+function Glance({ icon, title, sub, onOpen }: { icon: string; title: string; sub: string; onOpen?: () => void }) {
+  const body = (
+    <>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/50 bg-white text-accent-dark">
         <DoodleIcon name={icon} size={16} />
       </span>
       <span className="min-w-0">
         <span className="block text-[13.5px] font-semibold leading-snug">{title}</span>
-        {sub && <span className="block text-[12px] leading-snug text-muted">{sub}</span>}
+        {sub && <span className={`block text-[12px] leading-snug ${onOpen ? "font-semibold text-accent-dark group-hover:underline" : "text-muted"}`}>{sub}</span>}
       </span>
+    </>
+  );
+  /* A row that opens something (Lianna Denholm, 27 Oct 2026: "Passport done
+     - Their details are filled in below" sent her to the five facts on the
+     tenant card, and she never found the passport itself). */
+  return onOpen ? (
+    <li>
+      <button type="button" onClick={onOpen} className="group flex w-full items-start gap-3 text-left">
+        {body}
+      </button>
     </li>
+  ) : (
+    <li className="flex items-start gap-3">{body}</li>
   );
 }
 
@@ -4584,7 +4596,8 @@ function LeadDrawerBody({
                         <Glance
                           icon="doc"
                           title={passport?.done ? "Passport done" : passport?.sent ? "Passport sent, not finished" : "Passport not sent"}
-                          sub={passport?.done ? "Their details are filled in below" : passportEmail ? "Send passport, top right" : "No email to send it to yet"}
+                          sub={passport?.done ? "Open their passport" : passportEmail ? "Send passport, top right" : "No email to send it to yet"}
+                          onOpen={passport?.done ? () => setAnswersOpen(true) : undefined}
                         />
                         <Glance
                           icon="home"
