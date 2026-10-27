@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import type { PhoneProperty } from "@/app/api/m/properties/route";
 import type { PropertyGroup } from "@/lib/m-properties";
-import { ErrorLine, ReachButtons, Sheet, Spinner, TopBar, dialable, mapsHref } from "../bits";
+import { ErrorLine, ReachButtons, Sheet, Spinner, TopBar, dialable, mapsHref, EmptyCard, Mast } from "../bits";
+import { useAppLook } from "@/components/app/AppFrame";
 import SlideTabs from "@/components/app/SlideTabs";
 import FloatSearch from "@/components/app/FloatSearch";
 import { searchMatches } from "@/lib/search-match";
@@ -62,6 +63,7 @@ function monthly(rent: string): number {
 const VIEW_KEY = "agent-props-view";
 
 export default function PhoneProperties() {
+  const fresh = useAppLook();
   const [book, setBook] = useState<PhoneProperty[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needle, setNeedle] = useState("");
@@ -131,22 +133,28 @@ export default function PhoneProperties() {
     <main>
       <TopBar />
 
-      {/* Exactly Home's greeting box (James, 3 Oct 2026): the same height, the
-          same title size, the painting the same height, the search over its foot. */}
-      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
-        <img
-          src="/illustrations/app/townhouse.webp"
-          alt=""
-          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
-          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
-        />
-        <div className="relative w-[56%] pt-4">
-          <h1 className="m-title text-[38px] leading-[1.04]">Properties</h1>
-          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">A quick view of all your properties.</p>
-        </div>
-      </section>
+      {fresh ? (
+        <Mast title="Properties" brief="Every home on your book." />
+      ) : (
+        <>
+          {/* Exactly Home's greeting box (James, 3 Oct 2026): the same height, the
+             same title size, the painting the same height, the search over its foot. */}
+          <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
+            <img
+              src="/illustrations/app/townhouse.webp"
+              alt=""
+              className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
+              style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
+            />
+            <div className="relative w-[56%] pt-4">
+              <h1 className="m-title text-[38px] leading-[1.04]">Properties</h1>
+              <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">A quick view of all your properties.</p>
+            </div>
+          </section>
+        </>
+      )}
 
-      <div className="relative z-[1] -mt-5 flex items-center gap-2.5">
+      <div className={`relative z-[1] flex items-center gap-2.5 ${fresh ? "" : "-mt-5"}`}>
         <FloatSearch
           value={needle}
           onChange={setNeedle}
@@ -157,7 +165,7 @@ export default function PhoneProperties() {
           type="button"
           onClick={() => setSorting(true)}
           aria-label="Sort"
-          className="m-press flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full"
+          className="m-sortbtn m-press flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full"
           style={{ background: "var(--m-pink-wash)", color: "var(--m-coral)" }}
         >
           <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -192,13 +200,7 @@ export default function PhoneProperties() {
       ) : !book ? (
         <Spinner label="Loading your properties" className="py-8" />
       ) : shown.length === 0 ? (
-        <div className="flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-          <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
-          <p className="mt-2 text-[16px] font-medium">Nothing Here</p>
-          <p className="mt-1 text-[14px] text-muted">
-            {needle.trim() ? `No property matches "${needle.trim()}".` : countOf(chip) === 0 ? "None of your properties are in this group." : "Nothing matches."}
-          </p>
-        </div>
+        <EmptyCard title="Nothing Here" line={needle.trim() ? `No property matches "${needle.trim()}".` : countOf(chip) === 0 ? "None of your properties are in this group." : "Nothing matches."} />
       ) : grid ? (
         <ul className="grid grid-cols-2 gap-3">
           {shown.map((p) => (
@@ -333,7 +335,7 @@ function Status({ p }: { p: PhoneProperty }) {
 function Fact({ icon, children }: { icon: string; children: React.ReactNode }) {
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5">
-      <DoodleIcon name={icon} size={14} />
+      <AppIcon name={icon} size={14} />
       {children}
     </span>
   );
@@ -386,15 +388,15 @@ function Detail({ p, onClose }: { p: PhoneProperty; onClose: () => void }) {
       {p.group === "market" && p.key.startsWith("l-") ? (
         <div className="mt-4 grid gap-2.5">
           <Link href={`/agent/match/${encodeURIComponent(p.key.slice(2))}`} className="m-btn m-btn-primary m-press w-full">
-            <DoodleIcon name="mail" size={17} /> Email the Database
+            <AppIcon name="mail" size={17} /> Email the Database
           </Link>
           <a href={mapsHref(`${p.name}, ${p.locality}`, p.lat, p.lng)} target="_blank" rel="noreferrer" className="m-btn m-press w-full">
-            <DoodleIcon name="target" size={17} /> Directions
+            <AppIcon name="target" size={17} /> Directions
           </a>
         </div>
       ) : (
         <a href={mapsHref(`${p.name}, ${p.locality}`, p.lat, p.lng)} target="_blank" rel="noreferrer" className="m-btn m-btn-primary m-press mt-4 w-full">
-          <DoodleIcon name="target" size={17} /> Directions
+          <AppIcon name="target" size={17} /> Directions
         </a>
       )}
 

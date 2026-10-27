@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { calm } from "@/components/app/motion";
+import { useAppLook } from "@/components/app/AppFrame";
 
 /**
  * THE SWITCH THAT BOBBLES (James, 3 Oct 2026): "they shouldn't just jump. It
@@ -42,6 +43,9 @@ export default function SlideTabs<T extends string>({
   textClass?: string;
   shadow?: boolean;
 }) {
+  /* The new look (27 Oct 2026): text tabs on a hairline with an ink underline
+     that glides to the chosen one, as on the desktop - no pill, no bobble. */
+  const fresh = useAppLook();
   const box = useRef<HTMLDivElement | null>(null);
   const bar = useRef<HTMLSpanElement | null>(null);
   const was = useRef<{ l: number; w: number } | null>(null);
@@ -67,7 +71,7 @@ export default function SlideTabs<T extends string>({
     was.current = next;
     const el = bar.current;
     if (!el) return;
-    if (!prev || !next || prev.l === next.l || calm() || typeof el.animate !== "function") return place(next);
+    if (fresh || !prev || !next || prev.l === next.l || calm() || typeof el.animate !== "function") return place(next);
     const dir = next.l > prev.l ? 1 : -1;
     const from = Math.min(prev.l, next.l);
     const span = Math.max(prev.l + prev.w, next.l + next.w) - from;
@@ -87,7 +91,7 @@ export default function SlideTabs<T extends string>({
     el.style.opacity = "1";
     void anim;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, options.length]);
+  }, [value, options.length, fresh]);
 
   /* Keep it under its option if the row changes size (a rotate, a font). */
   useEffect(() => {
@@ -102,6 +106,34 @@ export default function SlideTabs<T extends string>({
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
+
+  if (fresh)
+    return (
+      <div ref={box} role="group" className={`relative flex gap-[22px] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`} style={{ boxShadow: "inset 0 -1px 0 var(--m-line)" }}>
+        <span
+          ref={bar}
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 h-[2px] rounded-full transition-[left,width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{ background: "var(--m-ink)", opacity: 0 }}
+        />
+        {options.map((o) => {
+          const on = o.id === value;
+          return (
+            <button
+              key={o.id}
+              data-slide={o.id}
+              type="button"
+              onClick={() => onChange(o.id)}
+              aria-pressed={on}
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap pb-2.5 pt-2 text-[14px] font-medium transition-colors duration-200"
+              style={{ color: on ? "var(--m-ink)" : "var(--m-muted)" }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    );
 
   return (
     <div

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import type { Application } from "@/lib/applications";
-import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref, HomeHero } from "../bits";
+import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref, HomeHero, EmptyCard } from "../bits";
 import SlideTabs from "@/components/app/SlideTabs";
 import FloatSearch from "@/components/app/FloatSearch";
 import { searchMatches } from "@/lib/search-match";
@@ -118,7 +118,7 @@ export default function PhoneApplications() {
     <main>
       <TopBar />
 
-      <HomeHero title="Applications" line="Offers on your homes, and where they stand." src="/illustrations/app/home-redbrick.webp" />
+      <HomeHero title="Applications" line="Offers on your homes, and where they stand." brief="Where each offer on your homes stands." src="/illustrations/app/home-redbrick.webp" />
 
       <div className="relative z-[1] -mt-5 flex items-center gap-2.5">
         <FloatSearch
@@ -131,7 +131,7 @@ export default function PhoneApplications() {
           type="button"
           onClick={() => setSorting(true)}
           aria-label="Sort"
-          className="m-press flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full"
+          className="m-sortbtn m-press flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full"
           style={{ background: "var(--m-pink-wash)", color: "var(--m-coral)" }}
         >
           <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -149,11 +149,7 @@ export default function PhoneApplications() {
       ) : !apps ? (
         <Spinner label="Loading your applications" className="py-6" />
       ) : shown.length === 0 ? (
-        <div className="flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-          <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
-          <p className="mt-2 text-[16px] font-medium">Nothing Here</p>
-          <p className="mt-1 text-[14px] text-muted">{needle.trim() ? `No application matches "${needle.trim()}".` : "No applications in this group."}</p>
-        </div>
+        <EmptyCard title="Nothing Here" line={needle.trim() ? `No application matches "${needle.trim()}".` : "No applications in this group."} />
       ) : (
         <ul className="grid grid-cols-1 gap-2.5">
           {shown.map((a) => {
@@ -269,7 +265,7 @@ function Detail({ a, onClose }: { a: App; onClose: () => void }) {
 
       <div className="mt-4 grid grid-cols-4 gap-2">
         {actions.map((x) => {
-          const icon = x.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <DoodleIcon name={x.icon} size={22} />;
+          const icon = x.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <AppIcon name={x.icon} size={22} />;
           return x.href ? (
             <a key={x.label} href={x.href} target={x.label === "Directions" ? "_blank" : undefined} rel="noreferrer" className="m-press flex flex-col items-center gap-1.5 rounded-[18px] py-3 text-[12.5px] font-medium" style={{ background: "var(--m-card)" }}>
               {icon}
@@ -288,7 +284,7 @@ function Detail({ a, onClose }: { a: App; onClose: () => void }) {
         <ul className="m-group mt-4">
           {facts.map(([icon, k, v]) => (
             <li key={k} className="m-row flex items-center gap-3 px-4 py-3.5">
-              <DoodleIcon name={icon} size={18} className="text-muted" />
+              <AppIcon name={icon} size={18} className="text-muted" />
               <span className="w-[44%] shrink-0 text-[14.5px] text-muted">{k}</span>
               <span className="min-w-0 truncate text-[15px] font-medium">{v}</span>
             </li>

@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import SignedOutWatch from "@/components/SignedOutWatch";
 import Toaster from "@/components/Toaster";
 import Welcome from "@/components/app/Welcome";
 import { useAlerts } from "@/components/app/alerts";
 import { useSwipeToClose } from "@/components/app/swipe";
 import { bounce, useMorph, useSheetExit } from "@/components/app/motion";
-import { applyMTheme, type MTheme } from "@/lib/m-theme";
+import { applyMTheme, M_LOOK_COOKIE, type MTheme } from "@/lib/m-theme";
 import { appHref } from "@/lib/app-href";
 import { MORE_ORDER, NAV_DEFAULT, NAV_DESTS, NAV_SLOTS, activeNav, navDest, saveNav, type NavDest, type NavId } from "@/lib/m-nav";
 
@@ -29,15 +29,30 @@ import { MORE_ORDER, NAV_DEFAULT, NAV_DESTS, NAV_SLOTS, activeNav, navDest, save
 /* More's three dots - the one icon that is always on the bar. */
 const MORE_DOTS = <path d="M6 12h.01M12 12h.01M18 12h.01" />;
 
-type Frame = { more: () => void; quick: () => void; bell: () => void; unread: number };
-const FrameContext = createContext<Frame>({ more: () => {}, quick: () => {}, bell: () => {}, unread: 0 });
+type Frame = { more: () => void; quick: () => void; bell: () => void; unread: number; fresh: boolean };
+const FrameContext = createContext<Frame>({ more: () => {}, quick: () => {}, bell: () => {}, unread: 0, fresh: false });
 export const useFrame = () => useContext(FrameContext);
+/** Whether the phone is in the new look (lib/new-look "app"), decided on the server in app/agent/layout. */
+export const useAppLook = () => useContext(FrameContext).fresh;
 /** Opens the "More" sheet. */
 export const useGoTo = () => useContext(FrameContext).more;
 
 type Sheet = "more" | "quick" | "bell" | null;
 
-export default function AppFrame({ inApp, theme, nav, children }: { inApp: boolean; theme: MTheme | null; nav: NavId[]; children: React.ReactNode }) {
+export default function AppFrame({
+  inApp,
+  theme,
+  nav,
+  fresh = false,
+  children,
+}: {
+  inApp: boolean;
+  theme: MTheme | null;
+  nav: NavId[];
+  /** The new look (lib/new-look "app"). */
+  fresh?: boolean;
+  children: React.ReactNode;
+}) {
   const path = usePathname() ?? "/agent";
   const router = useRouter();
   const go = useCallback((href: string) => router.push(href), [router]);
@@ -47,10 +62,25 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
   const [bar, setBar] = useState<NavId[]>(nav);
   const lit = activeNav(bar, path);
   const [sheet, setSheet] = useState<Sheet>(null);
-  const [mode, setMode] = useState<MTheme | null>(theme);
+  /* The new look has no first-visit chooser, as on the desktop: light until
+     they pick dark in More > Profile. */
+  const [mode, setMode] = useState<MTheme | null>(theme ?? (fresh ? "light" : null));
   const [unread, setUnread] = useState(0);
   const [chats, setChats] = useState(0);
   useEffect(() => setSheet(null), [path]);
+  /* ?look=new or ?look=old pins this phone to one look, ?look=auto hands it
+     back to the switch - the same words the desktop screens take. A cookie,
+     so the server paints it (app/agent/layout); a reload makes it so. */
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("look");
+    if (want !== "new" && want !== "old" && want !== "auto") return;
+    document.cookie = want === "auto" ? `${M_LOOK_COOKIE}=; path=/; max-age=0` : `${M_LOOK_COOKIE}=${want}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+    if ((want === "new") !== fresh || want === "auto") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("look");
+      window.location.replace(url.toString());
+    }
+  }, [fresh]);
   /* The app came to life: the stale-page guard in app/agent/layout.tsx stands down. */
   useEffect(() => {
     (window as { __tleAppReady?: boolean }).__tleAppReady = true;
@@ -94,7 +124,7 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
   if (!mode) return <Welcome onChoose={choose} />;
 
   return (
-    <FrameContext.Provider value={{ more, quick, bell, unread }}>
+    <FrameContext.Provider value={{ more, quick, bell, unread, fresh }}>
       {/* A session that ended goes to sign in, and a pace pause is said in
           words (components/SignedOutWatch) - here as on the desktop. */}
       <SignedOutWatch />
@@ -117,8 +147,8 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
               type="button"
               onClick={quick}
               aria-label="Quick actions"
-              className="m-press flex h-[50px] w-[50px] items-center justify-center rounded-full text-white shadow-[0_8px_18px_-8px_rgba(222,124,112,0.9)]"
-              style={{ background: "var(--m-coral)" }}
+              className={`m-press flex items-center justify-center ${fresh ? "h-[44px] w-[44px] rounded-[14px]" : "h-[50px] w-[50px] rounded-full text-white shadow-[0_8px_18px_-8px_rgba(222,124,112,0.9)]"}`}
+              style={fresh ? { background: "var(--m-coral)", color: "var(--m-brown-ink)" } : { background: "var(--m-coral)" }}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -136,7 +166,7 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
           </li>
           <Tab dest={navDest(bar[2]!)} on={lit === bar[2]} badge={bar[2] === "chats" ? chats : 0} />
           <li className="flex justify-center">
-            <button type="button" onClick={more} aria-label="More" className="flex h-[48px] w-[58px] items-center justify-center rounded-[16px]" style={{ color: "var(--m-muted)" }}>
+            <button type="button" onClick={more} aria-label="More" className="m-bar-tab relative flex h-[48px] w-[58px] items-center justify-center rounded-[16px]" style={fresh ? undefined : { color: "var(--m-muted)" }}>
               <svg viewBox="0 0 24 24" aria-hidden className="h-[24px] w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
                 {MORE_DOTS}
               </svg>
@@ -158,23 +188,25 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
           onClose={close}
         />
       )}
-      {sheet === "quick" && <QuickSheet onClose={close} />}
+      {sheet === "quick" && (fresh ? <QuickList onClose={close} /> : <QuickSheet onClose={close} />)}
       {sheet === "bell" && <BellSheet onClose={close} onRead={() => setUnread(0)} />}
     </FrameContext.Provider>
   );
 }
 
 function Tab({ dest, on, badge = 0 }: { dest: NavDest; on: boolean; badge?: number }) {
+  /* The new look: no pink pill - the screen you are on is ink with an orange dot under it (app/new-look/app.css). */
+  const fresh = useAppLook();
   return (
     <li className="flex justify-center">
       <Link
         href={dest.href}
         aria-current={on ? "page" : undefined}
         aria-label={dest.label}
-        className="relative flex h-[48px] w-[58px] items-center justify-center rounded-[16px] transition-colors"
-        style={on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-muted)" }}
+        className="m-bar-tab relative flex h-[48px] w-[58px] items-center justify-center rounded-[16px] transition-colors"
+        style={fresh ? undefined : on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-muted)" }}
       >
-        <NavIcon dest={dest} on={on} />
+        <NavIcon dest={dest} on={on && !fresh} />
         {badge > 0 && (
           <span className="absolute right-2 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10.5px] font-bold text-white" style={{ background: "var(--m-coral)" }}>
             {badge > 9 ? "9+" : badge}
@@ -363,7 +395,7 @@ function QuickSheet({ onClose }: { onClose: () => void }) {
                     </>
                   )}
                   <span className="relative flex h-11 w-11 items-center justify-center rounded-[14px]" style={lead ? { background: wash, color: ink } : { border: "1px solid var(--m-line)", color: ink }}>
-                    <DoodleIcon name={q.icon} size={21} />
+                    <AppIcon name={q.icon} size={21} />
                   </span>
                   <span className="relative mt-3 text-[16.5px] font-semibold leading-tight">{q.label}</span>
                   <span className="relative mt-1 flex flex-1 items-end justify-between gap-2">
@@ -379,6 +411,29 @@ function QuickSheet({ onClose }: { onClose: () => void }) {
         </ul>
       </div>
     </div>
+  );
+}
+
+/**
+ * The "+" in the new look (27 Oct 2026): the same jobs as plain rows - an
+ * icon, the words, a chevron - in a sheet that rises without the bounce.
+ * Nothing drawn in the corners; the words say what each does.
+ */
+function QuickList({ onClose }: { onClose: () => void }) {
+  return (
+    <SheetShell title="Quick Actions" label="Quick actions" onClose={onClose}>
+      <ul className="m-group">
+        {QUICK.map((q) => (
+          <li key={q.href} className="m-row">
+            <Link href={q.href} className="flex h-[54px] items-center gap-3.5 px-4 text-[15.5px] active:bg-panel">
+              <AppIcon name={q.icon} size={19} className="text-muted" />
+              <span className="flex-1 font-medium">{q.label}</span>
+              <Chevron />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </SheetShell>
   );
 }
 
@@ -655,7 +710,7 @@ function PagesSheet({
                 <p className="m-eyebrow mb-2 mt-5 px-1">Phone Alerts</p>
                 <div className="m-group">
                   <button type="button" onClick={() => setView("alerts")} className={row}>
-                    <DoodleIcon name="setting" size={18} className="text-muted" />
+                    <AppIcon name="setting" size={18} className="text-muted" />
                     <span className="flex-1">Choose Your Alerts</span>
                     <Chevron />
                   </button>
@@ -667,7 +722,7 @@ function PagesSheet({
                       className={`${row} justify-between`}
                     >
                       <span className="flex items-center gap-3">
-                        <DoodleIcon name="bell" size={18} className="text-muted" />
+                        <AppIcon name="bell" size={18} className="text-muted" />
                         {alerts.state === "blocked" ? "Alerts Are Blocked" : "Alerts on This Phone"}
                       </span>
                       <Toggle on={alerts.state === "on"} busy={alerts.state === "busy"} />
@@ -675,7 +730,7 @@ function PagesSheet({
                   )}
                   {(inApp || alerts.state === "on") && (
                     <button type="button" onClick={test} className={row}>
-                      <DoodleIcon name="bell" size={18} className="text-muted" />
+                      <AppIcon name="bell" size={18} className="text-muted" />
                       Test Phone Alerts
                     </button>
                   )}
@@ -691,7 +746,7 @@ function PagesSheet({
             <p className="m-eyebrow mb-2 mt-5 px-1">Chats</p>
             <div className="m-group">
               <a href="/agent/chats/team?patch=1" className={row}>
-                <DoodleIcon name="target" size={18} className="text-muted" />
+                <AppIcon name="target" size={18} className="text-muted" />
                 <span className="flex-1">My Patch</span>
                 <Chevron />
               </a>
@@ -699,7 +754,7 @@ function PagesSheet({
 
             <div className="m-group mt-5">
               <button type="button" onClick={signOut} className={row} style={{ color: "var(--accent-dark)" }}>
-                <DoodleIcon name="logout" size={18} />
+                <AppIcon name="logout" size={18} />
                 Sign Out
               </button>
             </div>

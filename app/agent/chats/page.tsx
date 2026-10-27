@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ErrorLine, HomeHero, Spinner, TopBar } from "../bits";
+import { ErrorLine, HomeHero, Spinner, TopBar, EmptyCard } from "../bits";
 import { Face, ago } from "./bits";
 import SlideTabs from "@/components/app/SlideTabs";
 import { previewOf } from "@/lib/chat-gif";
@@ -69,7 +69,7 @@ export default function PhoneChats() {
 
       {/* The curved crescent for Chats (James, 3 Oct 2026). */}
 
-      <HomeHero title="Chats" line="Your landlords, your tenants and your team." src="/illustrations/app/crescent.webp" height={196} right={-22} bottom={14} />
+      <HomeHero title="Chats" line="Your landlords, your tenants and your team." brief="Landlords, tenants and the team." src="/illustrations/app/crescent.webp" height={196} right={-22} bottom={14} />
 
       <SlideTabs
         className="z-[1] -mt-5"
@@ -114,11 +114,7 @@ export default function PhoneChats() {
 function Work({ threads }: { threads: Thread[] }) {
   if (!threads.length) {
     return (
-      <div className="mt-4 flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-        <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
-        <p className="mt-2 text-[16px] font-medium">No Messages Yet</p>
-        <p className="mt-1 text-[14px] text-muted">When a landlord or tenant writes through their portal, it lands here.</p>
-      </div>
+      <EmptyCard className="mt-4" title="No Messages Yet" line="When a landlord or tenant writes through their portal, it lands here." />
     );
   }
   return (

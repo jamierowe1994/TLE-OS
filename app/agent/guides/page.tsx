@@ -14,10 +14,10 @@ export default function PhoneGuides() {
   return (
     <main>
       <TopBar />
-      <HomeHero title="Guides" line="The latest rules, in plain English." src="/illustrations/app/home-flats.webp" height={160} right={-6} bottom={12} />
+      <HomeHero title="Guides" line="The latest rules, in plain English." brief="New rules, in plain English." src="/illustrations/app/home-flats.webp" height={160} right={-6} bottom={12} />
 
       {latest && (
-        <Link data-morph href={`/agent/guides/${latest.slug}`} className="m-press relative z-[1] -mt-5 block overflow-hidden rounded-[28px] p-5 shadow-[0_18px_40px_-22px_rgba(150,70,50,0.6)]" style={{ background: "var(--m-card)" }}>
+        <Link data-morph href={`/agent/guides/${latest.slug}`} className="m-tile m-press relative z-[1] -mt-5 block overflow-hidden rounded-[28px] p-5 shadow-[0_18px_40px_-22px_rgba(150,70,50,0.6)]" style={{ background: "var(--m-card)" }}>
           <span className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--m-coral)" }}>
             New · {latest.topic} · {day(latest.published)}
           </span>
@@ -44,7 +44,7 @@ export default function PhoneGuides() {
           <ul className="grid gap-2.5">
             {rest.map((g) => (
               <li key={g.slug}>
-                <Link href={`/agent/guides/${g.slug}`} className="m-press block rounded-[22px] px-4 py-3.5" style={{ background: "var(--m-card)" }}>
+                <Link href={`/agent/guides/${g.slug}`} className="m-tile m-press block rounded-[22px] px-4 py-3.5" style={{ background: "var(--m-card)" }}>
                   <span className="text-[12px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--m-coral)" }}>
                     {g.topic} · {day(g.published)}
                   </span>

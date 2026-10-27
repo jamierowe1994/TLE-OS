@@ -111,7 +111,17 @@ export async function GET(req: NextRequest) {
             ? new Set(book.properties.map((p) => String(p.propertyId ?? "")).filter(Boolean))
             : null;
           const scoped = mine ? tasks.filter((t) => (t.rexPropertyId && mine.has(t.rexPropertyId)) || (me && t.managedBy.trim().toLowerCase() === me)) : tasks;
-          due = dueFromTasks(scoped, inspections, book.properties, hmoIds);
+          /* The same homes-we-look-after scope as the cadence (Rhiannon Dodge,
+             23 Oct 2026). REX PM keeps a task open on a home it still files as
+             managed - Flat 7, Riva House said "Experts Managed Service" while
+             the home's record here says let only - so a task on a home the
+             compliance book knows and doesn't count as ours is dropped: let
+             only, rent collect, or an agent who has left. A task on a home
+             the book doesn't know stays, as there is nothing to say otherwise. */
+          const known = new Set(comp.book.properties.map((p) => String(p.id)));
+          const homesOf = (t: (typeof tasks)[number]) => [t.osPropertyId, t.rexPropertyId].filter((x): x is string => Boolean(x));
+          const notOurs = (t: (typeof tasks)[number]) => homesOf(t).some((h) => known.has(h)) && !homesOf(t).some((h) => ours.has(h));
+          due = dueFromTasks(scoped.filter((t) => !notOurs(t)), inspections, book.properties, hmoIds);
         } else {
           const prior = await lastClosedByHome("inspection");
           due = dueList(book.properties.filter((p) => ours.has(String(p.propertyId ?? p.listingId))), inspections, rules, hmoIds, prior);
