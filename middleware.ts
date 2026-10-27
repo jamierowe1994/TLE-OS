@@ -749,7 +749,7 @@ async function flushLog(): Promise<void> {
    import (it reaches the database). */
 const LOCKED_MESSAGE = "Your access to TLE OS has been paused. Speak to James.";
 const LOCK_TTL_MS = 20_000;
-type DoorState = { locked: boolean; capped: boolean };
+type DoorState = { locked: boolean; capped: boolean; emailDue?: boolean };
 const lockCache = new Map<string, { at: number; state: DoorState }>();
 
 /**
@@ -767,8 +767,8 @@ async function doorState(req: NextRequest, userId: string): Promise<DoorState> {
   let state: DoorState | null = null;
   try {
     const res = await askSelf(req, "/api/auth/lock-state", 1_500);
-    const j = res ? ((await res.json()) as { ok?: boolean; locked?: boolean; capped?: boolean }) : null;
-    if (j?.ok) state = { locked: j.locked === true, capped: j.capped !== false };
+    const j = res ? ((await res.json()) as { ok?: boolean; locked?: boolean; capped?: boolean; emailDue?: boolean }) : null;
+    if (j?.ok) state = { locked: j.locked === true, capped: j.capped !== false, emailDue: j.emailDue === true };
   } catch {
     /* Not JSON: no answer. */
   }
@@ -879,6 +879,32 @@ function paceCheck(req: NextRequest, userId: string): { until: number; why: stri
   return { until: p.pausedUntil, why, fresh: true };
 }
 
+/** Never held for the email check: the check, the sign-in and sign-out doors, and what a page needs to draw. */
+function emailCheckExempt(path: string): boolean {
+  return (
+    path === "/check-email" ||
+    path.startsWith("/api/email-check") ||
+    path.startsWith("/api/auth/") ||
+    path.startsWith("/sign-in") ||
+    path.startsWith("/reset") ||
+    path.startsWith("/join") ||
+    path.startsWith("/_next/") ||
+    path === "/api/track" ||
+    path === "/api/me" ||
+    path === "/api/setup"
+  );
+}
+
+/** Just passed: the signed os_email_ok cookie (lib/email-check emailOkCookie), younger than the check's own interval. */
+async function emailOk(req: NextRequest, userId: string): Promise<boolean> {
+  const secret = process.env.AUTH_SECRET;
+  const v = req.cookies.get("os_email_ok")?.value;
+  if (!v || !secret) return false;
+  const [id, at, sig] = v.split(".");
+  if (id !== userId || !Number(at) || Date.now() - Number(at) > 3 * 864e5) return false;
+  return sameSig(await hmac(secret, `email-ok.${id}.${at}`), sig ?? "");
+}
+
 /** The sign-in half of the door, after the area switches have had their say. */
 async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
   /**
@@ -899,6 +925,24 @@ async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
        21 Oct 2026): not their reading, so not in the read log or their pace. */
     if (!door.locked && process.env.CRON_SECRET && req.headers.get("x-os-rex-snapshot") === process.env.CRON_SECRET) {
       return NextResponse.next();
+    }
+    /* The every-few-days email check (lib/email-check, 26 Oct 2026): owed,
+       and not just passed (the os_email_ok cookie, ahead of the cached
+       answer). A page goes to /check-email and comes back; a call gets a
+       marker the shell's fetch watcher turns into the same trip. The check
+       itself, signing out and the sign-in pages are never stopped. */
+    if (!door.locked && door.emailDue && !emailCheckExempt(req.nextUrl.pathname) && !(await emailOk(req, userId))) {
+      if (req.nextUrl.pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { ok: false, error: "Check your email: TLE OS has sent you a code to confirm it's you.", emailCheck: true },
+          { status: 403, headers: { "x-os-email-check": "1" } }
+        );
+      }
+      const url = req.nextUrl.clone();
+      const wanted = req.nextUrl.pathname + req.nextUrl.search;
+      url.pathname = "/check-email";
+      url.search = wanted && wanted !== "/" ? `?next=${encodeURIComponent(wanted)}` : "";
+      return NextResponse.redirect(url);
     }
     if (!door.locked) {
       noteCall(req, userId);

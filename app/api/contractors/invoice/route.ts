@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       let said = `Pay to ${bankLine(shown)}.`;
       if (bankChanged && str("saveBank") === "1") {
         if (mayEdit) {
-          await setContractorBank(contractor.id, bank.bank);
+          await setContractorBank(contractor.id, bank.bank, { id: actor.id, email: actor.email, via: "Log an invoice", contractorName: contractor.name });
           said += ` Saved to ${contractor.name}'s record.`;
         } else said += ` Not saved to ${contractor.name}'s record: only whoever keeps it can change it.`;
       }

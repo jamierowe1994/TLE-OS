@@ -105,3 +105,36 @@ export function resetEmailFor(link: string): VerifyEmail {
     }),
   };
 }
+
+/**
+ * The every-few-days check that it's still them (lib/email-check, 26 Oct
+ * 2026). The code is the whole message: big, first, and said again in the
+ * plain text for a phone's lock screen.
+ */
+export function emailCheckEmailFor(code: string, name: string | null): VerifyEmail {
+  const first = (name ?? "").trim().split(/\s+/)[0] || "";
+  const origin = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
+  const text = [
+    `Your TLE OS code: ${code}`,
+    "",
+    `${first ? `Hi ${first}, every` : "Every"} few days TLE OS checks it's really you by sending a code to your work email.`,
+    "Type it on the screen that asked for it. It lasts 15 minutes.",
+    "",
+    "If you didn't just sign in to TLE OS, don't type it anywhere, and tell James.",
+  ].join("\n");
+  return {
+    subject: `Your TLE OS code: ${code}`,
+    text,
+    html: skyListShell({
+      heading: code,
+      subheading: "Your TLE OS code",
+      intro: `${first ? `Hi ${first}, every` : "Every"} few days TLE OS checks it's really you by sending a code to your work email. Type it on the screen that asked for it. It lasts 15 minutes.`,
+      button: "Open TLE OS",
+      link: `${origin}/check-email`,
+      /* No picture: the reset one says "New password", and this changes nothing. The code is the message. */
+      headingFirst: true,
+      tip: "If you didn't just sign in to TLE OS, don't type this code anywhere, and tell James.",
+      tipQuiet: true,
+    }),
+  };
+}

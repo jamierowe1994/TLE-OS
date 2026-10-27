@@ -64,9 +64,11 @@ export async function GET(req: NextRequest) {
     /* The office sees every agent's book (James, 19 Oct 2026); an agent only their own and the company's. */
     if (!c) return NextResponse.json({ ok: false, error: "No such contractor." }, { status: 404 });
     if (c.ownerId && c.ownerId !== me.id && !can(me.role, "see:everything")) return NextResponse.json({ ok: false, error: "This contractor is in another agent's book, so only they and the office can open their record." }, { status: 404 });
-    const [allStats, orders, bank] = await Promise.all([contractorStats(id), listOrders({ limit: 500 }), mayEdit(c, me.id, actor.role) ? contractorBank(id) : Promise.resolve(null)]);
+    const [allStats, orders] = await Promise.all([contractorStats(id), listOrders({ limit: 500 })]);
     const scoped = await scopeJobs(req, who, orders.filter((o) => o.contractorId === id));
-    const shown: Contractor = bank ? { ...c, bankAccountNumber: bank.accountNumber } : c;
+    /* The account number never comes to the browser, editor or not: the
+       last four, and a new one only when typed (lib/bank-vault, 26 Oct 2026). */
+    const shown: Contractor = c;
     return NextResponse.json({ ok: true, contractor: shown, canEdit: mayEdit(c, me.id, actor.role) && !c.deletedAt, stats: scoped.everyone ? allStats : statsOf(scoped.orders), jobs: scoped.orders, everyone: scoped.everyone, mineJobs: scoped.mine });
   }
   return NextResponse.json({ ok: true, contractors: await listContractors(me.id), me: me.id, canCorporate: can(actor.role, "see:business") });
@@ -131,7 +133,7 @@ export async function POST(req: NextRequest) {
     const ownerId = b.id ? before!.ownerId : wantsCorporate ? null : me.id;
     let contractor = await saveContractor({ ...b, name: b.name, trade: b.trade, ownerId: b.id && corporate && b.scope ? (wantsCorporate ? null : me.id) : ownerId }, me.name || me.email);
     if (bank?.ok) {
-      await setContractorBank(contractor.id, bank.bank);
+      await setContractorBank(contractor.id, bank.bank, { id: actor.id, email: actor.email, via: "the contractor's record", contractorName: contractor.name });
       contractor = { ...contractor, bankAccountName: bank.bank?.accountName ?? "", bankSortCode: bank.bank?.sortCode ?? "", bankAccountLast4: (bank.bank?.accountNumber ?? "").slice(-4) };
     }
     /* Place them from their address, so the picker can say how far. Best

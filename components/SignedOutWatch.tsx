@@ -34,6 +34,13 @@ export default function SignedOutWatch() {
           .then((j: { error?: string }) => toast(j.error ?? "TLE OS has paused for a few minutes.", "bad"))
           .catch(() => toast("TLE OS has paused for a few minutes.", "bad"));
       }
+      /* Owed the every-few-days email check (lib/email-check): to the page
+         that sends the code, coming back here. */
+      if (!leaving && res.status === 403 && res.headers.get("x-os-email-check") === "1" && window.location.pathname !== "/check-email") {
+        leaving = true;
+        const here = window.location.pathname + window.location.search;
+        window.location.assign(`/check-email?next=${encodeURIComponent(here)}`);
+      }
       if (!leaving && res.status === 401 && res.headers.get("x-os-signed-out") === "1") {
         leaving = true;
         const here = window.location.pathname + window.location.search;

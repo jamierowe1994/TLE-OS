@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { contractorBank } from "@/lib/works-orders";
 import type { WorksOrder } from "@/lib/works-orders";
 import type { BankDetails } from "@/lib/bank";
+import { openAccount, sealAccount } from "@/lib/bank-vault";
 
 /**
  * Where an invoice is to be paid (Stuart Roper, 26 Oct 2026: "I've uploaded
@@ -19,7 +20,7 @@ import type { BankDetails } from "@/lib/bank";
 export async function setOrderBank(orderId: string, bank: BankDetails | null): Promise<void> {
   await q(
     `UPDATE os_works_orders SET invoice_bank_name = $2, invoice_bank_sort = $3, invoice_bank_account = $4 WHERE id = $1`,
-    [orderId, bank?.accountName ?? "", bank?.sortCode ?? "", bank?.accountNumber ?? ""]
+    [orderId, bank?.accountName ?? "", bank?.sortCode ?? "", sealAccount(bank?.accountNumber ?? "")]
   );
 }
 
@@ -30,7 +31,8 @@ export async function bankForInvoice(o: WorksOrder): Promise<(BankDetails & { fr
     `SELECT invoice_bank_name, invoice_bank_sort, invoice_bank_account FROM os_works_orders WHERE id = $1`,
     [o.id]
   ).catch(() => []);
-  if (r?.invoice_bank_account) return { accountName: r.invoice_bank_name, sortCode: r.invoice_bank_sort, accountNumber: r.invoice_bank_account, from: "invoice" };
+  const own = openAccount(r?.invoice_bank_account);
+  if (r && own) return { accountName: r.invoice_bank_name, sortCode: r.invoice_bank_sort, accountNumber: own, from: "invoice" };
   const held = o.contractorId ? await contractorBank(o.contractorId).catch(() => null) : null;
   return held ? { ...held, from: "record" } : null;
 }
