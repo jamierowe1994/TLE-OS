@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import { useAlerts } from "@/components/app/alerts";
 
 /**
@@ -26,7 +26,7 @@ export default function AlertsCard() {
   return (
     <section className="m-group mb-3 flex items-start gap-3 p-4">
       <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-pink-wash)" }}>
-        <DoodleIcon name="bell" size={17} />
+        <AppIcon name="bell" size={17} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[15.5px] font-medium">Turn On Alerts</span>

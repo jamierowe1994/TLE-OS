@@ -158,6 +158,33 @@ const PATHS: Record<string, React.ReactNode> = {
     </>
   ),
   pencil: <path d="M4.5 19.5 5.5 15 15.5 5a2.1 2.1 0 0 1 3 3l-10 10zM13.5 7l3 3" />,
+  /* The phone app's new look (27 Oct 2026), in the same hand. */
+  call: <path d="M5 4.5h3.5l1.5 4-2 1.5a11 11 0 0 0 6 6l1.5-2 4 1.5V19a1.5 1.5 0 0 1-1.5 1.5A15.5 15.5 0 0 1 3.5 6 1.5 1.5 0 0 1 5 4.5z" />,
+  camera: (
+    <>
+      <path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2.5l1.5-2.5h6L16.5 7H19a1.5 1.5 0 0 1 1.5 1.5V18a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
+  doc: (
+    <>
+      <path d="M6.5 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5H6.5A1.5 1.5 0 0 1 5 19V5a1.5 1.5 0 0 1 1.5-1.5z" />
+      <path d="M13.5 3.5v4h4M8.5 12.5h7M8.5 16h5" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  upload: <path d="M12 15.5V4.5M7.5 9 12 4.5 16.5 9M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15" />,
+  whatsapp: (
+    <>
+      <path d="M3.5 20.5l1.3-4.2A8.4 8.4 0 1 1 8 19.4z" />
+      <path d="M9.2 8.5c.3-.4.9-.4 1.1 0l.8 1.7-.8 1a6 6 0 0 0 2.5 2.5l1-.8 1.7.8c.4.2.4.8 0 1.1-1 .8-2.6.6-4-.4a8 8 0 0 1-2.7-2.7c-.9-1.4-1-3-.6-3.2z" />
+    </>
+  ),
 };
 
 export default function LineIcon({ name, size = 16, className = "" }: { name: string; size?: number; className?: string }) {

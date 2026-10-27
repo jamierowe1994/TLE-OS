@@ -69,6 +69,9 @@ export const LOOK_SCREENS = [
   /* The tenant passport as a book (James's design, 24 Oct 2026). A customer screen: anonymous tenants only ever see it at Everyone (app/tenant/(public)/passport). */
   { id: "passport", label: "Tenant passport", what: "The passport as a book with seven stamped steps (James's design). Off, tenants get today's passport. Shown to signed-in staff by the level, and to tenants only at Everyone." },
   { id: "search", label: "Search (floating)", what: "Search for anything as floating boxes: the search bar on its own at the top, and the recents or the results each in their own box over a darkened page. Off, the search box as it is." },
+  /* The agents' phone app (James, 27 Oct 2026: "bring it in line with what we've got ... minimalistic but gets to
+     the point"). The installed app and the iPhone app both open /agent, so one switch covers both. */
+  { id: "app", label: "Phone app", what: "The agents' phone app, home screen and iPhone: white, the orange action, type-only headings with no paintings, line icons, text tabs and fewer words. Off, the pastel app as it is." },
   { id: "booking", label: "Book a viewing (tenants)", what: "The new five-step booking window: home, time, access, messages, book. On, every place a tenant viewing is booked opens it - the lead, the listing, Viewings and Enquiries - and the landlord's email, the tenant's notice and the access record go out from it when the agent presses Book." },
 ] as const;
 

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import { waAppLink } from "@/lib/whatsapp-link";
-import { useFrame } from "@/components/app/AppFrame";
+import { useAppLook, useFrame } from "@/components/app/AppFrame";
+import Wordmark from "@/components/Wordmark";
 import { useSwipeToClose } from "@/components/app/swipe";
 import { useSheetExit } from "@/components/app/motion";
 
@@ -31,11 +32,12 @@ export function PhoneTop({
   /** Sits under the title: the week strip, chips. */
   children?: React.ReactNode;
 }) {
+  const fresh = useAppLook();
   return (
     <header className="mb-4">
       <TopBar back={back} />
       {eyebrow && <p className="m-eyebrow mt-3">{eyebrow}</p>}
-      <h1 className="m-title mt-1 text-[32px] leading-[1.1]">{title}</h1>
+      <h1 className={`m-title mt-1 leading-[1.1] ${fresh ? "text-[30px]" : "text-[32px]"}`}>{title}</h1>
       {children}
     </header>
   );
@@ -43,14 +45,15 @@ export function PhoneTop({
 
 /** The wordmark or a back button, and the bell. Home uses it on its own. */
 export function TopBar({ back }: { back?: string }) {
-  const { bell, unread } = useFrame();
+  const { bell, unread, fresh } = useFrame();
   return (
     <div className="flex h-12 items-center justify-between gap-3">
       {back ? (
         <BackLink href={back} />
       ) : (
         <Link href="/agent" aria-label="TLE OS, home" className="block">
-          <img src="/brand/tle-os-type.png" alt="TLE OS" className="m-wordmark h-[22px] w-auto" />
+          {/* The new look: the desktop sidebar's live wordmark, not the picture of it. */}
+          {fresh ? <Wordmark size={21} /> : <img src="/brand/tle-os-type.png" alt="TLE OS" className="m-wordmark h-[22px] w-auto" />}
         </Link>
       )}
       <button type="button" onClick={bell} aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"} className="m-round m-press relative !h-11 !w-11">
@@ -131,14 +134,16 @@ export function whatsappHref(phone: string, text?: string): string | null {
 
 /** Call, text and email, as three plain buttons. Missing ones are left out, not greyed. */
 export function ReachButtons({ phone, email }: { phone: string; email: string }) {
+  /* The new look keeps the orange for the screen's one action (Viewing Done, Book), so Call is an outline here. */
+  const fresh = useAppLook();
   const tel = dialable(phone);
   if (!tel && !email) return <p className="mt-3 text-[13px] text-muted">No number or email on the record.</p>;
   const btn = "m-btn m-press flex-1 !h-11 !text-[14.5px]";
   return (
     <div className="mt-3 flex gap-2">
       {tel && (
-        <a href={`tel:${tel}`} className={`${btn} m-btn-primary`}>
-          <DoodleIcon name="call" size={17} /> Call
+        <a href={`tel:${tel}`} className={fresh ? btn : `${btn} m-btn-primary`}>
+          <AppIcon name="call" size={17} /> Call
         </a>
       )}
       {tel && (
@@ -148,7 +153,7 @@ export function ReachButtons({ phone, email }: { phone: string; email: string })
       )}
       {email && (
         <a href={`mailto:${email}`} className={btn}>
-          <DoodleIcon name="mail" size={17} /> Email
+          <AppIcon name="mail" size={17} /> Email
         </a>
       )}
     </div>
@@ -220,7 +225,7 @@ export function SearchBox({
 }) {
   return (
     <label className="m-search">
-      <DoodleIcon name="search" size={17} className="text-muted" />
+      <AppIcon name="search" size={17} className="text-muted" />
       <input
         type="search"
         autoFocus={autoFocus}
@@ -252,13 +257,43 @@ export function WhatsAppIcon({ size = 18, className = "" }: { size?: number; cla
   );
 }
 
+/** The new look's head for a tab: the title and one line, type only (app/new-look/app.css .m-mast). */
+export function Mast({ title, brief, eyebrow }: { title: React.ReactNode; brief?: React.ReactNode; eyebrow?: React.ReactNode }) {
+  return (
+    <section className="m-mast">
+      {eyebrow && <p className="m-eyebrow mb-1.5">{eyebrow}</p>}
+      <h1 className="m-title">{title}</h1>
+      {brief && <p className="m-blurb">{brief}</p>}
+    </section>
+  );
+}
+
 /**
  * The 268px greeting box every tab opens with (Home's), for the single homes
  * from James's sheet (3 Oct 2026: "every header has a different type of
  * property in it"). The home sits low and right, under the words, so it
  * never touches the title or the line below it.
  */
-export function HomeHero({ title, line, src, height = 150, right = -8, bottom = 18 }: { title: string; line: string; src: string; height?: number; right?: number; bottom?: number }) {
+export function HomeHero({
+  title,
+  line,
+  brief,
+  src,
+  height = 150,
+  right = -8,
+  bottom = 18,
+}: {
+  title: string;
+  line: string;
+  /** The new look's line, when it says something different (fewer words, or a live count); null for none. */
+  brief?: React.ReactNode;
+  src: string;
+  height?: number;
+  right?: number;
+  bottom?: number;
+}) {
+  /* The new look (27 Oct 2026): type only - the title and one line, no painting. */
+  if (useAppLook()) return <Mast title={title} brief={brief === undefined ? line : brief} />;
   return (
     <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
       <img src={src} alt="" className="pointer-events-none absolute w-auto max-w-none select-none" style={{ height, right, bottom }} />
@@ -268,4 +303,25 @@ export function HomeHero({ title, line, src, height = 150, right = -8, bottom = 
       </div>
     </section>
   );
+}
+
+/**
+ * An empty list. The pastel app draws James's armchair in a card with a title
+ * and a line; the new look says the line alone, in the serif, with nothing
+ * drawn (27 Oct 2026: "minimalistic but gets to the point").
+ */
+export function EmptyCard({ title, line, className = "" }: { title: React.ReactNode; line: React.ReactNode; className?: string }) {
+  if (useAppLook()) return <p className={`m-empty ${className}`}>{line}</p>;
+  return (
+    <div className={`flex flex-col items-center rounded-[22px] px-6 py-8 text-center ${className}`} style={{ background: "var(--m-card)" }}>
+      <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
+      <p className="mt-2 text-[16px] font-medium">{title}</p>
+      <p className="mt-1 text-[14px] text-muted">{line}</p>
+    </div>
+  );
+}
+
+/** Drawn only in the pastel app - for a server page's painting, which cannot ask useAppLook itself. */
+export function OldLookOnly({ children }: { children: React.ReactNode }) {
+  return useAppLook() ? null : <>{children}</>;
 }

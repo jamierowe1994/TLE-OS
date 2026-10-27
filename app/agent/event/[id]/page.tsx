@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
+import { useAppLook } from "@/components/app/AppFrame";
 import PhoneCancelViewing from "@/components/m/PhoneCancelViewing";
 import PhoneAppraisalChange from "@/components/m/PhoneAppraisalChange";
 import AfterViewing from "@/components/app/AfterViewing";
@@ -88,6 +89,7 @@ export default function PhoneEvent() {
 }
 
 function Event({ appt, back }: { appt: Appt; back: string }) {
+  const fresh = useAppLook();
   const [facts, setFacts] = useState<PhoneEventFacts | null>(null);
   const [factsError, setFactsError] = useState<string | null>(null);
   const [people, setPeople] = useState<PhonePerson[] | null>(null);
@@ -159,20 +161,27 @@ function Event({ appt, back }: { appt: Appt; back: string }) {
     <>
       {/* The drawing on its own card with the back button over it - the
           reference's "Meditation" screen (2 Oct 2026). */}
-      <div className="m-group relative flex h-[240px] items-center justify-center">
-        <div className="absolute left-3 top-3">
+      {fresh ? (
+        /* The new look: no drawing - the back button, then the address as the title. */
+        <div className="flex h-12 items-center">
           <BackLink href={back} />
         </div>
-        <img src={KIND_ART[appt.kind] ?? KIND_ART.other} alt="" className="h-[190px] w-auto max-w-[92%] object-contain" />
-      </div>
-      <h1 className="m-title mt-5 text-[28px] leading-[1.15]">{appt.where || appt.what}</h1>
+      ) : (
+        <div className="m-group relative flex h-[240px] items-center justify-center">
+          <div className="absolute left-3 top-3">
+            <BackLink href={back} />
+          </div>
+          <img src={KIND_ART[appt.kind] ?? KIND_ART.other} alt="" className="h-[190px] w-auto max-w-[92%] object-contain" />
+        </div>
+      )}
+      <h1 className={`m-title text-[28px] leading-[1.15] ${fresh ? "mt-4" : "mt-5"}`}>{appt.where || appt.what}</h1>
       <p className="mt-1.5 flex items-center gap-1.5 text-[14px] text-muted">
-        <DoodleIcon name="clock" size={15} />
+        <AppIcon name="clock" size={15} />
         {KIND_LABEL[appt.kind] ?? "Appointment"} · {appt.start} - {endOf(appt)}
       </p>
       {appt.where && (
         <a href={mapsHref(appt.where, appt.lat, appt.lng)} target="_blank" rel="noreferrer" className="m-btn m-press mt-5">
-          <DoodleIcon name="target" size={17} /> Directions
+          <AppIcon name="target" size={17} /> Directions
         </a>
       )}
 
@@ -261,7 +270,7 @@ function Event({ appt, back }: { appt: Appt; back: string }) {
 
       {appt.kind === "viewing" && appt.who && (
         <Link href={idHref} className="m-btn m-btn-primary m-press mt-6 !h-[52px]">
-          <DoodleIcon name="camera" size={18} /> Scan Their ID
+          <AppIcon name="camera" size={18} /> Scan Their ID
         </Link>
       )}
       <PhoneCancelViewing

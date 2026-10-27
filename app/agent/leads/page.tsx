@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ukDaysFromToday } from "@/lib/london-clock";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import type { Lead } from "@/lib/leads-sample";
-import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref } from "../bits";
+import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref, EmptyCard, Mast } from "../bits";
+import { useAppLook } from "@/components/app/AppFrame";
 import SlideTabs from "@/components/app/SlideTabs";
 import PhonePassport from "@/components/app/PhonePassport";
 import Link from "next/link";
@@ -89,6 +90,7 @@ async function readLeadsOnly(again = true): Promise<{ leads: Lead[] } | { error:
 }
 
 export default function PhoneLeads() {
+  const fresh = useAppLook();
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("today");
@@ -151,21 +153,27 @@ export default function PhoneLeads() {
     <main>
       <TopBar />
 
-      {/* Exactly Home's greeting box, as on Properties and People. */}
-      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
-        <img
-          src="/illustrations/app/street-row.webp"
-          alt=""
-          className="pointer-events-none absolute -right-24 top-6 h-[236px] w-auto max-w-none select-none"
-          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
-        />
-        <div className="relative w-[56%] pt-4">
-          <h1 className="m-title text-[38px] leading-[1.04]">Leads</h1>
-          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Your enquiries, newest first.</p>
-        </div>
-      </section>
+      {fresh ? (
+        <Mast title="Leads" brief="Your enquiries, newest first." />
+      ) : (
+        <>
+          {/* Exactly Home's greeting box, as on Properties and People. */}
+          <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
+            <img
+              src="/illustrations/app/street-row.webp"
+              alt=""
+              className="pointer-events-none absolute -right-24 top-6 h-[236px] w-auto max-w-none select-none"
+              style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
+            />
+            <div className="relative w-[56%] pt-4">
+              <h1 className="m-title text-[38px] leading-[1.04]">Leads</h1>
+              <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Your enquiries, newest first.</p>
+            </div>
+          </section>
+        </>
+      )}
 
-      <div className="relative z-[1] -mt-5 flex items-center gap-2.5">
+      <div className={`relative z-[1] flex items-center gap-2.5 ${fresh ? "" : "-mt-5"}`}>
         <FloatSearch
           value={needle}
           onChange={setNeedle}
@@ -176,7 +184,7 @@ export default function PhoneLeads() {
           type="button"
           onClick={() => setSorting(true)}
           aria-label="Sort"
-          className="m-press flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full"
+          className="m-sortbtn m-press flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full"
           style={{ background: "var(--m-pink-wash)", color: "var(--m-coral)" }}
         >
           <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -194,11 +202,7 @@ export default function PhoneLeads() {
       ) : !leads ? (
         <Spinner label="Loading your leads" className="py-6" />
       ) : shown.length === 0 ? (
-        <div className="flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-          <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
-          <p className="mt-2 text-[16px] font-medium">{tab === "today" && !needle.trim() ? "No New Leads Today Yet" : "Nothing Here"}</p>
-          <p className="mt-1 text-[14px] text-muted">{needle.trim() ? `No lead matches "${needle.trim()}".` : "They'll appear here as they come in."}</p>
-        </div>
+        <EmptyCard title={tab === "today" && !needle.trim() ? "No New Leads Today Yet" : "Nothing Here"} line={needle.trim() ? `No lead matches "${needle.trim()}".` : "They'll appear here as they come in."} />
       ) : (
         <ul className="grid grid-cols-1 gap-2.5">
           {shown.map((l) => {
@@ -298,7 +302,7 @@ function Detail({ l, onClose }: { l: Lead; onClose: () => void }) {
 
       <div className="mt-4 grid grid-cols-4 gap-2">
         {actions.map((a) => {
-          const icon = a.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <DoodleIcon name={a.icon} size={22} />;
+          const icon = a.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <AppIcon name={a.icon} size={22} />;
           return a.href ? (
             <a key={a.label} href={a.href} target={a.label === "Directions" ? "_blank" : undefined} rel="noreferrer" className="m-press flex flex-col items-center gap-1.5 rounded-[18px] py-3 text-[12.5px] font-medium" style={{ background: "var(--m-card)" }}>
               {icon}
@@ -319,7 +323,7 @@ function Detail({ l, onClose }: { l: Lead; onClose: () => void }) {
         <>
           <PhonePassport name={l.name} email={l.email ?? ""} listingId={l.listingId != null ? String(l.listingId) : null} address={l.address ?? ""} className="mt-3" />
           <Link href={`/agent/book?q=${encodeURIComponent(l.email || l.phone || l.name)}`} className="m-btn m-press mt-2 w-full">
-            <DoodleIcon name="calendar" size={17} /> Book a Viewing
+            <AppIcon name="calendar" size={17} /> Book a Viewing
           </Link>
         </>
       )}
@@ -339,7 +343,7 @@ function Detail({ l, onClose }: { l: Lead; onClose: () => void }) {
         <ul className="m-group mt-4">
           {facts.map(([icon, k, v]) => (
             <li key={k} className="m-row flex items-center gap-3 px-4 py-3.5">
-              <DoodleIcon name={icon} size={18} className="text-muted" />
+              <AppIcon name={icon} size={18} className="text-muted" />
               <span className="w-[38%] shrink-0 text-[14.5px] text-muted">{k}</span>
               <span className="min-w-0 truncate text-[15px] font-medium">{v}</span>
             </li>
@@ -392,7 +396,7 @@ function IdCheck({ l }: { l: Lead }) {
     </div>
   ) : (
     <a href={href} className="m-btn m-btn-primary m-press mt-3 w-full">
-      <DoodleIcon name="camera" size={18} /> Scan Their ID
+      <AppIcon name="camera" size={18} /> Scan Their ID
     </a>
   );
 }

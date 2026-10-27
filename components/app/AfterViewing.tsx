@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import { feedbackLabel, type Appt, type ViewingFeedback } from "@/lib/diary";
 import { Sheet, whatsappHref, WhatsAppIcon } from "@/app/agent/bits";
 import PhonePassport from "@/components/app/PhonePassport";
@@ -158,7 +158,7 @@ export default function AfterViewing({
         {feedback && !picking ? (
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-green-wash)", color: "var(--m-sage-ink)" }}>
-              <DoodleIcon name="checklist" size={17} />
+              <AppIcon name="checklist" size={17} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold">Viewing done</span>
@@ -186,7 +186,7 @@ export default function AfterViewing({
           </>
         ) : (
           <button type="button" onClick={() => setPicking(true)} className="m-btn m-btn-primary m-press w-full">
-            <DoodleIcon name="checklist" size={17} /> Viewing Done
+            <AppIcon name="checklist" size={17} /> Viewing Done
           </button>
         )}
         {saveSaid && (
@@ -215,7 +215,7 @@ export default function AfterViewing({
                   }}
                   className="m-btn m-btn-primary m-press flex-1 !text-[14.5px] disabled:opacity-50"
                 >
-                  <DoodleIcon name="mail" size={17} /> Email It
+                  <AppIcon name="mail" size={17} /> Email It
                 </button>
                 {wa && (
                   <a href={wa} className="m-btn m-press flex-1 !text-[14.5px]">
@@ -252,7 +252,7 @@ export default function AfterViewing({
             </p>
           )}
           <button type="button" onClick={() => void sendOffer()} disabled={sending} className="m-btn m-btn-primary m-press mt-5 w-full disabled:opacity-60">
-            <DoodleIcon name="mail" size={17} /> {sending ? "Sending" : "Send It"}
+            <AppIcon name="mail" size={17} /> {sending ? "Sending" : "Send It"}
           </button>
           <button type="button" onClick={() => setAsking(false)} className="m-btn m-press mt-2 w-full">
             Not Now
