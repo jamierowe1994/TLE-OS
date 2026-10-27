@@ -29,6 +29,7 @@ import {
   toneOf,
 } from "@/components/viewings/shared";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import EmailPerson from "@/components/EmailPerson";
 import CancelAppointment, { canCancelGeneral } from "@/components/CancelAppointment";
 import EditAppointment from "@/components/viewings/EditAppointment";
 import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/CancelViewing";
@@ -137,7 +138,7 @@ export default function AppointmentDrawer({
   useEffect(() => {
     if (!appt || own) return;
     /* Not while Edit's boxes are drawn over it: Escape closes those first. */
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector(".nl-fs-wrap") && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector(".nl-fs-wrap, [data-email-window], [data-wa-sheet]") && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [appt, onClose, own]);
@@ -181,6 +182,10 @@ export default function AppointmentDrawer({
   const near = nearLabel(appt.day);
   const when = `${near ? `${near} · ` : ""}${fmtFull(dateOfOffset(appt.day))}`;
   const subject = subjectOf(appt);
+  /* Email opens the OS's own window, not a mailto: (components/EmailPerson,
+     27 Oct 2026); a viewing's person gets the tenant templates, an
+     appraisal's or take-on's the landlord ones. */
+  const emailRole = appt.kind === "viewing" ? "tenant" : appt.kind === "appraisal" || appt.kind === "takeon" ? "landlord" : null;
   const atProperty = AT_PROPERTY.has(appt.kind);
   const missing = appt.comms.filter((c) => !c.done && !sentExtra.has(`${appt.id}:${c.label}`));
   const told = (needle: RegExp) => {
@@ -251,10 +256,10 @@ export default function AppointmentDrawer({
                           </>
                         )}
                         {appt.contact.email && (
-                          <a href={`mailto:${appt.contact.email}`} className={nb}>
+                          <EmailPerson email={appt.contact.email} name={appt.who} role={emailRole} address={appt.where || null} className={nb}>
                             <Ico name="mail" size={14} />
                             Email
-                          </a>
+                          </EmailPerson>
                         )}
                       </span>
                     ) : (
@@ -762,10 +767,10 @@ export default function AppointmentDrawer({
                   </>
                 )}
                 {appt.contact.email && (
-                  <a href={`mailto:${appt.contact.email}`} className={secondary}>
+                  <EmailPerson email={appt.contact.email} name={appt.who} role={emailRole} address={appt.where || null} className={secondary}>
                     <DoodleIcon name="mail" size={12} />
                     Email
-                  </a>
+                  </EmailPerson>
                 )}
               </div>
             ) : (

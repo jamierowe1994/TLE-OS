@@ -75,9 +75,21 @@ export default function EmailPerson({
         {children}
       </button>
       {/* React carries a portal's clicks up to the drawer it was opened
-          from, whose backdrop would close too; they stop here. */}
+          from, whose backdrop would close too; they stop here.
+          Its own layer at z-430, as the WhatsApp sheet's (27 Oct 2026): the
+          window is z-150, and opened from the landlord pop-up on a listing
+          (z-420) or the new-look diary drawer (z-300) it sat underneath
+          them. A dialog, so their Escape leaves the stage and the draft be. */}
       {mounted && open && createPortal(
-        <div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+        <div
+          className="relative z-[430]"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Email ${full || email}`}
+          data-email-window
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
         <Compose
           open
           to={email}
