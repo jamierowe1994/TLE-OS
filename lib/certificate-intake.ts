@@ -4,7 +4,7 @@ import { q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { R2_BUCKET, safeName, withR2 } from "@/lib/r2";
 import { rexWriteBlockedBecause, writeCertificateToRex } from "@/lib/plc-rex";
-import { refreshComplianceBook } from "@/lib/compliance-cache";
+import { patchHeldHome, refreshComplianceBook } from "@/lib/compliance-cache";
 import { shareCertificate, type SharePerson, type ShareResult } from "@/lib/certificate-share";
 import { CHECKING_LABEL, HELD_FOR_CHECK } from "@/lib/cert-hold";
 import { REAL_DAY, YMD, realDayOrNull, sayDay } from "@/lib/real-day";
@@ -230,7 +230,10 @@ const waitingForCheck = (held: boolean): ShareResult => ({
 export async function releaseHeldCertificate(certificateId: string): Promise<CertRow | null> {
   const rows = await q<CertRow>(`UPDATE os_certificates SET awaiting_check = false WHERE id = $1 AND awaiting_check RETURNING *`, [certificateId]);
   if (!rows[0]) return null;
-  return writeCertificateRow(rows[0], `Written by TLE OS from ${rows[0].source} (${rows[0].name}), verified by compliance.`, true);
+  const row = await writeCertificateRow(rows[0], `Written by TLE OS from ${rows[0].source} (${rows[0].name}), verified by compliance.`, true);
+  /* In date on every tile now, not when the rebuild above lands. */
+  await patchHeldHome(row.property_id).catch(() => false);
+  return row;
 }
 
 /**
