@@ -26,7 +26,10 @@ interface Row extends Record<string, unknown> {
   title: string; where_at: string; who: string; author_name: string; synced_at: Date | null;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  /* One of your own, to edit: what is saved and whether it is in your Outlook. */
+  const one = req.nextUrl.searchParams.get("id");
+  if (one !== null) return getOne(req, one);
   if (!hasDb()) return NextResponse.json({ ok: true, appointments: [] });
   try {
     const rows = await q<Row>(
@@ -164,4 +167,123 @@ export async function DELETE(req: NextRequest) {
      otherwise this says so quietly and nothing is touched. */
   const outlook = await removeFromOutlook(actor.id, `appointment|${rowId}`).catch(() => ({ ok: false, detail: "" }));
   return NextResponse.json({ ok: true, said: outlook.ok ? "Cancelled and taken out of your diary and your Outlook." : "Cancelled and taken out of your diary." });
+}
+
+/**
+ * The OS's own general entries a person may change: theirs, not a booked
+ * viewing (Change time), not one that went to REX, not a slot (Remove slot)
+ * and not an inspection visit (the inspection). The same rows Cancel takes.
+ */
+const EDITABLE = `author_id = $2 AND booking IS NULL AND rex_event_id IS NULL AND cancelled_at IS NULL
+  AND kind <> 'slot' AND kind <> 'viewing' AND id NOT LIKE 'inspection-%'`;
+
+function rowIdOf(id: unknown): string | null {
+  const rowId = String(id ?? "").replace(/^os-/, "");
+  return /^[A-Za-z0-9-]{8,64}$/.test(rowId) ? rowId : null;
+}
+
+async function inOutlook(rowId: string): Promise<boolean> {
+  const rows = await q<{ n: number }>(
+    `SELECT 1 AS n FROM os_case_state WHERE kind = 'outlook-event' AND record_id = $1`,
+    [`appointment|${rowId}`]
+  ).catch(() => []);
+  return rows.length > 0;
+}
+
+async function getOne(req: NextRequest, id: string) {
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, said: "Sign in first." }, { status: 401 });
+  if (!hasDb()) return NextResponse.json({ ok: false, said: "No database on this environment." }, { status: 503 });
+  const rowId = rowIdOf(id);
+  if (!rowId) return NextResponse.json({ ok: false, said: "Which appointment?" }, { status: 400 });
+  const rows = await q<{ starts_at: Date; mins: number; kind: string; title: string; where_at: string; notes: string | null }>(
+    `SELECT starts_at, mins, kind, title, where_at, notes FROM os_appointments WHERE id = $1 AND ${EDITABLE}`,
+    [rowId, actor.id]
+  ).catch(() => null);
+  if (rows === null) return NextResponse.json({ ok: false, said: "Couldn't read it just now. Try again." }, { status: 502 });
+  const r = rows[0];
+  if (!r) return NextResponse.json({ ok: false, said: "That appointment isn't yours to change, or it has gone." }, { status: 404 });
+  return NextResponse.json({
+    ok: true,
+    appointment: {
+      startsAt: new Date(r.starts_at).toISOString(),
+      mins: r.mins,
+      kind: r.kind,
+      title: r.title,
+      where: r.where_at ?? "",
+      notes: r.notes ?? "",
+      inOutlook: await inOutlook(rowId),
+    },
+  });
+}
+
+/**
+ * Edit a general appointment made here (Richard Callow c9389089, 27 Oct 2026:
+ * "Please add an edit button to amend appointments in the diary" - his
+ * "50 Bartlemas Road visit TBC" could only be cancelled and made again).
+ *
+ * What it is, the day, the time, how long, where and the notes, on the rows
+ * Cancel can take. Where the OS put it in their Outlook, that entry is moved
+ * and rewritten with it; `outlook: true` puts one that never went there in
+ * now. Nobody is invited or emailed, and nothing goes to REX.
+ */
+export async function PATCH(req: NextRequest) {
+  try {
+    assertNotViewingAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
+  } catch (e) {
+    if (e instanceof ViewingAsRefused) return NextResponse.json({ ok: false, said: e.message }, { status: 423 });
+    throw e;
+  }
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, said: "Sign in first." }, { status: 401 });
+  if (!hasDb()) return NextResponse.json({ ok: false, said: "Nothing to change here." }, { status: 503 });
+  const b = (await req.json().catch(() => ({}))) as {
+    id?: string; startsAt?: string; mins?: number; title?: string; where?: string; notes?: string; outlook?: boolean;
+  };
+  const rowId = rowIdOf(b.id);
+  if (!rowId) return NextResponse.json({ ok: false, said: "Which appointment?" }, { status: 400 });
+  const title = (b.title ?? "").trim();
+  const when = b.startsAt ? new Date(b.startsAt) : null;
+  if (!title) return NextResponse.json({ ok: false, said: "It needs a name." }, { status: 400 });
+  if (!when || Number.isNaN(when.getTime())) return NextResponse.json({ ok: false, said: "That date didn't make sense." }, { status: 400 });
+
+  const was = await q<{ kind: string }>(`SELECT kind FROM os_appointments WHERE id = $1 AND ${EDITABLE}`, [rowId, actor.id]).catch(() => null);
+  if (was === null) return NextResponse.json({ ok: false, said: "That didn't save. Try again." }, { status: 502 });
+  if (!was[0]) return NextResponse.json({ ok: false, said: "That appointment isn't yours to change, or it has gone." }, { status: 404 });
+  /* The same rules New appointment made it with: an inspection by its name, a travel buffer kept as one. */
+  const before = was[0].kind;
+  const kind = before === "other" || before === "inspection" ? (/inspection|inventory/i.test(title) ? "inspection" : "other") : before;
+  const most = kind === "travel" ? 16 * 60 : 8 * 60;
+  const mins = Math.min(Math.max(Number(b.mins) || 30, 15), most);
+  const where = (b.where ?? "").trim().slice(0, 200);
+  const notes = (b.notes ?? "").trim().slice(0, 4000);
+
+  const saved = await q<{ id: string }>(
+    `UPDATE os_appointments SET starts_at = $3, mins = $4, kind = $5, title = $6, where_at = $7, notes = $8
+      WHERE id = $1 AND ${EDITABLE} RETURNING id`,
+    [rowId, actor.id, when.toISOString(), mins, kind, title.slice(0, 200), where, notes]
+  ).catch(() => null);
+  if (saved === null) return NextResponse.json({ ok: false, said: "That didn't save. Try again." }, { status: 502 });
+  if (!saved.length) return NextResponse.json({ ok: false, said: "That appointment isn't yours to change, or it has gone." }, { status: 404 });
+
+  /* Their Outlook follows: the entry the OS made is moved and rewritten (force,
+     since the name or the notes may be all that changed); one that was never
+     put there goes in only when they asked. */
+  if (!(await inOutlook(rowId)) && !b.outlook) {
+    return NextResponse.json({ ok: true, said: "Changed in your diary here. It is not in your Outlook calendar." });
+  }
+  const put = await putInOutlook({
+    userId: actor.id,
+    key: `appointment|${rowId}`,
+    subject: title,
+    body: notes,
+    location: where,
+    startsAt: when.toISOString(),
+    minutes: mins,
+    force: true,
+  });
+  return NextResponse.json({
+    ok: true,
+    said: put.ok ? "Changed in your diary and your Outlook calendar." : `Changed in your diary here. ${put.detail}`,
+  });
 }

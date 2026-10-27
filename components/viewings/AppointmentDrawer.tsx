@@ -30,6 +30,7 @@ import {
 } from "@/components/viewings/shared";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import CancelAppointment, { canCancelGeneral } from "@/components/CancelAppointment";
+import EditAppointment from "@/components/viewings/EditAppointment";
 import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/CancelViewing";
 import AppraisalChange, { canChangeAppraisalAppt } from "@/components/AppraisalChange";
 import { Badge, Ico } from "@/components/new-look/Parts";
@@ -135,7 +136,8 @@ export default function AppointmentDrawer({
   const onClose = own ? closeNow : slide.close;
   useEffect(() => {
     if (!appt || own) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    /* Not while Edit's boxes are drawn over it: Escape closes those first. */
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector(".nl-fs-wrap") && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [appt, onClose, own]);
@@ -528,6 +530,7 @@ export default function AppointmentDrawer({
               <>
                 <p className="nl-meta mr-auto">Not linked to a record.</p>
                 <CancelAppointment appt={appt} onDone={onClose} className={nb} />
+                <EditAppointment appt={appt} onDone={onClose} className={np} />
               </>
             ) : (
               <p className="nl-meta w-full">
@@ -1016,6 +1019,7 @@ export default function AppointmentDrawer({
             <div className="flex flex-wrap items-center gap-2">
               <p className="flex-1 text-[11px] text-muted">Not linked to a record.</p>
               <CancelAppointment appt={appt} onDone={onClose} className={secondary} />
+              <EditAppointment appt={appt} onDone={onClose} className={primary} />
             </div>
           ) : (
             <p className="text-center text-[11px] text-muted">
