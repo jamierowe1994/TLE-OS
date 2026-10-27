@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import { calm } from "@/components/app/motion";
 
 /**
@@ -145,10 +145,10 @@ export default function FloatSearch({
         ref={pill}
         type="button"
         onClick={lift}
-        className={`m-press flex h-[54px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 text-left ${shadow ? "shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" : ""} ${className}`}
+        className={`m-floatpill m-press flex h-[54px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 text-left ${shadow ? "shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" : ""} ${className}`}
         style={{ background: "var(--m-card)", visibility: open ? "hidden" : undefined }}
       >
-        <DoodleIcon name="search" size={18} />
+        <AppIcon name="search" size={18} />
         <span className={`min-w-0 flex-1 truncate text-[15px] ${typed ? "" : "text-muted"}`}>{typed ? value : placeholder}</span>
         {typed && (
           <span
@@ -180,8 +180,8 @@ export default function FloatSearch({
             />
             <div className="pointer-events-none absolute inset-x-0 top-0 mx-auto max-w-[560px] px-4 pt-[calc(env(safe-area-inset-top)+46px)]">
               <div ref={float} className="pointer-events-auto flex items-center gap-2.5">
-                <label className="flex h-[56px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 shadow-[0_24px_50px_-18px_rgba(20,10,8,0.6)]" style={{ background: "var(--m-card)" }}>
-                  <DoodleIcon name="search" size={18} />
+                <label className="m-floatbox flex h-[56px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 shadow-[0_24px_50px_-18px_rgba(20,10,8,0.6)]" style={{ background: "var(--m-card)" }}>
+                  <AppIcon name="search" size={18} />
                   <input
                     ref={input}
                     type="search"

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import AlertsCard from "@/components/app/AlertsCard";
 import StandaloneHint from "@/components/app/StandaloneHint";
 import { TopBar } from "./bits";
 import { todayLine, useHomeFigures, type Figure } from "./figures";
 import FloatSearch from "@/components/app/FloatSearch";
 import SearchResults from "./search/results";
+import { useAppLook } from "@/components/app/AppFrame";
 
 /**
  * HOME (3 Oct 2026), drawn from James's own pastel mockup - "my favourite is
@@ -25,6 +26,11 @@ function greeting(): string {
   return h < 12 ? "Good Morning," : h < 18 ? "Good Afternoon," : "Good Evening,";
 }
 
+/** "Tuesday 27 October" - the new look's line over the greeting, always today in London. */
+function dateLine(): string {
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" }).format(new Date());
+}
+
 export default function PhoneHome() {
   const f = useHomeFigures();
   const [first, setFirst] = useState("");
@@ -35,6 +41,8 @@ export default function PhoneHome() {
       .then((j: { user?: { name?: string } | null }) => setFirst((j.user?.name ?? "").split(/\s+/)[0] ?? ""))
       .catch(() => null);
   }, []);
+
+  if (useAppLook()) return <FreshHome f={f} first={first} needle={needle} setNeedle={setNeedle} />;
 
   return (
     <main>
@@ -75,7 +83,7 @@ export default function PhoneHome() {
 
       <Link data-morph href="/agent/day" className="m-press mt-3 flex items-center gap-3.5 rounded-[22px] px-4 py-4" style={{ background: "var(--m-green-wash)" }}>
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px]" style={{ background: "var(--m-card)" }}>
-          <DoodleIcon name="calendar" size={20} />
+          <AppIcon name="calendar" size={20} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[16px] font-medium">Today</span>
@@ -94,6 +102,77 @@ export default function PhoneHome() {
   );
 }
 
+/**
+ * HOME in the new look (27 Oct 2026): the date, a short greeting, search, the
+ * four figures on hairlines with the number in the serif, and today's line.
+ * The same live figures and links as the pastel home; nothing painted.
+ */
+function FreshHome({ f, first, needle, setNeedle }: { f: ReturnType<typeof useHomeFigures>; first: string; needle: string; setNeedle: (v: string) => void }) {
+  const hello = greeting().replace(/^Good /, "").replace(/,$/, "");
+  return (
+    <main>
+      <TopBar />
+      <section className="m-mast">
+        <p className="m-eyebrow">{dateLine()}</p>
+        <h1 className="m-title mt-1.5">
+          {hello}
+          {first ? `, ${first}` : ""}
+        </h1>
+      </section>
+
+      <div className="relative z-[1] flex">
+        <FloatSearch value={needle} onChange={setNeedle} placeholder="Search people and homes">
+          <SearchResults needle={needle} flat />
+        </FloatSearch>
+      </div>
+
+      <div className="m-stats mt-6">
+        <Stat href="/agent/leads" value={f.leadsToday} label="Leads Today" />
+        <Stat href="/agent/properties?chip=market" value={f.onMarket} label="On the Market" />
+        <Stat href="/agent/applications" value={f.applications} label="Applications" />
+        <Stat href="/agent/viewings" value={f.viewingsWeek} label="Viewings, 7 Days" />
+      </div>
+
+      <Link data-morph href="/agent/day" className="m-press m-group mt-6 flex items-center gap-3.5 px-4 py-3.5">
+        <AppIcon name="calendar" size={19} className="text-muted" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-medium">Today</span>
+          <span className="block truncate text-[13.5px] text-muted">
+            {f.todayError ? "Your diary did not load" : f.today ? todayLine(f.today) : "Loading your diary"}
+          </span>
+        </span>
+        <Chevron />
+      </Link>
+
+      <div className="mt-3">
+        <StandaloneHint />
+        <AlertsCard />
+      </div>
+    </main>
+  );
+}
+
+/** One figure on the hairline grid: the number in the serif, the words under it. */
+function Stat({ href, value, label }: { href: string; value: Figure; label: string }) {
+  return (
+    <Link data-morph href={href} className="m-stat m-press">
+      <span className="m-figure block text-[34px] leading-none">
+        {value === "loading" ? (
+          <span role="status" aria-label="Loading" className="my-1.5 block h-5 w-5 animate-spin rounded-full border-2 border-[color:var(--m-line)] border-t-[color:var(--m-coral)]" />
+        ) : value === null ? (
+          "–"
+        ) : (
+          value
+        )}
+      </span>
+      <span className="flex items-center justify-between gap-2 text-[13px] text-muted">
+        {label}
+        <Chevron />
+      </span>
+    </Link>
+  );
+}
+
 /* href null: the figure stands alone until its own app page exists (James,
    3 Oct 2026: the app never opens a desktop page). */
 function Tile({ href, tone, icon, value, label }: { href: string | null; tone: "pink" | "sage"; icon: string; value: Figure; label: string }) {
@@ -109,7 +188,7 @@ function Tile({ href, tone, icon, value, label }: { href: string | null; tone: "
     );
   return (
     <Box>
-      <DoodleIcon name={icon} size={24} />
+      <AppIcon name={icon} size={24} />
       <span>
         <span className="m-figure block text-[30px] font-semibold">
           {value === "loading" ? (

@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { NearbyPerson } from "@/app/api/m/nearby/route";
 import type { BookPerson } from "@/lib/m-people-book";
-import { ErrorLine, Sheet, Spinner, TopBar, dialable, mapsHref, whatsappHref, WhatsAppIcon } from "../bits";
+import { ErrorLine, Sheet, Spinner, TopBar, dialable, mapsHref, whatsappHref, WhatsAppIcon, Mast } from "../bits";
+import { useAppLook } from "@/components/app/AppFrame";
 import { RadiusSheet, type RadiusPick } from "../radius";
 import SlideTabs from "@/components/app/SlideTabs";
 import PhonePassport from "@/components/app/PhonePassport";
@@ -44,6 +45,7 @@ const TONE: Record<BookPerson["tone"], { bg: string; ink: string }> = {
 const sameish = (a: string, b: string) => a.toLowerCase().replace(/\s+/g, " ").trim() === b.toLowerCase().replace(/\s+/g, " ").trim();
 
 export default function PhonePeople() {
+  const fresh = useAppLook();
   const [book, setBook] = useState<{ tenants: BookPerson[]; landlords: BookPerson[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [side, setSide] = useState<Side>("tenant");
@@ -153,26 +155,32 @@ export default function PhonePeople() {
     <main>
       <TopBar />
 
-      {/* Exactly Home's greeting box, as on Properties. The brick loft from
-          the desktop dashboard (James, 3 Oct 2026), cut to the building and
-          its clouds with soft sides, set to the right so it clears the title. */}
-      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
-        <img
-          src="/illustrations/app/people-loft.webp"
-          alt=""
-          className="pointer-events-none absolute -right-[100px] top-[26px] h-[232px] w-auto max-w-none select-none"
-        />
-        <div className="relative w-[56%] pt-4">
-          <h1 className="m-title text-[38px] leading-[1.04]">People</h1>
-          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">
-            {forPassport ? "Pick the tenant, then Send Rental Passport." : "Find your tenants and landlords."}
-          </p>
-        </div>
-      </section>
+      {fresh ? (
+        <Mast title="People" brief={forPassport ? "Pick the tenant to send their passport to." : "Your tenants and landlords."} />
+      ) : (
+        <>
+          {/* Exactly Home's greeting box, as on Properties. The brick loft from
+             the desktop dashboard (James, 3 Oct 2026), cut to the building and
+             its clouds with soft sides, set to the right so it clears the title. */}
+          <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
+            <img
+              src="/illustrations/app/people-loft.webp"
+              alt=""
+              className="pointer-events-none absolute -right-[100px] top-[26px] h-[232px] w-auto max-w-none select-none"
+            />
+            <div className="relative w-[56%] pt-4">
+              <h1 className="m-title text-[38px] leading-[1.04]">People</h1>
+              <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">
+                {forPassport ? "Pick the tenant, then Send Rental Passport." : "Find your tenants and landlords."}
+              </p>
+            </div>
+          </section>
+        </>
+      )}
 
       <SlideTabs
-        className="z-[1] -mt-5"
-        shadow
+        className={fresh ? "z-[1]" : "z-[1] -mt-5"}
+        shadow={!fresh}
         height={44}
         textClass="text-[15px]"
         value={side}
@@ -199,7 +207,7 @@ export default function PhonePeople() {
           type="button"
           onClick={() => setCustomise(true)}
           aria-label="Customise"
-          className="m-press flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full"
+          className="m-sortbtn m-press flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full"
           style={{ background: "var(--m-pink-wash)", color: "var(--m-coral)" }}
         >
           <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -317,7 +325,7 @@ export default function PhonePeople() {
                 }}
                 className="flex h-[52px] w-full items-center gap-3 px-4 text-left text-[15.5px]"
               >
-                <DoodleIcon name="target" size={18} />
+                <AppIcon name="target" size={18} />
                 <span className="flex-1">Search by Radius</span>
                 <Chevron />
               </button>
@@ -406,6 +414,7 @@ function findHomeHref(p: BookPerson): string {
 }
 
 function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
+  const fresh = useAppLook();
   const tel = dialable(p.phone);
   const applicant = p.side === "tenant" && p.tone === "new";
   const facts: Array<[string, string, string]> = [
@@ -424,9 +433,11 @@ function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
 
   return (
     <Sheet label={p.name} onClose={onClose}>
-      <div className="-mx-1 -mt-1 mb-4 h-[150px] overflow-hidden rounded-[22px]" style={{ background: "var(--m-pink-wash)" }}>
-        <img src="/illustrations/app/street-row.webp" alt="" className="ml-auto h-full w-auto max-w-none" />
-      </div>
+      {!fresh && (
+        <div className="-mx-1 -mt-1 mb-4 h-[150px] overflow-hidden rounded-[22px]" style={{ background: "var(--m-pink-wash)" }}>
+          <img src="/illustrations/app/street-row.webp" alt="" className="ml-auto h-full w-auto max-w-none" />
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="m-title text-[28px] leading-tight">{p.name}</h2>
         <Chip text={p.status} tone={p.tone} />
@@ -437,12 +448,12 @@ function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
         {actions.map((a) =>
           a.href ? (
             <a key={a.label} href={a.href} target={a.label === "Directions" ? "_blank" : undefined} rel="noreferrer" className="m-press flex flex-col items-center gap-1.5 rounded-[18px] py-3 text-[12.5px] font-medium" style={{ background: "var(--m-card)" }}>
-              {a.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <DoodleIcon name={a.icon} size={22} />}
+              {a.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <AppIcon name={a.icon} size={22} />}
               {a.label}
             </a>
           ) : (
             <span key={a.label} className="flex flex-col items-center gap-1.5 rounded-[18px] py-3 text-[12.5px] font-medium opacity-35" style={{ background: "var(--m-card)" }}>
-              {a.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <DoodleIcon name={a.icon} size={22} />}
+              {a.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <AppIcon name={a.icon} size={22} />}
               {a.label}
             </span>
           )
@@ -453,14 +464,14 @@ function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
           the live homes around where this tenant wants to be. */}
       {p.side === "tenant" && (
         <Link href={findHomeHref(p)} className="m-btn m-btn-primary m-press mt-3 w-full">
-          <DoodleIcon name="home" size={17} /> Find a Home
+          <AppIcon name="home" size={17} /> Find a Home
         </Link>
       )}
       {/* Book them in and send their passport from the phone (Kirstie, fe8ebdad, 19 Oct 2026). */}
       {p.side === "tenant" && (
         <>
           <Link href={`/agent/book?q=${encodeURIComponent(p.email || p.phone || p.name)}`} className="m-btn m-press mt-2 w-full">
-            <DoodleIcon name="calendar" size={17} /> Book a Viewing
+            <AppIcon name="calendar" size={17} /> Book a Viewing
           </Link>
           <PhonePassport name={p.name} email={p.email} className="mt-2" />
         </>
@@ -470,7 +481,7 @@ function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
         <ul className="m-group mt-4">
           {facts.map(([icon, k, v]) => (
             <li key={k} className="m-row flex items-center gap-3 px-4 py-3.5">
-              <DoodleIcon name={icon} size={18} className="text-muted" />
+              <AppIcon name={icon} size={18} className="text-muted" />
               <span className="w-[42%] shrink-0 text-[14.5px] text-muted">{k}</span>
               <span className="flex min-w-0 items-center gap-2 text-[15px] font-medium">
                 {k === "Status" && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: TONE[p.tone].ink }} />}

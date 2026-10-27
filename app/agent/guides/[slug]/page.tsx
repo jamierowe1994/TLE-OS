@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { guideBySlug, GUIDES } from "@/lib/m-guides";
-import { BackLink } from "../../bits";
+import { BackLink, OldLookOnly } from "../../bits";
 
 /**
  * ONE GUIDE (James, 3 Oct 2026), laid out like his Fieldfolk reference: a
@@ -39,9 +39,11 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
       </p>
 
       {/* The picture, one corner swept round (the reference's photo card). */}
-      <div className="relative mt-5 h-[210px] overflow-hidden rounded-[22px] rounded-tr-[90px]" style={{ background: "var(--m-pink-wash)" }}>
-        <img src={g.image} alt="" className="absolute bottom-3 left-1/2 h-[180px] w-auto max-w-none -translate-x-1/2" />
-      </div>
+      <OldLookOnly>
+        <div className="relative mt-5 h-[210px] overflow-hidden rounded-[22px] rounded-tr-[90px]" style={{ background: "var(--m-pink-wash)" }}>
+          <img src={g.image} alt="" className="absolute bottom-3 left-1/2 h-[180px] w-auto max-w-none -translate-x-1/2" />
+        </div>
+      </OldLookOnly>
 
       {/* In numbers */}
       <h2 className="m-guide-title mt-9 text-[34px] leading-[0.98]">

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
+import AppIcon from "@/components/app/AppIcon";
 import type { Appt } from "@/lib/diary";
 import type { ScoredMatch } from "@/lib/contact-match";
 import { OS_LEAD_PREFIX } from "@/lib/contacts-as-leads";
@@ -241,7 +241,7 @@ function Who({ seed, onPick }: { seed: string; onPick: (p: ViewingPerson) => voi
         </p>
       )}
       <button type="button" onClick={() => setAdding(true)} className="m-btn m-press mt-3 w-full">
-        <DoodleIcon name="user" size={17} /> Someone New
+        <AppIcon name="user" size={17} /> Someone New
       </button>
     </>
   );
@@ -699,7 +699,7 @@ function Check({
           ))}
         </ul>
         <Link href="/agent/viewings" className="m-btn m-btn-primary m-press mt-6 w-full">
-          <DoodleIcon name="calendar" size={17} /> Your Viewings
+          <AppIcon name="calendar" size={17} /> Your Viewings
         </Link>
         <button type="button" onClick={onAgain} className="m-btn m-press mt-2 w-full">
           Book Another
@@ -756,7 +756,7 @@ function Check({
         </div>
       )}
       <button type="button" onClick={() => void book()} disabled={busy || !draft} className="m-btn m-btn-primary m-press mt-5 w-full !h-[52px] disabled:opacity-50">
-        <DoodleIcon name="calendar" size={17} /> {busy ? "Booking" : "Book the Viewing"}
+        <AppIcon name="calendar" size={17} /> {busy ? "Booking" : "Book the Viewing"}
       </button>
 
       {looking && draft?.html && (
