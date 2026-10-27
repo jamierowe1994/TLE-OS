@@ -8,8 +8,7 @@ import { getArrears } from "@/lib/business/payprop-income";
 import { stageOf, type StageListing } from "@/lib/listing-stages";
 import { activity } from "@/lib/activity";
 import { grantWholeBusiness } from "@/lib/scope";
-import { seesWholeOverview } from "@/lib/overview-access";
-import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { wholeOverviewFor } from "@/lib/overview-access";
 import type { FrontRecord } from "@/lib/front-dash";
 import { GET as portfolioGET } from "@/app/api/portfolio/route";
 import { GET as worksGET } from "@/app/api/works-orders/route";
@@ -59,8 +58,7 @@ export async function GET(req: NextRequest) {
   if (!kind || !KINDS.includes(kind)) return NextResponse.json({ ok: false, error: "Which list?" }, { status: 400 });
   const offset = Math.max(0, Math.floor(Number(req.nextUrl.searchParams.get("offset") ?? 0)) || 0);
   const today = todayLondon();
-  const viewAsCookie = actor.role === "owner" && !!readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
-  const whole = viewingAs ? !!subject && (await seesWholeOverview(subject)) : !viewAsCookie && (await seesWholeOverview(actor));
+  const whole = await wholeOverviewFor(req, { actor, subject, viewingAs });
   const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, whole);
   const mine = async (): Promise<Set<string> | null> => {
     if (whole) return null;

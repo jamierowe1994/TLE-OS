@@ -127,11 +127,11 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
   const [q, setQ] = useState("");
 
   const load = useCallback(() => {
-    fetch("/api/inspections", { cache: "no-store" })
+    fetch(embedded ? "/api/inspections?overview=1" : "/api/inspections", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (j.ok) { setData(j); setError(null); } else setError(j.error ?? "Could not read the inspections."); })
       .catch(() => setError("Could not read the inspections."));
-  }, []);
+  }, [embedded]);
   useEffect(load, [load]);
 
   useEffect(() => {

@@ -78,11 +78,11 @@ export default function MoveOutsBoard({ embedded = false, onInnerOpen }: BoardPr
   useReportInner(!!closing || closingGone, onInnerOpen);
 
   const load = useCallback(() => {
-    fetch("/api/move-outs", { cache: "no-store" })
+    fetch(embedded ? "/api/move-outs?overview=1" : "/api/move-outs", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (j.ok) { setData(j); setError(null); } else setError(j.error ?? "Could not read the move-outs."); })
       .catch(() => setError("Could not read the move-outs."));
-  }, []);
+  }, [embedded]);
   useEffect(load, [load]);
 
   const needle = q.trim();
