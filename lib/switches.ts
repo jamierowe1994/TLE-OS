@@ -604,6 +604,20 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "EMAIL_CHECK",
     legacyOn: "on",
   },
+  {
+    /* Mark as Let Agreed on the listing page (Lorna, ticket 015e31a5, 22 Oct
+       2026: "change a property status online to LET AGREED, not just take it
+       straight offline"). app/api/listings/let-agreed. Off, the button is
+       hidden from agents and an owner's press is rehearsed: nothing written.
+       No new variable: unset is off. */
+    key: "listing_let_agreed",
+    label: "Mark as Let Agreed on the portals",
+    what: "Shows Mark as Let Agreed (and Back to available) on a live listing. Pressed and confirmed, it ticks Let Agreed on the listing in REX (Listings/update let_agreed) as the person pressing it, then sends the portals a fresh upload, so Rightmove, OnTheMarket and Zoopla keep the advert up with their Let Agreed banner. Back to available unticks it the same way. Agents only on their own listings, and only where Push to the portals lets them.",
+    who: "Nobody is emailed. REX is WRITTEN TO (the listing's let agreed tick) and the PUBLIC portals change what they show. REX_ALLOW_WRITES must name Listings/update and ListingPortalUploads/queue.",
+    confirm: "LET AGREED",
+    legacyEnv: "LISTING_LET_AGREED",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

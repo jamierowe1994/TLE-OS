@@ -111,7 +111,8 @@ export const AREA_DEFS: AreaDef[] = [
      switch - off, look, testers, everyone - separate from the screen. */
   {
     id: "listing-publish", label: "Push to the portals", phase: 1, parent: "listings",
-    pages: [], apis: ["/api/listings/publish"], canHide: true,
+    /* Mark as Let Agreed changes what the portals show too (27 Oct 2026). */
+    pages: [], apis: ["/api/listings/publish", "/api/listings/let-agreed"], canHide: true,
   },
   /* 15 Sep 2026: saving the Marketing tab and the portal preview into REX -
      rent, deposit, dates, rooms, key features, photo order, and photos and

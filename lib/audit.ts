@@ -70,6 +70,10 @@ export type AuditKind =
      It is the one button in Listings that reaches the public, and REX's own
      log will only say the OS did it. */
   | "listing_publication"
+  /* A live listing marked Let Agreed on the portals, or put back to
+     available, from its page (app/api/listings/let-agreed, 27 Oct 2026).
+     Rehearsals are written too, said as such. */
+  | "listing_let_agreed"
   /* The advert edited from the OS into REX: which fields, and any photo or
      floor plan uploaded (15 Sep 2026). */
   | "listing_edited"

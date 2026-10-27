@@ -67,12 +67,19 @@ export default function AdvertOffline({
   propertyId = null,
   address,
   className = "",
+  letAgreed = null,
+  onLetAgreed,
 }: {
   listingId: string;
   applicationId?: string | null;
   propertyId?: string | null;
   address: string;
   className?: string;
+  /* Mark as Let Agreed beside Take Offline (Lorna, 22 Oct 2026): the
+     listing page passes the portal's own Let Agreed tick and opens its
+     confirm. Left out, the box is as it was. */
+  letAgreed?: boolean | null;
+  onLetAgreed?: () => void;
 }) {
   const [advert, setAdvert] = useState<Advert>(null);
   const [pub, setPub] = useState<Pub>(null);
@@ -208,16 +215,23 @@ export default function AdvertOffline({
           ) : onPortals ? (
             <p className="mt-1 flex items-center gap-2 text-[13px]">
               <span className="rounded-full bg-[#e7efe1] px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-[#3f5a32]">Online</span>
-              <span className="text-muted">On Rightmove, OnTheMarket and Zoopla</span>
+              <span className="text-muted">On Rightmove, OnTheMarket and Zoopla{letAgreed ? ", showing Let Agreed" : ""}</span>
             </p>
           ) : (
             <p className="mt-1 text-[13px] text-muted">{pub ? "Not on the portals" : "Couldn't check the portals just now"}</p>
           )}
         </div>
         {loaded && !offline && (
-          <button type="button" onClick={() => setOpen(true)} className={primary}>
-            <DoodleIcon name="lock" size={13} /> Take Offline
-          </button>
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            {onLetAgreed && letAgreed != null && onPortals && (
+              <button type="button" onClick={onLetAgreed} className={quiet}>
+                {letAgreed ? "Back to Available" : "Mark as Let Agreed"}
+              </button>
+            )}
+            <button type="button" onClick={() => setOpen(true)} className={primary}>
+              <DoodleIcon name="lock" size={13} /> Take Offline
+            </button>
+          </span>
         )}
         {loaded && stuck && (
           <button type="button" disabled={offBusy} onClick={() => void takeOffAgain()} className={primary}>

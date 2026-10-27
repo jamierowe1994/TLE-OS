@@ -288,10 +288,17 @@ function ListingDrawerBody({
      part of the page uses is REX's, which Change address now rewrites, and
      the board's copy only catches up on its next read. */
   const [addrNow, setAddrNow] = useState<{ id: string; name: string; locality: string } | null>(null);
-  const listing = useMemo(
-    () => (listingIn && addrNow && addrNow.id === String(listingIn.id) ? { ...listingIn, name: addrNow.name, locality: addrNow.locality } : listingIn),
-    [listingIn, addrNow]
-  );
+  /* Marked Let Agreed, or back to available, from the head: shown at once,
+     as the address is, before the board's copy reads it again. */
+  const [letNow, setLetNow] = useState<{ id: string; letAgreed: boolean } | null>(null);
+  const listing = useMemo(() => {
+    if (!listingIn) return listingIn;
+    const id = String(listingIn.id);
+    let l = listingIn;
+    if (addrNow && addrNow.id === id) l = { ...l, name: addrNow.name, locality: addrNow.locality };
+    if (letNow && letNow.id === id) l = { ...l, letAgreed: letNow.letAgreed };
+    return l;
+  }, [listingIn, addrNow, letNow]);
   const onAddress = useCallback((a: { name: string; locality: string }) => {
     if (listingIn) setAddrNow({ id: String(listingIn.id), ...a });
   }, [listingIn]);
@@ -602,6 +609,72 @@ function ListingDrawerBody({
       setActivityKey((k) => k + 1);
       setQuietNote({ ok: true, text: "Live, and off the portals. It moves on to viewings and offers; Put back on the market sends it to Rightmove, OnTheMarket and Zoopla when you're ready." });
     } else setQuietNote({ ok: false, text: res.error ?? "It did not go live." });
+  }
+
+  /* MARK AS LET AGREED (Lorna, 22 Oct 2026: "change a property status online
+     to LET AGREED, not just take it straight offline"). The advert stays up
+     and the portals put their Let Agreed banner on it; Back to available is
+     the way back. The listing system's own tick, read live, decides which is
+     offered - an offer accepted here is not that tick. Behind its own switch
+     (app/api/listings/let-agreed): off, agents don't see it and an owner's
+     press is a rehearsal. */
+  const [letTick, setLetTick] = useState<{ letAgreed: boolean; onPortals: boolean; armed: boolean; rehearse: boolean } | null>(null);
+  const [letAsk, setLetAsk] = useState(false);
+  const [letBusy, setLetBusy] = useState(false);
+  const [letNote, setLetNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const tickFor = listingIn && Number(listingIn.id) > 0 ? String(listingIn.id) : null;
+  useEffect(() => {
+    setLetTick(null);
+    setLetAsk(false);
+    setLetNote(null);
+    if (!tickFor) return;
+    let off = false;
+    fetch(`/api/listings/let-agreed?id=${encodeURIComponent(tickFor)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; letAgreed?: boolean; onPortals?: boolean; armed?: boolean; rehearse?: boolean }) => {
+        if (!off && j.ok) setLetTick({ letAgreed: Boolean(j.letAgreed), onPortals: Boolean(j.onPortals), armed: Boolean(j.armed), rehearse: Boolean(j.rehearse) });
+      })
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [tickFor]);
+
+  async function markLet(action: "let_agreed" | "available") {
+    if (!listing) return;
+    setLetBusy(true);
+    setLetNote(null);
+    try {
+      const r = await fetch("/api/listings/let-agreed", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: listing.id, action }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; letAgreed?: boolean; onPortals?: boolean; rehearsed?: boolean; portalsTold?: boolean | null };
+      setLetAsk(false);
+      if (!j.ok) {
+        setLetNote({ ok: false, text: j.error ?? "That did not go through. Try again in a minute." });
+      } else if (j.rehearsed) {
+        setLetNote({ ok: true, text: "Rehearsal only: the switch is off, so nothing was changed and the portals were not told. Switched on, this is the press that does it." });
+      } else {
+        const la = Boolean(j.letAgreed);
+        setLetTick((cur) => (cur ? { ...cur, letAgreed: la, onPortals: Boolean(j.onPortals) } : cur));
+        setLetNow({ id: String(listing.id), letAgreed: la });
+        setActivityKey((k) => k + 1);
+        setLetNote({
+          ok: true,
+          text: !j.onPortals
+            ? la ? "Marked Let Agreed. It is off the portals, so it shows there if you put it back on the market." : "Back to available. It is off the portals, so nothing changes there until you put it back on the market."
+            : j.portalsTold === false
+              ? la ? "Marked Let Agreed. The portals pick it up on their next upload, usually within the hour." : "Back to available. The portals pick it up on their next upload, usually within the hour."
+              : la ? "Marked Let Agreed. Rightmove, OnTheMarket and Zoopla show the Let Agreed banner within about 10 minutes." : "Back to available. The Let Agreed banner comes off Rightmove, OnTheMarket and Zoopla within about 10 minutes.",
+        });
+      }
+    } catch {
+      setLetNote({ ok: false, text: "The connection dropped. Check the listing before trying again." });
+    } finally {
+      setLetBusy(false);
+    }
   }
 
   async function flipPortals(action: "off" | "on") {
@@ -2564,6 +2637,9 @@ function ListingDrawerBody({
     };
     const tone = listing.letAgreed ? "accent" : isLive ? "good" : "neutral";
     const onPortals = isLive && (pub ? pub.onPortals : true);
+    /* Mark as Let Agreed / Back to available: its own switch, then the same people as Take off the market. */
+    const letShown = Boolean(isLive && !publishHidden && letTick && (letTick.armed || letTick.rehearse));
+    const askLet = () => (publishCanPress ? (setLetNote(null), setPortalConfirm(false), setLetAsk(true)) : setPortalNote(lockedSentence(publishArea, publishLevel)));
     const notesN = listingNotes?.length ?? 0;
     const nlTabs: { id: NlTab; label: string; count?: number | null }[] = [
       { id: "overview", label: "Overview" },
@@ -2739,12 +2815,17 @@ function ListingDrawerBody({
               <Badge tone={tone}>{status.label}</Badge>
               {onPortals && (
                 <span className="nl-live">
-                  <i /> On the market
+                  <i /> {letTick?.letAgreed ? "Showing Let Agreed" : "On the market"}
                 </span>
               )}
               {isLive && pub && !publishHidden && (
                 <button type="button" data-steve-never className="nl-market-btn" aria-expanded={portalConfirm} onClick={() => (publishCanPress ? setPortalConfirm((o) => !o) : setPortalNote(lockedSentence(publishArea, publishLevel)))}>
                   {pub.onPortals ? "Take off the market" : "Put back on the market"}
+                </button>
+              )}
+              {letShown && (
+                <button type="button" data-steve-never className="nl-market-btn" aria-expanded={letAsk} onClick={() => (letAsk ? setLetAsk(false) : askLet())}>
+                  {letTick?.letAgreed ? "Back to available" : "Mark as Let Agreed"}
                 </button>
               )}
               {listing.publishedAt && (
@@ -2773,6 +2854,7 @@ function ListingDrawerBody({
                 ...(LISTING_BOOKER_LIVE && !listing.letAgreed ? [{ label: "Hold a viewing slot", onClick: () => setSlotting(true) }] : []),
                 ...(canFileAway ? [{ label: archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away", disabled: archiveBusy, onClick: () => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive") }] : []),
                 ...(mainIs === "push" ? [{ label: "Live without Portals", onClick: () => (publishCanPress ? (setQuietNote(null), setQuietAsk(true)) : setPortalNote(lockedSentence(publishArea, publishLevel))) }] : []),
+                ...(letShown ? [{ label: letTick?.letAgreed ? "Back to available" : "Mark as Let Agreed", onClick: askLet }] : []),
                 ...(isLive && pub && !publishHidden && pub.onPortals ? [{ label: "Take off the market", danger: true, onClick: () => (publishCanPress ? setPortalConfirm(true) : setPortalNote(lockedSentence(publishArea, publishLevel))) }] : []),
               ]}
             />
@@ -2795,6 +2877,26 @@ function ListingDrawerBody({
         )}
         {quietNote && <p className={`nl-meta -mt-4 mb-6 ${quietNote.ok ? "text-[var(--sage-ink)]" : "text-[var(--accent-dark)]"}`}>{quietNote.text}</p>}
 
+        {/* Mark as Let Agreed, and back: asked here, under the head. */}
+        {letAsk && letShown && letTick && (
+          <div className="nl-confirm" data-steve-never>
+            <p>
+              {letTick.letAgreed
+                ? `Put ${listing.name} back to available? The Let Agreed banner comes off Rightmove, OnTheMarket and Zoopla and it shows as available to let again.`
+                : letTick.onPortals
+                  ? `Show ${listing.name} as Let Agreed? The advert stays on Rightmove, OnTheMarket and Zoopla with their Let Agreed banner, so people can still see it, and you can take it off the market whenever you choose. If the let falls through, Back to available undoes it.`
+                  : `Mark ${listing.name} as Let Agreed? It is off the portals just now, so it shows as Let Agreed there if you put it back on the market. Back to available undoes it.`}
+            </p>
+            <button type="button" disabled={letBusy} onClick={() => setLetAsk(false)} className="nl-btn nl-btn--quiet nl-btn--sm">
+              {letTick.letAgreed ? "Keep it let agreed" : "Not yet"}
+            </button>
+            <button type="button" disabled={letBusy} onClick={() => void markLet(letTick.letAgreed ? "available" : "let_agreed")} className="nl-btn nl-btn--sm nl-btn--sage">
+              {letBusy ? "Telling the portals…" : letTick.letAgreed ? "Back to available" : "Mark as Let Agreed"}
+            </button>
+          </div>
+        )}
+        {letNote && <p className={`nl-meta -mt-4 mb-6 ${letNote.ok ? "text-[var(--sage-ink)]" : "text-[var(--accent-dark)]"}`}>{letNote.text}</p>}
+
         {/* On and off the portals: asked here, under the head. */}
         {portalConfirm && isLive && pub && (
           <div className="nl-confirm" data-steve-never>
@@ -2815,7 +2917,13 @@ function ListingDrawerBody({
           <div className="-mt-4 mb-10 space-y-3">
             {portalNote && !publishCanPress && <p className="nl-meta">{portalNote}</p>}
             {!listing.archived && listing.letAgreed && Number(listing.id) > 0 && (
-              <AdvertOffline listingId={String(listing.id)} propertyId={listing.propertyId ? String(listing.propertyId) : null} address={[listing.name, listing.locality].filter(Boolean).join(", ")} />
+              <AdvertOffline
+                listingId={String(listing.id)}
+                propertyId={listing.propertyId ? String(listing.propertyId) : null}
+                address={[listing.name, listing.locality].filter(Boolean).join(", ")}
+                letAgreed={letShown ? letTick?.letAgreed ?? null : null}
+                onLetAgreed={letShown ? () => { askLet(); window.scrollTo({ top: 0, behavior: "smooth" }); } : undefined}
+              />
             )}
             {listing.archived && (
               <p className="nl-meta max-w-3xl">
