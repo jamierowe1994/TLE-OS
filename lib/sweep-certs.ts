@@ -90,6 +90,32 @@ function better(held: Cert | undefined, next: Cert): boolean {
 }
 
 /**
+ * One home's own OS certificates onto its book row, in place: the build's
+ * fold, and the patch after a filing (lib/compliance-cache patchHeldHome).
+ */
+export function foldOsCerts(
+  p: CompProperty,
+  own: Partial<Record<CertKey, Cert>> | undefined,
+  checking: Partial<Record<CertKey, NonNullable<Cert["checking"]>>> | undefined
+): void {
+  /* The OS's own certificate on a REX home: filed here, and REX refused it
+     or has not caught up. The later expiry is the true one. */
+  if (own) {
+    for (const [k, c] of Object.entries(own) as [CertKey, Cert][]) {
+      if (c && better(p.certs[k], c)) p.certs[k] = { ...c, fromOs: true };
+    }
+  }
+
+  /* A newer gas safety record or EICR waiting for the compliance team's
+     check (lib/cert-hold): shown beside the live one, never counted. */
+  if (checking) {
+    for (const [k, c] of Object.entries(checking) as [CertKey, NonNullable<Cert["checking"]>][]) {
+      p.certs[k] = { ...(p.certs[k] ?? { expires: null, attached: false }), checking: c };
+    }
+  }
+}
+
+/**
  * Fold the sweep and the OS vault into the book, in place. Run after REX and
  * the OS record have had their say, before rooms inherit from their house.
  */
@@ -104,23 +130,7 @@ export async function applySweep(properties: CompProperty[]): Promise<void> {
   ]);
   const exempt = new Map(notNeeded.map((n) => [`${n.propertyId}|${n.cert}`, n]));
   for (const p of properties) {
-    /* The OS's own certificate on a REX home: filed here, and REX refused it
-       or has not caught up. The later expiry is the true one. */
-    const own = vault.get(String(p.id));
-    if (own) {
-      for (const [k, c] of Object.entries(own) as [CertKey, Cert][]) {
-        if (c && better(p.certs[k], c)) p.certs[k] = { ...c, fromOs: true };
-      }
-    }
-
-    /* A newer gas safety record or EICR waiting for the compliance team's
-       check (lib/cert-hold): shown beside the live one, never counted. */
-    const ch = checking.get(String(p.id));
-    if (ch) {
-      for (const [k, c] of Object.entries(ch) as [CertKey, NonNullable<Cert["checking"]>][]) {
-        p.certs[k] = { ...(p.certs[k] ?? { expires: null, attached: false }), checking: c };
-      }
-    }
+    foldOsCerts(p, vault.get(String(p.id)), checking.get(String(p.id)));
     const a = answers.get(String(p.id));
     if (a) {
       /* A tenant REX names is a tenant in, whatever the OS record lacks. */

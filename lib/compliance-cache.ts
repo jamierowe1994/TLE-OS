@@ -5,6 +5,8 @@ import { londonDay, londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { complianceWithoutArchived } from "@/lib/archived-homes";
 import { RULES } from "./staleness";
+import { checkingFor, osCertsFor } from "@/lib/os-certs";
+import { foldOsCerts } from "@/lib/sweep-certs";
 
 /**
  * The compliance book, cached — and cached HARD.
@@ -119,6 +121,48 @@ export async function patchHeldBook(fn: (book: ComplianceBook) => void): Promise
     await q(`UPDATE os_cache SET payload = $2 WHERE key = $1`, [CACHE_KEY, JSON.stringify({ book: held.book })]).catch(() => null);
   }
   return true;
+}
+
+/**
+ * A certificate just filed (or verified) on one home, onto the held book at
+ * once (Michael, 27 Oct 2026). He uploaded 8 Recreation Terrace's new gas
+ * record from the Compliance drawer: REX took it and the file below said
+ * "Verified, in date", but the Gas tile above it still read "Expired 27d ago"
+ * - the tile reads this book, and only the tracker's Upload asked for it to be
+ * rebuilt. A rebuild walks REX for every home, so the one home is patched
+ * here and the next full refresh reads the same answer from the database.
+ *
+ * The book's day counts are from the day it was BUILT (asOfToday moves them
+ * on as it is read), so a count worked out today is moved back to that day.
+ */
+export async function patchHeldHome(propertyId: string): Promise<boolean> {
+  const id = String(propertyId);
+  const held = memory ?? (await readStored());
+  if (!held || !held.book.properties.some((p) => String(p.id) === id)) return false;
+  const [vault, checking] = await Promise.all([osCertsFor([id]), checkingFor([id])]);
+  const shift = ukDayNumber(londonToday()) - ukDayNumber(londonDay(new Date(held.at).toISOString()));
+  const own = Object.fromEntries(
+    Object.entries(vault.get(id) ?? {}).map(([k, c]) => [k, c && typeof c.expires === "number" ? { ...c, expires: c.expires + Math.max(0, shift) } : c])
+  );
+  const ch = checking.get(id) ?? {};
+  return patchHeldBook((book) => {
+    for (const p of book.properties) {
+      if (String(p.id) !== id) continue;
+      /* Waiting for a check is read fresh: one verified since the build is not waiting any more. */
+      for (const c of Object.values(p.certs)) if (c?.checking) delete c.checking;
+      /* A person's mark (not needed, renewal applied) stays with the duty, whatever is filed. */
+      const marks = Object.fromEntries(
+        Object.entries(p.certs).map(([k, c]) => [k, { notNeeded: c?.notNeeded, renewalApplied: c?.renewalApplied }])
+      );
+      foldOsCerts(p, own, ch);
+      for (const [k, m] of Object.entries(marks)) {
+        const c = p.certs[k as keyof typeof p.certs];
+        if (!c) continue;
+        if (m.notNeeded) c.notNeeded = m.notNeeded;
+        if (m.renewalApplied) c.renewalApplied = m.renewalApplied;
+      }
+    }
+  });
 }
 
 export function refreshComplianceBook(): Promise<CachedBook> {

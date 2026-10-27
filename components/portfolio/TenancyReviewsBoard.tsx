@@ -86,11 +86,11 @@ export default function TenancyReviewsBoard({ embedded = false, onInnerOpen }: B
   useReportInner(!!recording, onInnerOpen);
 
   const load = useCallback(() => {
-    fetch("/api/tenancy-reviews", { cache: "no-store" })
+    fetch(embedded ? "/api/tenancy-reviews?overview=1" : "/api/tenancy-reviews", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (j.ok) { setData(j); setError(null); } else setError(j.error ?? "Could not read the tenancy reviews."); })
       .catch(() => setError("Could not read the tenancy reviews."));
-  }, []);
+  }, [embedded]);
   useEffect(load, [load]);
 
   const needle = q.trim();

@@ -6,6 +6,7 @@ import { hasDb, q } from "@/lib/db";
 import { r2Configured } from "@/lib/r2";
 import { rexWriteBlockedBecause } from "@/lib/plc-rex";
 import { removeCertificate } from "@/lib/certificate-remove";
+import { patchHeldHome } from "@/lib/compliance-cache";
 import {
   CERT_TYPES,
   FilingFailed,
@@ -182,5 +183,7 @@ async function post(req: NextRequest) {
     const off = await removeCertificate({ propertyId, key: replacesKey, reason: "replaced", by, replacedBy: filed.row.id }).catch(() => null);
     replacedNote = off?.ok ? `${off.name} has been taken off.` : "The old one could not be taken off just now - use Remove on it.";
   }
+  /* Every tile on the book says so at once, not at the next rebuild (lib/compliance-cache patchHeldHome). */
+  await patchHeldHome(propertyId).catch(() => false);
   return NextResponse.json({ ok: true, certificate: outCert(filed.row), share: filed.share, replaced: replacedNote });
 }

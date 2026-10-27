@@ -139,6 +139,7 @@ export default function PropertyFile({
   required,
   loose = [],
   emailTenant,
+  onFiled,
 }: {
   /** The REX property. Give this when you have it. */
   propertyId?: string | null;
@@ -164,6 +165,8 @@ export default function PropertyFile({
    *  home's page to send, `none` says why nobody can be sent it. Without it,
    *  no button: an appraisal or a listing has no tenant to send to. */
   emailTenant?: { open?: (start: string) => void; href?: (start: string) => string; none?: string | null };
+  /** A certificate has just been filed here: the screen around it reads its figures again. */
+  onFiled?: () => void;
 }) {
   const [data, setData] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -308,6 +311,7 @@ export default function PropertyFile({
     setWent(j.duplicate ? "That certificate is already on this home; nothing was sent again." : [j.replaced, j.share?.line].filter(Boolean).join(" ") || null);
     replacing.current = null;
     load();
+    if (!j.duplicate) onFiled?.();
   }
 
   /* Take a certificate off the home: the wrong document, or one that is out
