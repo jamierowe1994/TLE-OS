@@ -25,6 +25,7 @@ import HomeAgent from "@/components/portfolio/HomeAgent";
 import HomeKeys from "@/components/portfolio/HomeKeys";
 import HomeSource from "@/components/portfolio/HomeSource";
 import ContactBlock from "@/components/ContactBlock";
+import TenantCard from "@/components/new-look/TenantCard";
 import HomeLandlords from "@/components/HomeLandlords";
 import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
 import { HomeRightToRent } from "@/components/RightToRentField";
@@ -1290,7 +1291,8 @@ export default function PropertyPage() {
                       </ul>
                     ) : tenants.length ? (
                       <ul className="nl-prop-people">
-                        {tenants.map((t) => <li key={t.contactId}><PartyCard p={t} plain role="tenant" about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} /></li>)}
+                        {/* Each with an Edit button (James, 27 Oct 2026). */}
+                        {tenants.map((t) => <li key={t.contactId}><TenantCard contactId={t.contactId} person={{ name: t.name, email: t.email ?? null, phone: t.phone ?? null }} about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} /></li>)}
                       </ul>
                     ) : comingIn ? (
                       <p className="nl-empty">
