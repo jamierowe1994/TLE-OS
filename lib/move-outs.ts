@@ -6,6 +6,7 @@ import { londonDayOffset, londonParts, londonTime } from "@/lib/london-time";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { isTestTask, type Review } from "@/lib/tenancy-reviews";
 import type { RexpmTask } from "@/lib/rexpm-tasks";
+import { payPropTenancyCurrent } from "@/lib/business/payprop-tenant-contacts";
 
 /**
  * Move-outs (2 Oct 2026).
@@ -209,7 +210,7 @@ export function payPropSays(m: Pick<OpenMoveOut, "tenant" | "locality">, rows: A
       const addr = (pr.address ?? {}) as Record<string, unknown>;
       if (postcodeIn(String(addr.postal_code ?? "")) !== pc) continue;
       const end = String(((pr.tenant ?? {}) as Record<string, unknown>).end_date ?? "").slice(0, 10);
-      hits.push({ active: String(t.status ?? "") === "Active" && !(end && end < today), end });
+      hits.push({ active: payPropTenancyCurrent(t.status, end, today), end });
     }
   }
   if (!hits.length) return null;

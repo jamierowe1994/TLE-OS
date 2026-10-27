@@ -52,19 +52,31 @@ function leadOf(t: Record<string, unknown>): { first: string; last: string } | n
 }
 
 /** Current PayProp tenancies by rentKey, with their contact and named lead. */
+/**
+ * Still living there on `today`, by one of PayProp's tenant records on one
+ * home. An end date decides it when there is one: PayProp marks a tenant
+ * Inactive the moment their tenancy is given an end date, before they have
+ * left (Flat 11, 24 Ashley Place, 27 Oct 2026: Inactive, ending 31 Oct, and
+ * shown as past tenants with the flat empty). With no end date, Active is
+ * current and Inactive is not.
+ */
+export function payPropTenancyCurrent(status: unknown, endDate: unknown, today = londonToday()): boolean {
+  const end = str(endDate).slice(0, 10);
+  if (end) return end >= today;
+  return !str(status) || str(status) === "Active";
+}
+
 export type ContactsByKey = Map<string, Array<{ lead: { first: string; last: string } | null; display: string; email: string | null; phone: string | null }>>;
 
 export function contactsByKey(rows: Array<Record<string, unknown>>, today = londonToday()): ContactsByKey {
   const out: ContactsByKey = new Map();
   for (const t of rows) {
-    if (str(t.status) && str(t.status) !== "Active") continue;
     const email = str(t.email_address) ? str(t.email_address).toLowerCase() : null;
     const phone = ukPhone(t.mobile_number);
     if (!email && !phone) continue;
     const entry = { lead: leadOf(t), display: str(t.display_name), email, phone };
     for (const pr of (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>) {
-      const end = str((pr.tenant as Record<string, unknown> | undefined)?.end_date).slice(0, 10);
-      if (end && end < today) continue;
+      if (!payPropTenancyCurrent(t.status, (pr.tenant as Record<string, unknown> | undefined)?.end_date, today)) continue;
       const addr = pr.address as Record<string, unknown> | undefined;
       const keys = new Set([rentKey(str(pr.property_name), str(addr?.postal_code)), rentKey(str(addr?.first_line), str(addr?.postal_code))].filter(Boolean));
       for (const k of keys) out.set(k, [...(out.get(k) ?? []), entry]);
@@ -160,10 +172,7 @@ export function pastOnlyPeople(rows: Array<Record<string, unknown>>, today = lon
   const past = new Set<string>();
   for (const t of rows) {
     const props = (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>;
-    const current = (!str(t.status) || str(t.status) === "Active") && props.some((pr) => {
-      const end = str((pr.tenant as Record<string, unknown> | undefined)?.end_date).slice(0, 10);
-      return !end || end >= today;
-    });
+    const current = props.some((pr) => payPropTenancyCurrent(t.status, (pr.tenant as Record<string, unknown> | undefined)?.end_date, today));
     const names = new Set<string>();
     for (const part of (str(t.display_name) || str(t.business_name)).split(/\s*(?:,|&|\band\b)\s*/i)) {
       const k = personKey(part);

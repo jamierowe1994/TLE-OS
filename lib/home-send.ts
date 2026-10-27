@@ -20,7 +20,7 @@ import { footerFor, withFooter } from "@/lib/email-footer";
 import { londonToday } from "@/lib/london-clock";
 import { checkStatesFor, notYetSendable, type CertCheckState } from "@/lib/cert-check-state";
 import { normaliseEmail, type OsUser } from "@/lib/users";
-import { payPropTenantRows, personKey, ukPhone } from "@/lib/business/payprop-tenant-contacts";
+import { payPropTenancyCurrent, payPropTenantRows, personKey, ukPhone } from "@/lib/business/payprop-tenant-contacts";
 import { rentKey } from "@/lib/business/payprop-portfolio";
 import { record } from "@/lib/audit";
 import type { ComplianceBook } from "@/lib/rex-compliance";
@@ -781,7 +781,6 @@ export async function pastTenants(ctx: HomeContext): Promise<{ people: PastTenan
 
   const rows = await payPropTenantRows().catch(() => [] as Array<Record<string, unknown>>);
   for (const t of rows) {
-    const active = !str(t.status) || str(t.status) === "Active";
     for (const pr of (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>) {
       const addr = pr.address as Record<string, unknown> | undefined;
       const k1 = rentKey(str(pr.property_name), str(addr?.postal_code));
@@ -790,7 +789,7 @@ export async function pastTenants(ctx: HomeContext): Promise<{ people: PastTenan
       if (!home) continue;
       const ten = (pr.tenant ?? {}) as Record<string, unknown>;
       const end = str(ten.end_date).slice(0, 10) || null;
-      if (active && (!end || end >= today)) continue;
+      if (payPropTenancyCurrent(t.status, end, today)) continue;
       const display = str(t.display_name) || [str(t.first_name), str(t.last_name)].filter(Boolean).join(" ") || str(t.business_name);
       if (!display) continue;
       add({
