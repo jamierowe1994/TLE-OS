@@ -2,6 +2,7 @@ import "server-only";
 import { ukDaysFromToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { aiOutage } from "@/lib/ai-outage";
+import { WATCHERS, watchNotices } from "@/lib/cron-watch";
 import { can } from "@/lib/roles";
 import type { OsUser } from "@/lib/users";
 import { listDealEvents } from "@/lib/business/deal-watch";
@@ -454,6 +455,12 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
         tone: open ? "warn" : "none",
       });
     }
+  }
+  /* A Railway timer that stopped reaching the OS, or a rent read gone stale
+     (lib/cron-watch, 28 Oct 2026): James and Howard, while it lasts and for
+     three days after it came back. */
+  if (WATCHERS.includes((me.email ?? "").trim().toLowerCase())) {
+    for (const w of await watchNotices().catch(() => [])) out.push({ ...w, kind: "compliance", href: "/admin/connections" });
   }
   /* A contractor's bank details replaced (lib/bank-vault, 26 Oct 2026): the
      classic payment fraud, so owners hear about each one for a fortnight. */
