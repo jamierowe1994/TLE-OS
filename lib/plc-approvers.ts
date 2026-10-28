@@ -86,12 +86,15 @@ export type FinalApprover = { email: string; name: string; firstName: string };
 export async function finalApprover(): Promise<FinalApprover | null> {
   if (!hasDb()) return null;
   const emails = await plcApprovers();
-  const rows = await q<{ email: string; name: string | null }>(
-    `SELECT lower(email) AS email, name FROM os_users
+  const rows = await q<{ email: string; name: string | null; role: string }>(
+    `SELECT lower(email) AS email, name, role FROM os_users
       WHERE role IN ('owner', 'super_admin') AND lower(email) = ANY($1) AND locked_at IS NULL`,
     [emails]
   ).catch(() => []);
-  const r = rows.sort((a, b) => emails.indexOf(a.email) - emails.indexOf(b.email))[0];
+  /* An owner first (28 Oct 2026): Kirstie became super_admin on 26 Oct and,
+     listed first, took Susan's place here: her own check would have been sent to herself. */
+  const rank = (x: { role: string }) => (x.role === "owner" ? 0 : 1);
+  const r = rows.sort((a, b) => rank(a) - rank(b) || emails.indexOf(a.email) - emails.indexOf(b.email))[0];
   if (!r) return null;
   const name = (r.name ?? "").trim() || r.email.split("@")[0];
   const first = name.split(/\s+/)[0];

@@ -185,11 +185,16 @@ const MATRIX: Record<Role, Capability[]> = {
      PLC checks, to-do, Steve, guides, the email catalogue).
 
      `see:pretenancy` is not here for the DATA — she has see:everything
-     already. It is here so the rail can offer her Kirstie's board. */
+     already. It is here so the rail can offer her Kirstie's board.
+
+     `work:plc` (28 Oct 2026): Kirstie was moved from pretenancy to
+     super_admin on 26 Oct and every tick on a PLC pack was refused from
+     then, because work:plc was the one thing her old role held that this
+     one did not. */
   super_admin: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:prelaunch", "see:pretenancy", "see:everything", "see:roles", "edit:knowledge",
-    "see:agent-compliance", "see:clean-sweep", "archive:homes",
+    "see:agent-compliance", "see:clean-sweep", "archive:homes", "work:plc",
   ],
   /* The mirror image. A contractor brought in to debug REX needs the
      connections page and has no business reading anybody's earnings. */
