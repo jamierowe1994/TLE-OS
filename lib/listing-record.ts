@@ -16,7 +16,8 @@ import { isScottish } from "@/lib/property-flags";
  * property id itself, so they are still found next time.
  */
 
-export type EpcBand = "A" | "B" | "C" | "D" | "E" | "F" | "G";
+import { bandForScore, type EpcBand } from "@/lib/epc-band";
+export { bandForScore, type EpcBand } from "@/lib/epc-band";
 
 export interface ListingRecord {
   /** os_properties.id, or null where the OS holds no record for this home. */
@@ -28,18 +29,6 @@ export interface ListingRecord {
   /** From the property record, e.g. "D (68)" off the Scottish register. */
   epc: { band: EpcBand | null; score: number | null; from: string } | null;
   scotland: boolean;
-}
-
-/** SAP score to band, the scale every EPC prints. */
-export function bandForScore(score: number | null | undefined): EpcBand | null {
-  if (score == null || !Number.isFinite(score) || score < 1) return null;
-  if (score >= 92) return "A";
-  if (score >= 81) return "B";
-  if (score >= 69) return "C";
-  if (score >= 55) return "D";
-  if (score >= 39) return "E";
-  if (score >= 21) return "F";
-  return "G";
 }
 
 function parseEpc(value: string | null): { band: EpcBand | null; score: number | null } | null {

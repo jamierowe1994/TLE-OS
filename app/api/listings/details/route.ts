@@ -15,6 +15,7 @@ import { isOwner } from "@/lib/agent-words";
 import { refusalInWords } from "@/lib/rex-refusal";
 import { recordFact } from "@/lib/property-facts";
 import { bandForScore, forgetRecord, normaliseLarn, saveAgentLarn, withScottishFooter } from "@/lib/listing-record";
+import { bandScoreClash } from "@/lib/epc-band";
 
 /**
  * The advert, live from REX, and saved back to it.
@@ -248,6 +249,11 @@ export async function PATCH(req: NextRequest) {
         const now = epcCurrent !== undefined ? epcCurrent : current.epc.current ?? current.record?.epc?.score ?? null;
         const pot = epcPotential !== undefined ? epcPotential : current.epc.potential;
         const band = epcBand !== undefined ? epcBand : bandForScore(now);
+        /* REX has no rating to write: it shows the band the score is in. A
+           band the score disagrees with would be kept here and never reach
+           the portals (Lianna, 28 Oct 2026), so it is said, not kept. */
+        const clash = bandScoreClash(band, now);
+        if (clash) return NextResponse.json({ ok: false, error: clash }, { status: 400 });
         if (key && band) {
           await recordFact({ propertyId: key, field: "epc_rating", value: now ? `${band} (${now})` : band, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
         }
@@ -257,9 +263,12 @@ export async function PATCH(req: NextRequest) {
            no EPC had nothing, so the scores alone are refused. */
         const lodged = epcLodged !== undefined ? epcLodged : current.epc.lodged;
         if (now != null && pot != null && lodged) {
-          epcWrite = { epc_current_eer: now, epc_potential_eer: pot };
+          /* The date goes with the scores every time, even where REX holds it
+             already: REX refuses scores sent without it in the same save
+             ("Epc Lodgement Date is required" - Lianna's six saves on 12 South
+             Chesters Lane, 28 Oct 2026, with the date on file and untouched). */
+          epcWrite = { epc_current_eer: now, epc_potential_eer: pot, epc_lodgement_date: lodged };
           if (epcLodged) {
-            epcWrite.epc_lodgement_date = epcLodged;
             /* An EPC runs ten years from lodgement; REX holds both dates on
                every listing that has one. Only filled where it has none. */
             if (!current.epc.expiry) epcWrite.epc_expiry_date = `${Number(epcLodged.slice(0, 4)) + 10}${epcLodged.slice(4).replace("-02-29", "-02-28")}`;

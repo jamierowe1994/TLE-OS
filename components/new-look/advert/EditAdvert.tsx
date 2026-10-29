@@ -13,6 +13,7 @@ import { Ico } from "@/components/new-look/Parts";
 import { OPTIONS, RECOMMENDED, isRequired, type RequirementInput } from "@/lib/listing-requirements";
 import { useAdvertDraft } from "./useAdvertDraft";
 import OsAddressLine from "@/components/OsAddressLine";
+import { bandForScore, bandScoreClash } from "@/lib/epc-band";
 
 /**
  * EDIT THE ADVERT, in the new look (lib/new-look "advert", 23 Oct 2026).
@@ -346,7 +347,11 @@ export default function EditAdvert({
             </label>
             <label className="nl-adv-field">
               {label("epcCurrent", "Score now")}
-              <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcCurrent ?? ""} placeholder="e.g. 68" onChange={(e) => setDraft((d) => ({ ...d, epcCurrent: e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value)))) }))} />
+              <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcCurrent ?? ""} placeholder="e.g. 68" onChange={(e) => {
+                /* The band follows the score: it is the band REX and the portals show. */
+                const score = e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value))));
+                setDraft((d) => ({ ...d, epcCurrent: score, epcBand: bandForScore(score) ?? d.epcBand }));
+              }} />
             </label>
             <label className="nl-adv-field">
               {label("epcPotential", "Potential score")}
@@ -377,6 +382,7 @@ export default function EditAdvert({
           )}
           <p className="nl-meta nl-adv-aside">
             {a.epcNote ??
+              bandScoreClash(draft.epcBand, draft.epcCurrent) ??
               (draft.epcCurrent != null && draft.epcPotential == null
                 ? "Add the potential score too and the rating goes to the portals with the advert. Until then it is kept here."
                 : draft.epcCurrent != null && draft.epcPotential != null && !draft.epcLodged
