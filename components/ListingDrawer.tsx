@@ -1266,6 +1266,21 @@ function ListingDrawerBody({
     );
   };
 
+  /* Book more people in straight after this one, with its access. */
+  const addAfter = (v: LiveViewing) => {
+    setOpenViewing(null);
+    setBlockAnchor({
+      viewingId: v.id,
+      listingId: String(listing.id),
+      property: listing.name,
+      locality: listing.locality,
+      startsAt: v.startsAt,
+      minutes: v.mins || 15,
+      unaccompanied: /unaccompanied/i.test(`${v.type ?? ""} ${v.title}`),
+      who: v.contacts.map((c) => c.name).join(", ") || v.title || "Viewing",
+    });
+  };
+
   /* One diary entry, opening out to its details on a click. */
   const viewingRow = (v: LiveViewing, inSlot = false) => {
     const start = new Date(v.startsAt);
@@ -1317,24 +1332,26 @@ function ListingDrawerBody({
             Offer
           </button>
         )}
+        {/* Said as Edit (Lianna, 28 Oct 2026: "Can we not edit the viewings
+            from the actual listing?" - moving and cancelling were inside the
+            row, and nothing on it said so). */}
+        {!past && !v.cancelled && (
+          <button
+            type="button"
+            title="Change the time, add someone after, or cancel"
+            onClick={() => setOpenViewing(v.id)}
+            className="shrink-0 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-ink transition-colors hover:border-accent-dark hover:text-accent-dark"
+          >
+            Edit
+          </button>
+        )}
         {/* Book more people in straight after this one, with its access.
             Inside a slot, Book within slot on the slot does that. */}
         {!past && !v.cancelled && !inSlot && listing && (
           <button
             type="button"
             title="Add another viewing to this slot"
-            onClick={() =>
-              setBlockAnchor({
-                viewingId: v.id,
-                listingId: String(listing.id),
-                property: listing.name,
-                locality: listing.locality,
-                startsAt: v.startsAt,
-                minutes: v.mins || 15,
-                unaccompanied: /unaccompanied/i.test(`${v.type ?? ""} ${v.title}`),
-                who,
-              })
-            }
+            onClick={() => addAfter(v)}
             className="shrink-0 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted transition-colors hover:border-accent-dark hover:text-accent-dark"
           >
             + Add after
@@ -2296,6 +2313,7 @@ function ListingDrawerBody({
             landlord={landlord.status === "known" ? landlord.landlord : null}
             onApply={(p) => { setOpenViewing(null); applyFor(p); }}
             onChangeTime={movable(v) ? () => changeTime(v) : undefined}
+            onAddAfter={movable(v) ? () => addAfter(v) : undefined}
             onCancelled={() => {
               /* Shown as cancelled straight away; the tab's next read agrees. */
               setViewings((cur) => cur && {
@@ -2771,7 +2789,7 @@ function ListingDrawerBody({
             ) : !past && !v.cancelled ? (
               <>
                 {!inSlot && (
-                  <button type="button" className="nl-link" title="Book more people in straight after this one" onClick={() => setBlockAnchor({ viewingId: v.id, listingId: String(listing.id), property: listing.name, locality: listing.locality, startsAt: v.startsAt, minutes: v.mins || 15, unaccompanied: /unaccompanied/i.test(`${v.type ?? ""} ${v.title}`), who })}>
+                  <button type="button" className="nl-link" title="Book more people in straight after this one" onClick={() => addAfter(v)}>
                     Add after
                   </button>
                 )}
@@ -2780,7 +2798,8 @@ function ListingDrawerBody({
                     Change time
                   </button>
                 )}
-                <button type="button" className="nl-link" onClick={() => setOpenViewing(v.id)}>Open</button>
+                {/* Said as Edit (Lianna, 28 Oct 2026): it opens the viewing, with every change it takes. */}
+                <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" title="Change the time, add someone after, or cancel" onClick={() => setOpenViewing(v.id)}>Edit</button>
               </>
             ) : (
               <button type="button" className="nl-link" onClick={() => setOpenViewing(v.id)}>Open</button>

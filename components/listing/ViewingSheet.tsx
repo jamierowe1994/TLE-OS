@@ -65,6 +65,7 @@ export default function ViewingSheet({
   onApply,
   onCancelled,
   onChangeTime,
+  onAddAfter,
   propertyId,
   listingId,
   onClose,
@@ -82,6 +83,8 @@ export default function ViewingSheet({
   onCancelled?: (said: string) => void;
   /** Given, a viewing still to come offers Change time (James, 26 Oct 2026: "you'll be able to rearrange viewings"). */
   onChangeTime?: () => void;
+  /** Given, a viewing still to come offers Add another viewing after it. */
+  onAddAfter?: () => void;
   /** The home, for its key numbers (Sean McMahon, 22 Oct 2026: "show the key numbers"). */
   propertyId?: string | null;
   listingId?: string | null;
@@ -157,11 +160,20 @@ export default function ViewingSheet({
             {v.cancelled ? " · cancelled" : past ? (v.feedbackId ? " · feedback in" : " · been") : ` · ${v.status ?? "booked"}`}
           </p>
           {v.description && <p className="mt-2 whitespace-pre-line text-[12px] leading-relaxed text-muted">{v.description}</p>}
-          {(onCancelled || onChangeTime) && !past && !v.cancelled && (v.id.startsWith("rex-") || v.id.startsWith("os-")) && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+          {(onCancelled || onChangeTime || onAddAfter) && !past && !v.cancelled && (v.id.startsWith("rex-") || v.id.startsWith("os-")) && (
+            /* Every change a booked viewing takes, under one heading (Lianna,
+               28 Oct 2026: "Can we not edit the viewings from the actual listing?"). */
+            <div className="mt-3 border-t border-line/50 pt-3">
+            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Change this viewing</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               {onChangeTime && (
                 <button type="button" onClick={onChangeTime} className={pill}>
-                  Change time
+                  Change date or time
+                </button>
+              )}
+              {onAddAfter && (
+                <button type="button" onClick={onAddAfter} className={pill}>
+                  Add another viewing after
                 </button>
               )}
               {onCancelled && <CancelViewing
@@ -177,6 +189,7 @@ export default function ViewingSheet({
                 onDone={onCancelled}
                 className={pill}
               />}
+            </div>
             </div>
           )}
         </section>

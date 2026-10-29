@@ -22,6 +22,7 @@ import { keyNumbersFor, rexIdOf } from "@/lib/home-keys";
 import { accessLineFor } from "@/lib/viewing-brief";
 import type { JobTenant } from "@/lib/works-orders";
 import { CHASE_GRACE_HOURS } from "@/lib/works-chase-rules";
+import { refusedSender } from "@/lib/not-a-sender";
 
 /**
  * The emails a job sends as it moves: to the contractor, the tenant and the
@@ -197,6 +198,9 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
 async function send(o: WorksOrder, id: string, to: string, vars: Record<string, string>, me: OsUser, who: SendOutcome["to"]): Promise<SendOutcome> {
   const address = to.trim();
   if (!address.includes("@")) return { to: who, sent: false, reason: `no email address for the ${who}` };
+  /* Never from James to a contractor, tenant or landlord (lib/not-a-sender). */
+  const notJames = refusedSender(me.email, [address]);
+  if (notJames && !o.rehearsal) return { to: who, sent: false, address, reason: notJames };
   let subject = "", html = "";
   try {
     ({ subject, html } = await renderTleEmailLive(id, vars));

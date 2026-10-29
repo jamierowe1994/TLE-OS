@@ -4,6 +4,7 @@ import { MailboxNotConnected, msConnectionFor, msSendMail } from "@/lib/microsof
 import { archiveSentCopy, ResendBlocked, sendEmail } from "@/lib/resend";
 import { isInternalAddress } from "@/lib/email-policy";
 import { sendingLocked, switchOn } from "@/lib/switches";
+import { refusedSender } from "@/lib/not-a-sender";
 
 /**
  * FROM THE AGENT, NOT FROM THE SYSTEM (James, 16 Sep 2026 - scoped pilot i078).
@@ -82,6 +83,9 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
     return { sent: false, via: null, timeline: false, reason: "no_address", detail: "There is no usable email address on their record, so nobody was written to." };
   }
+  /* Never from James to a customer, on either road (lib/not-a-sender). */
+  const notJames = refusedSender(p.me.email, [to]);
+  if (notJames) return { sent: false, via: null, timeline: false, reason: "refused", detail: `${notJames}.` };
 
   /* Our own address is a test (Admin, Testing): the tester stands in for the
      tenant, so it goes whether or not customer email is armed. It cannot reach

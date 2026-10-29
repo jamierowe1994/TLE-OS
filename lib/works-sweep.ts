@@ -3,7 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { getOrder, logEvent } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 import { agentFor } from "@/lib/works-agent";
-import { runContractorChases } from "@/lib/works-chase";
+import { runContractorChases, workingHours } from "@/lib/works-chase";
 
 /**
  * The day after a booked visit, the contractor gets "all done?" with the
@@ -11,10 +11,15 @@ import { runContractorChases } from "@/lib/works-chase";
  *
  * And the contractor reminders that have come due (lib/works-chase, Sean
  * McMahon, 26 Oct 2026), on this same hourly tick rather than a cron of their own.
+ *
+ * Both only in working hours, weekdays 8am to 6pm in London (James, 29 Oct
+ * 2026): #1019's "All done?" reached the contractor at 7:06am.
  */
 export async function worksSweep(): Promise<{ doneRequests: number; chases?: Awaited<ReturnType<typeof runContractorChases>> | { error: string } }> {
   if (!hasDb()) return { doneRequests: 0 };
-  const rows = await q<{ id: string }>(
+  /* Out of hours the job waits for the next working-hours tick; the chases
+     keep their own hours. */
+  const rows = !workingHours() ? [] : await q<{ id: string }>(
     `SELECT id FROM os_works_orders
       WHERE NOT rehearsal AND status = 'scheduled' AND completed_at IS NULL AND done_request_at IS NULL
         AND contractor_id IS NOT NULL AND scheduled_at < NOW() - interval '18 hours'

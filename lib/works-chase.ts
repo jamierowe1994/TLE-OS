@@ -4,6 +4,7 @@ import { getOrder, logEvent, type WorksOrder } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, type SendOutcome } from "@/lib/works-emails";
 import { agentFor } from "@/lib/works-agent";
 import { findUserById, type OsUser } from "@/lib/users";
+import { neverSendsOut } from "@/lib/not-a-sender";
 import { chaseOf, stopChase } from "@/lib/works-chase-store";
 import { CHASE_FINAL_DAYS, CHASE_FIRST_DAYS, CHASE_GRACE_HOURS, chaseBlock, chaseLive, type WorksChase } from "@/lib/works-chase-rules";
 
@@ -191,5 +192,7 @@ export async function runContractorChases(now = new Date()): Promise<{ sent: num
 /** Whoever set the chase up: the reminders go out in their name, from their mailbox. */
 async function setterOf(orderId: string): Promise<OsUser | null> {
   const [r] = await q<{ set_by_id: string | null }>(`SELECT set_by_id FROM os_works_chases WHERE order_id = $1`, [orderId]).catch(() => []);
-  return r?.set_by_id ? await findUserById(r.set_by_id).catch(() => null) : null;
+  const who = r?.set_by_id ? await findUserById(r.set_by_id).catch(() => null) : null;
+  /* Gone, locked, or James (lib/not-a-sender): the job's own agent sends it instead. */
+  return who && !who.locked && !neverSendsOut(who.email) ? who : null;
 }
