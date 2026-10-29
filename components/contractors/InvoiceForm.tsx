@@ -11,6 +11,7 @@ import ContractorMark from "@/components/contractors/ContractorMark";
 import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
 import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
 import { digits, maskedAccount, readBank, sortCodeWords } from "@/lib/bank";
+import { postcodeIn } from "@/lib/postcode";
 
 /**
  * Their invoice, for work done without a job on the OS. It goes on as a
@@ -32,6 +33,13 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
   const [props, setProps] = useState<Property[] | null>(null);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Property | null>(null);
+  /* A home the search can't find - an agent searches their own Portfolio only - is typed in by hand
+     (Lianna, 28 Oct 2026: "16 Grindlay Street doesn't come up"). */
+  const [manual, setManual] = useState(false);
+  const [line1, setLine1] = useState("");
+  const [line2, setLine2] = useState("");
+  const [town, setTown] = useState("");
+  const [postcode, setPostcode] = useState("");
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [ref, setRef] = useState("");
@@ -96,8 +104,17 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
 
   async function save() {
     setErr(null);
-    const propertyName = picked?.name ?? q.trim();
-    if (!propertyName) return setErr("Which home was the work at?");
+    let propertyName = picked?.name ?? "";
+    let locality = picked?.locality ?? "";
+    if (!picked && manual) {
+      if (!line1.trim()) return setErr("Type the first line of the address - the number and street.");
+      if (!town.trim()) return setErr("Type the town or city.");
+      const pc = postcodeIn(postcode);
+      if (postcode.trim() && !pc) return setErr("That postcode doesn't look right.");
+      propertyName = [line1.trim(), line2.trim()].filter(Boolean).join(", ");
+      locality = [town.trim(), pc].filter(Boolean).join(" ");
+    }
+    if (!propertyName) return setErr(q.trim() ? "Pick the home from the list, or enter the address manually." : "Which home was the work at?");
     if (!title.trim()) return setErr("Say what the work was.");
     if (!amount.trim()) return setErr("The invoice needs its total.");
     if (!file) return setErr("Attach the invoice itself - the PDF or a photo of it.");
@@ -111,7 +128,7 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
     fd.append("contractorId", contractor.id);
     fd.append("propertyId", picked?.id ?? "");
     fd.append("propertyName", propertyName);
-    fd.append("locality", picked?.locality ?? "");
+    fd.append("locality", locality);
     fd.append("landlord", typeof picked?.landlord === "string" ? picked.landlord : "");
     fd.append("title", title.trim());
     fd.append("amount", amount);
@@ -131,6 +148,61 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
     if (!r?.ok) return setErr(r?.error ?? "Could not log the invoice.");
     onSaved(String(r.order?.id ?? ""));
   }
+
+  /* The home: search the book, or type it in. The same in both looks bar the classes. */
+  const homeBox = (c: { fl: string; lb: string; hint: string; list: string; item: string; sub: string; link: string; grid: string; wide: string; search: string }) => {
+    if (picked)
+      return (
+        <div className={`${c.fl} flex items-center justify-between gap-3`}>
+          <span className="min-w-0 truncate">{picked.name}<span className="text-muted">{picked.locality ? ` · ${picked.locality}` : ""}</span></span>
+          <button type="button" onClick={() => { setPicked(null); setQ(""); }} className={`${c.link} shrink-0`}>Change</button>
+        </div>
+      );
+    if (manual)
+      return (
+        <>
+          <div className={c.grid}>
+            <div className={c.wide}><label className={c.lb}>Number and street</label><input autoFocus value={line1} onChange={(e) => setLine1(e.target.value)} placeholder="e.g. 16 Grindlay Street" autoComplete="off" className={`${c.fl} mt-1`} /></div>
+            <div className={c.wide}><label className={c.lb}>Flat or building <span className="text-muted">(if any)</span></label><input value={line2} onChange={(e) => setLine2(e.target.value)} placeholder="e.g. Flat 3F2" autoComplete="off" className={`${c.fl} mt-1`} /></div>
+            <div><label className={c.lb}>Town or city</label><input value={town} onChange={(e) => setTown(e.target.value)} autoComplete="off" className={`${c.fl} mt-1`} /></div>
+            <div><label className={c.lb}>Postcode</label><input value={postcode} onChange={(e) => setPostcode(e.target.value)} autoComplete="off" className={`${c.fl} mt-1 uppercase`} /></div>
+          </div>
+          <p className={c.hint}>
+            Not on your book, so it goes on under this address.{" "}
+            <button type="button" onClick={() => { setManual(false); setQ(""); }} className={c.link}>Search again</button>
+          </p>
+        </>
+      );
+    const typed = q.trim().length >= 2;
+    return (
+      <>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={props === null ? "Reading the book…" : c.search} aria-label="The home" autoComplete="off" className={c.fl} />
+        {typed && props && (
+          <ul className={c.list}>
+            {hits.map((p) => (
+              <li key={p.id}>
+                <button type="button" onClick={() => setPicked(p)} className={c.item}>
+                  <span>{p.name}</span>
+                  <span className={c.sub}>{p.locality}</span>
+                </button>
+              </li>
+            ))}
+            {hits.length === 0 && (
+              <li className={`${c.item} cursor-default hover:bg-transparent`}>
+                <span className="text-muted">Nothing on your book matches that.</span>
+              </li>
+            )}
+            <li>
+              <button type="button" onClick={() => { setManual(true); setLine1((l) => l || q.trim()); }} className={c.item}>
+                <span className="font-semibold">Enter the address manually</span>
+                <span className={c.sub}>For a home that isn&apos;t on your book</span>
+              </button>
+            </li>
+          </ul>
+        )}
+      </>
+    );
+  };
 
   /* The bank boxes, the same in both looks bar the classes. Only when the contractor is being paid. */
   const bankBoxes = (fl: string, lb: string, hint: string, wrap: string) => (
@@ -162,27 +234,11 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
       <>
         <FloatCard>
           <FloatCardHead title="The Home" />
-          {picked ? (
-            <div className="nl-fs-row">
-              <span className="min-w-0 truncate">{picked.name}<span className="text-muted">{picked.locality ? ` · ${picked.locality}` : ""}</span></span>
-              <button type="button" onClick={() => { setPicked(null); setQ(""); }} className="nl-link shrink-0">Change</button>
-            </div>
-          ) : (
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={props === null ? "Reading the book…" : "Start typing the address"} aria-label="The home" className={fl} />
-          )}
-          {hits.length > 0 && (
-            <ul className="nl-fs-list mt-2">
-              {hits.map((p) => (
-                <li key={p.id}>
-                  <button type="button" onClick={() => setPicked(p)} className="flex w-full flex-col rounded-lg px-2 py-2 text-left hover:bg-panel">
-                    <span className="text-[13.5px]">{p.name}</span>
-                    <span className="text-[11.5px] text-muted">{p.locality}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {!picked && props && q.trim().length > 2 && hits.length === 0 && <p className="nl-fs-hint">Not on the book. It will go on under the address as typed.</p>}
+          {homeBox({
+            fl, lb: "nl-fs-label", hint: "nl-fs-hint mt-2", list: "nl-fs-list mt-2",
+            item: "flex w-full flex-col rounded-lg px-2 py-2 text-left text-[13.5px] hover:bg-panel", sub: "text-[11.5px] text-muted",
+            link: "nl-link", grid: "nl-fs-grid", wide: "is-wide", search: "Start typing the address",
+          })}
         </FloatCard>
         <FloatCard>
           <FloatCardHead title="The Invoice" />
@@ -232,27 +288,13 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
     <>
       <div className={`grid gap-3 sm:grid-cols-2 ${bare ? "" : "mt-4"}`}>
         <div className="sm:col-span-2">
-          {picked ? (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px]">
-              <span className="min-w-0 truncate">{picked.name}<span className="text-muted">{picked.locality ? ` · ${picked.locality}` : ""}</span></span>
-              <button type="button" onClick={() => { setPicked(null); setQ(""); }} className="shrink-0 text-[11.5px] text-muted underline">Change</button>
-            </div>
-          ) : (
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={props === null ? "Reading the book…" : "The home - start typing the address"} className={field} />
-          )}
-          {hits.length > 0 && (
-            <ul className="mt-2 divide-y divide-line/50 rounded-xl border border-line/80 bg-card">
-              {hits.map((p) => (
-                <li key={p.id}>
-                  <button type="button" onClick={() => setPicked(p)} className="flex w-full flex-col px-3 py-2 text-left hover:bg-panel">
-                    <span className="text-[13px]">{p.name}</span>
-                    <span className="text-[10.5px] text-muted">{p.locality}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {!picked && props && q.trim().length > 2 && hits.length === 0 && <p className="mt-1.5 text-[11px] text-muted">Not on the book. It will go on under the address as typed.</p>}
+          {homeBox({
+            fl: field, lb: "block text-[11px] text-muted", hint: "mt-1.5 text-[11.5px] text-muted",
+            list: "mt-2 divide-y divide-line/50 overflow-hidden rounded-xl border border-line/80 bg-card",
+            item: "flex w-full flex-col px-3 py-2 text-left text-[13px] hover:bg-panel", sub: "text-[10.5px] text-muted",
+            link: "text-[11.5px] text-muted underline", grid: "grid gap-3 sm:grid-cols-2", wide: "sm:col-span-2",
+            search: "The home - start typing the address",
+          })}
         </div>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What the work was, e.g. Replaced kitchen tap" className={`${field} sm:col-span-2`} />
         <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="£ invoice total" className={field} />
