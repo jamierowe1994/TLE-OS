@@ -225,7 +225,7 @@ export const GUIDES: Guide[] = [
       },
       {
         title: "Two steps: check, then approve",
-        body: "Every pack is checked twice. First Josel checks every document against the pack and presses Checked, pass for approval. Then Kirstie, Michael or Susan gives the final approval. The person who did the first check can never also approve the same pack. Either of you can send it back to the agent or decline it at your step; that needs a reason, and the agent reads it exactly as written.",
+        body: "Every pack is checked twice. First Josel or Kirstie checks every document against the pack and presses Checked, pass for approval. Then Kirstie, Michael or Susan gives the final approval. The person who did the first check can never also approve the same pack. Either of you can send it back to the agent or decline it at your step; that needs a reason, and the agent reads it exactly as written.",
         image: img("plc-decision"),
       },
       {

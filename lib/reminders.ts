@@ -8,6 +8,7 @@ import { presentationsFor } from "@/lib/present-store";
 import { getApplications } from "@/lib/applications";
 import { listCases } from "@/lib/plc-store";
 import { outstandingTerms } from "@/lib/rex-esign";
+import { cancelledTermIds } from "@/lib/terms-cancelled";
 import { rexConfigured } from "@/lib/rex";
 import { whenAgo } from "@/lib/lead-spine";
 import { salesLeadIds } from "@/lib/lead-ledger";
@@ -195,9 +196,10 @@ async function plcReminders(list: Person[], now: number): Promise<Reminder[]> {
 }
 
 async function termsReminders(list: Person[], now: number): Promise<Reminder[]> {
-  const rows = await outstandingTerms().catch(() => []);
+  const [rows, cancelled] = await Promise.all([outstandingTerms().catch(() => []), cancelledTermIds()]);
   const out: Reminder[] = [];
   for (const t of rows) {
+    if (cancelled.has(`esign:${t.id}`)) continue;
     /* Three days to sixty. Older than that is a landlord who went elsewhere,
        and the Outstanding terms list is the place for those. */
     if (t.age == null || t.age < 3 || t.age > 60 || !t.sentAt) continue;

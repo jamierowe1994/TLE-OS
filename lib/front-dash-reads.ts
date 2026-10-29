@@ -11,6 +11,7 @@ import { NOT_SALES } from "@/lib/lead-ledger";
 import { leadHeldBySql } from "@/lib/lead-owner";
 import type { Lead } from "@/lib/leads-sample";
 import { allCancellations } from "@/lib/let-cancel";
+import { cancelledTermIds } from "@/lib/terms-cancelled";
 import { MA_STAGES, type MarketAppraisal } from "@/lib/market-appraisal";
 import { donePassports } from "@/lib/passports-done";
 import { rexCall, rexConfigured, rexSearch, rexSearchAll } from "@/lib/rex";
@@ -799,7 +800,9 @@ async function termBook(ctx: FrontCtx): Promise<{ rows: TermRec[]; lateAfterDays
         href: "/market-appraisals",
       })),
   ];
-  return { rows, lateAfterDays };
+  /* Cancelled from the list (lib/terms-cancelled): nobody is chasing them. */
+  const cancelled = await cancelledTermIds();
+  return { rows: rows.filter((r) => !cancelled.has(r.id)), lateAfterDays };
 }
 
 /** Whether a set of terms (by its list id) is in this person's own Terms out list: the gate on a nudge. */

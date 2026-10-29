@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { contractSendReady, contractSendRecord } from "@/lib/contract-send";
+import { cancelledTermIds } from "@/lib/terms-cancelled";
 import { signedFor } from "@/lib/signed-documents";
 import { landlordByEmail, upsertLandlordAccount } from "@/lib/landlord-account";
 import { startVerification } from "@/lib/verification";
@@ -152,7 +153,9 @@ export async function runContractNudges(origin: string, now = new Date()): Promi
   const rows = await q<{ record_id: string }>(
     `SELECT record_id FROM os_case_state WHERE kind = 'contract-send' AND updated_at > NOW() - INTERVAL '30 days'`
   ).catch(() => []);
+  const cancelled = await cancelledTermIds();
   for (const { record_id: id } of rows) {
+    if (cancelled.has(`docuseal:${id}`)) continue;
     try {
       const sent = await contractSendRecord(id);
       if (!sent) continue;

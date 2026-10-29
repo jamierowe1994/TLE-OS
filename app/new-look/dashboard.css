@@ -416,6 +416,9 @@
 [data-look="new"] .nl-dash-nudge-said { font-size: 12px; }
 [data-look="new"] .nl-dash-nudge-said.is-ok { color: var(--sage-ink); }
 [data-look="new"] .nl-dash-nudge-said.is-bad { color: var(--accent-dark); max-width: 220px; }
+[data-look="new"] .nl-dash-nudge .nl-link { font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-dash-cancel-ask { flex-wrap: wrap; justify-content: flex-end; }
+[data-look="new"] .nl-dash-cancel-ask .nl-dash-nudge-said { color: var(--muted); }
 [data-look="new"] .nl-ticks { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--faint); white-space: nowrap; }
 [data-look="new"] .nl-ticks.is-read { color: var(--sage-ink); }
 /* ---------- pop-outs in the middle of the screen (James, 25 Oct 2026) ----------
@@ -474,6 +477,7 @@
 [data-look="new"] .nl-dash-rec-stretch { color: inherit; }
 [data-look="new"] .nl-dash-rec-stretch::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
 [data-look="new"] .nl-dash-trow > .nl-dash-rec-nudge { position: relative; z-index: 2; overflow: visible; display: flex; justify-content: flex-end; }
+[data-look="new"] .nl-dash-trow > .nl-dash-rec-nudge { flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 @media (max-width: 760px) {
   [data-look="new"] .nl-dash-table.is-terms .nl-dash-trow { grid-template-columns: minmax(0, 1fr) 20px; }
   [data-look="new"] .nl-dash-table.is-terms .nl-dash-trow > .nl-dash-rec-nudge { padding-top: 6px; }
