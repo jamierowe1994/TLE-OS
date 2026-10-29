@@ -498,7 +498,9 @@ async function pulledIntoBook(have: string[], rexUserId?: string | null): Promis
   /* A pulled home that has since let is not on the market: REX's own
      "current" filter would have dropped it, so the pull must too, or it
      reaches tenants as somewhere to enquire about. */
-  return rexRows(res.result).map((r) => toListing(r as unknown as RexListing)).filter((l) => !l.letAgreed);
+  /* Nor one since withdrawn, let or sold (29 Oct 2026): REX keeps its
+     publication at "published", so it would read as live on the market. */
+  return rexRows(res.result).map((r) => toListing(r as unknown as RexListing)).filter((l) => !l.letAgreed && (!l.listingState || l.listingState === "current"));
 }
 
 export async function fetchListingBook(rexUserId?: string | null): Promise<ListingBook> {

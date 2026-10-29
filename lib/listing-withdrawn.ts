@@ -1,14 +1,13 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import { sameHome } from "@/lib/address-parse";
 import { stillOnPortalFeeds } from "@/lib/advert-offline";
-import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { allCancellations } from "@/lib/let-cancel";
 import { forgetListing, readListingDetails } from "@/lib/listing-details";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { decisionsForListing, recordDecision, type DecisionRef } from "@/lib/offer-decisions";
 import { isExpiredToken, rexCall, rexWritesLocked, type RexResponse } from "@/lib/rex";
 import { outstandingTerms } from "@/lib/rex-esign";
+import { fellThroughOnHome } from "@/lib/propoly-gone";
 import { cancelledTermIds, cancelTermsHere } from "@/lib/terms-cancelled";
 
 /**
@@ -95,30 +94,16 @@ async function listingNow(id: number) {
   };
 }
 
-/** A let on this listing that fell through: cancelled in Propoly, or cancelled on its page here. */
+/** A let on this listing that fell through: cancelled on its page here, or withdrawn in Propoly (lib/propoly-gone). */
 async function fellThrough(id: string, address: string): Promise<{ on: string | null; why: string | null; tenants: string | null } | null> {
-  const [deals, decisions, cancels] = await Promise.all([
-    getAllPropolyDeals().catch(() => null),
-    decisionsForListing(id),
-    allCancellations(),
-  ]);
+  const [decisions, cancels] = await Promise.all([decisionsForListing(id), allCancellations()]);
   /* Cancelled here: an offer accepted on this listing whose let was cancelled. */
   const accepted = [...decisions.entries()].filter(([, d]) => d.decision === "accepted").map(([ref]) => ref);
   const here = cancels.find((c) => accepted.includes(c.ref));
   if (here) return { on: here.at.slice(0, 10), why: [here.reason, here.note].filter(Boolean).join(": ") || null, tenants: null };
-  if (!deals) return null;
-  const onThis = deals.filter((d) => (d.app.listingId != null ? String(d.app.listingId) === id : Boolean(address) && sameHome(address, `${d.app.propertyName}, ${d.app.locality}`)));
-  /* Another deal still going on the same listing is the let now. */
-  if (onThis.some((d) => d.statusKey !== "cancelled" && d.statusKey !== "complete")) return null;
-  const gone = onThis
-    .filter((d) => d.statusKey === "cancelled")
-    .sort((a, b) => String(b.app.dateUnsuccessful ?? "").localeCompare(String(a.app.dateUnsuccessful ?? "")))[0];
+  const gone = await fellThroughOnHome(address);
   if (!gone) return null;
-  return {
-    on: ymd(gone.app.dateUnsuccessful),
-    why: "The let was cancelled in Propoly",
-    tenants: gone.app.tenants.map((t) => t.name).filter(Boolean).join(" & ") || null,
-  };
+  return { on: gone.at.slice(0, 10), why: gone.status === "cancelled" ? "Cancelled in Propoly" : "Withdrawn in Propoly", tenants: null };
 }
 
 async function keptChoice(id: string): Promise<Kept | null> {

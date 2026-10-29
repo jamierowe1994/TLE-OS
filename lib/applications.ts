@@ -1,7 +1,8 @@
 import "server-only";
 import { londonToday } from "@/lib/london-clock";
+import { goneDealIds, homesWithLiveDeals } from "@/lib/propoly-gone";
 import { rexCall, rexRows } from "@/lib/rex";
-import { unitLine } from "@/lib/address-parse";
+import { unitLine, sameHome } from "@/lib/address-parse";
 import { hasDb, q } from "@/lib/db";
 import { isScottish } from "@/lib/property-flags";
 import { introOnlyIds } from "@/lib/intro-only";
@@ -1230,7 +1231,14 @@ export async function closedReasons(apps: Application[]): Promise<Map<string, st
   /* A pack left half-done long after the move-in is abandoned, not live. */
   const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const ids = [...new Set(apps.map((a) => a.listingId).filter((x): x is number => x != null))];
-  const [state, packOpen, cancelled, intro] = await Promise.all([listingStates(ids), openPlcPacks(), cancelledRefs(), introOnlyIds().catch(() => new Set<string>())]);
+  const [state, packOpen, cancelled, intro, gone, liveHomes] = await Promise.all([
+    listingStates(ids),
+    openPlcPacks(),
+    cancelledRefs(),
+    introOnlyIds().catch(() => new Set<string>()),
+    goneDealIds().catch(() => new Set<string>()),
+    homesWithLiveDeals().catch(() => null),
+  ]);
 
   const out = new Map<string, string>();
   for (const a of apps) {
@@ -1238,6 +1246,14 @@ export async function closedReasons(apps: Application[]): Promise<Map<string, st
     /* Cancelled by the agent from the let's page (lib/let-cancel). */
     if (cancelled.has(String(a.id))) {
       out.set(a.id, "Deal cancelled");
+      continue;
+    }
+    /* Its Propoly deal was withdrawn or cancelled there (lib/propoly-gone, 29 Oct 2026). */
+    if (
+      (gone.has(String(a.id)) || (a.propolyDealId && gone.has(a.propolyDealId))) &&
+      liveHomes && !liveHomes.some((h) => sameHome(h, `${a.property}, ${a.locality}`))
+    ) {
+      out.set(a.id, "Withdrawn in Propoly");
       continue;
     }
     const s = a.listingId != null ? state.get(a.listingId) : undefined;
