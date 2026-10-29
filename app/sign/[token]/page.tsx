@@ -135,7 +135,13 @@ export default function SignPage() {
   const [sig, setSig] = useState<string | null>(null);
 
   const [sheet, setSheet] = useState<null | "sign" | "details">(null);
+  /* Typed on a laptop, drawn on a phone (29 Oct 2026: two landlords took 6 and
+     33 minutes over this page that morning; a signature drawn with a trackpad
+     is the hard part). Draw stays one press away. */
   const [mode, setMode] = useState<"draw" | "type">("draw");
+  useEffect(() => {
+    if (!window.matchMedia("(pointer: coarse)").matches) setMode("type");
+  }, []);
   /* The sealing moment: which tick is spinning, or what went wrong. */
   const [seal, setSeal] = useState<{ stage: number; error: string | null; done: boolean | null } | null>(null);
   const [reread, setReread] = useState(false);
@@ -785,6 +791,9 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
   const [inked, setInked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /* A finger on a phone, a mouse or trackpad on a laptop: the hint says which. */
+  const [touch, setTouch] = useState(true);
+  useEffect(() => setTouch(window.matchMedia("(pointer: coarse)").matches), []);
 
   const mount = useCallback(() => {
     const c = cv.current;
@@ -849,7 +858,10 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
       last.current = p;
       grow(p);
     }
-    if (!inked) setInked(true);
+    if (!inked) {
+      setInked(true);
+      setErr(null);
+    }
   }
   const up = () => (last.current = null);
 
@@ -903,6 +915,8 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
     if (mode === "draw") {
       if (!inked) {
         padEl.current?.animate([{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "translateX(0)" }], 300);
+        /* Said, not only shaken: a shake alone left people pressing Sign again. */
+        setErr("Draw your signature in the box first, or choose Type to sign with your name.");
         return;
       }
       const png = drawnPng();
@@ -921,15 +935,15 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
       <h3 id="ts-sheet-t">Your signature</h3>
       <p className="who">Signing as <b>{name}</b> · {today}</p>
       <div className="seg" role="tablist">
-        <button type="button" role="tab" aria-selected={mode === "draw"} className={mode === "draw" ? "on" : ""} onClick={() => setMode("draw")}>Draw</button>
-        <button type="button" role="tab" aria-selected={mode === "type"} className={mode === "type" ? "on" : ""} onClick={() => setMode("type")}>Type</button>
+        <button type="button" role="tab" aria-selected={mode === "draw"} className={mode === "draw" ? "on" : ""} onClick={() => { setErr(null); setMode("draw"); }}>Draw</button>
+        <button type="button" role="tab" aria-selected={mode === "type"} className={mode === "type" ? "on" : ""} onClick={() => { setErr(null); setMode("type"); }}>Type</button>
       </div>
       {mode === "draw" ? (
         <div className={`pad${inked ? " has" : ""}`} ref={padEl}>
           <canvas ref={cv} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} aria-label="Signature pad" />
           <span className="base" />
           <span className="x">×</span>
-          <span className="hint">Sign with your finger</span>
+          <span className="hint">{touch ? "Sign with your finger" : "Draw your signature with your mouse or trackpad"}</span>
           <button type="button" className="clr" onClick={clear}>Clear</button>
         </div>
       ) : (
