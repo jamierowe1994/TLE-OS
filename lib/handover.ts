@@ -8,12 +8,12 @@ import { switchOn } from "@/lib/switches";
 import { handoffFor, landlordsForListing, type Handoff } from "@/lib/deal-handoff";
 import { findUserById } from "@/lib/users";
 import { renderTleEmail } from "@/lib/email/tle-emails";
-import { HOLDING_FEE_WORDING, SITE, WEEK_AHEAD_LINES } from "@/lib/email/tle-documents";
+import { HOLDING_FEE_WORDING, SITE, WEEK_AHEAD_LINES, WEEK_AHEAD_LINES_SCOTLAND } from "@/lib/email/tle-documents";
 import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { userByName } from "@/lib/tenant-email-send";
 import { isScottish } from "@/lib/property-flags";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
-import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, swapStandIn, withChanges, withLandlordOptOut, type DealTerms } from "@/lib/handover-deal";
+import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, isScottishListing, swapStandIn, withChanges, withLandlordOptOut, type DealTerms } from "@/lib/handover-deal";
 import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 import { guaranteedEmails, guarantorLines, planGuarantors, propolyGuarantorsLive, sendGuarantors } from "@/lib/deal-guarantors";
 
@@ -637,7 +637,11 @@ export async function runHandover(
          of them notifications") the handover sends neither: it puts them with
          the agent as a customer update (lib/customer-updates), already written,
          to send from their own address after reading, or to ring instead. */
-      const scotland = str((listing.agreement_type as Row | null)?.id) === "153279";
+      /* REX's Scottish agreement type OR the postcode, as the deal itself is
+         judged (Sean, 29 Oct 2026: 10 Thornton Road, Lanark ML11 had no
+         agreement type, so the deal went to Propoly as Scottish while the
+         tenants' yes offered them a week's holding fee). */
+      const scotland = isScottishListing(listing, packet);
       const sender = opts.byId ? await findUserById(opts.byId).catch(() => null) : null;
       const recipients = acceptedRecipients(packet, { scotland, senderName: sender?.name ?? null, senderEmail: sender?.email ?? null });
       const address = [packet.property, packet.locality].filter(Boolean).join(", ");
@@ -1203,7 +1207,7 @@ export function acceptedRecipients(
         holdingFeeLine: o.scotland
           ? HOLDING_FEE_WORDING.scotland.accepted()
           : HOLDING_FEE_WORDING.england.accepted(holdingFee ?? "one week's rent"),
-        weekAheadList: WEEK_AHEAD_LINES,
+        weekAheadList: o.scotland ? WEEK_AHEAD_LINES_SCOTLAND : WEEK_AHEAD_LINES,
         link: `${SITE}/tenant/tenancy`,
         agentName,
         agentPhone,
@@ -1227,7 +1231,7 @@ export async function putAcceptedWithAgent(
   const packet = o.packet ?? (await handoffFor(applicationId));
   if (!packet) return null;
   const agent = o.sender ?? (packet.agent ? await userByName(packet.agent).catch(() => null) : null);
-  const scotland = o.scotland ?? isScottish(packet.locality);
+  const scotland = o.scotland ?? isScottish(packet.locality, packet.property);
   const recipients = acceptedRecipients(packet, { scotland, senderName: agent?.name ?? null, senderEmail: agent?.email ?? null });
   return createUpdate({
     key: `accepted:${applicationId}`,

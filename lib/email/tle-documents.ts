@@ -2262,3 +2262,14 @@ export const WEEK_AHEAD_LINES = [
   "<strong>6.</strong> Your first month's rent, in cleared funds before move-in day",
   "<strong>7.</strong> Your keys",
 ].join("<br>");
+
+/* Scotland takes no holding fee, so its list starts at referencing (Sean,
+   29 Oct 2026, 10 Thornton Road: the yes promised a holding-fee link). */
+export const WEEK_AHEAD_LINES_SCOTLAND = [
+  "<strong>1.</strong> Referencing: about fifteen minutes of forms for each adult moving in",
+  "<strong>2.</strong> The landlord's safety checks on the home. Nothing needed from you",
+  "<strong>3.</strong> Your deposit, protected in a government-approved scheme",
+  "<strong>4.</strong> Signing the tenancy agreement online",
+  "<strong>5.</strong> Your first month's rent, in cleared funds before move-in day",
+  "<strong>6.</strong> Your keys",
+].join("<br>");
