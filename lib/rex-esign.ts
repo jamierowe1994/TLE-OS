@@ -243,6 +243,10 @@ export type SignedDoc = {
  *
  * `primary_record_type` MUST accompany `listing_id` or the search is refused.
  */
+const SIGNED_TERMS = /docusign|terms|agreement|contract|\btob\b/i;
+/** What lib/plc-rex calls a certificate it files: "EICR - expires 2028-09-06 - file.pdf". */
+const OS_CERTIFICATE = /^[^-]+ - expires \d{4}-\d{2}-\d{2} - /i;
+
 export async function signedDocuments(listingId: string | number): Promise<SignedDoc[]> {
   const res = await rexCall("Documents", "search", {
     limit: 40,
@@ -260,8 +264,14 @@ export async function signedDocuments(listingId: string | number): Promise<Signe
     system_ctime?: number;
     privacy_id?: string;
   }[];
+  /* Terms, not every document on the listing (29 Oct 2026). Since 26 Oct the
+     OS files a home's certificates onto its REX listing too ("EPC - expires
+     2030-10-19 - ....pdf"), and the first of those was shown as the signed
+     terms: 68 Main Street's Terms of Business opened its EPC, and the home
+     read "terms on file" with nothing signed. DocuSign's own copy, or a file
+     named as terms or an agreement, counts; a certificate never does. */
   return rows
-    .filter((r) => r.uri)
+    .filter((r) => r.uri && SIGNED_TERMS.test(r.description ?? "") && !OS_CERTIFICATE.test(r.description ?? ""))
     .map((r) => ({
       id: Number(r.id),
       name: r.description ?? "Document",

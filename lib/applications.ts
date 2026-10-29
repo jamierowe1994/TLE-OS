@@ -643,6 +643,12 @@ async function applyAgreedRent(apps: Application[]): Promise<void> {
 }
 
 /** Application id -> the Propoly deal its push started, newest push winning. */
+/* Every live push whose deal step went, not only the runs that finished "ok"
+   (29 Oct 2026). 68 Main Street's deal was made in Propoly on 26 Oct and its
+   tenant referenced there, but a later step (tenants onto the REX listing)
+   failed, so the run read "failed" and the let was never joined to its deal:
+   no references, no documents, stuck at hand-over. 6 Tenbury Crescent, Flat 3
+   Chequers Court and 5 Canter Close were the same. The newest run wins. */
 async function pushedDeals(): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (!hasDb()) return out;
@@ -651,7 +657,7 @@ async function pushedDeals(): Promise<Map<string, string>> {
             (SELECT s->'response'->>'uuid' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(steps) = 'array' THEN steps ELSE '[]'::jsonb END) s
               WHERE s->>'id' = 'deal' AND s->>'state' = 'ok' LIMIT 1) AS deal
        FROM os_handovers
-      WHERE mode = 'live' AND status = 'ok'
+      WHERE mode = 'live'
       ORDER BY started_at ASC`
   );
   for (const r of rows) if (r.deal) out.set(r.application_id, r.deal);

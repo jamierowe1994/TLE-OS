@@ -619,6 +619,12 @@ export async function runHandover(
             await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "failed", detail: (e as Error).message, request: payload });
           }
         }
+      } else if (applicationId.startsWith("os:")) {
+        /* An offer made in the OS has no REX application, so its tenants are
+           no REX contacts. This failed every OS offer's push after the deal had
+           gone (68 Main Street, 26 Oct 2026), and a "failed" run was never
+           joined to its deal. Nothing to write is not a failure. */
+        await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "skipped", detail: "An offer made in the OS, so there was nobody to add to the listing. The tenants are on the deal." });
       } else {
         await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "failed", detail: "No tenant on the application has a REX contact id." });
         status = "failed";

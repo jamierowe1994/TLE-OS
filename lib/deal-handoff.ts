@@ -1,5 +1,6 @@
 import "server-only";
 import { rexCall } from "@/lib/rex";
+import { hasDb, q } from "@/lib/db";
 import { getApplications, type Application } from "@/lib/applications";
 import { isOwnerReln } from "@/lib/rex-reln";
 import { recordLandlordFor } from "@/lib/record-landlords";
@@ -153,6 +154,34 @@ async function certificatesFor(
     const held = best.get(type);
     if (!held || (cert.expiry && (!held.expiry || cert.expiry > held.expiry))) {
       best.set(type, cert);
+    }
+  }
+  /* The OS's own copy counts as attached (29 Oct 2026). 68 Main Street's EPC
+     is in the OS vault, checked, and the document push sends it from there,
+     yet REX's entry holds the dates with no file, so the push said "Recorded,
+     but the certificate itself isn't attached". A certificate only the OS
+     holds is on file too. Never one still waiting for compliance's check. */
+  if (hasDb()) {
+    const ours = await q<{ type_id: string; expiry: string | null }>(
+      `SELECT type_id, expiry::text AS expiry FROM os_certificates WHERE property_id = $1 AND r2_key IS NOT NULL AND NOT awaiting_check`,
+      [propertyId]
+    ).catch(() => []);
+    for (const o of ours) {
+      const expiry = (o.expiry ?? "").slice(0, 10) || null;
+      const held = best.get(o.type_id);
+      if (held && !held.attached && (!expiry || !held.expiry || expiry >= held.expiry)) {
+        best.set(o.type_id, { ...held, attached: true });
+      } else if (!held) {
+        const need = REQUIRED.find((x) => x.rexType === o.type_id);
+        best.set(o.type_id, {
+          type: o.type_id,
+          label: need?.label ?? ALSO[o.type_id] ?? o.type_id,
+          expiry,
+          attached: true,
+          validAtStart: expiry ? new Date(expiry) >= when : !need,
+          required: Boolean(need),
+        });
+      }
     }
   }
   return [...best.values()];

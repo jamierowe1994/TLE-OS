@@ -227,7 +227,8 @@ export function findSwapDeal(app: Application, all: BusinessDeal[]): BusinessDea
  */
 export async function dealForApplication(app: Application): Promise<BusinessDeal | null> {
   const [all, runs] = await Promise.all([deals(), handoversFor(app.id, 10).catch(() => [])]);
-  const live = runs.find((r) => r.mode === "live" && r.status === "ok");
+  /* The newest live push that made a deal, even if a later step failed (29 Oct 2026). */
+  const live = runs.find((r) => r.mode === "live" && pushedDealOf(r.steps));
   return all ? findDeal(app, all, live ? pushedDealOf(live.steps) : null) : null;
 }
 
@@ -239,7 +240,8 @@ function pushedDealOf(steps: { id: string; state: string; response?: unknown }[]
 /** Every application's pushed deal, in one read, for a list. */
 async function pushedDeals(): Promise<Map<string, string>> {
   const rows = await q<{ application_id: string; steps: { id: string; state: string; response?: unknown }[] }>(
-    `SELECT application_id, steps FROM os_handovers WHERE mode = 'live' AND status = 'ok' ORDER BY started_at`
+    /* Any live run whose deal step went (29 Oct 2026, lib/applications pushedDeals). */
+    `SELECT application_id, steps FROM os_handovers WHERE mode = 'live' ORDER BY started_at`
   ).catch(() => []);
   const out = new Map<string, string>();
   for (const r of rows) {
@@ -420,7 +422,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     /* The push that went, over any rehearsal run after it: a rehearsal
        after a live push made the let read "not in Propoly yet" and offered
        Push to Propoly again, which on a swap starts a second deal. */
-    handoversFor(app.id, 10).then((runs) => runs.find((r) => r.mode === "live" && r.status === "ok") ?? runs[0] ?? null).catch(() => null),
+    /* Then a live push that made the deal though a later step failed (68 Main
+       Street, 29 Oct 2026): the deal is real, so the let follows it. */
+    handoversFor(app.id, 10).then((runs) => runs.find((r) => r.mode === "live" && r.status === "ok") ?? runs.find((r) => r.mode === "live" && pushedDealOf(r.steps)) ?? runs[0] ?? null).catch(() => null),
     /* The pack's id is the application's with anything but letters, digits
        and dashes made a dash (lib/plc caseIdFor): "swap:g2h4..." is kept as
        "plc-swap-g2h4...". Read as "plc-swap:g2h4..." it was never found, so a
@@ -445,7 +449,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   /* A tenant swap's home already has a deal - the tenancy being changed - so
      only the new one counts: the deal its own push started, or one keyed in
      by hand with a joiner on it (lib/tenant-swaps). */
-  const pushedUuid = run?.mode === "live" && run.status === "ok" ? pushedDealOf(run.steps) : null;
+  const pushedUuid = run?.mode === "live" ? pushedDealOf(run.steps) : null;
   const deal = accepted && allDeals ? (app.swap ? findSwapDeal(app, allDeals) : findDeal(app, allDeals, pushedUuid)) : null;
   /* SCOTLAND TAKES NO HOLDING FEE (James, 16 Oct 2026): it isn't required
      there and neither Scottish agent takes one. The push already sends none,

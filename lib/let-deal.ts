@@ -79,14 +79,16 @@ function shape(d: BusinessDeal, how: string): LetDeal {
   };
 }
 
-/** The deal step of the let's last good live push, if the OS pushed it. */
+/** The deal the OS made for the let: the newest live push whose deal step went,
+ *  whether or not a later step failed (29 Oct 2026, see lib/applications pushedDeals). */
 async function pushedDeal(applicationId: string): Promise<string | null> {
   if (!hasDb()) return null;
   const rows = await q<{ deal: string | null }>(
-    `SELECT (SELECT s->'response'->>'uuid' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(steps) = 'array' THEN steps ELSE '[]'::jsonb END) s
-              WHERE s->>'id' = 'deal' AND s->>'state' = 'ok' LIMIT 1) AS deal
-       FROM os_handovers WHERE application_id = $1 AND mode = 'live' AND status = 'ok'
-      ORDER BY started_at DESC LIMIT 1`,
+    `SELECT deal FROM (
+       SELECT started_at, (SELECT s->'response'->>'uuid' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(steps) = 'array' THEN steps ELSE '[]'::jsonb END) s
+                            WHERE s->>'id' = 'deal' AND s->>'state' = 'ok' LIMIT 1) AS deal
+         FROM os_handovers WHERE application_id = $1 AND mode = 'live'
+     ) x WHERE deal IS NOT NULL ORDER BY started_at DESC LIMIT 1`,
     [applicationId]
   ).catch(() => []);
   return rows[0]?.deal ?? null;
