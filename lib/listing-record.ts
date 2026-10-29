@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { isScottish } from "@/lib/property-flags";
+import { joinRegNumbers, regNumbers } from "@/lib/reg-numbers";
 
 /**
  * WHAT THE OS ALREADY KNOWS ABOUT A LISTING'S HOME (6 Oct 2026).
@@ -173,11 +174,12 @@ export async function saveAgentLarn(rexUserId: string, larn: string, by: string)
 export function withScottishFooter(body: string, numbers: { landlord?: string | null; agent?: string | null }): string {
   const kept = body
     .split("\n")
-    .filter((line) => !/^\s*(Landlord registration number|Letting agent registration number):/i.test(line))
+    .filter((line) => !/^\s*(Landlord registration numbers?|Letting agent registration number):/i.test(line))
     .join("\n")
     .trimEnd();
   const lines = [
-    numbers.landlord ? `Landlord registration number: ${numbers.landlord}` : null,
+    /* Joint owners each carry one (lib/reg-numbers). */
+    numbers.landlord ? `Landlord registration number${regNumbers(numbers.landlord).length > 1 ? "s" : ""}: ${joinRegNumbers(regNumbers(numbers.landlord))}` : null,
     numbers.agent ? `Letting agent registration number: ${numbers.agent}` : null,
   ].filter(Boolean);
   return lines.length ? `${kept}${kept ? "\n\n" : ""}${lines.join("\n")}` : kept;

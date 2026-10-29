@@ -8,6 +8,7 @@ import { AGENT_SIGNING } from "@/lib/signing-steps";
 import { fiveWeeks, money } from "@/components/listing/listing-draft";
 import { LEAD_SOURCES } from "@/lib/leads-sample";
 import { isScottish } from "@/lib/property-flags";
+import RegNumbersInput from "@/components/listing/RegNumbersInput";
 
 /**
  * NEW LISTING, IN FIVE SCREENS (James, 12 Oct 2026).
@@ -558,11 +559,13 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
                 <Err k="source" />
               </label>
               {scottish && (
-                <label className="block">
+                <div className="block">
                   <Label opt>Landlord registration number</Label>
-                  <input value={larn} onChange={(e) => setLarn(e.target.value)} placeholder="As the council gives it, e.g. 123456/230/12345" autoComplete="off" className={`mt-1.5 ${field} border-line`} />
-                  <span className="mt-1 block text-[11px] text-muted">A Scottish home. The advert has to carry this before it goes live.</span>
-                </label>
+                  <div className="mt-1.5">
+                    <RegNumbersInput value={larn || null} onChange={(v) => setLarn(v ?? "")} placeholder="As the council gives it, e.g. 123456/230/12345" inputClassName={`${field} border-line`} />
+                  </div>
+                  <span className="mt-1 block text-[11px] text-muted">A Scottish home. The advert has to carry this before it goes live. Joint owners each have their own.</span>
+                </div>
               )}
               {office && (
                 <div className={`rounded-2xl border bg-accent-soft/40 p-4 ${tried[1] && officeAnswer === null ? "border-[#c9675f]" : "border-accent-dark/40"}`}>

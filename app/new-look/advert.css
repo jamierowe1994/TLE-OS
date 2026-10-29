@@ -81,6 +81,9 @@
 /* An empty required field: a soft clay edge, not a red error. */
 [data-look="new"] .nl-adv-field.is-missing > input, [data-look="new"] .nl-adv-field.is-missing > select, [data-look="new"] .nl-adv-field.is-missing > textarea, [data-look="new"] .nl-adv-field.is-missing .nl-adv-money input, [data-look="new"] .nl-adv-field.is-missing .nl-adv-stepper { border-color: color-mix(in srgb, var(--accent) 70%, var(--line-strong)); }
 [data-look="new"] .nl-adv-field small { font-size: 12px; line-height: 17px; color: var(--muted); }
+/* Landlord registration: a box per owner (RegNumbersInput). */
+[data-look="new"] .nl-adv-field.is-missing.nl-adv-reg input { border-color: color-mix(in srgb, var(--accent) 70%, var(--line-strong)); }
+[data-look="new"] .nl-adv-reg .nl-adv-reg-link { font-size: 12px; color: var(--muted); }
 [data-look="new"] .nl-adv-field small.is-good { color: var(--sage-ink); }
 [data-look="new"] .nl-adv-field small.is-bad { color: var(--accent-dark); }
 [data-look="new"] .nl-adv-money { position: relative; display: block; }
