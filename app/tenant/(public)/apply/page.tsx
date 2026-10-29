@@ -207,6 +207,7 @@ export default function Apply() {
       const who = p.name.trim() || `Applicant ${i + 1}`;
       if (!p.name.trim()) out.push(`Applicant ${i + 1} needs a name`);
       if (!p.email.trim()) out.push(`${who} needs an email address`);
+      else if (people.slice(0, i).some((q) => q.email.trim().toLowerCase() === p.email.trim().toLowerCase())) out.push(`${who} needs their own email address - each person is referenced separately`);
       if (!p.dob) out.push(`${who} needs a date of birth`);
       if (!money(p.income)) out.push(`${who} needs an income figure`);
       if (p.rightToRent === null) out.push(`${who} hasn't answered the right to rent question`);

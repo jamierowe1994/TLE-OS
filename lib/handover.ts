@@ -862,6 +862,15 @@ async function pushDeal(
       result = "failed";
       continue;
     }
+    /* An email an earlier tenant in this push already used is not this
+       tenant being on the deal (10 Thornton Road, 29 Oct 2026: Chloe was
+       said to be "already on the deal" on Bailey's email). */
+    const sharer = o.packet.tenants.slice(0, o.packet.tenants.indexOf(t)).find((x) => x.email && norm(x.email) === norm(t.email!));
+    if (sharer) {
+      await rec.add({ id: sid, label: tlabel, state: "failed", detail: `Has the same email as ${sharer.name}, and Propoly needs each tenant's own. Change it on their details and push again.` });
+      result = "failed";
+      continue;
+    }
     if (have.has(norm(t.email))) {
       await rec.add({ id: sid, label: tlabel, state: "ok", detail: "Already on the deal." });
       continue;
