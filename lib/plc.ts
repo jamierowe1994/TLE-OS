@@ -387,7 +387,7 @@ export type PlcState =
   | "submitted"
   /** The model is reading the documents. */
   | "scanning"
-  /** Findings are in. The first check (Josel) has not passed it yet. */
+  /** Findings are in. The first check (Josel or Kirstie) has not passed it yet. */
   | "reviewing"
   /** First check done. Waiting on a final approver (lib/plc-approvers). */
   | "checked"
@@ -403,8 +403,10 @@ export const PLC_STATES: { id: PlcState; label: string; who: string; blurb: stri
     blurb: "With the PLC team. Locked to the agent from here." },
   { id: "scanning", label: "Scanning", who: "The OS",
     blurb: "Reading the documents for dates and details." },
-  { id: "reviewing", label: "First check", who: "Compliance",
-    blurb: "Findings are in. Josel checks every document against the pack before it goes further." },
+  /* Josel or Kirstie (Kirstie, 28 Oct 2026: "me and Jo can do the first
+     approval in case Jo is off"). Anyone holding work:plc can; these two do. */
+  { id: "reviewing", label: "First check", who: "Josel or Kirstie",
+    blurb: "Findings are in. Josel or Kirstie checks every document against the pack before it goes further." },
   { id: "checked", label: "Final approval", who: "Kirstie, Michael or Susan",
     blurb: "Checked once. Kirstie, Michael or Susan gives the final approval." },
   { id: "approved", label: "Approved", who: "Agent",
