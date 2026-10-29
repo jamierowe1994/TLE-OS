@@ -611,6 +611,7 @@ export async function middleware(req: NextRequest) {
      /api/teg/sync-everything too, and that is how an allowlist quietly
      becomes a wildcard. */
   if (MACHINE_ROUTES.includes(req.nextUrl.pathname)) {
+    void noteBeat(req);
     return NextResponse.next();
   }
 
@@ -677,6 +678,10 @@ type LogAlert = { at: number; userId: string; kind: "reading_paused"; detail: st
 let logQueue: LogEntry[] = [];
 /* Things an owner should hear about (a pace pause), sent with the next batch. */
 let alertQueue: LogAlert[] = [];
+/* A Railway timer reached the OS (lib/cron-watch, 29 Oct 2026): the address,
+   when the call carried the cron key. The latest per address, sent with the
+   next batch, so the watch can say which timer has gone quiet. */
+const beatQueue = new Map<string, number>();
 let logTimer: ReturnType<typeof setTimeout> | null = null;
 let logFlushing = false;
 /* The latest request: askSelf works out this server's own address from one. */
@@ -707,6 +712,25 @@ function noteCall(req: NextRequest, userId: string): void {
   }
 }
 
+async function noteBeat(req: NextRequest): Promise<void> {
+  try {
+    const want = process.env.CRON_SECRET;
+    const got = req.headers.get("x-cron-key");
+    if (!want || !got) return;
+    /* Compared as digests, so the time taken says nothing about the key. */
+    const key = process.env.AUTH_SECRET || DEV_SECRET;
+    if ((await hmac(key, `beat.${got}`)) !== (await hmac(key, `beat.${want}`))) return;
+    beatQueue.set(req.nextUrl.pathname, Date.now());
+    logVia = req;
+    /* Straight away, not on the timer: at night there may be no signed-in
+       call to carry it, and an unsent beat reads as a stopped timer. A batch
+       already on its way leaves this one for the next timer's call. */
+    void flushLog();
+  } catch {
+    /* Never in the way of the request. */
+  }
+}
+
 function noteAlert(a: LogAlert): void {
   alertQueue.push(a);
   if (alertQueue.length > 200) alertQueue.splice(0, alertQueue.length - 200);
@@ -719,12 +743,17 @@ async function flushLog(): Promise<void> {
   if (logFlushing) return;
   const via = logVia;
   const secret = process.env.AUTH_SECRET || (process.env.NODE_ENV !== "production" ? DEV_SECRET : undefined);
-  if (!via || !secret || (!logQueue.length && !alertQueue.length)) return;
+  if (!via || !secret || (!logQueue.length && !alertQueue.length && !beatQueue.size)) return;
   logFlushing = true;
   const batch = logQueue.splice(0, LOG_BATCH);
   const alerts = alertQueue.splice(0);
+  const beats = [...beatQueue].map(([path, at]) => ({ path, at }));
+  beatQueue.clear();
+  const keepBeats = () => {
+    for (const b of beats) beatQueue.set(b.path, Math.max(beatQueue.get(b.path) ?? 0, b.at));
+  };
   try {
-    const body = JSON.stringify({ entries: batch, alerts });
+    const body = JSON.stringify({ entries: batch, alerts, beats });
     const res = await askSelf(via, "/api/internal/read-log", 5_000, {
       method: "POST",
       body,
@@ -735,14 +764,16 @@ async function flushLog(): Promise<void> {
     if (!res) {
       logQueue = [...batch, ...logQueue].slice(-LOG_MAX_QUEUED);
       alertQueue = [...alerts, ...alertQueue].slice(-200);
+      keepBeats();
     }
   } catch {
     logQueue = [...batch, ...logQueue].slice(-LOG_MAX_QUEUED);
     alertQueue = [...alerts, ...alertQueue].slice(-200);
+    keepBeats();
   } finally {
     logFlushing = false;
   }
-  if ((logQueue.length || alertQueue.length) && !logTimer) logTimer = setTimeout(() => void flushLog(), LOG_FLUSH_MS);
+  if ((logQueue.length || alertQueue.length || beatQueue.size) && !logTimer) logTimer = setTimeout(() => void flushLog(), LOG_FLUSH_MS);
 }
 
 /* The same words as lib/lockout LOCKED_MESSAGE, which this edge file cannot

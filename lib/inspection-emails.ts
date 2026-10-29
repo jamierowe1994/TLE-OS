@@ -7,6 +7,7 @@ import { isInternalAddress } from "@/lib/email-policy";
 import { kindLabel, type Finding, type Inspection } from "@/lib/inspections";
 import { asChecks, checkLines } from "@/lib/inspection-checks";
 import type { OsUser } from "@/lib/users";
+import { refusedSender } from "@/lib/not-a-sender";
 
 /**
  * The four emails an inspection sends.
@@ -96,6 +97,9 @@ function varsFor(i: Inspection, me: OsUser, findings: Finding[] = []): Record<st
 async function send(id: string, to: string, vars: Record<string, string>, me: OsUser, who: SendOutcome["to"]): Promise<SendOutcome> {
   const address = to.trim();
   if (!address.includes("@")) return { to: who, sent: false, reason: `no email address for the ${who}` };
+  /* Never from James to a tenant or landlord (lib/not-a-sender). */
+  const notJames = refusedSender(me.email, [address]);
+  if (notJames) return { to: who, sent: false, address, reason: notJames };
   let subject = "", html = "";
   try {
     ({ subject, html } = await renderTleEmailLive(id, vars));

@@ -35,6 +35,7 @@ import { uid } from "@/lib/auth";
 import { assertInternalRecipient, isInternalAddress } from "@/lib/email-policy";
 import { sendingLocked, switchOn } from "@/lib/switches";
 import { noteFailure } from "@/lib/auto-bugs";
+import { refusedSender } from "@/lib/not-a-sender";
 
 const API = "https://api.resend.com/emails";
 
@@ -204,6 +205,9 @@ export async function sendEmail(msg: {
 
   const to = msg.to.trim();
   if (!to.includes("@")) throw new ResendBlocked(`"${to || "(blank)"}" isn't an email address.`);
+  /* Our sender with James as the reply-to is still an email from James (lib/not-a-sender). */
+  const notJames = refusedSender(msg.replyTo, [to, ...(msg.cc ?? [])]);
+  if (notJames) throw new ResendBlocked(`${notJames}.`);
   /* The sandbox guarantee, enforced at the send path rather than trusted to
      the caller. sandbox.invalid can never resolve, but we refuse before the
      request rather than relying on that. */

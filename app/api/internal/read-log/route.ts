@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cleanEntry, writeReadLog, type ReadEntry } from "@/lib/read-log";
 import { record } from "@/lib/audit";
 import { findUserById } from "@/lib/users";
+import { recordBeats } from "@/lib/cron-watch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,8 +35,10 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
-  /* { entries, alerts } - or a bare list of entries, as the first version sent. */
-  const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as { entries?: unknown; alerts?: unknown }) : null;
+  /* { entries, alerts, beats } - or a bare list of entries, as the first version sent. */
+  const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as { entries?: unknown; alerts?: unknown; beats?: unknown }) : null;
+  /* The Railway timers that reached the OS (lib/cron-watch). */
+  await recordBeats(o?.beats).catch(() => 0);
   const list = Array.isArray(raw) ? raw : Array.isArray(o?.entries) ? o.entries : [];
   const entries = list.slice(0, MAX).map(cleanEntry).filter((e): e is ReadEntry => e !== null);
   /* A pace pause (the middleware's PACE): into the audit trail, which is

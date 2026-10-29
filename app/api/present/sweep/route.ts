@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { purgeExpiredPresentations, PRESENTATION_DAYS } from "@/lib/present-store";
+import { beat } from "@/lib/cron-watch";
 
 /**
  * The daily sweep of expired presentations.
@@ -23,6 +24,8 @@ function authorised(req: NextRequest): boolean {
 
 export async function POST(req: NextRequest) {
   if (!authorised(req)) return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
+  /* The middleware never sees /api/present, so the daily timer's beat is noted here (lib/cron-watch). */
+  await beat("/api/present/sweep");
   const { deleted } = await purgeExpiredPresentations();
   return NextResponse.json({ ok: true, deleted, olderThanDays: PRESENTATION_DAYS });
 }

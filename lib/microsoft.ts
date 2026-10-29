@@ -3,6 +3,7 @@ import { footerFor, withFooter } from "@/lib/email-footer";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { rexCall, rexConfigured } from "@/lib/rex";
+import { assertMaySendAs } from "@/lib/not-a-sender";
 
 /**
  * MICROSOFT 365, PER AGENT — so an email to a landlord is genuinely from them.
@@ -360,6 +361,15 @@ export interface GraphSend {
  * which is the entire reason for sending this way instead of through REX.
  */
 export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd: boolean }> {
+  /* Never James to a customer or contractor, whoever picked him as the sender
+     (lib/not-a-sender). Both his OS login and the mailbox actually connected. */
+  const [owner] = await q<{ email: string; ms_email: string | null }>(
+    `SELECT u.email, t.ms_email FROM os_users u LEFT JOIN os_ms_tokens t ON t.user_id = u.id WHERE u.id = $1`,
+    [userId]
+  ).catch(() => []);
+  const recipients = [msg.to.email, ...(msg.cc ?? []).map((c) => c.email)];
+  assertMaySendAs(owner?.email, recipients);
+  assertMaySendAs(owner?.ms_email, recipients);
   const token = await msAccessTokenFor(userId);
   const bcc = await rexDropboxFor(msg.rexUserId ?? null);
 
