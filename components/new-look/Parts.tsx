@@ -143,7 +143,7 @@ export function Menu({ items, label = "More options" }: { items: MenuItem[]; lab
 }
 
 /** A small line icon for the new look's buttons: 1.6px stroke on a 24 grid. */
-export function Ico({ name, size = 16 }: { name: "plus" | "download" | "pen" | "calendar" | "arrow" | "back" | "image" | "search" | "filter" | "check" | "phone" | "mail" | "upload" | "lock" | "sun" | "moon" | "auto" | "camera" | "megaphone" | "coin" | "list" | "grid"; size?: number }) {
+export function Ico({ name, size = 16 }: { name: "plus" | "download" | "pen" | "calendar" | "arrow" | "back" | "image" | "search" | "filter" | "check" | "phone" | "mail" | "upload" | "lock" | "sun" | "moon" | "auto" | "camera" | "megaphone" | "coin" | "list" | "grid" | "link"; size?: number }) {
   const p: Record<string, React.ReactNode> = {
     plus: <path d="M12 5v14M5 12h14" />,
     download: <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />,
@@ -171,6 +171,7 @@ export function Ico({ name, size = 16 }: { name: "plus" | "download" | "pen" | "
     ),
     filter: <path d="M4 7h16M7 12h10M10 17h4" />,
     check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+    link: <path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1" />,
     phone: <path d="M6.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16.5 16.5 0 0 1 4.5 5.5a2 2 0 0 1 2-2z" />,
     mail: (
       <>
