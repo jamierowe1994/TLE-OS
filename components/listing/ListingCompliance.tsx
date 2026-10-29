@@ -15,6 +15,7 @@ import { CHOICES, eicExpiry, type EicReason } from "@/lib/home-facts-shared";
 import { DOC_ACCEPT, OTHER, docTypeLabel } from "@/lib/doc-types";
 import type { LetType } from "@/lib/let-type";
 import type { TermsRequest, TermsState } from "@/lib/use-listing-terms";
+import { regNumbers, regNumbersInWords } from "@/lib/reg-numbers";
 
 /**
  * THE LISTING'S COMPLIANCE, IN ONE PLACE (James, 12 Oct 2026).
@@ -238,7 +239,7 @@ export default function ListingCompliance({
     { key: "own", label: "Proof of ownership", held: doc("landlord_proof_of_ownership") ?? paper("doc_landlord_id_ownership"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_proof_of_ownership")} /> },
     { key: "aml", label: "AML check", held: doc("landlord_aml"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_aml")} /> },
     ...(home?.scotland
-      ? [{ key: "reg", label: "Landlord registration", held: paper("doc_landlord_registration") ?? (landlordRegistration ? { how: `Number ${landlordRegistration} on the record` } : null), need: "Not on file", action: <UploadButton onClick={() => upload("other")} /> }]
+      ? [{ key: "reg", label: "Landlord registration", held: paper("doc_landlord_registration") ?? (landlordRegistration ? { how: `${regNumbers(landlordRegistration).length > 1 ? "Numbers" : "Number"} ${regNumbersInWords(landlordRegistration)} on the record` } : null), need: "Not on file", action: <UploadButton onClick={() => upload("other")} /> }]
       : []),
   ];
 

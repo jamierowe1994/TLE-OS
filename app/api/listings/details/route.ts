@@ -14,6 +14,7 @@ import { rexTokenFor } from "@/lib/rex-user";
 import { isOwner } from "@/lib/agent-words";
 import { refusalInWords } from "@/lib/rex-refusal";
 import { recordFact } from "@/lib/property-facts";
+import { MAX_REG_NUMBERS, joinRegNumbers, regNumbers } from "@/lib/reg-numbers";
 import { bandForScore, forgetRecord, normaliseLarn, saveAgentLarn, withScottishFooter } from "@/lib/listing-record";
 import { bandScoreClash } from "@/lib/epc-band";
 
@@ -189,8 +190,12 @@ export async function PATCH(req: NextRequest) {
   let larn: string | null | undefined;
   if (b.landlordRegistration !== undefined) {
     if (b.landlordRegistration === null || b.landlordRegistration === "") larn = null;
-    else if (typeof b.landlordRegistration === "string" && /^[A-Za-z0-9/ -]{3,40}$/.test(b.landlordRegistration.trim())) larn = b.landlordRegistration.trim();
-    else bad.push("landlord registration number (numbers and slashes, as the council gives it)");
+    else {
+      /* One per owner (lib/reg-numbers): joint owners each register. */
+      const list = typeof b.landlordRegistration === "string" ? regNumbers(b.landlordRegistration) : [];
+      if (list.length && list.length <= MAX_REG_NUMBERS && list.every((n) => /^[A-Za-z0-9/ -]{3,40}$/.test(n))) larn = joinRegNumbers(list);
+      else bad.push("landlord registration number (numbers and slashes, as the council gives it)");
+    }
   }
   let propertyTypeId: string | undefined;
   if (b.propertyTypeId !== undefined) {

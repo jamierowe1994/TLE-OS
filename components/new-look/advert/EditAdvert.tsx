@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import LineIcon from "@/components/LineIcon";
 import DropZone from "@/components/listing/DropZone";
+import RegNumbersInput from "@/components/listing/RegNumbersInput";
 import PortalPreview, { PORTAL_TABS, type Portal } from "@/components/listing/PortalPreview";
 import { CHANGE_WORDS, fiveWeeks, longDate, money, type Draft, type FactField } from "@/components/listing/listing-draft";
 import type { ListingDetails } from "@/lib/listing-details";
@@ -362,10 +363,10 @@ export default function EditAdvert({
               <input type="date" max={new Date().toISOString().slice(0, 10)} disabled={!canEdit} value={draft.epcLodged ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcLodged: e.target.value || null }))} />
             </label>
             {scot && (
-              <label className={`nl-adv-field${missing("landlordRegistration") ? " is-missing" : ""}`}>
+              <div className={`nl-adv-field nl-adv-reg${missing("landlordRegistration") ? " is-missing" : ""}`}>
                 {label("landlordRegistration", "Landlord registration number")}
-                <input disabled={!canEdit} value={draft.landlordRegistration ?? ""} placeholder="e.g. 123456/230/12345" onChange={(e) => setDraft((d) => ({ ...d, landlordRegistration: e.target.value.replace(/\s+/g, " ").slice(0, 40) || null }))} />
-              </label>
+                <RegNumbersInput disabled={!canEdit} value={draft.landlordRegistration} onChange={(v) => setDraft((d) => ({ ...d, landlordRegistration: v }))} linkClassName="nl-link nl-adv-reg-link" />
+              </div>
             )}
             {scot && (
               <label className={`nl-adv-field${missing("agentLarn") ? " is-missing" : ""}`}>

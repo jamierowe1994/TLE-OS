@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import DoodleIcon from "@/components/DoodleIcon";
 import LineIcon from "@/components/LineIcon";
 import DropZone from "@/components/listing/DropZone";
+import RegNumbersInput from "@/components/listing/RegNumbersInput";
 import PortalPreview, { PORTAL_TABS, type Portal } from "@/components/listing/PortalPreview";
 import { CHANGE_WORDS, changesIn, draftFrom, fiveWeeks, money, orderedImages, shownFloorplans, type Draft, type FactField } from "@/components/listing/listing-draft";
 import type { ListingDetails } from "@/lib/listing-details";
@@ -599,10 +600,12 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
             <input type="date" max={new Date().toISOString().slice(0, 10)} disabled={!canEdit} value={draft.epcLodged ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcLodged: e.target.value || null }))} className={`${fieldCls} mt-1 border-line/70 ${draft.epcLodged ? "" : "text-muted"}`} />
           </label>
           {details.record?.scotland && (
-            <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-1">
+            <div className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-1">
               {label("landlordRegistration", "Landlord registration number")}
-              <input disabled={!canEdit} value={draft.landlordRegistration ?? ""} onChange={(e) => setDraft((d) => ({ ...d, landlordRegistration: e.target.value.replace(/\s+/g, " ").slice(0, 40) || null }))} placeholder="e.g. 123456/230/12345" className={`${fieldCls} mt-1 ${edge("landlordRegistration")}`} />
-            </label>
+              <div className="mt-1">
+                <RegNumbersInput disabled={!canEdit} value={draft.landlordRegistration} onChange={(v) => setDraft((d) => ({ ...d, landlordRegistration: v }))} inputClassName={`${fieldCls} ${edge("landlordRegistration")}`} />
+              </div>
+            </div>
           )}
           {details.record?.scotland && (
             <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-1">
