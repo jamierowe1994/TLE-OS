@@ -6,6 +6,7 @@ import { londonToday } from "@/lib/london-clock";
 import AdvertOffline from "@/components/listing/AdvertOffline";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignInAgain from "@/components/SignInAgain";
+import WithdrawnBox from "@/components/listing/WithdrawnBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import Link from "next/link";
@@ -241,6 +242,9 @@ function Card({
  * a provider it renders itself. Made in the body, they would toast and never
  * reach the chip.
  */
+/* A listing the listings system has withdrawn, let or sold: its publication still reads published. */
+const GONE_STATES = new Set(["withdrawn", "leased", "sold"]);
+
 export default function ListingDrawer(props: Omit<Parameters<typeof ListingDrawerBody>[0], "saves">) {
   const saves = useSaveScope(props.listing?.id ?? null);
   return (
@@ -479,8 +483,12 @@ function ListingDrawerBody({
   /* Where it really is, live from REX. The book is cached for minutes, and
      straight after a push it would still say draft. */
   const [pub, setPub] = useState<{ status: string | null; onPortals: boolean; blockers: string[] } | null>(null);
+  /* Read again after a withdrawn listing is relisted or taken off (WithdrawnBox). */
+  const [pubKey, setPubKey] = useState(0);
+  const reloadPub = () => setPubKey((k) => k + 1);
+  /* Cleared for a different listing only: a re-read keeps the old answer up meanwhile. */
+  useEffect(() => setPub(null), [listing?.id]);
   useEffect(() => {
-    setPub(null);
     if (!listing?.id) return;
     let live = true;
     fetch(`/api/listings/publish?id=${encodeURIComponent(String(listing.id))}`, { cache: "no-store" })
@@ -492,7 +500,7 @@ function ListingDrawerBody({
     return () => {
       live = false;
     };
-  }, [listing?.id]);
+  }, [listing?.id, pubKey]);
 
   /* The listing as REX holds it now - rooms, type, deposit, dates - read once
      per listing and shared with the Marketing tab. The book never carried
@@ -561,6 +569,10 @@ function ListingDrawerBody({
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalConfirm, setPortalConfirm] = useState(false);
   const [portalNote, setPortalNote] = useState<string | null>(null);
+  /* Take off / Put back refused for a lapsed sign-in (Lorna Fieldson, 28 Oct
+     2026: both her presses on 15 Egton Street were, and the new look showed
+     nothing). The sign-in is asked for there, and the press made again. */
+  const [portalRetry, setPortalRetry] = useState<"off" | "on" | null>(null);
   /* Live without Portals (James, 24 Oct 2026): asked under the head, like taking it off. */
   const [quietAsk, setQuietAsk] = useState(false);
   const [quietBusy, setQuietBusy] = useState(false);
@@ -680,9 +692,11 @@ function ListingDrawerBody({
   async function flipPortals(action: "off" | "on") {
     setPortalBusy(true);
     setPortalNote(null);
+    setPortalRetry(null);
     const res = await portalCall(action);
     setPortalBusy(false);
     setPortalConfirm(false);
+    if (!res.ok && res.signIn) setPortalRetry(action);
     setPortalNote(
       res.ok
         ? action === "off"
@@ -1174,6 +1188,11 @@ function ListingDrawerBody({
   ];
   const readyToGoLive = certs != null && requirements.every((r) => r.done) && !(pub?.blockers.length);
   const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
+  /* Withdrawn, leased or sold in the listings system (Lorna Fieldson, 28 Oct
+     2026, 15 Egton Street): neither live nor a draft, so it is never offered
+     Push to the portals or Take off the market. See WithdrawnBox. */
+  const withdrawnHere = Boolean(pub?.status && ["withdrawn", "leased", "sold"].includes(pub.status));
+  const isDraft = !isLive && !withdrawnHere;
   /* An offer can only go on a home that is live, not let agreed and has a
      rent - the same test the offer form's save makes (lib/agent-offer). */
   /* This home's viewing slots still to come, from the shared diary. */
@@ -1382,7 +1401,9 @@ function ListingDrawerBody({
      for minutes after 4 Williams Court went live (15 Sep 2026). */
   const status = listing.letAgreed
     ? { label: "Let agreed", tone: "neutral" as const }
-    : isLive
+    : withdrawnHere
+      ? { label: pub?.status === "withdrawn" ? "Withdrawn" : pub?.status === "leased" ? "Let" : "Sold", tone: "neutral" as const }
+      : isLive
       ? { label: "Available", tone: "good" as const }
       : { label: "Draft", tone: "accent" as const };
 
@@ -1538,12 +1559,12 @@ function ListingDrawerBody({
         onSaved={(d) => {
           setLive(d);
           setSaved({ heading: d.heading || null, body: d.body || null });
-          setPub((cur) => (cur ? { ...cur, status: d.status, blockers: [...new Set([...d.blockers.publish, ...d.blockers.portals])] } : cur));
+          setPub((cur) => (cur ? { ...cur, status: GONE_STATES.has(cur.status ?? "") ? cur.status : d.status, blockers: [...new Set([...d.blockers.publish, ...d.blockers.portals])] } : cur));
         }}
         onClose={closeTab}
         live={isLive}
         publish={
-          !isLive && !listing.letAgreed && !publishHidden
+          isDraft && !listing.letAgreed && !publishHidden
             ? { ready: readyToGoLive, why: missingWords, onPress: () => { closeTab(); pushLive(); } }
             : null
         }
@@ -1569,6 +1590,11 @@ function ListingDrawerBody({
             )}
                                                 {/* Where the advert is, once it is live (James, 8 Oct 2026: off the
                 home screen, under Marketing's top). */}
+            {t === "portals" && Number(listing.id) > 0 && (withdrawnHere || listing.letAgreed || listing.archiveReason === "withdrawn") && (
+              <div className="mb-5">
+                <WithdrawnBox listingId={String(listing.id)} address={listing.name} onChanged={() => { setActivityKey((k) => k + 1); reloadPub(); }} />
+              </div>
+            )}
             {t === "portals" && (listing.publishedAt || isLive) && (
               <section className="mb-5 rounded-xl border border-line/50 bg-white p-4">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1625,6 +1651,7 @@ function ListingDrawerBody({
                   )}
                 </div>
                 {portalNote && <p className="mt-2 text-[11.5px] leading-snug text-muted">{portalNote}</p>}
+                {portalRetry && <div className="mt-2"><SignInAgain compact doing={portalRetry === "off" ? "take it off the market" : "put it back on the market"} onDone={() => void flipPortals(portalRetry)} /></div>}
               </section>
             )}
                                     {t === "enquiries" &&
@@ -1820,7 +1847,7 @@ function ListingDrawerBody({
                 onSaved={(d) => {
                   setLive(d);
                   setSaved({ heading: d.heading || null, body: d.body || null });
-                  setPub((cur) => (cur ? { ...cur, status: d.status, blockers: [...new Set([...d.blockers.publish, ...d.blockers.portals])] } : cur));
+                  setPub((cur) => (cur ? { ...cur, status: GONE_STATES.has(cur.status ?? "") ? cur.status : d.status, blockers: [...new Set([...d.blockers.publish, ...d.blockers.portals])] } : cur));
                 }}
               />
             )}
@@ -2652,7 +2679,7 @@ function ListingDrawerBody({
     ];
     const tabIs: NlTab = nlTab === "portals" ? "overview" : nlTabs.some((t) => t.id === nlTab) ? nlTab : "overview";
     const { at: trackAt } = trackNotes();
-    const mainIs = !isLive && !listing.letAgreed && !publishHidden ? "push" : LISTING_BOOKER_LIVE && !listing.letAgreed ? "book" : canOffer ? "offer" : null;
+    const mainIs = isDraft && !listing.letAgreed && !publishHidden ? "push" : LISTING_BOOKER_LIVE && !listing.letAgreed && !withdrawnHere ? "book" : canOffer ? "offer" : null;
     const mainJob =
       mainIs === "push" ? (
         <button type="button" data-steve-never onClick={pushLive} className="nl-btn nl-btn--primary" title={readyToGoLive ? "Goes to Rightmove, OnTheMarket and Zoopla." : `Not until ${missingWords}.`}>
@@ -2702,7 +2729,7 @@ function ListingDrawerBody({
     const noFeedback = (viewings?.past ?? []).filter((v) => !v.cancelled && !v.feedbackId).length;
     const ideas: { says: string; act: string; go: () => void }[] = [
       ...(openOffers > 0 ? [{ says: `${openOffers === 1 ? "An offer is" : `${openOffers} offers are`} waiting on a decision. Want to put ${openOffers === 1 ? "it" : "them"} to the landlord?`, act: "Show me", go: () => goTab("applications") }] : []),
-      ...(!isLive && !listing.letAgreed && marketingToGo ? [{ says: `The advert has ${marketingToGo} ${marketingToGo === 1 ? "thing" : "things"} to fill in before it can go on the portals. Want me to fill it in?`, act: "Open the advert", go: () => pickTab("marketing") }] : []),
+      ...(isDraft && !listing.letAgreed && marketingToGo ? [{ says: `The advert has ${marketingToGo} ${marketingToGo === 1 ? "thing" : "things"} to fill in before it can go on the portals. Want me to fill it in?`, act: "Open the advert", go: () => pickTab("marketing") }] : []),
       ...(unsent > 0 && !listing.letAgreed ? [{ says: `${unsent} ${unsent === 1 ? "enquiry hasn't" : "enquiries haven't"} had a tenant passport yet. Want me to send them?`, act: "Show me", go: () => goTab("enquiries") }] : []),
       ...(noFeedback > 0 ? [{ says: `${noFeedback} ${noFeedback === 1 ? "viewing has" : "viewings have"} no feedback yet. Worth a call while it's fresh.`, act: "Show me", go: () => goTab("viewings") }] : []),
       ...(photos.length === 0 ? [{ says: "There are no photos on this home yet. The advert won't get far without them.", act: "Add photos", go: () => setDrop("photos") }] : []),
@@ -2850,7 +2877,7 @@ function ListingDrawerBody({
                 ...(isLive || listing.publishedAt ? [{ label: "Preview on the portals", onClick: () => setPortalStats(true) }] : []),
                 { label: "Mail out to matching tenants", onClick: () => setEmailing(true), steve: "listing.mail-db" },
                 ...(mainIs !== "offer" && canOffer ? [{ label: "Make an offer", onClick: () => setPickingOfferer(true), steve: "listing.make-offer" }] : []),
-                ...(LISTING_BOOKER_LIVE && mainIs !== "book" && !listing.letAgreed ? [{ label: "Book a viewing", onClick: () => setChoosingBook(true) }] : []),
+                ...(LISTING_BOOKER_LIVE && mainIs !== "book" && !listing.letAgreed && !withdrawnHere ? [{ label: "Book a viewing", onClick: () => setChoosingBook(true) }] : []),
                 ...(LISTING_BOOKER_LIVE && !listing.letAgreed ? [{ label: "Hold a viewing slot", onClick: () => setSlotting(true) }] : []),
                 ...(canFileAway ? [{ label: archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away", disabled: archiveBusy, onClick: () => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive") }] : []),
                 ...(mainIs === "push" ? [{ label: "Live without Portals", onClick: () => (publishCanPress ? (setQuietNote(null), setQuietAsk(true)) : setPortalNote(lockedSentence(publishArea, publishLevel))) }] : []),
@@ -2862,7 +2889,7 @@ function ListingDrawerBody({
         </div>
 
         {/* Live without Portals: asked here, under the head. */}
-        {quietAsk && !isLive && (
+        {quietAsk && isDraft && (
           <div className="nl-confirm" data-steve-never>
             <p>
               Put {listing.name} live without the portals? It moves on to viewings and offers, and stays off Rightmove, OnTheMarket and Zoopla until you put it on them.
@@ -2913,9 +2940,16 @@ function ListingDrawerBody({
             </button>
           </div>
         )}
-        {(portalNote && !publishCanPress) || listing.archived || (!listing.archived && listing.letAgreed && Number(listing.id) > 0) ? (
+        {Number(listing.id) > 0 && (withdrawnHere || listing.letAgreed || listing.archiveReason === "withdrawn") && (
+          <div className="-mt-4 mb-8">
+            <WithdrawnBox listingId={String(listing.id)} address={listing.name} onChanged={() => { setActivityKey((k) => k + 1); reloadPub(); }} />
+          </div>
+        )}
+        {portalNote || listing.archived || (!listing.archived && listing.letAgreed && Number(listing.id) > 0) ? (
           <div className="-mt-4 mb-10 space-y-3">
-            {portalNote && !publishCanPress && <p className="nl-meta">{portalNote}</p>}
+            {/* Every answer to Take off / Put back, not only a locked one (Lorna Fieldson, 28 Oct 2026). */}
+            {portalNote && <p className="nl-meta">{portalNote}</p>}
+            {portalRetry && <SignInAgain compact doing={portalRetry === "off" ? "take it off the market" : "put it back on the market"} onDone={() => void flipPortals(portalRetry)} />}
             {!listing.archived && listing.letAgreed && Number(listing.id) > 0 && (
               <AdvertOffline
                 listingId={String(listing.id)}
@@ -3626,7 +3660,7 @@ function ListingDrawerBody({
             {sectionTile("enquiries")}
             {sectionTile("applications")}
             {sectionTile("compliance")}
-            {!isLive && !listing.letAgreed && !publishHidden ? (
+            {isDraft && !listing.letAgreed && !publishHidden ? (
               <button type="button" data-steve-never onClick={pushLive} className={tile} title={readyToGoLive ? undefined : `Can't push it live until ${missingWords}.`}>
                 {tileIcon("megaphone")}
                 {tileText("Push to the portals", readyToGoLive ? "Rightmove, Zoopla, OTM" : (() => { const n = requirements.filter((r) => !r.done).length || 1; return `${n} ${n === 1 ? "thing" : "things"} to finish`; })())}
@@ -3782,7 +3816,7 @@ function ListingDrawerBody({
           <h2 className="hand mt-1.5 text-[19px] leading-tight">{here.title}</h2>
           <p className="mt-1 text-[12px] leading-relaxed text-muted">{here.detail}</p>
           {/* Before it goes live: the legal minimum, each one a click to fix. */}
-          {here.id === "live" && !isLive && (
+          {here.id === "live" && isDraft && (
             <ul className="mt-3.5 space-y-1.5">
               {requirements.map((r) => (
                 <li key={r.id} className="flex items-center gap-2 text-[12px]">

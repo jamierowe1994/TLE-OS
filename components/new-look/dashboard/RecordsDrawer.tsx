@@ -97,6 +97,48 @@ function Ticks({ opened }: { opened: boolean | null | undefined }) {
   );
 }
 
+/**
+ * Cancel one set (Lorna Fieldson, 28 Oct 2026: 15 Egton Street was withdrawn
+ * and its terms still counted). Asks once, then the row comes off the list;
+ * nobody is emailed (app/api/dashboard/front/terms-cancel).
+ */
+function CancelTerms({ r, onGone, onAsk }: { r: FrontRecord; onGone: () => void; onAsk: (asking: boolean) => void }) {
+  const [state, setState] = useState<"idle" | "ask" | "going" | "failed">("idle");
+  const [said, setSaid] = useState<string | null>(null);
+  const go = async () => {
+    setState("going");
+    const j = (await fetch("/api/dashboard/front/terms-cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: r.id, why: "Cancelled from Terms Out" }) })
+      .then((x) => x.json())
+      .catch(() => null)) as { ok?: boolean; error?: string } | null;
+    if (j?.ok) onGone();
+    else {
+      setState("failed");
+      setSaid(j?.error ?? "They weren't cancelled. Try again.");
+    }
+  };
+  if (state === "ask" || state === "going") {
+    return (
+      <span className="nl-dash-nudge nl-dash-cancel-ask" title="They come off Terms Out and stop being chased. Nobody is emailed.">
+        <button type="button" className="nl-btn nl-btn--danger nl-btn--sm" disabled={state === "going"} onClick={() => void go()}>
+          {state === "going" ? "Cancelling…" : "Cancel the terms"}
+        </button>
+        <button type="button" className="nl-link" disabled={state === "going"} onClick={() => { setState("idle"); onAsk(false); }}>
+          Keep them
+        </button>
+        <span className="nl-dash-nudge-said">Nobody is emailed.</span>
+      </span>
+    );
+  }
+  return (
+    <span className="nl-dash-nudge">
+      {state === "failed" && <span className="nl-dash-nudge-said is-bad">{said}</span>}
+      <button type="button" className="nl-link" onClick={() => { setState("ask"); onAsk(true); }}>
+        Cancel terms
+      </button>
+    </span>
+  );
+}
+
 /** Nudge one set: asks once ("Email Roman"), then sends from the person's own mailbox. */
 function Nudge({ r }: { r: FrontRecord }) {
   const [state, setState] = useState<"idle" | "ask" | "going" | "done" | "failed">("idle");
@@ -144,6 +186,10 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
   const [got, setGot] = useState<Got | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [more, setMore] = useState<"idle" | "busy" | "failed">("idle");
+  /* Terms cancelled from this list while it is open: greyed, then gone on the next read. */
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  /* The row asking "Cancel the terms?" hides its Nudge, so the two never sit on each other. */
+  const [cancelAsk, setCancelAsk] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ask) return;
@@ -277,7 +323,16 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
                     <div key={r.id} className="nl-dash-trow nl-dash-rec nl-dash-rec-in is-term" style={delay} role="row">
                       {cells}
                       <span role="cell"><Ticks opened={r.opened} /></span>
-                      <span role="cell" className="nl-dash-rec-nudge"><Nudge r={r} /></span>
+                      <span role="cell" className="nl-dash-rec-nudge">
+                        {gone.has(r.id) ? (
+                          <span className="nl-dash-nudge-said is-ok">Cancelled</span>
+                        ) : (
+                          <>
+                            {cancelAsk !== r.id && <Nudge r={r} />}
+                            <CancelTerms r={r} onGone={() => setGone((g) => new Set(g).add(r.id))} onAsk={(a) => setCancelAsk(a ? r.id : null)} />
+                          </>
+                        )}
+                      </span>
                       <Link href={r.href} role="cell" className="nl-dash-rec-go nl-dash-rec-stretch" aria-label={`Open ${r.name}`} onClick={() => closeNow()}>
                         <Ico name="arrow" size={14} />
                       </Link>

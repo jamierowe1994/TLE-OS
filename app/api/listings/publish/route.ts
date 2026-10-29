@@ -170,11 +170,12 @@ export async function GET(req: NextRequest) {
        and the Marketing tab open together, and the portal check is the same
        call the details read makes - now asked once and shared. Showing only;
        the POST below reads REX fresh before it does anything. */
-    const [status, issues, upload, feeds] = await Promise.all([
+    const [status, issues, upload, feeds, own] = await Promise.all([
       listingRead(id, "ListingPublication", "getPublicationStatus", { listing_id: id }),
       listingRead(id, "ListingPublication", "getPublicationIssues", { listing_id: id }),
       listingRead(id, "ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
       listingRead(id, "ListingPortalUploads", "getStatuses", { listing_id: id, include_last_sent: false }),
+      listingRead(id, "Listings", "read", { id }),
     ]);
     if (!status.ok) {
       const plain = "The listings system did not say where the listing is. Try again in a minute.";
@@ -182,10 +183,20 @@ export async function GET(req: NextRequest) {
     }
     const iss = (issues.result ?? {}) as { errors?: unknown; warnings?: unknown };
     const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+    /* WITHDRAWN STAYS "PUBLISHED" (Lorna Fieldson, 28 Oct 2026, 15 Egton
+       Street). REX keeps a withdrawn listing's publication at "published"
+       with its channels on, so this read said On the market a month after
+       the landlord withdrew. The listing's own state decides: withdrawn,
+       leased or sold is off the market, unless a feed is still showing it. */
+    const where = whereFrom(status.result, feeds.ok ? feeds.result : undefined);
+    const state = own.ok ? String((own.result as { system_listing_state?: unknown } | null)?.system_listing_state ?? "") : "";
+    const gone = state !== "" && state !== "current" && !stillOnPortalFeeds(feeds.ok ? feeds.result : undefined);
     return NextResponse.json({
       ok: true,
       id,
-      ...whereFrom(status.result, feeds.ok ? feeds.result : undefined),
+      ...where,
+      ...(gone ? { status: state, onPortals: false } : {}),
+      listingState: state || null,
       blockers: [...new Set([...list(iss.errors), ...(upload.ok ? portalMessages(upload.result) : [])].map((m) => forAgent(actor, m, PORTAL_CHECK)))],
       warnings: [...new Set(list(iss.warnings).map((m) => forAgent(actor, m, PORTAL_WARNING)))],
     });

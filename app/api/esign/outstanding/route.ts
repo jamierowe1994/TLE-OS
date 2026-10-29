@@ -4,6 +4,7 @@ import { can } from "@/lib/roles";
 import { scopeForWho } from "@/lib/scope";
 import { rexConfigured } from "@/lib/rex";
 import { outstandingTerms } from "@/lib/rex-esign";
+import { cancelledTermIds } from "@/lib/terms-cancelled";
 
 /**
  * Every set of terms still waiting on a signature, across TLE's whole book.
@@ -37,7 +38,8 @@ export async function GET(req: NextRequest) {
       mineOnly = scope.rexUserId;
     }
   }
-  const all = await outstandingTerms().catch(() => []);
+  const [every, cancelled] = await Promise.all([outstandingTerms().catch(() => []), cancelledTermIds()]);
+  const all = every.filter((r) => !cancelled.has(`esign:${r.id}`));
   const rows = mineOnly ? all.filter((r) => r.sentById === mineOnly) : all;
   return NextResponse.json({
     ok: true,
