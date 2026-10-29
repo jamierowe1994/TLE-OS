@@ -5,6 +5,7 @@ import { isFresh, rentBook } from "@/lib/rent-status";
 import { skyListShell } from "@/lib/email/shell-sky";
 import { sendEmail } from "@/lib/resend";
 import { withR2 } from "@/lib/r2";
+import { checkLinks, isLink, LINKS } from "@/lib/link-watch";
 
 /* ==========================================================================
    WHEN A TIMER STOPS (28 Oct 2026, every timer and by email 29 Oct).
@@ -199,6 +200,12 @@ export async function checkCronWatch(): Promise<{ stopped: WatchId[] }> {
     await settle("backup", late ? backup ?? new Date(now - BACKUP_LATE_MS) : null, backup ? "" : "No backup found in R2 at all.");
     if (late) stopped.push("backup");
   }
+
+  /* The links to REX, PayProp, Propoly and Flatfair (lib/link-watch). */
+  for (const l of await checkLinks().catch(() => [])) {
+    await settle(l.id, l.down ? l.since : null, l.report);
+    if (l.down) stopped.push(l.id);
+  }
   return { stopped };
 }
 
@@ -238,6 +245,12 @@ function words(watch: WatchId, s: { open: boolean; since: Date; back?: Date | nu
         }
       : { title: `${t.label} is running again`, body: `The Railway timer ${t.service} didn't reach the OS from ${since} until ${back}. It's running again, and anything it held back goes on its next run.` };
   }
+  if (isLink(watch)) {
+    const l = LINKS[watch];
+    return s.open
+      ? { title: `The link to ${l.label} is broken`, body: `The OS hasn't been able to reach ${l.label} since ${since}. The report below says what it answered, what that means and what to check.` }
+      : { title: `The link to ${l.label} is working again`, body: `${l.label} couldn't be reached from ${since} until ${back}. It's answering again.` };
+  }
   if (watch === "rent-read") {
     return s.open
       ? { title: "The rent isn't being read from PayProp", body: `The last rent read from PayProp was ${since}, so every home's rent box says the rent can't be shown. Check os-cron-scheduled-sends on Railway, and Admin > Connections for PayProp.` }
@@ -257,15 +270,23 @@ async function tell(watch: WatchId, s: { open: boolean; since: Date; back?: Date
   const t = TIMERS.find((x) => x.id === watch) ?? (EFFECTS as Record<string, { service: string; every: string; does: string }>)[watch];
   const link = `${(process.env.OS_PUBLIC_URL || process.env.OS_ORIGIN || "https://tle-os.co.uk").replace(/\/+$/, "")}/admin/connections`;
   const subject = `TLE OS: ${w.title}`;
-  const rows = t
+  /* A broken link's report, one row per line (lib/link-watch). */
+  const reportRows = isLink(watch) && s.open && s.detail
+    ? s.detail.split("\n").map((line) => {
+        const at = line.indexOf(": ");
+        const title = at > 0 ? line.slice(0, at) : line;
+        return { title, detail: at > 0 ? line.slice(at + 2) : "", tone: (title === "What it said" ? "attention" : "neutral") as "attention" | "neutral" };
+      })
+    : null;
+  const rows = reportRows ?? (t
     ? [
         { title: "Railway timer", detail: `${t.service}, ${t.every}`, tone: "neutral" as const },
         { title: s.open ? "Last reached the OS" : "Was stopped", detail: s.open ? when(s.since) : `${when(s.since)} until ${when(s.back ?? new Date())}`, tone: s.open ? ("attention" as const) : ("good" as const) },
         { title: "What it does", detail: t.does, tone: "neutral" as const },
       ]
-    : [];
+    : []);
   const html = skyListShell({ heading: w.title, intro: w.body, rows, rowStyle: "bare", button: "Open Connections", link });
-  const text = [w.title, "", w.body, "", link].join("\n");
+  const text = [w.title, "", w.body, ...(reportRows ? ["", s.detail ?? ""] : []), "", link].join("\n");
   for (const to of WATCHERS) {
     await sendEmail({ to, subject, html, text }).catch((e) => console.error(`[cron-watch] ${watch} email to ${to} failed:`, e instanceof Error ? e.message : e));
   }
