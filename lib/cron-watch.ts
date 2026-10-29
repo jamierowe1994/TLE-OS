@@ -70,14 +70,14 @@ export const TIMERS: Timer[] = [
   {
     id: "daily",
     service: "os-cron-daily",
-    label: "The 7am run",
-    every: "daily at 7am",
+    label: "The early morning run",
+    every: "daily, early morning",
     does: "Handover scan, pre-tenancy digest, certificate chases, campaigns, agent compliance, the maintenance figures, deck reminders and the landlord questions chase",
     paths: ["/api/handover/scan", "/api/pretenancy/alerts/run", "/api/compliance/reminders/run", "/api/campaigns/run", "/api/agent-compliance/remind", "/api/maintenance/snapshot", "/api/present/sweep", "/api/landlord/property-answers/chase"],
     lateMs: 27 * HOUR,
   },
-  { id: "compliance-warm", service: "os-cron-compliance-warm", label: "The noon run", every: "daily at noon", does: "The compliance book warmed and the day's portal figures for every live home", paths: ["/api/compliance/warm", "/api/listings/stats/sweep"], lateMs: 27 * HOUR },
-  { id: "book-health", service: "os-cron-book-health", label: "Book health check", every: "Mondays at 7am", does: "The weekly book health email", paths: ["/api/book-health/run"], lateMs: 8 * 24 * HOUR },
+  { id: "compliance-warm", service: "os-cron-compliance-warm", label: "The late morning run", every: "daily, late morning", does: "The compliance book warmed and the day's portal figures for every live home", paths: ["/api/compliance/warm", "/api/listings/stats/sweep"], lateMs: 27 * HOUR },
+  { id: "book-health", service: "os-cron-book-health", label: "Book health check", every: "Mondays, early morning", does: "The weekly book health email", paths: ["/api/book-health/run"], lateMs: 8 * 24 * HOUR },
 ];
 
 const WATCHED_PATHS = new Set(TIMERS.flatMap((t) => t.paths));
@@ -86,7 +86,7 @@ export const isWatchedPath = (path: string) => WATCHED_PATHS.has(path);
 /** The two judged by what they leave behind. */
 const EFFECTS = {
   "rent-read": { service: "os-cron-scheduled-sends", label: "PayProp rent read", every: "10am and 4pm", does: "Every home's rent box" },
-  backup: { service: "os-cron-db-backup", label: "Nightly database backup", every: "nightly at 2:30am", does: "The copy of the database in R2 that a restore would come from" },
+  backup: { service: "os-cron-db-backup", label: "Nightly database backup", every: "nightly, small hours", does: "The copy of the database in R2 that a restore would come from" },
 } as const;
 const BACKUP_LATE_MS = 27 * HOUR;
 
