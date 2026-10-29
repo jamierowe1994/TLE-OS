@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { cronAuthorised } from "@/lib/bug-bot";
 import { runQuestionsChase } from "@/lib/property-answers-chase";
+import { beat } from "@/lib/cron-watch";
 
 /**
  * POST → chase every signed landlord whose property questions are unfinished
@@ -17,6 +18,8 @@ export async function POST(req: NextRequest) {
   if (!cronAuthorised(req) && !(await requireCapability(req, "manage:switches"))) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
+  /* The middleware never sees /api/landlord, so the daily timer's beat is noted here (lib/cron-watch). */
+  if (cronAuthorised(req)) await beat("/api/landlord/property-answers/chase");
   const origin = process.env.OS_ORIGIN?.replace(/\/+$/, "") || req.nextUrl.origin;
   const results = await runQuestionsChase(origin);
   return NextResponse.json({ ok: true, sent: results.filter((r) => r.result === "sent").length, results });

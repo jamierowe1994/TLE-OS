@@ -1,5 +1,6 @@
 import { warmSchema } from "@/lib/db";
 import { startRevokedSync } from "@/lib/session-revoke";
+import { startCronWatch } from "@/lib/cron-watch";
 
 /**
  * Capped, and never thrown: a database that is slow or down at boot must not
@@ -13,4 +14,6 @@ export async function warmAtBoot(): Promise<void> {
     .catch((e) => console.warn("[boot] schema warm failed, the first query will retry:", e instanceof Error ? e.message : e));
   /* Signed-out sessions, held in memory for lib/auth (lib/session-revoke). */
   startRevokedSync();
+  /* Every Railway timer watched from in here, so none has to run for a stopped one to be seen. */
+  startCronWatch();
 }
