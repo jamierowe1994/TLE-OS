@@ -25,7 +25,12 @@ export async function worksSweep(): Promise<{ doneRequests: number; chases?: Awa
     const found = await getOrder(r.id);
     if (!found) continue;
     const me = await agentFor(found.order);
-    if (!me) continue;
+    if (!me) {
+      /* Nobody on our side to send it as: said once on the job, not tried every hour. */
+      await logEvent(r.id, "TLE OS", "email", "The contractor was not emailed \"All done?\": nobody on the job to send it from. Ask them yourself.");
+      await q(`UPDATE os_works_orders SET done_request_at = NOW() WHERE id = $1`, [r.id]);
+      continue;
+    }
     const outcomes = await emailsForMove(found.order, "done_request", me).catch(() => []);
     for (const e of outcomes) await logEvent(r.id, "TLE OS", "email", outcomeLine(e));
     await q(`UPDATE os_works_orders SET done_request_at = NOW() WHERE id = $1`, [r.id]);
