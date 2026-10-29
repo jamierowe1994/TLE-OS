@@ -175,7 +175,7 @@ export default function PassportStage({
                   </ul>
                 </section>
               ) : null}
-              {groups(d, a.householdIncome ?? null, rules).map((g, i) => (
+              {groups(d, a.householdIncome ?? null, rules, a.custom ?? []).map((g, i) => (
                 <section key={g.title} className="nl-pp-box nl-po-in" style={beat(4 + i)}>
                   <h3>{g.title}</h3>
                   <dl>

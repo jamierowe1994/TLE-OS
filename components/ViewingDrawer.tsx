@@ -22,6 +22,7 @@ import { minutesOf, type Appt } from "@/lib/diary";
 import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import FileDocuments from "@/components/FileDocuments";
 import { useCaseState } from "@/lib/case-state";
+import PassportAnswers from "@/components/passport/PassportAnswers";
 
 /**
  * One viewing, at full record width — and the machine that moves an
@@ -210,6 +211,11 @@ function ViewingDrawerBody({
      rather than confirming a time. Sent from here because this is where the
      tenant's email is, and the viewing is what the email talks about. */
   const [invite, setInvite] = useState<{ state: "idle" | "sending" | "sent" | "already" | "failed"; text: string }>({ state: "idle", text: "" });
+  /* Their passport, opened from the viewing (James, 29 Oct 2026: the overview,
+     the agent's own questions with it, "needs to appear on every screen").
+     Offered once they have started one; the same overview as Enquiries. */
+  const [passport, setPassport] = useState<"none" | "sent" | "started" | "done" | null>(null);
+  const [passportOpen, setPassportOpen] = useState(false);
 
   useEffect(() => {
     if (!appt) return;
@@ -230,14 +236,30 @@ function ViewingDrawerBody({
     setPushingOffer(false);
     setOfferPushed(false);
     setExtraActivity([]);
+    setPassportOpen(false);
   }, [appt]);
 
   useEffect(() => {
+    setPassport(null);
+    const email = appt?.contact?.email?.trim().toLowerCase();
+    if (!email) return;
+    let live = true;
+    fetch("/api/tenant/passport/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ emails: [email] }) })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; statuses?: Record<string, { state: "none" | "sent" | "started" | "done" }> }) => live && setPassport(j.ok ? j.statuses?.[email]?.state ?? "none" : null))
+      .catch(() => live && setPassport(null));
+    return () => {
+      live = false;
+    };
+  }, [appt?.contact?.email]);
+
+  useEffect(() => {
     if (!appt) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    /* Escape with their passport open closes the passport, not the viewing. */
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !passportOpen && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [appt, onClose]);
+  }, [appt, onClose, passportOpen]);
 
   /* ── The property behind the viewing. ──
      Live REX appointments carry NO listing link (record_service is null on
@@ -706,7 +728,17 @@ function ViewingDrawerBody({
                     </p>
                   </div>
                 )}
-                {appt.contact?.email && !past && !cancelled && (
+                {appt.contact?.email && (passport === "started" || passport === "done") && (
+                  <button
+                    type="button"
+                    onClick={() => setPassportOpen(true)}
+                    className="press-ring mt-3 inline-flex items-center gap-2 rounded-full border border-ink/25 px-3 py-1.5 text-[11.5px] font-semibold transition-colors hover:border-ink"
+                  >
+                    <DoodleIcon name="user" size={13} />
+                    {passport === "done" ? "Open their passport" : "Open their passport (not finished)"}
+                  </button>
+                )}
+                {appt.contact?.email && !past && !cancelled && passport !== "done" && (
                   <div className="mt-3">
                     <PressButton
                       onClick={() => void sendPassportInvite(invite.state === "already")}
@@ -1278,6 +1310,14 @@ function ViewingDrawerBody({
             }}
           />
         </Modal>
+      )}
+      {passportOpen && appt.contact?.email && (
+        <PassportAnswers
+          email={appt.contact.email}
+          name={appt.who ?? undefined}
+          home={[property, match?.locality ?? appt.where].filter(Boolean).join(", ") || null}
+          onClose={() => setPassportOpen(false)}
+        />
       )}
     </div>
   );

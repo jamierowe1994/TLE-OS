@@ -6,6 +6,7 @@ import { findDonePassportByEmail, findPassportByEmail, getPassport } from "@/lib
 import { householdIncome } from "@/lib/passport-shape";
 import { forScreen, passportRules } from "@/lib/passport-scotland";
 import { documentsForEmail } from "@/lib/tenant-documents";
+import { passportQuestions, valuesFor } from "@/lib/attributes";
 
 /**
  * GET /api/tenant/passport/answers?email= -> the tenant's passport, every answer
@@ -54,8 +55,23 @@ export async function GET(req: NextRequest) {
      code, payslips, references. It reached no agent's screen until now. */
   const documents = (await documentsForEmail(rec.email || email)).map((d) => ({ id: d.id, kind: d.kind, name: d.name, r2Key: d.r2Key, uploadedAt: d.uploadedAt }));
 
+  /* The agent's own questions on the passport, with what the tenant said
+     (James, 29 Oct 2026: "all of the custom questions aren't actually showing
+     on the overview"). They live in os_attr_values against the passport's
+     token, under the agent who sent it (lib/attributes), so every screen that
+     opens this overview shows them. A question with no answer still shows. */
+  const [questions, values] = await Promise.all([
+    passportQuestions(rec.agentId).catch(() => []),
+    rec.agentId ? valuesFor(rec.agentId, rec.token).catch(() => ({} as Record<string, string>)) : Promise.resolve({} as Record<string, string>),
+  ]);
+  const custom = questions.map((qn) => {
+    const v = (values[qn.id] ?? "").trim();
+    return { label: qn.label, value: qn.kind === "yesno" ? (v === "yes" ? "Yes" : v === "no" ? "No" : null) : v || null };
+  });
+
   return NextResponse.json({
     documents,
+    custom,
     ok: true,
     name: rec.data.legalName || rec.name,
     email: rec.email,

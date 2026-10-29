@@ -134,7 +134,7 @@ export default function PassportAnswers({ email, name, home, onClose, look, onBo
               </div>
               <p className="-mt-1 text-center text-[11px] text-muted">Drag or tap the card to see the back.</p>
 
-              {groups(d, a.householdIncome ?? null, a.rules ?? {}).map((g) => (
+              {groups(d, a.householdIncome ?? null, a.rules ?? {}, a.custom ?? []).map((g) => (
                 <section key={g.title} className="mt-5">
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">{g.title}</p>
                   <dl className="mt-2 overflow-hidden rounded-2xl border border-line/60 bg-white">

@@ -3,7 +3,9 @@
 import { isEmployed, isTrading, otherAdultCount, otherCredit, otherName, type PassportData, type PassportRules } from "@/lib/passport-shape";
 
 export type SentIn = { id: string; kind: string; name: string; r2Key: string; uploadedAt: string };
-export type Answer = { ok?: boolean; error?: string; name?: string; email?: string; submittedAt?: string | null; updatedAt?: string; householdIncome?: number | null; data?: PassportData; rules?: PassportRules; documents?: SentIn[] };
+/** One of the agent's own questions on the passport, and the tenant's answer (null when not answered). */
+export type CustomAnswer = { label: string; value: string | null };
+export type Answer = { ok?: boolean; error?: string; name?: string; email?: string; submittedAt?: string | null; updatedAt?: string; householdIncome?: number | null; data?: PassportData; rules?: PassportRules; documents?: SentIn[]; custom?: CustomAnswer[] };
 
 const yn = (b: boolean | null | undefined) => (b == null ? null : b ? "Yes" : "No");
 const money = (s: string | number | null | undefined) => {
@@ -14,7 +16,7 @@ export const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { 
 const dob = (s: string) => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : s || null);
 const month = (s: string) => (/^\d{4}-\d{2}$/.test(s) ? new Date(`${s}-01T12:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : s || null);
 
-export function groups(d: PassportData, household: number | null, rules: PassportRules): { title: string; rows: [string, string | null][] }[] {
+export function groups(d: PassportData, household: number | null, rules: PassportRules, custom: CustomAnswer[] = []): { title: string; rows: [string, string | null][] }[] {
   /* Each adult's credit under their own name (Rhiannon, 14 Oct 2026). A
      passport from before the others were asked shows "Not answered". */
   const others = otherAdultCount(d);
@@ -97,5 +99,7 @@ export function groups(d: PassportData, household: number | null, rules: Passpor
         ["Smoker", yn(d.smoker)],
       ],
     },
+    /* The agent's own questions (29 Oct 2026), after everything the passport always asks. */
+    ...(custom.length ? [{ title: "Extra questions", rows: custom.map((c) => [c.label, c.value] as [string, string | null]) }] : []),
   ];
 }
