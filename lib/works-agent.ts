@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import type { OsUser } from "@/lib/users";
 import type { WorksOrder } from "@/lib/works-orders";
 import { propertyAgentFor } from "@/lib/works-property-agent";
+import { neverSendsOut } from "@/lib/not-a-sender";
 
 /**
  * Whose name a job's emails go out in when the move came from a public page
@@ -35,7 +36,8 @@ async function personCalled(nameOrEmail: string): Promise<OsUser | null> {
       LIMIT 2`,
     [key]
   ).catch(() => []);
-  return rows.length === 1 ? toUser(rows[0]) : null;
+  /* James is never the one a job's email goes out as (lib/not-a-sender): the next in line is. */
+  return rows.length === 1 && !neverSendsOut(rows[0].email) ? toUser(rows[0]) : null;
 }
 
 export async function agentFor(o: WorksOrder): Promise<OsUser | null> {
