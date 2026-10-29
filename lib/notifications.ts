@@ -2,6 +2,7 @@ import "server-only";
 import { ukDaysFromToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { aiOutage } from "@/lib/ai-outage";
+import { WATCHERS, watchNotices } from "@/lib/cron-watch";
 import { can } from "@/lib/roles";
 import type { OsUser } from "@/lib/users";
 import { listDealEvents } from "@/lib/business/deal-watch";
@@ -105,8 +106,9 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   const ops = me.role === "owner" || can(me.role, "see:pretenancy");
 
   /* The office covers for each other (James, 30 Sep 2026): Kirstie gets the
-     desk's notices as well as Michael and Josel. */
-  const desk = me.role === "compliance" || me.role === "pretenancy";
+     desk's notices as well as Michael and Josel. Kirstie has been
+     super_admin since 26 Oct 2026, and is the only one. */
+  const desk = me.role === "compliance" || me.role === "pretenancy" || me.role === "super_admin";
 
   const [deals, steps, handovers, reminders, toVerify, toCheck, sections, decided] = await Promise.all([
     listDealEvents({ agentEmail: whole ? null : me.email, limit }).catch(() => []),
@@ -454,6 +456,12 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
         tone: open ? "warn" : "none",
       });
     }
+  }
+  /* A Railway timer that stopped reaching the OS, or a rent read gone stale
+     (lib/cron-watch, 28 Oct 2026): James and Howard, while it lasts and for
+     three days after it came back. */
+  if (WATCHERS.includes((me.email ?? "").trim().toLowerCase())) {
+    for (const w of await watchNotices().catch(() => [])) out.push({ ...w, kind: "compliance", href: "/admin/connections" });
   }
   /* A contractor's bank details replaced (lib/bank-vault, 26 Oct 2026): the
      classic payment fraud, so owners hear about each one for a fortnight. */

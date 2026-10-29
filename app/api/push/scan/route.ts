@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb } from "@/lib/db";
 import { scanAndPush } from "@/lib/push";
+import { checkCronWatch } from "@/lib/cron-watch";
 import { requireCapability } from "@/lib/admin";
 
 /**
@@ -30,5 +31,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." });
-  return NextResponse.json(await scanAndPush());
+  /* Before the push, so a stoppage found now reaches the phones this scan. A
+     different timer from scheduled-sends, so it still runs when that one stops. */
+  const watch = await checkCronWatch().catch(() => ({ stopped: [] }));
+  return NextResponse.json({ ...(await scanAndPush()), watch });
 }

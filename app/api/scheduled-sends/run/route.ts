@@ -1,6 +1,7 @@
 import { runRentNudges } from "@/lib/rent-nudges";
 import { publicError } from "@/lib/public-error";
 import { runDailyRentRead } from "@/lib/rent-status";
+import { beat } from "@/lib/cron-watch";
 import { runUpdateNudges } from "@/lib/customer-updates";
 import { runNewsletters } from "@/lib/newsletters";
 import { NextRequest, NextResponse } from "next/server";
@@ -153,6 +154,8 @@ export async function POST(req: NextRequest) {
   if (!hasDb()) {
     return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   }
+  /* The timer reached us. The push scan watches for this going quiet (lib/cron-watch). */
+  await beat("scheduled-sends");
   /* ?only=steve runs Steve's standing jobs and nothing else - for running
      them by hand without sending anything that happens to be queued. */
   if (req.nextUrl.searchParams.get("only") === "steve") {

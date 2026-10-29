@@ -508,7 +508,7 @@ export interface MailboxGap { name: string; email: string; role: string; why: st
 
 const GAPS_KEY = "propoly_mail_gaps";
 /** The roles that get Propoly's copies: the agents on lets, Kirstie, the compliance desk. Owners only when they manage a deal. */
-const WATCHED_ROLES = new Set(["agent", "pretenancy", "compliance"]);
+const WATCHED_ROLES = new Set(["agent", "pretenancy", "compliance", "super_admin"]);
 
 /**
  * Everybody whose Propoly copies the OS can't read: staff in a role that

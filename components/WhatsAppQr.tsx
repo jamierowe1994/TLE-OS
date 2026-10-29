@@ -128,9 +128,27 @@ function WhatsAppSheet({
   }
 
   /* Portalled: the drawers it opens from are transformed, which would pin a
-     fixed overlay to the drawer instead of the screen. */
+     fixed overlay to the drawer instead of the screen.
+
+     ON TOP OF WHATEVER IT WAS PRESSED IN (27 Oct 2026). At z-150 it opened
+     under the floating stages that came after it - the landlord pop-up on a
+     listing (z-420) and the new-look diary drawer (z-300) - blurred behind
+     them, and closing them took it away (Dan Richards, Sean McMahon). Nothing
+     opens from the sheet, so it sits above every stage. A dialog, so the
+     stages' Escape closes the sheet first and leaves them open; and clicks
+     stop here, as EmailPerson's do, rather than reaching the row it was
+     pressed from (the landlord rows fold and drag). */
   return createPortal(
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[430] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`WhatsApp ${first}`}
+      data-wa-sheet
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/45" />
       <div className="fade-up relative w-full max-w-[440px] rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
         <h2 className="hand text-[20px]">WhatsApp {first}</h2>
