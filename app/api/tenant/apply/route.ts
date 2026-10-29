@@ -136,6 +136,10 @@ export async function POST(req: NextRequest) {
   const errors = validateApplication(app, home.askingPcm || null).map(noDash);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(app.startDate)) errors.push("Choose the day you'd like to move in.");
   if (applicants.some((a) => a.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email))) errors.push("One of the email addresses doesn't look right.");
+  /* 10 Thornton Road, 29 Oct 2026: two people on one email, and Propoly
+     would only take the first of them onto the deal. */
+  const emails = applicants.map((a) => a.email).filter(Boolean);
+  if (new Set(emails).size < emails.length) errors.push("Each person needs their own email address - they're each referenced separately.");
   if (errors.length) return NextResponse.json({ ok: false, errors: [...new Set(errors)] }, { status: 400 });
 
   const lead = applicants.find((a) => a.isPrimary) ?? applicants[0];

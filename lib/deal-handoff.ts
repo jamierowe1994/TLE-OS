@@ -467,6 +467,17 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
       `${mustHaveEmail.filter((t) => !t.email).map((t) => t.name).join(", ")} has no email address.`
     );
   }
+  /* One email each (29 Oct 2026, 10 Thornton Road): Chloe McGovern's offer
+     part carried Bailey Cookson's email, and Propoly refuses a second tenant
+     on an email the deal already has ("Failed to add tenant"). */
+  const firstWith = new Map<string, string>();
+  for (const t of tenants) {
+    const e = (t.email ?? "").trim().toLowerCase();
+    if (!e) continue;
+    const first = firstWith.get(e);
+    if (first) blockers.push(`${t.name} has the same email as ${first} (${e}). Propoly needs each tenant's own email address.`);
+    else firstWith.set(e, t.name);
+  }
   if (!application.startDate) blockers.push("No move-in date agreed.");
   if (!application.offerAmount) blockers.push("No agreed rent on the application.");
   /* Right to rent no longer stops the push to Propoly (9 Oct 2026). The push
