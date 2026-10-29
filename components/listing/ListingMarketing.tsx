@@ -12,6 +12,7 @@ import GuideButton from "@/components/GuideButton";
 import { toast } from "@/lib/toast";
 import { useSaveReporter } from "@/components/SaveChip";
 import { MIN_FEATURES, OPTIONS, RECOMMENDED, REQUIREMENTS, isRequired, type RequirementInput } from "@/lib/listing-requirements";
+import { bandForScore, bandScoreClash } from "@/lib/epc-band";
 
 /**
  * THE MARKETING TAB (15 Sep 2026, second pass after James saw the first).
@@ -584,7 +585,11 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
           </label>
           <label className="block min-w-0">
             {label("epcCurrent", "Score now")}
-            <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcCurrent ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcCurrent: e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value)))) }))} placeholder="e.g. 68" className={`${fieldCls} mt-1 border-line/70`} />
+            <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcCurrent ?? ""} onChange={(e) => {
+              /* The band follows the score: it is the band REX and the portals show. */
+              const score = e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value))));
+              setDraft((d) => ({ ...d, epcCurrent: score, epcBand: bandForScore(score) ?? d.epcBand }));
+            }} placeholder="e.g. 68" className={`${fieldCls} mt-1 border-line/70`} />
           </label>
           <label className="block min-w-0">
             {label("epcPotential", "Potential score")}
@@ -610,7 +615,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
           )}
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
-          {epcNote ?? (draft.epcCurrent != null && draft.epcPotential == null
+          {epcNote ?? bandScoreClash(draft.epcBand, draft.epcCurrent) ?? (draft.epcCurrent != null && draft.epcPotential == null
             ? "Add the potential score too and the rating goes to the portals with the advert. Until then it is kept here."
             : draft.epcCurrent != null && draft.epcPotential != null && !draft.epcLodged
               ? "Add the date on the EPC and the rating goes to the portals with the advert. Until then it is kept here, and the rest of the advert still saves."
