@@ -128,11 +128,21 @@ function OnPagePanel({
     return null;
   }
 
+  /* Copy link (James, 29 Oct 2026): "copy the link, and then we can send it to the landlord
+     direct" - by text or WhatsApp when the email isn't being opened. Same link the email
+     carries, so it opens their own copy to read and sign. */
   const copy = (p: StaffParty) => {
-    navigator.clipboard?.writeText(p.link).then(() => {
+    const done = () => {
       setCopied(p.key);
-      window.setTimeout(() => setCopied(null), 1600);
-    }).catch(() => window.prompt("Their link", p.link));
+      const first = p.name.trim().split(/\s+/)[0];
+      setSaid(`${first ? `${first}'s` : "Their"} link is copied. Paste it into a text, WhatsApp or email to them - it opens their copy to read and sign.`);
+      window.setTimeout(() => setCopied(null), 2400);
+    };
+    if (!navigator.clipboard) {
+      window.prompt("Their link", p.link);
+      return;
+    }
+    navigator.clipboard.writeText(p.link).then(done).catch(() => window.prompt("Their link", p.link));
   };
 
   if (all === null) {
@@ -250,7 +260,11 @@ function OnPagePanel({
               ) : (
                 <Ticks read={false} when={day(p.emailedAt)} />
               )}
-              {!p.signedAt && <button type="button" className="nl-link" onClick={() => copy(p)}>{copied === p.key ? "Copied" : "Copy their link"}</button>}
+              {!p.signedAt && (
+                <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => copy(p)}>
+                  <Ico name={copied === p.key ? "check" : "link"} size={14} /> {copied === p.key ? "Copied" : "Copy link"}
+                </button>
+              )}
             </li>
           ))}
         </ul>
