@@ -3,6 +3,7 @@ import { uid } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
 import { docTypeLabel } from "@/lib/doc-types";
+import { standingForHome } from "@/lib/standing-documents";
 
 /**
  * A HOME'S DOCUMENTS, FROM ANY FILE (James, 5 Oct 2026).
@@ -59,6 +60,12 @@ export interface FileDoc {
   url: string;
   /** The uploader, or the office: they may take it off again. */
   canRemove: boolean;
+  /**
+   * Kept once by the office and on this home because of where it is
+   * (lib/standing-documents): the Easy Read Notes on a Scottish let.
+   * `missing` while nobody has uploaded it, so the tab says so.
+   */
+  standing?: { whereLabel: string; missing: boolean; adminHref: string | null };
 }
 
 type Row = {
@@ -99,8 +106,36 @@ function isThisHome(r: Row, home: Home): boolean {
   return sameHome(r.address, home.address);
 }
 
-export async function docsForHome(home: Home, me: { id: string; office: boolean }): Promise<FileDoc[]> {
+/**
+ * The standing documents this home carries (lib/standing-documents), as rows
+ * on its Documents tab: first, so the office sees one missing at a glance.
+ */
+async function standingRows(home: Home, me: { office: boolean }): Promise<FileDoc[]> {
+  const list = await standingForHome({ address: clean(home.address), propertyId: clean(home.propertyId) || null }).catch(() => []);
+  return list.map(({ info, doc }) => ({
+    id: `standing:${info.kind}`,
+    type: info.kind,
+    typeLabel: info.label,
+    name: info.label,
+    fileName: doc?.fileName ?? "",
+    mime: doc?.mime ?? "",
+    sizeBytes: doc?.sizeBytes ?? 0,
+    byName: doc?.byName ?? "",
+    at: doc?.at ?? new Date().toISOString(),
+    from: { kind: "property" as FromKind, id: "standing", label: info.whereLabel },
+    url: doc ? `/api/r2/file?key=${encodeURIComponent(doc.r2Key)}` : "",
+    canRemove: false,
+    standing: { whereLabel: info.whereLabel, missing: !doc, adminHref: me.office ? "/admin/standing-documents" : null },
+  }));
+}
+
+export async function docsForHome(home: Home, me: { id: string; office: boolean }, opts: { standing?: boolean } = {}): Promise<FileDoc[]> {
   if (!hasDb()) return [];
+  const standing = opts.standing ? await standingRows(home, me) : [];
+  return [...standing, ...(await uploadedDocsForHome(home, me))];
+}
+
+async function uploadedDocsForHome(home: Home, me: { id: string; office: boolean }): Promise<FileDoc[]> {
   const address = clean(home.address);
   const propertyId = clean(home.propertyId);
   const street = address ? parseAddress(address).street : "";
@@ -180,7 +215,7 @@ export async function storedDocsForHome(home: Home): Promise<StoredFileDoc[]> {
       LIMIT 400`,
     [propertyId, street]
   );
-  return rows
+  const uploaded = rows
     .filter((r) => isThisHome(r, { address, propertyId }))
     .map((r) => ({
       id: r.id,
@@ -192,4 +227,19 @@ export async function storedDocsForHome(home: Home): Promise<StoredFileDoc[]> {
       at: new Date(r.at).toISOString(),
       fromKind: r.from_kind,
     }));
+  /* The standing documents this home carries (the Easy Read Notes on a
+     Scottish let), once uploaded: a pack takes them like any other file. */
+  const standing = (await standingForHome({ address, propertyId: propertyId || null }).catch(() => []))
+    .filter((x) => x.doc)
+    .map(({ info, doc }) => ({
+      id: `standing:${info.kind}`,
+      type: info.kind,
+      name: info.label,
+      fileName: doc!.fileName,
+      r2Key: doc!.r2Key,
+      mime: doc!.mime,
+      at: doc!.at,
+      fromKind: "standing",
+    }));
+  return [...standing, ...uploaded];
 }

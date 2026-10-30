@@ -15,6 +15,10 @@ import { DOC_ACCEPT, DOC_TYPES, OTHER, SIDE_LABEL, docTypeLabel, hasGuarantorPap
  * Below what is held, the types not on file yet sit as dashed outlines - the
  * way the office's old system shows them - and pressing one opens the upload
  * with that type already picked.
+ *
+ * On a let, the office's standing documents come first (the Easy Read Notes
+ * on a Scottish let, 29 Oct 2026). They are never uploaded here; until the
+ * office has uploaded one in Admin, it shows as missing, plainly.
  */
 
 export type FromKind = "deal" | "listing" | "application" | "appraisal" | "viewing" | "property" | "job" | "propoly";
@@ -31,6 +35,8 @@ export type Doc = {
   from: { kind: FromKind; id: string; label: string };
   url: string;
   canRemove: boolean;
+  /** Kept once by the office, on this let because of where it is (lib/standing-documents). */
+  standing?: { whereLabel: string; missing: boolean; adminHref?: string | null };
 };
 
 const SIDES: DocSide[] = ["tenant", "landlord", "home"];
@@ -94,7 +100,7 @@ export default function FileDocuments({
   }, [ask?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prop = propertyId != null && String(propertyId).trim() ? String(propertyId) : "";
-  const query = `address=${encodeURIComponent(address)}&property=${encodeURIComponent(prop)}`;
+  const query = `address=${encodeURIComponent(address)}&property=${encodeURIComponent(prop)}&from=${encodeURIComponent(from.kind)}`;
 
   const load = useCallback(async () => {
     setFailed(false);
@@ -158,7 +164,7 @@ export default function FileDocuments({
 
   const held = new Set((docs ?? []).map((d) => d.type));
   const guarantor = hasGuarantorPapers(held);
-  const missing = DOC_TYPES.filter((t) => sides.includes(t.side) && !held.has(t.key) && (!t.guarantor || guarantor));
+  const missing = DOC_TYPES.filter((t) => !t.standing && sides.includes(t.side) && !held.has(t.key) && (!t.guarantor || guarantor));
 
   return (
     <div>
@@ -237,7 +243,7 @@ export default function FileDocuments({
         <>
           {docs!.length ? (
             <ul className="divide-y divide-line/50 rounded-[18px] border border-line/60 bg-white">
-              {docs!.map((d) => (
+              {docs!.map((d) => d.standing ? <StandingRow key={d.id} d={d} /> : (
                 <li key={d.id} className={`flex items-center gap-3 px-4 py-3 ${isInventory(d) ? "bg-accent-soft/25" : ""}`}>
                   <DoodleIcon name={isInventory(d) ? "checklist" : "doc"} size={16} className="shrink-0 text-accent-dark" />
                   <span className="min-w-0 flex-1">
@@ -307,6 +313,54 @@ export default function FileDocuments({
 }
 
 /**
+ * A standing document on this let: the office's one copy, opened like any
+ * other, never taken off here. Missing, it says so in the accent colour with
+ * where it is uploaded, so nobody assumes the tenant has been given it.
+ */
+function StandingRow({ d }: { d: Doc }) {
+  const s = d.standing!;
+  if (s.missing) {
+    return (
+      <li className="flex items-start gap-3 bg-accent-soft/40 px-4 py-3">
+        <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-accent-dark" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v5m0 3.5v.01M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        </svg>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-semibold text-accent-dark">{d.name} - not uploaded yet</span>
+          <span className="block text-[11.5px] leading-snug text-ink/80">
+            Needed on {s.whereLabel.toLowerCase()} before the lease is signed. The office uploads it once
+            {s.adminHref ? (
+              <>
+                {" "}in <a href={s.adminHref} className="font-semibold underline underline-offset-2">Admin, Standing Documents</a>
+              </>
+            ) : (
+              " in Admin"
+            )}
+            , and it shows here by itself.
+          </span>
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      <DoodleIcon name="doc" size={16} className="shrink-0 text-accent-dark" />
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-2">
+          <a href={d.url} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate text-[13px] font-semibold hover:underline">
+            {d.name}
+          </a>
+          <span className="shrink-0 rounded-full bg-page px-2 py-0.5 text-[10.5px] font-semibold text-muted">{s.whereLabel}</span>
+        </span>
+        <span className="block truncate text-[11px] text-muted">
+          Kept once by the office · {d.fileName} · {d.byName}, {when(d.at)}
+        </span>
+      </span>
+    </li>
+  );
+}
+
+/**
  * Pick what it is, choose the file, press Upload. Shared with the lead drawer,
  * which keeps its own store: `onUpload` does the sending and answers with an
  * error sentence, or null when it landed.
@@ -369,7 +423,7 @@ export function UploadForm({
       </p>
       <div className="mt-2 space-y-2.5">
         {sides.map((s) => {
-          const list = DOC_TYPES.filter((t) => t.side === s);
+          const list = DOC_TYPES.filter((t) => t.side === s && !t.standing);
           return list.length ? (
             <div key={s}>
               <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{SIDE_LABEL[s]}</p>
