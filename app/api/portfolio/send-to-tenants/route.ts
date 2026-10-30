@@ -5,7 +5,7 @@ import { msConnectionFor } from "@/lib/microsoft";
 import { footerFor, footerPreviewHtml, withFooter } from "@/lib/email-footer";
 import { sameSite } from "@/lib/email/preview-origin";
 import { publicOrigin } from "@/lib/origin";
-import { AlreadySending, defaultsFor, docsForTenant, emailFor, forScreen, homeContext, isRefusal, sendableDocs, sendRecord, sendsFor, sendToTenants, tenantsOf } from "@/lib/home-send";
+import { AlreadySending, defaultsFor, docsFor, emailFor, forScreen, homeContext, isRefusal, NothingToSay, recipientsOf, sendableDocs, sendFromHome, sendRecord, sendsFor, uploadsFrom } from "@/lib/home-send";
 
 /**
  * Send to tenants (Josel Banagua, 20 Oct 2026; lib/home-send).
@@ -18,10 +18,15 @@ import { AlreadySending, defaultsFor, docsForTenant, emailFor, forScreen, homeCo
  *                                         email exactly as it went, each file's
  *                                         SHA-256, the provider's id. Only for
  *                                         somebody whose book holds the home.
- *   POST { listing, listings, documents: [id], tenants: [key], subject, message, mode }
- *        mode "preview" + previewFor: the email that tenant would get, and
+ *   POST { listing, listings, documents: [id], tenants: [key], uploads, subject, message, mode }
+ *        tenants         anybody from `tenants` in the GET: since Email Docs
+ *                        (29 Oct 2026) the landlord side as well, by role
+ *        uploads         files from the sender's computer: [{ name, size }]
+ *                        for a preview, [{ name, data (base64) }] to send
+ *        mode "preview" + previewFor: the email that person would get, and
  *                        the default subject and words when none are given
- *        mode "send": one email each, documents attached, written down as it goes
+ *        mode "send": one email each, what is theirs attached, written down
+ *                        as it goes. No documents is fine when there are words.
  *
  * The home must be in the person's book (the office's is the whole business).
  * Nothing goes while viewing as somebody, or from a test home.
@@ -59,7 +64,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       title: ctx.title,
       documents: docs.map(forScreen),
-      tenants: tenantsOf(ctx),
+      tenants: await recipientsOf(ctx),
       sends,
       customerEmail,
       office: ctx.office,
@@ -85,36 +90,39 @@ export async function POST(req: NextRequest) {
     /* Everything is re-read here: the browser only says which. */
     const wantDocs = new Set(list(b?.documents));
     const wantTenants = new Set(list(b?.tenants));
-    const docs = (await sendableDocs(ctx)).filter((d) => wantDocs.has(d.id));
-    const tenants = tenantsOf(ctx).filter((t) => wantTenants.has(t.key));
+    const uploads = uploadsFrom(b?.uploads, mode === "send");
+    if (isRefusal(uploads)) return NextResponse.json({ ok: false, error: uploads.error }, { status: uploads.status });
+    const docs = [...(await sendableDocs(ctx)).filter((d) => wantDocs.has(d.id)), ...uploads];
+    const tenants = (await recipientsOf(ctx)).filter((t) => wantTenants.has(t.key));
     const edit = { subject: typeof b?.subject === "string" ? b.subject : null, message: typeof b?.message === "string" ? b.message : null };
-    if (!docs.length) return NextResponse.json({ ok: false, error: "Tick at least one document." }, { status: 400 });
-    if (docs.every((d) => d.blocked)) return NextResponse.json({ ok: false, error: docs[0].blocked ?? "None of those can be sent." }, { status: 400 });
-    if (!tenants.length) return NextResponse.json({ ok: false, error: "Tick at least one tenant." }, { status: 400 });
+    const roles = [...new Set(tenants.map((t) => t.role))];
+    if (docs.length && docs.every((d) => d.blocked)) return NextResponse.json({ ok: false, error: docs[0].blocked ?? "None of those can be sent." }, { status: 400 });
+    if (!tenants.length) return NextResponse.json({ ok: false, error: "Tick at least one person to send it to." }, { status: 400 });
 
     if (mode === "preview") {
       const who = tenants.find((t) => t.key === String(b?.previewFor ?? "")) ?? tenants[0];
-      const mine = docsForTenant(docs, who);
-      const { subject, html } = await emailFor(ctx, who, mine.length ? mine : docs.filter((d) => !d.blocked), edit);
+      const mine = docsFor(docs, who);
+      const { subject, html } = await emailFor(ctx, who, mine, edit, roles);
       const [mailboxArmed, conn] = await Promise.all([switchOn("assistant_email"), msConnectionFor(ctx.me.id).catch(() => ({ connected: false }))]);
       const f = mailboxArmed && conn.connected ? await footerFor(ctx.me.id).catch(() => null) : null;
       const shown = sameSite(html, publicOrigin(req));
       return NextResponse.json({
         ok: true,
         subject,
-        defaults: defaultsFor(ctx, docs),
+        defaults: defaultsFor(ctx, docs, roles),
         to: who.email ?? "",
         name: who.name,
         html: f ? withFooter(shown, { ...f, html: footerPreviewHtml(f) }) : shown,
         attachments: mine.map((d) => ({ label: d.label, name: d.name, sizeBytes: d.sizeBytes })),
-        perTenant: tenants.map((t) => ({ key: t.key, name: t.name, email: t.email, where: t.where, documents: docsForTenant(docs, t).map((d) => d.label) })),
+        perTenant: tenants.map((t) => ({ key: t.key, name: t.name, email: t.email, where: t.where, role: t.role, documents: docsFor(docs, t).map((d) => d.label) })),
       });
     }
 
-    const { results, id } = await sendToTenants(ctx, docs, tenants, edit);
+    const { results, id } = await sendFromHome(ctx, docs, tenants, edit);
     return NextResponse.json({ ok: true, sent: results.filter((r) => r.sent).length, results, record: id });
   } catch (e) {
     if (e instanceof AlreadySending) return NextResponse.json({ ok: false, error: e.message }, { status: 409 });
+    if (e instanceof NothingToSay) return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
     return NextResponse.json({ ok: false, error: publicError(e, "That couldn't be sent just now. Try again in a minute.") }, { status: 500 });
   }
 }

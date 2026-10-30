@@ -215,11 +215,10 @@ export default function PropertyPage() {
       const sp = new URLSearchParams(window.location.search);
       const t = sp.get("tab");
       if (t && (TABS.some((x) => x.id === t) || t === "overview")) { setTab(t as Tab); tabAsked.current = true; }
-      /* ?email=certificates (the compliance drawer's Email Certificates) opens it straight away. */
+      /* ?email=certificates (the compliance drawer's Email Certificates) opens Email Docs straight away. */
       if (sp.get("email") === "certificates") {
-        /* &start=<document>: one certificate's Email Tenant, from the compliance drawer or the desk. */
-        const start = sp.get("start");
-        setSendOpen(start ? { start, heading: "Email Tenant" } : { start: null, heading: "Email Certificates" });
+        /* &start=<document>: one certificate, from the compliance drawer or the desk. */
+        setSendOpen({ start: sp.get("start"), heading: "Email Docs" });
       }
       const o = JSON.parse(sessionStorage.getItem(ORDER_KEY) ?? "[]");
       if (Array.isArray(o)) setOrder(o.map(String));
@@ -417,10 +416,11 @@ export default function PropertyPage() {
   /* Send to tenants (Josel, 20 Oct 2026, lib/home-send): certificates and
      documents by email, from whoever presses. Each press is kept and shows
      in the latest activity. The lets are the room, or every let of the house. */
-  const [sendOpen, setSendOpen] = useState<{ start: string | null; heading?: string } | null>(null);
+  /* Email Docs and Email (James's team call, 29 Oct 2026): one sheet, to the tenants, the landlord or both. */
+  const [sendOpen, setSendOpen] = useState<{ start: string | null; heading?: string; blank?: boolean } | null>(null);
   /* The record of one send (Email Certificates, 20 Oct 2026): from the activity. */
   const [recordOpen, setRecordOpen] = useState<string | null>(null);
-  const [sends, setSends] = useState<{ id: string; at: string; by: string; documents: string[]; results: { sent: boolean }[] }[]>([]);
+  const [sends, setSends] = useState<{ id: string; at: string; by: string; subject?: string; documents: string[]; results: { sent: boolean; name?: string; role?: "tenant" | "landlord" }[] }[]>([]);
   const sendListings = useMemo(() => (p ? (roomP ? [roomP] : house ? house.members : [p]).map((x) => String(x.listingId)) : []), [p, roomP, house]);
   const loadSends = useCallback(() => {
     if (!p || p.test) return;
@@ -774,7 +774,11 @@ export default function PropertyPage() {
   }
   for (const x of sends) {
     const went = x.results.filter((r) => r.sent).length;
-    activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `Sent to tenants · ${x.documents.join(", ")}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => setRecordOpen(x.id) });
+    /* Since Email Docs a send may be to the landlord, or have nothing attached. */
+    const toLandlord = x.results.some((r) => r.role === "landlord");
+    const toTenants = x.results.some((r) => (r.role ?? "tenant") === "tenant");
+    const to = toLandlord && toTenants ? "the tenants and landlord" : toLandlord ? "the landlord" : "tenants";
+    activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `${x.documents.length ? "Sent" : "Emailed"} to ${to} · ${x.documents.length ? x.documents.join(", ") : x.subject || "no attachments"}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => setRecordOpen(x.id) });
   }
   for (const m of propolyMail) {
     const kept = m.attachments.filter((f) => f.key).length;
@@ -921,6 +925,7 @@ export default function PropertyPage() {
           title={roomP ? `${roomLabel(roomP)}, ${title}` : title}
           heading={sendOpen.heading}
           start={sendOpen.start}
+          blank={sendOpen.blank}
           onClose={() => setSendOpen(null)}
           onSent={loadSends}
         />
@@ -995,7 +1000,7 @@ export default function PropertyPage() {
           : { label: "Change the tenants", sub: tenants.length ? "Add someone, swap a sharer or re-reference" : "No tenants on this home yet", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "swap" }) },
       "rule",
       { label: "Send out logins", sub: "Tenant account, to report repairs", disabled: p.test || !loginListings.length, onClick: () => setShowLogins(true) },
-      { label: "Email Certificates", sub: "To the tenants, kept on the record", disabled: p.test || !loginListings.length, onClick: () => setSendOpen({ start: null, heading: "Email Certificates" }) },
+      { label: "Email Docs", sub: "To the tenants, the landlord or both, kept on the record", disabled: p.test, onClick: () => setSendOpen({ start: null, heading: "Email Docs" }) },
       { label: "Add a certificate", sub: "Read and filed on the home", disabled: !propertyId, onClick: () => goTab("compliance") },
       { label: "Add a document", sub: "An inventory, an agreement, anything else", disabled: p.test, onClick: () => goTab("documents") },
       { label: "Add a note", sub: "A call, an email, a query", disabled: !propertyId, onClick: () => goTab("notes", () => document.getElementById("home-note")?.focus({ preventScroll: true })) },
@@ -1091,7 +1096,7 @@ export default function PropertyPage() {
         sub: standing.find((s) => s.id === "compliance")?.text,
         acts: (
           <>
-            {btn("Email certificates", "mail", () => setSendOpen({ start: null, heading: "Email Certificates" }), { disabled: p.test || !loginListings.length, title: "To the tenants, from you, kept on the record" })}
+            {btn("Email Docs", "mail", () => setSendOpen({ start: null, heading: "Email Docs" }), { disabled: p.test, title: "To the tenants, the landlord or both, from you, kept on the record" })}
             {btn("Add a certificate", "upload", certButton, { disabled: !propertyId, title: "Read and filed on the home" })}
             {btn("Plan a certificate", "calendar", () => act({ kind: "planned" }), { primary: true, disabled: !canAct, title: "A gas safety, EICR or service, by a date" })}
           </>
@@ -1124,7 +1129,7 @@ export default function PropertyPage() {
         sub: "Inventories, agreements and anything else that isn't a certificate",
         acts: (
           <>
-            {btn("Send to tenants", "mail", () => setSendOpen({ start: null }), { disabled: p.test || !loginListings.length, title: "Certificates and documents, from you, kept on the record" })}
+            {btn("Email Docs", "mail", () => setSendOpen({ start: null, heading: "Email Docs" }), { disabled: p.test, title: "To the tenants, the landlord or both, from you, kept on the record" })}
             {btn("Add a document", "upload", docPicker, { primary: true, disabled: p.test })}
           </>
         ),
@@ -1200,6 +1205,12 @@ export default function PropertyPage() {
                 )}
                 {/* Re-let waits for notice (Michael and James, 8 Oct 2026). */}
                 {canAct && p.onRex !== false && mayRelet && <ReletAction home={p} className="nl-btn nl-btn--sage" />}
+                {/* Email at the top, so it is in reach from every tab (Sean McMahon,
+                    29 Oct 2026: "if you open a maintenance screen ... you lose that
+                    facility"). The Email Docs sheet with nothing ticked. */}
+                <button type="button" disabled={p.test} onClick={() => setSendOpen({ start: null, heading: "Email", blank: true })} className="nl-btn nl-btn--secondary" title="The tenants, the landlord or both, with anything attached">
+                  <Ico name="mail" /> Email
+                </button>
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className="nl-btn nl-btn--secondary" title="A gas safety, EICR or service, by a date">
                   <Ico name="calendar" /> Plan a certificate
                 </button>
@@ -1534,8 +1545,8 @@ export default function PropertyPage() {
                         propertyName={house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name}
                         screen="the property page"
                         emailTenant={{
-                          open: (start) => setSendOpen({ start, heading: "Email Tenant" }),
-                          none: p.test ? "This is a test home" : loginListings.length ? null : "Nobody is living here",
+                          open: (start) => setSendOpen({ start, heading: "Email Docs" }),
+                          none: p.test ? "This is a test home" : null,
                         }}
                       />
                     </div>
@@ -1728,8 +1739,8 @@ export default function PropertyPage() {
                 {/* Sean McMahon, 16 Oct 2026: tenants report repairs in their portal, as Fixflow had them do. */}
                 <button type="button" disabled={p.test || !loginListings.length} onClick={() => setShowLogins(true)} className={tile}>{tileIcon("mail")}{tileText("Send out logins", "Tenant account, to report repairs")}</button>
                 {/* Josel, 20 Oct 2026: certificates and documents to the tenants, from here.
-                    James, same day: called Email Certificates, the in-date ones ticked. */}
-                <button type="button" disabled={p.test || !loginListings.length} onClick={() => setSendOpen({ start: null, heading: "Email Certificates" })} className={tile}>{tileIcon("mail")}{tileText("Email Certificates", "To the tenants, kept on the record")}</button>
+                    James, 29 Oct 2026: Email Docs, to the tenants, the landlord or both. */}
+                <button type="button" disabled={p.test} onClick={() => setSendOpen({ start: null, heading: "Email Docs" })} className={tile}>{tileIcon("mail")}{tileText("Email Docs", "To the tenants, the landlord or both")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 <button type="button" disabled={p.test} onClick={() => { pickTab("documents"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("folder")}{tileText("Add a document", "An inventory, an agreement, anything else")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("notes"); setTimeout(() => { document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }); document.getElementById("home-note")?.focus({ preventScroll: true }); }, 60); }} className={tile}>{tileIcon("note")}{tileText("Add a note", "A call, an email, a query")}</button>
@@ -1958,8 +1969,8 @@ export default function PropertyPage() {
             </nav>
             {tab === "compliance" && (
               <div className="mt-4 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
-                {!p.test && loginListings.length > 0 && (
-                  <SendBar onSend={() => setSendOpen({ start: null, heading: "Email Certificates" })} what="this home's certificates" label="Email Certificates" />
+                {!p.test && (
+                  <SendBar onSend={() => setSendOpen({ start: null, heading: "Email Docs" })} what="this home's certificates" label="Email Docs" />
                 )}
                 {houseView && house && !house.house && !lets && (
                   <p className="mb-2 text-[11.5px] text-muted">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
@@ -1971,8 +1982,8 @@ export default function PropertyPage() {
                     propertyName={house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name}
                     screen="the property page"
                     emailTenant={{
-                      open: (start) => setSendOpen({ start, heading: "Email Tenant" }),
-                      none: p.test ? "This is a test home" : loginListings.length ? null : "Nobody is living here",
+                      open: (start) => setSendOpen({ start, heading: "Email Docs" }),
+                      none: p.test ? "This is a test home" : null,
                     }}
                   />
                 ) : (
@@ -2076,8 +2087,8 @@ export default function PropertyPage() {
 
             {tab === "documents" && (
               <section className="mt-4">
-                {!p.test && loginListings.length > 0 && (
-                  <SendBar onSend={() => setSendOpen({ start: null })} what="this home's certificates and documents" label="Send to Tenants" />
+                {!p.test && (
+                  <SendBar onSend={() => setSendOpen({ start: null, heading: "Email Docs" })} what="this home's certificates and documents" label="Email Docs" />
                 )}
                 {/* The home's documents (lib/file-documents): what Kirstie added
                     on the deal and the agent on the listing or application for
@@ -2130,7 +2141,7 @@ export default function PropertyPage() {
 function SendBar({ onSend, what, label }: { onSend: () => void; what: string; label: string }) {
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/60 bg-white px-4 py-3">
-      <p className="min-w-0 text-[12.5px] text-muted">Email the tenants {what}, from you. You pick the files and the people, edit the email before it goes, and each send is kept on the record.</p>
+      <p className="min-w-0 text-[12.5px] text-muted">Email {what} to the tenants, the landlord or both, from you. You pick the people and the files, edit the email before it goes, and each send is kept on the record.</p>
       <button type="button" onClick={onSend} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page">
         <DoodleIcon name="mail" size={13} />{label}
       </button>

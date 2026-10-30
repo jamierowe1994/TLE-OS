@@ -107,6 +107,7 @@ import {
   TENANT_PASSPORT_THANKS,
   TENANT_PORTAL_LOGIN,
   TENANT_DOCUMENTS,
+  LANDLORD_DOCUMENTS,
   TENANT_PASSPORT_NUDGE_1,
   TENANT_PASSPORT_NUDGE_2,
   TENANT_PASSPORT_REMINDER,
@@ -1028,6 +1029,29 @@ export const TLE_EMAILS: CatalogEntry[] = [
       )(),
   },
   {
+    id: "landlord-documents",
+    group: "Doorways",
+    name: "Documents for Your Property",
+    audience: "landlord",
+    trigger: "Somebody presses Email or Email Docs on a home's page and ticks the landlord",
+    fires: "Wired 29 Oct 2026. lib/home-send sendFromHome, the same press as the tenants' copy: who, the documents, the preview, Send. From the person who pressed it, their Outlook where that is connected. Needs customer email only.",
+    to: "The home's landlord, any additional landlords and any point of contact ticked",
+    summary: "The sender's own words, and a list of what is attached. Tenants' references, ID and right to rent papers are never offered to a landlord.",
+    doc: LANDLORD_DOCUMENTS,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_DOCUMENTS, {
+          heading: "Documents for Your Property",
+          preheader: "Your copies, attached to this email.",
+          firstName: "David",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
+          agentName: "Sam Whitaker",
+          messageHtml: "Here are copies of the certificates for <strong>8 Recreation Terrace, Nottingham NG2 3AB</strong>. They're attached to this email.<br><br>Please keep them with your records for the property.",
+          docList: "<ul style=\"margin:0;padding-left:18px\"><li>Gas safety (CP12), runs to 12 March 2027</li><li>Inventory</li></ul>",
+        })
+      )(),
+  },
+  {
     id: "landlord-viewing-booked",
     group: "Doorways",
     name: "Viewing Booked - Landlord",
@@ -1666,12 +1690,14 @@ TLE_EMAILS.push(
   tenantEntry(
     "tenant-documents",
     "Documents for Your Home",
-    "Somebody presses Email Certificates or Send to Tenants on a home's page",
-    "Wired 20 Oct 2026. lib/home-send sendToTenants, from Send to tenants on /portfolio/<listing> after the documents, the tenants and the preview. From the person who pressed it, their Outlook where that is connected. A press, not a timer, so it needs customer email only, not the Automatic tenant emails switch.",
+    "Somebody presses Email or Email Docs on a home's page and ticks the tenants",
+    "Wired 20 Oct 2026. lib/home-send sendFromHome, from Email Docs (and Email at the top) on /portfolio/<listing> after who, the documents and the preview. From the person who pressed it, their Outlook where that is connected. A press, not a timer, so it needs customer email only, not the Automatic tenant emails switch.",
     "Each tenant ticked, with only the documents for their own room on a shared house",
     "Their copies attached, the sender's own message (edited on the send screen; the default says to keep them with their tenancy papers and reply if a file won't open), and a list of what is attached with each certificate's end date.",
     TENANT_DOCUMENTS,
     {
+      heading: "Your Paperwork Has Arrived",
+      preheader: "Your copies, attached to this email.",
       address: "Flat 2, 14 Ruskin Place, Glasgow",
       messageHtml: "Here are your copies of the certificates for <strong>Flat 2, 14 Ruskin Place, Glasgow</strong>. They're attached to this email.<br><br>Please keep them with your tenancy papers. If anything won't open, reply to this email and we'll send it another way.",
       docList: "<ul style=\"margin:0;padding-left:18px\"><li>Gas safety (CP12), runs to 12 March 2027</li><li>EICR, runs to 4 June 2029</li><li>Energy Performance Certificate</li></ul>",

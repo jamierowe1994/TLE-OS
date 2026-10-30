@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
-import { GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
 import type { NextRequest } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
@@ -12,7 +12,8 @@ import { listVault, VAULT_LABEL } from "@/lib/vault";
 import { addrOf, isRoomAddress, parseAddress, sameHome } from "@/lib/address-parse";
 import { houseByListing, housesIn, MANAGED_READERS, roomLabel } from "@/lib/houses";
 import { sittingLets } from "@/lib/tenant-logins";
-import { docTypeLabel, OTHER } from "@/lib/doc-types";
+import { DOC_TYPES, docTypeLabel, OTHER } from "@/lib/doc-types";
+import { peopleOn } from "@/lib/property-people";
 import { standingForHome } from "@/lib/standing-documents";
 import { FIELDS } from "@/lib/property-facts";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
@@ -68,6 +69,19 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
  * tenant emails switch is not involved. Nothing goes from a test home or
  * while viewing as somebody. REX, PayProp and Propoly are read, never written.
  * Every send is kept in os_home_sends and shows on the home's activity.
+ *
+ * ── Email Docs: the landlord too (James's team call, 29 Oct 2026) ────────
+ *
+ * Sean McMahon: a landlord could be emailed from the home but nothing could
+ * be attached, and from Maintenance or the tenancy the email was out of
+ * reach. So the same press now writes to whoever is ticked: the tenants, the
+ * landlord (and any additional landlord or point of contact on the home), or
+ * both at once, with any of the home's documents, a file from the sender's
+ * computer, or none at all - just an email. Each person gets only what is
+ * theirs to have: a landlord is never sent a tenant's reference, ID, right to
+ * rent or guarantor papers; a tenant is never sent the landlord's papers or
+ * an invoice (the rules above). A file from the computer is kept in R2 under
+ * home-sends/<send id>/ so the record still holds the bytes that went.
  */
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
@@ -218,7 +232,7 @@ export async function recordFiles(ctx: HomeContext): Promise<RecordFile[]> {
 
 export interface SendDoc {
   id: string;
-  group: "Certificates" | "Documents on this home" | "From the clean sweep";
+  group: "Certificates" | "Documents on this home" | "From the clean sweep" | "From your computer";
   label: string;
   name: string;
   /** YYYY-MM-DD, a certificate's expiry. */
@@ -231,13 +245,21 @@ export interface SendDoc {
   blocked: string | null;
   /** Ticked when the list opens: in-date certificates. */
   suggested: boolean;
+  /** Who it may go to: a tenant (the rules above), a landlord (anything but a tenant's own papers). */
+  forTenants: boolean;
+  forLandlord: boolean;
   /** Server side only: where the bytes are. */
-  source: { r2: string } | { rex: string };
+  source: { r2: string } | { rex: string } | { upload: Buffer | null };
+  /** Server side only: where a file from the computer was kept for the record. */
+  kept?: string;
   certificateId?: string | null;
 }
 
 /* Documents added on the OS (lib/doc-types) a tenant may be sent. */
 const FILE_TYPES_FOR_TENANTS = new Set(["gas_safety", "eicr", "epc", "licensing", "inventory", "holding_deposit_guide", OTHER]);
+/* A tenant's or guarantor's own papers: never to a landlord from here. */
+const FILE_TYPES_TENANT_OWN = new Set(DOC_TYPES.filter((t) => t.side === "tenant").map((t) => t.key));
+const RECORD_TENANT_OWN = new Set(["doc_tenant_referencing", "doc_rtr_evidence", "doc_guarantor"]);
 
 /* Certificates with no end date: an EPC runs ten years, an alarm test is a record. */
 const NO_EXPIRY_NEEDED = new Set(["epc"]);
@@ -268,7 +290,7 @@ export async function sendableDocs(ctx: HomeContext): Promise<SendDoc[]> {
     if (!blocked) vaultKinds.add(v.certKey);
     out.push({
       id: `vault:${v.key}`, group: "Certificates", label: v.label, name: v.name, expiry, sizeBytes: v.size, room: null, where: null,
-      blocked, suggested: !blocked && Boolean(expiry || NO_EXPIRY_NEEDED.has(v.certKey)), source: { r2: v.key }, certificateId: row?.id ?? null,
+      blocked, suggested: !blocked && Boolean(expiry || NO_EXPIRY_NEEDED.has(v.certKey)), forTenants: true, forLandlord: true, source: { r2: v.key }, certificateId: row?.id ?? null,
     });
   }
 
@@ -285,7 +307,7 @@ export async function sendableDocs(ctx: HomeContext): Promise<SendDoc[]> {
         const blocked = expiry && expiry < today ? `Expired on ${prettyDay(expiry)}, so it isn't sent.` : null;
         out.push({
           id: `rex:${pid}:${k}`, group: "Certificates", label: VAULT_LABEL[k] ?? k, name: `${VAULT_LABEL[k] ?? k}.pdf`, expiry, sizeBytes: null,
-          room: null, where: null, blocked, suggested: !blocked, source: { rex: c.fileUrl },
+          room: null, where: null, blocked, suggested: !blocked, forTenants: true, forLandlord: true, source: { rex: c.fileUrl },
         });
         vaultKinds.add(k);
       }
@@ -302,42 +324,46 @@ export async function sendableDocs(ctx: HomeContext): Promise<SendDoc[]> {
       [rexIds, streets]
     ).catch(() => []);
     for (const r of rows) {
-      if (!FILE_TYPES_FOR_TENANTS.has(r.type)) continue;
+      const forTenants = FILE_TYPES_FOR_TENANTS.has(r.type);
+      const forLandlord = !FILE_TYPES_TENANT_OWN.has(r.type);
+      if (!forTenants && !forLandlord) continue;
       const room = isRoomAddress(r.address) ? roomOf(r.address, ctx.lets) : null;
       const here = room || ctx.all.some((p) => sameHome(r.address, addrOf(p)) || (!isRoomAddress(r.address) && r.rex_property_id && r.rex_property_id === p.propertyId));
       if (!here) continue;
       out.push({
         id: `file:${r.id}`, group: "Documents on this home", label: r.type === OTHER ? r.name || "Other" : docTypeLabel(r.type),
         name: r.file_name, expiry: null, sizeBytes: Number(r.size_bytes) || null, room: room ? String(room.listingId) : null,
-        where: room && ctx.lets.length > 1 ? roomLabel(room) : null, blocked: null, suggested: false, source: { r2: r.r2_key },
+        where: room && ctx.lets.length > 1 ? roomLabel(room) : null, blocked: null, suggested: false, forTenants, forLandlord, source: { r2: r.r2_key },
       });
     }
   }
 
   /* 3b. The office's standing documents this home carries: the Easy Read
-     Notes on a Scottish let (lib/standing-documents, 29 Oct 2026). Offered,
-     not ticked, as they go before the lease rather than with every send. */
+     Notes on a Scottish let (lib/standing-documents, 29 Oct 2026), for the
+     tenants only. Offered, not ticked, as they go before the lease rather than with every send. */
   const standing = await standingForHome({ address: addrOf(ctx.home), propertyId: String(ctx.home.propertyId ?? "") || null }).catch(() => []);
   for (const { info, doc } of standing) {
     if (!doc) continue;
     out.push({
       id: `standing:${info.kind}`, group: "Documents on this home", label: info.label, name: doc.fileName, expiry: null,
-      sizeBytes: doc.sizeBytes || null, room: null, where: null, blocked: null, suggested: false, source: { r2: doc.r2Key },
+      sizeBytes: doc.sizeBytes || null, room: null, where: null, blocked: null, suggested: false, forTenants: true, forLandlord: false, source: { r2: doc.r2Key },
     });
   }
 
-  /* 4. The clean sweep's papers a tenant is owed. Office only. */
+  /* 4. The clean sweep's papers: the ones a tenant is owed, and (Email
+     Docs) every one but a tenant's own for the landlord. Office only. */
   if (ctx.office) {
     for (const f of await recordFiles(ctx).catch(() => [] as RecordFile[])) {
-      if (!RECORD_FOR_TENANTS[f.field]) continue;
       const rec = f.where ? ctx.lets.find((l) => roomLabel(l) === f.where) ?? null : null;
       /* A room's own paper whose room is not among the tenants being written
-         to is not offered: it is nobody here's. */
-      if (ROOM_OWN.has(f.field) && f.where && !rec) continue;
+         to goes to no tenant here. */
+      const forTenants = Boolean(RECORD_FOR_TENANTS[f.field]) && !(ROOM_OWN.has(f.field) && f.where && !rec);
+      const forLandlord = !RECORD_TENANT_OWN.has(f.field);
+      if (!forTenants && !forLandlord) continue;
       out.push({
         id: `record:${f.key}`, group: "From the clean sweep", label: f.label, name: f.name, expiry: null, sizeBytes: f.sizeBytes,
         room: ROOM_OWN.has(f.field) && rec ? String(rec.listingId) : null, where: f.where, blocked: f.sizeBytes > MAX_FILE_BYTES ? "Too big to email." : null,
-        suggested: false, source: { r2: f.key },
+        suggested: false, forTenants, forLandlord, source: { r2: f.key },
       });
     }
   }
@@ -347,22 +373,27 @@ export async function sendableDocs(ctx: HomeContext): Promise<SendDoc[]> {
 
 /** What the browser is shown: everything but where the bytes are. */
 export const forScreen = (d: SendDoc) => {
-  const { source, certificateId, ...rest } = d;
-  void source; void certificateId;
+  const { source, certificateId, kept, ...rest } = d;
+  void source; void certificateId; void kept;
   return rest;
 };
 
-export interface SendTenant {
+export type Role = "tenant" | "landlord";
+
+export interface Recipient {
   key: string;
   name: string;
   email: string | null;
+  /** A tenant's let; the home's listing for a landlord. */
   listingId: string;
+  /** "Room 2" on a shared house; "Landlord", "Additional landlord" or "Point of contact" for the landlord side. */
   where: string | null;
+  role: Role;
 }
 
 /** Every sitting tenant on these lets, one row each, the room named on a shared house. */
-export function tenantsOf(ctx: HomeContext): SendTenant[] {
-  const out: SendTenant[] = [];
+export function tenantsOf(ctx: HomeContext): Recipient[] {
+  const out: Recipient[] = [];
   const seen = new Set<string>();
   for (const l of ctx.lets) {
     for (const t of l.tenants) {
@@ -370,10 +401,75 @@ export function tenantsOf(ctx: HomeContext): SendTenant[] {
       const key = `${l.listingId}|${email ?? `name:${t.name.toLowerCase()}`}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ key, name: t.name, email, listingId: String(l.listingId), where: ctx.lets.length > 1 && isRoomAddress(addrOf(l)) ? roomLabel(l) : null });
+      out.push({ key, name: t.name, email, listingId: String(l.listingId), where: ctx.lets.length > 1 && isRoomAddress(addrOf(l)) ? roomLabel(l) : null, role: "tenant" });
     }
   }
   return out.sort((a, b) => (a.where ?? "").localeCompare(b.where ?? "", "en-GB", { numeric: true }));
+}
+
+/**
+ * The landlord side of the home, as its page shows them (HomeLandlords): the
+ * landlord the book holds (the house's own record first on a shared house, a
+ * changed landlord or the OS record's landlord already folded in by
+ * lib/managed-book-cache), then the additional landlords and points of
+ * contact kept against the home (lib/property-people).
+ */
+export async function landlordsOf(ctx: HomeContext): Promise<Recipient[]> {
+  const out: Recipient[] = [];
+  const seen = new Set<string>();
+  const listingId = String(ctx.home.listingId);
+  const add = (name: string, rawEmail: string | null, where: string) => {
+    const email = rawEmail && EMAIL.test(rawEmail.trim()) ? normaliseEmail(rawEmail) : null;
+    const key = `landlord|${email ?? `name:${name.toLowerCase()}`}`;
+    if (!name.trim() || seen.has(key)) return;
+    seen.add(key);
+    out.push({ key, name: name.trim(), email, listingId, where, role: "landlord" });
+  };
+  const main = ctx.all.find((p) => p.landlord)?.landlord ?? ctx.home.landlord;
+  if (main) add(main.name, main.email, "Landlord");
+  const pids = [...new Set([ctx.home.propertyId, ...ctx.all.map((p) => p.propertyId)].map((x) => String(x ?? "")).filter(Boolean))];
+  const people = (await Promise.all(pids.map((pid) => peopleOn(pid).catch(() => [])))).flat();
+  for (const x of people.filter((x) => x.kind === "joint_landlord")) add(x.name, x.email, "Additional landlord");
+  for (const x of people.filter((x) => x.kind === "contact")) add(x.name, x.email, x.relation ? `Point of contact · ${x.relation}` : "Point of contact");
+  return out;
+}
+
+/** Everybody the home's email can go to: the tenants, then the landlord side. */
+export async function recipientsOf(ctx: HomeContext): Promise<Recipient[]> {
+  return [...tenantsOf(ctx), ...(await landlordsOf(ctx).catch(() => []))];
+}
+
+/* ── a file from the sender's computer ─────────────────────────────────── */
+
+const MAX_UPLOADS = 5;
+const cleanName = (n: unknown) => String(n ?? "").replace(/[\\/\u0000-\u001f]/g, "").trim().slice(0, 120) || "attachment";
+
+/**
+ * Files added on the send screen, as documents. The preview sends only each
+ * file's name and size; the send sends the bytes too (base64), and each is
+ * checked here: at most five, none over 12 MB.
+ */
+export function uploadsFrom(raw: unknown, withBytes: boolean): SendDoc[] | Refusal {
+  const list = Array.isArray(raw) ? raw.slice(0, MAX_UPLOADS + 1) : [];
+  if (list.length > MAX_UPLOADS) return { error: `Add at most ${MAX_UPLOADS} files from your computer.`, status: 400 };
+  const out: SendDoc[] = [];
+  for (const [i, u] of list.entries()) {
+    const o = (u ?? {}) as Record<string, unknown>;
+    const name = cleanName(o.name);
+    let bytes: Buffer | null = null;
+    if (withBytes) {
+      const data = String(o.data ?? "").replace(/^data:[^,]*,/, "");
+      bytes = data ? Buffer.from(data, "base64") : null;
+      if (!bytes?.length) return { error: `${name} couldn't be read. Add it again.`, status: 400 };
+    }
+    const size = bytes ? bytes.length : Number(o.size) || null;
+    out.push({
+      id: `upload:${i}`, group: "From your computer", label: name, name, expiry: null, sizeBytes: size, room: null, where: null,
+      blocked: size != null && size > MAX_FILE_BYTES ? "Too big to email." : null, suggested: false, forTenants: true, forLandlord: true,
+      source: { upload: bytes },
+    });
+  }
+  return out;
 }
 
 /* ── the email ──────────────────────────────────────────────────────────── */
@@ -395,48 +491,84 @@ const homeLine = (ctx: HomeContext) => [ctx.title, ctx.home.locality].filter(Boo
 /**
  * The words the send screen opens with. Certificates only says certificates,
  * so a gas safety send reads as one. The greeting ("Hi Sophie,"), the list of
- * what is attached and the sign-off are added round it for each tenant, so the
- * same words can go to everyone in a house.
+ * what is attached and the sign-off are added round it for each person, so
+ * the same words can go to everyone in a house. A tenant is told to keep them
+ * with their tenancy papers, a landlord with their records for the property;
+ * to both at once, the words fit either. With nothing attached (Email at the
+ * top of the page, 29 Oct 2026) the box starts empty for the sender's own.
  */
-export function defaultsFor(ctx: HomeContext, docs: SendDoc[]): { subject: string; message: string } {
+export function defaultsFor(ctx: HomeContext, docs: SendDoc[], roles: Role[] = ["tenant"]): { subject: string; message: string } {
   const live = docs.filter((d) => !d.blocked);
-  const certsOnly = live.length > 0 && live.every((d) => d.group === "Certificates");
+  if (!live.length) return { subject: `${homeLine(ctx)}`.slice(0, MAX_SUBJECT), message: "" };
+  const certsOnly = live.every((d) => d.group === "Certificates");
   const gasOnly = certsOnly && live.every((d) => /gas/i.test(d.label));
   const what = gasOnly ? (live.length === 1 ? "gas safety certificate" : "gas safety certificates") : certsOnly ? "certificates" : "documents";
+  const one = live.length === 1;
+  const tenants = roles.includes("tenant");
+  const landlords = roles.includes("landlord");
+  const keep = tenants && landlords ? "with your papers for the property" : landlords ? "with your records for the property" : "with your tenancy papers";
   return {
-    subject: `Your ${what} for ${homeLine(ctx)}`.slice(0, MAX_SUBJECT),
-    message: `Here ${live.length === 1 ? "is your copy of the" : "are your copies of the"} ${what} for ${homeLine(ctx)}. ${live.length === 1 ? "It's" : "They're"} attached to this email.\n\nPlease keep ${live.length === 1 ? "it" : "them"} with your tenancy papers. If anything won't open, reply to this email and we'll send it another way.`,
+    subject: `${tenants && !landlords ? "Your " : ""}${tenants && !landlords ? what : what.replace(/^./, (c) => c.toUpperCase())} for ${homeLine(ctx)}`.slice(0, MAX_SUBJECT),
+    message: `Here ${one ? "is your copy of the" : "are your copies of the"} ${what} for ${homeLine(ctx)}. ${one ? "It's" : "They're"} attached to this email.\n\nPlease keep ${one ? "it" : "them"} ${keep}. If anything won't open, reply to this email and we'll send it another way.`,
   };
 }
 
 /** The sender's words as the email's paragraph: escaped, line breaks kept. */
 const messageHtml = (text: string) => esc(text.trim()).replace(/\r\n/g, "\n").replace(/\n/g, "<br>");
 
-export async function emailFor(ctx: HomeContext, tenant: SendTenant, docs: SendDoc[], edit: EmailEdit = {}): Promise<{ subject: string; html: string }> {
-  const let_ = ctx.lets.find((l) => String(l.listingId) === tenant.listingId) ?? ctx.home;
+/* "Hi David," - or the whole name when the landlord is a company or an estate. */
+const COMPANY = /\b(ltd|limited|llp|plc|estate|trust|trustees|properties|property|holdings|investments|group|partnership)\b/i;
+const greetingName = (r: Recipient) => {
+  const full = (r.name || "").trim();
+  if (!full) return "there";
+  return r.role === "landlord" && COMPANY.test(full) ? full : full.split(/\s+/)[0];
+};
+
+export async function emailFor(ctx: HomeContext, who: Recipient, docs: SendDoc[], edit: EmailEdit = {}, roles: Role[] = [who.role]): Promise<{ subject: string; html: string }> {
+  const let_ = who.role === "tenant" ? ctx.lets.find((l) => String(l.listingId) === who.listingId) ?? ctx.home : ctx.home;
   const items = docs.map((d) => `<li style="margin:0 0 4px">${esc(docLine(d))}</li>`).join("");
-  const dflt = defaultsFor(ctx, docs);
+  const dflt = defaultsFor(ctx, docs, roles);
   const message = String(edit.message ?? "").trim() ? String(edit.message).slice(0, MAX_MESSAGE) : dflt.message;
   const subject = String(edit.subject ?? "").trim() ? String(edit.subject).trim().replace(/\s+/g, " ").slice(0, MAX_SUBJECT) : dflt.subject;
-  const out = await renderTleEmailLive("tenant-documents", {
-    firstName: (tenant.name || "").trim().split(/\s+/)[0] || "there",
+  const landlord = who.role === "landlord";
+  const out = await renderTleEmailLive(landlord ? "landlord-documents" : "tenant-documents", {
+    firstName: greetingName(who),
     agentName: ctx.me.name || "The Letting Experts",
-    address: [let_.name, let_.locality].filter(Boolean).join(", "),
+    address: landlord ? homeLine(ctx) : [let_.name, let_.locality].filter(Boolean).join(", "),
+    heading: docs.length ? (landlord ? "Documents for Your Property" : "Your Paperwork Has Arrived") : landlord ? "A Message About Your Property" : "A Message About Your Home",
+    preheader: docs.length ? "Your copies, attached to this email." : subject,
     messageHtml: messageHtml(message),
-    docList: `<p style="margin:0 0 6px;font-weight:600">Attached to this email</p><ul style="margin:0;padding-left:18px">${items}</ul>`,
+    docList: docs.length ? `<p style="margin:0 0 6px;font-weight:600">Attached to this email</p><ul style="margin:0;padding-left:18px">${items}</ul>` : "",
   });
   return { subject, html: out.html };
 }
 
-/** The documents a tenant gets: what was ticked, less another room's own papers. */
-export const docsForTenant = (docs: SendDoc[], t: SendTenant) => docs.filter((d) => !d.blocked && (!d.room || d.room === t.listingId));
+/**
+ * What one person gets: what was ticked and is theirs to have. A tenant: a
+ * tenant's papers, less another room's own on a shared house. A landlord:
+ * anything but a tenant's own papers.
+ */
+export const docsFor = (docs: SendDoc[], r: Recipient) =>
+  docs.filter((d) => !d.blocked && (r.role === "landlord" ? d.forLandlord : d.forTenants && (!d.room || d.room === r.listingId)));
+
+const TYPES: [RegExp, string][] = [
+  [/\.pdf$/i, "application/pdf"], [/\.png$/i, "image/png"], [/\.jpe?g$/i, "image/jpeg"], [/\.heic$/i, "image/heic"],
+  [/\.docx$/i, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"], [/\.doc$/i, "application/msword"],
+  [/\.xlsx$/i, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"], [/\.xls$/i, "application/vnd.ms-excel"],
+  [/\.csv$/i, "text/csv"], [/\.txt$/i, "text/plain"],
+];
+const contentTypeOf = (name: string) => TYPES.find(([re]) => re.test(name))?.[1] ?? "application/octet-stream";
 
 interface Attachment { filename: string; content: string; contentType: string; bytes: number; sha256: string }
 
 async function bytesOf(d: SendDoc): Promise<Attachment | null> {
-  const contentType = /\.pdf$/i.test(d.name) ? "application/pdf" : /\.png$/i.test(d.name) ? "image/png" : /\.jpe?g$/i.test(d.name) ? "image/jpeg" : "application/octet-stream";
+  const contentType = contentTypeOf(d.name);
   const pack = (buf: Buffer, type: string): Attachment => ({ filename: d.name, content: buf.toString("base64"), contentType: type, bytes: buf.length, sha256: createHash("sha256").update(buf).digest("hex") });
   try {
+    if ("upload" in d.source) {
+      const buf = d.source.upload;
+      return buf && buf.length <= MAX_FILE_BYTES ? pack(buf, contentType) : null;
+    }
     if ("r2" in d.source) {
       const obj = await withR2((c) => c.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: (d.source as { r2: string }).r2 })));
       if ((obj.ContentLength ?? 0) > MAX_FILE_BYTES) return null;
@@ -536,25 +668,27 @@ export function ensureTable(): Promise<void> {
   return ready;
 }
 
-export interface SendResult { key: string; name: string; email: string; sent: boolean; detail: string; documents: string[] }
+/** `role` from 29 Oct 2026 (Email Docs); a result without one went to a tenant. */
+export interface SendResult { key: string; name: string; email: string; sent: boolean; detail: string; documents: string[]; role?: Role }
 
 export interface HomeSend {
   id: string;
   at: string;
   by: string;
+  subject: string;
   documents: string[];
   results: SendResult[];
 }
 
-/** What has been sent to this home's tenants, newest first. */
+/** What has been emailed from this home, newest first. */
 export async function sendsFor(ctx: HomeContext): Promise<HomeSend[]> {
   await ensureTable();
   const ids = [...new Set([...ctx.lets, ctx.home].map((l) => String(l.listingId)))];
-  const rows = await q<{ id: string; at: Date; sent_by_name: string; documents: { label: string }[]; results: SendResult[] }>(
-    `SELECT id, at, sent_by_name, documents, results FROM os_home_sends WHERE listing_id = ANY($1) ORDER BY at DESC LIMIT 50`,
+  const rows = await q<{ id: string; at: Date; sent_by_name: string; subject: string; documents: { label: string }[]; results: SendResult[] }>(
+    `SELECT id, at, sent_by_name, subject, documents, results FROM os_home_sends WHERE listing_id = ANY($1) ORDER BY at DESC LIMIT 50`,
     [ids]
   );
-  return rows.map((r) => ({ id: r.id, at: new Date(r.at).toISOString(), by: r.sent_by_name, documents: (r.documents ?? []).map((d) => d.label), results: r.results ?? [] }));
+  return rows.map((r) => ({ id: r.id, at: new Date(r.at).toISOString(), by: r.sent_by_name, subject: r.subject ?? "", documents: (r.documents ?? []).map((d) => d.label), results: r.results ?? [] }));
 }
 
 export interface RecordedFile { id: string; label: string; name: string; expiry: string | null; source: string; bytes: number; sha256: string; certificateId: string | null }
@@ -633,25 +767,45 @@ async function claim(fingerprint: string, byId: string): Promise<boolean> {
 const release = (fingerprint: string) => q(`DELETE FROM os_home_send_locks WHERE fingerprint = $1`, [fingerprint]).catch(() => undefined);
 
 export class AlreadySending extends Error {}
+/** Refused before anything went, with the sentence to show. */
+export class NothingToSay extends Error {}
 
 /**
- * Send each ticked tenant their email, with their documents attached. One
- * email each, from the person pressing. Every press is kept, sent or not, and
- * every email is written down the moment it goes.
+ * Send each ticked person their email, with what is theirs attached: the
+ * tenants, the landlord side, or both (Email Docs, 29 Oct 2026). One email
+ * each, from the person pressing. Every press is kept, sent or not, and every
+ * email is written down the moment it goes.
  */
-export async function sendToTenants(ctx: HomeContext, docs: SendDoc[], tenants: SendTenant[], edit: EmailEdit = {}): Promise<{ results: SendResult[]; id: string }> {
+export async function sendFromHome(ctx: HomeContext, docs: SendDoc[], tenants: Recipient[], edit: EmailEdit = {}): Promise<{ results: SendResult[]; id: string }> {
   await ensureTable();
   const picked = docs.filter((d) => !d.blocked);
-  const dflt = defaultsFor(ctx, picked);
+  const roles = [...new Set(tenants.map((t) => t.role))];
+  const dflt = defaultsFor(ctx, picked, roles);
   const subject = String(edit.subject ?? "").trim() || dflt.subject;
   const message = String(edit.message ?? "").trim() || dflt.message;
+  if (!message.trim()) throw new NothingToSay("Write your email, or tick a document to send.");
 
   const fingerprint = createHash("sha256")
-    .update([String(ctx.home.listingId), picked.map((d) => d.id).sort().join(","), tenants.map((t) => t.key).sort().join(","), subject, message].join("\n"))
+    .update([String(ctx.home.listingId), picked.map((d) => `${d.id}:${d.name}:${d.sizeBytes ?? ""}`).sort().join(","), tenants.map((t) => t.key).sort().join(","), subject, message].join("\n"))
     .digest("hex");
   if (!(await claim(fingerprint, ctx.me.id))) throw new AlreadySending("That has just been sent. Give it a minute before sending the same again.");
 
   const id = randomBytes(12).toString("hex");
+  /* A file from the sender's computer is kept with the send, so the record
+     holds what went; one that can't be kept is not sent. */
+  for (const d of picked) {
+    if (!("upload" in d.source) || !d.source.upload) continue;
+    if (!r2Configured) { await release(fingerprint); throw new NothingToSay("Files from your computer can't be kept on this environment, so they can't be sent from here."); }
+    const key = `home-sends/${id}/${d.id.replace(/\W/g, "")}-${d.name.replace(/[^\w.\- ]+/g, "_")}`;
+    const body = d.source.upload;
+    try {
+      await withR2((c) => c.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: contentTypeOf(d.name) })));
+    } catch {
+      await release(fingerprint);
+      throw new NothingToSay(`${d.name} couldn't be kept with the email, so nothing was sent. Try again in a minute.`);
+    }
+    d.kept = key;
+  }
   const home = `${ctx.title}, ${ctx.home.locality}`;
   const byName = ctx.me.name || ctx.me.email;
   await q(
@@ -663,7 +817,7 @@ export async function sendToTenants(ctx: HomeContext, docs: SendDoc[], tenants: 
 
   const cache = new Map<string, Attachment | null>();
   const results: SendResult[] = [];
-  const write = async (t: SendTenant, row: { emailId: string; subject: string; html: string; files: { d: SendDoc; f: Attachment }[]; via: string | null; messageId: string | null; sent: boolean; detail: string }) => {
+  const write = async (t: Recipient, row: { emailId: string; subject: string; html: string; files: { d: SendDoc; f: Attachment }[]; via: string | null; messageId: string | null; sent: boolean; detail: string }) => {
     await q(
       `INSERT INTO os_home_send_emails (id, send_id, listing_id, tenant_listing_id, property_id, home, sent_by_id, sent_by_name, sent_by_email,
          to_name, to_email, subject, html, html_sha256, attachments, via, message_id, sent, detail)
@@ -673,7 +827,7 @@ export async function sendToTenants(ctx: HomeContext, docs: SendDoc[], tenants: 
         JSON.stringify(row.files.map(({ d, f }): RecordedFile => ({
           id: d.id, label: d.label, name: d.name, expiry: d.expiry, bytes: f.bytes, sha256: f.sha256, certificateId: d.certificateId ?? null,
           /* Where the bytes were: the R2 key, or which REX certificate (never REX's file address, which is a signed link). */
-          source: "r2" in d.source ? `r2:${d.source.r2}` : d.id,
+          source: "r2" in d.source ? `r2:${d.source.r2}` : d.kept ? `r2:${d.kept}` : d.id,
         }))),
         row.via, row.messageId, row.sent, row.detail]
     ).catch((e) => console.error("[home-send] the record of an email could not be written", id, e));
@@ -681,12 +835,15 @@ export async function sendToTenants(ctx: HomeContext, docs: SendDoc[], tenants: 
 
   try {
     for (const t of tenants) {
-      const mine = docsForTenant(docs, t);
-      const base = { key: t.key, name: t.name, email: t.email ?? "", documents: mine.map((d) => d.label) };
+      const mine = docsFor(docs, t);
+      const base = { key: t.key, name: t.name, email: t.email ?? "", documents: mine.map((d) => d.label), role: t.role };
       const emailId = randomBytes(12).toString("hex");
       const none = { emailId, subject, html: "", files: [] as { d: SendDoc; f: Attachment }[], via: null, messageId: null, sent: false };
       if (!t.email) { const detail = "There is no email address on their record, so nobody was written to."; results.push({ ...base, sent: false, detail }); await write(t, { ...none, detail }); continue; }
-      if (!mine.length) { const detail = "None of the documents ticked are for their room, so nothing was sent."; results.push({ ...base, sent: false, detail }); await write(t, { ...none, detail }); continue; }
+      if (picked.length && !mine.length) {
+        const detail = t.role === "landlord" ? "None of the documents ticked are for a landlord, so nothing was sent." : "None of the documents ticked are for them, so nothing was sent.";
+        results.push({ ...base, sent: false, detail }); await write(t, { ...none, detail }); continue;
+      }
       const files: { d: SendDoc; f: Attachment }[] = [];
       const missing: string[] = [];
       for (const d of mine) {
@@ -697,7 +854,7 @@ export async function sendToTenants(ctx: HomeContext, docs: SendDoc[], tenants: 
       if (missing.length) { const detail = `${missing.join(", ")} couldn't be read from storage, so nothing was sent. Try again in a minute.`; results.push({ ...base, sent: false, detail }); await write(t, { ...none, detail }); continue; }
       const total = files.reduce((n, x) => n + x.f.bytes, 0);
       if (total > MAX_EMAIL_BYTES) { const detail = "Together those files are too big for one email. Send them in two goes."; results.push({ ...base, sent: false, detail }); await write(t, { ...none, files, detail }); continue; }
-      const email = await emailFor(ctx, t, mine, { subject, message });
+      const email = await emailFor(ctx, t, mine, { subject, message }, roles);
       try {
         const r = await sendAsAgent({
           me: ctx.me, to: t.email, toName: t.name, subject: email.subject, html: email.html,
@@ -727,17 +884,18 @@ export async function sendToTenants(ctx: HomeContext, docs: SendDoc[], tenants: 
     for (const r of results.filter((x) => x.sent && x.documents.includes(d.label))) {
       await q(
         `INSERT INTO os_certificate_sends (id, certificate_id, property_id, type_id, role, name, address, sent, note)
-         SELECT $1, c.id, c.property_id, c.type_id, 'tenant', $2, $3, true, $4 FROM os_certificates c WHERE c.id = $5`,
-        [randomBytes(12).toString("hex"), r.name, r.email, `sent from the home's page by ${byName}`, d.certificateId]
+         SELECT $1, c.id, c.property_id, c.type_id, $6, $2, $3, true, $4 FROM os_certificates c WHERE c.id = $5`,
+        [randomBytes(12).toString("hex"), r.name, r.email, `sent from the home's page by ${byName}`, d.certificateId, r.role ?? "tenant"]
       ).catch(() => undefined);
     }
   }
   const sent = results.filter((r) => r.sent).length;
+  const toLandlord = roles.includes("landlord");
   await record({
-    kind: "tenant_documents_sent",
+    kind: toLandlord ? "home_email_sent" : "tenant_documents_sent",
     actorId: ctx.me.id,
     actorEmail: ctx.me.email,
-    detail: `Send to tenants, ${ctx.title}: ${sent} of ${results.length} sent (record ${id}). ${picked.map((d) => d.label).join(", ")}. ${results.map((r) => `${r.email || r.name} ${r.sent ? "sent" : "not sent"}`).join("; ")}`.slice(0, 1900),
+    detail: `${toLandlord ? "Email from the home" : "Send to tenants"}, ${ctx.title}: ${sent} of ${results.length} sent (record ${id}). ${picked.length ? picked.map((d) => d.label).join(", ") : `"${subject}", no attachments`}. ${results.map((r) => `${r.email || r.name} (${r.role}) ${r.sent ? "sent" : "not sent"}`).join("; ")}`.slice(0, 1900),
   }).catch(() => undefined);
   return { results, id };
 }

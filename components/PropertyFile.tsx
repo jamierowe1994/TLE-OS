@@ -708,7 +708,7 @@ function EmailTenant({
   onRecord: (id: string) => void;
 }) {
   const cls = "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-semibold transition";
-  const label = sent ? "Send Again" : "Email Tenant";
+  const label = sent ? "Send Again" : "Email Docs";
   const button = blocked ? (
     <span aria-disabled="true" title={blocked} className={`${cls} cursor-not-allowed border border-line/70 bg-box text-muted`}>
       <DoodleIcon name="mail" size={12} className="shrink-0 opacity-60" />{label}
