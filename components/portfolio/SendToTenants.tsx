@@ -68,12 +68,14 @@ const asBase64 = (f: File) =>
     r.readAsDataURL(f);
   });
 
-/** "2 tenants and the landlord", "the landlord", "Sophie Bell". */
+/** "2 tenants and the landlord", "Sophie Bell and 2 landlords", "3 tenants and 2 on the landlord side". */
 function whoLine(people: { name: string; role?: Role; where?: string | null }[]): string {
   const t = people.filter((p) => (p.role ?? "tenant") === "tenant");
   const l = people.filter((p) => p.role === "landlord");
-  const side = (list: typeof people, one: string, many: string) => (list.length === 0 ? null : list.length === 1 ? (one === "landlord" ? (list[0].where === "Landlord" ? "the landlord" : list[0].name) : list[0].name) : `${list.length} ${many}`);
-  return [side(t, "tenant", "tenants"), side(l, "landlord", "on the landlord side")].filter(Boolean).join(" and ") || "nobody";
+  const tenants = t.length === 0 ? null : t.length === 1 ? t[0].name : `${t.length} tenants`;
+  const allLandlords = l.every((p) => p.where === "Landlord" || p.where === "Additional landlord");
+  const landlords = l.length === 0 ? null : l.length === 1 ? (l[0].where === "Landlord" ? "the landlord" : l[0].name) : `${l.length} ${allLandlords ? "landlords" : "on the landlord side"}`;
+  return [tenants, landlords].filter(Boolean).join(" and ") || "nobody";
 }
 
 export default function SendToTenants({
@@ -371,7 +373,7 @@ export default function SendToTenants({
                 )}
                 <label className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-[12.5px] font-semibold text-accent-dark hover:bg-box">
                   <DoodleIcon name="upload" size={13} className="shrink-0" />
-                  Add a File
+                  <span className="whitespace-nowrap">Add a File</span>
                   <span className="font-normal text-muted">Goes to everyone ticked. Kept with the record, not added to the home.</span>
                   <input ref={fileInput} type="file" multiple className="sr-only" onChange={(e) => addFiles(e.target.files)} />
                 </label>
