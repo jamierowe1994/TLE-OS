@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { phoneKey, priorOffer } from "@/lib/offer-repeat";
 import { hasDb, q } from "@/lib/db";
 import { geocode } from "@/lib/geocode";
 import { proseEmail } from "@/lib/email/prose";
@@ -99,11 +100,19 @@ export async function makeEnquiry(p: {
 
   const to = await agentEmailFor(p.home.id, p.passportAgentId);
 
+  /* ONE ENQUIRY PER PERSON PER HOME (James, 29 Oct 2026): Sean had an
+     applicant asking about the same homes again and again, each one landing
+     as a fresh enquiry even after he had turned them down. A second one from
+     the same email or phone joins the first, and the agent is told it is a
+     repeat - and that they were declined here, when they were. */
+  const before = await priorEnquiry(p.home.id, p.email, p.phone).catch(() => null);
+
   const address = [p.home.name, p.home.locality].filter(Boolean).join(", ");
   const rent = `£${Math.round(p.home.rent).toLocaleString("en-GB")} ${p.home.rentPeriod === "week" ? "a week" : "a month"}`;
   let outcome = "not_sent";
   if (to) {
     const body = [
+      before ? before.line : "",
       p.afterLet
         ? `${p.name} has asked about ${address} (${rent}). They were told ${p.afterLet} is let and pressed Show Me Other Homes.`
         : `${p.name} has asked about ${address} (${rent}) from their tenant area.`,
@@ -112,9 +121,9 @@ export async function makeEnquiry(p: {
       p.afterLet
         ? "Reply to this email to answer them."
         : "Their tenant passport is complete, so they can apply in one tap once they have viewed. Reply to this email to answer them.",
-    ].join("\n\n");
+    ].filter(Boolean).join("\n\n");
     try {
-      await sendEmail({ to, subject: `${p.afterLet ? "Enquiry from Show Me Other Homes" : "Enquiry from the tenant area"}: ${address}`, html: proseEmail(body), replyTo: p.email, audience: "internal" });
+      await sendEmail({ to, subject: `${before ? "Asked again" : p.afterLet ? "Enquiry from Show Me Other Homes" : "Enquiry from the tenant area"}: ${address}`, html: proseEmail(body), replyTo: p.email, audience: "internal" });
       outcome = "sent";
     } catch (e) {
       outcome = `failed: ${e instanceof Error ? e.message : "send failed"}`.slice(0, 300);
@@ -123,12 +132,46 @@ export async function makeEnquiry(p: {
 
   const contactId = await fileOnLeads({ ...p, address, rent, emailed: outcome === "sent" ? `Emailed to ${to}.` : to ? `The email to ${to} did not go.` : "No agent email found, so nobody was emailed." }).catch(() => null);
 
-  await q(
-    `INSERT INTO os_tenant_enquiries (id, email, name, phone, listing_id, address, message, sent_to, outcome, contact_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-    [randomUUID(), p.email, p.name, p.phone.trim() || null, p.home.id, address, p.message.trim().slice(0, 4000), to, outcome, contactId]
-  );
+  if (before) {
+    const on = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
+    await q(
+      `UPDATE os_tenant_enquiries
+          SET message = $2, asked_times = asked_times + 1, last_asked_at = NOW(), sent_to = COALESCE($3, sent_to), outcome = $4,
+              phone = COALESCE(phone, $5), contact_id = COALESCE(contact_id, $6)
+        WHERE id = $1`,
+      [before.id, [p.message.trim() ? `${on}: ${p.message.trim()}` : `${on}: asked again`, before.message].filter(Boolean).join("\n\n").slice(0, 4000), to, outcome, p.phone.trim() || null, contactId]
+    );
+  } else
+    await q(
+      `INSERT INTO os_tenant_enquiries (id, email, name, phone, listing_id, address, message, sent_to, outcome, contact_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [randomUUID(), p.email, p.name, p.phone.trim() || null, p.home.id, address, p.message.trim().slice(0, 4000), to, outcome, contactId]
+    );
   return { ok: true, sentTo: outcome === "sent" ? to : null };
+}
+
+/**
+ * This person's enquiry already on this home, by email or phone, with the
+ * line that tells the agent it is a repeat: how many times, since when, and
+ * whether their offer here was declined.
+ */
+async function priorEnquiry(listingId: string, email: string, phone: string): Promise<{ id: string; message: string; line: string } | null> {
+  const rows = await q<{ id: string; email: string; phone: string | null; message: string; asked_times: number; created_at: Date }>(
+    `SELECT id, email, phone, message, asked_times, created_at FROM os_tenant_enquiries WHERE listing_id = $1 ORDER BY created_at ASC`,
+    [listingId]
+  );
+  const e = email.trim().toLowerCase();
+  const ph = phoneKey(phone);
+  const hit = rows.find((r) => r.email.trim().toLowerCase() === e) ?? (ph ? rows.find((r) => phoneKey(r.phone) === ph) : undefined);
+  if (!hit) return null;
+  const day = (d: Date | string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
+  const offer = await priorOffer(listingId, email, [phone]).catch(() => null);
+  const times = Number(hit.asked_times || 1) + 1;
+  const line = [
+    `This is the ${times === 2 ? "second" : times === 3 ? "third" : `${times}th`} time they have asked about this home; they first asked on ${day(hit.created_at)}. It has been added to their first enquiry rather than kept as a new one.`,
+    offer?.decision?.decision === "declined" ? `Their offer on this home was declined by ${offer.decision.by} on ${day(offer.decision.at)}.` : "",
+  ].filter(Boolean).join(" ");
+  return { id: hit.id, message: hit.message ?? "", line };
 }
 
 /** Who hears about a home: the listing's own agent in REX; failing that, the

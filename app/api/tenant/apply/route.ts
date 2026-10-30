@@ -11,6 +11,7 @@ import { offerSubset } from "@/lib/offer-passport";
 import { proseEmail } from "@/lib/email/prose";
 import { sendEmail } from "@/lib/resend";
 import { publicOrigin } from "@/lib/origin";
+import { foldRepeat, priorOffer, repeatLine } from "@/lib/offer-repeat";
 
 /**
  * The application form a listing sends out (Howard's ticket, approved by James
@@ -195,7 +196,10 @@ export async function POST(req: NextRequest) {
     applicants,
   };
 
-  const id = randomUUID();
+  /* Their offer already on this home takes this one in (lib/offer-repeat,
+     29 Oct 2026): one offer per person per home, never a second row. */
+  const prior = await priorOffer(home.id, lead.email, [lead.phone]).catch(() => null);
+  const id = prior?.id ?? randomUUID();
   const link = `${publicOrigin(req)}/offers/${id}`;
   const moveIn = new Date(`${app.startDate}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const yn = (b: boolean) => (b ? "yes" : "no");
@@ -212,8 +216,9 @@ export async function POST(req: NextRequest) {
       `Right to rent: ${yn(a.rightToRent)} · Landlord reference: ${yn(a.landlordRef)} · Guarantor: ${yn(a.guarantor)} · Adverse credit: ${yn(a.adverseCredit)}${a.adverseCredit && a.adverseCreditNote ? ` (${a.adverseCreditNote})` : ""}`,
     ].join("\n");
   });
-  const subject = `${asOffer ? "Offer" : "Application"} from ${lead.name}: ${gbp(app.offerAmount)} a month on ${address}`;
+  const subject = `${prior ? (asOffer ? "Offer again" : "Applied again") : asOffer ? "Offer" : "Application"} from ${lead.name}: ${gbp(app.offerAmount)} a month on ${address}`;
   const text = [
+    prior ? repeatLine(prior) : "",
     asOffer ? `${lead.name} has made an offer on ${address} through the offer link.` : `${lead.name} has applied for ${address} through the application form.`,
     [
       `Offer: ${gbp(app.offerAmount)} a month${home.askingPcm ? ` (advertised at ${gbp(home.askingPcm)})` : ""}`,
@@ -230,11 +235,13 @@ export async function POST(req: NextRequest) {
   /* Kept first, emailed second (23 Oct 2026). The other way round, a save
      that failed after the email left gave the agent a link to an offer that
      was never kept, and the tenant a page that said it hadn't gone. */
-  await q(
-    `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
-     VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,'not_sent')`,
-    [id, lead.email, lead.name, String(home.id), address, JSON.stringify(payload), home.agentEmail]
-  );
+  if (prior) await foldRepeat(prior, { name: lead.name, email: lead.email, payload, sentTo: home.agentEmail, outcome: "not_sent" });
+  else
+    await q(
+      `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
+       VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,'not_sent')`,
+      [id, lead.email, lead.name, String(home.id), address, JSON.stringify(payload), home.agentEmail]
+    );
 
   /* Staff mail, so not behind the customer switch: an application sitting in
      a table nobody reads is the failure here. */

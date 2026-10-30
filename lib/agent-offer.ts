@@ -17,6 +17,7 @@ import { proseEmail } from "@/lib/email/prose";
 import { addTestOffer, isTestId, kitPeopleForTestListing, testListing } from "@/lib/test-overlay";
 import { addOfferPeople, checkOthers, partLink } from "@/lib/offer-people";
 import { incomeOf, personLines } from "@/lib/offer-people-shape";
+import { foldRepeat, priorOffer, repeatLine } from "@/lib/offer-repeat";
 
 /**
  * An offer the AGENT puts forward for a tenant (1 Oct 2026, James: "build the
@@ -276,7 +277,10 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     recordedBy: { name: me.name, email: me.email, how },
   };
 
-  const id = randomUUID();
+  /* Their offer already on this home takes this one in (lib/offer-repeat,
+     29 Oct 2026): one offer per person per home, whoever keys it in. */
+  const prior = await priorOffer(listingId, email, [(after as { mobile?: string }).mobile, (rec?.data as { mobile?: string } | undefined)?.mobile]).catch(() => null);
+  const id = prior?.id ?? randomUUID();
   const whenWords = new Date(`${moveIn}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const who = `${movingIn.length ? movingIn.join(" and ") : name}${after.pets ? `, with ${after.petsNote ? after.petsNote.charAt(0).toLowerCase() + after.petsNote.slice(1) : "pets"}` : ""}`;
 
@@ -309,6 +313,7 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     const base = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
     const body = [
       `${me.name} has put an offer forward on ${address} for ${name}.`,
+      prior ? repeatLine(prior) : "",
       [`Offer: ${gbp(amount)} a month (advertised at ${gbp(asking)})`, `Move in: ${whenWords}`, `Moving in: ${who}`, `Working: ${workLine(after)}`, ...workFlags(after)].join("\n"),
       works.length ? `Works before moving day:\n${works.map((w) => `- ${w}`).join("\n")}` : "",
       note ? `For the landlord:\n${note}` : "",
@@ -320,18 +325,20 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
       `Open the offer: ${base}/offers/${id}`,
     ];
     try {
-      await sendEmail({ to: listingAgent, subject: `Offer from ${name}: ${gbp(amount)} a month on ${address}`, html: proseEmail(body.filter(Boolean).join("\n\n")), replyTo: me.email, audience: "internal" });
+      await sendEmail({ to: listingAgent, subject: `${prior ? "Offer again" : "Offer"} from ${name}: ${gbp(amount)} a month on ${address}`, html: proseEmail(body.filter(Boolean).join("\n\n")), replyTo: me.email, audience: "internal" });
       outcome = `recorded, sent to ${listingAgent}`;
     } catch {
       outcome = "recorded, listing agent not told";
     }
   }
 
-  await q(
-    `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
-     VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,$8)`,
-    [id, email, name, listingId, address, JSON.stringify(payload), listingAgent, `${outcome}; copy ${copy}; passport ${passportNote}`.slice(0, 300)]
-  );
+  if (prior) await foldRepeat(prior, { name, email, payload, sentTo: listingAgent, outcome: `${outcome}; copy ${copy}; passport ${passportNote}` });
+  else
+    await q(
+      `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
+       VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,$8)`,
+      [id, email, name, listingId, address, JSON.stringify(payload), listingAgent, `${outcome}; copy ${copy}; passport ${passportNote}`.slice(0, 300)]
+    );
   const links = await keepPeople(id, listingId, address);
   return { id, copy, passport: passportNote, links };
 }

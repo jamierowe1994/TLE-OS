@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { findPassportByEmail, getPassport } from "@/lib/passport";
 import { EMPTY_PASSPORT, householdIncome, type PassportData } from "@/lib/passport-shape";
 import { offerSubset } from "@/lib/offer-passport";
+import { foldRepeat, priorOffer, repeatLine, type PriorOffer } from "@/lib/offer-repeat";
 
 /**
  * The tenant's feedback on a viewing, behind the token in How Was It?
@@ -117,40 +118,41 @@ export async function POST(req: NextRequest) {
      listing's agent, which is what rings their bell (lib/notifications). */
   const agent = await userByName(f.agent);
   const listingAgent = offer && f.listing_id ? await agentEmailFor(String(f.listing_id), null).catch(() => null) : null;
+  let prior: PriorOffer | null = null;
   if (offer && f.listing_id) {
     offerId = randomUUID();
     const found = await findPassportByEmail(f.email, null).catch(() => null);
     const held = found ? await getPassport(found.token).catch(() => null) : null;
     const data = (held?.data ?? null) as PassportData | null;
     const pp = offerSubset(data);
-    await q(
-      `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
-       VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,'from the viewing feedback page')`,
-      [
-        offerId,
-        f.email.toLowerCase(),
-        f.name,
-        f.listing_id,
-        f.address,
-        JSON.stringify({
-          source: "viewing-feedback",
-          amount: offer.amount,
-          asking: f.asking_pcm,
-          moveIn: offer.moveIn,
-          movingIn: [],
-          works: [],
-          adults: Number(pp.numAdults) || 1,
-          children: Number(pp.numChildren) || 0,
-          pets: pp.pets === true,
-          petsNote: pp.petsNote ?? "",
-          note: "",
-          householdIncome: data ? householdIncome({ ...EMPTY_PASSPORT, ...data }).total : null,
-          passport: data ? pp : null,
-          changes: [],
-          answers,
-        }),
-        listingAgent ?? agent?.email ?? null,
-      ]
+    /* Their offer already on this home takes this one in (lib/offer-repeat,
+       29 Oct 2026): one offer per person per home. */
+    prior = await priorOffer(String(f.listing_id), f.email, [data?.mobile]).catch(() => null);
+    if (prior) offerId = prior.id;
+    const payload = {
+      source: "viewing-feedback",
+      amount: offer.amount,
+      asking: f.asking_pcm,
+      moveIn: offer.moveIn,
+      movingIn: [],
+      works: [],
+      adults: Number(pp.numAdults) || 1,
+      children: Number(pp.numChildren) || 0,
+      pets: pp.pets === true,
+      petsNote: pp.petsNote ?? "",
+      note: "",
+      householdIncome: data ? householdIncome({ ...EMPTY_PASSPORT, ...data }).total : null,
+      passport: data ? pp : null,
+      changes: [],
+      answers,
+    };
+    await (prior
+      ? foldRepeat(prior, { name: f.name, email: f.email.toLowerCase(), payload, sentTo: listingAgent ?? agent?.email ?? null, outcome: "from the viewing feedback page" })
+      : q(
+          `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
+           VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,'from the viewing feedback page')`,
+          [offerId, f.email.toLowerCase(), f.name, f.listing_id, f.address, JSON.stringify(payload), listingAgent ?? agent?.email ?? null]
+        )
     ).catch(() => {
       offerId = null;
     });
@@ -175,11 +177,12 @@ export async function POST(req: NextRequest) {
     const address = safe(f.address);
     /* The subject line is plain text, so it carries their words as typed. */
     const subject = offer
-      ? `Offer from ${f.name || f.email}: £${offer.amount.toLocaleString("en-GB")} pcm on ${f.address}`
+      ? `${prior ? "Offer again" : "Offer"} from ${f.name || f.email}: £${offer.amount.toLocaleString("en-GB")} pcm on ${f.address}`
       : `Viewing feedback from ${f.name || f.email}: ${f.address}`;
     const text = [
       offer ? `${who} would like to offer on ${address}.` : `${who} has said ${address} is not for them.`,
       "",
+      ...(prior ? [repeatLine(prior), ""] : []),
       ...(offer
         ? [
             `**Offer:** £${offer.amount.toLocaleString("en-GB")} pcm${f.asking_pcm ? ` (advertised at £${f.asking_pcm.toLocaleString("en-GB")})` : ""}`,

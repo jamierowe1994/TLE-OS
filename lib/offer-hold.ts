@@ -5,6 +5,8 @@ import { decisionsFor, recordDecision, type DecisionRef } from "@/lib/offer-deci
 import { createUpdate, type CustomerUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { homesListHtml, liveBook, similarHomes } from "@/lib/tenant-matching";
 import { firstName, validEmail } from "@/lib/tenant-email-send";
+import { discardedRefs } from "@/lib/offer-discards";
+import { offerPhones, personKeys } from "@/lib/offer-repeat";
 
 /**
  * The other offers, held until the holding fee is paid (9 Oct 2026).
@@ -60,11 +62,21 @@ export async function otherOpenOffers(
       ).catch(() => [] as OsRow[])
     : [];
   const refs = [...rex.map((a) => `rex:${a.id}`), ...os.map((r) => `os:${r.id}`)];
-  const decided = await decisionsFor(refs).catch(() => new Map());
+  const [decided, discarded] = await Promise.all([decisionsFor(refs).catch(() => new Map()), discardedRefs(refs).catch(() => new Set<string>())]);
+  /* The accepted tenant's own second offer is never theirs to be told no
+     about (29 Oct 2026, lib/offer-repeat), and a discarded one is gone. */
+  const acceptedApp = exceptRef.startsWith("rex:") ? apps.find((a) => `rex:${a.id}` === exceptRef) : undefined;
+  const acceptedOs = exceptRef.startsWith("os:") ? os.find((r) => `os:${r.id}` === exceptRef) : undefined;
+  const theirs = new Set([
+    ...(acceptedApp?.applicants ?? []).flatMap((p) => personKeys(p.email, p.phone)),
+    ...(acceptedOs ? [...personKeys(acceptedOs.email, null), ...offerPhones(acceptedOs.payload as Record<string, unknown>).map((x) => `p:${x}`)] : []),
+  ]);
+  const sameTenant = (keys: string[]) => keys.some((k) => theirs.has(k));
   const out: HeldOffer[] = [];
   for (const a of rex) {
     const ref = `rex:${a.id}` as DecisionRef;
-    if (ref === exceptRef || decided.has(ref)) continue;
+    if (ref === exceptRef || decided.has(ref) || discarded.has(ref)) continue;
+    if (sameTenant(a.applicants.flatMap((p) => personKeys(p.email, p.phone)))) continue;
     out.push({
       ref,
       name: a.applicants.map((p) => p.name).filter(Boolean).join(" & ") || "Applicant not named",
@@ -74,7 +86,8 @@ export async function otherOpenOffers(
   }
   for (const r of os) {
     const ref = `os:${r.id}` as DecisionRef;
-    if (ref === exceptRef || decided.has(ref)) continue;
+    if (ref === exceptRef || decided.has(ref) || discarded.has(ref)) continue;
+    if (sameTenant([...personKeys(r.email, null), ...offerPhones(r.payload as Record<string, unknown>).map((x) => `p:${x}`)])) continue;
     out.push({
       ref,
       name: r.name || r.email,

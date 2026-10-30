@@ -51,7 +51,22 @@ const LeadDrawer = dynamic(() => import("@/components/LeadDrawer"), { ssr: false
  * Other Homes in the email (components/listing/NotifyEnquiries).
  */
 
-export type Enquiry = { id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; message?: string };
+export type Enquiry = {
+  id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; message?: string;
+  /** Their enquiries about this home folded into this one, the newest (lib/lead-repeats, 29 Oct 2026). */
+  repeat?: { times: number; firstAt: string | null } | null;
+  /** Their offer was declined here before this came in. */
+  declinedBefore?: { at: string; by: string; home: string } | null;
+};
+
+/** "Asked 3 times, declined 29 Oct": a repeat said as one, for either look. */
+function againOf(e: Enquiry): string {
+  const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
+  return [
+    e.repeat && e.repeat.times > 1 ? `Asked ${e.repeat.times} times${e.repeat.firstAt ? ` since ${day(e.repeat.firstAt)}` : ""}` : "",
+    e.declinedBefore ? `declined ${day(e.declinedBefore.at)} by ${e.declinedBefore.by}` : "",
+  ].filter(Boolean).join(", ").replace(/^d/, "D");
+}
 type Status = { state: "none" | "sent" | "started" | "done"; invitedAt: string | null; submittedAt: string | null };
 type Result = { email: string; name: string; ok: boolean; said: string };
 
@@ -615,7 +630,10 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
                       <span className="nl-enq-name-text">{e.name}</span>
                       {opening === e.id && <span className="nl-enq-spin" aria-hidden />}
                     </span>
-                    <span className="nl-enq-msg nl-meta">{e.message || "No message"}</span>
+                    <span className="nl-enq-msg nl-meta">
+                      {againOf(e) && <strong>{againOf(e)}. </strong>}
+                      {e.message || "No message"}
+                    </span>
                   </a>
                   {src && <span className="nl-enq-src">{src}</span>}
                   <span className="nl-enq-age nl-mono">{ageOf(e)}</span>
@@ -781,6 +799,7 @@ export default function ListingEnquiries({ enquiries, home, listingId, propertyI
                       {opening === e.id && <span aria-hidden className="h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />}
                     </span>
                     <span className="block truncate text-[10.5px] text-muted">{[e.phone, e.email].filter(Boolean).join(" · ") || "No contact details"}</span>
+                    {againOf(e) && <span className="block truncate text-[10.5px] font-semibold text-accent-dark">{againOf(e)}</span>}
                   </span>
                   <span className="hidden sm:block"><Tag tone="neutral">{e.source}</Tag></span>
                   <span className="hidden min-w-0 truncate text-[11px] text-muted sm:block">{e.message || "-"}</span>
