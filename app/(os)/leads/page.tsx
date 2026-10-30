@@ -150,6 +150,24 @@ function PassportChip({ state, at }: { state: PassportState | "none"; at: string
  * a quieter "Viewed". Nothing at all when there is no viewing.
  */
 const LONDON = "Europe/London";
+/** "Asked 3 times since 4 Oct", for one person's enquiries about one home folded into one row (29 Oct 2026). */
+const lowerFirst = (s: string) => (s ? s[0].toLowerCase() + s.slice(1) : s);
+
+function askedWords(l: Lead): string {
+  const r = l.repeat;
+  if (!r || r.times < 2) return "";
+  const since = r.firstAt ? new Date(r.firstAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }) : "";
+  return `Asked ${r.times} times${since ? ` since ${since}` : ""}`;
+}
+
+/** "Declined 29 Oct by Sean McMahon on 10 Thornton Road", for a person whose offer was declined before this came in. */
+function declinedWords(l: Lead): string {
+  const d = l.declinedBefore;
+  if (!d) return "";
+  const on = new Date(d.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
+  return `Declined ${on} by ${d.by}${d.home ? ` on ${d.home.split(",")[0]}` : ""}`;
+}
+
 function ViewingChip({ list }: { list: LeadViewingRow[] }) {
   if (!list.length) return null;
   const now = Date.now();
@@ -714,6 +732,9 @@ export default function Leads() {
             <span className="block whitespace-nowrap">
               <span className="hand text-[13px]">{l.name}</span>
               {manyAgents && <span className="block text-[10.5px] text-muted">{l.agent && l.agent !== "Unassigned" ? `For ${l.agent}` : "Not assigned"}</span>}
+              {(askedWords(l) || declinedWords(l)) && (
+                <span className="block text-[10.5px] font-semibold text-accent-dark">{[askedWords(l), declinedWords(l)].filter(Boolean).join(" · ")}</span>
+              )}
             </span>
           );
         },
@@ -1112,7 +1133,7 @@ export default function Leads() {
                   const pw = passportWord(l);
                   const vw = viewingWord(l);
                   const facts = [real(l.email), real(l.phone), real(l.budget) && `Budget ${real(l.budget)}`, tenant && real(l.moveDate) && `Moving ${real(l.moveDate)}`].filter(Boolean) as string[];
-                  const who = `${tenant ? "Tenant" : "Landlord"}${manyAgents ? ` · ${l.agent && l.agent !== "Unassigned" ? `for ${l.agent}` : "not assigned"}` : ""}`;
+                  const who = `${tenant ? "Tenant" : "Landlord"}${manyAgents ? ` · ${l.agent && l.agent !== "Unassigned" ? `for ${l.agent}` : "not assigned"}` : ""}${askedWords(l) ? ` · ${askedWords(l).toLowerCase()}` : ""}${l.declinedBefore ? " · declined before" : ""}`;
                   return (
                     <div key={l.id} className={`nl-leads-row${isOpen ? " is-open" : ""}${openId === l.id ? " is-current" : ""}`}>
                       <button type="button" data-steve-row="" className="nl-leads-rowbtn" aria-expanded={isOpen} onClick={() => setNlOpenRow(isOpen ? null : l.id)}>
@@ -1133,6 +1154,14 @@ export default function Leads() {
                           {isOpen && (
                             <div className="nl-leads-more">
                               <p className="nl-leads-said">{said || "No message came with this enquiry."}</p>
+                              {(askedWords(l) || declinedWords(l)) && (
+                                <p className="nl-meta">
+                                  {[
+                                    askedWords(l) && `${askedWords(l)} about this home - shown once, newest first.${l.repeat?.closedBefore ? " An earlier one was closed." : ""}`,
+                                    declinedWords(l) && `Their offer was ${lowerFirst(declinedWords(l))}.`,
+                                  ].filter(Boolean).join(" ")}
+                                </p>
+                              )}
                               {(pw || vw || facts.length > 0) && (
                                 <div className="nl-leads-facts">
                                   {pw}

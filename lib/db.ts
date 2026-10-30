@@ -1774,6 +1774,10 @@ CREATE TABLE IF NOT EXISTS os_tenant_enquiries (
 -- The person on the Leads board it was filed against (os_contacts id).
 ALTER TABLE os_tenant_enquiries ADD COLUMN IF NOT EXISTS contact_id TEXT;
 CREATE INDEX IF NOT EXISTS os_tenant_enquiries_email_idx ON os_tenant_enquiries (LOWER(email), created_at DESC);
+-- One enquiry per person per home (29 Oct 2026): a second one from the same
+-- email or phone adds to the first rather than making a new row.
+ALTER TABLE os_tenant_enquiries ADD COLUMN IF NOT EXISTS asked_times INT NOT NULL DEFAULT 1;
+ALTER TABLE os_tenant_enquiries ADD COLUMN IF NOT EXISTS last_asked_at TIMESTAMPTZ;
 
 -- THE TEST OVERLAY (19 Sep 2026): the later stages of a test file - a
 -- listing live on the portals, offers, a deal moving through referencing -

@@ -40,6 +40,10 @@ export type Lead = {
   lat?: number;
   lng?: number;
   activity: { icon: string; text: string; when: string }[];
+  /** The same person about the same home more than once: folded into this, the newest (lib/lead-repeats, 29 Oct 2026). */
+  repeat?: { times: number; firstAt: string | null; earlier: string[]; closedBefore: boolean } | null;
+  /** Their offer was declined here before this came in. */
+  declinedBefore?: { at: string; by: string; home: string } | null;
   /* ── Only real REX leads carry these; the demo book leaves them unset. ── */
   /** ISO timestamp, so the list can sort on something better than "10m ago". */
   receivedAt?: string;

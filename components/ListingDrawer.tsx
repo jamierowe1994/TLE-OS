@@ -74,7 +74,7 @@ import ContactBlock from "@/components/ContactBlock";
 import HomeLandlords from "@/components/HomeLandlords";
 import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
 import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
-import ListingEnquiries from "@/components/listing/ListingEnquiries";
+import ListingEnquiries, { type Enquiry } from "@/components/listing/ListingEnquiries";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import BookSlot from "@/components/viewings/BookSlot";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
@@ -765,10 +765,10 @@ function ListingDrawerBody({
        applications to keep a handful. Same fields back. */
     fetch(`/api/listings/${encodeURIComponent(id)}/enquiries`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; leads?: { id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; enquiryMessage?: string; listingId?: number | string }[] }) => {
+      .then((j: { ok?: boolean; leads?: { id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; enquiryMessage?: string; listingId?: number | string; repeat?: Enquiry["repeat"]; declinedBefore?: Enquiry["declinedBefore"] }[] }) => {
         if (gone) return;
         const mine = (j.leads ?? []).filter((l) => String(l.listingId ?? "") === id);
-        setEnquiries(mine.map((l) => ({ id: l.id, name: l.name, source: l.source, received: l.received, receivedAt: l.receivedAt, email: l.email, phone: l.phone, message: l.enquiryMessage })));
+        setEnquiries(mine.map((l) => ({ id: l.id, name: l.name, source: l.source, received: l.received, receivedAt: l.receivedAt, email: l.email, phone: l.phone, message: l.enquiryMessage, repeat: l.repeat ?? null, declinedBefore: l.declinedBefore ?? null })));
       })
       .catch(() => { if (!gone) setEnquiries([]); });
     setViewings(null);
@@ -829,7 +829,7 @@ function ListingDrawerBody({
      listing (James, 7 Sep 2026: "it's not showing the actual leads that have
      inquired about a property"). The lead book is the cached one every
      screen shares, filtered here to the listing; applications likewise. */
-  const [enquiries, setEnquiries] = useState<{ id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; message?: string }[] | null>(null);
+  const [enquiries, setEnquiries] = useState<Enquiry[] | null>(null);
   /* The listing's diary out of REX (and kept): upcoming and past viewings,
      who came and who took them (James, 7 Sep). */
   type LiveViewing = { id: string; startsAt: string; endsAt: string | null; mins: number; kind: string; title: string; type: string | null; status: string | null; cancelled: boolean; agent: string | null; contacts: { id: string; name: string; email: string | null; phone: string | null; leadId?: string | null }[]; feedbackId: string | null; description: string | null };
@@ -859,6 +859,8 @@ function ListingDrawerBody({
   const [slotting, setSlotting] = useState(false);
   const [savedOffers, setSavedOffers] = useState<ListingOffer[] | null>(null);
   const [offersRexUnread, setOffersRexUnread] = useState(false);
+  /* Duplicates discarded here, for Activity (29 Oct 2026, lib/offer-discards). */
+  const [discardedOffers, setDiscardedOffers] = useState<{ ref: string; name: string; by: string; at: string }[]>([]);
   /* Bumped after an Accept, Decline or Undo, so the list reads again. */
   const [offersTick, setOffersTick] = useState(0);
   const offersFor = useRef<string | null>(null);
@@ -867,13 +869,14 @@ function ListingDrawerBody({
     if (id == null) return;
     let gone = false;
     /* Another listing: never show the last one's offers while this one's load. */
-    if (offersFor.current !== String(id)) setSavedOffers(null);
+    if (offersFor.current !== String(id)) { setSavedOffers(null); setDiscardedOffers([]); }
     offersFor.current = String(id);
     fetch(`/api/listings/${encodeURIComponent(String(id))}/offers`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; offers?: ListingOffer[]; rexUnread?: boolean }) => {
+      .then((j: { ok?: boolean; offers?: ListingOffer[]; rexUnread?: boolean; discarded?: { ref: string; name: string; by: string; at: string }[] }) => {
         if (gone) return;
         setSavedOffers(j.ok ? (j.offers ?? []) : []);
+        setDiscardedOffers(j.ok ? (j.discarded ?? []) : []);
         setOffersRexUnread(!j.ok || j.rexUnread === true);
       })
       .catch(() => { if (!gone) { setSavedOffers([]); setOffersRexUnread(true); } });
@@ -1433,6 +1436,9 @@ function ListingDrawerBody({
   }
   for (const o of savedOffers ?? []) {
     if (o.at) latest.push({ key: `offer-${o.ref}`, at: o.at, icon: "coin", title: `Offer · ${o.name}`, sub: `${o.amount ? `£${o.amount.toLocaleString("en-GB")} · ` : ""}${o.status === "open" ? "Waiting on a decision" : o.status === "accepted" ? "Accepted" : "Declined"}`, to: "applications", hot: o.status === "open" });
+  }
+  for (const d of discardedOffers) {
+    latest.push({ key: `discard-${d.ref}`, at: d.at, icon: "coin", title: `Duplicate offer from ${d.name} discarded by ${d.by}`, sub: "Nobody was emailed", to: "applications" });
   }
   latest.sort((a, b) => b.at.localeCompare(a.at));
   const reading = enquiries === null || viewings === null || savedOffers === null;

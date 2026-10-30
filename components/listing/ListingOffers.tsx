@@ -44,6 +44,13 @@ import { Badge, Ico, type Tone } from "@/components/new-look/Parts";
  * over the list lets the held ones go - the hold rule said first, then a
  * "not this one" drafted for each to read and send
  * (components/offers/DeclineOtherOffers).
+ *
+ * DISCARD (James, 29 Oct 2026): a second offer from the same person is marked
+ * Duplicate and offers Discard instead of Decline, which would have emailed
+ * them a no while their other offer goes ahead. Discard emails nobody and
+ * takes it off the list (POST /api/offers/discard); the listing's Activity
+ * keeps who and when. An offer sent again by the same person joins their
+ * first one (lib/offer-repeat), and says how many times it was sent.
  */
 
 export type ListingOffer = {
@@ -66,7 +73,18 @@ export type ListingOffer = {
   offered?: number | null;
   /** The back-and-forth, oldest first (16 Oct 2026). */
   counters?: OfferCounter[];
+  /** Every time they sent it, oldest first, when more than once (29 Oct 2026). */
+  tries?: { at: string; amount: number | null; moveIn: string | null; via: string }[];
+  /** A second offer from the same person, and the one it repeats. */
+  duplicateOf?: { ref: string; name: string; at: string | null } | null;
+  /** Sent again after it was decided. */
+  againAfter?: "accepted" | "declined" | null;
 };
+
+const isDup = (o: ListingOffer) => Boolean(o.duplicateOf);
+
+/** "Offered 3 times, last 29 Oct", for an offer sent more than once. */
+const triesWord = (o: ListingOffer) => (o.tries && o.tries.length > 1 ? `offered ${o.tries.length} times, last ${short(o.tries[o.tries.length - 1].at)}` : "");
 
 const countered = (o: ListingOffer) => Boolean(o.counters?.length);
 
@@ -90,6 +108,7 @@ const lower = (s: string) => (s ? s[0].toLowerCase() + s.slice(1) : s);
 
 /** The new look's status word and tone, held ones included. */
 function statusOf(o: ListingOffer, taken: ListingOffer | null): { word: string; tone: Tone } {
+  if (isDup(o)) return { word: "Duplicate", tone: "warning" };
   if (o.status === "accepted") return { word: "Accepted", tone: "good" };
   if (o.status === "declined") return { word: "Declined", tone: "neutral" };
   if (taken) return { word: "Held", tone: "neutral" };
@@ -178,6 +197,50 @@ export default function ListingOffers({
      case they drop out. The application file asks to let them go once it is. */
   const taken = sorted.find((o) => o.status === "accepted") ?? null;
 
+  /* Discard a duplicate: asks once, emails nobody (29 Oct 2026). */
+  async function discard(o: ListingOffer) {
+    if (busy || !o.duplicateOf) return;
+    if (confirming !== `dis:${o.ref}`) {
+      setConfirming(`dis:${o.ref}`);
+      return;
+    }
+    setConfirming(null);
+    setBusy(o.ref);
+    setErr(null);
+    try {
+      const r = await fetch("/api/offers/discard", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ref: o.ref, listingId, duplicateOf: o.duplicateOf.ref, name: o.name }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!j.ok) setErr({ ref: o.ref, text: j.error ?? "That didn't save. Try again." });
+      else {
+        if (openRef === o.ref) setOpenRef(null);
+        onChanged();
+      }
+    } catch {
+      setErr({ ref: o.ref, text: "That didn't go through. Try again." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** What a duplicate says about itself, for either look. */
+  const dupNote = (o: ListingOffer) =>
+    o.duplicateOf
+      ? confirming === `dis:${o.ref}`
+        ? `Discard ${o.name}'s duplicate? It comes off this list and nobody is emailed. ${o.duplicateOf.at ? `Their offer from ${short(o.duplicateOf.at)}` : "Their other offer"} stays as it is.`
+        : `Same person as ${o.duplicateOf.at ? `the offer from ${short(o.duplicateOf.at)}` : "another offer here"}. Discard it rather than decline it, so they aren't told no.`
+      : "";
+  /** A declined tenant who tried again, said as a repeat. */
+  const againNote = (o: ListingOffer) =>
+    o.againAfter === "declined" && o.tries?.length
+      ? `Offered again ${short(o.tries[o.tries.length - 1].at)} after it was declined. It stays declined and nothing was sent to them.${o.undoable ? " Undo opens it again." : ""}`
+      : o.againAfter === "accepted" && o.tries?.length
+        ? `Sent again ${short(o.tries[o.tries.length - 1].at)} after it was accepted. The accepted figures stand.`
+        : "";
+
   async function act(o: ListingOffer, what: "accepted" | "declined" | "undo") {
     if (busy) return;
     if (what === "declined" && confirming !== o.ref) {
@@ -221,10 +284,25 @@ export default function ListingOffers({
   /* THE NEW LOOK (23 Oct 2026): one card, rows on hairlines, the same
      decisions, confirmations, counter, held offers and opened offer. */
   if (look === "new") {
-    const heldNew = taken && taken.kind !== "test" ? sorted.filter((o) => o.status === "open" && o.kind !== "test") : [];
+    const heldNew = taken && taken.kind !== "test" ? sorted.filter((o) => o.status === "open" && o.kind !== "test" && !isDup(o)) : [];
 
     const decideNew = (o: ListingOffer, big = false) => {
       const sm = big ? "" : " nl-btn--sm";
+      if (o.duplicateOf) {
+        return (
+          <span className="nl-off-acts">
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void discard(o)}
+              onBlur={() => confirming === `dis:${o.ref}` && setConfirming(null)}
+              className={`nl-btn ${confirming === `dis:${o.ref}` ? "nl-btn--danger" : "nl-btn--secondary"}${sm}`}
+            >
+              {busy === o.ref ? "Saving…" : confirming === `dis:${o.ref}` ? "Yes, discard it" : "Discard"}
+            </button>
+          </span>
+        );
+      }
       if (o.status === "open") {
         return (
           <span className="nl-off-acts">
@@ -301,13 +379,15 @@ export default function ListingOffers({
           </p>
         );
       }
-      if (o.status === "open" && taken) {
+      if (o.status === "open" && taken && !isDup(o)) {
         lines.push(
           <p key="held" className="nl-meta">
             Held until {taken.name}&apos;s holding fee is paid. The home keeps taking viewings meanwhile.
           </p>
         );
       }
+      if (dupNote(o)) lines.push(<p key="dup" className="nl-meta">{dupNote(o)}</p>);
+      if (againNote(o)) lines.push(<p key="again" className="nl-meta">{againNote(o)}</p>);
       if (err?.ref === o.ref) lines.push(<p key="err" className="nl-off-err" role="alert">{unRex(err.text) || "That didn't save. Try again."}</p>);
       return lines.length ? <div className="nl-off-sub">{lines}</div> : null;
     };
@@ -360,12 +440,13 @@ export default function ListingOffers({
                         o.moveIn ? `moving in ${short(o.moveIn)}` : "",
                         o.decided ? unRex(o.decided) : "",
                         o.landlordSent ? `sent to the landlord ${short(o.landlordSent.at)}` : "",
+                        triesWord(o),
                         unRex(o.via),
                       ].filter(Boolean).map((x, i) => (i === 0 ? x[0].toUpperCase() + x.slice(1) : lower(x))).join(" · ");
                       const talk = last && o.status === "open" ? `${last.side === "landlord" ? "Landlord" : "Tenant"} countered${o.offered != null ? `, first offer ${gbp(o.offered)}` : ""}` : null;
                       const st = statusOf(o, taken);
                       return (
-                        <li key={o.ref} className={o.status === "declined" ? "is-faded" : undefined}>
+                        <li key={o.ref} className={o.status === "declined" && !isDup(o) ? "is-faded" : undefined}>
                           <div className="nl-off-row">
                             <button type="button" className="nl-off-main" title="Open the offer" onClick={() => { setConfirming(null); setOpenRef(o.ref); }}>
                               <span className="nl-strong">{o.name}</span>
@@ -471,6 +552,21 @@ export default function ListingOffers({
   /* The decision buttons, the same on the list and on the opened offer. */
   const decide = (o: ListingOffer, big = false) => {
     const pad = big ? "px-4 py-2.5 text-[12.5px]" : "px-3 py-1.5 text-[11.5px]";
+    if (o.duplicateOf) {
+      return (
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void discard(o)}
+          onBlur={() => confirming === `dis:${o.ref}` && setConfirming(null)}
+          className={`shrink-0 rounded-full border font-semibold disabled:opacity-50 ${pad} ${
+            confirming === `dis:${o.ref}` ? "border-accent-dark bg-accent-dark text-white" : "border-line text-ink hover:border-ink/50"
+          }`}
+        >
+          {busy === o.ref ? "Saving…" : confirming === `dis:${o.ref}` ? "Yes, discard it" : "Discard"}
+        </button>
+      );
+    }
     if (o.status === "open") {
       return (
         <span className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -549,7 +645,9 @@ export default function ListingOffers({
             : <>Accept {o.name}&apos;s offer on the landlord&apos;s behalf? It goes onto Applications, ready to push to Propoly. The other offers are held until the holding fee is paid.</>}
         </p>
       )}
-      {o.status === "open" && taken && (
+      {dupNote(o) && <p className="mt-1.5 text-[11px] leading-snug text-muted">{dupNote(o)}</p>}
+      {againNote(o) && <p className="mt-1.5 text-[11px] leading-snug text-muted">{againNote(o)}</p>}
+      {o.status === "open" && taken && !isDup(o) && (
         <p className="mt-1.5 text-[11px] leading-snug text-muted">
           Held until {taken.name}&apos;s holding fee is paid. The home keeps taking viewings meanwhile.
         </p>
@@ -559,7 +657,7 @@ export default function ListingOffers({
   );
 
   /* Held offers on a home with one accepted: let them go from here (22 Oct 2026). */
-  const heldOnes = taken && taken.kind !== "test" ? sorted.filter((o) => o.status === "open" && o.kind !== "test") : [];
+  const heldOnes = taken && taken.kind !== "test" ? sorted.filter((o) => o.status === "open" && o.kind !== "test" && !isDup(o)) : [];
 
   return (
     <>
@@ -592,10 +690,11 @@ export default function ListingOffers({
                   o.at ? `made ${short(o.at)}` : "",
                   o.moveIn ? `moving in ${short(o.moveIn)}` : "",
                   o.landlordSent ? `sent to the landlord ${short(o.landlordSent.at)}` : "",
+                  triesWord(o),
                 ].filter(Boolean).join(" · ");
                 const talk = last && o.status === "open" ? `${last.side === "landlord" ? "Landlord" : "Tenant"} countered${o.offered != null ? `, first offer ${gbp(o.offered)}` : ""}` : null;
                 return (
-                  <li key={o.ref} className={`py-3 ${o.status === "declined" ? "opacity-60" : ""}`}>
+                  <li key={o.ref} className={`py-3 ${o.status === "declined" && !isDup(o) ? "opacity-60" : ""}`}>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                       <button
                         type="button"
@@ -608,8 +707,8 @@ export default function ListingOffers({
                         {talk && <span className="block truncate text-[10.5px] font-semibold text-accent-dark">{talk}</span>}
                         {o.decided && <span className="block truncate text-[10.5px] text-muted">{o.decided}</span>}
                       </button>
-                      <Tag tone={o.status === "accepted" ? "good" : o.status === "declined" ? "neutral" : "accent"}>
-                        {o.status === "accepted" ? "Accepted" : o.status === "declined" ? "Declined" : taken ? "Held" : countered(o) ? "Negotiating" : "Open"}
+                      <Tag tone={isDup(o) ? "neutral" : o.status === "accepted" ? "good" : o.status === "declined" ? "neutral" : "accent"}>
+                        {isDup(o) ? "Duplicate" : o.status === "accepted" ? "Accepted" : o.status === "declined" ? "Declined" : taken ? "Held" : countered(o) ? "Negotiating" : "Open"}
                       </Tag>
                       {o.amount != null && <span className="figures whitespace-nowrap text-[13px]">{gbp(o.amount)}</span>}
                       {decide(o)}

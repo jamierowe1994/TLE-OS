@@ -6,6 +6,7 @@ import { leadsForListing, salesAmong } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { isTestId, testEnquiriesForListing } from "@/lib/test-overlay";
+import { withRepeats } from "@/lib/lead-repeats";
 
 /**
  * ONE LISTING'S ENQUIRIES (2 Oct 2026).
@@ -71,9 +72,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       (l) => l && l.id && !hidden.has(l.id) && (!scope.rexUserId || l.assigneeId === scope.rexUserId)
     );
     const sales = await salesAmong(mine.map((l) => l.id)).catch(() => new Set<string>());
-    const leads = mine
-      .filter((l) => !sales.has(l.id))
-      .map((l) => ({
+    /* One row per person (29 Oct 2026, lib/lead-repeats): the newest of
+       their enquiries, saying how many times they asked and whether they
+       were declined before. */
+    const leads = (await withRepeats(mine.filter((l) => !sales.has(l.id)))).map((l) => ({
         id: l.id,
         name: l.name,
         source: l.source,
@@ -85,6 +87,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         phone: l.phone,
         enquiryMessage: l.enquiryMessage,
         listingId: l.listingId,
+        repeat: l.repeat ?? null,
+        declinedBefore: l.declinedBefore ?? null,
       }));
     return NextResponse.json({ ok: true, live: true, scope: scope.label, leads });
   } catch (e) {

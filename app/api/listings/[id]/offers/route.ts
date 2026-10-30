@@ -11,6 +11,8 @@ import { offerPeople, toOfferParts, type OfferPerson } from "@/lib/offer-people"
 import type { OfferPart } from "@/lib/offer-people-shape";
 import { landlordSends, type LandlordSend } from "@/lib/offer-landlord-email";
 import { countersFor, type OfferCounter } from "@/lib/offer-counters";
+import { discardsForListing, type Discard } from "@/lib/offer-discards";
+import { offerHistory, personKeys, type OfferTry } from "@/lib/offer-repeat";
 
 /**
  * ONE LISTING'S OFFERS (7 Oct 2026).
@@ -60,6 +62,12 @@ export type ListingOffer = {
   offered?: number | null;
   /** The back-and-forth, oldest first (lib/offer-counters). */
   counters?: OfferCounter[];
+  /** Every time they sent it, oldest first, where they sent it more than once (lib/offer-repeat, 29 Oct 2026). */
+  tries?: OfferTry[];
+  /** A second offer from the same person: the one it repeats, which stays. Discard is offered on this one. */
+  duplicateOf?: { ref: string; name: string; at: string | null } | null;
+  /** They sent it again after it was decided: it stays as decided, and the agent is shown it was tried again. */
+  againAfter?: "accepted" | "declined" | null;
 };
 
 export type OfferDetail = {
@@ -98,6 +106,42 @@ type OsRow = {
   };
   created_at: Date;
 };
+
+/**
+ * THE SAME PERSON TWICE (James, 29 Oct 2026). Offers on one home that share
+ * an email, a phone number or a full name are one person's. Of each such
+ * group the one that stands is the accepted one, else the newest still open,
+ * else the newest; the others are marked as its duplicates, and the Offers
+ * tab offers Discard on them rather than only Decline, which emails the
+ * tenant. An OS offer and the same person's REX application meet here too.
+ */
+function markDuplicates(offers: ListingOffer[]): ListingOffer[] {
+  const keysOf = (o: ListingOffer) => {
+    const full = o.name.trim().toLowerCase().replace(/[^a-z\s]/g, "").replace(/\s+/g, " ");
+    return [...personKeys(o.detail.email, o.detail.phone), ...(full.split(" ").length >= 2 ? [`n:${full}`] : [])];
+  };
+  const parent = offers.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const seen = new Map<string, number>();
+  offers.forEach((o, i) => {
+    if (o.kind === "test") return;
+    for (const k of keysOf(o)) {
+      const j = seen.get(k);
+      if (j == null) seen.set(k, i);
+      else parent[find(i)] = find(j);
+    }
+  });
+  const groups = new Map<number, number[]>();
+  offers.forEach((_, i) => groups.set(find(i), [...(groups.get(find(i)) ?? []), i]));
+  const out = offers.map((o) => ({ ...o, duplicateOf: null as ListingOffer["duplicateOf"] }));
+  const rank = (o: ListingOffer) => (o.status === "accepted" ? 2 : o.status === "open" ? 1 : 0);
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    const keep = [...members].sort((a, b) => rank(offers[b]) - rank(offers[a]) || String(offers[b].at ?? "").localeCompare(String(offers[a].at ?? "")))[0];
+    for (const i of members) if (i !== keep && offers[i].status !== "accepted") out[i].duplicateOf = { ref: offers[keep].ref, name: offers[keep].name, at: offers[keep].at };
+  }
+  return out;
+}
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 const newestFirst = (a: ListingOffer, b: ListingOffer) => String(b.at ?? "").localeCompare(String(a.at ?? ""));
@@ -185,7 +229,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ]);
     /* REX not answering is said, not shown as no offers (22 Oct 2026): during
        the REX outage the tab looked empty and Lorna's applicants seemed lost. */
-    const rex = rexRead ?? [];
+    /* An OS offer once accepted is on the applications board too, as
+       "os:<id>" (lib/applications), and was listed here a second time - the
+       "two offers from the same tenant" on 68 Main Street (29 Oct 2026). The
+       offer itself is already in the list; its application is not another. */
+    const osHere = new Set(osRows.map((r) => `os:${r.id}`));
+    const rex = (rexRead ?? []).filter((a) => !osHere.has(String(a.id)));
 
     /* Every other adult's part, for the offers made in the OS. */
     const partsBy = await offerPeople(osRows.map((r) => r.id)).catch(() => new Map<string, OfferPerson[]>());
@@ -214,6 +263,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         decided: d ? `${d.decision === "accepted" ? "Accepted" : "Declined"} by ${d.by} ${day(d.at)}` : null,
         undoable: Boolean(d),
         href: `/offers/${encodeURIComponent(r.id)}`,
+        ...(() => {
+          const t = offerHistory(new Date(r.created_at).toISOString(), (r.payload ?? {}) as Record<string, unknown>);
+          if (t.length < 2) return {};
+          /* Sent again after the agent had decided: said, so a declined
+             tenant trying again is seen as a repeat (29 Oct 2026). */
+          const last = t[t.length - 1].at;
+          return { tries: t, againAfter: d && last > d.at ? d.decision : null };
+        })(),
         detail: {
           parts: toOfferParts(partsBy.get(r.id) ?? [], r.name || ""),
           email: r.email || null,
@@ -292,7 +349,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
 
-    return NextResponse.json({ ok: true, offers: (await withSends(offers)).sort(newestFirst), ...(rexRead === null ? { rexUnread: true } : {}) });
+    /* Discarded duplicates leave the list; the listing's Activity still says
+       who discarded which and when (lib/offer-discards, 29 Oct 2026). */
+    const discarded = await discardsForListing(listingId).catch(() => [] as Discard[]);
+    const gone = new Set(discarded.map((d) => d.ref));
+    const kept = markDuplicates(offers.filter((o) => !gone.has(o.ref)));
+    return NextResponse.json({ ok: true, offers: (await withSends(kept)).sort(newestFirst), discarded, ...(rexRead === null ? { rexUnread: true } : {}) });
   } catch (e) {
     console.error("listing offers failed", e);
     return NextResponse.json({ ok: false, error: "Couldn't read the offers.", offers: [] }, { status: 500 });

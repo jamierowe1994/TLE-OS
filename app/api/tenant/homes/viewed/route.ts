@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { foldRepeat, priorOffer, repeatLine } from "@/lib/offer-repeat";
 import { publicError } from "@/lib/public-error";
 import { jsonObject } from "@/lib/json-body";
 import { NextRequest, NextResponse } from "next/server";
@@ -182,7 +183,10 @@ export async function POST(req: NextRequest) {
     };
   }
 
-  const id = randomUUID();
+  /* Their offer already on this home takes this one in (lib/offer-repeat,
+     29 Oct 2026): one offer per person per home. */
+  const prior = kind === "offer" && listingId ? await priorOffer(listingId, me.email, [data?.mobile]).catch(() => null) : null;
+  const id = prior?.id ?? randomUUID();
   const OFFER_LINK = `${(process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "")}/offers/${id}`;
 
   /* The agent hears. */
@@ -202,9 +206,10 @@ export async function POST(req: NextRequest) {
   } else {
     const p = payload as { amount: number; asking: number | null; moveIn: string; movingIn: string[]; works: string[]; adults: number; children: number; pets: boolean; petsNote: string; note: string; passport: OfferPassport; changes: OfferChange[] };
     const moveIn = new Date(p.moveIn).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    subject = `Offer from ${who}: ${gbp(p.amount)} a month on ${address}`;
+    subject = `${prior ? "Offer again" : "Offer"} from ${who}: ${gbp(p.amount)} a month on ${address}`;
     body = [
       `${who} would like to offer on ${address}.`,
+      prior ? repeatLine(prior) : "",
       [`Offer: ${gbp(p.amount)} a month${p.asking ? ` (advertised at ${gbp(p.asking)})` : ""}`, `Move in: ${moveIn}`, `Moving in: ${p.movingIn.length ? p.movingIn.join(", ") : `${p.adults} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}`}${p.pets ? `, with pets${p.petsNote ? ` (${p.petsNote})` : ""}` : ", no pets"}`].join("\n"),
       ...others.map((o) =>
         o.mode === "fill"
@@ -232,11 +237,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await q(
-    `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
-     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)`,
-    [id, me.email, me.name, listingId, address, kind, JSON.stringify(payload), to, outcome]
-  );
+  if (prior) await foldRepeat(prior, { name: me.name, email: me.email, payload, sentTo: to, outcome });
+  else
+    await q(
+      `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)`,
+      [id, me.email, me.name, listingId, address, kind, JSON.stringify(payload), to, outcome]
+    );
   const on = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
   await noteOnLeads({ email: me.email, name: me.name, phone, address, line: `${on}: ${subject}.${outcome === "sent" ? ` Emailed to ${to}.` : ""}` }).catch(() => null);
 

@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { staleForWalk } from "@/lib/rex-outage";
+import { withRepeats } from "@/lib/lead-repeats";
 import { publicError } from "@/lib/public-error";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { leadScope } from "@/lib/scope";
@@ -256,7 +257,8 @@ export async function GET(req: NextRequest) {
       { email: (viewingAs ? subject?.email : actor?.email) ?? null },
       async (ids) => [...(await ledgerLeadsByIds(ids)), ...(await contactLeadsByIds(ids))] as typeof asked
     ).catch(() => [...ours, ...asked]);
-    const leads = held.filter((l) => l && l.id && !hidden.has(l.id) && !sales.has(l.id));
+    /* One row per person per home, a repeat said as one (29 Oct 2026, lib/lead-repeats). */
+    const leads = await withRepeats(held.filter((l) => l && l.id && !hidden.has(l.id) && !sales.has(l.id)));
     /* This month and last, counted from everything on file rather than the
        500 the board carries (Rig P-010), plus contacts typed in by hand,
        which the board shows but the ledger never holds. */
