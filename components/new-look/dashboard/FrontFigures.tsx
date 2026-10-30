@@ -16,8 +16,14 @@ import type { FrontView } from "./useFront";
 
 /**
  * The front dashboard's bottom half (new look, 24 Oct 2026), after the
- * design's front office: the range switch, four figures with their change and
+ * design's front office: the range switch, five figures with their change and
  * a sparkline, leads per day by source, and the tenant pipeline.
+ *
+ * Passports done is a figure of its own in the top row (29 Oct 2026, Lianna on
+ * the team call: "they are on the dashboard, but they're down below"), so an
+ * agent sees them without scrolling - second, so a phone has it in the first
+ * row. It is the same count and list as the pipeline's step, scoped the same
+ * way: their own tenants, or the business's.
  *
  * Every figure is live, from /api/dashboard/front (read once a visit, 180
  * London days, so the switch never asks again), in three reads that each land
@@ -171,6 +177,9 @@ export default function FrontFigures({ range, setRange, front }: { range: RangeD
   const terms = front.terms.data;
   const late = terms ? terms.rows.filter((r) => r.late).length : 0;
 
+  /* Passports done: tenants who finished their passport in the range. */
+  const pp = front.passports.data;
+
   /* Let agreed */
   const lets = front.lets.data;
   const rentSum = lets ? sumRange(lets.rentSum, n) : 0;
@@ -186,6 +195,16 @@ export default function FrontFigures({ range, setRange, front }: { range: RangeD
       sub: leads ? `${sumRange(leads.fresh, n).toLocaleString("en-GB")} not contacted yet` : null,
       spark: leadTotals ? sparkOf(leadTotals, n) : null,
       ask: { kind: "leads", days: n, title: "New Leads", range: rangeWords, note: "Every lettings lead received, newest first. A coral dot is one nobody has contacted yet.", board: { href: "/leads", label: "Open the Leads board" } },
+    },
+    {
+      label: "Passports done",
+      loading: front.passports.loading,
+      error: front.passports.error,
+      value: pp ? sumRange(pp, n) : null,
+      badge: pp ? diffBadge(sumRange(pp, n), sumRange(pp, n, 1), n) : null,
+      sub: pp ? `${pp[pp.length - 1]} today` : null,
+      spark: pp ? sparkOf(pp, n) : null,
+      ask: { kind: "passports", days: n, title: "Passports Done", range: rangeWords, note: "Tenant passports finished, newest first.", board: { href: "/leads?passports=done", label: "Open finished passports" } },
     },
     {
       label: "Appraisals booked",
@@ -305,8 +324,8 @@ export default function FrontFigures({ range, setRange, front }: { range: RangeD
           </h2>
           <p className="nl-dash-bar-sub">
             {front.everything === false
-              ? "Your leads, terms and lets. Appraisals are the whole office's."
-              : "Leads, appraisals and terms across the whole business."}{" "}
+              ? "Your leads, passports, terms and lets. Appraisals are the whole office's."
+              : "Leads, passports, appraisals and terms across the whole business."}{" "}
             Click a figure to see what&rsquo;s behind it.
           </p>
         </div>
@@ -319,7 +338,7 @@ export default function FrontFigures({ range, setRange, front }: { range: RangeD
         </div>
       </div>
 
-      <div className="nl-dash-stats">
+      <div className="nl-dash-stats is-five">
         {figs.map((f) => (
           <Figure key={f.label} f={f} labels={sparkLabels} onOpen={setAsk} />
         ))}

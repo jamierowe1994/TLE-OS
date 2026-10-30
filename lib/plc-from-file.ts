@@ -53,6 +53,10 @@ const CHECK_FOR_TYPE: Record<string, CheckId> = {
   guarantor_id: "guarantor-checks",
   guarantor_reference: "guarantor-checks",
   guarantor_agreement: "guarantor-checks",
+  /* The office's Easy Read Notes, on every Scottish let (lib/standing-documents,
+     29 Oct 2026). Not one of the checks, so Anything else; on an approved
+     pack that goes to the Propoly deal as a General Document. */
+  easy_read_notes: "other",
 };
 
 /** The other way: the Documents-tab label for a file filed on a pack. */
@@ -141,8 +145,11 @@ const shortAddress = (a: string) => a.split(",").slice(0, 2).join(",").trim();
  *   2. this home's certificates on file (os_certificates: the Propoly
  *      download, renewals, the EPC register) - an EPC lasts ten years and
  *      nobody should download it to upload it again;
- *   3. the landlord's ID and AML from the packs and Documents tabs of their
- *      OTHER homes - a landlord with four homes shows their passport once;
+ *   2b. the landlord's ID, AML and proof of ownership on this home's
+ *      property record (the clean sweep's papers, 29 Oct 2026);
+ *   3. the landlord's ID and AML from the packs, Documents tabs and property
+ *      records of their OTHER homes - a landlord with four homes shows their
+ *      passport once;
  *   4. the terms of business the landlord signed in DocuSeal, or the copy on
  *      the home's property record, when the Documents tab had none.
  *
@@ -178,6 +185,7 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
 
   await fromDocumentsTab(run);
   await fromCertificates(run, home.ids);
+  await fromPropertyRecord(run, home.records, landlord);
   if (landlord) await fromLandlordsOtherHomes(run, landlord, home.ids);
   await fromSignedTerms(run, home.ids);
   if (!run.termsOffered) run.remember.push(TERMS_OFFERED);
@@ -274,15 +282,18 @@ async function fromDocumentsTab(run: Run) {
   }
 
   const reads = await inThrees(fresh, (d) =>
-    readDroppedFile(
-      { key: d.r2Key, name: d.fileName },
-      {
-        address: start.address,
-        landlordName: run.ctx.landlord,
-        tenantNames: run.ctx.tenants,
-        label: d.type === OTHER ? d.name : docTypeLabel(d.type),
-      }
-    )
+    /* A standing document is known already: no reading, no AI call per pack. */
+    d.fromKind === "standing"
+      ? Promise.resolve<Read>({ checkId: "other", what: d.name, issueDate: null, expiryDate: null, names: [], confidence: "high", note: "The office's own copy, on every Scottish let.", at: new Date().toISOString() })
+      : readDroppedFile(
+          { key: d.r2Key, name: d.fileName },
+          {
+            address: start.address,
+            landlordName: run.ctx.landlord,
+            tenantNames: run.ctx.tenants,
+            label: d.type === OTHER ? d.name : docTypeLabel(d.type),
+          }
+        )
   );
 
   for (let i = 0; i < fresh.length; i++) {
@@ -320,9 +331,9 @@ const CHECK_FOR_CERT: Record<string, CheckId> = {
 const PER_CHECK = 3;
 
 /** This home on the OS's property record: every id its certificates may be filed under, and its landlord. */
-async function homeRecords(address: string, propertyId: string | null): Promise<{ ids: string[]; landlord: string | null }> {
+async function homeRecords(address: string, propertyId: string | null): Promise<{ ids: string[]; records: string[]; landlord: string | null }> {
   const ids = new Set<string>(propertyId ? [propertyId] : []);
-  if (!hasDb()) return { ids: [...ids], landlord: null };
+  if (!hasDb()) return { ids: [...ids], records: [], landlord: null };
   const street = parseAddress(address).street;
   const rows = await q<{ id: string; rex_property_id: string | null; address: string; landlord_name: string | null }>(
     `SELECT id, rex_property_id, address, landlord_name FROM os_properties
@@ -334,7 +345,85 @@ async function homeRecords(address: string, propertyId: string | null): Promise<
     ids.add(r.id);
     if (r.rex_property_id) ids.add(r.rex_property_id);
   }
-  return { ids: [...ids], landlord: mine.find((r) => r.landlord_name?.trim())?.landlord_name?.trim() ?? null };
+  return {
+    ids: [...ids],
+    records: mine.map((r) => r.id),
+    landlord: mine.find((r) => r.landlord_name?.trim())?.landlord_name?.trim() ?? null,
+  };
+}
+
+/* ── 2b. The landlord's papers on this home's property record ──────────── */
+
+/**
+ * Property-record folders (the clean sweep, lib/listing-record recordFiles)
+ * → the check a file there most likely answers. 68 Main Street, 29 Oct 2026:
+ * the landlord's driving licence sat in doc_landlord_id_ownership, the
+ * listing's Compliance showed it, and the pack - so the Propoly push - asked
+ * for it again. The ID folder also holds title sheets and Companies House
+ * extracts, so the reader has the final word on each file.
+ */
+const CHECK_FOR_RECORD: Record<string, CheckId> = {
+  doc_landlord_id_ownership: "landlord-id-aml",
+  landlord_photo_id: "landlord-id-aml",
+  landlord_aml: "landlord-aml",
+};
+const RECORD_CHECKS: CheckId[] = ["landlord-id-aml", "landlord-aml", "proof-of-ownership"];
+
+/** Read at most this many record files per home: a landlord paper folder is a handful. */
+const PER_RECORD = 8;
+
+/**
+ * "11_Albion_Street_-_Title_sheet.pdf" on 68 Main Street's record: a file
+ * whose name gives another home's address belongs to that home, so it never
+ * proves ownership of this one.
+ */
+function namesAnotherHome(fileName: string, address: string): boolean {
+  const words = fileName.replace(/\.[a-z0-9]+$/i, "").replace(/[_\-.]+/g, " ");
+  const here = parseAddress(address).street;
+  for (const m of words.matchAll(/\b\d+[a-z]?\s+((?:[a-z']+\s+){1,3}?[a-z]+)\b/gi)) {
+    const there = parseAddress(m[0]).street;
+    if (there && here && there !== here) return true;
+  }
+  return false;
+}
+
+async function fromPropertyRecord(run: Run, records: string[], landlord: string | null) {
+  const gaps = RECORD_CHECKS.filter((c) => !filledOn(run.current).has(c));
+  if (!gaps.length || !records.length) return;
+  const { recordFiles } = await import("@/lib/listing-record");
+  const files = (await Promise.all(records.map((id) => recordFiles(id).catch(() => []))))
+    .flat()
+    .filter((f) => CHECK_FOR_RECORD[f.field] && !run.offered.has(f.key))
+    .slice(0, PER_RECORD);
+  if (!files.length) return;
+
+  const hashes = await inThrees(files, (f) => hashOf(f.key));
+  const reads = await inThrees(files, (f) =>
+    readDroppedFile(
+      { key: f.key, name: f.name },
+      { address: run.current.address, landlordName: landlord, label: checkById(CHECK_FOR_RECORD[f.field])?.label ?? null }
+    )
+  );
+
+  const validOn = run.current.moveInDate ?? ymdToday();
+  const amlFrom = daysBefore(validOn, Math.round(AML_MONTHS * 30.4));
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const hash = hashes[i];
+    if (hash && run.hashes.has(hash)) continue;
+    const { checkId, read } = slotFor(reads[i], CHECK_FOR_RECORD[f.field]);
+    if (!checkId || !RECORD_CHECKS.includes(checkId)) continue;
+    /* Joint owners: room for two IDs, as from the landlord's other homes. */
+    const onPack = run.current.documents.filter((d) => d.checkId === checkId && !d.placeholder).length;
+    if (onPack >= (checkId === "proof-of-ownership" ? 1 : PER_LANDLORD_CHECK)) continue;
+    if (checkId === "proof-of-ownership" && namesAnotherHome(f.name, run.current.address)) continue;
+    if (checkId === "landlord-id-aml" && read.expiryDate && read.expiryDate < validOn) continue;
+    if (checkId === "landlord-aml" && read.issueDate && read.issueDate < amlFrom) continue;
+    if (landlord && checkId !== "proof-of-ownership" && !namesLandlord(read, landlord)) continue;
+    await file(run, "landlord", { key: f.key, name: f.name, checkId, hash, read: { ...read, checkId, note: read.note ?? "From this home's property record." } });
+  }
+  /* Offered once, like the Documents tab: one taken off is not brought back. */
+  run.remember.push(...files.map((f) => f.key));
 }
 
 async function fromCertificates(run: Run, ids: string[]) {
@@ -519,6 +608,17 @@ async function fromLandlordsOtherHomes(run: Run, landlord: string, thisHome: str
     const label = CHECK_FOR_TYPE[r.type];
     if (!gaps.includes(label)) continue;
     candidates.push({ key: r.r2_key, name: r.file_name, label, at: new Date(r.at).toISOString(), from: r.address, read: null });
+  }
+
+  /* The property records of their other homes (the clean sweep's papers).
+     Undated, so they come after everything above, and an AML check counts
+     only when the reader finds its date. */
+  const { recordFiles } = await import("@/lib/listing-record");
+  for (const h of others.slice(0, PER_RECORD)) {
+    for (const f of await recordFiles(h.id).catch(() => [])) {
+      const label = CHECK_FOR_RECORD[f.field];
+      if (label && gaps.includes(label)) candidates.push({ key: f.key, name: f.name, label, at: "", from: h.address, read: null });
+    }
   }
 
   /* Newest first, one of each file. */

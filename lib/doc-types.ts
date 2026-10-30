@@ -15,6 +15,9 @@ export interface DocType {
   side: DocSide;
   /** Only asked for when the let has a guarantor (see hasGuarantorPapers). */
   guarantor?: boolean;
+  /** Kept once by the office and on every home it applies to by itself
+   *  (lib/standing-documents), so it is never offered as an upload on a let. */
+  standing?: boolean;
 }
 
 export const DOC_TYPES: DocType[] = [
@@ -30,6 +33,12 @@ export const DOC_TYPES: DocType[] = [
   { key: "guarantor_id", label: "Guarantor ID", side: "tenant", guarantor: true },
   { key: "guarantor_reference", label: "Guarantor Reference", side: "tenant", guarantor: true },
   { key: "guarantor_agreement", label: "Guarantor Agreement", side: "tenant", guarantor: true },
+  /* Michael Healy and Lianna Denholm, 29 Oct 2026: the Easy Read Notes go to
+     every Scottish tenant before the lease is signed, and it is the same
+     document for every home. They were dropping it on each let as Other
+     ("statutory notes"). Now the office uploads it once (Admin > Standing
+     documents) and it is on every Scottish let by itself. */
+  { key: "easy_read_notes", label: "Easy Read Notes", side: "tenant", standing: true },
   { key: "terms_of_business", label: "Terms of Business", side: "landlord" },
   { key: "landlord_id", label: "Landlord ID", side: "landlord" },
   { key: "landlord_proof_of_ownership", label: "Landlord Proof of Ownership", side: "landlord" },
