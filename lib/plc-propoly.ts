@@ -7,6 +7,7 @@ import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { getCase, recordPropolyPush } from "@/lib/plc-store";
 import { checkById, type CheckId, type PlcCase, type PlcDocument, type PropolyPush, type PushResult } from "@/lib/plc";
 import { isTestCase } from "@/lib/test-guard";
+import { combineForSlot, type SlotPart } from "@/lib/propoly-combine";
 import { PROPOLY_FILE_TYPES, propolyExtension, propolyFileName, propolyTypeFor } from "@/lib/propoly-names";
 
 export { PROPOLY_NAME_MAX, propolyExtension, propolyFileName, propolyTypeFor } from "@/lib/propoly-names";
@@ -182,13 +183,34 @@ export async function pushCaseToPropoly(caseId: string, by: string, opts: { only
   const taken = new Set<string>();
   const last = opts.onlyFailed && c.propolyPush?.dealId === dealId ? c.propolyPush.results : null;
   if (last) for (const r of last) if (r.type && (r.outcome === "uploaded" || r.outcome === "already")) taken.add(r.type);
+  /* Every file still to send for each slot: more than one goes as one PDF
+     (lib/propoly-combine, 30 Oct 2026). Certificates keep one file each: one
+     expiry date can't stand for two. */
+  const toSend = c.documents.filter((doc) => {
+    const before = last?.find((r) => r.checkId === doc.checkId && r.name === doc.name);
+    return !last || before?.outcome === "failed";
+  });
+  const bySlot = new Map<string, PlcDocument[]>();
+  for (const doc of toSend) {
+    const t = propolyTypeFor(doc.checkId, doc.name);
+    if (t && !COMPLIANCE_TYPES.has(t) && !doc.placeholder) bySlot.set(t, [...(bySlot.get(t) ?? []), doc]);
+  }
+  const done = new Set<PlcDocument>();
   for (const doc of c.documents) {
+    if (done.has(doc)) continue;
     const before = last?.find((r) => r.checkId === doc.checkId && r.name === doc.name);
     if (last && before?.outcome !== "failed") {
       if (before) results.push(before);
       continue;
     }
     const type = propolyTypeFor(doc.checkId, doc.name);
+    const group = type ? bySlot.get(type) ?? [] : [];
+    if (type && group.length > 1 && !taken.has(type)) {
+      group.forEach((g) => done.add(g));
+      results.push(...(await sendCombined(dealId, type, group)));
+      taken.add(type);
+      continue;
+    }
     const label = checkById(doc.checkId)?.label ?? doc.checkId;
     if (!type) {
       const note = doc.checkId === "terms-of-business" ? `${label} stays in the OS.` : `${label} is generated in Propoly after the check.`;
@@ -222,4 +244,37 @@ export async function pushCaseToPropoly(caseId: string, by: string, opts: { only
   const push: PropolyPush = { at, by, dealId, results };
   await recordPropolyPush(caseId, push);
   return push;
+}
+
+/** Two or more files bound for one slot, sent as one PDF. One result line per file. */
+async function sendCombined(dealId: string, type: string, group: PlcDocument[]): Promise<PushResult[]> {
+  const label = checkById(group[0].checkId)?.label ?? "Documents";
+  const line = (doc: PlcDocument, outcome: PushResult["outcome"], note: string): PushResult => ({ checkId: doc.checkId, name: doc.name, type, outcome, note });
+  const parts: (SlotPart & { doc: PlcDocument })[] = [];
+  const out: PushResult[] = [];
+  for (const doc of group) {
+    try {
+      const { bytes, type: mime } = await bytesOf(doc);
+      parts.push({ doc, name: doc.label || doc.name, bytes, mime, who: doc.read?.names ?? [] });
+    } catch (e) {
+      out.push(line(doc, "failed", e instanceof Error ? e.message : "the stored file couldn't be read"));
+    }
+  }
+  if (!parts.length) return out;
+  try {
+    const combined = await combineForSlot(label, parts);
+    const title = combined.title;
+    for (const l of combined.left) out.push(line((l.part as (typeof parts)[number]).doc, "skipped", `Not in the combined file: ${l.why}.`));
+    if (!combined.included.length) return out;
+    const sent = await sendToDeal(dealId, { bytes: combined.bytes, mime: "application/pdf", type, fileName: `${title}.pdf`, label: title, expiry: null });
+    const others = combined.included.length - 1;
+    for (const p of combined.included) {
+      const note = sent.outcome === "uploaded" ? `Sent as one PDF with ${others} other file${others === 1 ? "" : "s"} for this slot ("${title}").` : sent.note;
+      out.push(line((p as (typeof parts)[number]).doc, sent.outcome, note));
+    }
+  } catch (e) {
+    const note = e instanceof PropolyWriteBlocked ? "Pushing documents into Propoly is switched off (Admin, Switches)." : e instanceof Error ? e.message : "upload failed";
+    for (const p of parts) out.push(line(p.doc, e instanceof PropolyWriteBlocked ? "skipped" : "failed", note));
+  }
+  return out;
 }
