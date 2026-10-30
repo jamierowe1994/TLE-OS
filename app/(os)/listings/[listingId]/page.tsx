@@ -25,6 +25,11 @@ import { useNewLook } from "@/lib/use-new-look";
 
 type Book = { ok?: boolean; live?: boolean; listings?: Listing[]; reason?: string };
 type Found = { state: "loading" } | { state: "missing"; reason?: string } | { state: "ready"; listing: Listing };
+/** A listing that has left the market (GET /api/listings/off-market). */
+type OffMarket = { state: string | null; address: string; agent: string | null; let: { date: string | null; service: string | null; rentPcm: number | null } | null; applicationId: string | null };
+
+const SERVICE: Record<string, string> = { full_managed: "Fully managed", tenant_find: "Tenant find", rent_collect: "Rent collect" };
+const longDay = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 export default function ListingPage() {
   const params = useParams<{ listingId: string }>();
@@ -37,6 +42,8 @@ export default function ListingPage() {
     const hit = held?.listings?.find((l) => String(l.id) === listingId);
     return hit ? { state: "ready", listing: hit } : { state: "loading" };
   });
+  /* What became of a listing that is in neither the board nor the archive. */
+  const [gone, setGone] = useState<OffMarket | null>(null);
   /* Read once, so a link straight to ?tab=marketing lands on Marketing.
      From the router, not window.location: arriving by a client navigation
      (a row on Offers in, 15 Oct 2026) the page renders before the address
@@ -62,6 +69,17 @@ export default function ListingPage() {
            the archive before saying it is gone. */
         const a = await fetch("/api/listings/archive", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
         const old = (a?.listings as Listing[] | undefined)?.find((l) => String(l.id) === listingId);
+        if (!old && j.ok && j.live) {
+          /* Nor in the archive: let, perhaps (Rhiannon, 29 Oct 2026 - 12b
+             Cliff Road was let and its old enquiries opened "isn't in your
+             book"). Ask what became of it before saying it is not theirs. */
+          const off = await fetch(`/api/listings/off-market?id=${encodeURIComponent(listingId)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+          if (live && off?.ok) {
+            setGone(off as OffMarket);
+            setFound({ state: "missing" });
+            return;
+          }
+        }
         if (live) setFound(old ? { state: "ready", listing: old } : { state: "missing", reason: j.ok && j.live ? undefined : j.reason });
       } catch {
         if (live) setFound((f) => (f.state === "ready" ? f : { state: "missing", reason: "We couldn't read your listings just now. Nothing is lost - try again in a minute." }));
@@ -133,6 +151,37 @@ export default function ListingPage() {
       </p>
     );
   }
+  if (found.state === "missing" && gone) {
+    const home = gone.address.split(",")[0] || "This home";
+    const leased = gone.state === "leased";
+    return (
+      <div className="mx-auto max-w-2xl py-16 text-center" data-steve="listing.off-market">
+        <p className="hand text-[20px]">{leased ? `${home} Has Been Let` : `${home} Is Off the Market`}</p>
+        <p className="mt-2 text-[12.5px] text-muted">
+          {leased
+            ? gone.let
+              ? `Moved in ${gone.let.date ? longDay(gone.let.date) : "recently"}${gone.let.service ? `, ${(SERVICE[gone.let.service] ?? gone.let.service).toLowerCase()}` : ""}${gone.let.rentPcm ? `, £${gone.let.rentPcm.toLocaleString("en-GB")} pcm` : ""}.`
+              : "It is marked as let."
+            : "It isn't being advertised any more."}
+          {gone.agent ? ` ${gone.agent}'s listing.` : ""}
+        </p>
+        <p className="mt-2 text-[12.5px] text-muted">
+          {leased
+            ? gone.let?.service === "tenant_find"
+              ? "A let home comes off Listings, and a tenant find home is the landlord's to look after, so it isn't in Portfolio. Its enquiries stay on Leads."
+              : "A let home comes off Listings. Its enquiries stay on Leads."
+            : "Its enquiries stay on Leads."}
+        </p>
+        <div className="mt-4 flex items-center justify-center gap-4 text-[12.5px]">
+          {gone.applicationId && (
+            <Link href={`/applications/${encodeURIComponent(gone.applicationId)}`} className="rounded-full bg-ink px-4 py-1.5 font-semibold text-white">Open the Let</Link>
+          )}
+          <Link href="/listings" className="underline">Back to Listings</Link>
+        </div>
+      </div>
+    );
+  }
+
   if (found.state === "missing" || !listing) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
