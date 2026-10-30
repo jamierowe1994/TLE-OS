@@ -86,6 +86,8 @@
 /* The book: search, then a row for each contractor. */
 [data-look="new"] .nl-ct-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 28px; }
 [data-look="new"] .nl-ct-tools > .nl-fsearch { flex: 0 1 380px; }
+/* The search over To pay and Paid (29 Oct 2026): inside the section, under its note. */
+[data-look="new"] .nl-ct-paytools { margin: 4px 0 14px; }
 [data-look="new"] .nl-ct-crow {
   display: grid; grid-template-columns: 40px minmax(0, 1fr) 210px 110px auto; gap: 18px; align-items: center;
   padding: 18px 0; border-top: 1px solid var(--line); cursor: pointer; color: var(--ink);

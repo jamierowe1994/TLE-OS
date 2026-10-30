@@ -59,7 +59,7 @@ export default function Maintenance() {
     else if (params.get("section") === "planned") setSection("planned");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params, router]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; canPayrun?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedClosed?: CarriedClosed[]; carriedReadAt?: string | null; carriedError?: string; carriedWarning?: string; mineFailed?: boolean; ringForApproval?: string[]; mine?: { orders: string[]; carried: string[]; summary: WorksSummary; startOn: "mine" | "everyone"; note: string | null } | null } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; canPayrun?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedClosed?: CarriedClosed[]; carriedReadAt?: string | null; carriedError?: string; carriedWarning?: string; mineFailed?: boolean; scoped?: boolean; ringForApproval?: string[]; mine?: { orders: string[]; carried: string[]; summary: WorksSummary; startOn: "mine" | "everyone"; note: string | null } | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
@@ -97,7 +97,9 @@ export default function Maintenance() {
      the server could not work out Mine at all, it is Everyone and no toggle. */
   const [savedView, saveView] = usePref<"" | "mine" | "everyone">("maintenance-view-v1", "");
   const mine = data?.mine ?? null;
-  const view: "mine" | "everyone" = mine ? (savedView || mine.startOn) : "everyone";
+  /* An agent is sent only their own (29 Oct 2026, /api/works-orders `scoped`): no Everyone to switch to. */
+  const switchable = Boolean(mine) && !data?.scoped;
+  const view: "mine" | "everyone" = mine ? (data?.scoped ? "mine" : savedView || mine.startOn) : "everyone";
   const mineOrders = useMemo(() => new Set(mine?.orders ?? []), [mine]);
   const mineCarried = useMemo(() => new Set(mine?.carried ?? []), [mine]);
   const allOrders = useMemo(() => data?.orders ?? [], [data]);
@@ -234,7 +236,7 @@ export default function Maintenance() {
           />
           {section !== "contractors" && section !== "invoices" && (
             <div className="nl-bo-tabrow-side">
-              {mine && (
+              {switchable && (
                 <span className="nl-toggle" role="group" aria-label="Whose jobs">
                   <button type="button" className={view === "mine" ? "is-on" : ""} aria-pressed={view === "mine"} title="Jobs on the homes in your own book, and any you raised" onClick={() => saveView("mine")}>Mine</button>
                   <button type="button" className={view === "everyone" ? "is-on" : ""} aria-pressed={view === "everyone"} title="Every job on the managed book" onClick={() => saveView("everyone")}>Everyone</button>
@@ -278,7 +280,7 @@ export default function Maintenance() {
             action={
               <span className="flex flex-wrap items-center justify-center gap-3">
                 <button type="button" className="nl-btn nl-btn--primary" onClick={() => setRaising(section === "repair" ? "repair" : "planned")}><Ico name="plus" /> {section === "repair" ? "Report a repair" : "Plan a certificate"}</button>
-                {view === "mine" && <button type="button" className="nl-link" onClick={() => saveView("everyone")}>See everyone&apos;s</button>}
+                {switchable && view === "mine" && <button type="button" className="nl-link" onClick={() => saveView("everyone")}>See everyone&apos;s</button>}
               </span>
             }
           >
@@ -425,7 +427,7 @@ export default function Maintenance() {
         )}
         {section !== "contractors" && section !== "invoices" && (
           <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 sm:ml-auto sm:w-auto">
-            {mine && (
+            {switchable && (
               <Segmented
                 className="sm:min-w-[220px]"
                 value={view}
@@ -482,7 +484,7 @@ export default function Maintenance() {
               {section === "repair"
                 ? "Report a repair when a tenant or landlord lets you know, and we'll help you keep everything on track."
                 : "Plan a certificate from Compliance when one is coming up, or straight from here."}
-              {view === "mine" && (
+              {switchable && view === "mine" && (
                 <>
                   {" "}
                   <button type="button" onClick={() => saveView("everyone")} className="underline underline-offset-2 hover:text-ink">See everyone&apos;s</button>

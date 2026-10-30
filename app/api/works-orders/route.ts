@@ -9,7 +9,7 @@ import { createOrder, listOrders, listContractors, worksSummary, logEvent, moveO
 import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 import { alreadyTakenOn, carriedJobs, markTakenOn, withCarried } from "@/lib/works-carried";
 import { landlordKey, landlordPrefsFor, ringsForApproval } from "@/lib/landlord-prefs";
-import { mineFor } from "@/lib/works-mine";
+import { mineFor, summariseOrders, type MineAnswer } from "@/lib/works-mine";
 
 /**
  * Works orders: the list, the figures, and raising one.
@@ -52,7 +52,6 @@ export async function GET(req: NextRequest) {
   /* The board lists names; a job's numbers and emails come when it is opened
      (/api/works-orders/<id>). An agent's list carries them shortened (lib/
      contact-mask, 10 Oct 2026) so the whole book's tenants are not one call. */
-  const shown = seesContactLists(actor.role) ? orders : orders.map((o) => maskContactFields(o));
   /* Which of them are this person's own (Rhiannon, 15 Oct 2026, lib/works-mine):
      the board shows Mine or Everyone, and the tiles count whichever is shown.
      A failed read of their homes is said on the page, never an empty Mine. */
@@ -61,22 +60,53 @@ export async function GET(req: NextRequest) {
      on one refresh and drop back on the next. Tried twice now, and if it still
      fails the page says it is showing everyone's (mineFailed). */
   const mineOf = () => mineFor(req, who, orders, carried?.jobs ?? null, [...(carried?.done ?? []), ...(carried?.closed ?? [])]);
-  const mine = await mineOf().catch(() => mineOf()).catch((e) => {
+  let mine: MineAnswer | null = await mineOf().catch(() => mineOf()).catch((e) => {
     console.error("[works-orders] Mine could not be worked out", e instanceof Error ? e.message : e);
     return null;
   });
+
+  /* AN AGENT SEES THEIR OWN (James, 29 Oct 2026, opening a works order on
+     the team call: "I can see everyone's, which is not ideal"). Contractors
+     went this way on 21 Oct (lib/contractor-scope); Maintenance still sent an
+     agent every colleague's jobs - tenants, landlords, the notifications on
+     each - one press of Everyone away. Now the server sends an agent only
+     Mine: the jobs on the homes in their book and the ones they raised. The
+     office and the owners (see:everything) keep Mine / Everyone. A home's own
+     page (?property=) still lists that home's jobs, as it always has.
+     If Mine cannot be worked out, an agent gets the jobs they raised and is
+     told so - never everybody's. */
+  const scoped = !can(me.role, "see:everything") && !propertyId;
+  let ownOrders = orders;
+  let ownCarried = carried;
+  if (scoped) {
+    if (!mine) {
+      const names = new Set([me.name, me.email].map((x) => (x ?? "").trim().toLowerCase()).filter(Boolean));
+      const raised = orders.filter((o) => names.has((o.raisedBy ?? "").trim().toLowerCase()));
+      mine = { orders: raised.map((o) => o.id), carried: [], summary: summariseOrders(raised), startOn: "mine", note: "Your homes couldn't be read just now, so this shows only the jobs you raised. Try again in a minute." };
+    }
+    /* Its note talks about the Mine toggle; an agent has none now. */
+    if (mine.note) mine = { ...mine, note: mine.note.replace(/Mine shows/g, "this shows") };
+    const ids = new Set(mine.orders);
+    const tasks = new Set(mine.carried);
+    ownOrders = orders.filter((o) => ids.has(o.id));
+    ownCarried = carried ? { ...carried, jobs: carried.jobs.filter((j) => tasks.has(j.taskId)), done: (carried.done ?? []).filter((j) => tasks.has(j.taskId)), closed: (carried.closed ?? []).filter((j) => tasks.has(j.taskId)) } : carried;
+  }
+  const shown = seesContactLists(actor.role) ? ownOrders : ownOrders.map((o) => maskContactFields(o));
   return NextResponse.json({
-    ok: true, live: true, orders: shown, contractors, summary, ringForApproval, mine,
-    carried: carried?.jobs ?? [],
+    ok: true, live: true, orders: shown, contractors, summary: scoped && mine ? mine.summary : summary, ringForApproval: ringForApproval.filter((id) => !scoped || ownOrders.some((o) => o.id === id)), mine,
+    /* True when this is only the person's own: the page has no Everyone to offer. */
+    scoped,
+    carried: ownCarried?.jobs ?? [],
     /* Planned jobs a certificate on file has since finished (5 Oct 2026). */
-    carriedDone: carried?.done ?? [],
+    carriedDone: ownCarried?.done ?? [],
     /* Closed here by hand, with the note (Sean McMahon, 26 Oct 2026). Off the board and its figures. */
-    carriedClosed: carried?.closed ?? [],
+    carriedClosed: ownCarried?.closed ?? [],
     carriedReadAt: carried?.readAt ?? null,
     ...(carried ? {} : { carriedError: "The jobs copied across from the old system couldn't be read just now, so the figures leave them out. Try again in a minute." }),
     ...(carried?.certsUnchecked ? { carriedWarning: "We couldn't check which planned jobs a certificate has since finished, so a few finished ones may be counted as open just now. Try again in a minute." } : {}),
     ...(mine ? {} : { mineFailed: true }),
-    lastMonth: lastMonth?.summary ?? null,
+    /* The month-ago snapshot is the whole business's: no delta against an agent's own. */
+    lastMonth: scoped ? null : lastMonth?.summary ?? null,
     lastMonthOn: lastMonth?.day ?? null,
     canCorporate: can(actor.role, "see:business"),
     /* The office says an invoice is on the payment run (James, 21 Oct 2026). */

@@ -1276,6 +1276,53 @@ export async function auditRowsForRange(
   return per.flatMap((x) => x.rows);
 }
 
+/** A contractor paid out of the rent, as the works orders read it (lib/works-payprop-paid). */
+export interface ContractorPayment {
+  account: PayPropAccountId;
+  amount: number;
+  /** Who PayProp paid, as PayProp spells them. */
+  name: string;
+  propertyId: string;
+  /** propertyKey of PayProp's property name ("39|holyrood"); "" when it has none. */
+  propertyKey: string;
+  /** The batch transfer date: the day the money left. */
+  paidOn: string;
+}
+
+/**
+ * Every Contractor payment PayProp has paid out over the last three months
+ * and the next one (Lianna Denholm, 29 Oct 2026: "where do we look in the
+ * system to see" what has been paid).
+ *
+ * Read from the SAME two ranges the income tiles walk - this month and last,
+ * each widened a month either side - so it is almost always the persisted
+ * walk and not a new one. Worked out from today, so it rolls over on its own.
+ * Only rows PayProp says are paid: a reversal or a failed transfer is not a
+ * payment.
+ */
+export async function contractorPayments(today = new Date().toISOString().slice(0, 10)): Promise<ContractorPayment[]> {
+  const month = today.slice(0, 7);
+  const [y, m] = month.split("-").map(Number);
+  const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+  const ranges = [month, prev].map((mo) => { const r = monthRange(mo); return widened(r.from, r.to); });
+  const walks = await Promise.all(ranges.map((r) => paymentsForRange(r.from, r.to)));
+  /* The two ranges overlap by two months, and a reduced row has no id: the
+     whole row is the key. Two distinct payments identical in every field are
+     one payment as far as matching an invoice is concerned. */
+  const seen = new Set<string>();
+  const out: ContractorPayment[] = [];
+  for (const per of walks.flat()) {
+    for (const r of per.rows) {
+      if (r.c !== "Contractor" || r.bs !== "paid" || !r.td || !(r.a > 0)) continue;
+      const k = [per.account, r.b, r.a, r.d, r.rd, r.td, r.p].join("|");
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ account: per.account, amount: r.a, name: r.n, propertyId: r.p, propertyKey: r.pk, paidOn: r.td.slice(0, 10) });
+    }
+  }
+  return out;
+}
+
 export async function agentBeneficiaryIds(
   email: string,
   displayName: string

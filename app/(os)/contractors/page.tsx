@@ -54,7 +54,7 @@ type Job = {
   propertyName: string; locality: string; contractorId: string | null; contractorName: string;
   dueAt: string | null; scheduledAt: string | null; completedAt: string | null; contractorContactedAt: string | null;
   quotePence: number | null; invoicePence: number | null; invoiceRef: string; invoicedAt: string | null;
-  paidAt: string | null; payee: "contractor" | "agent" | null; raisedBy: string; urgency: string | null;
+  paidAt: string | null; paidHow: string | null; payee: "contractor" | "agent" | null; raisedBy: string; urgency: string | null;
   /** On the payment run: keyed on PayProp by the office (21 Oct 2026). */
   payrunAt: string | null;
 };
@@ -66,6 +66,8 @@ type Board = {
   mineNote?: string | null;
 };
 type Per = Map<string, { open: number; owed: number; today: boolean }>;
+/* The look in PayProp for what it has paid (James, 29 Oct 2026, lib/works-payprop-paid). */
+type PayCheck = { state: "checking" } | { state: "ok"; readAt: string; marked: number } | { state: "failed"; error: string };
 /* The book's columns, sortable (James, 25 Oct 2026). Null is the order the book comes in. */
 type SortKey = "name" | "paper" | "work";
 type Sort = { key: SortKey; dir: 1 | -1 } | null;
@@ -102,6 +104,32 @@ export default function ContractorsPage() {
       .catch(() => setErr("Could not read the contractors."));
   }, []);
   useEffect(load, [load]);
+
+  /* Paid out of the rent (James to Lianna Denholm, 29 Oct 2026: "it will
+     cross-reference PayProp ... once it is paid out of the rent, it will then
+     mark as done"). Once a visit, after the board: PayProp is asked which of
+     the invoices waiting it has paid, those jobs are marked paid, and the
+     board is read again so they move from To pay to Paid. */
+  const [payCheck, setPayCheck] = useState<PayCheck | null>(null);
+  const checked = useRef(false);
+  useEffect(() => {
+    if (!data || checked.current) return;
+    checked.current = true;
+    setPayCheck({ state: "checking" });
+    fetch("/api/works-orders/payprop-paid", { method: "POST" })
+      .then((r) => r.json())
+      .then((j: { ok: boolean; readAt?: string; marked?: string[]; error?: string }) => {
+        if (!j.ok) return setPayCheck({ state: "failed", error: j.error ?? "PayProp couldn't be read just now, so nothing has been checked off." });
+        /* Only the ones on this person's board: the look ticks off the whole business's. */
+        const mine = (j.marked ?? []).filter((id) => data.jobs.some((x) => x.id === id));
+        setPayCheck({ state: "ok", readAt: j.readAt ?? new Date().toISOString(), marked: mine.length });
+        if (j.marked?.length) load();
+      })
+      .catch(() => setPayCheck({ state: "failed", error: "PayProp couldn't be read just now, so nothing has been checked off." }));
+  }, [data, load]);
+  /* Invoices by home, not only by number (Lianna Denholm, 29 Oct 2026: "we can't search by property"). */
+  const [payQ, setPayQ] = useState("");
+
   useEffect(() => {
     if (editing) requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }, [editing]);
@@ -132,6 +160,10 @@ export default function ContractorsPage() {
   const owedPence = unpaid.reduce((a, j) => a + (j.invoicePence ?? 0), 0);
   const longWait = unpaid.filter((j) => waitedDays(j) > WAITING_DAYS);
   const recentlyPaid = jobs.filter((j) => j.status === "paid").sort((a, b) => ((a.paidAt ?? "") > (b.paidAt ?? "") ? -1 : 1));
+  const payNeedle = payQ.trim();
+  const payMatch = (j: Job) => !payNeedle || searchMatches(payNeedle, j.propertyName, j.locality, j.invoiceRef, j.contractorName, j.title, String(j.ref), j.payee === "agent" ? j.raisedBy : "");
+  const shownUnpaid = unpaid.filter(payMatch);
+  const shownPaid = recentlyPaid.filter(payMatch);
 
   /* Per contractor, for the book. */
   const per: Per = useMemo(() => {
@@ -358,15 +390,29 @@ export default function ContractorsPage() {
             <section className="nl-ct-sec">
               <div className="nl-ct-sh"><h2>To Pay</h2><span className="nl-ct-total">{pounds(owedPence)}</span></div>
               <p className="nl-meta nl-ct-shnote">Their invoice is on the job and accounts have been told. Oldest first. Over {WAITING_DAYS} days is marked.</p>
+              <PayPropLine c={payCheck} look="new" />
+              {(unpaid.length > 0 || recentlyPaid.length > 0) && (
+                <div className="nl-ct-tools nl-ct-paytools">
+                  <label className="nl-fsearch">
+                    <Ico name="search" />
+                    <input value={payQ} onChange={(e) => setPayQ(e.target.value)} placeholder="Search by property or invoice number" aria-label="Search invoices" />
+                  </label>
+                  {payNeedle && <span className="nl-fcount">{plural(shownUnpaid.length + shownPaid.length, "invoice")} found</span>}
+                </div>
+              )}
               {unpaid.length === 0 ? (
                 <p className="nl-ct-calm">Nothing owed. Every contractor invoice on the OS is paid.</p>
-              ) : unpaid.map((j) => <CtInvRow key={j.id} j={j} waited={waitedDays(j)} />)}
+              ) : shownUnpaid.length === 0 ? (
+                <p className="nl-ct-calm">Nothing to pay matches &ldquo;{payNeedle}&rdquo;.</p>
+              ) : shownUnpaid.map((j) => <CtInvRow key={j.id} j={j} waited={waitedDays(j)} />)}
             </section>
             <section className="nl-ct-sec">
-              <div className="nl-ct-sh"><h2>Paid in the Last 90 Days</h2><span>{recentlyPaid.length}</span></div>
+              <div className="nl-ct-sh"><h2>Paid in the Last 90 Days</h2><span>{payNeedle ? shownPaid.length : recentlyPaid.length}</span></div>
               {recentlyPaid.length === 0 ? (
                 <p className="nl-ct-calm">Nothing marked paid in the last 90 days.</p>
-              ) : recentlyPaid.map((j) => <CtInvRow key={j.id} j={j} waited={0} paid />)}
+              ) : shownPaid.length === 0 ? (
+                <p className="nl-ct-calm">Nothing paid matches &ldquo;{payNeedle}&rdquo;.</p>
+              ) : shownPaid.map((j) => <CtInvRow key={j.id} j={j} waited={0} paid />)}
             </section>
             <p className="nl-meta nl-ct-foot">A contractor emailed you an invoice for work with no job on the OS? Press Log an invoice at the top of the page.</p>
           </div>
@@ -579,11 +625,23 @@ export default function ContractorsPage() {
               <Head icon="wallet" title="Invoices to Pay" blurb={`Their invoice is on the job and accounts have been told. Oldest first. Over ${WAITING_DAYS} days is marked.`} />
               <span className="figures shrink-0 text-[15px] font-semibold">{pounds(owedPence)}</span>
             </div>
+            <div className="mt-2 sm:pl-[52px]"><PayPropLine c={payCheck} look="old" /></div>
+            {(unpaid.length > 0 || recentlyPaid.length > 0) && (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <div className="relative w-full max-w-sm">
+                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted"><DoodleIcon name="search" size={13} /></span>
+                  <input value={payQ} onChange={(e) => setPayQ(e.target.value)} placeholder="Search by property or invoice number…" aria-label="Search invoices" className="w-full rounded-full border border-line/80 bg-white py-2 pl-9 pr-4 text-[12.5px] outline-none focus:border-ink" />
+                </div>
+                {payNeedle && <span className="text-[11.5px] text-muted">{plural(shownUnpaid.length + shownPaid.length, "invoice")} found</span>}
+              </div>
+            )}
             {unpaid.length === 0 ? (
               <Empty>Nothing owed. Every contractor invoice on the OS is paid.</Empty>
+            ) : shownUnpaid.length === 0 ? (
+              <Empty>Nothing to pay matches &ldquo;{payNeedle}&rdquo;.</Empty>
             ) : (
               <ul className="mt-3 divide-y divide-line/50">
-                {unpaid.map((j) => {
+                {shownUnpaid.map((j) => {
                   const w = waitedDays(j);
                   const c = mark(j);
                   return (
@@ -607,14 +665,16 @@ export default function ContractorsPage() {
           </section>
           {recentlyPaid.length > 0 && (
             <section className={`${box} p-5`}>
-              <Head icon="checklist" title="Paid in the Last 90 Days" blurb="Marked paid on the job." />
+              <Head icon="checklist" title="Paid in the Last 90 Days" blurb="Marked paid on the job, or paid out of the rent through PayProp." count={payNeedle ? shownPaid.length : undefined} />
+              {shownPaid.length === 0 && <Empty>Nothing paid matches &ldquo;{payNeedle}&rdquo;.</Empty>}
               <ul className="mt-3 divide-y divide-line/50">
-                {recentlyPaid.map((j) => (
+                {shownPaid.map((j) => (
                   <li key={j.id} className="flex items-center gap-3 py-2.5">
                     <ContractorMark name={j.contractorName} logoUrl={mark(j)?.logoUrl} size={30} />
                     <a href={jobHref(j.id)} className="min-w-0 flex-1 hover:underline">
                       <span className="block truncate text-[13px]">{j.contractorName}</span>
-                      <span className="block truncate text-[11px] text-muted">{j.propertyName} · paid {day(j.paidAt)}</span>
+                      <span className="block text-[11px] text-muted sm:truncate">{j.propertyName}{j.invoiceRef ? ` · invoice ${j.invoiceRef}` : ""} · paid {day(j.paidAt)}{j.paidHow === "payprop" ? " out of the rent" : ""}</span>
+                      {j.paidHow === "payprop" && <span className="block text-[11px] text-muted sm:truncate">Through PayProp. The paid copy of the invoice is in PayProp.</span>}
                     </a>
                     <span className="figures shrink-0 text-[13px] text-muted">{j.invoicePence != null ? pounds(j.invoicePence) : ""}</span>
                   </li>
@@ -686,6 +746,22 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
     >
       {children}
     </button>
+  );
+}
+
+/** What the look in PayProp found, said under To pay. A failed read is said, never a quiet nothing. */
+function PayPropLine({ c, look }: { c: PayCheck | null; look: "new" | "old" }) {
+  if (!c) return null;
+  const cls = look === "new" ? "nl-meta nl-ct-shnote" : "text-[11.5px] text-muted";
+  if (c.state === "checking") {
+    return <p className={`${cls} flex items-center gap-2`}><span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Checking PayProp for anything it has paid…</p>;
+  }
+  if (c.state === "failed") return <p className={`${cls} text-accent-dark`}>{c.error}</p>;
+  return (
+    <p className={cls}>
+      Checked against PayProp at {hhmm(c.readAt)}.{" "}
+      {c.marked ? `${plural(c.marked, "invoice")} paid out of the rent, now under Paid.` : "Anything PayProp pays out of the rent moves to Paid on its own."}
+    </p>
   );
 }
 
@@ -898,6 +974,11 @@ function CtInvRow({ j, waited, paid = false }: { j: Job; waited: number; paid?: 
       <div className="nl-ct-t">
         <a href={jobHref(j.id)} className="nl-ct-home">{j.payee === "agent" ? `${j.raisedBy} (paid it themselves)` : j.contractorName}</a>
         <span className="nl-ct-d">{j.propertyName} · #{j.ref} {j.title}</span>
+        {paid && (
+          <span className="nl-ct-m">
+            {[j.invoiceRef ? `Invoice ${j.invoiceRef}` : "", j.paidHow === "payprop" ? "Paid out of the rent through PayProp. The paid copy is in PayProp" : ""].filter(Boolean).join(" · ")}
+          </span>
+        )}
         {!paid && (
           <span className="nl-ct-m">
             {[j.invoiceRef ? `Invoice ${j.invoiceRef}` : "", awaitingPay(j) ? (j.payrunAt ? PAYRUN_LABEL : "To go on PayProp") : ""].filter(Boolean).join(" · ")}

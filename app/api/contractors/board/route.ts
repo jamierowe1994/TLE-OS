@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
         propertyName: o.propertyName, locality: o.locality, contractorId: o.contractorId, contractorName: o.contractorName,
         dueAt: o.dueAt, scheduledAt: o.scheduledAt, completedAt: o.completedAt, contractorContactedAt: o.contractorContactedAt,
         quotePence: o.quotePence, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef, invoicedAt: o.invoicedAt,
-        paidAt: o.paidAt, payee: o.payee, raisedBy: o.raisedBy, urgency: o.urgency,
+        paidAt: o.paidAt, paidHow: o.paidHow, payee: o.payee, raisedBy: o.raisedBy, urgency: o.urgency,
         /* On the payment run (James, 21 Oct 2026): keyed on PayProp, coming out of the rent. */
         payrunAt: o.payrunAt,
       }));

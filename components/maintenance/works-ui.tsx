@@ -80,23 +80,29 @@ export function PayrunTag({ o, className = "" }: { o: Pick<WorksOrder, "status" 
 }
 
 /** Invoice in, on the payment run, paid - with dates. Read-only: what the agent sees. */
-export function PayrunTrack({ o }: { o: Pick<WorksOrder, "status" | "invoicePence" | "invoicedAt" | "payrunAt" | "paidAt"> }) {
+export function PayrunTrack({ o }: { o: Pick<WorksOrder, "status" | "invoicePence" | "invoicedAt" | "payrunAt" | "paidAt"> & { paidHow?: WorksOrder["paidHow"] } }) {
   if (o.invoicePence == null) return null;
+  /* Paid out of the rent (29 Oct 2026, lib/works-payprop-paid): PayProp gives
+     the payment, not the paid copy of the invoice, so the job says where it is. */
+  const viaPayProp = o.status === "paid" && o.paidHow === "payprop";
   const steps: { label: string; at: string | null; done: boolean }[] = [
     { label: "Invoice in", at: o.invoicedAt, done: true },
     { label: PAYRUN_LABEL, at: o.payrunAt, done: !!o.payrunAt || o.status === "paid" },
     { label: "Paid", at: o.paidAt, done: o.status === "paid" },
   ];
   return (
-    <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px]">
-      {steps.map((s, i) => (
-        <li key={s.label} className="flex items-center gap-2">
-          {i > 0 && <span aria-hidden className={`h-[2px] w-4 ${s.done ? "bg-[#56634a]" : "bg-line"}`} />}
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${s.done ? "bg-[#56634a]" : "border-2 border-line bg-white"}`} aria-hidden />
-          <span className={s.done ? "text-ink" : "text-muted"}>{s.label}{s.at ? ` · ${day(s.at)}` : ""}</span>
-        </li>
-      ))}
-    </ol>
+    <>
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px]">
+        {steps.map((s, i) => (
+          <li key={s.label} className="flex items-center gap-2">
+            {i > 0 && <span aria-hidden className={`h-[2px] w-4 ${s.done ? "bg-[#56634a]" : "bg-line"}`} />}
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${s.done ? "bg-[#56634a]" : "border-2 border-line bg-white"}`} aria-hidden />
+            <span className={s.done ? "text-ink" : "text-muted"}>{s.label}{s.at ? ` · ${day(s.at)}` : ""}{s.label === "Paid" && viaPayProp ? " out of the rent" : ""}</span>
+          </li>
+        ))}
+      </ol>
+      {viaPayProp && <p className="mt-1.5 text-[11.5px] text-muted">Paid through PayProp. The paid copy of the invoice is in PayProp.</p>}
+    </>
   );
 }
 

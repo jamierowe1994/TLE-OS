@@ -131,6 +131,19 @@ export default function WorksOrderPage() {
       .catch(() => setJob({ state: "failed", error: "The job could not be read just now. Try again in a minute." }));
   }, [id]);
   useEffect(() => { if (id && id !== "invoices") load(); }, [id, load]);
+  /* An invoice waiting to be paid: ask PayProp once whether it has paid it
+     out of the rent (29 Oct 2026, lib/works-payprop-paid), and read the job
+     again if it has. Quiet otherwise - Contractors > To pay says how it went. */
+  const waitingPay = job.state === "ready" && job.data.order.status === "invoiced";
+  const askedPayProp = useRef(false);
+  useEffect(() => {
+    if (!waitingPay || askedPayProp.current) return;
+    askedPayProp.current = true;
+    fetch("/api/works-orders/payprop-paid", { method: "POST" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; marked?: string[] }) => { if (j?.ok && j.marked?.includes(id)) load(); })
+      .catch(() => null);
+  }, [waitingPay, id, load]);
   /* The trades book, for picking and for the engineer's details. */
   useEffect(() => {
     fetch("/api/contractors", { cache: "no-store" })
