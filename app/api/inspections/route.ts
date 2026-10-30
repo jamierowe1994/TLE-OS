@@ -11,6 +11,7 @@ import { factsByRexId } from "@/lib/os-properties";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { isOurs } from "@/lib/compliance";
 import { homesOff, withoutOff } from "@/lib/inspections-off";
+import { notOursTask } from "@/lib/task-scope";
 import { lastClosedByHome, lastImport, openTasks } from "@/lib/rexpm-tasks";
 import {
   createInspection, dueFromTasks, dueList, inspectionRules, listInspections, logEvent, moveInspection, openFindings, summarise,
@@ -119,11 +120,9 @@ export async function GET(req: NextRequest) {
              managed - Flat 7, Riva House said "Experts Managed Service" while
              the home's record here says let only - so a task on a home the
              compliance book knows and doesn't count as ours is dropped: let
-             only, rent collect, or an agent who has left. A task on a home
-             the book doesn't know stays, as there is nothing to say otherwise. */
-          const known = new Set(comp.book.properties.map((p) => String(p.id)));
-          const homesOf = (t: (typeof tasks)[number]) => [t.osPropertyId, t.rexPropertyId].filter((x): x is string => Boolean(x));
-          const notOurs = (t: (typeof tasks)[number]) => homesOf(t).some((h) => known.has(h)) && !homesOf(t).some((h) => ours.has(h));
+             only, rent collect, or an agent who has left. A home the book
+             doesn't know goes by its record here (lib/task-scope). */
+          const notOurs = await notOursTask(comp.book.properties);
           due = dueFromTasks(scoped.filter((t) => !notOurs(t)), inspections, book.properties, hmoIds);
         } else {
           const prior = await lastClosedByHome("inspection");

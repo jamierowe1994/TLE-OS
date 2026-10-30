@@ -227,10 +227,10 @@ export async function agentSigned(id: string, origin: string, me?: OsUser | null
     if (s.status !== "completed") throw new TermsRefused("Your signature hasn't reached DocuSeal yet. Give it a moment.");
   }
   await markAgentSigned(id);
-  if (t.status === "agent") {
+  /* Claimed before the email, so the screen and the webhook send it once between them. */
+  if (t.status === "agent" && (await markSent(id))) {
     const agent = me ?? (await findUserById(t.agentId));
     if (agent) await emailParties(t, agent, origin, t.parties.map((p) => p.key));
-    await markSent(id);
     /* The appraisal's Next up, At a glance and stage read this stamp, as they did for the old DocuSeal send. */
     if (t.appraisalId) await markTermsSent(t.appraisalId).catch(() => null);
     /* Adjust contract: the new one is out, so the old one's links stop now. */
