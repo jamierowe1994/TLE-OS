@@ -1846,10 +1846,12 @@ export const TENANT_PORTAL_LOGIN = {
  */
 export const TENANT_DOCUMENTS = {
   subject: "Documents for {{address}}",
-  preheader: "Your copies, attached to this email.",
+  preheader: "{{preheader}}",
   mode: "blocks",
   blocks: [
-    H("tdc1", "Your Paperwork Has Arrived"),
+    /* "Your Paperwork Has Arrived", or "A Message About Your Home" when the
+       email carries no documents (Email Docs, 29 Oct 2026). */
+    H("tdc1", "{{heading}}"),
     T("tdc2", "Hi {{firstName}},"),
     /* The sender's own words (20 Oct 2026, Email Certificates): the box on
        the send screen is filled with the default in lib/home-send
@@ -1860,6 +1862,27 @@ export const TENANT_DOCUMENTS = {
     FOOT("tdc7", "You're getting this because you rent your home through The Letting Experts."),
   ],
   branding: { showSignoff: false, kicker: "Your documents", mast: "sage" },
+} as const;
+
+/**
+ * The landlord's copy (Email Docs, 29 Oct 2026, Sean McMahon on the team
+ * call: "when you do be able to email a landlord throughout, I can't attach
+ * documents to it"). The same press as the tenants' one on the home's page,
+ * the same words box, the landlord's own look.
+ */
+export const LANDLORD_DOCUMENTS = {
+  subject: "Documents for {{address}}",
+  preheader: "{{preheader}}",
+  mode: "blocks",
+  blocks: [
+    H("ldc1", "{{heading}}"),
+    T("ldc2", "Hi {{firstName}},"),
+    T("ldc4", "{{messageHtml}}"),
+    T("ldc3", "{{docList}}"),
+    T("ldc6", "All the best,<br>{{agentName}}"),
+    FOOT("ldc7", "You're getting this because The Letting Experts look after your property."),
+  ],
+  branding: { showSignoff: false, kicker: "Your property" },
 } as const;
 
 /** Two days after the passport invite, nothing typed. */
