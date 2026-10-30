@@ -235,9 +235,9 @@ export default function ListingCompliance({
         </>
       ),
     },
-    { key: "id", label: "Landlord ID", held: doc("landlord_id") ?? paper("doc_landlord_id_ownership"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_id")} /> },
+    { key: "id", label: "Landlord ID", held: doc("landlord_id") ?? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_id")} /> },
     { key: "own", label: "Proof of ownership", held: doc("landlord_proof_of_ownership") ?? paper("doc_landlord_id_ownership"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_proof_of_ownership")} /> },
-    { key: "aml", label: "AML check", held: doc("landlord_aml"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_aml")} /> },
+    { key: "aml", label: "AML check", held: doc("landlord_aml") ?? paper("landlord_aml"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_aml")} /> },
     ...(home?.scotland
       ? [{ key: "reg", label: "Landlord registration", held: paper("doc_landlord_registration") ?? (landlordRegistration ? { how: `${regNumbers(landlordRegistration).length > 1 ? "Numbers" : "Number"} ${regNumbersInWords(landlordRegistration)} on the record` } : null), need: "Not on file", action: <UploadButton onClick={() => upload("other")} /> }]
       : []),
