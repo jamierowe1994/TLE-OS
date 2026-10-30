@@ -15,7 +15,7 @@ type Ctx = {
   ok: boolean;
   error?: string;
   home: OfferHome | null;
-  tenant: { name: string; email: string; passport: PassportData | null; passportDoneOn: string | null };
+  tenant: { name: string; email: string; passport: PassportData | null; passportDoneOn: string | null; existing?: OfferTenant["existing"] };
 };
 
 export default function NewOffer() {
@@ -37,7 +37,7 @@ export default function NewOffer() {
   }, []);
 
   const tenant: OfferTenant | null = ctx
-    ? { id: ctx.tenant.email, name: ctx.tenant.name, email: ctx.tenant.email, passport: ctx.tenant.passport, passportDoneOn: ctx.tenant.passportDoneOn }
+    ? { id: ctx.tenant.email, name: ctx.tenant.name, email: ctx.tenant.email, passport: ctx.tenant.passport, passportDoneOn: ctx.tenant.passportDoneOn, existing: ctx.tenant.existing ?? null }
     : null;
 
   return (

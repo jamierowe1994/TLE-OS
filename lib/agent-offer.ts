@@ -18,6 +18,7 @@ import { addTestOffer, isTestId, kitPeopleForTestListing, testListing } from "@/
 import { addOfferPeople, checkOthers, partLink } from "@/lib/offer-people";
 import { incomeOf, personLines } from "@/lib/offer-people-shape";
 import { foldRepeat, priorOffer, repeatLine } from "@/lib/offer-repeat";
+import { getApplications } from "@/lib/applications";
 
 /**
  * An offer the AGENT puts forward for a tenant (1 Oct 2026, James: "build the
@@ -40,10 +41,29 @@ const str = (v: unknown, max = 2000) => String(v ?? "").trim().slice(0, max);
 const list = (v: unknown, max = 12) => (Array.isArray(v) ? v.map((x) => str(x, 120)).filter(Boolean).slice(0, max) : []);
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
+/** An application this tenant already has on this home, with everyone on it. */
+export type ExistingApplication = { id: string; status: string; people: { name: string; email: string | null; phone: string | null; isPrimary: boolean }[] };
+
 export type OfferContext = {
   home: { id: string; address: string; locality: string; askingPcm: number; beds: number; photo: string | null } | null;
-  tenant: { name: string; email: string; passport: PassportData | null; passportDoneOn: string | null };
+  tenant: { name: string; email: string; passport: PassportData | null; passportDoneOn: string | null; existing?: ExistingApplication | null };
 };
+
+/**
+ * 12 South Chesters Lane, 30 Oct 2026: Lianna opened Put an Offer Forward
+ * from Katherine Quinn's lead although REX already held the application, with
+ * Steven Quinn's own email and mobile on it. The form reads the passport, which
+ * keeps the second adult as a name and an income, so Steven came up blank
+ * and "full tenants don't pull through". The application is the file: the
+ * form now says so, and fills the others from it.
+ */
+async function existingApplication(listingId: string, email: string): Promise<ExistingApplication | null> {
+  const e = email.trim().toLowerCase();
+  if (!e) return null;
+  const apps = await getApplications(300).catch(() => []);
+  const hit = apps.find((a) => String(a.listingId ?? "") === listingId && a.status !== "unsuccessful" && a.applicants.some((p) => (p.email ?? "").trim().toLowerCase() === e));
+  return hit ? { id: hit.id, status: hit.status, people: hit.applicants.map((p) => ({ name: p.name, email: p.email, phone: p.phone, isPrimary: p.isPrimary })) } : null;
+}
 
 /** The home and the tenant's passport, for the screen to open on. */
 export async function offerContext(p: { listingId: string; email: string; name: string }): Promise<OfferContext> {
@@ -70,7 +90,10 @@ export async function offerContext(p: { listingId: string; email: string; name: 
     };
   }
   const h = /^\d+$/.test(p.listingId) ? await homeOnMarket(p.listingId).catch(() => null) : null;
-  const rec = emailOk(p.email) ? await passportFor(p.email) : null;
+  const [rec, existing] = await Promise.all([
+    emailOk(p.email) ? passportFor(p.email) : Promise.resolve(null),
+    h && emailOk(p.email) ? existingApplication(p.listingId, p.email) : Promise.resolve(null),
+  ]);
   return {
     home: h
       ? {
@@ -90,6 +113,7 @@ export async function offerContext(p: { listingId: string; email: string; name: 
       passportDoneOn: rec?.submittedAt
         ? new Date(rec.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })
         : null,
+      existing,
     },
   };
 }

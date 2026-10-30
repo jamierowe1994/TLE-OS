@@ -37,7 +37,11 @@ export type OfferTenant = {
   /** Their passport if they have one; null when they have never been sent one. */
   passport: PassportData | null;
   passportDoneOn: string | null;
+  /** An application they already have on this home, with everyone on it (lib/agent-offer). */
+  existing?: { id: string; status: string; people: { name: string; email: string | null; phone: string | null; isPrimary: boolean }[] } | null;
 };
+
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
 
 export type OfferHome = { id: string; address: string; locality: string; askingPcm: number; beds: number; photo: string | null };
 
@@ -169,9 +173,18 @@ export default function AgentOfferRecorder({
   const extraNames = people.length
     ? movingIn.filter((p) => p.who === "Adult").map((p) => (/^Adult \d+$/.test(p.name) ? "" : p.name))
     : Array.from({ length: Math.max(0, adults - 1) }, () => "");
+  /* The others on an application they already have here: their own email and
+     mobile, matched by name ("StevenQuinn" on a passport is Steven Quinn), else
+     in the application's order (12 South Chesters Lane, 30 Oct 2026). */
+  const onApp = (tenant.existing?.people ?? []).filter((p) => !p.isPrimary && squash(p.name) !== squash(tenant.name) && (p.email ?? "").toLowerCase() !== tenant.email.toLowerCase());
+  const fromApp = (n: string, i: number) => {
+    /* A name that isn't on the application gets nobody's details. */
+    const p = n.trim() ? onApp.find((x) => squash(x.name) === squash(n)) : onApp[i];
+    return p ? { name: p.name, email: p.email ?? "", mobile: p.phone ?? "" } : {};
+  };
   const extraSeeds = people.length
-    ? movingIn.filter((p) => p.who === "Adult").map((p) => (p.credit == null ? {} : { adverseCredit: p.credit, adverseCreditNote: p.creditNote ?? "" }))
-    : [];
+    ? movingIn.filter((p) => p.who === "Adult").map((p, i) => ({ ...(p.credit == null ? {} : { adverseCredit: p.credit, adverseCreditNote: p.creditNote ?? "" }), ...fromApp(/^Adult \d+$/.test(p.name) ? "" : p.name, i) }))
+    : extraNames.map((n, i) => fromApp(n, i));
   const [parts, setParts] = useOtherAdults(extraNames, extraSeeds);
   const partIncome = parts.reduce((t, o) => t + (o.mode === "fill" ? incomeOf(o.answers) : 0), 0);
   const income = Math.max(
@@ -349,6 +362,17 @@ export default function AgentOfferRecorder({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {tenant.existing && (
+        <div className="rounded-[16px] border border-[#e8d9b5] bg-[#fbf5e6] px-4 py-3.5 text-[13.5px] leading-snug lg:col-span-2">
+          <p className="font-semibold">{name} already has an application on this home</p>
+          <p className="mt-1 text-muted">
+            {tenant.existing.people.map((p) => p.name).join(" and ")}, with everyone&apos;s own email and mobile. To start referencing, open the application and use Push to Propoly - there&apos;s no need for a second offer.
+          </p>
+          <a href={`/applications/${encodeURIComponent(tenant.existing.id)}`} className="mt-2.5 inline-block rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white">
+            Open the application
+          </a>
+        </div>
+      )}
       <section className={`${card} p-5 sm:p-6`}>
         {/* ── the steps ── */}
         <ol className="flex flex-wrap gap-2">
