@@ -53,6 +53,10 @@ const CHECK_FOR_TYPE: Record<string, CheckId> = {
   guarantor_id: "guarantor-checks",
   guarantor_reference: "guarantor-checks",
   guarantor_agreement: "guarantor-checks",
+  /* The office's Easy Read Notes, on every Scottish let (lib/standing-documents,
+     29 Oct 2026). Not one of the checks, so Anything else; on an approved
+     pack that goes to the Propoly deal as a General Document. */
+  easy_read_notes: "other",
 };
 
 /** The other way: the Documents-tab label for a file filed on a pack. */
@@ -278,15 +282,18 @@ async function fromDocumentsTab(run: Run) {
   }
 
   const reads = await inThrees(fresh, (d) =>
-    readDroppedFile(
-      { key: d.r2Key, name: d.fileName },
-      {
-        address: start.address,
-        landlordName: run.ctx.landlord,
-        tenantNames: run.ctx.tenants,
-        label: d.type === OTHER ? d.name : docTypeLabel(d.type),
-      }
-    )
+    /* A standing document is known already: no reading, no AI call per pack. */
+    d.fromKind === "standing"
+      ? Promise.resolve<Read>({ checkId: "other", what: d.name, issueDate: null, expiryDate: null, names: [], confidence: "high", note: "The office's own copy, on every Scottish let.", at: new Date().toISOString() })
+      : readDroppedFile(
+          { key: d.r2Key, name: d.fileName },
+          {
+            address: start.address,
+            landlordName: run.ctx.landlord,
+            tenantNames: run.ctx.tenants,
+            label: d.type === OTHER ? d.name : docTypeLabel(d.type),
+          }
+        )
   );
 
   for (let i = 0; i < fresh.length; i++) {

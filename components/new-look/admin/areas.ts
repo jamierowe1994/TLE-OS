@@ -98,10 +98,13 @@ export const ADMIN_AREAS: AdminArea[] = [
       { href: "/pre-tenancy/dashboard", label: "Kirstie's view", says: "Every let on its way to a move-in", needs: "see:pretenancy" },
       { href: "/compliance-desk", label: "Michael's view", says: "Certificates, new documents, agents and works orders", needs: "see:agent-compliance" },
       {
-        href: "/admin/plc-checks", label: "Pre-let", says: "How the PLC decisions are holding up, and Propoly's packs", needs: "see:reports",
+        href: "/admin/plc-checks", label: "Pre-let", says: "How the PLC decisions are holding up, Propoly's packs and the standing documents", needs: "see:reports",
         tabs: [
           t("/admin/plc-checks", "PLC checks", "see:reports"),
           t("/admin/propoly", "Propoly", "see:pretenancy"),
+          /* Kept once, on every let it applies to: the Easy Read Notes on every
+             Scottish let (lib/standing-documents, 29 Oct 2026). */
+          t("/admin/standing-documents", "Standing documents", "see:pretenancy"),
         ],
       },
     ],

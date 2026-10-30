@@ -60,6 +60,7 @@ import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Tabs, Menu, Ico, type MenuItem, type Tone } from "@/components/new-look/Parts";
 import PhotoGrid from "@/components/new-look/PhotoGrid";
 import type { IncomingLet } from "@/app/api/portfolio/incoming/route";
+import HomeSwitch from "@/components/HomeSwitch";
 
 /**
  * One home, the whole of it, on one page.
@@ -1171,6 +1172,8 @@ export default function PropertyPage() {
                   {[sub, rentShown ?? (!(houseView && house && !lets) && !p.test ? noRent : null)].filter(Boolean).join(" · ")}
                 </p>
                 <div className="nl-prop-addr"><OsAddressLine propertyId={propertyId} listingId={p.listingId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} onChanged={() => setBookRev((n) => n + 1)} /></div>
+                {/* The same home's listing and let in progress (29 Oct 2026). */}
+                {!p.test && <HomeSwitch from="home" listingId={String(p.listingId)} propertyId={propertyId} address={p.address || [p.name, p.locality, p.postcode].filter(Boolean).join(", ")} className="mt-4" />}
                 {house && (
                   <div className="nl-prop-rooms">
                     <button type="button" onClick={() => setRoom("house")} className={`nl-prop-room${room === "house" ? " is-on" : ""}`} aria-pressed={room === "house"}>
@@ -1674,6 +1677,8 @@ export default function PropertyPage() {
               ) : null}
               <p className="mt-1 text-[13px] text-muted">{sub}</p>
               <OsAddressLine propertyId={propertyId} listingId={p.listingId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} onChanged={() => setBookRev((n) => n + 1)} />
+              {/* The same home's listing and let in progress (29 Oct 2026). */}
+              {!p.test && <HomeSwitch from="home" listingId={String(p.listingId)} propertyId={propertyId} address={p.address || [p.name, p.locality, p.postcode].filter(Boolean).join(", ")} className="mt-3" />}
               {house && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button

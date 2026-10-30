@@ -3,7 +3,8 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { can } from "@/lib/roles";
-import { DOC_MIME, isDocType, OTHER, docTypeLabel } from "@/lib/doc-types";
+import { DOC_MIME, DOC_TYPES, isDocType, OTHER, docTypeLabel } from "@/lib/doc-types";
+import { LET_KINDS } from "@/lib/standing-document-kinds";
 import { addFileDoc, docsForHome, isFromKind, removeFileDoc } from "@/lib/file-documents";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
 import { isTestId } from "@/lib/test-overlay";
@@ -12,7 +13,8 @@ import { isTestFile, TEST_STREET } from "@/lib/test-guard";
 /**
  * A home's documents, from whichever file is open (lib/file-documents).
  *
- *   GET    /api/documents?address=&property=        → every document for that home
+ *   GET    /api/documents?address=&property=&from=  → every document for that home
+ *                                                     (on a let, its standing documents first: lib/standing-documents)
  *   POST   /api/documents   multipart: file, type, name (for Other), address, property, from, fromId
  *   DELETE /api/documents?id=                         → off the file (its uploader, or the office)
  *
@@ -30,12 +32,15 @@ const home = (req: NextRequest) => ({
 
 const officeOf = (role: string) => can(role as never, "see:everything");
 
+/** A let's file (application, deal, home page) carries the standing documents, such as the Easy Read Notes on a Scottish let. */
+const onALet = (kind: string | null | undefined) => ({ standing: LET_KINDS.has(String(kind ?? "")) });
+
 export async function GET(req: NextRequest) {
   const { actor, subject } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: true, stored: false, docs: [] });
   const me = subject ?? actor;
-  const docs = await docsForHome(home(req), { id: me.id, office: officeOf(me.role) });
+  const docs = await docsForHome(home(req), { id: me.id, office: officeOf(me.role) }, onALet(req.nextUrl.searchParams.get("from")));
   return NextResponse.json({ ok: true, stored: true, docs });
 }
 
@@ -68,6 +73,9 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
   if (!isDocType(type)) return NextResponse.json({ ok: false, error: "Pick what the document is first." }, { status: 400 });
   if (type === OTHER && !ownName) return NextResponse.json({ ok: false, error: "Give the document a name." }, { status: 400 });
+  if (DOC_TYPES.some((t) => t.key === type && t.standing)) {
+    return NextResponse.json({ ok: false, error: `${docTypeLabel(type)} are kept once by the office in Admin, and are on every let they apply to already.` }, { status: 400 });
+  }
   /* "propoly" is the move-in pack's own filing (lib/propoly-mail), never an upload. */
   if (!isFromKind(fromKind) || fromKind === "propoly" || !fromId) return NextResponse.json({ ok: false, error: "Which file is this for?" }, { status: 400 });
   if (!address && !propertyId) return NextResponse.json({ ok: false, error: "This file has no address, so there is nowhere to keep it." }, { status: 400 });
@@ -123,7 +131,7 @@ export async function POST(req: NextRequest) {
     const { fileTermsToRex } = await import("@/lib/terms-to-rex");
     note = (await fileTermsToRex({ propertyId, r2Key: key, fileName: file.name, byName: actor.name || actor.email })).note;
   }
-  const docs = await docsForHome({ address, propertyId }, { id: actor.id, office: officeOf(actor.role) });
+  const docs = await docsForHome({ address, propertyId }, { id: actor.id, office: officeOf(actor.role) }, onALet(fromKind));
   return NextResponse.json({ ok: true, docs, note });
 }
 
@@ -137,6 +145,6 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id") ?? "";
   const done = await removeFileDoc(id, { id: actor.id, name: actor.name || actor.email, office: officeOf(actor.role) });
   if (!done) return NextResponse.json({ ok: false, error: "Only the person who added it, or the office, can take it off." }, { status: 403 });
-  const docs = await docsForHome(home(req), { id: actor.id, office: officeOf(actor.role) });
+  const docs = await docsForHome(home(req), { id: actor.id, office: officeOf(actor.role) }, onALet(req.nextUrl.searchParams.get("from")));
   return NextResponse.json({ ok: true, docs });
 }
