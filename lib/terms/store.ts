@@ -175,8 +175,18 @@ export async function markAgentSigned(id: string): Promise<void> {
   await q(`UPDATE os_terms SET agent_signed_at = COALESCE(agent_signed_at, NOW()) WHERE id = $1`, [id]);
 }
 
-export async function markSent(id: string): Promise<void> {
-  await q(`UPDATE os_terms SET status = 'sent', sent_at = COALESCE(sent_at, NOW()) WHERE id = $1 AND status = 'agent'`, [id]);
+/**
+ * Moves agent-signed terms to sent, once. True for the one caller that moved
+ * them: the agent's screen and DocuSeal's webhook both arrive on the agent's
+ * signature, and each emailed the landlord (68 Main Street, 29 Oct 2026: two
+ * copies 0.4s apart). Only the caller this returns true for sends.
+ */
+export async function markSent(id: string): Promise<boolean> {
+  const rows = await q<{ id: string }>(
+    `UPDATE os_terms SET status = 'sent', sent_at = COALESCE(sent_at, NOW()) WHERE id = $1 AND status = 'agent' RETURNING id`,
+    [id]
+  );
+  return rows.length > 0;
 }
 
 export async function markSigned(id: string, r2Key: string | null): Promise<boolean> {
