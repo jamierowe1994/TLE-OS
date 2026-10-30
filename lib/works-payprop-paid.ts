@@ -15,9 +15,10 @@ import { contractorPayments, type ContractorPayment } from "@/lib/business/paypr
  * marks the job paid, on the day PayProp's batch went, through PayProp, with
  * a line on the timeline saying what PayProp paid and to whom.
  *
- * PayProp is READ-ONLY. Nothing here writes to it. What PayProp will not give
- * us is the paid copy of the invoice (James: "All I can get is the
- * confirmation of payment"), so the timeline says the paid copy is in PayProp.
+ * PayProp is READ-ONLY. Nothing here writes to it. PayProp gives the payment,
+ * not a document (James: "All I can get is the confirmation of payment"; 0 of
+ * 25 Scottish contractor payments had a file attached, 30 Oct), so the
+ * timeline says only what PayProp paid. The invoice logged on the job is the copy.
  *
  * ── What counts as the same payment ────────────────────────────────────────
  *
@@ -152,7 +153,7 @@ async function sweep(): Promise<PaidSweep> {
       job.id,
       "TLE OS",
       "paid",
-      `Paid out of the rent through PayProp on ${dayLong(pay.paidOn)}: ${pounds(job.invoicePence)} to ${pay.name || "the contractor"}. The paid copy of the invoice is in PayProp.`
+      `Paid in PayProp on ${dayLong(pay.paidOn)}: ${pounds(job.invoicePence)} to ${pay.name || "the contractor"}.`
     );
     marked.push({ id: job.id, ref: job.ref, paidOn: pay.paidOn });
   }

@@ -674,7 +674,7 @@ export default function ContractorsPage() {
                     <a href={jobHref(j.id)} className="min-w-0 flex-1 hover:underline">
                       <span className="block truncate text-[13px]">{j.contractorName}</span>
                       <span className="block text-[11px] text-muted sm:truncate">{j.propertyName}{j.invoiceRef ? ` · invoice ${j.invoiceRef}` : ""} · paid {day(j.paidAt)}{j.paidHow === "payprop" ? " out of the rent" : ""}</span>
-                      {j.paidHow === "payprop" && <span className="block text-[11px] text-muted sm:truncate">Through PayProp. The paid copy of the invoice is in PayProp.</span>}
+                      {j.paidHow === "payprop" && <span className="block text-[11px] text-muted sm:truncate">Paid in PayProp.</span>}
                     </a>
                     <span className="figures shrink-0 text-[13px] text-muted">{j.invoicePence != null ? pounds(j.invoicePence) : ""}</span>
                   </li>
@@ -976,7 +976,7 @@ function CtInvRow({ j, waited, paid = false }: { j: Job; waited: number; paid?: 
         <span className="nl-ct-d">{j.propertyName} · #{j.ref} {j.title}</span>
         {paid && (
           <span className="nl-ct-m">
-            {[j.invoiceRef ? `Invoice ${j.invoiceRef}` : "", j.paidHow === "payprop" ? "Paid out of the rent through PayProp. The paid copy is in PayProp" : ""].filter(Boolean).join(" · ")}
+            {[j.invoiceRef ? `Invoice ${j.invoiceRef}` : "", j.paidHow === "payprop" ? "Paid in PayProp" : ""].filter(Boolean).join(" · ")}
           </span>
         )}
         {!paid && (

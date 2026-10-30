@@ -83,7 +83,7 @@ export function PayrunTag({ o, className = "" }: { o: Pick<WorksOrder, "status" 
 export function PayrunTrack({ o }: { o: Pick<WorksOrder, "status" | "invoicePence" | "invoicedAt" | "payrunAt" | "paidAt"> & { paidHow?: WorksOrder["paidHow"] } }) {
   if (o.invoicePence == null) return null;
   /* Paid out of the rent (29 Oct 2026, lib/works-payprop-paid): PayProp gives
-     the payment, not the paid copy of the invoice, so the job says where it is. */
+     the payment, not a document, so the job says only that PayProp paid it. */
   const viaPayProp = o.status === "paid" && o.paidHow === "payprop";
   const steps: { label: string; at: string | null; done: boolean }[] = [
     { label: "Invoice in", at: o.invoicedAt, done: true },
@@ -101,7 +101,7 @@ export function PayrunTrack({ o }: { o: Pick<WorksOrder, "status" | "invoicePenc
           </li>
         ))}
       </ol>
-      {viaPayProp && <p className="mt-1.5 text-[11.5px] text-muted">Paid through PayProp. The paid copy of the invoice is in PayProp.</p>}
+      {viaPayProp && <p className="mt-1.5 text-[11.5px] text-muted">Paid in PayProp.</p>}
     </>
   );
 }
