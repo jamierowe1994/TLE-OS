@@ -100,6 +100,7 @@ export default function Maintenance() {
   /* An agent is sent only their own (29 Oct 2026, /api/works-orders `scoped`): no Everyone to switch to. */
   const switchable = Boolean(mine) && !data?.scoped;
   const view: "mine" | "everyone" = mine ? (data?.scoped ? "mine" : savedView || mine.startOn) : "everyone";
+  const mineNote = mine?.note ?? (data?.scoped ? "Only your own jobs show here: the homes in your book, and jobs you raised." : null);
   const mineOrders = useMemo(() => new Set(mine?.orders ?? []), [mine]);
   const mineCarried = useMemo(() => new Set(mine?.carried ?? []), [mine]);
   const allOrders = useMemo(() => data?.orders ?? [], [data]);
@@ -258,7 +259,7 @@ export default function Maintenance() {
             {data && <span className="nl-fcount">{rows.length + carried.length} {rows.length + carried.length === 1 ? "job" : "jobs"}</span>}
           </div>
         )}
-        {view === "mine" && mine?.note && section !== "contractors" && section !== "invoices" && <p className="nl-meta mb-4">{mine.note}</p>}
+        {view === "mine" && mineNote && section !== "contractors" && section !== "invoices" && <p className="nl-meta mb-4">{mineNote}</p>}
         {/* Mine could not be worked out (26 Oct 2026): said, never a silent switch to everyone's. */}
         {data?.mineFailed && section !== "contractors" && section !== "invoices" && <div className="mb-4"><Failed onRetry={load}>Your own jobs couldn&apos;t be worked out just now, so this is everyone&apos;s and the figures count them all.</Failed></div>}
         {data?.carriedWarning && jobsTab && <p className="nl-bo-note mb-4">{data.carriedWarning}</p>}
@@ -446,8 +447,8 @@ export default function Maintenance() {
           </div>
         )}
       </div>
-      {view === "mine" && mine?.note && section !== "contractors" && section !== "invoices" && (
-        <p className="mt-3 text-[12px] text-muted">{mine.note}</p>
+      {view === "mine" && mineNote && section !== "contractors" && section !== "invoices" && (
+        <p className="mt-3 text-[12px] text-muted">{mineNote}</p>
       )}
 
       {error && <p className="mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{error}</p>}
