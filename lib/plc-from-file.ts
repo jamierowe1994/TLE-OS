@@ -12,6 +12,7 @@ import { checkById, CHECK_GROUPS, COVERABLE, guessCheck, type CheckId, type PlcC
 import { readDroppedFile } from "@/lib/plc-read-file";
 import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { isTestCase } from "@/lib/test-guard";
+import { letTenantFiles } from "@/lib/let-tenant-files";
 
 /**
  * ONE UPLOAD, BOTH PLACES (Kirstie, 8 Oct 2026).
@@ -102,7 +103,7 @@ async function hashOf(key: string): Promise<string | null> {
   }
 }
 
-export type PullSource = "file" | "certificates" | "landlord" | "terms";
+export type PullSource = "file" | "tenant" | "certificates" | "landlord" | "terms";
 
 export type PullOutcome = {
   case: PlcCase;
@@ -184,6 +185,7 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
   };
 
   await fromDocumentsTab(run);
+  await fromTenantUploads(run);
   await fromCertificates(run, home.ids);
   await fromPropertyRecord(run, home.records, landlord);
   if (landlord) await fromLandlordsOtherHomes(run, landlord, home.ids);
@@ -308,6 +310,43 @@ async function fromDocumentsTab(run: Run) {
   }
   /* Offered once: one the agent takes off the pack is not brought back. */
   run.remember.push(...all.map((d) => d.r2Key));
+}
+
+/* ── 1b. What the let's tenants sent themselves ─────────────────────────── */
+
+/**
+ * The tenants' own uploads and what was filed on their leads (lib/let-tenant-
+ * files, 30 Oct 2026), which never reached the Documents tab and so never
+ * reached a pack. Only what answers one of the pack's tenant checks comes in:
+ * right to rent and references. Photo ID, proof of income and proof of
+ * address have no check of their own, and as Anything else they would go to
+ * the Propoly deal as General Documents - held back until James decides they
+ * should (asked 30 Oct). They stay on the let's Documents tab meanwhile, and
+ * are not remembered, so they come in on the next pull once that is decided.
+ */
+async function fromTenantUploads(run: Run) {
+  const start = run.current;
+  if (!start.applicationRef) return;
+  const startedAt = Date.parse(start.createdAt) || Date.now();
+  const files = (await letTenantFiles(start.applicationRef).catch(() => [])).filter(
+    (f) => f.check && !run.offered.has(f.r2Key) && Date.parse(f.at) >= startedAt - TENANT_PAPERS_DAYS * 86_400_000
+  );
+  if (!files.length) return;
+  const hashes = await inThrees(files, (f) => hashOf(f.r2Key));
+  const fresh = files.map((f, i) => ({ ...f, hash: hashes[i] })).filter((f) => !f.hash || !run.hashes.has(f.hash));
+  const reads = await inThrees(fresh, (f) =>
+    readDroppedFile({ key: f.r2Key, name: f.name }, { address: start.address, landlordName: run.ctx.landlord, tenantNames: run.ctx.tenants, label: f.kind })
+  );
+  for (let i = 0; i < fresh.length; i++) {
+    const f = fresh[i];
+    const { checkId, read } = slotFor(reads[i], f.check);
+    /* Sent as a right to rent or a reference, and read as something else that is no tenant check: left for the agent. */
+    if (!checkId || !TENANT_CHECKS.has(checkId)) {
+      run.left.push({ name: f.name, why: `sent by ${f.who || "the tenant"} as ${f.kind.toLowerCase()}, but it doesn't read as one` });
+      continue;
+    }
+    await file(run, "tenant", { key: f.r2Key, name: f.name, checkId, read, hash: f.hash });
+  }
 }
 
 /* ── 2. This home's certificates on file ────────────────────────────────── */

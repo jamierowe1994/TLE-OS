@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { tenantDocLabel } from "@/lib/tenant-documents-kinds";
+/** What the tenants have sent in on this let, from their portal or filed on
+ *  their lead - see lib/let-tenant-files. The pre-tenancy board passes the
+ *  Propoly deal's id, the let's Documents tab the application's. */
+type Doc = { key: string; kind: string; name: string; url: string; at: string; who: string; from: "tenant" | "lead" };
 
-/** What the tenants have sent in on this deal. The other end of the tenant
- *  portal's "Send us something" - see app/api/tenant/documents. */
-type Doc = { id: string; kind: string; name: string; r2Key: string; uploadedAt: string; who: string };
-
-export default function TenantDocuments({ dealId }: { dealId: string }) {
+export default function TenantDocuments({ dealId, className = "" }: { dealId: string; className?: string }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   useEffect(() => {
     let gone = false;
@@ -23,7 +22,7 @@ export default function TenantDocuments({ dealId }: { dealId: string }) {
   if (!docs || docs.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-line/80 bg-panel p-5">
+    <section className={`rounded-2xl border border-line/80 bg-panel p-5 ${className}`}>
       <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Sent in by the tenant</p>
       {docs == null ? (
         <p className="mt-2 text-[12px] text-muted">Looking…</p>
@@ -32,16 +31,16 @@ export default function TenantDocuments({ dealId }: { dealId: string }) {
       ) : (
         <ul className="mt-3 divide-y divide-line/50">
           {docs.map((d) => (
-            <li key={d.id} className="flex items-center justify-between gap-3 py-2.5 text-[12px]">
+            <li key={d.key} className="flex items-center justify-between gap-3 py-2.5 text-[12px]">
               <span className="min-w-0">
                 <span className="block truncate font-semibold">{d.name}</span>
                 <span className="block text-muted">
-                  {tenantDocLabel(d.kind)} · {d.who} ·{" "}
-                  {new Date(d.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  {d.kind} · {d.who}{d.from === "lead" ? " (on their lead)" : ""} ·{" "}
+                  {new Date(d.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                 </span>
               </span>
               <a
-                href={`/api/r2/file?key=${encodeURIComponent(d.r2Key)}`}
+                href={d.url}
                 target="_blank"
                 rel="noreferrer"
                 className="shrink-0 rounded-full border border-line/60 px-3 py-1.5 text-[11px] font-semibold"

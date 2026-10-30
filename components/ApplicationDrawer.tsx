@@ -23,6 +23,7 @@ import { GuarantorsToPropoly } from "@/components/LetPropoly";
 import LetTenants from "@/components/LetTenants";
 import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
 import FileDocuments from "@/components/FileDocuments";
+import TenantDocuments from "@/components/pretenancy/TenantDocuments";
 import IntroKeys from "@/components/listing/IntroKeys";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
 import AdvertOffline from "@/components/listing/AdvertOffline";
@@ -1415,6 +1416,8 @@ export default function ApplicationDrawer({
 
       {/* Add a document: up from the bottom, a big drop space. */}
       <BottomSheet open={docsOpen} title="Documents" onClose={closeDocs}>
+        {/* What the tenants sent in themselves (lib/let-tenant-files, 30 Oct 2026). */}
+        <TenantDocuments dealId={letId} className="mb-5" />
         <FileDocuments
           dropZone
           address={[name, locality].filter(Boolean).join(", ")}
@@ -1991,6 +1994,7 @@ export default function ApplicationDrawer({
 
             {nlTab === "documents" && (
               <div className="nl-holder">
+                <TenantDocuments dealId={letId} className="mb-5" />
                 <FileDocuments dropZone address={[name, locality].filter(Boolean).join(", ")} propertyId={app?.propertyId ?? null} from={{ kind: "application", id: letId }} />
                 <div className="nl-apps-propfile">
                   <PropertyFile propertyId={app?.propertyId ?? null} address={app?.propertyId ? null : [name, locality].filter(Boolean).join(", ")} screen="the application" />
