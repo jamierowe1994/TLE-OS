@@ -203,7 +203,7 @@ export default function AgentOfferRecorder({
     if (s === 2) {
       /* Asked of people who did their passport before these questions existed. */
       if (stillToAsk.length) return `Still to ask: ${stillToAskWords}.`;
-      const gap = othersProblem(parts, scottish);
+      const gap = othersProblem(parts, scottish, { name: tenant.name, email: tenant.email, mobile: tenant.passport?.mobile });
       if (gap) return gap;
     }
     if (s === 3 && !consent) return `Tick to say ${name} has agreed the details are right.`;

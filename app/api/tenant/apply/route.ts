@@ -12,6 +12,7 @@ import { proseEmail } from "@/lib/email/prose";
 import { sendEmail } from "@/lib/resend";
 import { publicOrigin } from "@/lib/origin";
 import { foldRepeat, priorOffer, repeatLine } from "@/lib/offer-repeat";
+import { phoneKey } from "@/lib/offer-people-shape";
 
 /**
  * The application form a listing sends out (Howard's ticket, approved by James
@@ -141,6 +142,10 @@ export async function POST(req: NextRequest) {
      would only take the first of them onto the deal. */
   const emails = applicants.map((a) => a.email).filter(Boolean);
   if (new Set(emails).size < emails.length) errors.push("Each person needs their own email address - they're each referenced separately.");
+  /* And a mobile each, never shared (30 Oct 2026, lib/offer-people-shape). */
+  if (applicants.some((a) => phoneKey(a.phone).length < 9)) errors.push("Each person needs a mobile number.");
+  const phones = applicants.map((a) => phoneKey(a.phone)).filter((m) => m.length >= 9);
+  if (new Set(phones).size < phones.length) errors.push("Each person needs their own mobile number - they're each referenced separately.");
   if (errors.length) return NextResponse.json({ ok: false, errors: [...new Set(errors)] }, { status: 400 });
 
   const lead = applicants.find((a) => a.isPrimary) ?? applicants[0];

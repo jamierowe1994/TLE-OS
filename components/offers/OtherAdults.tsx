@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import PersonQuestions from "@/components/offers/PersonQuestions";
-import { emptyPerson, missingForLink, missingFrom, type OtherAdult, type PersonAnswers } from "@/lib/offer-people-shape";
+import { emptyPerson, missingForLink, missingFrom, sharedContact, type Contact, type OtherAdult, type PersonAnswers } from "@/lib/offer-people-shape";
 import { SCOTLAND } from "@/lib/passport-shape";
 import { toast } from "@/lib/toast";
 
@@ -36,14 +36,14 @@ export function useOtherAdults(names: string[], seeds: Partial<PersonAnswers>[] 
   return [others, setOthers];
 }
 
-/** What still stops the offer going, for the sender: null when it can go. */
-export function othersProblem(others: OtherAdult[], scottish = false): string | null {
+/** What still stops the offer going, for the sender: null when it can go. The lead's own details, where known, so nobody else is given them. */
+export function othersProblem(others: OtherAdult[], scottish = false, lead?: Contact): string | null {
   for (const [i, o] of others.entries()) {
     const who = o.answers.name.trim() || `Adult ${i + 2}`;
     const gaps = o.mode === "fill" ? missingFrom(o.answers, scottish ? SCOTLAND : {}) : missingForLink(o.answers);
     if (gaps.length) return `${o.mode === "fill" ? `For ${who}, still needed` : `To send ${who} a link, add`}: ${gaps.join(", ")}.`;
   }
-  return null;
+  return sharedContact([...(lead ? [lead] : []), ...others.filter((o) => o.mode === "fill").map((o) => o.answers)]);
 }
 
 export default function OtherAdults({

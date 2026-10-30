@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import { emailKey, phoneKey } from "@/lib/offer-people-shape";
 
 /**
  * The application form — Howard's JotForm, brought in-house.
@@ -207,7 +208,10 @@ export default function Apply() {
       const who = p.name.trim() || `Applicant ${i + 1}`;
       if (!p.name.trim()) out.push(`Applicant ${i + 1} needs a name`);
       if (!p.email.trim()) out.push(`${who} needs an email address`);
-      else if (people.slice(0, i).some((q) => q.email.trim().toLowerCase() === p.email.trim().toLowerCase())) out.push(`${who} needs their own email address - each person is referenced separately`);
+      else if (people.slice(0, i).some((q) => emailKey(q.email) === emailKey(p.email))) out.push(`${who} needs their own email address - each person is referenced separately`);
+      /* A mobile each, never shared (10 Thornton Road, 30 Oct 2026). */
+      if (phoneKey(p.phone).length < 9) out.push(`${who} needs a mobile number`);
+      else if (people.slice(0, i).some((q) => phoneKey(q.phone) === phoneKey(p.phone))) out.push(`${who} needs their own mobile number - each person is referenced separately`);
       if (!p.dob) out.push(`${who} needs a date of birth`);
       if (!money(p.income)) out.push(`${who} needs an income figure`);
       if (p.rightToRent === null) out.push(`${who} hasn't answered the right to rent question`);
@@ -373,10 +377,10 @@ export default function Apply() {
               <input type="date" className={inputCls} value={p.dob} onChange={(e) => set(i, { dob: e.target.value })} />
             </Field>
             <Field label="Email">
-              <input type="email" className={inputCls} value={p.email} onChange={(e) => set(i, { email: e.target.value })} />
+              <input type="email" className={inputCls} value={p.email} onChange={(e) => set(i, { email: e.target.value })} autoComplete={i === 0 ? "email" : "off"} />
             </Field>
             <Field label="Mobile">
-              <input className={inputCls} value={p.phone} onChange={(e) => set(i, { phone: e.target.value })} />
+              <input type="tel" inputMode="tel" className={inputCls} value={p.phone} onChange={(e) => set(i, { phone: e.target.value })} autoComplete={i === 0 ? "tel" : "off"} />
             </Field>
           </div>
 

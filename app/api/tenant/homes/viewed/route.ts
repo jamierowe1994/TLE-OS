@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
        passport and kept here with the original, for the agent only. */
     /* A blank household count reads as the sheet's own default (1 adult,
        no children), so filling it in is not flagged to the agent as a change. */
-    const checked = checkOthers(b.others, scotHome ? SCOTLAND : {});
+    const checked = checkOthers(b.others, scotHome ? SCOTLAND : {}, { name: "you", email: me.email, mobile: data?.mobile });
     if (!checked.ok) return NextResponse.json({ ok: false, error: checked.error }, { status: 400 });
     others = checked.others;
     const held = offerSubset(data);

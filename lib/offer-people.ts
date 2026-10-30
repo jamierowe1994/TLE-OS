@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
-import { cleanPerson, missingFrom, personLines, type OfferPart, type OtherAdult, type PersonAnswers } from "@/lib/offer-people-shape";
+import { cleanPerson, missingFrom, personLines, sharedContact, type Contact, type OfferPart, type OtherAdult, type PersonAnswers } from "@/lib/offer-people-shape";
 import { isScottish } from "@/lib/property-flags";
 import { SCOTLAND, type PassportRules } from "@/lib/passport-shape";
 
@@ -78,7 +78,7 @@ const newToken = () => randomBytes(16).toString("base64url");
  * one left for a link needs only the name. Returns what to tell the sender:
  * the reason a part was refused, or the rows made.
  */
-export function checkOthers(raw: unknown, rules: PassportRules = {}): { ok: true; others: OtherAdult[] } | { ok: false; error: string } {
+export function checkOthers(raw: unknown, rules: PassportRules = {}, lead?: Contact): { ok: true; others: OtherAdult[] } | { ok: false; error: string } {
   const list = Array.isArray(raw) ? raw.slice(0, 8) : [];
   const others: OtherAdult[] = [];
   for (const item of list) {
@@ -93,6 +93,8 @@ export function checkOthers(raw: unknown, rules: PassportRules = {}): { ok: true
     }
     others.push({ mode, answers });
   }
+  const shared = sharedContact([...(lead ? [lead] : []), ...others.filter((o) => o.mode === "fill").map((o) => o.answers)]);
+  if (shared) return { ok: false, error: shared };
   return { ok: true, others };
 }
 
@@ -124,6 +126,27 @@ export async function offerPersonByToken(token: string): Promise<(OfferPerson & 
   const rows = await tq<Row>(`SELECT * FROM os_offer_people WHERE token = $1`, [token]).catch(() => [] as Row[]);
   const r = rows[0];
   return r ? { ...shape(r), property: r.property ?? "", leadName: r.lead_name ?? "", listingId: r.listing_id ?? null } : null;
+}
+
+/**
+ * Everyone else's email and mobile on an offer: the lead's, from the offer and
+ * their passport, and each other adult's part already filled in, leaving out
+ * the part with this token.
+ */
+export async function offerContacts(offerId: string, exceptToken: string): Promise<Contact[]> {
+  if (!hasDb()) return [];
+  const lead = await q<{ name: string; email: string; mobile: string | null }>(
+    `SELECT r.name, r.email, COALESCE(p.data->>'mobile', r.payload->'applicants'->0->>'phone') AS mobile
+       FROM os_tenant_viewing_responses r
+       LEFT JOIN os_tenant_passports p ON LOWER(p.email) = LOWER(r.email)
+      WHERE r.id = $1 LIMIT 1`,
+    [offerId]
+  ).catch(() => []);
+  const parts = (await offerPeople([offerId]).catch(() => new Map<string, OfferPerson[]>())).get(offerId) ?? [];
+  return [
+    ...lead.map((l) => ({ name: l.name || "the lead tenant", email: l.email, mobile: l.mobile })),
+    ...parts.filter((m) => m.filled && m.token !== exceptToken).map((m) => m.answers),
+  ];
 }
 
 /** Their part, filled in by them (from the link) or by the agent for them. */

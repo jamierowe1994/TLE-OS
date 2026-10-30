@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { fillOfferPerson, offerPersonByToken } from "@/lib/offer-people";
-import { cleanPerson, missingFrom } from "@/lib/offer-people-shape";
+import { fillOfferPerson, offerContacts, offerPersonByToken } from "@/lib/offer-people";
+import { cleanPerson, missingFrom, sharedContact } from "@/lib/offer-people-shape";
 import { jsonObject } from "@/lib/json-body";
 import { SCOTLAND } from "@/lib/passport-shape";
 
@@ -41,6 +41,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   const answers = p.scottish ? { ...sent, hasBritishPassport: p.answers.hasBritishPassport, shareCode: p.answers.shareCode } : sent;
   const gaps = missingFrom(answers, p.scottish ? SCOTLAND : {});
   if (gaps.length) return NextResponse.json({ ok: false, error: `Still needed: ${gaps.join(", ")}.` }, { status: 400 });
+  /* Their own email and mobile, nobody else's on the offer (lib/offer-people-shape, 30 Oct 2026). */
+  const shared = sharedContact([...(await offerContacts(p.offerId, token)), answers]);
+  if (shared) return NextResponse.json({ ok: false, error: shared }, { status: 400 });
   const { actor } = await whoIs(req).catch(() => ({ actor: null }));
   const saved = await fillOfferPerson(token, answers, actor ? { kind: "agent", name: actor.name || actor.email } : { kind: "self", name: answers.name });
   if (!saved) return NextResponse.json({ ok: false, error: "That didn't save. Try again in a minute." }, { status: 502 });

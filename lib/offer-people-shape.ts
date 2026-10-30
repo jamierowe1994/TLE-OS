@@ -98,6 +98,38 @@ export function missingFrom(p: PersonAnswers, rules: PassportRules = {}): string
   return out;
 }
 
+/**
+ * ONE EMAIL AND ONE MOBILE PER PERSON (James, 30 Oct 2026). 10 Thornton
+ * Road: Chloe McGovern went in with Bailey Cookson's email and mobile, so
+ * Propoly took her for Bailey and only Bailey reached the deal. Each adult is
+ * referenced separately, so nobody on an offer may share either with anyone
+ * else on it. Mobiles are compared on their digits, +44 and 0 alike.
+ */
+export const emailKey = (s: string | null | undefined) => String(s ?? "").trim().toLowerCase();
+export function phoneKey(s: string | null | undefined): string {
+  let d = String(s ?? "").replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("44") && d.length >= 12) d = d.slice(2);
+  return d.replace(/^0+/, "");
+}
+
+export type Contact = { name: string; email?: string | null; mobile?: string | null };
+
+/** The first two people on an offer sharing an email or a mobile, in words; null when everyone has their own. */
+export function sharedContact(people: Contact[]): string | null {
+  for (const [i, p] of people.entries()) {
+    for (const q of people.slice(0, i)) {
+      const who = p.name.trim() || "Two people";
+      const other = q.name.trim() || "someone else on the offer";
+      const e = emailKey(p.email);
+      if (e && e === emailKey(q.email)) return `${who} has the same email as ${other}. Each person needs their own email - they're each referenced separately.`;
+      const m = phoneKey(p.mobile);
+      if (m.length >= 9 && m === phoneKey(q.mobile)) return `${who} has the same mobile as ${other}. Each person needs their own mobile - they're each referenced separately.`;
+    }
+  }
+  return null;
+}
+
 /** What only the link needs: who it is for. */
 export function missingForLink(p: PersonAnswers): string[] {
   return p.name.trim().split(/\s+/).filter(Boolean).length < 2 ? ["their full name"] : [];

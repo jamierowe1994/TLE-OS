@@ -173,7 +173,9 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     : /^\d+$/.test(listingRaw)
       ? await homeOnMarket(listingRaw).then((h) => isScottish(h?.locality, h?.name)).catch(() => false)
       : false;
-  const checked = checkOthers(raw.others, scotHome ? SCOTLAND : {});
+  /* Nobody else on the offer may have the lead's email or mobile (lib/offer-people-shape, 30 Oct 2026). */
+  const leadMobile = isTestId(raw.listingId) ? "" : ((await passportFor(email).catch(() => null))?.data as { mobile?: string } | undefined)?.mobile ?? "";
+  const checked = checkOthers(raw.others, scotHome ? SCOTLAND : {}, { name, email, mobile: leadMobile });
   if (!checked.ok) throw new OfferRefused(checked.error);
   const others = checked.others;
   const keepPeople = async (offerId: string, listingId: string | null, property: string) =>
