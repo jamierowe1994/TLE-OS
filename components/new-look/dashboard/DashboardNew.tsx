@@ -15,7 +15,7 @@ import { AskPill, DashThread, useDashChat } from "./DashChat";
  * The Dashboard in the new look (lib/new-look "dashboard", 23 Oct 2026), after
  * the design's front office (24 Oct 2026): the date, the greeting with Steve, a
  * box to ask him anything, his quick questions and the agent's quick links,
- * then the range switch, four figures, leads per day and the pipeline
+ * then the range switch, five figures, leads per day and the pipeline
  * (FrontFigures), Today and Needs You side by side, and Get Set for Launch at
  * the foot. The design's back office is its own page (PM Dashboard, /overview).
  *
