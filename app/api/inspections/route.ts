@@ -11,6 +11,7 @@ import { factsByRexId } from "@/lib/os-properties";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { isOurs } from "@/lib/compliance";
 import { homesOff, withoutOff } from "@/lib/inspections-off";
+import { notOursTask } from "@/lib/task-scope";
 import { lastClosedByHome, lastImport, openTasks } from "@/lib/rexpm-tasks";
 import {
   createInspection, dueFromTasks, dueList, inspectionRules, listInspections, logEvent, moveInspection, openFindings, summarise,
@@ -119,11 +120,9 @@ export async function GET(req: NextRequest) {
              managed - Flat 7, Riva House said "Experts Managed Service" while
              the home's record here says let only - so a task on a home the
              compliance book knows and doesn't count as ours is dropped: let
-             only, rent collect, or an agent who has left. A task on a home
-             the book doesn't know stays, as there is nothing to say otherwise. */
-          const known = new Set(comp.book.properties.map((p) => String(p.id)));
-          const homesOf = (t: (typeof tasks)[number]) => [t.osPropertyId, t.rexPropertyId].filter((x): x is string => Boolean(x));
-          const notOurs = (t: (typeof tasks)[number]) => homesOf(t).some((h) => known.has(h)) && !homesOf(t).some((h) => ours.has(h));
+             only, rent collect, or an agent who has left. A home the book
+             doesn't know goes by its record here (lib/task-scope). */
+          const notOurs = await notOursTask(comp.book.properties);
           due = dueFromTasks(scoped.filter((t) => !notOurs(t)), inspections, book.properties, hmoIds);
         } else {
           const prior = await lastClosedByHome("inspection");
@@ -142,22 +141,29 @@ export async function GET(req: NextRequest) {
   const me = subject ?? actor;
   const team = await q<{ id: string; name: string }>(`SELECT id, name FROM os_users WHERE name <> '' ORDER BY name`).catch(() => []);
 
-  /* Every inspection in the business is listed, so an agent's copy carries
-     the contacts shortened on homes outside their own book (lib/contact-mask,
-     10 Oct 2026). The due list is their own book already. */
+  /* In hand and Done keep to the agent's own book, as Due does (Rhiannon
+     Dodge, 29 Oct 2026: both tabs listed every inspection in the business).
+     A visit they are sent on, or raised themselves, is theirs too. The whole
+     business for anybody whose book is the whole business, the Overview
+     pop-out included; a property's own page (?property=) keeps its history. */
+  const myName = (me.name || me.email).trim().toLowerCase();
+  const onMyBook = (i: (typeof inspections)[number]) =>
+    ownHomes!.has(String(i.propertyId ?? "")) || ownHomes!.has(String(i.listingId ?? "")) || ownHomes!.has(String(i.osPropertyId ?? ""));
+  const mineToo = (i: (typeof inspections)[number]) =>
+    i.inspectorId === me.id || [i.inspector, i.raisedBy].some((n) => n.trim().toLowerCase() === myName);
+  const listed = ownHomes === null || propertyId ? inspections : inspections.filter((i) => onMyBook(i) || mineToo(i));
+  /* What is left outside their own book carries its contacts shortened
+     (lib/contact-mask, 10 Oct 2026). */
   const full = seesContactLists(actor.role) || ownHomes === null;
-  const shownInspections = full
-    ? inspections
-    : inspections.map((i) => (ownHomes!.has(String(i.propertyId ?? "")) || ownHomes!.has(String(i.listingId ?? "")) ? i : maskContactFields(i)));
+  const shownInspections = full ? listed : listed.map((i) => (onMyBook(i) ? i : maskContactFields(i)));
   /* The homes taken off by hand that sit in this person's own book, or that
      they took off themselves. */
-  const myName = (me.name || me.email).trim().toLowerCase();
   const shownOff = ownHomes === null ? off : off.filter((o) => o.homes.some((h) => ownHomes!.has(h)) || o.by.trim().toLowerCase() === myName);
   return NextResponse.json({
     ok: true, live: true, inspections: shownInspections, due, actions, rules, off: shownOff,
     me: { id: me.id, name: me.name || me.email },
     team: team.map((t) => ({ id: t.id, name: t.name })),
-    summary: summarise(inspections, due),
+    summary: summarise(listed, due),
     source: fromTasks ? "rex-pm" : "os",
     readAt: read?.at ?? null,
     ...(bookError ? { bookError } : {}),

@@ -1221,6 +1221,21 @@ CREATE TABLE IF NOT EXISTS os_file_documents (
 CREATE INDEX IF NOT EXISTS os_file_documents_street_idx ON os_file_documents (street) WHERE removed_at IS NULL;
 CREATE INDEX IF NOT EXISTS os_file_documents_property_idx ON os_file_documents (rex_property_id) WHERE removed_at IS NULL;
 
+-- A document kept ONCE and on every home it applies to by itself
+-- (lib/standing-documents, 29 Oct 2026): the Easy Read Notes on every
+-- Scottish let. One row per kind; a new upload replaces the row, and the
+-- earlier file stays in storage under its own key.
+CREATE TABLE IF NOT EXISTS os_standing_documents (
+  kind        TEXT PRIMARY KEY,
+  file_name   TEXT NOT NULL,
+  r2_key      TEXT NOT NULL,
+  mime        TEXT NOT NULL DEFAULT '',
+  size_bytes  INTEGER NOT NULL DEFAULT 0,
+  by_id       TEXT,
+  by_name     TEXT NOT NULL DEFAULT '',
+  at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Each agent's Letting Agent Registration Number (Scotland), by REX user id.
 -- Every Scottish advert must show it (6 Oct 2026); typed once on a listing,
 -- prefilled on every Scottish listing of theirs after that.

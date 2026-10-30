@@ -13,6 +13,7 @@ import { addrOf, isRoomAddress, parseAddress, sameHome } from "@/lib/address-par
 import { houseByListing, housesIn, MANAGED_READERS, roomLabel } from "@/lib/houses";
 import { sittingLets } from "@/lib/tenant-logins";
 import { docTypeLabel, OTHER } from "@/lib/doc-types";
+import { standingForHome } from "@/lib/standing-documents";
 import { FIELDS } from "@/lib/property-facts";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
@@ -311,6 +312,18 @@ export async function sendableDocs(ctx: HomeContext): Promise<SendDoc[]> {
         where: room && ctx.lets.length > 1 ? roomLabel(room) : null, blocked: null, suggested: false, source: { r2: r.r2_key },
       });
     }
+  }
+
+  /* 3b. The office's standing documents this home carries: the Easy Read
+     Notes on a Scottish let (lib/standing-documents, 29 Oct 2026). Offered,
+     not ticked, as they go before the lease rather than with every send. */
+  const standing = await standingForHome({ address: addrOf(ctx.home), propertyId: String(ctx.home.propertyId ?? "") || null }).catch(() => []);
+  for (const { info, doc } of standing) {
+    if (!doc) continue;
+    out.push({
+      id: `standing:${info.kind}`, group: "Documents on this home", label: info.label, name: doc.fileName, expiry: null,
+      sizeBytes: doc.sizeBytes || null, room: null, where: null, blocked: null, suggested: false, source: { r2: doc.r2Key },
+    });
   }
 
   /* 4. The clean sweep's papers a tenant is owed. Office only. */

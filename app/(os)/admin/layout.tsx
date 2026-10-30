@@ -171,6 +171,9 @@ const GROUPS: Array<{
          certificates pushed into its deal (22 Oct 2026). Owners, and the office
          to place an email nobody could match. */
       { href: "/admin/propoly", label: "Propoly", needs: "see:pretenancy" },
+      /* The documents kept once and on every let they apply to: the Easy Read
+         Notes on every Scottish let (29 Oct 2026). The office uploads them. */
+      { href: "/admin/standing-documents", label: "Standing documents", needs: "see:pretenancy" },
       /* Where Steve's knowledge is written. The same screen Susan, Francesca,
          Michael and Kirstie get as a workspace of their own. */
       { href: "/knowledge", label: "Knowledge", needs: "edit:knowledge" },
