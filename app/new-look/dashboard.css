@@ -204,6 +204,9 @@
 [data-look="new"] .nl-dash-stat:nth-child(2) { animation-delay: 0.06s; }
 [data-look="new"] .nl-dash-stat:nth-child(3) { animation-delay: 0.12s; }
 [data-look="new"] .nl-dash-stat:nth-child(4) { animation-delay: 0.18s; }
+[data-look="new"] .nl-dash-stat:nth-child(5) { animation-delay: 0.24s; }
+/* The dashboard's row is five across (Passports done joined it, 29 Oct 2026); /overview keeps four. */
+[data-look="new"] .nl-dash-stats.is-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 [data-look="new"] button.nl-dash-stat:hover .nl-dash-stat-n { color: var(--coral); }
 [data-look="new"] button.nl-dash-stat:hover .nl-dash-spark-ln { opacity: 0.9; }
 [data-look="new"] .nl-dash-stat:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
@@ -358,6 +361,10 @@
   [data-look="new"] .nl-dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   [data-look="new"] .nl-dash-stat:nth-child(3) { border-left: 0; padding-left: 0; }
   [data-look="new"] .nl-dash-stat:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  /* five in two columns: the odd one starts each row and the last runs across */
+  [data-look="new"] .nl-dash-stats.is-five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-look="new"] .nl-dash-stats.is-five .nl-dash-stat:nth-child(odd) { border-left: 0; padding-left: 0; }
+  [data-look="new"] .nl-dash-stats.is-five .nl-dash-stat:nth-child(5) { grid-column: 1 / -1; }
   [data-look="new"] .nl-dash-grid, [data-look="new"] .nl-dash-two { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {

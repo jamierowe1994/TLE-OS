@@ -79,6 +79,7 @@ import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import BookSlot from "@/components/viewings/BookSlot";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
 import ChangeViewing, { apptFromViewing, apptStartIso } from "@/components/viewings/ChangeViewing";
+import HomeSwitch from "@/components/HomeSwitch";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -2862,6 +2863,8 @@ function ListingDrawerBody({
             <p className="nl-rhead-sub">
               {[listing.locality, live?.beds ? `${live.beds} bed${live.propertyType ? ` ${live.propertyType.toLowerCase()}` : ""}` : live?.propertyType?.toLowerCase(), listing.rent != null ? `£${listing.rent.toLocaleString("en-GB")} ${per}` : "rent not set"].filter(Boolean).join(" · ")}
             </p>
+            {/* The same home on Portfolio and Applications (29 Oct 2026). */}
+            <HomeSwitch from="listing" listingId={String(listing.id)} propertyId={listing.propertyId ? String(listing.propertyId) : null} address={[listing.name, listing.locality].filter(Boolean).join(", ")} className="mt-4" />
           </div>
           <div className="nl-rhead-acts">
             <button type="button" data-steve="listing.tab.marketing" onClick={() => pickTab("marketing")} className="nl-btn nl-btn--secondary">
@@ -3541,6 +3544,8 @@ function ListingDrawerBody({
               {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
             </p>
             <OsAddressLine propertyId={listing.propertyId ? String(listing.propertyId) : null} listingId={String(listing.id)} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} onChanged={onAddress} />
+            {/* The same home on Portfolio and Applications (29 Oct 2026). */}
+            <HomeSwitch from="listing" listingId={String(listing.id)} propertyId={listing.propertyId ? String(listing.propertyId) : null} address={[listing.name, listing.locality].filter(Boolean).join(", ")} className="mt-3" />
             {/* The key numbers, from REX's key register (James, 22 Oct 2026). */}
             {Number(listing.id) > 0 && listing.propertyId && (
               <div className="mt-3">
