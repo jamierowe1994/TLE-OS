@@ -45,6 +45,8 @@ export interface Handoff {
   /** Where the landlord was found: the listing, or the home when the listing names nobody (lib/deal-handoff). */
   landlordFrom?: "listing" | "changed" | "property" | "record" | "joint" | null;
   landlordNote?: string | null;
+  /** Every other landlord the push sends; `joint` = a joint landlord on the home (lib/deal-handoff). */
+  otherLandlords?: (Party & { joint: boolean })[];
   tenants: (Party & { isPrimary: boolean })[];
   rentPcm: number | null;
   startDate: string | null;
@@ -199,7 +201,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
   const required = h.certificates.filter((c) => c.required);
   const certsGood = required.filter((c) => c.validAtStart && c.attached).length;
   const summary = [
-    h.landlord?.name ?? (applicationId.startsWith("swap:") ? "A change of tenants: the landlord is already in Propoly" : "No landlord on the listing or the home"),
+    (h.landlord ? [h.landlord, ...(h.otherLandlords ?? [])].map((x) => x.name).join(", ").replace(/, ([^,]*)$/, " and $1") : null) ?? (applicationId.startsWith("swap:") ? "A change of tenants: the landlord is already in Propoly" : "No landlord on the listing or the home"),
     h.rentPcm != null ? `${gbp(h.rentPcm)} pcm${h.startDate ? ` from ${niceDay(h.startDate)}` : ""}` : null,
     required.length ? `${certsGood} of ${required.length} certificates` : null,
   ].filter(Boolean).join(" · ");
@@ -235,7 +237,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
       {/* Who and what — the packet, in the order the deal needs it. */}
       <dl className="mt-3.5 space-y-2 text-[12.5px]">
         <div className="flex gap-3">
-          <dt className="w-[92px] shrink-0 text-muted">Landlord</dt>
+          <dt className="w-[92px] shrink-0 text-muted">{h.otherLandlords?.length ? "Landlords" : "Landlord"}</dt>
           <dd className="min-w-0">
             {h.landlord ? (
               <>
@@ -262,6 +264,30 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
             ) : (
               <span className="text-accent-dark">Nobody on the listing or the home</span>
             )}
+            {/* Every other landlord goes too (James, 2 Nov 2026), a joint landlord on the
+                home included. Propoly refuses one with no mobile, so that one is left off
+                and the rest still goes: said here, before the push, with where to fix it. */}
+            {(h.otherLandlords ?? []).map((o) => (
+              <span key={`${o.name}-${o.email ?? ""}`} className="mt-2.5 block">
+                {o.name}
+                <span className="text-muted">{o.joint ? " · joint landlord" : " · landlord"}</span>
+                {o.email ? (
+                  <span className="block text-[11px] text-muted">{o.email}</span>
+                ) : (
+                  <span className="block text-[11px] text-accent-dark">No email address</span>
+                )}
+                {o.phone ? (
+                  <span className="block text-[11px] text-muted">{o.phone}</span>
+                ) : (
+                  <span className="block text-[11px] text-accent-dark">No mobile number</span>
+                )}
+                {o.joint && (!o.phone || !o.email) ? (
+                  <span className="mt-1 block text-[11px] font-semibold text-[#8a5a12]">
+                    Propoly won&apos;t take {o.name.split(/\s+/)[0]} without {!o.email ? "an email address" : "a mobile number"}, so they&apos;ll be left off and the rest still goes. Add it under Landlords on this let, then press Add to the Propoly deal on them.
+                  </span>
+                ) : null}
+              </span>
+            ))}
           </dd>
         </div>
         <div className="flex gap-3">
