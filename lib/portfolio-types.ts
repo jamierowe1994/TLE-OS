@@ -88,6 +88,12 @@ export interface ManagedProperty {
   /** REX no longer shows this let, but the tenants haven't moved out yet, so
    *  it is kept on the book from the tenancy archive until they do. */
   held?: boolean;
+  /**
+   * Fields an agent put right in the OS with Edit on the home's page
+   * (lib/home-overrides, 2 Nov 2026): who, when, and what REX or the record
+   * still says. The row above already carries the OS's answer.
+   */
+  overridden?: Partial<Record<"service" | "letType" | "tenancyStart" | "tenancyEnd" | "tenants", { by: string; at: string; was: string | null }>>;
 }
 
 export interface ManagedLandlord {

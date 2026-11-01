@@ -179,7 +179,10 @@ export async function factsByRexId(): Promise<Map<string, OsFacts>> {
   for (const r of rows) {
     const held = out.get(r.rex_property_id as string);
     out.set(r.rex_property_id as string, {
-      hmo: Boolean(r.hmo) || Boolean(held?.hmo),
+      /* not_hmo is the office's (or an agent's, lib/home-facts) "it's a flat":
+         it beats REX PM's HMO category here too, as it does in rowTo, so the
+         inspections cadence stops treating the flat as an HMO (2 Nov 2026). */
+      hmo: (Boolean(r.hmo) && !r.not_hmo) || Boolean(held?.hmo),
       notHmo: Boolean(r.not_hmo) || Boolean(held?.notHmo),
       noGas: Boolean(r.no_gas) || Boolean(held?.noGas),
       ref: r.ref,
