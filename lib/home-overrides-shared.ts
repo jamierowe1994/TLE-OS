@@ -55,7 +55,8 @@ export interface OverrideMark {
 }
 
 /** Every field on the one Edit, the home facts and management included. */
-export type LoggedField = OverrideField | "homeType" | "gasSupply" | "management";
+/** "contract": the answer to "Do you need to re-sign a new contract?" after a change of service (2 Nov 2026). */
+export type LoggedField = OverrideField | "homeType" | "gasSupply" | "management" | "contract";
 
 export interface OverrideLogEntry {
   id: string;
@@ -85,6 +86,7 @@ export const FIELD_LABEL: Record<LoggedField, string> = {
   homeType: "Type of home",
   gasSupply: "Gas",
   management: "Management",
+  contract: "Contract",
 };
 
 export const SERVICE_CHOICES: { value: ServiceLevel; label: string; sub: string }[] = [

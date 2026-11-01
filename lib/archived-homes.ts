@@ -28,6 +28,8 @@ export interface ArchivedHome {
   listingIds: string[];
   reason: string;
   byName: string;
+  /** Who took it off, so the agent who did can put their own home back. */
+  byEmail?: string;
   at: string;
 }
 
@@ -41,11 +43,11 @@ export function forgetArchived(): void {
 export async function archivedHomes(): Promise<ArchivedHome[]> {
   if (!hasDb()) return [];
   if (held && Date.now() - held.at < FRESH_MS) return held.rows;
-  const rows = await q<{ id: string; label: string; keys: string[]; listing_ids: string[]; reason: string; by_name: string; archived_at: Date }>(
-    `SELECT id, label, keys, listing_ids, reason, by_name, archived_at FROM os_archived_homes WHERE restored_at IS NULL ORDER BY archived_at DESC`,
+  const rows = await q<{ id: string; label: string; keys: string[]; listing_ids: string[]; reason: string; by_name: string; by_email: string; archived_at: Date }>(
+    `SELECT id, label, keys, listing_ids, reason, by_name, by_email, archived_at FROM os_archived_homes WHERE restored_at IS NULL ORDER BY archived_at DESC`,
     []
   );
-  const out = rows.map((r) => ({ id: r.id, label: r.label, keys: r.keys ?? [], listingIds: r.listing_ids ?? [], reason: r.reason, byName: r.by_name, at: new Date(r.archived_at).toISOString() }));
+  const out = rows.map((r) => ({ id: r.id, label: r.label, keys: r.keys ?? [], listingIds: r.listing_ids ?? [], reason: r.reason, byName: r.by_name, byEmail: r.by_email ?? "", at: new Date(r.archived_at).toISOString() }));
   held = { at: Date.now(), rows: out };
   return out;
 }
@@ -73,6 +75,17 @@ export async function keysFor(ids: string[]): Promise<string[]> {
     }
   }
   return [...keys];
+}
+
+/**
+ * Who may take a home off (James, 2 Nov 2026): whoever holds archive:homes -
+ * Michael, Susan, the owners - and the home's own agent, on their own homes.
+ * "Their own" is how every page already decides it: the agent's book is
+ * scoped to them (lib/scope), so a home in it is theirs. The office, whose
+ * book is the whole business, is not an agent and does not get it this way.
+ */
+export function mayArchiveOwn(role: string | null | undefined, scope: { rexUserId: string | null; everything: boolean; unlinked?: boolean }): boolean {
+  return role === "agent" && !scope.everything && !scope.unlinked && Boolean(scope.rexUserId);
 }
 
 export async function archiveHome(a: { label: string; keys: string[]; listingIds: string[]; reason: string; byName: string; byEmail: string }): Promise<string> {

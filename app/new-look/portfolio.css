@@ -278,6 +278,10 @@
 [data-look="new"] .nl-home-check input { width: 16px; height: 16px; accent-color: var(--sage-deep); }
 [data-look="new"] .nl-home-tenants { display: flex; flex-direction: column; gap: 8px; }
 [data-look="new"] .nl-home-tenant { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; align-items: center; }
+/* "Do you need to re-sign a new contract?", straight after a change of service (2 Nov 2026). */
+[data-look="new"] .nl-home-ask { margin: 6px 0 10px; padding: 14px 16px; border-radius: 14px; background: var(--sage-soft); display: flex; flex-direction: column; gap: 6px; animation: nl-fade .3s var(--nl-ease) both; }
+[data-look="new"] .nl-home-ask .nl-strong { font-size: 15px; }
+[data-look="new"] .nl-home-ask-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 /* What was changed in the OS, under the details. */
 [data-look="new"] .nl-home-log { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 [data-look="new"] .nl-home-log ul { margin: 6px 0 4px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }

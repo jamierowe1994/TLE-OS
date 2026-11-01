@@ -28,6 +28,8 @@ import HomeSource from "@/components/portfolio/HomeSource";
 import ContactBlock from "@/components/ContactBlock";
 import TenantCard from "@/components/new-look/TenantCard";
 import HomeDetails from "@/components/new-look/HomeDetails";
+import TermsPanel from "@/components/terms/TermsPanel";
+import { everyLandlord, useJointLandlords } from "@/lib/use-home-landlords";
 import HomeLandlords from "@/components/HomeLandlords";
 import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
 import { HomeRightToRent } from "@/components/RightToRentField";
@@ -295,6 +297,11 @@ export default function PropertyPage() {
   /* What the page describes: a room, the house's own record, or the home. */
   const p: ManagedProperty | null = roomP ?? house?.house ?? (house ? house.rooms[0] : home);
   const saves = useSaveScope(p?.listingId ?? listingId);
+  /* Re-sign after a change of service (James, 2 Nov 2026): the terms open on the new
+     service, to every landlord on the home - the second owner too (lib/use-home-landlords,
+     the same key the landlords section is given). */
+  const [resign, setResign] = useState<{ at: number; service: string } | null>(null);
+  const jointLandlords = useJointLandlords(look && resign && p && !p.test ? p.propertyId ?? null : null);
 
   const step = (d: number) => {
     const i = order.indexOf(listingId);
@@ -1239,6 +1246,22 @@ export default function PropertyPage() {
               />
             )}
 
+            {/* Yes to "Do you need to re-sign a new contract?" (2 Nov 2026): the Terms of Business
+                send screen on the new service, to every landlord. Signed terms on the home are
+                reissued; terms still out are adjusted, and the new set replaces them. Mounted once
+                the second owners are read, so the screen starts with all of them. */}
+            {resign && jointLandlords !== null && (
+              <TermsPanel
+                quiet
+                reissue={resign}
+                listingId={String(p.listingId)}
+                propertyId={propertyId}
+                propertyAddress={p.address || [title, p.locality, p.postcode].filter(Boolean).join(", ")}
+                landlords={everyLandlord(landlord ? [{ name: landlord.name, email: landlord.email, phone: landlord.phone }] : [], jointLandlords)}
+                serviceOnRecord={resign.service}
+              />
+            )}
+
             {(actionErr || p.held) && (
               <div className="nl-prop-notes">
                 {actionErr && <p className="nl-prop-err" role="alert">{actionErr}</p>}
@@ -1299,6 +1322,7 @@ export default function PropertyPage() {
                 tenancySet={tenancy.state === "ready" ? tenancy.data.set ?? null : null}
                 onSaved={() => { setBookRev((n) => n + 1); setDetailsRev((n) => n + 1); }}
                 onEnded={() => setBookRev((n) => n + 1)}
+                onResign={(service) => setResign({ at: Date.now(), service })}
                 rows={[
                   houseView && house && !lets
                     ? { key: "rent", label: `Rent${pricedRooms ? `, ${pricedRooms} ${pricedRooms === 1 ? "room" : "rooms"}` : ""}`, text: roomRent > 0 ? `${money(roomRent)} pcm` : "No room rents yet", quiet: roomRent <= 0 }
