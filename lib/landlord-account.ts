@@ -11,7 +11,7 @@ import { presentationsFor, readPresentation, type PresentationRow } from "@/lib/
 import { signedFor } from "@/lib/signed-documents";
 import { effectiveStage, SERVICE_LEVELS, type MarketAppraisal, type MaStage } from "@/lib/market-appraisal";
 import type { ManagedProperty } from "@/lib/portfolio-types";
-import { certificatesFor } from "@/lib/rex-compliance";
+import { certificatesFromBook } from "@/lib/compliance-cache";
 import { getApplications, type Application } from "@/lib/applications";
 import type { ViewOffer, ViewProgress } from "@/lib/landlord-view";
 import { liveBook } from "@/lib/tenant-matching";
@@ -202,7 +202,13 @@ export interface LandlordCompliance {
   allInDate: boolean;
   /** "All in date", "Gas due in 12 days", "EICR: no record". Worst first. */
   headline: string;
+  /** The certificates could not be read just now (1 Nov 2026). Not "none":
+   *  every screen says it could not load them, and claims nothing about them. */
+  unavailable?: boolean;
 }
+
+/** Said wherever the certificates would be, when they could not be read. */
+export const CERTS_UNAVAILABLE = "Certificates couldn't load just now";
 
 const RANK: Record<CertStatus, number> = { expired: 0, missing: 1, urgent: 2, watch: 3, ok: 4 };
 
@@ -251,22 +257,29 @@ function summarise(p: CompProperty): LandlordCompliance {
 }
 
 /**
- * The certificates on the landlord's managed properties, from REX, by
- * property id. The same read and the same rules as the Compliance screen,
- * so what the landlord sees is what Michael sees. Empty on any failure: a
- * portal must render without it rather than hang on REX.
+ * The certificates on the landlord's managed properties, by property id, cut
+ * from the compliance book Michael's screens hold (1 Nov 2026), so what the
+ * landlord sees is what Michael sees - including a certificate filed in the
+ * OS a moment ago, which patches that book (patchHeldHome).
+ *
+ * This used to build its own book with certificatesFor on every page load,
+ * which swept all of REX's certificates for every home we manage - 37 to 125
+ * seconds a load, and the "ComplianceEntries/search was slow or busy" tickets
+ * - and when that failed the map came back empty, so a landlord's
+ * certificates simply vanished. Now a home whose certificates could not be
+ * read gets an `unavailable` entry: the page says so, never "none".
  */
 export async function landlordCompliance(props: ManagedProperty[]): Promise<Map<string, LandlordCompliance>> {
   const out = new Map<string, LandlordCompliance>();
   const subjects = props
     .filter((p) => p.propertyId)
-    .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: null }));
+    .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: p.epcExpiry }));
   if (!subjects.length) return out;
-  try {
-    const book = await certificatesFor(subjects);
-    for (const cp of book.properties) out.set(cp.id, summarise(cp));
-  } catch {
-    /* the portal shows the property without certificates rather than nothing */
+  const answer = await certificatesFromBook(subjects).catch(() => null);
+  if (answer?.status === "ready") for (const cp of answer.certs.properties) out.set(String(cp.id), summarise(cp));
+  for (const s of subjects) {
+    if (out.has(s.propertyId)) continue;
+    out.set(s.propertyId, { propertyId: s.propertyId, certs: [], allInDate: false, headline: CERTS_UNAVAILABLE, unavailable: true });
   }
   return out;
 }

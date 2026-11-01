@@ -10,7 +10,8 @@ import { withChangedLandlords } from "./landlord-change";
 import { withTakeOns } from "./take-ons";
 import { withAgentMoves } from "./agent-moves";
 import { withoutArchived } from "./archived-homes";
-import { certificatesFor, type ComplianceBook } from "./rex-compliance";
+import type { ComplianceBook } from "./rex-compliance";
+import { certificatesFromBook, refreshComplianceBook } from "./compliance-cache";
 import type { ManagedBook } from "./portfolio-types";
 
 /**
@@ -23,12 +24,11 @@ import type { ManagedBook } from "./portfolio-types";
  * The BOOK is five REX searches, ten seconds cold. Fresh for ten minutes,
  * served stale for six hours while it refreshes behind.
  *
- * The CERTIFICATES are forty-five ComplianceEntries searches over the same
- * 449 properties — that service is superlinear-slow and capped at 100 rows a
- * call, so it is minutes, not seconds. Fresh for an hour, stale for a day, and
- * when nothing is held at all the route says "pending" and starts the walk
- * rather than making the screen wait for it. Certificates change weekly;
- * nobody needs them re-read while they are looking at the list.
+ * The CERTIFICATES are minutes of ComplianceEntries searches, and since
+ * 1 Nov 2026 they are not walked here at all: they are cut from the
+ * compliance book Compliance holds (lib/compliance-cache), on its clocks -
+ * fresh for an hour, stale for a day, and "pending" while nothing is held
+ * rather than making the screen wait. See managedCertsFor.
  *
  * ── Keyed by scope, like everything else here ─────────────────────────────
  *
@@ -48,19 +48,14 @@ import type { ManagedBook } from "./portfolio-types";
 /* v6 (6 Oct 2026): an agent's book adds the REX PM homes whose REX property they own. */
 /* v7 (6 Oct 2026): every room of a shared house, REX PM's tenant names where REX has none. */
 const BOOK_BASE = "portfolio:v7";
-/* v2 (18 Sep 2026): REX PM rows no longer pass "Managed" as a service, so a
-   let-only home stops counting as ours here. A v1 answer still would. */
-const CERTS_BASE = "portfolio-certs:v2";
+/* The certificates were cached here per scope too (portfolio-certs:v2) until
+   1 Nov 2026; they are cut from the compliance book now (managedCertsFor). */
 
 export const bookKeyFor = (rexUserId: string | null) =>
   rexUserId ? `${BOOK_BASE}:agent:${rexUserId}` : `${BOOK_BASE}:all`;
-export const certsKeyFor = (rexUserId: string | null) =>
-  rexUserId ? `${CERTS_BASE}:agent:${rexUserId}` : `${CERTS_BASE}:all`;
 
 export const BOOK_FRESH_MS = 10 * 60 * 1000;
 export const BOOK_STALE_MS = 6 * 60 * 60 * 1000;
-export const CERTS_FRESH_MS = 60 * 60 * 1000;
-export const CERTS_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface Held<T> {
   data: T;
@@ -220,36 +215,31 @@ export type CertsAnswer =
   | { status: "pending" }
   | { status: "failed"; message: string };
 
-export async function managedCertsFor(rexUserId: string | null, book: ManagedBook, force = false): Promise<CertsAnswer> {
-  const key = certsKeyFor(rexUserId);
-  const work = () =>
-    certificatesFor(
-      book.properties
-        .filter((p) => p.propertyId)
-        /* A REX PM row ("pm-link-") says "Managed" because REX PM holds a
-           letting agreement - that is not REX's service type, and passing it
-           as one let it outrank REX's own "Let Only" (1 The Coppice, 18 Sep
-           2026: let only on Compliance, ours on Portfolio). Let only wins
-           over everything, so these rows leave the service to REX. */
-        .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: p.epcExpiry, service: p.listingId.startsWith("pm-link-") ? null : p.service }))
-    );
-
-  const h = await held<ComplianceBook>(key);
-  const age = h ? Date.now() - h.at : Infinity;
-  if (force) { const fresh = await refresh(key, work); return { status: "ready", certs: fresh.data, ageMs: 0, stale: false }; }
-  if (h && age < CERTS_FRESH_MS) return { status: "ready", certs: h.data, ageMs: age, stale: false };
-  if (h && age < CERTS_STALE_MS) {
-    void refresh(key, work).catch(() => {});
-    return { status: "ready", certs: h.data, ageMs: age, stale: true };
-  }
-
-  /* Nothing usable held. Start the walk (or join the one running) and say so.
-     A failure inside the last minute is reported as a failure rather than as
-     pending, so a refused REX call surfaces instead of spinning. */
-  const failed = failureFor(key);
-  if (failed && !inFlight(key) && Date.now() - failed.at < 60_000) {
-    return { status: "failed", message: failed.message };
-  }
-  void refresh(key, work).catch(() => {});
-  return { status: "pending" };
+/**
+ * The managed book's certificates, cut from the compliance book Compliance
+ * already holds (1 Nov 2026).
+ *
+ * This used to be its own sweep per scope - certificatesFor over the agent's
+ * homes, under portfolio-certs:v2:agent:<id> - and certificatesFor adds every
+ * home the OS manages, so each of eighteen agents' Portfolios was a full walk
+ * of REX's ComplianceEntries and Listings, on top of Compliance's own. Now
+ * there is one book: each scope takes its own homes out of it, so an agent
+ * still sees only theirs, and Portfolio and Compliance cannot disagree about
+ * a home. A certificate filed in the OS patches that book (patchHeldHome) and
+ * is here on the next load.
+ *
+ * `force` (?refresh=1, after a certificate run) waits for the shared sweep,
+ * then cuts.
+ */
+export async function managedCertsFor(book: ManagedBook, force = false): Promise<CertsAnswer> {
+  /* A REX PM row ("pm-link-") says "Managed" because REX PM holds a letting
+     agreement - not REX's service type (1 The Coppice, 18 Sep 2026). The book
+     decides the service; only the listing's EPC date is passed in. */
+  const subjects = book.properties
+    .filter((p) => p.propertyId)
+    .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: p.epcExpiry, service: p.listingId.startsWith("pm-link-") ? null : p.service }));
+  if (force) await refreshComplianceBook();
+  const answer = await certificatesFromBook(subjects);
+  if (answer.status !== "ready") return answer;
+  return { status: "ready", certs: answer.certs, ageMs: answer.ageMs, stale: answer.stale };
 }

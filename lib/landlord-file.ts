@@ -256,7 +256,7 @@ export function fileData(opts: {
     },
     service,
     figure,
-    readiness: Math.max(0, Math.min(100, Math.round(view.snapshot.readinessPct))),
+    readiness: Math.max(0, Math.min(100, Math.round(view.snapshot.readinessPct ?? 0))),
     stage,
     signed,
     signHref,

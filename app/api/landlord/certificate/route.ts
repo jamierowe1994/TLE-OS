@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentLandlord, landlordProperties } from "@/lib/landlord-account";
-import { certificatesFor } from "@/lib/rex-compliance";
+import { certificatesFromBook } from "@/lib/compliance-cache";
 import { CERT_META, type CertKey } from "@/lib/compliance";
 
 /**
@@ -11,7 +11,8 @@ import { CERT_META, type CertKey } from "@/lib/compliance";
  * sense but is not the landlord's to have either: it names the account and
  * the entry, and it never expires. So the portal does not hand the URL out.
  * It checks the property is on this landlord's managed book, reads the
- * certificate row the same way the Compliance screen does, fetches the file
+ * certificate row off the compliance book the Compliance screen holds (1 Nov
+ * 2026: not a sweep of REX per click, which this used to be), fetches the file
  * under our own connection, and streams it back as a download with a name a
  * person would choose.
  *
@@ -35,8 +36,10 @@ export async function GET(req: NextRequest) {
   const mine = (await landlordProperties(me).catch(() => [])).find((p) => p.propertyId === propertyId);
   if (!mine) return new NextResponse("Not found", { status: 404 });
 
-  const book = await certificatesFor([{ propertyId, name: mine.name, locality: mine.locality, epcExpiry: null }]).catch(() => null);
-  const raw = book?.properties[0]?.certs[cert]?.fileUrl ?? null;
+  const answer = await certificatesFromBook([{ propertyId, name: mine.name, locality: mine.locality, epcExpiry: null }]).catch(() => null);
+  /* The book not to hand is not "no such file": say try again, not not found. */
+  if (answer?.status !== "ready") return new NextResponse("Your certificates couldn't load just now. Try again in a few minutes.", { status: 503, headers: { "Retry-After": "120" } });
+  const raw = answer.certs.properties.find((p) => String(p.id) === propertyId)?.certs[cert]?.fileUrl ?? null;
   if (!raw) return new NextResponse("Not found", { status: 404 });
   const url = raw.startsWith("//") ? `https:${raw}` : raw;
 

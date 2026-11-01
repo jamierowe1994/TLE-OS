@@ -6,7 +6,8 @@ import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { can } from "@/lib/roles";
 import { bookScope } from "@/lib/scope";
-import { certsKeyFor, held, managedBookFor } from "@/lib/managed-book-cache";
+import { managedBookFor } from "@/lib/managed-book-cache";
+import { heldComplianceBook } from "@/lib/compliance-cache";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { listVault, VAULT_LABEL } from "@/lib/vault";
 import { addrOf, isRoomAddress, parseAddress, sameHome } from "@/lib/address-parse";
@@ -25,7 +26,6 @@ import { normaliseEmail, type OsUser } from "@/lib/users";
 import { payPropTenancyCurrent, payPropTenantRows, personKey, ukPhone } from "@/lib/business/payprop-tenant-contacts";
 import { rentKey } from "@/lib/business/payprop-portfolio";
 import { record } from "@/lib/audit";
-import type { ComplianceBook } from "@/lib/rex-compliance";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 
 /**
@@ -297,7 +297,9 @@ export async function sendableDocs(ctx: HomeContext): Promise<SendDoc[]> {
   /* 2. A certificate only REX holds, from the compliance book as held (never
      a fresh walk). Offered only where the OS has no file of that kind. The
      file's address stays on the server. */
-  const book = await held<ComplianceBook>(certsKeyFor(null)).catch(() => null);
+  /* The compliance book Portfolio is cut from (1 Nov 2026: Portfolio's own copy is gone). */
+  const held = await heldComplianceBook().catch(() => null);
+  const book = held ? { data: held.book, at: held.at } : null;
   if (book) {
     for (const pid of pids) {
       const e = book.data.properties.find((x) => x.id === pid);

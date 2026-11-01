@@ -326,6 +326,12 @@ export async function fileCertificate(given: FileCertificate): Promise<{ row: Ce
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, CASE WHEN $12 THEN NOW() END, $14) RETURNING *`,
     [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? []), held, held ? "Waiting for compliance to verify it before it goes into REX." : "", input.replacesId ?? null]
   ).catch(notKept("saving it on the home"));
+  /* On the held book at once, whichever door it came in by (1 Nov 2026): the
+     landlord portal and Portfolio read that book now rather than walking REX
+     themselves, and only the Compliance upload route patched it - a filing
+     from Michael's desk or a contractor's job waited for the hourly rebuild.
+     A certificate waiting for a check shows as waiting. */
+  await patchHeldHome(input.propertyId).catch(() => false);
   if (held) return { row: rows[0], duplicate: false, share: waitingForCheck(true) };
 
   /* From here the certificate is on the home. Nothing after this fails the

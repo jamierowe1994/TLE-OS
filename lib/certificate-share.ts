@@ -7,12 +7,12 @@ import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { certificateSharedEmail } from "@/lib/email/works-internal";
-import { certsKeyFor, held, managedBookFor } from "@/lib/managed-book-cache";
+import { managedBookFor } from "@/lib/managed-book-cache";
+import { heldComplianceBook } from "@/lib/compliance-cache";
 import { invoiceSettings } from "@/lib/invoices";
 import { switchOn } from "@/lib/switches";
 import { VAULT_LABEL } from "@/lib/vault";
 import type { ManagedProperty } from "@/lib/portfolio-types";
-import type { ComplianceBook } from "@/lib/rex-compliance";
 import type { CertKey } from "@/lib/compliance";
 
 /**
@@ -246,8 +246,8 @@ async function isRenewal(cert: ShareCertificate): Promise<boolean> {
   const key = CERT_KEY[cert.typeId] as CertKey | undefined;
   if (!key) return false;
   try {
-    const cached = await held<ComplianceBook>(certsKeyFor(null));
-    const home = cached?.data.properties.find((p) => p.id === cert.propertyId);
+    const cached = await heldComplianceBook();
+    const home = cached?.book.properties.find((p) => p.id === cert.propertyId);
     return Boolean(home?.certs?.[key]);
   } catch {
     return false;

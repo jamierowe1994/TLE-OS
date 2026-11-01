@@ -135,7 +135,7 @@ export function entryCert(e: Pick<RexEntry, "type_id" | "details" | "file">): { 
 const MIN_DATE = new Date("2000-01-01T00:00:00").getTime();
 const MAX_DATE = new Date("2045-12-31T23:59:59").getTime();
 
-function daysUntil(date: string | null | undefined): number | null {
+export function daysUntil(date: string | null | undefined): number | null {
   if (!date) return null;
   const then = new Date(`${date}T00:00:00`).getTime();
   if (!Number.isFinite(then)) return null;
@@ -251,7 +251,7 @@ export async function fetchComplianceBook(): Promise<ComplianceBook> {
  * the same rules — latest expiry wins, EPC falls back to the listing field,
  * "no gas record" stays unknown — rather than a second copy of them.
  */
-export async function certificatesFor(subjects: CertSubject[]): Promise<ComplianceBook> {
+export async function certificatesFor(subjects: CertSubject[], opts: { only?: boolean } = {}): Promise<ComplianceBook> {
   if (!rexConfigured() || !subjects.length) return EMPTY;
 
   /* Every home REX PM manages joins the book (6 Sep 2026): one REX holds a
@@ -291,7 +291,10 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
   for (const o of osProps) {
     const id = o.rexPropertyId ?? o.id;
     pmManaged.add(String(id));
-    if (present.has(id)) continue;
+    /* `only` (1 Nov 2026): the homes asked for and no others - a home the
+       held book does not have yet (lib/compliance-cache certificatesFromBook),
+       read on its own rather than by sweeping the whole book again. */
+    if (opts.only || present.has(id)) continue;
     present.add(id);
     listings.push({ propertyId: id, name: o.name || o.address, locality: o.locality, epcExpiry: null });
   }
@@ -339,13 +342,23 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
      after them; it is one paged walk of a different service. */
   const tenantsByProperty = await sittingTenantsByProperty().catch(() => new Map());
   const peopleByProperty = new Map<string, { landlord: string; tenants: string[] }>();
-  const peopleResults = await inBatches(chunks, CONCURRENCY, async (chunk) => {
-    const res = await rexCall("Listings", "search", {
+  /* Asked twice, quietly the first time (1 Nov 2026), as the certificates
+     above and the lead book are: a single slow chunk filed "REX Listings/
+     search was slow or busy" though the names simply fall back to blank. A
+     second failure is still a ticket, and still blank names, never a failed
+     book. */
+  const people = (chunk: string[], quiet: boolean) =>
+    rexCall("Listings", "search", {
       criteria: [{ name: "property_id", type: "in", value: chunk }],
       limit: 100,
       extra_options: { extra_fields: ["related.contact_reln_listing"] },
-    });
-    return res.ok ? (rexRows(res.result) as Row[]) : [];
+    }, null, { quiet });
+  const peopleResults = await inBatches(chunks, CONCURRENCY, async (chunk) => {
+    const first = await people(chunk, true).catch(() => null);
+    if (first?.ok) return rexRows(first.result) as Row[];
+    await new Promise((r) => setTimeout(r, 2000));
+    const again = await people(chunk, false).catch(() => null);
+    return again?.ok ? (rexRows(again.result) as Row[]) : [];
   }).catch(() => [] as Row[][]);
 
   /**
@@ -567,7 +580,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
   /* Homes REX CRM has no property for. The OS is their record: its own
      certificates are their compliance, and they count in every figure so
      the OS matches REX PM's managed book, not REX CRM's. */
-  const extra = osProps.filter((o) => !o.rexPropertyId);
+  const extra = osProps.filter((o) => !o.rexPropertyId && (!opts.only || present.has(o.id)));
   const extraCerts = await osCertsFor([...new Set([...extra.map((p) => p.id), ...listings.map((l) => l.propertyId).filter((id) => /^pm-/i.test(id))])]).catch(() => new Map());
   /* The managed book may already list these homes (Portfolio does): REX
      answered nothing for them, so their certificates come from the OS. */

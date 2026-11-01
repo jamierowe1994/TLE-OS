@@ -1,6 +1,8 @@
 import "server-only";
 import { staleForWalk } from "@/lib/rex-outage";
-import { fetchComplianceBook, ukDayNumber, type ComplianceBook } from "@/lib/rex-compliance";
+import { certificatesFor, daysUntil, fetchComplianceBook, ukDayNumber, type CertSubject, type ComplianceBook } from "@/lib/rex-compliance";
+import { rexConfigured } from "@/lib/rex";
+import { inheritFromHouse, sliceBook, sliceCounts } from "@/lib/compliance-slice";
 import { londonDay, londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { complianceWithoutArchived } from "@/lib/archived-homes";
@@ -54,6 +56,9 @@ let memory: CachedBook | null = null;
 /** One in-flight refresh, shared. Without this, three simultaneous cold
  *  requests each start their own thirty-second sweep. */
 let refreshing: Promise<CachedBook> | null = null;
+/** The last sweep that failed, so a reader that never waits for one can say
+ *  it broke rather than "still building" (certificatesFromBook). */
+let lastFailure: { at: number; message: string } | null = null;
 
 async function readStored(): Promise<CachedBook | null> {
   if (!hasDb()) return null;
@@ -179,7 +184,12 @@ export function refreshComplianceBook(): Promise<CachedBook> {
           .then((m) => m.feedRexRenewals(book.properties, entry.at))
           .then((r) => (r.queued || r.seeded ? console.log("[cert-register] REX renewals", JSON.stringify(r)) : undefined))
           .catch((e) => console.error("[cert-register] feed failed", e instanceof Error ? e.message : e));
+        lastFailure = null;
         return entry;
+      })
+      .catch((e: unknown) => {
+        lastFailure = { at: Date.now(), message: e instanceof Error ? e.message : String(e) };
+        throw e;
       })
       .finally(() => {
         refreshing = null;
@@ -259,4 +269,84 @@ async function bookAsHeld(): Promise<{
     }
     throw e;
   }
+}
+
+/* ------------------------------------------------ one person's homes -- */
+
+export type CertsFromBook =
+  | { status: "ready"; certs: ComplianceBook; ageMs: number; stale: boolean; unread: string[] }
+  | { status: "pending" }
+  | { status: "failed"; message: string };
+
+/** How long a failed sweep is reported as a failure, before the next reader starts another. */
+const FAILURE_SHOWN_MS = 5 * 60 * 1000;
+/** REX homes read on their own when the book lacks them: three chunks of ten. */
+const ON_THEIR_OWN_MAX = 30;
+
+/**
+ * Certificates for some homes, out of the held book, never waiting on a
+ * sweep (1 Nov 2026). For the landlord portal and every agent's Portfolio,
+ * which each used to sweep REX for the whole book themselves (see
+ * lib/compliance-slice).
+ *
+ * The same ages as getComplianceBook - an hour fresh, a day served while a
+ * refresh runs behind - but past a day, or with nothing held, it starts the
+ * one shared sweep and says "pending" (or "failed", if the last sweep broke)
+ * instead of holding a page open for minutes. Nobody is shown a book older
+ * than getComplianceBook would show them.
+ *
+ * Reads `memory` first, which is the book patchHeldHome has just changed:
+ * a certificate filed in the OS is on the landlord's page and Portfolio on
+ * the next load.
+ *
+ * A home the book does not hold (a room REX PM links to another room's REX
+ * property, a home added since the build) is read on its own with
+ * certificatesFor's `only`: no REX call for a home REX has no property for,
+ * one search per ten homes for one it does. One that still cannot be read
+ * is in `unread`, so the screen can say so rather than show it bare.
+ */
+export async function certificatesFromBook(subjects: CertSubject[]): Promise<CertsFromBook> {
+  const held = memory ?? (await readStored());
+  const age = held ? Date.now() - held.at : Infinity;
+  const walk = await staleForWalk(held?.at).catch(() => false);
+  const sweep = () => {
+    if (!rexConfigured()) return;
+    /* Not again straight after one failed: the held copy stands meanwhile. */
+    if (lastFailure && Date.now() - lastFailure.at < FAILURE_SHOWN_MS) return;
+    void refreshComplianceBook().catch((e) => console.error("[compliance-cache] background refresh failed", e instanceof Error ? e.message : e));
+  };
+  if (!held || age >= STALE_MS) {
+    /* A sweep that has just failed is said as a failure, and not started
+       again for a few minutes: every landlord page asking for a fresh walk
+       while REX is struggling is the storm this replaced. */
+    const failed = lastFailure;
+    if (failed && !refreshing && Date.now() - failed.at < FAILURE_SHOWN_MS) return { status: "failed", message: failed.message };
+    sweep();
+    return { status: "pending" };
+  }
+  if (age >= FRESH_MS || walk) sweep();
+
+  const book = await complianceWithoutArchived(asOfToday(held.book, held.at));
+  const cut = sliceBook(book, subjects, (iso) => daysUntil(iso));
+  const unread: string[] = [];
+  if (cut.missing.length) {
+    /* At most three REX searches' worth on their own: more than that missing
+       is a book that needs rebuilding, not reading round, and they wait for it. */
+    let rex = 0;
+    const asked = new Set(cut.missing.filter((id) => !/^\d+$/.test(id) || ++rex <= ON_THEIR_OWN_MAX));
+    const extra = await certificatesFor(subjects.filter((s) => asked.has(String(s.propertyId))), { only: true }).catch(() => null);
+    const got = new Map((extra?.properties ?? []).map((p) => [String(p.id), p]));
+    for (const id of cut.missing) {
+      const p = got.get(id);
+      if (p) cut.properties.push(inheritFromHouse(p, book));
+      else unread.push(id);
+    }
+  }
+  return {
+    status: "ready",
+    certs: { properties: cut.properties, counts: sliceCounts(cut.properties) },
+    ageMs: age,
+    stale: age >= FRESH_MS || walk,
+    unread,
+  };
 }

@@ -112,7 +112,7 @@ export default function PropertySheet({ v }: { v: LandlordView }) {
             <DoodleIcon name="home" size={15} />
           </span>
           <div className="min-w-0">
-            <p className="text-[12px] font-semibold">{v.snapshot.readinessPct}% ready</p>
+            <p className="text-[12px] font-semibold">{v.snapshot.readinessPct == null ? "Certificates not loaded" : `${v.snapshot.readinessPct}% ready`}</p>
             <p className="text-[11.5px] leading-snug text-muted">{v.snapshot.note}</p>
           </div>
         </div>

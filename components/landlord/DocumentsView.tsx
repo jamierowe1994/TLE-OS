@@ -166,7 +166,9 @@ export default function DocumentsView({ view: v, docs: d, sample = false }: { vi
               {p.headline}
             </span>
           </div>
-          {p.certs.length === 0 ? (
+          {p.unavailable ? (
+            <p className="mt-4 text-[13px] text-muted">We couldn&apos;t load this property&apos;s certificates just now. Please try again in a few minutes.</p>
+          ) : p.certs.length === 0 ? (
             <p className="mt-4 text-[13px] text-muted">Its certificates are being read from your file.</p>
           ) : (
             <ul className="mt-4 divide-y divide-line/50">

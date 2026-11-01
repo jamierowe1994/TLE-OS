@@ -1,5 +1,6 @@
 import {
   currentLandlord,
+  CERTS_UNAVAILABLE,
   landlordCompliance,
   landlordDocuments,
   landlordJourneys,
@@ -560,13 +561,16 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
   const certDocs = (comp?.certs ?? []).map((c) => {
     const fault = !c.quiet && (c.status === "missing" || c.status === "expired");
     return {
-      title: c.label,
+      /* No em dashes in front of a customer ("EICR — electrical safety"), as on the Documents page. */
+      title: c.label.replace(/\s+—\s+/g, " - "),
       sub: c.line + (fault ? "  •  Ask your agent" : c.href ? "  •  Open" : ""),
       state: (c.status === "ok" || c.status === "watch" ? "uploaded" : fault ? "missing" : "pending") as "uploaded" | "missing" | "pending",
       href: c.href,
     };
   });
   const dated = (comp?.certs ?? []).filter((c) => !c.quiet);
+  /* Not read just now (1 Nov 2026): said so, and no figure worked from nothing. */
+  const unread = Boolean(comp?.unavailable);
   const certsSub = comp
     ? comp.allInDate
       ? `All in date  •  ${dated.length} on record`
@@ -605,6 +609,7 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
       tenancy: { id: "tenancy", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: "#tenancy", icon: "key" },
     }),
     documents: certDocs,
+    ...(unread ? { documentsUnavailable: `${CERTS_UNAVAILABLE}. Try again in a few minutes.` } : {}),
     tenancy: {
       tenant: tenant?.name ?? "Your tenant",
       started: day(p.letSince),
@@ -623,8 +628,8 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
     maintenance,
     offers,
     snapshot: {
-      readinessPct: comp ? Math.round((100 * dated.filter((c) => c.status === "ok" || c.status === "watch").length) / Math.max(1, dated.length)) : 100,
-      note: comp && !comp.allInDate ? `${comp.headline}. Your agent will be in touch about it.` : "Nothing waiting on you.",
+      readinessPct: unread ? null : comp ? Math.round((100 * dated.filter((c) => c.status === "ok" || c.status === "watch").length) / Math.max(1, dated.length)) : 100,
+      note: unread ? `${CERTS_UNAVAILABLE}. Try again in a few minutes.` : comp && !comp.allInDate ? `${comp.headline}. Your agent will be in touch about it.` : "Nothing waiting on you.",
       lines: [
         ["Rent", p.rent == null ? "Not set" : `${money(p.rent)} / ${p.rentPeriod === "week" ? "week" : "month"}`],
         ["Service", p.service ?? "Not set"],

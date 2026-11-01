@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       const p = byId.get(id);
       if (p && !p.test) homes.push(p);
     }
-    const certs = await managedCertsFor(scope.rexUserId, book).catch(() => null);
+    const certs = await managedCertsFor(book).catch(() => null);
     const certBy = certs?.status === "ready" ? new Map(certs.certs.properties.map((c) => [String(c.id), c])) : null;
     const valued = await valuations([...new Set(homes.map((p) => p.propertyId).filter((x): x is string => Boolean(x)))]);
 
