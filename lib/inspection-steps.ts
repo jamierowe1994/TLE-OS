@@ -58,3 +58,28 @@ export function stepOf(i: StepInspection): StepId {
 }
 
 export const stepLabel = (id: StepId) => STEPS.find((s) => s.id === id)?.label ?? "";
+
+/**
+ * The In hand lists behind the board's figures (Rhiannon Dodge, 1 Nov 2026:
+ * "I can't press the 9 Booked in to see what I have booked"). Pressing
+ * Waiting on a tenant, Booked in or To write up or raise opens In hand on
+ * just those visits, and the figure on each tile is counted by this same
+ * rule (lib/inspections summarise), so a tile and its list always agree.
+ *
+ *   awaiting  asked and not answered, or turned away and to arrange again
+ *   booked    a date in, not yet visited - to confirm in writing, or to go on
+ *   write_up  visited: to write up, to send, or work on it still to raise
+ */
+export type InHandFocus = "awaiting" | "booked" | "write_up";
+export const FOCUS_LABEL: Record<InHandFocus, string> = {
+  awaiting: "Waiting on a tenant",
+  booked: "Booked in",
+  write_up: "To write up or raise",
+};
+const FOCUS_STEPS: Record<InHandFocus, readonly StepId[]> = {
+  awaiting: ["await_access", "rearrange"],
+  booked: ["confirm", "visit"],
+  write_up: ["report", "send_report", "actions"],
+};
+export const isFocus = (v: string | null | undefined): v is InHandFocus => !!v && v in FOCUS_STEPS;
+export const onFocus = (f: InHandFocus, step: StepId): boolean => FOCUS_STEPS[f].includes(step);

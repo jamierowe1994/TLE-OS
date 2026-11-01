@@ -4,7 +4,7 @@ import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { widenForOverview } from "@/lib/overview-access";
-import { bookScope } from "@/lib/scope";
+import { agentBookOf, bookScope } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 import { factsByRexId } from "@/lib/os-properties";
@@ -110,7 +110,8 @@ export async function GET(req: NextRequest) {
              match its dashboard. An agent sees the tasks on homes in their
              own book, and any REX PM has under their name. */
           const tasks = await openTasks("inspection");
-          const me = ((subject ?? actor).name || "").trim().toLowerCase();
+          /* An agent picked on the Overview: their tasks by name, not the viewer's. */
+          const me = (agentBookOf(req)?.name ?? ((subject ?? actor).name || "")).trim().toLowerCase();
           const mine = scope.rexUserId
             ? new Set(book.properties.map((p) => String(p.propertyId ?? "")).filter(Boolean))
             : null;
@@ -146,11 +147,14 @@ export async function GET(req: NextRequest) {
      A visit they are sent on, or raised themselves, is theirs too. The whole
      business for anybody whose book is the whole business, the Overview
      pop-out included; a property's own page (?property=) keeps its history. */
-  const myName = (me.name || me.email).trim().toLowerCase();
+  /* The Overview narrowed to one agent (lib/overview-access): their homes
+     and the visits under their name, never the viewer's own. */
+  const asAgent = agentBookOf(req);
+  const myName = (asAgent ? asAgent.name : me.name || me.email).trim().toLowerCase();
   const onMyBook = (i: (typeof inspections)[number]) =>
     ownHomes!.has(String(i.propertyId ?? "")) || ownHomes!.has(String(i.listingId ?? "")) || ownHomes!.has(String(i.osPropertyId ?? ""));
   const mineToo = (i: (typeof inspections)[number]) =>
-    i.inspectorId === me.id || [i.inspector, i.raisedBy].some((n) => n.trim().toLowerCase() === myName);
+    (!asAgent && i.inspectorId === me.id) || (!!myName && [i.inspector, i.raisedBy].some((n) => n.trim().toLowerCase() === myName));
   const listed = ownHomes === null || propertyId ? inspections : inspections.filter((i) => onMyBook(i) || mineToo(i));
   /* What is left outside their own book carries its contacts shortened
      (lib/contact-mask, 10 Oct 2026). */

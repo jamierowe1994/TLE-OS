@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pastDueDay } from "@/lib/london-clock";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -10,7 +10,7 @@ import StatTile, { toneFor } from "@/components/StatTile";
 import { Pill } from "@/components/Wire";
 import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
-import { STEPS, stepOf, type StepId } from "@/lib/inspection-steps";
+import { FOCUS_LABEL, STEPS, isFocus, onFocus, stepOf, type InHandFocus, type StepId } from "@/lib/inspection-steps";
 import type { DueVisit, Finding, Inspection, InspectionEvent, InspectionRules } from "@/lib/inspections";
 import type { OffHome } from "@/lib/inspections-off";
 import ReportSheet from "@/components/inspections/ReportSheet";
@@ -22,7 +22,7 @@ import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import { searchMatches } from "@/lib/search-match";
 import { useNoteVisit } from "@/lib/recent-visits";
-import BoardSearch, { useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
+import BoardSearch, { overviewQuery, useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
 
 /**
  * Inspections: the visits we owe the book, and the permission that lets us in.
@@ -136,9 +136,27 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
   useReportInner(!!openId, onInnerOpen);
   useNoteVisit(openId ? `insp:${openId}` : null);
   const [q, setQ] = useState("");
+  /* One of the figures pressed: In hand shows only those visits (Rhiannon
+     Dodge, 1 Nov 2026). Pressing it again, or choosing a tab, shows them all. */
+  const [focus, setFocus] = useState<InHandFocus | null>(null);
+  /* On a phone the list is under the four tiles, so a press brings it up
+     rather than changing something off the screen. */
+  const tabsRow = useRef<HTMLDivElement>(null);
+  const press = (f: InHandFocus) => {
+    setTab("hand");
+    setFocus((was) => (was === f ? null : f));
+    const row = tabsRow.current;
+    if (row && row.getBoundingClientRect().top > window.innerHeight * 0.6) {
+      window.requestAnimationFrame(() => row.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  };
+  const chooseTab = (t: "due" | "hand" | "done") => {
+    setTab(t);
+    setFocus(null);
+  };
 
   const load = useCallback(() => {
-    fetch(embedded ? "/api/inspections?overview=1" : "/api/inspections", { cache: "no-store" })
+    fetch(embedded ? `/api/inspections?${overviewQuery()}` : "/api/inspections", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (j.ok) { setData(j); setError(null); } else setError(j.error ?? "Could not read the inspections."); })
       .catch(() => setError("Could not read the inspections."));
@@ -147,8 +165,12 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
 
   useEffect(() => {
     try {
-      const open = new URLSearchParams(window.location.search).get("open");
+      const sp = new URLSearchParams(window.location.search);
+      const open = sp.get("open");
       if (open) { setOpenId(open); setTab("hand"); }
+      /* ?focus= from a figure on the Overview's Inspections card. */
+      const f = sp.get("focus");
+      if (!open && isFocus(f)) { setFocus(f); setTab("hand"); }
     } catch { /* fine */ }
   }, []);
 
@@ -157,6 +179,8 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
   const match = (...fields: (string | null | undefined)[]) => !needle || searchMatches(needle, ...fields);
 
   const inHand = useMemo(() => all.filter((i) => !["closed", "cancelled"].includes(i.status) && match(i.propertyName, i.locality, i.tenant, i.landlord, String(i.ref))), [all, needle]);
+  const stepFor = (i: Inspection) => i.step ?? stepOf({ ...i, openActions: i.openActions ?? 0 });
+  const shownInHand = useMemo(() => (focus ? inHand.filter((i) => onFocus(focus, stepFor(i))) : inHand), [inHand, focus]);
   const done = useMemo(() => all.filter((i) => ["closed", "cancelled"].includes(i.status) && match(i.propertyName, i.locality, i.tenant, i.landlord, String(i.ref))), [all, needle]);
   const due = useMemo(() => (data?.due ?? []).filter((d) => match(d.propertyName, d.locality, d.tenant, d.landlord)), [data, needle]);
   const s = data?.summary ?? null;
@@ -258,26 +282,37 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
       <div className={`${embedded ? "mt-5" : "mt-10"} grid grid-cols-2 gap-4 xl:grid-cols-4`}>
         {(
           [
-            ["Due now", s ? String(s.due) : "•", s?.overdue ? `${s.overdue} already late` : "inside the lead window", "calendar"],
-            ["Waiting on a tenant", s ? String(s.awaitingTenant) : "•", "asked, not answered", "user"],
-            ["Booked in", s ? String(s.booked) : "•", "dates agreed", "clock"],
-            ["To write up or raise", s ? String(s.toWriteUp + s.openActions) : "•", "visits done, work outstanding", "checklist"],
+            ["Due now", s ? String(s.due) : "•", s?.overdue ? `${s.overdue} already late` : "inside the lead window", "calendar", null],
+            [FOCUS_LABEL.awaiting, s ? String(s.awaitingTenant) : "•", "asked, not answered", "user", "awaiting"],
+            [FOCUS_LABEL.booked, s ? String(s.booked) : "•", "dates agreed", "clock", "booked"],
+            [FOCUS_LABEL.write_up, s ? String(s.toWriteUp + s.openActions) : "•", "visits done, work outstanding", "checklist", "write_up"],
           ] as const
-        ).map(([k, v, hint, icon]) => (
+        ).map(([k, v, hint, icon, f]) => (
           /* Portfolio's tile; Due now is the one that matters - pink while any
-             visit is due, green when the book is all visited. */
-          <StatTile key={k} label={k} value={v} hint={hint} icon={icon} tone={k === "Due now" ? toneFor(s?.due) : undefined} />
+             visit is due, green when the book is all visited. Every tile is a
+             button, the way Compliance's are: Due now opens the Due list, the
+             other three open In hand on just their visits. */
+          <StatTile
+            key={k}
+            label={k}
+            value={v}
+            hint={hint}
+            icon={icon}
+            tone={k === "Due now" ? toneFor(s?.due) : undefined}
+            onClick={s ? (f ? () => press(f) : () => chooseTab("due")) : undefined}
+            active={!!f && focus === f && tab === "hand"}
+          />
         ))}
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
+      <div ref={tabsRow} className="mt-6 flex scroll-mt-4 flex-wrap items-center gap-2">
         {/* The same sliding, brown-marked control as Properties, Listings,
             Leads and Viewings. This screen was drawing its own black pills,
             which is the one place in the OS that colour appears. */}
         <Segmented
           className="w-full sm:w-auto sm:min-w-[340px]"
           value={tab}
-          onChange={setTab}
+          onChange={chooseTab}
           options={[
             { id: "due" as const, label: `Due ${due.length}`, icon: <DoodleIcon name="calendar" size={14} /> },
             { id: "hand" as const, label: `In hand ${inHand.length}`, icon: <DoodleIcon name="clock" size={14} /> },
@@ -333,7 +368,23 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
           {!!data.off?.length && <OffList rows={data.off} onPutBack={putBack} />}
         </>
       ) : (
-        <List rows={tab === "hand" ? inHand : done} onOpen={setOpenId} empty={tab === "hand" ? "Nothing in hand." : "Nothing finished yet."} />
+        <>
+          {tab === "hand" && focus && (
+            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+              <span>
+                Showing <b className="font-semibold text-ink">{FOCUS_LABEL[focus]}</b>: {shownInHand.length} of the {inHand.length} visit{inHand.length === 1 ? "" : "s"} in hand.
+              </span>
+              <button type="button" onClick={() => setFocus(null)} className="text-[12px] underline underline-offset-2 hover:text-ink">
+                Show all in hand
+              </button>
+            </p>
+          )}
+          <List
+            rows={tab === "hand" ? shownInHand : done}
+            onOpen={setOpenId}
+            empty={tab === "hand" ? (focus ? `Nothing ${focus === "booked" ? "booked in" : focus === "awaiting" ? "waiting on a tenant" : "to write up or raise"}${needle ? " matches that" : ""}.` : "Nothing in hand.") : "Nothing finished yet."}
+          />
+        </>
       )}
 
       {openId && <Sheet id={openId} team={data?.team ?? []} me={data?.me ?? null} onClose={() => setOpenId(null)} onChanged={load} />}

@@ -7,8 +7,8 @@ import { CERT_META, dueWithin, type CompProperty } from "@/lib/compliance";
 import { getArrears } from "@/lib/business/payprop-income";
 import { stageOf, type StageListing } from "@/lib/listing-stages";
 import { activity } from "@/lib/activity";
-import { grantWholeBusiness } from "@/lib/scope";
-import { wholeOverviewFor } from "@/lib/overview-access";
+import { grantAgentBook, grantWholeBusiness } from "@/lib/scope";
+import { overviewAgentFor, wholeOverviewFor } from "@/lib/overview-access";
 import type { FrontRecord } from "@/lib/front-dash";
 import { GET as portfolioGET } from "@/app/api/portfolio/route";
 import { GET as worksGET } from "@/app/api/works-orders/route";
@@ -29,6 +29,7 @@ import { GET as listingsGET } from "@/app/api/listings/route";
  * a person's own homes - so a list always matches the figure on its tile.
  * Inspections, tenancy reviews and move-outs open their own boards instead
  * (components/portfolio/OverviewPanel). Never a phone number or an email.
+ * ?agent= narrows it to one agent's book, as it does the figures.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,9 +43,10 @@ const todayLondon = () => new Date().toLocaleDateString("en-CA", { timeZone: "Eu
 const enc = encodeURIComponent;
 const pounds = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
 
-async function read(handler: (r: NextRequest) => Promise<Response>, req: NextRequest, path: string, whole: boolean): Promise<Json> {
+async function read(handler: (r: NextRequest) => Promise<Response>, req: NextRequest, path: string, whole: boolean, agent: { rexUserId: string; name: string } | null): Promise<Json> {
   const sub = new NextRequest(new URL(path, req.url), { headers: req.headers });
-  if (whole) grantWholeBusiness(sub);
+  if (agent) grantAgentBook(sub, agent);
+  else if (whole) grantWholeBusiness(sub);
   const res = await handler(sub);
   const j = (await res.json()) as Json;
   if (!res.ok || j.ok === false || j.unlinked) throw new Error(typeof j.error === "string" ? j.error : typeof j.reason === "string" ? j.reason : "That list couldn't be read just now.");
@@ -58,8 +60,10 @@ export async function GET(req: NextRequest) {
   if (!kind || !KINDS.includes(kind)) return NextResponse.json({ ok: false, error: "Which list?" }, { status: 400 });
   const offset = Math.max(0, Math.floor(Number(req.nextUrl.searchParams.get("offset") ?? 0)) || 0);
   const today = todayLondon();
-  const whole = await wholeOverviewFor(req, { actor, subject, viewingAs });
-  const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, whole);
+  const everything = await wholeOverviewFor(req, { actor, subject, viewingAs });
+  const agent = await overviewAgentFor(req, everything);
+  const whole = everything && !agent;
+  const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, everything, agent);
   const mine = async (): Promise<Set<string> | null> => {
     if (whole) return null;
     const j = await get(portfolioGET, "/api/portfolio");
@@ -85,6 +89,7 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => a.property.localeCompare(b.property));
     } else if (kind === "arrears") {
       if (!can(actor.role, "see:business") || viewingAs) throw new Error("Rent arrears are for the business owners.");
+      if (agent) throw new Error("Rent arrears aren't split by agent. Choose Every agent to see them.");
       const a = await getArrears();
       if (!a) throw new Error("Still reading arrears from PayProp. Try again in a minute.");
       rows = a.tenants

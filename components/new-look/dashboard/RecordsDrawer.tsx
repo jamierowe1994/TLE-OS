@@ -51,6 +51,8 @@ export type RecordAsk = {
   note?: string;
   /** The full screen for the lot. */
   board: { href: string; label: string };
+  /** One agent's book, picked on the PM Dashboard (its REX user id). */
+  agent?: string | null;
 };
 
 const fmtWhen = (iso: string | null, withTime: boolean) => {
@@ -75,6 +77,7 @@ function query(ask: RecordAsk, offset: number): string {
   else if (ask.days) p.set("days", String(ask.days));
   if (ask.source) p.set("source", ask.source);
   if (offset) p.set("offset", String(offset));
+  if (ask.agent) p.set("agent", ask.agent);
   return `${ask.endpoint ?? "/api/dashboard/front/records"}?${p}`;
 }
 

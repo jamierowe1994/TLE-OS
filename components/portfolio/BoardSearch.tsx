@@ -54,6 +54,21 @@ export function useReportInner(open: boolean, onInnerOpen?: (open: boolean) => v
   useEffect(() => () => onInnerOpen?.(false), [onInnerOpen]);
 }
 
+/**
+ * The query a board adds when it reads from inside the Overview's pop-out:
+ * ?overview=1, and the agent picked on the Overview (?agent= in its address,
+ * Michael Healy, 1 Nov 2026), so the board lists the book its tile counted.
+ */
+export function overviewQuery(): string {
+  let agent = "";
+  try {
+    agent = new URLSearchParams(window.location.search).get("agent") ?? "";
+  } catch {
+    /* fine - the whole book */
+  }
+  return /^\d{1,12}$/.test(agent) ? `overview=1&agent=${agent}` : "overview=1";
+}
+
 /** Props every Portfolio board takes (21 Oct 2026). */
 export interface BoardProps {
   /** Drawn inside the Overview's pop-out: no masthead, a plain search row instead. */

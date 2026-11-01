@@ -30,3 +30,19 @@ export function currentLets<T extends Let>(rows: T[]): T[] {
 
 /** The services we manage or collect rent on, as REX names them. */
 export const MANAGED_SERVICES = new Set(["Managed", "Fully Managed", "Rent Collect"]);
+
+/**
+ * The homes we MANAGE, and their rent (James Crumpton, 1 Nov 2026: the
+ * dashboard's Portfolio tile counted his let only homes). Each home once, on
+ * its latest let, by its service - the home's own record over REX's field
+ * (lib/record-service lays that on before the book is served). Let Only is
+ * the landlord's to look after, and so is Rent Collect: we collect the rent
+ * and nothing else (James, 2 Oct 2026), so neither is a managed home here.
+ * Test homes riding alongside the book are not counted.
+ */
+export const MANAGED_HOME_SERVICES = new Set(["Managed", "Fully Managed"]);
+
+export function managedHomesOf<T extends Let & { service: string | null; rentMonthly?: number | null; test?: boolean }>(rows: T[]): { homes: number; rentRoll: number } {
+  const homes = currentLets(rows.filter((r) => !r.test)).filter((r) => MANAGED_HOME_SERVICES.has(r.service ?? ""));
+  return { homes: homes.length, rentRoll: homes.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) };
+}

@@ -2,7 +2,8 @@ import "server-only";
 import type { NextRequest } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import type { Who } from "@/lib/admin";
-import { grantWholeBusiness } from "@/lib/scope";
+import { grantAgentBook, grantWholeBusiness } from "@/lib/scope";
+import { managedBookFor } from "@/lib/managed-book-cache";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
@@ -55,6 +56,43 @@ export async function wholeOverviewFor(req: NextRequest, who: Who): Promise<bool
 }
 
 /**
+ * THE AGENT PICKER (Michael Healy, 1 Nov 2026): somebody who sees the whole
+ * business can narrow the Overview to one agent's managed book - the book that
+ * agent's own Overview shows (managedBookFor their REX id). Every agent with a
+ * home on the book, by name, with how many homes.
+ */
+export type OverviewAgent = { id: string; name: string; homes: number };
+
+export async function overviewAgents(): Promise<OverviewAgent[]> {
+  const { book } = await managedBookFor(null);
+  const by = new Map<string, OverviewAgent>();
+  for (const p of book.properties) {
+    /* "name:" ids are agents REX has no user for: there is no book to read. */
+    if (!p.agent?.id || p.agent.id.startsWith("name:") || p.test) continue;
+    const held = by.get(p.agent.id) ?? { id: p.agent.id, name: p.agent.name || "Agent not named", homes: 0 };
+    held.homes++;
+    by.set(p.agent.id, held);
+  }
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name, "en-GB"));
+}
+
+/**
+ * The agent a whole-business Overview request asks for (?agent=<REX user id>),
+ * or null for the whole business. Only for somebody the Overview shows
+ * everything to (`whole`); anybody else's ?agent= is ignored, so it can never
+ * show an agent another agent's book. The name comes from the book, for the
+ * REX PM tasks the boards match by name; a book that can't be read leaves it
+ * blank and the homes still decide.
+ */
+export async function overviewAgentFor(req: NextRequest, whole: boolean): Promise<{ rexUserId: string; name: string } | null> {
+  if (!whole) return null;
+  const id = (req.nextUrl.searchParams.get("agent") ?? "").trim();
+  if (!/^\d{1,12}$/.test(id)) return null;
+  const named = await overviewAgents().then((all) => all.find((a) => a.id === id)?.name ?? "").catch(() => "");
+  return { rexUserId: id, name: named };
+}
+
+/**
  * A board opened in the Overview's pop-out (?overview=1) reads the same book as
  * the tile that opened it.
  *
@@ -66,5 +104,9 @@ export async function wholeOverviewFor(req: NextRequest, who: Who): Promise<bool
  */
 export async function widenForOverview(req: NextRequest, who: Who): Promise<void> {
   if (req.nextUrl.searchParams.get("overview") !== "1") return;
-  if (await wholeOverviewFor(req, who)) grantWholeBusiness(req);
+  if (!(await wholeOverviewFor(req, who))) return;
+  /* An agent picked on the Overview: that agent's book, as the tile read it. */
+  const agent = await overviewAgentFor(req, true);
+  if (agent) grantAgentBook(req, agent);
+  else grantWholeBusiness(req);
 }

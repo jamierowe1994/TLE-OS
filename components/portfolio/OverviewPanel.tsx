@@ -57,10 +57,15 @@ export function useOverviewPanel() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const open = useCallback((id: PanelId) => {
+  /* `focus` (1 Nov 2026): a figure on a card opens its board on just those
+     records - the Inspections card's Booked in opens In hand on the visits
+     booked (lib/inspection-steps InHandFocus). The board reads it once. */
+  const open = useCallback((id: PanelId, focus?: string) => {
     const url = new URL(window.location.href);
     url.searchParams.set("panel", id);
     url.searchParams.delete("open");
+    if (focus) url.searchParams.set("focus", focus);
+    else url.searchParams.delete("focus");
     window.history.pushState(null, "", `${url.pathname}${url.search}`);
     pushed.current = true;
     setPanel(id);
@@ -78,6 +83,7 @@ export function useOverviewPanel() {
     const url = new URL(window.location.href);
     url.searchParams.delete("panel");
     url.searchParams.delete("open");
+    url.searchParams.delete("focus");
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
   }, []);
 

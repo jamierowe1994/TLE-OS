@@ -207,7 +207,10 @@
 [data-look="new"] .nl-dash-stat:nth-child(5) { animation-delay: 0.24s; }
 /* The dashboard's row is five across (Passports done joined it, 29 Oct 2026); /overview keeps four. */
 [data-look="new"] .nl-dash-stats.is-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-[data-look="new"] button.nl-dash-stat:hover .nl-dash-stat-n { color: var(--coral); }
+[data-look="new"] button.nl-dash-stat:hover .nl-dash-stat-n, [data-look="new"] .nl-dash-stat.is-press:hover .nl-dash-stat-n { color: var(--coral); }
+[data-look="new"] .nl-dash-stat.is-press { cursor: pointer; }
+[data-look="new"] .nl-dash-stat-link { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+[data-look="new"] .nl-dash-stat-link:hover { color: var(--ink); text-decoration-color: currentColor; }
 [data-look="new"] button.nl-dash-stat:hover .nl-dash-spark-ln { opacity: 0.9; }
 [data-look="new"] .nl-dash-stat:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
 [data-look="new"] .nl-dash-stat-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; line-height: 20px; color: var(--muted); }

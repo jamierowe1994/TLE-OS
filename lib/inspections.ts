@@ -4,7 +4,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
-import { stepOf, type StepId } from "@/lib/inspection-steps";
+import { onFocus, stepOf, type StepId } from "@/lib/inspection-steps";
 import { asChecks, type Checks } from "@/lib/inspection-checks";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import type { RexpmTask } from "@/lib/rexpm-tasks";
@@ -1023,8 +1023,11 @@ export function summarise(list: Inspection[], due: DueVisit[], now: Date = new D
        visit due today, or one just booked "for today", is not late at 08:00. */
     overdue: due.filter((d) => londonDay(d.dueAt) < londonDay(now.toISOString())).length
       + list.filter((i) => OPEN_STATUSES.includes(i.status) && i.dueAt && londonDay(i.dueAt) < londonDay(now.toISOString()) && !i.visitedAt).length,
-    awaitingTenant: list.filter((i) => i.step === "await_access" || i.step === "rearrange").length,
-    booked: list.filter((i) => i.status === "booked").length,
+    /* By the same rule as the In hand list each tile opens (lib/inspection-
+       steps onFocus). Booked counted status "booked" until 1 Nov 2026, which
+       also took in a booked visit the tenant had since turned down. */
+    awaitingTenant: list.filter((i) => i.step && onFocus("awaiting", i.step)).length,
+    booked: list.filter((i) => i.step && onFocus("booked", i.step)).length,
     toWriteUp: list.filter((i) => i.step === "report" || i.step === "send_report").length,
     openActions: list.reduce((n, i) => n + (i.openActions ?? 0), 0),
   };

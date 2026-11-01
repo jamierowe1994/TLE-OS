@@ -23,6 +23,11 @@ import { CountUp } from "@/components/new-look/dashboard/Charts";
  * Portfolio menu and are "hidden within the Overview tab". Their tiles
  * (Upcoming Vacancies is the Move-outs list) open the whole board in a pop-out
  * here rather than navigating - see components/portfolio/OverviewPanel.
+ *
+ * Michael Healy, 1 Nov 2026: an Agent picker, for the people who see the whole
+ * business (lib/overview-access). Picking an agent reads every tile, every
+ * list and every pop-out board as that agent's own book; it rides in the
+ * address as ?agent=, so the boards and a reload keep it.
  */
 
 type Tile<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -30,8 +35,10 @@ interface Board {
   ok: boolean;
   error?: string;
   at: string;
-  /** Whole business for Michael and the owners; everyone else, their own homes. */
-  scope?: { whole: boolean; label: string };
+  /** Whole business for Michael and the owners; everyone else, their own homes; or the agent picked. */
+  scope?: { whole: boolean; label: string; agent?: string | null };
+  /** The agents to pick from - only for somebody who sees the whole business. */
+  agents?: { id: string; name: string; homes: number }[];
   properties: Tile<{ managed: number; avgRent: number; landlords: number; rentRoll: number; occupied: number | null; vacant: number | null; upcoming: number | null }>;
   maintenance: Tile<{ open: number; overdue: number; emergencies: number; followUp: number; late: { title: string; where: string; dueOn: string | null }[]; partial: string | null }>;
   inspections: Tile<{ due: number; overdue: number; booked: number; awaitingTenant: number }>;
@@ -49,17 +56,50 @@ const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` :
 const compact = (n: number) => (n >= 10000 ? `£${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : pounds(n));
 const shortDay = (ymd: string | null) => (ymd ? new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
 
+/** The agent in the address (?agent=<REX user id>), or "" for every agent. */
+const agentInUrl = () => {
+  try {
+    const a = new URLSearchParams(window.location.search).get("agent") ?? "";
+    return /^\d{1,12}$/.test(a) ? a : "";
+  } catch {
+    return "";
+  }
+};
+
 export default function Overview() {
   const [data, setData] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* null until the address has been read, so the first read is the right one. */
+  const [agent, setAgent] = useState<string | null>(null);
+  /* Kept across reads, so the picker stays put while the next agent loads. */
+  const [agents, setAgents] = useState<NonNullable<Board["agents"]> | null>(null);
+  useEffect(() => setAgent(agentInUrl()), []);
 
+  /* Only the latest read lands: a quick change of agent can't be overwritten
+     by the slower answer for the one before it. */
+  const asked = useRef(0);
   const load = useCallback(() => {
-    fetch("/api/overview", { cache: "no-store" })
+    if (agent === null) return;
+    const n = ++asked.current;
+    fetch(agent ? `/api/overview?agent=${encodeURIComponent(agent)}` : "/api/overview", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => { if (j.ok) { setData(j); setError(null); } else setError(j.error ?? "The overview couldn't be read."); })
-      .catch(() => setError("The overview couldn't be read."));
-  }, []);
+      .then((j) => {
+        if (n !== asked.current) return;
+        if (j.ok) { setData(j); setError(null); if (j.agents) setAgents(j.agents); } else setError(j.error ?? "The overview couldn't be read.");
+      })
+      .catch(() => { if (n === asked.current) setError("The overview couldn't be read."); });
+  }, [agent]);
   useEffect(load, [load]);
+  const pickAgent = (id: string) => {
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("agent", id);
+    else url.searchParams.delete("agent");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+    setData(null);
+    setError(null);
+    setAgent(id);
+  };
+  const picker = agents?.length ? <AgentPicker agents={agents} value={agent ?? ""} onChange={pickAgent} newLook={false} /> : null;
   const { panel, open, closeNow } = useOverviewPanel();
   /* Re-read the tiles once a board closes (by Esc, the button or Back), so a
      review recorded or a visit booked in the pop-out shows on its tile. */
@@ -78,7 +118,17 @@ export default function Overview() {
     return <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />Opening Overview…</p>;
   }
   if (look) {
-    return <OverviewNew data={data} error={error} reload={() => { setData(null); setError(null); load(); }} open={open} panel={<OverviewPanel panel={panel} onClose={closeNow} />} />;
+    return (
+      <OverviewNew
+        data={data}
+        error={error}
+        reload={() => { setData(null); setError(null); load(); }}
+        open={open}
+        panel={<OverviewPanel panel={panel} onClose={closeNow} />}
+        agent={agent || null}
+        picker={agents?.length ? <AgentPicker agents={agents} value={agent ?? ""} onChange={pickAgent} newLook /> : null}
+      />
+    );
   }
 
   return (
@@ -96,11 +146,18 @@ export default function Overview() {
         </p>
       )}
 
-      {data?.scope && (
-        <p className="mt-6 flex items-center gap-2 text-[12px] text-muted">
-          <DoodleIcon name={data.scope.whole ? "grid" : "user"} size={14} className="text-accent-dark" />
-          {data.scope.whole ? "Showing every home across the business." : "Showing the homes on your own book."}
-        </p>
+      {(data?.scope || picker) && (
+        <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {picker}
+          {data?.scope && (
+            <p className="flex items-center gap-2 text-[12px] text-muted">
+              <DoodleIcon name={data.scope.whole ? "grid" : "user"} size={14} className="text-accent-dark" />
+              {data.scope.agent
+                ? `Showing the homes on ${data.scope.label}'s book.`
+                : data.scope.whole ? "Showing every home across the business." : "Showing the homes on your own book."}
+            </p>
+          )}
+        </div>
       )}
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -148,10 +205,12 @@ export default function Overview() {
           {(d) => (
             <>
               <Big value={d.due} label="visits due" />
+              {/* Each figure opens the board on just those visits (Rhiannon
+                  Dodge, 1 Nov 2026); Overdue is on the Due list it opens anyway. */}
               <Stats items={[
                 ["Overdue", String(d.overdue), d.overdue > 0],
-                ["Booked in", String(d.booked)],
-                ["Waiting on tenant", String(d.awaitingTenant)],
+                ["Booked in", String(d.booked), false, () => open("inspections", "booked")],
+                ["Waiting on tenant", String(d.awaitingTenant), false, () => open("inspections", "awaiting")],
               ]} />
             </>
           )}
@@ -243,6 +302,31 @@ export default function Overview() {
   );
 }
 
+/**
+ * The Agent picker (Michael Healy, 1 Nov 2026), drawn the way Michael's
+ * compliance desk draws its own: "Every agent" first, then each agent by name
+ * with how many homes are on their book.
+ */
+function AgentPicker({ agents, value, onChange, newLook }: { agents: NonNullable<Board["agents"]>; value: string; onChange: (id: string) => void; newLook: boolean }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Agent"
+      className={newLook ? "nl-input w-full sm:w-auto sm:max-w-[300px]" : "w-full rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12.5px] sm:w-auto sm:max-w-[300px]"}
+    >
+      <option value="">Every agent</option>
+      {agents.map((a) => (
+        <option key={a.id} value={a.id}>
+          {a.name} ({a.homes} home{a.homes === 1 ? "" : "s"})
+        </option>
+      ))}
+      {/* An agent in the address who has no homes on the book still reads as chosen. */}
+      {value && !agents.some((a) => a.id === value) ? <option value={value}>That agent</option> : null}
+    </select>
+  );
+}
+
 /** Upcoming vacancies needs the move-outs and the lettings figures; it fails if either does. */
 function combine(
   m: Board["moveOuts"],
@@ -305,15 +389,31 @@ function Big({ value, label, hot }: { value: number; label: string; hot?: boolea
   );
 }
 
-function Stats({ items }: { items: ([string, string] | [string, string, boolean])[] }) {
+/** A figure with `onOpen` is its own button, inside a card that may be one too. */
+function Stats({ items }: { items: ([string, string] | [string, string, boolean] | [string, string, boolean, () => void])[] }) {
   return (
     <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line/60 pt-3">
-      {items.map(([k, v, hot]) => (
-        <div key={k} className="min-w-0">
-          <dt className="break-words text-[9.5px] font-bold uppercase leading-tight tracking-wider text-muted">{k}</dt>
-          <dd className={`figures mt-0.5 truncate text-[16px] ${hot ? "text-accent-dark" : ""}`}>{v}</dd>
-        </div>
-      ))}
+      {items.map(([k, v, hot, onOpen]) => {
+        const body = (
+          <>
+            <dt className="break-words text-[9.5px] font-bold uppercase leading-tight tracking-wider text-muted">{k}</dt>
+            <dd className={`figures mt-0.5 truncate text-[16px] ${hot ? "text-accent-dark" : ""} ${onOpen ? "underline decoration-line underline-offset-4 group-hover:decoration-ink" : ""}`}>{v}</dd>
+          </>
+        );
+        return onOpen ? (
+          <button
+            key={k}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpen(); }}
+            aria-label={`${k}: ${v}. Show them.`}
+            className="group -mx-1 min-w-0 self-start rounded-md px-1 text-left transition-colors hover:bg-accent-soft/40"
+          >
+            {body}
+          </button>
+        ) : (
+          <div key={k} className="min-w-0">{body}</div>
+        );
+      })}
     </dl>
   );
 }
@@ -339,7 +439,7 @@ function Rows({ rows, empty }: { rows: [string, string, string][]; empty: string
 
 type PanelId = Parameters<ReturnType<typeof useOverviewPanel>["open"]>[0];
 
-function OverviewNew({ data, error, reload, open, panel }: { data: Board | null; error: string | null; reload: () => void; open: (id: PanelId) => void; panel: React.ReactNode }) {
+function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data: Board | null; error: string | null; reload: () => void; open: (id: PanelId, focus?: string) => void; panel: React.ReactNode; agent: string | null; picker: React.ReactNode }) {
   const p = data?.properties;
   const a = data?.arrears;
   const pd = p?.ok ? p.data : null;
@@ -354,7 +454,7 @@ function OverviewNew({ data, error, reload, open, panel }: { data: Board | null;
      already open here (inspections, reviews, move-outs) as they always did. */
   const [ask, setAsk] = useState<RecordAsk | null>(null);
   const list = (kind: PmRecordKind, title: string, figure: number, columns: [string, string, string, string, string], board: { href: string; label: string }, note: string, empty: string, drift = true) => () =>
-    setAsk({ kind, endpoint: "/api/overview/records", title, figure, range: data?.scope ? (data.scope.whole ? "Every home" : "Your homes") : "Now", note, board, columns, empty, drift });
+    setAsk({ kind, endpoint: "/api/overview/records", title, figure, range: data?.scope ? (data.scope.agent ? `${data.scope.label}'s homes` : data.scope.whole ? "Every home" : "Your homes") : "Now", note, board, columns, empty, drift, agent });
   const md = data?.maintenance?.ok ? data.maintenance.data : null;
   const ind = data?.inspections?.ok ? data.inspections.data : null;
   const rd = data?.reviews?.ok ? data.reviews.data : null;
@@ -367,9 +467,10 @@ function OverviewNew({ data, error, reload, open, panel }: { data: Board | null;
   return (
     <div data-look="new" className="nl-page nl-rise nl-bo nl-pm">
       <Mast
-        eyebrow={data?.scope ? (data.scope.whole ? "Every home across the business" : "The homes on your own book") : "Back office"}
+        eyebrow={data?.scope ? (data.scope.agent ? `The homes on ${data.scope.label}'s book` : data.scope.whole ? "Every home across the business" : "The homes on your own book") : "Back office"}
         title="PM Dashboard"
         blurb="Your homes at a glance: what is late, what is coming up, and where to go next. Press any figure to see what is behind it."
+        actions={picker}
       />
 
       {error && <Failed onRetry={reload}>{error}</Failed>}
@@ -401,7 +502,10 @@ function OverviewNew({ data, error, reload, open, panel }: { data: Board | null;
           onOpen={md ? list("maintenance", "Open Jobs", md.open, ["Job", "Home", "Due", "Urgency", "Status"], { href: "/maintenance", label: "Open Maintenance" }, "Overdue first, then by when they're due.", "No open jobs.") : undefined} />
         <PmTile label="Inspections due" {...state(data?.inspections)} value={ind?.due ?? null}
           badge={ind && ind.overdue > 0 ? { text: `${ind.overdue} overdue`, tone: "warn" } : null}
-          sub={ind ? `${ind.booked} booked · ${ind.awaitingTenant} waiting on the tenant` : null}
+          links={ind ? [
+            { text: `${ind.booked} booked`, onOpen: () => open("inspections", "booked") },
+            { text: `${ind.awaitingTenant} waiting on the tenant`, onOpen: () => open("inspections", "awaiting") },
+          ] : null}
           strip={ind ? [ind.due - ind.overdue, ind.overdue] : null}
           onOpen={() => open("inspections")} />
         <PmTile label="Tenancy reviews" {...state(data?.reviews)} value={rd?.due ?? null}
@@ -507,12 +611,15 @@ function PmRow({ title, sub, children }: { title: string; sub: string; children:
  * dash with the reason, and opens nothing.
  */
 function PmTile({
-  label, value, loading, error, sub, badge, strip, money, suffix, onOpen, href,
+  label, value, loading, error, sub, links, badge, strip, money, suffix, onOpen, href,
 }: {
   label: string; value: number | null; loading: boolean; error: string | null; sub?: React.ReactNode; badge?: { text: string; tone: "warn" | "up" | "flat" } | null;
+  /** The sub line as figures that each open their own list (the Inspections tile's booked and waiting, 1 Nov 2026). */
+  links?: { text: string; onOpen: () => void }[] | null;
   strip?: [number, number] | null; money?: boolean; suffix?: string; onOpen?: () => void; href?: string;
 }) {
   const ready = !loading && !error && value != null;
+  const linked = ready && !!links?.length;
   const body = (
     <>
       <span className="nl-dash-stat-top">
@@ -531,7 +638,16 @@ function PmTile({
           <b className="nl-dash-stat-n">
             <CountUp value={value!} format={(n) => (money ? compact(n) : `${Math.round(n).toLocaleString("en-GB")}${suffix ?? ""}`)} />
           </b>
-          <span className="nl-dash-stat-sub">{sub}</span>
+          <span className="nl-dash-stat-sub">
+            {linked
+              ? links!.map((l, i) => (
+                  <span key={l.text}>
+                    {i > 0 && " · "}
+                    <button type="button" className="nl-dash-stat-link" onClick={(e) => { e.stopPropagation(); l.onOpen(); }}>{l.text}</button>
+                  </span>
+                ))
+              : sub}
+          </span>
           {strip && strip[0] + strip[1] > 0 && (
             <span className="nl-dash-strip" aria-hidden>
               <i className="is-ok" style={{ flexGrow: Math.max(0, strip[0]) }} />
@@ -542,6 +658,22 @@ function PmTile({
       )}
     </>
   );
+  /* A tile with its own figure buttons can't itself be a button (a button
+     may not hold another), so it is a pressable box with the same look. */
+  if (linked && onOpen) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        className="nl-dash-stat is-press"
+        onClick={onOpen}
+        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(); } }}
+        aria-label={`${label}. Show them.`}
+      >
+        {body}
+      </div>
+    );
+  }
   if (ready && onOpen) return <button type="button" className="nl-dash-stat" onClick={onOpen} aria-label={`${label}. Show them.`}>{body}</button>;
   if (ready && href) return <Link href={href} className="nl-dash-stat">{body}</Link>;
   return <div className="nl-dash-stat is-still">{body}</div>;

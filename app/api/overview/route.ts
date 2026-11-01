@@ -16,8 +16,8 @@ import { GET as reviewsGET } from "@/app/api/tenancy-reviews/route";
 import { GET as moveOutsGET } from "@/app/api/move-outs/route";
 import { GET as applicationsGET } from "@/app/api/applications/route";
 import { GET as listingsGET } from "@/app/api/listings/route";
-import { grantWholeBusiness } from "@/lib/scope";
-import { wholeOverviewFor } from "@/lib/overview-access";
+import { grantAgentBook, grantWholeBusiness } from "@/lib/scope";
+import { overviewAgentFor, overviewAgents, wholeOverviewFor, type OverviewAgent } from "@/lib/overview-access";
 
 /**
  * The Overview board (1 Oct 2026): one tile per part of property management,
@@ -35,6 +35,12 @@ import { wholeOverviewFor } from "@/lib/overview-access";
  * else's Overview is their own homes (lib/overview-access). Maintenance and
  * compliance are company-wide on their own screens, so for an own-homes
  * board they are cut down here to the homes in the person's book.
+ *
+ * ?agent=<REX user id> (Michael Healy, 1 Nov 2026): somebody who sees the
+ * whole business can narrow it to one agent's book with the Agent picker.
+ * Every screen is then read as that agent's book (lib/scope grantAgentBook),
+ * exactly as their own Overview reads it, and the list of agents comes back
+ * for the picker.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,10 +49,13 @@ export const maxDuration = 120;
 type Json = Record<string, unknown>;
 type Tile<T> = { ok: true; data: T } | { ok: false; error: string };
 
+type Agent = { rexUserId: string; name: string } | null;
+
 /** Call another screen's GET as the same person, and read its JSON. */
-async function read(handler: (r: NextRequest) => Promise<Response>, req: NextRequest, path: string, whole: boolean): Promise<Json> {
+async function read(handler: (r: NextRequest) => Promise<Response>, req: NextRequest, path: string, whole: boolean, agent: Agent): Promise<Json> {
   const sub = new NextRequest(new URL(path, req.url), { headers: req.headers });
-  if (whole) grantWholeBusiness(sub);
+  if (agent) grantAgentBook(sub, agent);
+  else if (whole) grantWholeBusiness(sub);
   const res = await handler(sub);
   const j = (await res.json()) as Json;
   if (!res.ok || j.ok === false) throw new Error(typeof j.error === "string" ? j.error : `That screen didn't answer (${res.status}).`);
@@ -69,8 +78,11 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const today = todayLondon();
   const money = can(actor.role, "see:business") && !viewingAs;
-  const whole = await wholeOverviewFor(req, who);
-  const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, whole);
+  const everything = await wholeOverviewFor(req, who);
+  const agent = await overviewAgentFor(req, everything);
+  /* One agent picked: read as their book, not the whole business. */
+  const whole = everything && !agent;
+  const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, everything, agent);
   /* An answer that could not be read is an error on its tile, never zeros
      (Rig run 4, P-065, 10 Oct 2026): an agent the OS cannot place got "0 to
      review", "0 applications" and "0 on the market" beside the tiles that
@@ -89,7 +101,7 @@ export async function GET(req: NextRequest) {
     ? Promise.resolve(null)
     : portfolio.then((j) => new Set(((Array.isArray(j.properties) ? j.properties : []) as { propertyId: string | null }[]).map((p) => String(p.propertyId ?? "")).filter(Boolean)));
 
-  const [properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears] = await Promise.all([
+  const [properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears, agents] = await Promise.all([
     settle(portfolio.then((j) => {
       const c = (j.counts ?? {}) as Json;
       return {
@@ -180,7 +192,12 @@ export async function GET(req: NextRequest) {
 
     /* Money is Susan's and the owners' (see:business). Anyone else sees the
        tile say so rather than a number they are not meant to have. */
-    money
+    /* PayProp's arrears carry PayProp's property ids, not an agent, so they
+       are not split by agent: said on the tile rather than the whole
+       business's figure under one agent's name. */
+    money && agent
+      ? Promise.resolve({ ok: false as const, error: "Rent arrears aren't split by agent. Choose Every agent to see them." })
+      : money
       ? settle(getArrears().then((a) => {
           /* Null is "not read yet" or "PayProp failed", not only "not set up"
              (Rig run 3, P-022): say which. */
@@ -195,8 +212,17 @@ export async function GET(req: NextRequest) {
           return { tenants: owing.length, owed: owing.reduce((n, t) => n + t.owed, 0), largest: a.largest };
         }))
       : Promise.resolve({ ok: false as const, error: "Rent arrears are for the business owners." }),
+
+    /* The picker's agents, for somebody who sees everything. A failed read
+       leaves the picker out rather than the page. */
+    everything ? overviewAgents().catch(() => null as OverviewAgent[] | null) : Promise.resolve(null),
   ]);
 
-  const label = whole ? "the whole business" : ((subject ?? actor).name || "your homes");
-  return NextResponse.json({ ok: true, at: new Date().toISOString(), scope: { whole, label }, properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears });
+  const label = agent ? agent.name || "that agent" : whole ? "the whole business" : ((subject ?? actor).name || "your homes");
+  return NextResponse.json({
+    ok: true, at: new Date().toISOString(),
+    scope: { whole, label, agent: agent?.rexUserId ?? null },
+    ...(agents ? { agents } : {}),
+    properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears,
+  });
 }
