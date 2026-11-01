@@ -9,6 +9,13 @@ import type { Application } from "@/lib/applications";
 
 const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
 
+/** What the application itself said for a field, under anything put right in the OS (lib/let-edits). */
+function raw(a: Application, f: "moveIn" | "rent" | "holdingFee" | "termMonths", now: string | number | null): string | null {
+  const mark = a.letEdits?.[f];
+  if (mark) return mark.source;
+  return now == null ? null : String(now);
+}
+
 /** A let in progress: accepted in REX, or by the agent in the OS (lib/offer-decisions). */
 export const isLet = (a: Application) => a.status === "accepted" || (a.status !== "unsuccessful" && a.osDecision?.decision === "accepted");
 
@@ -76,6 +83,13 @@ export function toAppRecord(a: Application): AppRecord {
     image: a.image,
     rent: a.offerAmount ? `${gbp(a.offerAmount)} pcm` : "—",
     moveIn: a.startDate ?? "—",
+    figures: {
+      moveIn: raw(a, "moveIn", a.startDate ? a.startDate.slice(0, 10) : null),
+      rent: raw(a, "rent", a.offerAmount),
+      holdingFee: raw(a, "holdingFee", a.holdingDepositAmount),
+      termMonths: raw(a, "termMonths", a.agreementMonths),
+    },
+    osEdits: a.letEdits ?? null,
     /* Accepted in the OS is accepted on the page too (Sean, 15 Oct 2026): the PLC tile sat greyed "once the offer is accepted" on a let he had accepted. */
     stageKey: isLet(a) ? "accepted" : a.status,
     ticked: 0,

@@ -165,6 +165,13 @@ export interface Application {
    * read any other way.
    */
   osDecision?: OfferDecision | null;
+  /**
+   * The let's figures as an agent put them right in the OS (lib/let-edits,
+   * 1 Nov 2026), already laid over startDate, offerAmount,
+   * holdingDepositAmount and agreementMonths; the deposit is only here.
+   * null: none changed. Absent on a record read without them.
+   */
+  letEdits?: Partial<Record<import("@/lib/let-edit-fields").LetField, import("@/lib/let-edits").AppEditMark>> | null;
   listingId: number | null;
   /** The PROPERTY, not the listing. Compliance certificates hang off this. */
   propertyId: string | null;
@@ -617,6 +624,7 @@ async function pullApplications(limit: number, rexUserId: string | null | undefi
   const leads = await leadOverrides().catch(() => new Map<string, string>());
   if (leads.size) for (const a of out) applyLead(a, leads);
   await applyAgreedRent(out).catch(() => null);
+  await applyOsFigures(out).catch(() => null);
   await applyDecisions(out).catch(() => null);
   appsCache.set(key, { at: Date.now(), apps: out });
   return out;
@@ -655,6 +663,17 @@ async function applyAgreedRent(apps: Application[]): Promise<void> {
     a.offerAmount = c.amount;
     if (c.moveIn) a.startDate = c.moveIn;
   }
+}
+
+/**
+ * The figures an agent put right on the let in the OS (lib/let-edits, 1 Nov
+ * 2026): the move-in, rent, holding fee and tenancy length, over REX's and
+ * over an agreed counter-offer, since the agent changed them after both.
+ */
+async function applyOsFigures(apps: Application[]): Promise<void> {
+  if (!apps.length || !hasDb()) return;
+  const { applyLetEdits } = await import("@/lib/let-edits");
+  await applyLetEdits(apps);
 }
 
 /** Application id -> the Propoly deal its push started, newest push winning. */
@@ -985,6 +1004,7 @@ export async function getApplicationById(id: string): Promise<Application | null
   if (rows.length) {
     const one = applyLead(shapeApplication(rows[0]), await leadOverrides().catch(() => new Map<string, string>()));
     await applyAgreedRent([one]).catch(() => null);
+    await applyOsFigures([one]).catch(() => null);
     return one;
   }
 

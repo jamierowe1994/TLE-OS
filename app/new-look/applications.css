@@ -202,3 +202,7 @@
   [data-look="new"].nl-app .nl-rhead-acts { width: 100%; }
   [data-look="new"].nl-app .nl-rhead-acts > .nl-menu-wrap { margin-left: auto; }
 }
+/* A let's figure changed in the OS (lib/let-edits, 1 Nov 2026): who, and what Propoly still has. */
+[data-look="new"] .nl-fact .nl-fact-note { display: flex; flex-direction: column; gap: 3px; font-size: 12px; line-height: 17px; color: var(--muted); }
+[data-look="new"] .nl-fact .nl-fact-differs { color: var(--warning); background: var(--warning-soft); border-radius: 8px; padding: 4px 8px; }
+[data-look="new"] .nl-fact .nl-fact-differs a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
