@@ -171,6 +171,18 @@
 .tsa .pad.has .hint { opacity: 0; }
 .tsa .pad .clr { position: absolute; right: 10px; top: 8px; all: unset; position: absolute; right: 10px; top: 8px; cursor: pointer; font-size: 12px; color: var(--muted); }
 .tsa .typed { height: 150px; border-radius: 14px; background: #fffaf7; border: 1px dashed var(--coral); display: grid; place-items: center; font-family: var(--font-hand), cursive; font-size: 46px; color: var(--ink); }
+/* Upload (Dan Richards, 1 Nov 2026): the pad's box to drop or choose a picture; once read, the paper's own signature box. */
+.tsa .pad.up { display: grid; place-items: center; cursor: pointer; touch-action: auto; transition: background .2s; }
+.tsa .pad.up:hover, .tsa .pad.up.over { background: #fdf1eb; }
+.tsa .pad.up.busy { cursor: progress; }
+.tsa .pad.up .up-say { display: grid; justify-items: center; gap: 4px; padding: 0 18px; text-align: center; color: var(--clay); font-size: 13px; }
+.tsa .pad.up .up-say.busy { display: flex; align-items: center; gap: 8px; }
+.tsa .pad.up .up-say b { font-weight: 500; }
+.tsa .pad.up .up-say small { color: rgba(170, 74, 43, .7); font-size: 12px; line-height: 1.4; max-width: 300px; }
+.tsa .pad.up .up-say .ic { width: 22px; height: 22px; margin-bottom: 2px; }
+.tsa .up-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--coral); border-top-color: transparent; animation: tsa-spin .8s linear infinite; }
+.tsa .up-proof { display: grid; gap: 10px; justify-items: start; }
+.tsa .up-proof .t-sig { width: 100%; box-sizing: border-box; }
 .tsa .saved-sig { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
 .tsa .saved-sig input { accent-color: var(--ink); }
 .tsa .legal { font-size: 12px; color: var(--faint); margin: 12px 0 0; }
