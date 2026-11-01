@@ -147,7 +147,10 @@ export default function TenantCard({ contactId, person, about }: { contactId: st
           </button>
         )}
       </div>
-      {!canEdit && <p className="nl-hint mt-1">Not linked to a tenant record, so their details can&apos;t be changed here.</p>}
+      {/* Named on the home in the OS (lib/home-overrides, 2 Nov 2026): changed where they were named. */}
+      {!canEdit && (id.startsWith("ostenant:")
+        ? <p className="nl-hint mt-1">Named on this home in the OS. Change who lives here, or their details, with Edit on The Details.</p>
+        : <p className="nl-hint mt-1">Not linked to a tenant record, so their details can&apos;t be changed here.</p>)}
       {note && <p className={`nl-meta mt-1 ${note.tone === "bad" ? "text-accent-dark" : ""}`}>{note.text}</p>}
     </div>
   );

@@ -27,6 +27,7 @@ import HomeKeys from "@/components/portfolio/HomeKeys";
 import HomeSource from "@/components/portfolio/HomeSource";
 import ContactBlock from "@/components/ContactBlock";
 import TenantCard from "@/components/new-look/TenantCard";
+import HomeDetails from "@/components/new-look/HomeDetails";
 import HomeLandlords from "@/components/HomeLandlords";
 import { ChangeLandlordButton, ListingChangedLandlord } from "@/components/landlord/ChangeLandlord";
 import { HomeRightToRent } from "@/components/RightToRentField";
@@ -124,8 +125,11 @@ type Visits = { inspections: Inspection[]; due: DueVisit[]; team: Person[]; me: 
 type Tenancy = {
   ready: boolean;
   error?: string | null;
-  tenancy: { startDate: string | null; endDate: string | null; depositId: string | null } | null;
+  /* endKnown false: only the start was put right in the OS and PayProp gave nothing, so no end is not "rolling". */
+  tenancy: { startDate: string | null; endDate: string | null; depositId: string | null; endKnown?: boolean } | null;
   protection: "protected" | "without" | null;
+  /* The dates put right in the OS (lib/home-overrides, 2 Nov 2026), and what PayProp says. */
+  set?: { start: { by: string; at: string; was: string | null } | null; end: { by: string; at: string; was: string | null } | null };
 };
 type Ending = { reviewsDue: DueReview[]; reviewsDone: Review[]; open: OpenMoveOut[]; done: MoveOut[] };
 
@@ -397,11 +401,16 @@ export default function PropertyPage() {
     if (!p) return;
     setNotices({ state: "loading" });
     loadNotices();
-    setTenancy({ state: "loading" });
+  }, [p?.listingId]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* Read again after the details are edited (detailsRev), so new dates show. */
+  const [detailsRev, setDetailsRev] = useState(0);
+  useEffect(() => {
+    if (!p) return;
+    if (!detailsRev) setTenancy({ state: "loading" });
     getJson<Tenancy>(`/api/portfolio/tenancy?listing=${encodeURIComponent(p.listingId)}`)
       .then((j) => setTenancy({ state: "ready", data: j }))
       .catch((e) => setTenancy({ state: "failed", error: e.message }));
-  }, [p?.listingId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [p?.listingId, detailsRev]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── the things you do to a home ────────────────────────────────────── */
   const [action, setAction] = useState<Action | null>(null);
@@ -1057,7 +1066,7 @@ export default function PropertyPage() {
     ];
     const tenancyRow = tenancy.state === "loading" ? "Reading…"
       : tenancy.state === "failed" ? "Not read"
-      : tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? `Ends ${day(tenancy.data.tenancy.endDate)}` : "Rolling") : "Not on record";
+      : tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? `Ends ${day(tenancy.data.tenancy.endDate)}` : tenancy.data.tenancy.endKnown === false ? "Not on record" : "Rolling") : "Not on record";
     const changed = Boolean(landlord && landlord.contactId.startsWith("changed:") && propertyId);
     const jobEmails = landlord?.email && landlord.email.includes("@") ? (
       <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line pt-3" />
@@ -1270,31 +1279,60 @@ export default function PropertyPage() {
                 </button>
               </div>
 
-              <section className="nl-facts">
-                <div className="nl-facts-head">
-                  <h3 className="nl-block-title">The Details</h3>
-                </div>
-                <div className="nl-facts-grid">
-                  {houseView && house && !lets ? (
-                    <div className="nl-fact"><span>Rent{pricedRooms ? `, ${pricedRooms} ${pricedRooms === 1 ? "room" : "rooms"}` : ""}</span><b className={roomRent > 0 ? "" : "is-quiet"}>{roomRent > 0 ? `${money(roomRent)} pcm` : "No room rents yet"}</b></div>
-                  ) : (
-                    <div className="nl-fact"><span>Rent</span><b className={rentLine ? "" : "is-quiet"} title={rentLine ? undefined : noRent}>{rentLine ?? (p.test ? "Test home" : noRent)}</b></div>
-                  )}
-                  <div className="nl-fact"><span>Let type</span><b className={p.letType ? "" : "is-quiet"}>{p.letType ?? "Not set"}</b></div>
-                  <div className="nl-fact"><span>Let since</span><b className={p.letSince ? "" : "is-quiet"}>{p.letSince ? day(p.letSince) : "Not set"}</b></div>
-                  <div className="nl-fact"><span>Tenancy</span><b className={tenancy.state === "ready" && tenancy.data.tenancy ? "" : "is-quiet"}>{tenancyRow}</b></div>
-                  <div className="nl-fact"><span>{roomsOnly ? "Rooms let" : tenants.length === 1 ? "Tenant" : "Tenants"}</span><b className={(roomsOnly ? letRooms.length : tenants.length) ? "" : "is-quiet"}>{roomsOnly && house ? `${letRooms.length} of ${house.rooms.length}` : tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? `None yet, ${comingWhen}` : "None on record"}</b></div>
-                  <div className="nl-fact"><span>On the books since</span><b>{day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince).replace("—", "Not known")}</b></div>
-                </div>
-                {/* The agent, the key numbers and the source: each changeable in place. */}
-                <div className="nl-prop-more">
-                  <HomeAgent propertyId={p.test ? null : p.propertyId} agent={p.agent} movedFrom={p.agentMovedFrom} everything={everything} />
-                  {/* Sean McMahon, 20 Oct 2026: the key numbers, from the key register. */}
-                  {!p.test && <HomeKeys propertyId={p.propertyId} />}
-                  {/* Sean McMahon, 21 Oct 2026: a re-let refused for want of a Source, settable here. */}
-                  {!p.test && p.onRex !== false && <HomeSource propertyId={p.propertyId} />}
-                </div>
-              </section>
+              {/* The Details, fixed until Edit (lib/home-overrides, 2 Nov 2026):
+                  the agent puts the record right here, kept in the OS only. */}
+              <HomeDetails
+                key={String(p.listingId)}
+                listingId={String(p.listingId)}
+                label={houseView && house ? [house.name, house.locality].filter(Boolean).join(", ") : [p.name, p.locality].filter(Boolean).join(", ")}
+                endListingIds={(houseView && house ? house.members : [p]).map((x) => String(x.listingId))}
+                test={Boolean(p.test)}
+                letFieldsOff={houseView && house ? `Pick ${lets ? "a tenant" : "a room"} above to change ${lets ? "their" : "its"} tenancy and tenants.` : null}
+                current={{
+                  service: p.service,
+                  letType: p.letType,
+                  letSince: tenancy.state === "ready" && tenancy.data.tenancy?.startDate ? tenancy.data.tenancy.startDate : p.letSince,
+                  tenancyEnd: tenancy.state === "ready" && tenancy.data.tenancy && tenancy.data.tenancy.endKnown !== false ? tenancy.data.tenancy.endDate : undefined,
+                  tenants,
+                }}
+                marks={p.overridden}
+                tenancySet={tenancy.state === "ready" ? tenancy.data.set ?? null : null}
+                onSaved={() => { setBookRev((n) => n + 1); setDetailsRev((n) => n + 1); }}
+                onEnded={() => setBookRev((n) => n + 1)}
+                rows={[
+                  houseView && house && !lets
+                    ? { key: "rent", label: `Rent${pricedRooms ? `, ${pricedRooms} ${pricedRooms === 1 ? "room" : "rooms"}` : ""}`, text: roomRent > 0 ? `${money(roomRent)} pcm` : "No room rents yet", quiet: roomRent <= 0 }
+                    : { key: "rent", label: "Rent", text: rentLine ?? (p.test ? "Test home" : noRent), quiet: !rentLine, title: rentLine ? undefined : noRent },
+                  { key: "service", label: "Service", text: p.test ? "Test home" : p.service ?? "Not set", quiet: !p.service, field: "service" },
+                  { key: "letType", label: "Let type", text: p.letType ?? "Not set", quiet: !p.letType, field: "letType" },
+                  {
+                    key: "start",
+                    label: "Tenancy start",
+                    text: tenancy.state === "ready" && tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.letSince ? day(p.letSince) : "Not set",
+                    quiet: !(tenancy.state === "ready" && tenancy.data.tenancy?.startDate) && !p.letSince,
+                    field: "tenancyStart",
+                  },
+                  { key: "end", label: "Tenancy end", text: tenancyRow, quiet: tenancyRow === "Not on record" || tenancyRow === "Not read" || tenancyRow === "Reading…", field: "tenancyEnd" },
+                  {
+                    key: "tenants",
+                    label: roomsOnly ? "Rooms let" : tenants.length === 1 ? "Tenant" : "Tenants",
+                    text: roomsOnly && house ? `${letRooms.length} of ${house.rooms.length}` : tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? `None yet, ${comingWhen}` : "None on record",
+                    quiet: !(roomsOnly ? letRooms.length : tenants.length),
+                    field: roomsOnly ? undefined : "tenants",
+                  },
+                  { key: "books", label: "On the books since", text: day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince).replace("—", "Not known") },
+                ]}
+                more={
+                  /* The agent, the key numbers and the source: each changeable in place. */
+                  <div className="nl-prop-more">
+                    <HomeAgent propertyId={p.test ? null : p.propertyId} agent={p.agent} movedFrom={p.agentMovedFrom} everything={everything} />
+                    {/* Sean McMahon, 20 Oct 2026: the key numbers, from the key register. */}
+                    {!p.test && <HomeKeys propertyId={p.propertyId} />}
+                    {/* Sean McMahon, 21 Oct 2026: a re-let refused for want of a Source, settable here. */}
+                    {!p.test && p.onRex !== false && <HomeSource propertyId={p.propertyId} />}
+                  </div>
+                }
+              />
             </div>
 
             {/* How it stands: a line each, read live, each opening its tab. */}
@@ -1473,7 +1511,7 @@ export default function PropertyPage() {
                         <NlFact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? "None yet, a let is on its way in" : "None on record"} />
                         <NlFact label="Rent" value={rentLine ?? noRent} />
                         <NlFact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.letSince ? day(p.letSince) : "-"} />
-                        <NlFact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : "Rolling, no end date") : "-"} />
+                        <NlFact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : tenancy.data.tenancy.endKnown === false ? "-" : "Rolling, no end date") : "-"} />
                         <NlFact label="Deposit" value={tenancy.data.tenancy?.depositId ? `Registered · ${tenancy.data.tenancy.depositId}` : "-"} />
                         <NlFact label="Rent and legal protection" value={tenancy.data.protection === "protected" ? "On" : tenancy.data.protection === "without" ? "Not taken" : "-"} />
                       </dl>
@@ -2172,15 +2210,17 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function TenancyLine({ t, long = false }: { t: { startDate: string | null; endDate: string | null }; long?: boolean }) {
+function TenancyLine({ t, long = false }: { t: { startDate: string | null; endDate: string | null; endKnown?: boolean }; long?: boolean }) {
   const ends = t.endDate ? new Date(`${t.endDate}T12:00:00`) : null;
   const soon = ends ? ends.getTime() - Date.now() < 60 * 86_400_000 : false;
-  if (!long) return <span className={soon ? "font-semibold text-accent-dark" : ""}>{ends ? `Ends ${day(t.endDate)}` : t.startDate ? `Since ${day(t.startDate)}, rolling` : "Rolling"}</span>;
+  /* Only the start is known (put right in the OS, PayProp unread): no "rolling". */
+  const unknownEnd = !ends && t.endKnown === false;
+  if (!long) return <span className={soon ? "font-semibold text-accent-dark" : ""}>{ends ? `Ends ${day(t.endDate)}` : t.startDate ? `Since ${day(t.startDate)}${unknownEnd ? "" : ", rolling"}` : "Rolling"}</span>;
   return (
     <span>
       {t.startDate ? <>Started <b className="font-semibold">{day(t.startDate)}</b></> : "Start not on record"}
       {" · "}
-      {ends ? <span className={soon ? "font-semibold text-accent-dark" : ""}>ends {day(t.endDate)}</span> : <span className="text-muted">rolling, no end date</span>}
+      {ends ? <span className={soon ? "font-semibold text-accent-dark" : ""}>ends {day(t.endDate)}</span> : <span className="text-muted">{unknownEnd ? "end not on record" : "rolling, no end date"}</span>}
     </span>
   );
 }

@@ -6,6 +6,7 @@ import { inheritFromHouse, sliceBook, sliceCounts } from "@/lib/compliance-slice
 import { londonDay, londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { complianceWithoutArchived } from "@/lib/archived-homes";
+import { complianceWithOverrides } from "@/lib/home-overrides";
 import { RULES } from "./staleness";
 import { checkingFor, osCertsFor } from "@/lib/os-certs";
 import { foldOsCerts } from "@/lib/sweep-certs";
@@ -93,7 +94,10 @@ async function store(entry: CachedBook): Promise<void> {
  * not wait minutes on REX. Null when nothing has been built yet.
  */
 export async function heldComplianceBook(): Promise<CachedBook | null> {
-  return memory ?? (await readStored());
+  const held = memory ?? (await readStored());
+  /* The service an agent put right on the home's page (lib/home-overrides),
+     on a copy: the held book itself is never changed by it. */
+  return held ? { ...held, book: await complianceWithOverrides(held.book) } : null;
 }
 
 /**
@@ -234,7 +238,7 @@ export async function getComplianceBook(): Promise<{
   stale: boolean;
 }> {
   const r = await bookAsHeld();
-  return { ...r, book: await complianceWithoutArchived(r.book) };
+  return { ...r, book: await complianceWithoutArchived(await complianceWithOverrides(r.book)) };
 }
 
 async function bookAsHeld(): Promise<{
@@ -326,7 +330,7 @@ export async function certificatesFromBook(subjects: CertSubject[]): Promise<Cer
   }
   if (age >= FRESH_MS || walk) sweep();
 
-  const book = await complianceWithoutArchived(asOfToday(held.book, held.at));
+  const book = await complianceWithoutArchived(await complianceWithOverrides(asOfToday(held.book, held.at)));
   const cut = sliceBook(book, subjects, (iso) => daysUntil(iso));
   const unread: string[] = [];
   if (cut.missing.length) {

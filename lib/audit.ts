@@ -101,6 +101,9 @@ export type AuditKind =
   /* A home archived in the OS, or put back (27 Oct 2026, lib/archived-homes).
      REX is not changed. */
   | "home_archived"
+  /* A home's details put right with Edit on its page: service, let type,
+     tenancy dates, tenants (2 Nov 2026, lib/home-overrides). REX is not changed. */
+  | "home_details_set"
   /* A key number recorded on a home in the OS, or taken off (20 Oct 2026,
      /api/property/keys). REX's key register is not changed. */
   | "home_key_set"
