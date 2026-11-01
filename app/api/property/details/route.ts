@@ -9,10 +9,11 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { heldComplianceBook, patchHeldBook } from "@/lib/compliance-cache";
 import { applyOne, homeFactsFor, isHomeKey, setHomeFacts } from "@/lib/home-facts";
 import { choiceLabel, isChoice, type FactKey } from "@/lib/home-facts-shared";
-import { archiveHome, keysFor } from "@/lib/archived-homes";
+import { archiveHome, keysFor, mayArchiveOwn } from "@/lib/archived-homes";
 import { logChange, overrideLog, overridesFor, saveOverrides } from "@/lib/home-overrides";
 import {
   LET_TYPES,
+  SERVICE_LABEL,
   cleanTenants,
   isDay,
   isServiceLevel,
@@ -33,7 +34,7 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
  * the agent on it, and the office and owners, whose book is the whole
  * business - as themselves, not viewing as somebody. Taking a home off
  * management is the archive (lib/archived-homes), so it is for whoever holds
- * archive:homes: Michael and the owners.
+ * archive:homes (Michael, Susan, the owners) or the home's own agent (2 Nov 2026).
  *
  * Every change goes in the home's log with who, what it was and what it is
  * now. Nothing is written to REX, REX PM, PayProp or Propoly.
@@ -50,7 +51,10 @@ async function homeFor(req: NextRequest, listing: string) {
   const { book } = await managedBookFor(scope.rexUserId);
   const home = book.properties.find((p) => String(p.listingId) === listing) ?? null;
   if (!home) return { error: NextResponse.json({ ok: false, error: "This home isn't in your book." }, { status: 404 }) };
-  return { who, home, book };
+  /* Taking it off management (James, 2 Nov 2026): Michael, Susan and the owners
+     (archive:homes), and the home's own agent - it is in their own book. */
+  const mayEnd = !who.viewingAs && (can(who.actor.role, "archive:homes") || mayArchiveOwn(who.actor.role, scope));
+  return { who, home, book, mayEnd };
 }
 
 async function payload(home: ManagedProperty, canEdit: boolean, canEnd: boolean) {
@@ -85,7 +89,7 @@ export async function GET(req: NextRequest) {
     if ("error" in r) return r.error;
     const actor = r.who.actor!;
     const canEdit = !r.who.viewingAs && !r.home.test;
-    return NextResponse.json(await payload(r.home, canEdit, canEdit && can(actor.role, "archive:homes")), { headers: { "cache-control": "private, no-store" } });
+    return NextResponse.json(await payload(r.home, canEdit, canEdit && r.mayEnd), { headers: { "cache-control": "private, no-store" } });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "The home's details couldn't be read just now.") }, { status: 503 });
   }
@@ -107,6 +111,15 @@ export async function PATCH(req: NextRequest) {
     if (who.viewingAs) return NextResponse.json({ ok: false, error: "You are viewing as somebody else. Stop viewing as them to change this." }, { status: 403 });
     if (home.test) return NextResponse.json({ ok: false, error: "A test home keeps its own details." }, { status: 400 });
     const by = { name: actor.name || actor.email, email: actor.email };
+
+    /* The answer to "Do you need to re-sign a new contract?" after a change of
+       service (James, 2 Nov 2026). No sends nothing and says so on the log;
+       Yes opens the terms to send, and the terms keep their own record. */
+    if (b.contract === "no") {
+      const service = typeof b.service === "string" && isServiceLevel(b.service) ? SERVICE_LABEL[b.service] : home.service;
+      await logChange(home, "contract", null, `No new contract needed${service ? ` for ${service}` : ""}`, by);
+      return NextResponse.json(await payload(home, true, r.mayEnd));
+    }
 
     /* ── the OS's own answers ─────────────────────────────────────────── */
     const held = await overridesFor(home);
@@ -150,7 +163,7 @@ export async function PATCH(req: NextRequest) {
     /* ── no longer managed: the archive ───────────────────────────────── */
     let ended = false;
     if (b.end) {
-      if (!can(actor.role, "archive:homes")) return NextResponse.json({ ok: false, error: "Taking a home off management is for Michael and the owners." }, { status: 403 });
+      if (!r.mayEnd) return NextResponse.json({ ok: false, error: "Taking a home off management is for the home's own agent, Michael, Susan and the owners." }, { status: 403 });
       const asked = Array.isArray(b.end.listingIds) ? [...new Set(b.end.listingIds.map((x) => String(x ?? "").trim()).filter(Boolean))].slice(0, 60) : [listing];
       const homes = book.properties.filter((p) => asked.includes(String(p.listingId)));
       if (!homes.length) return bad("That home isn't in the book.");
@@ -194,7 +207,7 @@ export async function PATCH(req: NextRequest) {
     /* The book again, with the answers on: the page shows what every other screen now shows. */
     const { book: after } = await managedBookFor((await bookScope(req, who)).rexUserId);
     const now = after.properties.find((p) => String(p.listingId) === listing) ?? home;
-    return NextResponse.json(await payload(now, true, can(actor.role, "archive:homes")));
+    return NextResponse.json(await payload(now, true, r.mayEnd));
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That didn't save. Try again in a minute.") }, { status: 503 });
   }

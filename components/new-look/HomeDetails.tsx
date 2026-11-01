@@ -10,9 +10,11 @@ import {
   FIELD_LABEL,
   LET_TYPES,
   SERVICE_CHOICES,
+  SERVICE_LABEL,
   isServiceLevel,
   serviceLevelOf,
   type OverrideField,
+  type ServiceLevel,
   type OverrideLogEntry,
   type OverrideTenant,
 } from "@/lib/home-overrides-shared";
@@ -99,6 +101,7 @@ export default function HomeDetails({
   more,
   onSaved,
   onEnded,
+  onResign,
 }: {
   listingId: string;
   /** "12 High Street, Filton", for the archive's record. */
@@ -118,6 +121,8 @@ export default function HomeDetails({
   more?: ReactNode;
   onSaved: () => void;
   onEnded: () => void;
+  /** Yes to "Do you need to re-sign a new contract?": open the terms to send, on this service. */
+  onResign?: (service: string) => void;
 }) {
   const [data, setData] = useState<Loaded | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -127,6 +132,28 @@ export default function HomeDetails({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [allLog, setAllLog] = useState(false);
+  /* The service just changed: does the landlord sign new terms? Asked once, straight after Save. */
+  const [ask, setAsk] = useState<{ level: ServiceLevel; words: string } | null>(null);
+  const [answering, setAnswering] = useState(false);
+  /* Brought into view once, when it appears. */
+  const askInView = useCallback((el: HTMLDivElement | null) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" }), []);
+
+  async function noContract() {
+    if (!ask) return;
+    setAnswering(true);
+    try {
+      const r = await fetch("/api/property/details", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ listing: listingId, contract: "no", service: ask.level }) });
+      const j = await r.json().catch(() => null);
+      if (!j?.ok) { toast(j?.error ?? "That didn't save. Try again.", "bad"); return; }
+      setData(j);
+      setAsk(null);
+      toast("Noted on the home: no new contract needed");
+    } catch {
+      toast("That didn't go through. Try again.", "bad");
+    } finally {
+      setAnswering(false);
+    }
+  }
 
   const load = useCallback(() => {
     if (test) return;
@@ -204,10 +231,16 @@ export default function HomeDetails({
       const j = await r.json().catch(() => null);
       if (!j?.ok) { setErr(j?.error ?? "That didn't save. Try again in a minute."); return; }
       if (j.ended) {
-        toast("Taken off management. It is in Portfolio, Archive, to put back");
+        toast("Taken off management. It can be put back from the home's page");
         stop();
         onEnded();
         return;
+      }
+      /* A new service: ask straight away whether the landlord signs new terms (James, 2 Nov 2026). */
+      if ("service" in body && onResign) {
+        const level = typeof body.service === "string" ? body.service : serviceLevelOf(markOf("service")?.was ?? null);
+        const words = level && isServiceLevel(level) ? SERVICE_LABEL[level] : null;
+        if (words && level !== start?.service) setAsk({ level: level as ServiceLevel, words });
       }
       setData(j);
       stop();
@@ -299,6 +332,21 @@ export default function HomeDetails({
 
       {!editing || !draft ? (
         <>
+          {/* Straight after a change of service (James, 2 Nov 2026), first thing under the title. */}
+          {ask && (
+            <div ref={askInView} className="nl-home-ask" role="dialog" aria-label="Do you need to re-sign a new contract?">
+              <p className="nl-strong">Do you need to re-sign a new contract?</p>
+              <p className="nl-hint">The service is now {ask.words}. If the landlord&apos;s signed terms say otherwise, send new ones on {ask.words}: they replace the old ones once signed.</p>
+              <div className="nl-home-ask-acts">
+                <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" disabled={answering} onClick={() => void noContract()}>
+                  {answering ? "Saving…" : "No"}
+                </button>
+                <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={answering} onClick={() => { const w = ask.words; setAsk(null); onResign?.(w); }}>
+                  Yes, send new terms
+                </button>
+              </div>
+            </div>
+          )}
           <div className="nl-facts-grid">
             {shown.map((r) => (
               <div key={r.key} className="nl-fact">
@@ -375,7 +423,7 @@ export default function HomeDetails({
               </div>,
               { wide: true, off: letFieldsOff, hint: letFieldsOff ? null : "Only if the record names the wrong people. To change a tenant's number or email, use Edit on their card." })}
 
-            {/* No longer managed is the archive (lib/archived-homes): Michael and the owners. */}
+            {/* No longer managed is the archive (lib/archived-homes): the home's own agent, Michael, Susan and the owners (2 Nov 2026). */}
             {field(null, "Management",
               data?.canEnd ? (
                 <FieldSelect
@@ -387,7 +435,7 @@ export default function HomeDetails({
                   ]}
                 />
               ) : (
-                <p className="nl-hint">Managed by us. Taking a home off management is for Michael and the owners: ask them, and add a note saying why.</p>
+                <p className="nl-hint">Managed by us. Taking a home off management is for its own agent, Michael, Susan and the owners: ask one of them, and add a note saying why.</p>
               ),
               { wide: true })}
 
@@ -398,7 +446,7 @@ export default function HomeDetails({
                   <input value={draft.reason} onChange={(e) => set("reason", e.target.value)} placeholder="Sold, management ended, landlord took it back..." maxLength={300} aria-label="Why it is no longer managed" />
                 </div>
                 <small className="nl-fact-was">
-                  It comes off Portfolio, inspections, the compliance desk, the rent figures and search for everyone{endListingIds.length > 1 ? ", every room with it" : ""}. Nothing is deleted, and it can be put back from Portfolio, Archive.
+                  It comes off Portfolio, inspections, the compliance desk, the rent figures and search for everyone{endListingIds.length > 1 ? ", every room with it" : ""}. Nothing is deleted, and it can be put back from the home&apos;s page.
                 </small>
               </div>
             )}

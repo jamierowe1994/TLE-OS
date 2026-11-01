@@ -7,6 +7,7 @@ import { testHomesFor } from "@/lib/test-overlay";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 import { can } from "@/lib/roles";
+import { mayArchiveOwn } from "@/lib/archived-homes";
 
 /**
  * The managed book for the Portfolio screen.
@@ -61,7 +62,9 @@ export async function GET(req: NextRequest) {
          An owner viewing as somebody sees what they would. */
       byAgent: scope.everything && Boolean(who?.actor && !who.viewingAs && can(who.actor.role, "admin:open")),
       /* Archive an old home (lib/archived-homes, 27 Oct 2026): Michael and the owners, as themselves. */
-      canArchive: Boolean(who?.actor && !who.viewingAs && can(who.actor.role, "archive:homes")),
+      /* James, 2 Nov 2026: the home's own agent may take it off too, on their own book only
+         (lib/archived-homes mayArchiveOwn). The office, whose book is the whole business, may not. */
+      canArchive: Boolean(who?.actor && !who.viewingAs && (can(who.actor.role, "archive:homes") || mayArchiveOwn(who.actor.role, scope))),
       ...book,
       ...(tests.length ? { properties: [...tests, ...book.properties] } : {}),
       ageMs,
