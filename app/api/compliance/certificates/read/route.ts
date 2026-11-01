@@ -35,10 +35,11 @@ export async function POST(req: NextRequest) {
   if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "That file is over 12MB, too big to read the dates off. Type them in below." }, { status: 413 });
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  const name = (file.name || "").toLowerCase();
-  const isPdf = file.type === "application/pdf" || name.endsWith(".pdf") || bytes.subarray(0, 4).toString() === "%PDF";
-  const media = isPdf ? "application/pdf" : /\.(jpe?g)$/.test(name) ? "image/jpeg" : /\.png$/.test(name) ? "image/png" : /\.webp$/.test(name) ? "image/webp" : null;
-  if (!media) return NextResponse.json({ ok: false, error: "Only PDFs and images can be read." }, { status: 415 });
+  const media = sniff(bytes);
+  if (media === "heic") {
+    return NextResponse.json({ ok: false, error: "That photo is a HEIC (the iPhone's own format), which can't be read. Save it as a JPEG or PDF and attach that, or fill in the dates by hand." }, { status: 415 });
+  }
+  if (!media) return NextResponse.json({ ok: false, error: "Only PDFs and photos can be read. Save it as a JPEG or PDF and attach that, or fill in the dates by hand." }, { status: 415 });
 
   try {
     return NextResponse.json({ ok: true, ...(await readCertificate(bytes, media, expect)) });
@@ -49,4 +50,21 @@ export async function POST(req: NextRequest) {
     /* Out of credit or busy is already one plain sentence (lib/ai-outage). */
     return NextResponse.json({ ok: false, error: publicError(e, "The reader couldn't read this one. Type the dates in below.") }, { status: 500 });
   }
+}
+
+/**
+ * What the file really is, from its first bytes - not its name (1 Nov 2026: a
+ * .jfif, a .heic or a phone photo with no extension at all was turned away as
+ * "Only PDFs and images can be read" because the type was picked off the
+ * extension alone). HEIC is named so the screen can say what to do with it.
+ */
+function sniff(b: Buffer): "application/pdf" | "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "heic" | null {
+  if (b.subarray(0, 1024).includes("%PDF")) return "application/pdf";
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b[0] === 0x89 && b.subarray(1, 4).toString("latin1") === "PNG") return "image/png";
+  if (b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  if (b.subarray(0, 4).toString("latin1") === "GIF8") return "image/gif";
+  /* HEIC and HEIF: "ftyp" at byte 4, then the brand. */
+  if (b.subarray(4, 8).toString("latin1") === "ftyp" && /^(heic|heix|hevc|hevx|heim|heis|mif1|msf1)/.test(b.subarray(8, 12).toString("latin1"))) return "heic";
+  return null;
 }

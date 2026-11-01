@@ -65,7 +65,7 @@ export async function readCertificate(
   const block: Anthropic.ContentBlockParam =
     media === "application/pdf"
       ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: bytes.toString("base64") } }
-      : { type: "image", source: { type: "base64", media_type: media as "image/jpeg" | "image/png" | "image/webp", data: bytes.toString("base64") } };
+      : { type: "image", source: { type: "base64", media_type: media as "image/jpeg" | "image/png" | "image/webp" | "image/gif", data: bytes.toString("base64") } };
 
   const res = await aiCreate("cert-reader", {
     max_tokens: 4000,
