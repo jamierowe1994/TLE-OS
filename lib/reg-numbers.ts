@@ -8,14 +8,31 @@
 /** The most a home is given room for: joint owners, rarely more than two. */
 export const MAX_REG_NUMBERS = 4;
 
-/** "123/230/1, 456/230/2" -> ["123/230/1", "456/230/2"]. */
-export function regNumbers(value: string | null | undefined): string[] {
-  return (value ?? "").split(/[,;\n]+/).map((x) => x.replace(/\s+/g, " ").trim()).filter(Boolean);
+/**
+ * Each number once, in the order given (1 Nov 2026: listing 855923 held
+ * "186196/290/23410, 186196/290/23410"). The same number typed with other
+ * spacing or case is the same number.
+ */
+function once(list: string[]): string[] {
+  const seen = new Set<string>();
+  return list
+    .map((x) => x.replace(/\s+/g, " ").trim())
+    .filter((x) => {
+      const k = x.replace(/\s+/g, "").toUpperCase();
+      if (!x || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
 }
 
-/** The numbers as they are kept and written on the advert. */
+/** "123/230/1, 456/230/2" -> ["123/230/1", "456/230/2"]. A number kept twice reads once. */
+export function regNumbers(value: string | null | undefined): string[] {
+  return once((value ?? "").split(/[,;\n]+/));
+}
+
+/** The numbers as they are kept and written on the advert, each once. */
 export function joinRegNumbers(list: string[]): string | null {
-  const kept = list.map((x) => x.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const kept = once(list);
   return kept.length ? kept.join(", ") : null;
 }
 

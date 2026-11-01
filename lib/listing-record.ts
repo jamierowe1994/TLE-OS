@@ -73,7 +73,8 @@ export async function recordForProperty(rexPropertyId: string | null, place: { p
     const pick = (field: string) =>
       facts.find((f) => f.field === field && f.property_id === osId && f.value) ?? facts.find((f) => f.field === field && f.value) ?? null;
     const larn = pick("landlord_registration");
-    const larnValue = larn?.value && /\d/.test(larn.value) ? larn.value.trim() : null;
+    /* Each number once, however it was kept (lib/reg-numbers; listing 855923 held one twice). */
+    const larnValue = larn?.value && /\d/.test(larn.value) ? joinRegNumbers(regNumbers(larn.value)) : null;
     const epcRow = pick("epc_rating");
     const epc = parseEpc(epcRow?.value ?? null);
     const record: ListingRecord = {
