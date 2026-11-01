@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import TermsPaper, { Blank, type PaperPerson } from "@/components/terms/TermsPaper";
 import { isScottish } from "@/lib/property-flags";
+import { signatureFromPhoto } from "@/lib/terms/signature-photo";
 import { edition, editionFor } from "@/lib/terms/catalogue";
 import { guessService, servicesFor } from "@/lib/terms/services";
 import type { Country, LandlordDetails, TermsValues } from "@/lib/terms/types";
@@ -26,8 +27,9 @@ import type { Country, LandlordDetails, TermsValues } from "@/lib/terms/types";
  *   1. Check the details: who signs, the property, which country's terms, the
  *      service and fees, and each landlord's home address (it goes on the
  *      contract; "Send without it" leaves it for them to add when they sign).
- *   2. Sign your half: their saved signature, drawn, or typed in a hand. It is
- *      always sent as a PNG, the only thing DocuSeal will seal.
+ *   2. Sign your half: their saved signature, drawn, typed in a hand, or a photo
+ *      of their real one (lib/terms/signature-photo). It is always sent as a
+ *      PNG, the only thing DocuSeal will seal.
  *   3. Send: the email that goes, as it goes. Nothing to type into it: the
  *      email is the standard one from lib/email/tle-emails.
  *
@@ -112,6 +114,7 @@ const PATHS = {
   check: "M5 12.5l4.5 4.5L19 7.5",
   mail: "M4 6h16v12H4zM4 7l8 6 8-6",
   pen: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
+  up: "M12 15V4M7.5 8.5L12 4l4.5 4.5M5 15v5h14v-5",
   link: "M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1",
 } as const;
 const Ic = ({ k, w = 1.7 }: { k: keyof typeof PATHS; w?: number }) => (
@@ -121,6 +124,8 @@ const Ic = ({ k, w = 1.7 }: { k: keyof typeof PATHS; w?: number }) => (
 );
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/* What the Upload picker offers: PNG or JPEG, and what a phone hands over (an iPhone's HEIC, which Safari reads). */
+const PHOTO_TYPES = "image/png,image/jpeg,image/heic,image/heif,image/webp";
 const firstOf = (name: string) => name.trim().split(/\s+/)[0] || "";
 const listOf = (xs: string[]) => (xs.length < 2 ? xs[0] ?? "" : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
@@ -286,7 +291,7 @@ export default function TermsSendScreen({
 
   /* ── The signature (step 2) ── */
   const [saved, setSaved] = useState<string | null>(null);
-  const [mode, setMode] = useState<"saved" | "draw" | "type">("draw");
+  const [mode, setMode] = useState<"saved" | "draw" | "type" | "upload">("draw");
   const [sig, setSig] = useState<string | null>(null);
   const [keep, setKeep] = useState(true);
   const [keepUsed, setKeepUsed] = useState(false);
@@ -314,6 +319,24 @@ export default function TermsSendScreen({
   const signBtn = useRef<HTMLButtonElement | null>(null);
   const ink = useRef<{ drawing: boolean; last: [number, number] | null; box: [number, number, number, number] | null; dpr: number }>({ drawing: false, last: null, box: null, dpr: 1 });
   const [inked, setInked] = useState(false);
+
+  /* Upload (Dan Richards, 1 Nov 2026): a photo or scan of their real signature, made
+     into the same transparent PNG cut to the ink that the pad makes. */
+  const upBox = useRef<HTMLLabelElement | null>(null);
+  const [upImg, setUpImg] = useState<string | null>(null);
+  const [upBusy, setUpBusy] = useState(false);
+  const [upOver, setUpOver] = useState(false);
+  async function takePhoto(file: File | null | undefined) {
+    if (!file || upBusy) return;
+    setSignProblem(null);
+    setUpBusy(true);
+    /* A frame first, so "Reading your signature" shows before the canvas work holds the page. */
+    await wait(30);
+    const r = await signatureFromPhoto(file).catch(() => ({ ok: false as const, problem: "That picture couldn't be read here. Try another, or draw your signature instead." }));
+    setUpBusy(false);
+    if (r.ok) setUpImg(r.image);
+    else setSignProblem(r.problem);
+  }
 
   /* The design's mountPad: the canvas sized to the pad at the screen's pixel density. */
   const mountPad = useCallback(() => {
@@ -415,6 +438,13 @@ export default function TermsSendScreen({
     else if (mode === "type") {
       if (!agentName) return setSignProblem("Your name hasn't loaded yet. Give it a moment.");
       img = await typedSignature(agentName);
+    } else if (mode === "upload") {
+      if (!upImg) {
+        shake(upBox.current);
+        shake(signBtn.current);
+        return;
+      }
+      img = upImg;
     } else {
       if (!ink.current.box) {
         shake(padBox.current);
@@ -425,7 +455,7 @@ export default function TermsSendScreen({
     }
     if (!img) return setSignProblem("That signature couldn't be made here. Try drawing it instead.");
     setSig(img);
-    setKeepUsed(mode === "draw" && keep);
+    setKeepUsed((mode === "draw" || mode === "upload") && keep);
     setStep(2);
     flash("ts-sig-agent");
   }
@@ -863,6 +893,7 @@ export default function TermsSendScreen({
         ) : null}
         <button type="button" className={mode === "draw" ? "on" : ""} onClick={() => { modeTouched.current = true; setMode("draw"); }}>Draw</button>
         <button type="button" className={mode === "type" ? "on" : ""} onClick={() => { modeTouched.current = true; setMode("type"); }}>Type</button>
+        <button type="button" className={mode === "upload" ? "on" : ""} onClick={() => { modeTouched.current = true; setMode("upload"); setSignProblem(null); }}>Upload</button>
       </div>
       {mode === "saved" && saved ? (
         <>
@@ -874,6 +905,50 @@ export default function TermsSendScreen({
         </>
       ) : mode === "type" ? (
         <div className="typed">{agentName || "…"}</div>
+      ) : mode === "upload" ? (
+        <>
+          {upImg ? (
+            /* As it will sit on the contract: the paper's own signature box, in the paper's own styles. */
+            <div className="tsp up-proof">
+              <div className="t-sig done">
+                <small>Signed for and on behalf of The Letting Experts</small>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <div className="ink"><img src={upImg} alt="Your uploaded signature" /></div>
+                <dl className="t-tbl">
+                  <div><dt>Name</dt><dd>{agentName || "…"}</dd></div>
+                  <div><dt>Date</dt><dd>{today}</dd></div>
+                </dl>
+              </div>
+              <label className="chg">
+                Choose another picture
+                <input type="file" accept={PHOTO_TYPES} hidden onChange={(e) => { void takePhoto(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+            </div>
+          ) : (
+            <label
+              className={`pad up${upOver ? " over" : ""}${upBusy ? " busy" : ""}`}
+              ref={upBox}
+              onDragOver={(e) => { e.preventDefault(); setUpOver(true); }}
+              onDragLeave={() => setUpOver(false)}
+              onDrop={(e) => { e.preventDefault(); setUpOver(false); void takePhoto(e.dataTransfer.files?.[0]); }}
+            >
+              <input type="file" accept={PHOTO_TYPES} hidden disabled={upBusy} onChange={(e) => { void takePhoto(e.target.files?.[0]); e.target.value = ""; }} />
+              {upBusy ? (
+                <span className="up-say busy"><i className="up-spin" aria-hidden /> Reading your signature…</span>
+              ) : (
+                <span className="up-say">
+                  <Ic k="up" />
+                  <b>Choose a photo or scan of your signature</b>
+                  <small>PNG or JPEG. Sign in dark pen on plain white paper - the paper is taken out for you.</small>
+                </span>
+              )}
+            </label>
+          )}
+          <label className="saved-sig">
+            <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
+            Save it for next time
+          </label>
+        </>
       ) : (
         <>
           <div className={`pad${inked ? " has" : ""}`} ref={padBox}>
