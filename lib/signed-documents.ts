@@ -1,6 +1,6 @@
 import "server-only";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
+import { R2_BUCKET, r2Configured, rexReadyKey, safeName, withR2 } from "@/lib/r2";
 import { hasDb, q } from "@/lib/db";
 
 /**
@@ -206,8 +206,10 @@ export async function pushToRex(
   const row = rows[0];
 
   try {
+    /* A .jfif goes as a .jpg, or Upload refuses it (lib/r2 rexReadyKey). */
+    const rexKey = await rexReadyKey(row.r2_key);
     const url = await withR2((client) =>
-      getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: row.r2_key }), {
+      getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: rexKey }), {
         expiresIn: 3600,
       })
     );

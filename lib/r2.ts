@@ -1,4 +1,4 @@
-import { S3Client } from "@aws-sdk/client-s3";
+import { CopyObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 /**
  * Cloudflare R2, spoken to over the S3 protocol.
@@ -264,4 +264,56 @@ export function safeName(name: string): string {
 export function keyIsOurs(key: string): boolean {
   if (!key || key.includes("..") || key.startsWith("/")) return false;
   return Object.values(SCOPES).some((s) => key.startsWith(`${s.prefix}/`));
+}
+
+/* --------------------------------------------------------------------------
+   JPEGs under another name.
+
+   .jfif, .jpe, .pjpeg and .pjp are all plain JPEGs; Windows saves photos as
+   .jfif by default. REX's Upload judges a file by the extension on the link
+   and refuses these ("invalid extension 'jfif'", 1 Nov 2026: Richard
+   Callow's gas certificate "GSR 24.07.2027.jfif" never reached REX). So a
+   file is kept as .jpg from the moment it arrives, and one already kept
+   under the old name is copied to a .jpg beside it before REX is handed a
+   link.
+-------------------------------------------------------------------------- */
+
+const JPEG_ALIAS = /\.(jfif|jpe|pjpeg|pjp)$/i;
+
+/** "GSR 24.07.2027.jfif" -> "GSR 24.07.2027.jpg"; anything else as it was. */
+export function jpegName(name: string): string {
+  return name.replace(JPEG_ALIAS, ".jpg");
+}
+
+/** The content type to keep a file under: a JPEG alias is image/jpeg whatever the browser said. */
+export function keptType(name: string, type: string | null | undefined): string {
+  return JPEG_ALIAS.test(name) || /^image\/(pjpeg|jfif)$/i.test(type ?? "") ? "image/jpeg" : type || "";
+}
+
+/**
+ * The key to give REX a link to. A key ending in a JPEG alias is copied once
+ * to the same key ending .jpg (kept, so the next push finds it) and that is
+ * the one returned; every other key comes straight back.
+ */
+export async function rexReadyKey(key: string): Promise<string> {
+  if (!JPEG_ALIAS.test(key)) return key;
+  const jpg = jpegName(key);
+  const there = await withR2((c) => c.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: jpg }))).then(() => true, () => false);
+  if (!there) {
+    /* Its own metadata travels with it (the original name, the property). */
+    const src = await withR2((c) => c.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }))).catch(() => null);
+    await withR2((c) =>
+      c.send(
+        new CopyObjectCommand({
+          Bucket: R2_BUCKET,
+          Key: jpg,
+          CopySource: `${R2_BUCKET}/${key.split("/").map(encodeURIComponent).join("/")}`,
+          ContentType: "image/jpeg",
+          Metadata: src?.Metadata ?? {},
+          MetadataDirective: "REPLACE",
+        })
+      )
+    );
+  }
+  return jpg;
 }

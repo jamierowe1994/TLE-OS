@@ -1,6 +1,6 @@
 import "server-only";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
+import { R2_BUCKET, r2Configured, rexReadyKey, withR2 } from "@/lib/r2";
 import { rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { switchOn } from "@/lib/switches";
 import { getApplications } from "@/lib/applications";
@@ -12,6 +12,7 @@ import { getCase, recordRexPush } from "@/lib/plc-store";
 import { checkById, type CheckId, type PlcCase, type PlcDocument, type PushResult, type RexPush } from "@/lib/plc";
 import { isTestCase } from "@/lib/test-guard";
 import { hasDb, q } from "@/lib/db";
+import { CERT_LIFE_MONTHS, NO_EXPIRY_TYPES } from "@/lib/cert-life";
 
 /**
  * The approved pack, into REX's compliance table.
@@ -74,9 +75,10 @@ function docDescription(type: string, expiry: string, name: string): string {
   return `${TYPE_WORDS[type] ?? type} - expires ${expiry} - ${plainName(name)}`.slice(0, 200);
 }
 
-const LIFE_MONTHS: Partial<Record<string, number>> = { eicr: 60, gas_safety: 12, epc: 120, legionella_risk_assessment: 24, portable_appliance_testing: 12, emergency_lighting_fire_exit: 12 };
-/** REX types whose entry has a tested or checked date and no expiry field. */
-const NO_EXPIRY = new Set(["portable_appliance_testing", "emergency_lighting_fire_exit"]);
+/** Each type's usual life, and the REX types whose entry has a tested or checked
+ *  date and no expiry field: one table with the property file's form (lib/cert-life). */
+const LIFE_MONTHS = CERT_LIFE_MONTHS;
+const NO_EXPIRY = NO_EXPIRY_TYPES;
 
 /** Which REX compliance type a check writes, by check and then by filename. */
 export function rexTypeFor(checkId: CheckId, name: string): string | null {
@@ -125,7 +127,9 @@ async function presigned(doc: PlcDocument): Promise<string> {
   if (doc.placeholder) throw new Error("recorded by name only, never stored");
   if (!r2Configured) throw new Error("file storage isn't configured here");
   const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
-  return withR2((client) => getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: doc.key }), { expiresIn: 3600 }));
+  /* A .jfif goes to REX as a .jpg, or Upload refuses it (lib/r2 rexReadyKey). */
+  const rexKey = await rexReadyKey(doc.key);
+  return withR2((client) => getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: rexKey }), { expiresIn: 3600 }));
 }
 
 /**

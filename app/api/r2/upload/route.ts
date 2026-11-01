@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import {
   isScope,
+  jpegName,
+  keptType,
   R2_BUCKET,
   r2Configured,
   r2Problem,
@@ -75,7 +77,9 @@ export async function POST(req: NextRequest) {
       { status: 413 }
     );
   }
-  if (!(scope.types as readonly string[]).includes(file.type)) {
+  /* A .jfif is a JPEG and is kept as one, or REX refuses it later (lib/r2 jpegName). */
+  const type = keptType(file.name, file.type);
+  if (!(scope.types as readonly string[]).includes(type)) {
     return NextResponse.json(
       { ok: false, error: `${file.type || "That file type"} isn't allowed here.` },
       { status: 415 }
@@ -91,7 +95,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const clean = safeName(file.name);
+  const clean = safeName(jpegName(file.name));
   const key = `${scope.prefix}/${ref}/${Date.now()}-${clean}`;
   const body = new Uint8Array(await file.arrayBuffer());
 
@@ -102,7 +106,7 @@ export async function POST(req: NextRequest) {
           Bucket: R2_BUCKET,
           Key: key,
           Body: body,
-          ContentType: file.type,
+          ContentType: type,
           // The original name, kept for display without it having to survive
           // the trip through the key.
           Metadata: { "original-name": encodeURIComponent(file.name) },
@@ -122,7 +126,7 @@ export async function POST(req: NextRequest) {
     key,
     name: file.name,
     size: file.size,
-    type: file.type,
+    type,
     url: `/api/r2/file?key=${encodeURIComponent(key)}`,
   });
 }

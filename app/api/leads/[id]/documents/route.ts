@@ -3,7 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { leadAccess } from "@/lib/lead-access";
 import { hasDb } from "@/lib/db";
 import { addDoc, docsFor, docToRex, updateDoc, type DocRexResult } from "@/lib/lead-documents";
-import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { R2_BUCKET, jpegName, keptType, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
 import { DOC_MIME, DOC_TYPES } from "@/lib/doc-types";
 
 /**
@@ -74,20 +74,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       { status: 413 }
     );
   }
-  if (!DOC_MIME.includes(file.type) && !/\.docx?$/i.test(file.name)) {
+  /* A .jfif is a JPEG and is kept as one, or REX refuses it later (lib/r2 jpegName). */
+  const fileName = jpegName(file.name);
+  const mime = keptType(file.name, file.type);
+  if (!DOC_MIME.includes(mime) && !/\.docx?$/i.test(file.name)) {
     return NextResponse.json({ ok: false, error: "Only a PDF, a photo or a Word document can go here." }, { status: 415 });
   }
   if (!r2Configured) {
     return NextResponse.json({ ok: false, error: "Storage isn't configured on this environment." }, { status: 503 });
   }
 
-  const key = `${scope.prefix}/lead-${safeName(id) || "unfiled"}/${Date.now()}-${safeName(file.name)}`;
+  const key = `${scope.prefix}/lead-${safeName(id) || "unfiled"}/${Date.now()}-${safeName(fileName)}`;
   try {
     const body = new Uint8Array(await file.arrayBuffer());
     await withR2((client) =>
       client.send(
         new PutObjectCommand({
-          Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type,
+          Bucket: R2_BUCKET, Key: key, Body: body, ContentType: mime,
           Metadata: { "original-name": encodeURIComponent(file.name) },
         })
       )
@@ -99,7 +102,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const who = subject ?? actor;
   const doc = await addDoc({
-    leadId: id, name: ownName || file.name, tag, r2Key: key, mime: file.type, sizeBytes: file.size,
+    leadId: id, name: ownName || fileName, tag, r2Key: key, mime, sizeBytes: file.size,
     byId: who.id, byName: who.name || who.email,
   });
   const rex = await toRex({ actorId: actor.id, viewingAsOther: !!subject && subject.id !== actor.id }, { leadId: id, docId: doc.id, contactId });

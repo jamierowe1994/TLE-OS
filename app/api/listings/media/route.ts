@@ -6,7 +6,7 @@ import { record } from "@/lib/audit";
 import { forgetListing, readListingDetails } from "@/lib/listing-details";
 import { gateListingWrite, listingIsTheirs } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
-import { R2_BUCKET, withR2 } from "@/lib/r2";
+import { R2_BUCKET, rexReadyKey, withR2 } from "@/lib/r2";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 
@@ -63,7 +63,9 @@ export async function POST(req: NextRequest) {
     }
 
     const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
-    const url = await withR2((client) => getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }), { expiresIn: 900 }));
+    /* A .jfif goes as a .jpg, or Upload refuses it (lib/r2 rexReadyKey). */
+    const rexKey = await rexReadyKey(key);
+    const url = await withR2((client) => getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: rexKey }), { expiresIn: 900 }));
     const up = await rexCall("Upload", "uploadFileFromUrl", { url });
     const uri = (up.result as { uri?: string } | undefined)?.uri;
     if (!up.ok || !uri) return NextResponse.json({ ok: false, error: "That file would not upload. Try a JPEG or PNG." }, { status: 502 });
