@@ -40,6 +40,8 @@ export interface DocsProperty {
   headline: string;
   allInDate: boolean;
   certs: DocRow[];
+  /** The certificates could not be read just now: said so, not "none" (1 Nov 2026). */
+  unavailable?: boolean;
 }
 
 export interface DocsView {
@@ -143,6 +145,7 @@ export async function loadLandlordDocuments(me: LandlordAccount, pick?: string |
       image: p.image,
       headline: comp ? comp.headline : "Being read from your file",
       allInDate: comp?.allInDate ?? true,
+      ...(comp?.unavailable ? { unavailable: true } : {}),
       certs: (comp?.certs ?? []).map((c) => ({
         /* No em dashes in front of a customer. */
         title: c.label.replace(/\s+—\s+/g, " - "),

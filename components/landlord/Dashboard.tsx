@@ -405,7 +405,11 @@ export default function LandlordDashboard({
               Six rows of certificate names is a list a landlord reads once;
               "2 of 6" is the only line most of them ever need, and the page
               behind it holds the detail. */}
-          <DocsSummary v={v} />
+          {v.documentsUnavailable ? (
+            <p className="mt-3 text-[13px] leading-snug text-muted">{v.documentsUnavailable}</p>
+          ) : (
+            <DocsSummary v={v} />
+          )}
 
           <ul className="mt-4 hidden divide-y divide-line/50 sm:block">
             {v.documents.map((d) => (
@@ -568,8 +572,9 @@ function DocsSummary({ v }: { v: LandlordView }) {
   );
 }
 
-function Ring({ pct }: { pct: number }) {
-  const p = Math.max(0, Math.min(100, Math.round(pct)));
+function Ring({ pct }: { pct: number | null }) {
+  /* No figure when the certificates it is worked from could not be read. */
+  const p = pct == null ? 0 : Math.max(0, Math.min(100, Math.round(pct)));
   const r = 40;
   const c = 2 * Math.PI * r;
   return (
@@ -584,10 +589,11 @@ function Ring({ pct }: { pct: number }) {
           stroke="var(--accent-dark)"
           strokeWidth="8"
           strokeLinecap="round"
+          strokeOpacity={pct == null ? 0 : 1}
           strokeDasharray={`${(p / 100) * c} ${c}`}
         />
       </svg>
-      <p className="figures absolute inset-0 flex items-center justify-center text-[22px]">{p}%</p>
+      <p className="figures absolute inset-0 flex items-center justify-center text-[22px]">{pct == null ? "-" : `${p}%`}</p>
     </div>
   );
 }

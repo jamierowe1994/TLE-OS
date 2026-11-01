@@ -267,6 +267,9 @@ export interface LandlordView {
   };
   steps: ViewStep[];
   documents: ViewDocument[];
+  /** Said in place of the documents when the certificates could not be read
+   *  just now (1 Nov 2026) - an empty list there would read as "none". */
+  documentsUnavailable?: string;
   /** Offers on the property, newest first. Absent before marketing. */
   offers?: ViewOffer[];
   /**
@@ -298,7 +301,8 @@ export interface LandlordView {
   tenancy?: ViewTenancy | null;
   /** Maintenance in one line, once the property is let. */
   maintenance?: ViewMaintenance | null;
-  snapshot: { readinessPct: number; note: string; lines: Array<[string, string]> };
+  /** readinessPct is null when the certificates it is worked from could not be read. */
+  snapshot: { readinessPct: number | null; note: string; lines: Array<[string, string]> };
   activity: ViewActivity[];
   messages?: ViewMessage[];
   agent: { name: string; title?: string | null; phone?: string | null; email?: string | null; photo?: string | null } | null;
