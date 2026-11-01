@@ -22,7 +22,7 @@ import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import { searchMatches } from "@/lib/search-match";
 import { useNoteVisit } from "@/lib/recent-visits";
-import BoardSearch, { useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
+import BoardSearch, { overviewQuery, useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
 
 /**
  * Inspections: the visits we owe the book, and the permission that lets us in.
@@ -156,7 +156,7 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
   };
 
   const load = useCallback(() => {
-    fetch(embedded ? "/api/inspections?overview=1" : "/api/inspections", { cache: "no-store" })
+    fetch(embedded ? `/api/inspections?${overviewQuery()}` : "/api/inspections", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (j.ok) { setData(j); setError(null); } else setError(j.error ?? "Could not read the inspections."); })
       .catch(() => setError("Could not read the inspections."));

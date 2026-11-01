@@ -4,7 +4,7 @@ import { forgetNotices } from "@/lib/portfolio-notice";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { widenForOverview } from "@/lib/overview-access";
-import { scopeFor } from "@/lib/scope";
+import { agentBookOf, scopeFor } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 import { getComplianceBook } from "@/lib/compliance-cache";
@@ -66,7 +66,8 @@ export async function GET(req: NextRequest) {
     bookError = "REX isn't connected on this environment.";
   }
 
-  const me = ((subject ?? actor).name || "").trim().toLowerCase();
+  /* An agent picked on the Overview: their tasks by name, not the viewer's. */
+  const me = (agentBookOf(req)?.name ?? ((subject ?? actor).name || "")).trim().toLowerCase();
   const mine = scope.rexUserId ? new Set(book.map((p) => String(p.propertyId ?? "")).filter(Boolean)) : null;
   const isMine = (rexPropertyId: string | null, who: string | undefined) =>
     !mine || (rexPropertyId && mine.has(rexPropertyId)) || (me && (who ?? "").trim().toLowerCase() === me);

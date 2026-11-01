@@ -10,7 +10,7 @@ import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import type { DueReview, Review, ReviewRules } from "@/lib/tenancy-reviews";
 import { searchMatches } from "@/lib/search-match";
-import BoardSearch, { useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
+import BoardSearch, { overviewQuery, useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
 
 /**
  * Tenancy reviews (1 Oct 2026). See lib/tenancy-reviews.
@@ -86,7 +86,7 @@ export default function TenancyReviewsBoard({ embedded = false, onInnerOpen }: B
   useReportInner(!!recording, onInnerOpen);
 
   const load = useCallback(() => {
-    fetch(embedded ? "/api/tenancy-reviews?overview=1" : "/api/tenancy-reviews", { cache: "no-store" })
+    fetch(embedded ? `/api/tenancy-reviews?${overviewQuery()}` : "/api/tenancy-reviews", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (j.ok) { setData(j); setError(null); } else setError(j.error ?? "Could not read the tenancy reviews."); })
       .catch(() => setError("Could not read the tenancy reviews."));

@@ -61,8 +61,25 @@ export function grantWholeBusiness(req: NextRequest): NextRequest {
   return req;
 }
 
+/**
+ * Requests the Overview board makes for ONE agent's book, chosen from its
+ * Agent picker (Michael Healy, 1 Nov 2026: "an agent filter on the PM
+ * Dashboard"). Granted the same way, by this server process only, and only by
+ * lib/overview-access for somebody the Overview already shows everything to -
+ * so it can narrow a whole-business view, never widen anybody's.
+ */
+const AGENT_BOOK = new WeakMap<NextRequest, { rexUserId: string; name: string }>();
+export function grantAgentBook(req: NextRequest, agent: { rexUserId: string; name: string }): NextRequest {
+  AGENT_BOOK.set(req, agent);
+  return req;
+}
+/** The agent a request was narrowed to, for a route that also matches REX PM's tasks by name. */
+export function agentBookOf(req: NextRequest): { rexUserId: string; name: string } | null {
+  return AGENT_BOOK.get(req) ?? null;
+}
+
 export async function scopeFor(req: NextRequest): Promise<Scope> {
-  return scopeForWho(req, hasDb() && !WHOLE_BUSINESS.has(req) ? await whoIs(req) : null);
+  return scopeForWho(req, hasDb() && !WHOLE_BUSINESS.has(req) && !AGENT_BOOK.has(req) ? await whoIs(req) : null);
 }
 
 /**
@@ -74,6 +91,8 @@ export async function scopeFor(req: NextRequest): Promise<Scope> {
  * and hands it in here. `who` may be null only where scopeFor never needed it.
  */
 export async function scopeForWho(req: NextRequest, who: Who | null): Promise<Scope> {
+  const agent = AGENT_BOOK.get(req);
+  if (agent) return { rexUserId: agent.rexUserId, everything: false, unlinked: false, label: agent.name || "that agent" };
   if (WHOLE_BUSINESS.has(req)) {
     return { rexUserId: null, everything: true, unlinked: false, label: "the whole business" };
   }
@@ -184,7 +203,7 @@ export async function searchScope(req: NextRequest, scope: Scope): Promise<strin
  */
 export async function bookScope(req: NextRequest, who: Who | null = null): Promise<Scope> {
   const scope = await scopeForWho(req, who);
-  if (scope.everything || !hasDb()) return scope;
+  if (scope.everything || !hasDb() || AGENT_BOOK.has(req)) return scope;
   const { actor, viewingAs } = who ?? (await whoIs(req));
   if (!actor || viewingAs || actor.role === "owner") return scope;
   if (!can(actor.role, "see:everything")) return scope;
@@ -193,7 +212,7 @@ export async function bookScope(req: NextRequest, who: Who | null = null): Promi
 
 export async function leadScope(req: NextRequest): Promise<Scope> {
   const scope = await scopeFor(req);
-  if (scope.everything || !hasDb()) return scope;
+  if (scope.everything || !hasDb() || AGENT_BOOK.has(req)) return scope;
   const { actor, viewingAs } = await whoIs(req);
   if (!actor || viewingAs || actor.role === "owner") return scope;
   if (!can(actor.role, "see:everything")) return scope;

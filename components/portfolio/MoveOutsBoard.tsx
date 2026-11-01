@@ -10,7 +10,7 @@ import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
 import { searchMatches } from "@/lib/search-match";
-import BoardSearch, { useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
+import BoardSearch, { overviewQuery, useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
 
 /**
  * Move-outs (2 Oct 2026). See lib/move-outs.
@@ -78,7 +78,7 @@ export default function MoveOutsBoard({ embedded = false, onInnerOpen }: BoardPr
   useReportInner(!!closing || closingGone, onInnerOpen);
 
   const load = useCallback(() => {
-    fetch(embedded ? "/api/move-outs?overview=1" : "/api/move-outs", { cache: "no-store" })
+    fetch(embedded ? `/api/move-outs?${overviewQuery()}` : "/api/move-outs", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (j.ok) { setData(j); setError(null); } else setError(j.error ?? "Could not read the move-outs."); })
       .catch(() => setError("Could not read the move-outs."));
