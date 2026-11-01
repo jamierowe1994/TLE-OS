@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { stageCounts, stageOf, type StageListing } from "@/lib/listing-stages";
+import { managedHomesOf } from "@/lib/current-lets";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryCalendar from "@/components/DiaryCalendar";
@@ -784,7 +785,7 @@ export function Figure({ n }: { n: number | null | undefined }) {
  */
 type BookForTile = {
   counts: { properties: number; homes?: number | null; rentRoll: number; landlords: number };
-  properties: Array<{ listingId: string; name: string; letSince: string | null; agent: { name: string } | null; service: string | null }>;
+  properties: Array<{ listingId: string; propertyId: string | null; name: string; letSince: string | null; agent: { name: string } | null; service: string | null; rentMonthly: number | null; test?: boolean }>;
 };
 let bookPromise: Promise<{ ok?: boolean; unlinked?: boolean; error?: string; counts?: BookForTile["counts"]; properties?: BookForTile["properties"] } | null> | null = null;
 
@@ -857,14 +858,17 @@ function PortfolioWidget({ w, h }: { w: number; h: number }) {
     .filter((p) => p.letSince)
     .sort((a, b) => (b.letSince ?? "").localeCompare(a.letSince ?? ""));
 
-  /* REX PM's count of the homes we manage once it is read, else the book's -
-     the same count as Overview and Company Figures (Rig run 4, P-052). This
-     read the book alone, so the Dashboard said 532 beside their 527. */
-  const count = loading ? "·" : book ? (book.counts.homes ?? book.counts.properties).toLocaleString("en-GB") : "—";
+  /* The homes we manage and their rent, Let Only and Rent Collect left out
+     (James Crumpton, 1 Nov 2026: "the Portfolio tile counts let only
+     homes"). It was REX PM's count of every letting agreement (Rig run 4,
+     P-052) and the whole book's rent; lib/current-lets managedHomesOf says
+     which homes are managed, by each home's own record. */
+  const managed = book ? managedHomesOf(book.properties) : null;
+  const count = loading ? "·" : managed ? managed.homes.toLocaleString("en-GB") : "—";
   const hint = loading
     ? "reading the book"
-    : book
-      ? `${thisMonth} let this month · ${money(book.counts.rentRoll)} pcm`
+    : managed
+      ? `managed homes · ${money(managed.rentRoll)} pcm`
       : unlinked
         ? "link your REX account to see yours"
         : "couldn't read REX";
@@ -883,7 +887,7 @@ function PortfolioWidget({ w, h }: { w: number; h: number }) {
             <div>
               <p className="figures text-[34px] leading-none">{count}</p>
               <p className="mt-1 text-[11px] font-medium text-accent-dark">
-                {book ? `managed · ${money(book.counts.rentRoll)} pcm` : hint}
+                {managed ? `managed homes · ${money(managed.rentRoll)} pcm · ${thisMonth} let this month` : hint}
               </p>
             </div>
             {book && (
@@ -988,7 +992,8 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
         {
           label: "Managed",
           short: "Managed",
-          value: managedFeed.book ? (managedFeed.book.counts.homes ?? managedFeed.book.counts.properties) : null,
+          /* The Portfolio tile's own count: managed homes, not let only. */
+          value: managedFeed.book ? managedHomesOf(managedFeed.book.properties).homes : null,
           href: "/portfolio",
           loading: managedFeed.loading,
         },
