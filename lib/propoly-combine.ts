@@ -1,5 +1,6 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PROPOLY_MAX_BYTES, propolyMb } from "@/lib/propoly-names";
 
 /**
  * SEVERAL FILES, ONE PROPOLY SLOT (30 Oct 2026).
@@ -18,7 +19,7 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
  */
 
 /** Propoly refuses anything over 8.5MB; this leaves room for the PDF's own overhead. */
-const LIMIT = 8_200_000;
+const LIMIT = PROPOLY_MAX_BYTES - 300_000;
 
 export type SlotPart = { name: string; bytes: Uint8Array; mime: string; who: string[] };
 
@@ -39,7 +40,7 @@ export async function combineForSlot(label: string, parts: SlotPart[]): Promise<
   let size = 0;
   for (const p of parts) {
     if (size + p.bytes.byteLength > LIMIT) {
-      left.push({ part: p, why: "it would take the combined file over Propoly's 8.5MB limit - add it to the deal in Propoly by hand" });
+      left.push({ part: p, why: `it would take the combined file over Propoly's ${propolyMb(PROPOLY_MAX_BYTES)} limit - add it to the deal in Propoly by hand` });
       continue;
     }
     try {

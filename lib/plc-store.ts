@@ -395,6 +395,7 @@ export async function attachDocument(
     placeholder?: boolean;
     read?: FileRead | null;
     hash?: string;
+    size?: number;
     covers?: CheckId[];
     fromFile?: boolean;
   }
@@ -415,6 +416,7 @@ export async function attachDocument(
       ...(doc.placeholder ? { placeholder: true as const } : {}),
       ...(doc.read ? { read: doc.read } : {}),
       ...(doc.hash ? { hash: doc.hash } : {}),
+      ...(doc.size ? { size: doc.size } : {}),
       ...(doc.covers?.length ? { covers: doc.covers } : {}),
       ...(doc.fromFile ? { fromFile: true } : {}),
     };
@@ -820,7 +822,7 @@ export async function saveAiSummary(id: string, summary: PlcAiSummary): Promise<
  */
 export async function complianceAttach(
   id: string,
-  doc: { checkId: CheckId; name: string; key: string; url: string; addedBy: string; read?: FileRead | null; hash?: string },
+  doc: { checkId: CheckId; name: string; key: string; url: string; addedBy: string; read?: FileRead | null; hash?: string; size?: number },
   replaceKey: string | null
 ): Promise<PlcCase> {
   return mutate(id, (c) => {
@@ -844,6 +846,7 @@ export async function complianceAttach(
       byCompliance: true,
       ...(doc.read ? { read: doc.read } : {}),
       ...(doc.hash ? { hash: doc.hash } : {}),
+      ...(doc.size ? { size: doc.size } : {}),
       ...(old?.covers?.length ? { covers: old.covers } : {}),
       ...(old ? { replaces: { name: old.name, key: old.key, addedBy: old.addedBy, addedAt: old.addedAt, at: now, by: doc.addedBy } } : {}),
     };

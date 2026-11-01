@@ -108,7 +108,7 @@ function AgentSide({
       if (!up.ok || !stored.ok) throw new Error(stored.error ?? "The upload failed.");
       await api(`/api/plc/${c.id}/documents`, {
         method: "POST",
-        body: JSON.stringify({ checkId, name: stored.name, key: stored.key }),
+        body: JSON.stringify({ checkId, name: stored.name, key: stored.key, size: stored.size }),
       });
       settle({ ok: true });
       await reload();

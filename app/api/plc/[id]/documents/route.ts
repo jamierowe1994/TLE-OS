@@ -29,7 +29,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean; read?: FileRead | null; hash?: string; compliance?: boolean; replaceKey?: string | null };
+  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean; read?: FileRead | null; hash?: string; size?: number; compliance?: boolean; replaceKey?: string | null };
   try {
     body = await req.json();
   } catch {
@@ -64,6 +64,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     );
   }
 
+  /* The upload's own count of the bytes, for the pack's "too big for Propoly" box. */
+  const size = typeof body.size === "number" && Number.isFinite(body.size) && body.size > 0 ? Math.round(body.size) : undefined;
+
   const key = (body.key ?? "").trim();
   /* The key has to be one we issued. Without this a caller could file an
      arbitrary bucket path against a case and the file route would happily
@@ -96,6 +99,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           addedBy: await actorName(req, "Compliance"),
           read: cleanRead(body.read),
           hash: typeof body.hash === "string" && /^[0-9a-f]{64}$/.test(body.hash) ? body.hash : undefined,
+          size,
         },
         typeof body.replaceKey === "string" && body.replaceKey.trim() ? body.replaceKey.trim() : null
       );
@@ -116,6 +120,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       placeholder,
       read: cleanRead(body.read),
       hash: typeof body.hash === "string" && /^[0-9a-f]{64}$/.test(body.hash) ? body.hash : undefined,
+      size,
       /* The reader saw a reference report pass Right to Rent: ticked, and the
          agent can untick it on the file. */
       covers: (cleanRead(body.read)?.alsoCovers ?? []).filter((x) => COVERABLE[checkId]?.includes(x)),

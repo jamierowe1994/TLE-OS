@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { PROPOLY_NAME_MAX, propolyExtension, propolyFileName, propolyTypeFor } from "@/lib/propoly-names";
+import { PROPOLY_MAX_BYTES, PROPOLY_NAME_MAX, propolyExtension, propolyFileName, propolyMb, propolyTooBig, propolyTypeFor } from "@/lib/propoly-names";
 import {
   CHECK_GROUPS,
   COVERABLE,
@@ -258,6 +258,7 @@ export default function PlcDocuments({
       let name = row.file.name;
       let placeholder = false;
       let read: FileRead | null = null;
+      let size: number | undefined;
 
       /* Never the same file twice (Michael, 7 Oct 2026). Same contents as a
          file already on the pack, or in this drop: skipped, and it says where
@@ -293,6 +294,7 @@ export default function PlcDocuments({
         if (up.ok && stored.ok) {
           key = stored.key;
           name = stored.name;
+          size = typeof stored.size === "number" ? stored.size : row.file.size;
         } else if (up.status === 503) {
           /* No bucket on this machine: recorded by name, flagged all the way down. */
           key = `documents/${c.id}/${row.file.name.replace(/[^\w.\- ]+/g, "")}`;
@@ -336,7 +338,7 @@ export default function PlcDocuments({
         }
         const res = await api<{ case: PlcCase }>(`/api/plc/${c.id}/documents`, {
           method: "POST",
-          body: JSON.stringify({ checkId, name, key, placeholder, read, hash }),
+          body: JSON.stringify({ checkId, name, key, placeholder, read, hash, size }),
         });
         latest.current = res.case;
         onChanged(res.case);
@@ -839,12 +841,24 @@ export default function PlcDocuments({
  * itself; this says so while the agent can still rename the file. Only for
  * files that go to Propoly, and not under Anything else once it has its own
  * name (that name is what goes, and its box warns as it is typed).
+ *
+ * And a file over Propoly's 8.5MB (1 Nov 2026, 36 Rensburg Street's 9.6MB
+ * proof of ownership): the push leaves it out, so the box says so first.
+ * Only where the upload recorded the size; older files have none.
  */
 const RED_BOX = "rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800";
 
 function PropolyNameNote({ doc }: { doc: PlcDocument }) {
   if (doc.placeholder || !propolyTypeFor(doc.checkId, doc.name)) return null;
-  if (doc.checkId === "other" && doc.label) return null;
+  const big = propolyTooBig(doc.size);
+  const sizeBox = big ? (
+    <div className="order-last w-full pl-[3.25rem]">
+      <p className={RED_BOX}>
+        Propoly only takes files up to {propolyMb(PROPOLY_MAX_BYTES)}. This one is {big}, so it won&apos;t go into Propoly. Save a smaller copy and add it again, or add it to the deal in Propoly by hand.
+      </p>
+    </div>
+  ) : null;
+  if (doc.checkId === "other" && doc.label) return sizeBox;
   const name = doc.name.split(/[\\/]/).pop() ?? doc.name;
   const ext = name.match(/\.([A-Za-z0-9]{1,5})$/)?.[1];
   if (ext && !propolyExtension(name, "")) {
@@ -856,8 +870,13 @@ function PropolyNameNote({ doc }: { doc: PlcDocument }) {
       </div>
     );
   }
-  if (name.length <= PROPOLY_NAME_MAX) return null;
-  return <LongNameBox length={name.length} sent={propolyFileName(name)} what="file name" fix="Rename the file and add it again" />;
+  if (name.length <= PROPOLY_NAME_MAX) return sizeBox;
+  return (
+    <>
+      {sizeBox}
+      <LongNameBox length={name.length} sent={propolyFileName(name)} what="file name" fix="Rename the file and add it again" />
+    </>
+  );
 }
 
 function LongNameBox({ length, sent, what, fix, inset = true }: { length: number; sent: string; what: string; fix: string; inset?: boolean }) {

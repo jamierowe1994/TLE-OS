@@ -122,3 +122,22 @@ export function propolyExtension(fileName: string, mime: string): string | null 
   const byMime = Object.entries(PROPOLY_FILE_TYPES).find(([, t]) => t === mime.toLowerCase().split(";")[0].trim());
   return byMime ? byMime[0] : null;
 }
+
+/**
+ * The biggest file Propoly takes. It answers anything over with 413 "File
+ * size 9.6MB exceeds the maximum allowed size of 8.5MB" (1 Nov 2026, a
+ * proof of ownership on 36 Rensburg Street, refused on every push and every
+ * retry, each filing a ticket). Counted as 8,500,000 bytes, the smaller of
+ * the two ways "8.5MB" can be read, so nothing under it is over in
+ * Propoly's own count. The combined PDF (lib/propoly-combine) keeps under
+ * this with room for its own pages.
+ */
+export const PROPOLY_MAX_BYTES = 8_500_000;
+
+/** "9.6MB", rounded up, so a file just over the limit never reads as 8.5MB. */
+export const propolyMb = (bytes: number) => `${(Math.ceil(bytes / 100_000) / 10).toFixed(1)}MB`;
+
+/** The size, when Propoly would turn the file away for it; null when it fits. */
+export function propolyTooBig(bytes: number | null | undefined): string | null {
+  return bytes && bytes > PROPOLY_MAX_BYTES ? propolyMb(bytes) : null;
+}

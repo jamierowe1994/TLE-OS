@@ -181,7 +181,7 @@ export default function PlcSplitReview({
         .catch(() => null);
       await api(`/api/plc/${encodeURIComponent(c.id)}/documents`, {
         method: "POST",
-        body: JSON.stringify({ compliance: true, checkId: t.checkId, name: stored.name, key: stored.key, read, replaceKey: t.replaceKey }),
+        body: JSON.stringify({ compliance: true, checkId: t.checkId, name: stored.name, key: stored.key, size: stored.size, read, replaceKey: t.replaceKey }),
       });
       await reload();
     } catch (e) {

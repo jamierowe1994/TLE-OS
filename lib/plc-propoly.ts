@@ -8,7 +8,7 @@ import { getCase, recordPropolyPush } from "@/lib/plc-store";
 import { checkById, type CheckId, type PlcCase, type PlcDocument, type PropolyPush, type PushResult } from "@/lib/plc";
 import { isTestCase } from "@/lib/test-guard";
 import { combineForSlot, type SlotPart } from "@/lib/propoly-combine";
-import { PROPOLY_FILE_TYPES, propolyExtension, propolyFileName, propolyTypeFor } from "@/lib/propoly-names";
+import { PROPOLY_FILE_TYPES, PROPOLY_MAX_BYTES, propolyExtension, propolyFileName, propolyMb, propolyTooBig, propolyTypeFor } from "@/lib/propoly-names";
 
 export { PROPOLY_NAME_MAX, propolyExtension, propolyFileName, propolyTypeFor } from "@/lib/propoly-names";
 
@@ -73,6 +73,15 @@ export function isAlreadyThere(status: number, body: unknown): boolean {
   return status === 409 || /already exists/i.test(propolyErrorText(body));
 }
 
+/** Propoly's 413, "File size 9.6MB exceeds the maximum allowed size of 8.5MB". */
+export function isTooBig(status: number, body: unknown): boolean {
+  return status === 413 || /exceeds the maximum allowed size/i.test(propolyErrorText(body));
+}
+
+/** What the pack says about a file over Propoly's limit, with its real size. */
+export const tooBigNote = (bytes: number) =>
+  `Too big for Propoly (${propolyMb(bytes)}, it takes up to ${propolyMb(PROPOLY_MAX_BYTES)}). Save a smaller copy and push again, or add it to the deal in Propoly by hand.`;
+
 export type SendOutcome = "uploaded" | "already" | "skipped" | "failed";
 
 /**
@@ -85,6 +94,12 @@ export type SendOutcome = "uploaded" | "already" | "skipped" | "failed";
  * certificate on the property (gas, EPC, EICR) or a landlord AML check or
  * proof of ownership on the deal answers 409 when it is there already
  * (21-22 Oct 2026, five tickets). It is said on the pack and raises no bug.
+ *
+ * A file over Propoly's 8.5MB is "skipped" before it is sent (1 Nov 2026,
+ * 36 Rensburg Street: a 9.6MB proof of ownership was refused on every push
+ * and every retry, and each refusal filed a ticket). Skipped, not failed, so
+ * Retry the ones that failed leaves it be; a 413 all the same is an answer,
+ * not a fault, should Propoly's count ever differ from ours.
  */
 export async function sendToDeal(
   dealId: string,
@@ -99,6 +114,7 @@ export async function sendToDeal(
     };
   }
   if (!f.bytes.byteLength) return { outcome: "skipped", note: "The stored file is empty, so there was nothing to send." };
+  if (propolyTooBig(f.bytes.byteLength)) return { outcome: "skipped", note: tooBigNote(f.bytes.byteLength) };
   const form = new FormData();
   /* deal_uuid, as Propoly's spec has it. deal_id was sent until 9 Oct
      2026 and Propoly answers it "Missing required parameter: deal_uuid" -
@@ -114,12 +130,16 @@ export async function sendToDeal(
   const copy = new Uint8Array(f.bytes.byteLength);
   copy.set(f.bytes);
   form.set("attached", new Blob([copy.buffer], { type: PROPOLY_FILE_TYPES[ext] }), fileName);
-  const res = await propolyUpload("/api/v1/documents", form, { expected: isAlreadyThere });
+  const res = await propolyUpload("/api/v1/documents", form, { expected: (status, body) => isAlreadyThere(status, body) || isTooBig(status, body) });
   /* Everything Propoly said, field errors included, not just .message. */
   const msg = propolyErrorText(res.body);
   if (res.status === 201 || res.status === 200) return { outcome: "uploaded", note: "Uploaded." };
   if (isAlreadyThere(res.status, res.body)) {
     return { outcome: "already", note: msg ? `Already in Propoly ("${msg}"), so it keeps the one it has.` : "Propoly already holds a document in this slot." };
+  }
+  if (isTooBig(res.status, res.body)) {
+    /* Under our count but over Propoly's: its own words, not a size that reads as fitting. */
+    return { outcome: "skipped", note: msg ? `Too big for Propoly ("${msg}"). Save a smaller copy and push again, or add it to the deal in Propoly by hand.` : tooBigNote(f.bytes.byteLength) };
   }
   return { outcome: "failed", note: msg || `Propoly answered ${res.status}.` };
 }

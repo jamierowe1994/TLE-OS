@@ -505,6 +505,12 @@ export type PlcDocument = {
   /** SHA-256 of the bytes, so the same file is never on a pack twice (7 Oct 2026). */
   hash?: string;
   /**
+   * Bytes, as the upload stored them (1 Nov 2026), so the pack can say while
+   * the agent can still swap the file that Propoly will turn it away for its
+   * size. Files filed before then have none; the push checks the bytes.
+   */
+  size?: number;
+  /**
    * Other checks this one document answers (Michael, 7 Oct 2026): a Legal for
    * Landlords reference report carries the tenant's ID, Right to Rent and AML,
    * so filed under Tenant checks it ticks Right to Rent too.
