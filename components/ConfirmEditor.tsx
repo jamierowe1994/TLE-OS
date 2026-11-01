@@ -63,6 +63,8 @@ export type ConfirmDraft = {
   blocked?: string;
   alreadySent?: { at: string; to: string; subject: string };
   moved?: { from: string };
+  /** Where the last one went, when the email on file has changed since. */
+  previousTo?: string;
   attachment: string | null;
 };
 
@@ -173,11 +175,19 @@ const ConfirmEditor = forwardRef<ConfirmEditorHandle, { target: ConfirmTarget; o
       <div className={`flex min-h-0 flex-col gap-3 ${fill ? "flex-1" : ""}`}>
         <p className="truncate text-[12px] text-muted">{draft.to ? `To ${draft.toName} · ${draft.to}` : `To ${draft.toName || "them"} · no email address`}</p>
         {draft.blocked && <p className="rounded-xl bg-accent-soft/70 px-3.5 py-2.5 text-[12px] leading-snug text-accent-dark">{draft.blocked}</p>}
-        {draft.alreadySent && (
+        {draft.alreadySent && draft.previousTo ? (
+          <p className="rounded-xl border border-amber-300/70 bg-amber-50 px-3.5 py-2.5 text-[12px] leading-snug text-amber-900">
+            <span className="font-semibold">Last sent to {draft.previousTo}</span> on {when(draft.alreadySent.at)} - the email has changed since, so this one goes to {draft.to}.
+          </p>
+        ) : draft.alreadySent ? (
           <p className="rounded-xl border border-amber-300/70 bg-amber-50 px-3.5 py-2.5 text-[12px] leading-snug text-amber-900">
             <span className="font-semibold">Already sent</span> to {draft.alreadySent.to} on {when(draft.alreadySent.at)}. Sending again sends them a second email.
           </p>
-        )}
+        ) : draft.previousTo ? (
+          <p className="rounded-xl bg-panel px-3.5 py-2.5 text-[12px] leading-snug text-muted">
+            The last one went to {draft.previousTo} - the email has changed since, so this one goes to {draft.to}.
+          </p>
+        ) : null}
         {draft.moved && (
           <p className="rounded-xl bg-panel px-3.5 py-2.5 text-[12px] leading-snug text-muted">
             They were booked for {when(draft.moved.from)}. The time has changed, so this one says it has moved.

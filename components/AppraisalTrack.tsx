@@ -15,6 +15,7 @@ import {
 } from "@/lib/appraisal-email";
 import EmailPopout from "@/components/EmailPopout";
 import ConfirmSheet from "@/components/ConfirmSheet";
+import ConfirmLine from "@/components/appraisal/ConfirmLine";
 import SendHandoff from "@/components/SendHandoff";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import { campaignsFor, CAMPAIGNS, lastDay, type Campaign } from "@/lib/campaigns";
@@ -721,6 +722,18 @@ export default function AppraisalTrack({
               {c.state === "pre" && (
                 <div className="mt-4 space-y-3">
                   <Appointment c={c} />
+                  {/* What the landlord was sent, with Send Again: the booked
+                      card goes once the confirmation has, and a corrected
+                      email address needs a way to send it once more
+                      (Dan Richards, 1 Nov 2026). */}
+                  {appraisalId && c.confirmationSentAt && c.bookedAt && (
+                    <ConfirmLine
+                      appraisalId={appraisalId}
+                      appointmentAt={c.bookedAt}
+                      fromLink={false}
+                      onSent={() => patch({ confirmationSentAt: new Date().toISOString() })}
+                    />
+                  )}
                   {c.preScheduledFor ? (
                     <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-600/40 bg-card p-4">
                       <DoodleIcon name="clock" size={16} className="text-emerald-700" />
