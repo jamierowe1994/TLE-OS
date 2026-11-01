@@ -155,7 +155,12 @@ export default function NotificationBell({ compact = false, inSidebar = false }:
                         />
                         <span className="min-w-0">{n.body}</span>
                       </span>
-                      <span className="mt-0.5 block text-[10.5px] text-muted">{whenAgo(n.at)}</span>
+                      <span className="mt-0.5 flex items-center gap-2 text-[10.5px] text-muted">
+                        {whenAgo(n.at)}
+                        {n.cta && n.href && (
+                          <span className="rounded-full bg-ink px-2.5 py-0.5 text-[10.5px] font-semibold text-page">{n.cta}</span>
+                        )}
+                      </span>
                     </span>
                   </span>
                 );

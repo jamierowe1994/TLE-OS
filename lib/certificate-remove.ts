@@ -80,6 +80,14 @@ export async function removeCertificate(input: {
   );
   if (row) await q(`DELETE FROM os_certificates WHERE id = $1`, [row.id]);
   removedCache = null;
+  /* A query on the one replaced goes with the replacement (Dan, ticket
+     cf6364de: it stayed open on a certificate that no longer existed). */
+  if (row && input.reason === "replaced" && input.replacedBy) {
+    const newId = input.replacedBy;
+    await import("@/lib/compliance-desk")
+      .then((m) => m.carryQueryToReplacement({ oldId: row.id, newId, by: input.by }))
+      .catch((e) => console.error("[certificate-remove] carrying the query failed", row.id, e instanceof Error ? e.message : e));
+  }
   return { ok: true, name, rexStillHolds: Boolean(row?.rex_entry_id) };
 }
 

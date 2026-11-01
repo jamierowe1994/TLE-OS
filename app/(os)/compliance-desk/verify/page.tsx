@@ -250,6 +250,7 @@ function VerifyRow({
       addedAt={r.addedAt}
       lateAfterDays={LATE_AFTER_DAYS}
       queried={r.queried}
+      replaced={r.replaced}
       okLabel={onRegister ? "On the register - verified" : "Verified"}
       busy={busy}
       onVerify={verify}

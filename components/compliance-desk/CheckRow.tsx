@@ -34,6 +34,18 @@ export interface Queried {
   replies?: { id: string; body: string; by: string; at: string }[];
 }
 
+/** The queried certificate this one replaced (1 Nov 2026, Dan's Replace on a queried gas certificate). */
+export interface ReplacedQuery {
+  note: string;
+  by: string;
+  at: string;
+  /** The old file's name. */
+  fileName: string;
+  replies?: { id: string; body: string; by: string; at: string }[];
+}
+
+const shortDay = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
 export default function CheckRow({
   title,
   sub,
@@ -44,6 +56,7 @@ export default function CheckRow({
   addedAt,
   lateAfterDays,
   queried,
+  replaced,
   okLabel,
   busy,
   onVerify,
@@ -61,6 +74,8 @@ export default function CheckRow({
   /** Past this many days waiting, the age goes red. */
   lateAfterDays: number;
   queried: Queried | null;
+  /** It replaced a certificate that was queried: re-check it against that query. */
+  replaced?: ReplacedQuery | null;
   okLabel: string;
   busy: boolean;
   onVerify: () => void;
@@ -110,6 +125,20 @@ export default function CheckRow({
       </div>
 
       {children}
+
+      {replaced && (
+        <div className="mt-3 rounded-xl bg-[#fdf6e8] px-3.5 py-2.5 text-[12.5px] leading-snug text-[#7a5a1e]">
+          <p>
+            <span className="font-semibold">Replaced - please re-check.</span> {replaced.by || "Compliance"} queried the one before it
+            {replaced.fileName ? ` (${replaced.fileName})` : ""} on {shortDay(replaced.at)}: {replaced.note}
+          </p>
+          {replaced.replies?.map((r) => (
+            <p key={r.id} className="mt-1.5 text-[12px]">
+              <span className="font-semibold">{r.by}, {shortDay(r.at)}:</span> <span className="whitespace-pre-wrap">{r.body}</span>
+            </p>
+          ))}
+        </div>
+      )}
 
       {queried && (
         <p className={`mt-3 rounded-xl px-3.5 py-2.5 text-[12.5px] leading-snug ${RED}`}>

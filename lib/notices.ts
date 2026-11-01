@@ -19,6 +19,8 @@ export interface Notice {
   body: string;
   href: string | null;
   tone: "ok" | "warn" | "none";
+  /** A word for what opening it does, shown as a button on the line ("Answer"). */
+  cta?: string;
 }
 
 export const NOTICE_ICON: Record<NoticeKind, string> = {

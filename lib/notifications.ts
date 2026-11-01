@@ -18,6 +18,7 @@ import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
 import { gapsForBell } from "@/lib/propoly-mail";
 import { recentBankChanges } from "@/lib/bank-vault";
 import { bookFor } from "@/lib/listings-cache";
+import type { OsListing } from "@/lib/rex-listings";
 import { recentTenantSends } from "@/lib/tenant-documents";
 import { termsForAgent } from "@/lib/terms/store";
 
@@ -206,9 +207,8 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
      is bernadine@thepropertyexperts.co.uk), and it is empty when REX could
      not be read as the offer came in. So a listing on their own book counts
      too - the same book their Listings board and Offers tab are read from. */
-  const myListings = me.rexUserId
-    ? ((await bookFor(me.rexUserId).catch(() => null))?.listings ?? []).map((l) => String(l.id))
-    : [];
+  const myBook = me.rexUserId ? ((await bookFor(me.rexUserId).catch(() => null))?.listings ?? []) : [];
+  const myListings = myBook.map((l) => String(l.id));
   const offersIn = await q<{ id: string; name: string; email: string; address: string | null; listing_id: string; amount: string | null; created_at: Date }>(
     `SELECT id, name, email, address, listing_id, payload->>'amount' AS amount, created_at FROM os_tenant_viewing_responses
       WHERE kind = 'offer' AND listing_id IS NOT NULL AND created_at > NOW() - INTERVAL '7 days'
@@ -383,15 +383,28 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       tone: "warn",
     });
   }
+  /* Answered where the agent works on the home (Dan, ticket cf6364de, 1 Nov
+     2026): the listing's Compliance tab on their own book, with the answer
+     box open under the query (?answer=, components/QueryThread); otherwise
+     the home's file on Compliance, which opens it the same way. */
+  const listingOf = new Map<string, OsListing>();
+  for (const l of myBook) {
+    if (!l.propertyId) continue;
+    const had = listingOf.get(l.propertyId);
+    if (!had || Number(l.id) > Number(had.id)) listingOf.set(l.propertyId, l);
+  }
   for (const x of queried) {
+    const listing = x.kind === "certificate" && x.propertyId ? listingOf.get(x.propertyId) ?? null : null;
+    const property = x.property !== "A property" ? x.property : listing ? [listing.name, listing.locality].filter(Boolean).join(", ") || x.property : x.property;
     out.push({
       id: `queried:${x.kind}:${x.id}`,
       kind: "compliance",
       at: x.at,
-      title: x.property,
-      body: `${x.by || "Compliance"} queried the ${x.what}: ${x.note}`,
-      href: x.link,
+      title: property,
+      body: `${x.by || "Compliance"} queried the ${x.what}${x.gone ? ", since taken off the home" : ""}: ${x.note}`,
+      href: listing && !x.gone ? `/listings/${encodeURIComponent(listing.id)}?tab=compliance&answer=${encodeURIComponent(x.id)}` : x.link,
       tone: "warn",
+      cta: x.gone ? undefined : "Answer",
     });
   }
   out.push(...automationLines);

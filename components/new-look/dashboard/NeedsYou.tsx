@@ -55,6 +55,7 @@ const fmtAt = (iso: string) => {
  */
 function actionFor(n: Notice): string {
   const id = n.id;
+  if (n.cta) return n.cta;
   if (/^(lead|still-looking|moved):/.test(id)) return "Call";
   if (/^terms-agent:/.test(id)) return "Sign";
   if (/^(terms-email|pre):/.test(id)) return "Send";
