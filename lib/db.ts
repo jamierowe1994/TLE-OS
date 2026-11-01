@@ -4968,6 +4968,24 @@ CREATE TABLE IF NOT EXISTS os_take_ons (
   cancelled_at    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS os_take_ons_home ON os_take_ons (home_ref);
+-- A let's figures put right in the OS (lib/let-edits, 1-2 Nov 2026). Made
+-- lazily there too; declared here so readers that join it (the automations'
+-- move-in, lib/automations/sources) never meet a missing table. Same definition.
+CREATE TABLE IF NOT EXISTS os_let_edits (
+  id        TEXT PRIMARY KEY,
+  let_ref   TEXT NOT NULL,
+  deal_id   TEXT,
+  field     TEXT NOT NULL,
+  value     TEXT,
+  was       TEXT,
+  by_id     TEXT,
+  by_name   TEXT NOT NULL DEFAULT '',
+  by_email  TEXT NOT NULL DEFAULT '',
+  at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE os_let_edits ADD COLUMN IF NOT EXISTS seen JSONB;
+CREATE INDEX IF NOT EXISTS os_let_edits_ref ON os_let_edits (let_ref, field, at);
+CREATE INDEX IF NOT EXISTS os_let_edits_deal ON os_let_edits (deal_id, field, at);
 -- The last push of a take-on into Propoly and into REX (lib/take-on-push):
 -- rehearsed or live, every step with its outcome and the other system's own
 -- reason, and the ids it made so a second push reuses them.

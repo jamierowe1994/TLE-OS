@@ -13,7 +13,7 @@ import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { userByName } from "@/lib/tenant-email-send";
 import { isScottish } from "@/lib/property-flags";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
-import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, isScottishListing, swapStandIn, withChanges, withLandlordOptOut, type DealTerms } from "@/lib/handover-deal";
+import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, isScottishListing, swapStandIn, withChanges, withLandlordOptOut, withLetFigures, type DealTerms } from "@/lib/handover-deal";
 import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 import { guaranteedEmails, guarantorLines, planGuarantors, propolyGuarantorsLive, sendGuarantors } from "@/lib/deal-guarantors";
 
@@ -773,7 +773,8 @@ async function pushDeal(
   }
 ): Promise<"ok" | "would" | "blocked" | "failed"> {
   const label = "The deal in Propoly";
-  const terms = withChanges(await withLandlordOptOut(dealDefaults(o.packet, o.listing), o.packet), o.change);
+  /* The OS's edited figures (lib/let-edits) before the agent's push-panel changes, which are newer still. */
+  const terms = withChanges(await withLetFigures(await withLandlordOptOut(dealDefaults(o.packet, o.listing), o.packet), o.packet), o.change);
   const realProperty = o.propertyUuid && !o.propertyUuid.startsWith("(") ? o.propertyUuid : null;
 
   /* 1. A deal an earlier push of this application started. */
