@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { rexCall } from "@/lib/rex";
-import { propolyConfigured, propolyGet, propolyPatch, propolyPost } from "@/lib/business/propoly";
+import { propolyConfigured, propolyErrorText, propolyGet, propolyPatch, propolyPost } from "@/lib/business/propoly";
 import { osAddressForRexProperty } from "@/lib/os-property-address";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { switchOn } from "@/lib/switches";
@@ -1064,7 +1064,15 @@ export function refusal(res: { status: number; body: unknown }): string {
      had said why - "Contact number is invalid". */
   const msg = str(b.message);
   if (msg && errs) return `${msg.replace(/[.\s]+$/, "")}: ${errs}.`;
-  return msg ?? errs ?? `it answered ${res.status || "nothing"}.`;
+  const plain = msg ?? errs;
+  if (plain) return plain;
+  /* Anything else Propoly said, in its words (1 Nov 2026): a 500 with
+     {"error": "Failed to add tenant"} reached the agent as "Propoly said no:
+     it answered 500." because only message and errors were read. An empty
+     body still says the status. */
+  const said = propolyErrorText(res.body);
+  if (said && said !== "{}" && said !== "[]") return `${said.replace(/[.\s]+$/, "")}.`;
+  return `it answered ${res.status || "nothing"}.`;
 }
 
 /** A Propoly property offered to the agent as a possible match. */
