@@ -68,6 +68,17 @@ export async function peopleOn(propertyId: string): Promise<PropertyPerson[]> {
   return rows.map(shape);
 }
 
+/** The joint landlords' names on any of these keys for one home (a REX id, the OS record's id, a let's key). */
+export async function jointLandlordNames(keys: string[]): Promise<string[]> {
+  const ids = [...new Set(keys.filter(Boolean))];
+  if (!hasDb() || !ids.length) return [];
+  const rows = await q<{ name: string }>(
+    `SELECT name FROM os_property_people WHERE property_id = ANY($1) AND kind = 'joint_landlord' AND removed_at IS NULL ORDER BY added_at`,
+    [ids]
+  );
+  return [...new Set(rows.map((r) => r.name.trim()).filter(Boolean))];
+}
+
 export async function personById(id: string): Promise<PropertyPerson | null> {
   if (!hasDb() || !id) return null;
   const rows = await q<Row>(

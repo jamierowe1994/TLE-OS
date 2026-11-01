@@ -17,6 +17,7 @@ import { DOC_ACCEPT, OTHER, docTypeLabel } from "@/lib/doc-types";
 import type { LetType } from "@/lib/let-type";
 import type { TermsRequest, TermsState } from "@/lib/use-listing-terms";
 import { regDay, regNumbers, regState, type RegState } from "@/lib/reg-numbers";
+import { everyLandlord, useJointLandlords, type HomeLandlord } from "@/lib/use-home-landlords";
 
 /**
  * THE LISTING'S COMPLIANCE, IN ONE PLACE (James, 12 Oct 2026).
@@ -208,9 +209,23 @@ export default function ListingCompliance({
     requestAnimationFrame(() => document.getElementById("listing-docs")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
+  /* Every landlord on the home (Lianna, 1 Nov 2026): the record's, then the
+     joint landlords kept on the home (lib/property-people) under the same key
+     the listing's Landlord section uses. A test listing keeps its own. */
+  const joint = useJointLandlords(Number(listingId) < 0 ? null : propertyId ?? `listing:${listingId}`);
+  const landlords = everyLandlord([{ name: landlord.name, email: landlord.email, phone: landlord.phone }], joint ?? []);
+
   /* ── Where each landlord paper already is ── */
   const doc = (type: string): Held => {
     const d = (docs ?? []).find((x) => x.type === type);
+    return d ? { how: `Uploaded ${when(d.at)}`, name: d.name, url: d.url } : null;
+  };
+  /* One landlord's paper among several: uploaded with their name on it
+     ("Landlord AML Check - John Hood", the documents route's `who`). The first
+     landlord also has anything uploaded before there were names on them. */
+  const docFor = (type: string, who: string, first: boolean): Held => {
+    const named = (x: Doc) => x.type === type && x.name.toLowerCase().endsWith(` - ${who.toLowerCase()}`);
+    const d = (docs ?? []).find(named) ?? (first ? (docs ?? []).find((x) => x.type === type && x.name === docTypeLabel(type)) : undefined);
     return d ? { how: `Uploaded ${when(d.at)}`, name: d.name, url: d.url } : null;
   };
   const paper = (field: string, how = "On the property record"): Held => {
@@ -264,10 +279,26 @@ export default function ListingCompliance({
       : []),
   ];
 
+  /* With more than one landlord, an ID and an AML check for each, each on file on its own (ticket
+     910dbc38: "if multiple LL, will only allow you to add 1"). The property record's copy is the
+     record landlord's. One landlord: the rows as they were. */
+  const named = landlords.filter((l) => l.name?.trim());
+  const perLandlord = (r: (typeof rows)[number]) => {
+    if (named.length < 2 || (r.key !== "id" && r.key !== "aml")) return [{ key: r.key, label: r.label, held: r.held, reg: r.reg ?? null }];
+    return named.map((l, i) => {
+      const who = (l.name ?? "").trim();
+      const held =
+        r.key === "id"
+          ? docFor("landlord_id", who, i === 0) ?? (i === 0 ? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id") : null)
+          : docFor("landlord_aml", who, i === 0) ?? (i === 0 ? paper("landlord_aml") : null);
+      return { key: `${r.key}:${i}`, label: `${who}: ${r.key === "id" ? "ID" : "AML check"}`, held, reg: null, who };
+    });
+  };
+
   const loose: LooseDoc[] = (docs ?? []).filter((d) => DOC_TO_CERT[d.type]).map((d) => ({ type: DOC_TO_CERT[d.type], name: d.fileName || d.name, url: d.url, at: d.at }));
   const reading = docs === null || papers === null || (terms.status === "loading" && !home);
   /* Terms can be filed on the home's own record, so nothing offers to send them until that has answered. */
-  const termsReading = reading || (!home && !homeProblem);
+  const termsReading = reading || (!home && !homeProblem) || joint === null;
   const card = "rounded-[22px] border border-line/50 bg-white p-5";
 
   if (look === "new") {
@@ -291,7 +322,8 @@ export default function ListingCompliance({
         termsReading={termsReading}
         termsHeld={termsHeld}
         waiting={waiting}
-        paperRows={rows.filter((r) => r.key !== "terms").map((r) => ({ key: r.key, label: r.label, held: r.held, reg: r.reg ?? null }))}
+        landlords={landlords}
+        paperRows={rows.filter((r) => r.key !== "terms").flatMap(perLandlord)}
         agentLarn={agentLarn}
         service={service}
       />
@@ -305,7 +337,7 @@ export default function ListingCompliance({
           listingId={listingId}
           propertyId={propertyId}
           propertyAddress={address}
-          landlords={landlord.name || landlord.email ? [{ name: landlord.name, email: landlord.email, phone: landlord.phone }] : []}
+          landlords={landlords}
           agentLarn={agentLarn}
           serviceOnRecord={service}
           scottish={home ? home.scotland : null}
@@ -665,6 +697,7 @@ function NewLookCompliance({
   termsHeld,
   waiting,
   paperRows,
+  landlords,
   agentLarn,
   service,
 }: {
@@ -686,7 +719,9 @@ function NewLookCompliance({
   termsReading: boolean;
   termsHeld: Held;
   waiting: TermsRequest | null;
-  paperRows: { key: string; label: string; held: Held; reg?: RegState | null }[];
+  paperRows: { key: string; label: string; held: Held; reg?: RegState | null; who?: string }[];
+  /** Every landlord on the home, for the terms' signers. */
+  landlords: HomeLandlord[];
   agentLarn: string | null;
   service: string | null;
 }) {
@@ -829,17 +864,19 @@ function NewLookCompliance({
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
   const [paperBusy, setPaperBusy] = useState<string | null>(null);
   const paperInput = useRef<HTMLInputElement>(null);
-  const paperFor = useRef<{ row: string; type: string; name: string }>({ row: "", type: "", name: "" });
-  const pickPaper = (row: string, type: string, nm: string) => {
-    paperFor.current = { row, type, name: nm };
+  const paperFor = useRef<{ row: string; type: string; name: string; who?: string }>({ row: "", type: "", name: "" });
+  const pickPaper = (row: string, type: string, nm: string, who?: string) => {
+    paperFor.current = { row, type, name: nm, who };
     paperInput.current?.click();
   };
 
-  async function putDoc(file: File, type: string, nm: string): Promise<string | null> {
+  /** `who`: whose paper it is, when the home has more than one landlord. */
+  async function putDoc(file: File, type: string, nm: string, who?: string): Promise<string | null> {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("type", type);
     fd.append("name", nm);
+    if (who) fd.append("who", who);
     fd.append("address", address);
     fd.append("property", propertyId != null && String(propertyId).trim() ? String(propertyId) : "");
     fd.append("from", "listing");
@@ -850,7 +887,7 @@ function NewLookCompliance({
       if (!r.ok || !j?.ok) return j?.error ?? "That did not upload. Try again.";
       setDocs(j.docs ?? []);
       setDocsKey((k) => k + 1);
-      setSaid({ ok: true, text: `${type === OTHER ? nm : docTypeLabel(type)} is on the file. Nobody has been sent it.` });
+      setSaid({ ok: true, text: `${type === OTHER ? nm : docTypeLabel(type)}${who ? ` for ${who}` : ""} is on the file. Nobody has been sent it.` });
       return null;
     } catch {
       return "That did not upload. Check the connection and try again.";
@@ -861,7 +898,7 @@ function NewLookCompliance({
     const p = paperFor.current;
     setSaid(null);
     setPaperBusy(p.row);
-    const err = await putDoc(file, p.type, p.name);
+    const err = await putDoc(file, p.type, p.name, p.who);
     setPaperBusy(null);
     if (err) setSaid({ ok: false, text: err });
   }
@@ -994,7 +1031,7 @@ function NewLookCompliance({
   });
 
   const paperList: ListRow[] = paperRows.map((p) => {
-    const t = PAPER_TYPE[p.key];
+    const t = PAPER_TYPE[p.key.split(":")[0]];
     const held = p.held;
     const busy = paperBusy === p.key;
     const sub = held ? (
@@ -1032,11 +1069,11 @@ function NewLookCompliance({
       icon: !held ? "missing" : p.reg === "expired" || p.reg === "due-soon" || p.reg === "no-date" ? "warn" : "ok",
       count: !held ? "upload" : p.reg === "expired" ? "renew" : "on",
       action: !t ? null : held ? (
-        <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" disabled={busy} onClick={() => pickPaper(p.key, t.type, t.name)}>
+        <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" disabled={busy} onClick={() => pickPaper(p.key, t.type, t.name, p.who)}>
           {busy ? "Uploading…" : "Add another"}
         </button>
       ) : (
-        <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" disabled={busy} onClick={() => pickPaper(p.key, t.type, t.name)}>
+        <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" disabled={busy} onClick={() => pickPaper(p.key, t.type, t.name, p.who)}>
           {busy ? <span className="nl-cmp-spin" aria-hidden /> : <Ico name="upload" size={14} />}
           {busy ? "Uploading…" : "Upload"}
         </button>
@@ -1174,7 +1211,7 @@ function NewLookCompliance({
           listingId={listingId}
           propertyId={propertyId}
           propertyAddress={address}
-          landlords={landlord.name || landlord.email ? [{ name: landlord.name, email: landlord.email, phone: landlord.phone }] : []}
+          landlords={landlords}
           agentLarn={agentLarn}
           serviceOnRecord={service}
           scottish={home ? home.scotland : null}
@@ -1290,7 +1327,7 @@ function NewLookCompliance({
           listingId={listingId}
           propertyId={propertyId}
           propertyAddress={address}
-          landlords={landlord.name || landlord.email ? [{ name: landlord.name, email: landlord.email, phone: landlord.phone }] : []}
+          landlords={landlords}
           agentLarn={agentLarn}
           serviceOnRecord={service}
           scottish={home ? home.scotland : null}

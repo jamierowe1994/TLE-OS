@@ -13,6 +13,7 @@ import { readDroppedFile } from "@/lib/plc-read-file";
 import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { isTestCase } from "@/lib/test-guard";
 import { letTenantFiles } from "@/lib/let-tenant-files";
+import { jointLandlordNames } from "@/lib/property-people";
 
 /**
  * ONE UPLOAD, BOTH PLACES (Kirstie, 8 Oct 2026).
@@ -132,6 +133,17 @@ async function inThrees<T, R>(items: T[], fn: (t: T) => Promise<R>): Promise<R[]
 /** Every check the pack already has a file for, counting what a file also covers. */
 const filledOn = (c: PlcCase) => new Set(c.documents.flatMap((d) => [d.checkId, ...(d.covers ?? [])]));
 
+/** How many files on the pack answer this check. */
+const countOn = (c: PlcCase, check: CheckId) => c.documents.filter((d) => !d.placeholder && (d.checkId === check || (d.covers ?? []).includes(check))).length;
+
+/**
+ * Still short of a landlord check: one ID and one AML check for each landlord
+ * on the home, up to two (joint owners, 1 Nov 2026). With one landlord this
+ * is exactly "nothing on the pack for it yet", as before.
+ */
+const shortOf = (run: Run, check: CheckId) =>
+  countOn(run.current, check) < (check === "proof-of-ownership" ? 1 : Math.min(Math.max(run.landlords.length, 1), PER_LANDLORD_CHECK));
+
 const ymdToday = () => londonToday();
 const daysBefore = (ymd: string, days: number) =>
   new Date(Date.parse(`${ymd}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
@@ -164,6 +176,10 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
 
   const home = await homeRecords(start.address, ctx.propertyId);
   const landlord = (ctx.landlord ?? home.landlord ?? "").trim() || null;
+  /* A second owner kept on the home in the OS (lib/property-people): their ID
+     and AML belong on the pack as much as the record landlord's do. */
+  const joint = await jointLandlordNames([...home.ids, `let:${start.applicationRef}`]).catch(() => [] as string[]);
+  const landlords = [...(landlord ? [landlord] : []), ...joint.filter((n) => n.toLowerCase() !== landlord?.toLowerCase())];
   if (hasDb()) {
     await q(`UPDATE os_plc_cases SET rex_property_id = COALESCE($2, rex_property_id), landlord_name = COALESCE($3, landlord_name) WHERE id = $1`, [
       caseId,
@@ -174,7 +190,9 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
 
   const run: Run = {
     caseId,
-    ctx: { ...ctx, landlord },
+    /* The reader is told every landlord's name, so a joint owner's passport reads as a landlord's. */
+    ctx: { ...ctx, landlord: landlords.join(" & ") || null },
+    landlords,
     current: start,
     offered: new Set([...(start.fileKeys ?? []), ...start.documents.map((d) => d.key)]),
     hashes: new Set(start.documents.map((d) => d.hash).filter(Boolean) as string[]),
@@ -187,7 +205,7 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
   await fromDocumentsTab(run);
   await fromTenantUploads(run);
   await fromCertificates(run, home.ids);
-  await fromPropertyRecord(run, home.records, landlord);
+  await fromPropertyRecord(run, home.records);
   if (landlord) await fromLandlordsOtherHomes(run, landlord, home.ids);
   await fromSignedTerms(run, home.ids);
   if (!run.termsOffered) run.remember.push(TERMS_OFFERED);
@@ -199,6 +217,8 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
 type Run = {
   caseId: string;
   ctx: Ctx;
+  /** Every landlord on the home by name: the record's, then the joint ones. */
+  landlords: string[];
   current: PlcCase;
   /** Keys on the pack, or offered to it before. */
   offered: Set<string>;
@@ -426,8 +446,8 @@ function namesAnotherHome(fileName: string, address: string): boolean {
   return false;
 }
 
-async function fromPropertyRecord(run: Run, records: string[], landlord: string | null) {
-  const gaps = RECORD_CHECKS.filter((c) => !filledOn(run.current).has(c));
+async function fromPropertyRecord(run: Run, records: string[]) {
+  const gaps = RECORD_CHECKS.filter((c) => shortOf(run, c));
   if (!gaps.length || !records.length) return;
   const { recordFiles } = await import("@/lib/listing-record");
   const files = (await Promise.all(records.map((id) => recordFiles(id).catch(() => []))))
@@ -440,7 +460,7 @@ async function fromPropertyRecord(run: Run, records: string[], landlord: string 
   const reads = await inThrees(files, (f) =>
     readDroppedFile(
       { key: f.key, name: f.name },
-      { address: run.current.address, landlordName: landlord, label: checkById(CHECK_FOR_RECORD[f.field])?.label ?? null }
+      { address: run.current.address, landlordName: run.ctx.landlord, label: checkById(CHECK_FOR_RECORD[f.field])?.label ?? null }
     )
   );
 
@@ -458,7 +478,7 @@ async function fromPropertyRecord(run: Run, records: string[], landlord: string 
     if (checkId === "proof-of-ownership" && namesAnotherHome(f.name, run.current.address)) continue;
     if (checkId === "landlord-id-aml" && read.expiryDate && read.expiryDate < validOn) continue;
     if (checkId === "landlord-aml" && read.issueDate && read.issueDate < amlFrom) continue;
-    if (landlord && checkId !== "proof-of-ownership" && !namesLandlord(read, landlord)) continue;
+    if (run.landlords.length && checkId !== "proof-of-ownership" && !namesLandlord(read, run.landlords)) continue;
     await file(run, "landlord", { key: f.key, name: f.name, checkId, hash, read: { ...read, checkId, note: read.note ?? "From this home's property record." } });
   }
   /* Offered once, like the Documents tab: one taken off is not brought back. */
@@ -589,11 +609,11 @@ const PER_LANDLORD_CHECK = 2;
 
 const isCompany = (name: string) => /\b(ltd|limited|llp|plc|inc|properties|holdings|lettings|estates|group|trust)\b/i.test(name);
 
-/** Does the paper name the landlord? A company's director is not checkable here. */
-function namesLandlord(read: Read | null | undefined, landlord: string): boolean {
-  if (isCompany(landlord) || !read?.names?.length) return true;
-  const surnames = landlord
-    .split(/\s*(?:&|\band\b|,)\s*/i)
+/** Does the paper name one of the landlords? A company's director is not checkable here. */
+function namesLandlord(read: Read | null | undefined, landlords: string[]): boolean {
+  if (landlords.some(isCompany) || !read?.names?.length) return true;
+  const surnames = landlords
+    .flatMap((l) => l.split(/\s*(?:&|\band\b|,)\s*/i))
     .map((p) => p.trim().split(/\s+/).pop()?.toLowerCase() ?? "")
     .filter((s) => s.length > 1);
   return read.names.some((n) => surnames.some((s) => n.toLowerCase().includes(s)));
@@ -601,8 +621,7 @@ function namesLandlord(read: Read | null | undefined, landlord: string): boolean
 
 async function fromLandlordsOtherHomes(run: Run, landlord: string, thisHome: string[]) {
   if (!hasDb()) return;
-  const filled = filledOn(run.current);
-  const gaps = LANDLORD_CHECKS.filter((c) => !filled.has(c));
+  const gaps = LANDLORD_CHECKS.filter((c) => shortOf(run, c));
   if (!gaps.length) return;
 
   const homes = await q<{ id: string; rex_property_id: string | null; address: string }>(
@@ -687,11 +706,11 @@ async function fromLandlordsOtherHomes(run: Run, landlord: string, thisHome: str
     if (hash && run.hashes.has(hash)) continue;
     const { checkId, read } = c.confirmed ? { checkId: c.label, read: reads[i] } : slotFor(reads[i], c.label);
     if (!checkId || !gaps.includes(checkId)) continue;
-    if ((count.get(checkId) ?? 0) >= PER_LANDLORD_CHECK) continue;
+    if ((count.get(checkId) ?? 0) >= PER_LANDLORD_CHECK || !shortOf(run, checkId)) continue;
     /* In date on the move-in: an ID by its expiry, an AML check by its age. */
     if (checkId === "landlord-id-aml" && read.expiryDate && read.expiryDate < validOn) continue;
     if (checkId === "landlord-aml" && (read.issueDate ?? c.at.slice(0, 10)) < amlFrom) continue;
-    if (!namesLandlord(read, landlord)) continue;
+    if (!namesLandlord(read, run.landlords)) continue;
     count.set(checkId, (count.get(checkId) ?? 0) + 1);
     await file(run, "landlord", {
       key: c.key,
