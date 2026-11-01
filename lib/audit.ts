@@ -84,6 +84,9 @@ export type AuditKind =
   | "property_person_added"
   | "property_person_changed"
   | "property_person_removed"
+  /* A let's move-in, deposit, rent, holding fee or tenancy length put right on
+     the let in the OS (lib/let-edits, 1 Nov 2026). Never sent to REX or Propoly. */
+  | "let_figures_changed"
   /* The landlord of a home changed in the OS to a company, an estate or a new
      owner (17 Oct 2026, lib/landlord-change), or that change undone. OS only. */
   | "landlord_changed"
