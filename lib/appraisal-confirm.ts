@@ -111,6 +111,12 @@ export interface ConfirmationDraft {
   alreadySent?: { at: string; to: string; subject: string };
   /** Confirmed before at another time, so this one says it has moved. */
   moved?: { from: string };
+  /**
+   * Where the last confirmation went, when the landlord's email has been
+   * changed since. A corrected address is a reason to send it again even at
+   * the same time (Dan Richards, 1 Nov 2026).
+   */
+  previousTo?: string;
   attachment: string | null;
 }
 
@@ -165,6 +171,7 @@ export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me:
         : undefined,
     alreadySent: prev && isRepeat(prev, full.appointmentAt) ? { at: prev.sentAt, to: prev.to, subject: prev.subject } : undefined,
     moved: moved && (prev?.startsAt || input.movedFrom) ? { from: (input.movedFrom || prev?.startsAt)! } : undefined,
+    previousTo: prev?.to && to.includes("@") && prev.to.trim().toLowerCase() !== to.toLowerCase() ? prev.to : undefined,
     /* The buttons in the body replace the attachment people missed. */
     attachment: full.appointmentAt && !links ? "market-appraisal.ics" : null,
   };

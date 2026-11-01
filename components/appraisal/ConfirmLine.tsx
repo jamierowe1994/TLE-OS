@@ -15,17 +15,33 @@ import ConfirmSheet from "@/components/ConfirmSheet";
  * See it, and View more sent items for the rest, each one openable as it
  * went (James, 17 Sep 2026).
  *
+ * Once it has gone, Send Again sits beside See it: the same sheet, written to
+ * the email on file NOW, so a landlord whose address was wrong can have it
+ * again after the agent corrects it. When the email has changed since the
+ * last send the card says where that one went (Dan Richards, 1 Nov 2026).
+ *
  * Arriving with ?confirm=1 opens the confirmation at once, and the parameter
  * is dropped so a refresh does not reopen it.
  */
-type Draft = { ok?: boolean; alreadySent?: { at: string }; moved?: { from: string }; blocked?: string };
+type Draft = { ok?: boolean; alreadySent?: { at: string }; moved?: { from: string }; blocked?: string; previousTo?: string };
 type Item = { id: string; subject: string; sentAt: string; label: string };
 type Email = Item & { html: string; to: string; deck?: { href: string } | null };
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
 
-export default function ConfirmLine({ appraisalId, appointmentAt }: { appraisalId: string; appointmentAt: string }) {
+export default function ConfirmLine({
+  appraisalId,
+  appointmentAt,
+  fromLink = true,
+  onSent,
+}: {
+  appraisalId: string;
+  appointmentAt: string;
+  /** Open on ?confirm=1. Off where the appraisal file may be showing its own line. */
+  fromLink?: boolean;
+  onSent?: () => void;
+}) {
   const [draft, setDraft] = useState<Draft | null | "error">(null);
   const [items, setItems] = useState<Item[] | null>(null);
   const [open, setOpen] = useState(false);
@@ -51,18 +67,22 @@ export default function ConfirmLine({ appraisalId, appointmentAt }: { appraisalI
   useEffect(() => load(), [load, appointmentAt]);
 
   useEffect(() => {
+    if (!fromLink) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("confirm") !== "1") return;
     setOpen(true);
     params.delete("confirm");
     const qs = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
-  }, []);
+  }, [fromLink]);
 
   const loading = draft === null || items === null;
   const d = draft === "error" ? null : draft;
   const needsConfirming = Boolean(d && !d.alreadySent && !d.blocked);
   const latest = items?.[0] ?? null;
+  /* The confirmation has gone for this time: it can go again, to the email on file now. */
+  const canResend = Boolean(d?.alreadySent);
+  const changed = d?.previousTo ?? null;
   /* "More" is everything the headline line is not already showing. */
   const more = (items?.length ?? 0) - (needsConfirming ? 0 : latest ? 1 : 0);
 
@@ -70,7 +90,7 @@ export default function ConfirmLine({ appraisalId, appointmentAt }: { appraisalI
     <div className="mt-3.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line/50 bg-white/60 px-3.5 py-2.5">
         <DoodleIcon name="mail" size={14} className="shrink-0 text-accent-dark" />
-        <p className="min-w-0 flex-1 text-[12px] leading-snug">
+        <p className="min-w-[10.5rem] flex-1 text-[12px] leading-snug">
           {loading ? (
             <span className="flex items-center gap-2 text-muted">
               <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
@@ -94,6 +114,15 @@ export default function ConfirmLine({ appraisalId, appointmentAt }: { appraisalI
             <>
               <span className="block font-semibold">{latest.label}</span>
               <span className="block text-muted">{when(latest.sentAt)}</span>
+              {changed && <span className="block text-accent-dark">Last sent to {changed} - the email has changed since.</span>}
+            </>
+          ) : d?.alreadySent ? (
+            /* Sent, but to an address no longer on file: the sent list reads
+               the email on file now, so it has nothing to show. */
+            <>
+              <span className="block font-semibold">Confirmation sent</span>
+              <span className="block text-muted">{when(d.alreadySent.at)}</span>
+              {changed && <span className="block text-accent-dark">Last sent to {changed} - the email has changed since.</span>}
             </>
           ) : d?.blocked ? (
             <span className="text-muted">{d.blocked}</span>
@@ -111,6 +140,19 @@ export default function ConfirmLine({ appraisalId, appointmentAt }: { appraisalI
             See it
           </button>
         )}
+        {!loading && !needsConfirming && canResend && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className={
+              changed
+                ? "shrink-0 rounded-full bg-[var(--brown)] px-3.5 py-1.5 text-[11.5px] font-semibold text-white"
+                : "shrink-0 rounded-full border border-line/80 px-3 py-1.5 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
+            }
+          >
+            {latest && !/^(Confirmation|New time) sent$/.test(latest.label) ? "Send Confirmation Again" : "Send Again"}
+          </button>
+        )}
       </div>
       {!loading && more > 0 && (
         <button type="button" onClick={() => setList(true)} className="mt-2 pl-1 text-[11.5px] font-semibold text-muted underline-offset-2 hover:text-ink hover:underline">
@@ -119,7 +161,10 @@ export default function ConfirmLine({ appraisalId, appointmentAt }: { appraisalI
       )}
 
       {open && (
-        <ConfirmSheet title="Confirm the appraisal" target={{ kind: "appraisal", id: appraisalId }} onClose={() => setOpen(false)} onSent={() => load()} />
+        <ConfirmSheet title="Confirm the appraisal" target={{ kind: "appraisal", id: appraisalId }} onClose={() => setOpen(false)} onSent={() => {
+          load();
+          onSent?.();
+        }} />
       )}
       {list && items && (
         <SentList items={items} onClose={() => setList(false)} onOpen={(id) => setViewing(id)} />
