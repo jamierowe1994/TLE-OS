@@ -959,15 +959,17 @@ export default function ApplicationDrawer({
      in Propoly it is the only place that says (Sean, 15 Oct 2026: a let only
      read "Not known yet"). */
   const [listingService, setListingService] = useState<string | null>(null);
+  const [listingDeposit, setListingDeposit] = useState<number | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
   useEffect(() => {
     if (!photoListing) return;
     let live = true;
     fetch(`/api/listings/details?id=${encodeURIComponent(photoListing)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; details?: { images?: { url: string; priority: number }[]; service?: string | null } }) => {
+      .then((j: { ok?: boolean; details?: { images?: { url: string; priority: number }[]; service?: string | null; deposit?: number | null } }) => {
         if (!live || !j.ok) return;
         if (j.details?.service) setListingService(j.details.service);
+        if (j.details?.deposit != null) setListingDeposit(j.details.deposit);
         const urls = [...(j.details?.images ?? [])].sort((a, b) => a.priority - b.priority).map((m) => m.url).filter(Boolean);
         if (urls.length) setGallery(urls);
       })
@@ -1026,7 +1028,21 @@ export default function ApplicationDrawer({
      Applications we only seem to show the one photo"), the one the record
      carries until they land. */
   const shots = gallery?.length ? gallery : (deal?.app.images?.length ? deal.app.images : image ? [image] : []);
-  const moveIn = app ? (app.moveIn !== "—" ? app.moveIn : deal?.app.startDate ?? null) : deal?.app.startDate ?? null;
+  /* Once the let is in Propoly, Propoly's move-in day is the one the
+     agreement is drawn on, so it is the one shown (Lianna, 30 Oct 2026, 12
+     South Chesters Lane: Propoly had 9 November and the listing 10 November,
+     yet the let read the tenant's first offer, 1 November, whatever was
+     changed). Before the deal, the application's own date. */
+  const moveIn = deal?.app.startDate ?? (app && app.moveIn !== "—" ? app.moveIn : null);
+  /* The deposit, which the let never showed: Propoly's on the deal, the
+     listing's before it. Zero deposit has no cash to take. */
+  const depositText = deal?.app.propoly?.depositReplacement
+    ? "Zero deposit (Flatfair)"
+    : deal?.app.propoly?.deposit != null
+      ? gbp(deal.app.propoly.deposit)
+      : listingDeposit != null
+        ? `${gbp(listingDeposit)} on the listing`
+        : "Not set yet";
   const agent = app?.agent ?? deal?.agentName ?? "—";
   const dealStatus = deal ? cardStatus(deal, deal.effectiveStatusKey) : null;
   const flags = [...(journey?.ok ? journey.flags ?? [] : []), ...(deal?.flags ?? []).map((f) => f.label)].filter((f, i, all) => all.indexOf(f) === i);
@@ -1073,6 +1089,7 @@ export default function ApplicationDrawer({
 
   const facts = [
     { icon: "calendar", label: "Move-in", text: moveIn ? niceDate(moveIn) : "Not set yet" },
+    ...(intro || isSwap ? [] : [{ icon: "wallet", label: "Deposit", text: depositText }]),
     { icon: "coin", label: isSwap ? "Rent, the home" : "Rent", text: rent ? `${rent} ${per}` : "No offer recorded" },
     ...(app?.swapPortion ? [{ icon: "coin", label: "Their portion", text: `${app.swapPortion} pcm` }] : []),
     { icon: "user", label: "Agent", text: agent },
