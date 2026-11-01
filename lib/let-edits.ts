@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import type { Application } from "@/lib/applications";
 import type { AgentApplication } from "@/lib/business/rex-stats";
-import { LET_FIELDS, letNumber, type LetEditEvent, type LetEditNow, type LetField } from "@/lib/let-edit-fields";
+import { LET_FIELDS, letNumber, stillNewest, type LetEditEvent, type LetEditNow, type LetField } from "@/lib/let-edit-fields";
 
 /**
  * THE OS'S OWN FIGURES ON A LET (James, 1 Nov 2026).
@@ -23,6 +23,9 @@ import { LET_FIELDS, letNumber, type LetEditEvent, type LetEditNow, type LetFiel
  *             logged here so the let has one history)
  *   value     null: put back to what the let was read from
  *   was       what the let showed before the change
+ *   seen      what Propoly and the application held at the time ({propoly,
+ *             app}), so a source changed AFTER the OS wins back: the newest
+ *             figure always wins (James, 2 Nov 2026)
  *
  * Rows are never updated or deleted: they are the audit trail.
  */
@@ -49,6 +52,7 @@ async function tq<T extends Record<string, unknown>>(text: string, params: unkno
     )`)
     .then(() => q(`CREATE INDEX IF NOT EXISTS os_let_edits_ref ON os_let_edits (let_ref, field, at)`))
     .then(() => q(`CREATE INDEX IF NOT EXISTS os_let_edits_deal ON os_let_edits (deal_id, field, at)`))
+    .then(() => q(`ALTER TABLE os_let_edits ADD COLUMN IF NOT EXISTS seen JSONB`))
     .then(() => undefined)
     .catch((e) => {
       ready = null;
@@ -58,9 +62,9 @@ async function tq<T extends Record<string, unknown>>(text: string, params: unkno
   return q<T>(text, params);
 }
 
-type Row = { id: string; let_ref: string; deal_id: string | null; field: string; value: string | null; was: string | null; by_name: string; by_email: string; at: Date };
+type Row = { id: string; let_ref: string; deal_id: string | null; field: string; value: string | null; was: string | null; by_name: string; by_email: string; at: Date; seen?: LetEditNow["seen"] | null };
 
-const now = (r: Row): LetEditNow => ({ value: r.value, by: r.by_name || r.by_email, at: new Date(r.at).toISOString() });
+const now = (r: Row): LetEditNow => ({ value: r.value, by: r.by_name || r.by_email, at: new Date(r.at).toISOString(), ...(r.seen ? { seen: r.seen } : {}) });
 
 /** Newest row per key and field, the key being what `keyOf` says the row belongs to. */
 function latest(rows: Row[], keyOf: (r: Row) => string): Map<string, LetEditsNow> {
@@ -101,6 +105,62 @@ export async function letEditsForDeals(dealIds: string[]): Promise<Map<string, L
   return latest(rows, (r) => (r.deal_id && set.has(r.deal_id) ? r.deal_id : r.let_ref));
 }
 
+/*
+ * Every deal's figures at once, for the Propoly book itself (lib/business/
+ * propoly-deals): read on every look at the book, so held for a few seconds
+ * in this process and dropped on a save. A small table - one row per change.
+ */
+let dealCache: { at: number; map: Map<string, LetEditsNow> } | null = null;
+const DEAL_CACHE_MS = 15_000;
+async function allDealEdits(): Promise<Map<string, LetEditsNow>> {
+  if (!hasDb()) return new Map();
+  if (dealCache && Date.now() - dealCache.at < DEAL_CACHE_MS) return dealCache.map;
+  const rows = await tq<Row>(`SELECT * FROM os_let_edits WHERE field = ANY($1::text[])`, [[...LET_FIELDS]]);
+  /* Keyed both ways: by the deal it was saved against, and by the let's own id
+     (a let opened as its deal has the deal's id as its page id). */
+  const byDeal = latest(rows.filter((r) => r.deal_id), (r) => r.deal_id as string);
+  const byRef = latest(rows.filter((r) => !r.deal_id), (r) => r.let_ref);
+  const map = new Map<string, LetEditsNow>(byRef);
+  for (const [k, e] of byDeal) {
+    const other = map.get(k) ?? {};
+    const out: LetEditsNow = { ...other };
+    for (const f of LET_FIELDS) if (e[f] && (!other[f] || other[f]!.at <= e[f]!.at)) out[f] = e[f];
+    map.set(k, out);
+  }
+  dealCache = { at: Date.now(), map };
+  return map;
+}
+
+/**
+ * The Propoly book as every screen reads it (lib/business/propoly-deals):
+ * each deal with the OS's newer figures over Propoly's - the tenant and
+ * landlord portals, the boards, Steve, the move-in counts, the emails - and
+ * a mark on each changed field saying what Propoly itself still has. Copies
+ * only of the deals that changed; the held book is never touched.
+ */
+export async function overlayDealBook<T extends DealLike & { letEdits?: Partial<Record<LetField, DealEditMark>> | null }>(deals: T[]): Promise<T[]> {
+  const edits = await allDealEdits().catch(() => null);
+  if (!edits?.size) return deals;
+  return deals.map((d) => {
+    const { deal, marks } = withLetEdits(d, edits.get(d.app.id));
+    return marks ? { ...deal, letEdits: marks } : d;
+  });
+}
+
+/** Propoly's finished deals, with a move-in or rent changed in the OS over Propoly's. */
+export async function overlayCompletes<T extends { uuid: string | null; date: string | null; rentPcm: number | null }>(rows: T[]): Promise<T[]> {
+  const edits = await allDealEdits().catch(() => null);
+  if (!edits?.size) return rows;
+  return rows.map((c) => {
+    const e = c.uuid ? edits.get(c.uuid) : undefined;
+    if (!e) return c;
+    const out = { ...c };
+    if (e.moveIn && stillNewest("moveIn", e.moveIn, "propoly", c.date ? c.date.slice(0, 10) : null)) out.date = e.moveIn.value;
+    if (e.rent && stillNewest("rent", e.rent, "propoly", c.rentPcm)) out.rentPcm = letNumber(e.rent.value);
+    return out;
+  });
+}
+
 /** Everything changed on one let, newest first: its own rows and its deal's. */
 export async function letEditHistory(ref: string, dealId: string | null): Promise<LetEditEvent[]> {
   if (!hasDb() || !ref) return [];
@@ -111,8 +171,12 @@ export async function letEditHistory(ref: string, dealId: string | null): Promis
   return rows.map((r) => ({ id: r.id, field: r.field, value: r.value, was: r.was, by: r.by_name || r.by_email, at: new Date(r.at).toISOString() }));
 }
 
-/** The current OS values on one let, its own and its deal's, newest winning. */
-export async function letEditsNow(ref: string, dealId: string | null): Promise<LetEditsNow> {
+/**
+ * The current OS values on one let, its own and its deal's, newest winning.
+ * With what each source holds now (`raw`), a figure a source has changed
+ * since is left out: that source's figure is the newer one.
+ */
+export async function letEditsNow(ref: string, dealId: string | null, raw?: { propoly?: (f: LetField) => string | null; app?: (f: LetField) => string | null }): Promise<LetEditsNow> {
   const [own, deal] = await Promise.all([letEditsFor([ref]), dealId ? letEditsForDeals([dealId]) : Promise.resolve(new Map<string, LetEditsNow>())]);
   const a = own.get(ref) ?? {};
   const b = (dealId ? deal.get(dealId) : null) ?? {};
@@ -121,23 +185,28 @@ export async function letEditsNow(ref: string, dealId: string | null): Promise<L
     const x = a[f];
     const y = b[f];
     const pick = x && y ? (x.at >= y.at ? x : y) : x ?? y;
-    if (pick) out[f] = pick;
+    if (!pick) continue;
+    if (raw?.propoly && !stillNewest(f, pick, "propoly", raw.propoly(f))) continue;
+    if (raw?.app && !stillNewest(f, pick, "app", raw.app(f))) continue;
+    out[f] = pick;
   }
   return out;
 }
 
-export type LetChange = { field: string; value: string | null; was: string | null };
+export type LetChange = { field: string; value: string | null; was: string | null; seen?: LetEditNow["seen"] };
 
 /** One Save: every field that changed, in one go. */
 export async function saveLetEdits(ref: string, dealId: string | null, changes: LetChange[], by: { id: string | null; name: string; email: string }): Promise<void> {
   if (!changes.length) return;
   const values: unknown[] = [];
   const rows = changes.map((c, i) => {
-    values.push(randomUUID(), ref, dealId, c.field.slice(0, 300), c.value, c.was === null ? null : c.was.slice(0, 300), by.id, by.name.slice(0, 120), by.email.slice(0, 200));
-    const o = i * 9;
-    return `($${o + 1},$${o + 2},$${o + 3},$${o + 4},$${o + 5},$${o + 6},$${o + 7},$${o + 8},$${o + 9})`;
+    values.push(randomUUID(), ref, dealId, c.field.slice(0, 300), c.value, c.was === null ? null : c.was.slice(0, 300), by.id, by.name.slice(0, 120), by.email.slice(0, 200), c.seen ? JSON.stringify(c.seen) : null);
+    const o = i * 10;
+    return `($${o + 1},$${o + 2},$${o + 3},$${o + 4},$${o + 5},$${o + 6},$${o + 7},$${o + 8},$${o + 9},$${o + 10}::jsonb)`;
   });
-  await tq(`INSERT INTO os_let_edits (id, let_ref, deal_id, field, value, was, by_id, by_name, by_email) VALUES ${rows.join(",")}`, values);
+  await tq(`INSERT INTO os_let_edits (id, let_ref, deal_id, field, value, was, by_id, by_name, by_email, seen) VALUES ${rows.join(",")}`, values);
+  /* The Propoly book reads the change at once, not in a few seconds. */
+  dealCache = null;
 }
 
 /* ── laid over what the let was read from ─────────────────────────────── */
@@ -153,15 +222,19 @@ export async function applyLetEdits(apps: Application[]): Promise<void> {
   const edits = await letEditsFor(fresh.map((a) => String(a.id)));
   const s = (n: number | null | undefined) => (n == null ? null : String(n));
   for (const a of fresh) {
-    const e = edits.get(String(a.id));
-    if (!e) { a.letEdits = null; continue; }
+    const found = edits.get(String(a.id));
+    if (!found) { a.letEdits = null; continue; }
+    /* A figure the application has changed since is the newer one: it stands. */
+    const e: LetEditsNow = {};
+    const appNow: Record<LetField, string | number | null> = { moveIn: a.startDate ? a.startDate.slice(0, 10) : null, rent: a.offerAmount, holdingFee: a.holdingDepositAmount, termMonths: a.agreementMonths, deposit: null };
+    for (const f of LET_FIELDS) if (found[f] && stillNewest(f, found[f]!, "app", appNow[f])) e[f] = found[f];
     const marks: Partial<Record<LetField, AppEditMark>> = {};
     if (e.moveIn) { marks.moveIn = { ...e.moveIn, source: a.startDate ? a.startDate.slice(0, 10) : null }; a.startDate = e.moveIn.value; }
     if (e.rent) { marks.rent = { ...e.rent, source: s(a.offerAmount) }; a.offerAmount = letNumber(e.rent.value); }
     if (e.holdingFee) { marks.holdingFee = { ...e.holdingFee, source: s(a.holdingDepositAmount) }; a.holdingDepositAmount = letNumber(e.holdingFee.value); }
     if (e.termMonths) { marks.termMonths = { ...e.termMonths, source: s(a.agreementMonths) }; a.agreementMonths = letNumber(e.termMonths.value); }
     if (e.deposit) marks.deposit = { ...e.deposit, source: null };
-    a.letEdits = marks;
+    a.letEdits = Object.keys(marks).length ? marks : null;
   }
 }
 
@@ -191,6 +264,8 @@ export function withLetEdits<T extends DealLike>(d: T, e: LetEditsNow | undefine
   for (const f of LET_FIELDS) {
     const x = e[f];
     if (!x) continue;
+    /* Propoly changed it after the OS did: Propoly's is the newer figure. */
+    if (!stillNewest(f, x, "propoly", dealValue(d.app, f))) continue;
     marks[f] = { ...x, propoly: dealValue(d.app, f) };
     const n = letNumber(x.value);
     if (f === "moveIn") app.startDate = x.value;
@@ -199,5 +274,6 @@ export function withLetEdits<T extends DealLike>(d: T, e: LetEditsNow | undefine
     if (f === "deposit" && app.propoly) app.propoly.deposit = n;
     if (f === "holdingFee" && app.propoly) app.propoly.holdingFee = n;
   }
+  if (!Object.keys(marks).length) return { deal: d, marks: null };
   return { deal: { ...d, app }, marks };
 }

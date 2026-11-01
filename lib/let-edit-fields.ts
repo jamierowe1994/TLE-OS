@@ -43,6 +43,23 @@ export interface LetEditNow {
   value: string | null;
   by: string;
   at: string;
+  /**
+   * What each source held when the change was made (James, 2 Nov 2026: "the
+   * newest figure always wins"). A key present means that source was read at
+   * the time; if it holds something else now, it changed after the OS did and
+   * its figure is the newer one. Absent on the first rows, which always win.
+   */
+  seen?: { propoly?: string | null; app?: string | null };
+}
+
+/**
+ * Is the OS's figure still the newest, against what this source holds now?
+ * False once the source has moved on since the change was made here.
+ */
+export function stillNewest(field: LetField, e: LetEditNow, side: "propoly" | "app", now: string | number | null | undefined): boolean {
+  const s = e.seen;
+  if (!s || !(side in s)) return true;
+  return sameLetValue(field, s[side] ?? null, now ?? null);
 }
 
 /** A change, for the record's history. */

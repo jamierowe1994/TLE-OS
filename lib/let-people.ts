@@ -16,7 +16,6 @@ import { sameHome } from "@/lib/address-parse";
 import { letTenants } from "@/lib/let-tenants";
 import { dealForLet, type LetDeal } from "@/lib/let-deal";
 import { isOwnerReln } from "@/lib/rex-reln";
-import { letEditsForDeals } from "@/lib/let-edits";
 import { can } from "@/lib/roles";
 
 /**
@@ -169,8 +168,8 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
     listingId,
     dealId: d.app.id,
     agentName: d.managerName,
-    /* The move-in as the agent put it right on the let (lib/let-edits), over Propoly's. */
-    moveIn: (await letEditsForDeals([d.app.id]).catch(() => null))?.get(d.app.id)?.moveIn?.value ?? d.app.startDate,
+    /* Already the OS's where the agent put it right (the book lays lib/let-edits over Propoly's). */
+    moveIn: d.app.startDate,
     tenants: d.app.tenants.map((t) => ({ name: t.name, email: t.email, phone: t.phone, contactId: null, isPrimary: t.isPrimary })),
     landlord,
     landlordProblem: landlord ? null : !listingId ? "Propoly's deal names no landlord, and it isn't linked to a listing to look one up." : ll && !ll.ok ? ll.problem : null,

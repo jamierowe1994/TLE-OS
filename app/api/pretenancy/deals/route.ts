@@ -27,7 +27,7 @@ import { PORTAL_STAGES, portalStageOf } from "@/lib/business/propoly-stages";
 import type { DealPortalOverlay } from "@/lib/business/types";
 import { testDealsForBoard } from "@/lib/test-overlay";
 import { allOptOuts, optOutIn, type OptOut } from "@/lib/zero-deposit-optout";
-import { letEditsForDeals, withLetEdits, type DealEditMark } from "@/lib/let-edits";
+import type { DealEditMark } from "@/lib/let-edits";
 import type { LetField } from "@/lib/let-edit-fields";
 
 // GET /api/pretenancy/deals — every Propoly deal across all TLE agents with
@@ -293,19 +293,10 @@ export async function GET(req: NextRequest) {
     /* Cancelling a duplicate is Kirstie's job, in Propoly. */
     duplicates = [];
   }
-  /* The let's figures as the agent put them right in the OS, over Propoly's
-     (lib/let-edits): the move-in date, the deposit, the rent. Laid on before
-     anything is worked out from them, so a move-in moved on in the OS is not
-     "slipped". Copies: the deals are a shared held copy. */
-  const osEdits = await letEditsForDeals(deals.map((d) => d.app.id)).catch(() => null);
-  const editMarks = new Map<string, Partial<Record<LetField, DealEditMark>>>();
-  if (osEdits?.size) {
-    deals = deals.map((d) => {
-      const { deal, marks } = withLetEdits(d, osEdits.get(d.app.id));
-      if (marks) editMarks.set(d.app.id, marks);
-      return deal;
-    });
-  }
+  /* The let's figures as the agent put them right in the OS are already
+     laid over Propoly's by the book itself (lib/business/propoly-deals,
+     lib/let-edits), before anything here is worked out from them - so a
+     move-in moved on in the OS is not "slipped". Each carries its marks. */
   const [overlays, optOuts] = await Promise.all([getOverlays(deals.map((d) => d.app.id)), allOptOuts()]);
   /* The records seven of the eight stages are read from. See deal-stage. */
   const stageSources = await loadStageSources(deals.map((d) => d.app.id));
@@ -519,7 +510,7 @@ export async function GET(req: NextRequest) {
         ? { ...d.app, image: match.image, images: match.images, listingId: match.listingId }
         : d.app,
       statusKey: d.statusKey,
-      ...(editMarks.has(d.app.id) ? { letEdits: editMarks.get(d.app.id) } : {}),
+      ...(d.letEdits ? { letEdits: d.letEdits } : {}),
       effectiveStatusKey: effective,
       plc,
       money: {

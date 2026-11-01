@@ -2,6 +2,8 @@ import { rexCall } from "@/lib/rex";
 import type { Handoff } from "@/lib/deal-handoff";
 import { isHmoType, isScottish } from "@/lib/property-flags";
 import { optOutFor, refOfContact, type OptOut } from "@/lib/zero-deposit-optout";
+import { letEditsFor } from "@/lib/let-edits";
+import { letNumber, sameLetValue, stillNewest, type LetField } from "@/lib/let-edit-fields";
 
 /**
  * THE DEAL, PUSHED (9 Oct 2026).
@@ -132,6 +134,8 @@ export interface DealTerms {
   scotland: boolean;
   /** A tenant swap: never a holding fee. */
   swap?: boolean;
+  /** The holding fee was put right on the let in the OS (lib/let-edits): kept, never over a week's rent. */
+  holdingFeeSet?: boolean;
 }
 
 /** REX's lettings_service_type id → Propoly's service level. */
@@ -208,8 +212,10 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
   if (out.landlordOptOut) out.zeroDeposit = false;
   const dep = money(change.depositPounds);
   if (dep !== undefined) out.depositPounds = dep;
-  /* The holding fee follows the rent; it is never typed. */
-  out.holdingFeePounds = out.swap ? 0 : holdingFeeFor(out.rentPcm, out.scotland);
+  /* The holding fee follows the rent; it is never typed - unless the agent
+     put it right on the let in the OS, when that stands, capped at a week. */
+  const cap = holdingFeeFor(out.rentPcm, out.scotland);
+  out.holdingFeePounds = out.swap ? 0 : out.holdingFeeSet && base.holdingFeePounds != null && cap != null ? Math.min(base.holdingFeePounds, cap) : cap;
   return out;
 }
 
@@ -283,8 +289,47 @@ export async function dealDraftFor(packet: Handoff): Promise<{ terms: DealTerms;
   } else if (packet.swap) {
     listing = swapStandIn(packet);
   } else return null;
-  const terms = await withLandlordOptOut(dealDefaults(packet, listing), packet);
+  const terms = await withLetFigures(await withLandlordOptOut(dealDefaults(packet, listing), packet), packet);
   return { terms, problems: dealProblems(terms) };
+}
+
+/**
+ * The figures an agent put right on the let in the OS (lib/let-edits), over
+ * the offer's and the listing's: a new Propoly deal takes the edited move-in,
+ * rent, deposit, holding fee and tenancy length (James, 2 Nov 2026: "the
+ * newest figure always wins"). The packet's move-in, rent and term are the
+ * application's, which already carry them; the packet may be a held copy, so
+ * they are laid on again unless the application has changed since the edit.
+ * The deposit and holding fee were the listing's alone until now. The agent's
+ * own changes on the push panel come after, so they still win.
+ */
+export async function withLetFigures(terms: DealTerms, packet: Pick<Handoff, "applicationId" | "startDate" | "rentPcm" | "agreementMonths">): Promise<DealTerms> {
+  const e = (await letEditsFor([packet.applicationId]).catch(() => null))?.get(packet.applicationId);
+  if (!e) return terms;
+  const out = { ...terms };
+  const fromApp: Partial<Record<LetField, string | number | null>> = { moveIn: packet.startDate ? packet.startDate.slice(0, 10) : null, rent: packet.rentPcm, termMonths: packet.agreementMonths };
+  const newest = (f: LetField) => {
+    const x = e[f];
+    if (!x || x.value === null) return null;
+    if (f in fromApp && !sameLetValue(f, x.value, fromApp[f]) && !stillNewest(f, x, "app", fromApp[f])) return null;
+    return x.value;
+  };
+  const moveIn = newest("moveIn");
+  if (moveIn) out.moveIn = moveIn;
+  const rent = letNumber(newest("rent"));
+  if (rent != null && rent > 0) out.rentPcm = rent;
+  const term = letNumber(newest("termMonths"));
+  if (term != null && Number.isInteger(term) && term >= 1 && term <= 60) out.termMonths = term;
+  const deposit = letNumber(newest("deposit"));
+  if (deposit != null) out.depositPounds = deposit;
+  /* Never a holding fee in Scotland, whatever was typed. */
+  const holding = letNumber(newest("holdingFee"));
+  if (holding != null && !out.scotland && !out.swap) {
+    const cap = holdingFeeFor(out.rentPcm, false);
+    out.holdingFeePounds = cap != null ? Math.min(holding, cap) : holding;
+    out.holdingFeeSet = true;
+  }
+  return out;
 }
 
 /**
