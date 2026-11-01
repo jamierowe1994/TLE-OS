@@ -148,10 +148,12 @@ export default function Overview() {
           {(d) => (
             <>
               <Big value={d.due} label="visits due" />
+              {/* Each figure opens the board on just those visits (Rhiannon
+                  Dodge, 1 Nov 2026); Overdue is on the Due list it opens anyway. */}
               <Stats items={[
                 ["Overdue", String(d.overdue), d.overdue > 0],
-                ["Booked in", String(d.booked)],
-                ["Waiting on tenant", String(d.awaitingTenant)],
+                ["Booked in", String(d.booked), false, () => open("inspections", "booked")],
+                ["Waiting on tenant", String(d.awaitingTenant), false, () => open("inspections", "awaiting")],
               ]} />
             </>
           )}
@@ -305,15 +307,31 @@ function Big({ value, label, hot }: { value: number; label: string; hot?: boolea
   );
 }
 
-function Stats({ items }: { items: ([string, string] | [string, string, boolean])[] }) {
+/** A figure with `onOpen` is its own button, inside a card that may be one too. */
+function Stats({ items }: { items: ([string, string] | [string, string, boolean] | [string, string, boolean, () => void])[] }) {
   return (
     <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line/60 pt-3">
-      {items.map(([k, v, hot]) => (
-        <div key={k} className="min-w-0">
-          <dt className="break-words text-[9.5px] font-bold uppercase leading-tight tracking-wider text-muted">{k}</dt>
-          <dd className={`figures mt-0.5 truncate text-[16px] ${hot ? "text-accent-dark" : ""}`}>{v}</dd>
-        </div>
-      ))}
+      {items.map(([k, v, hot, onOpen]) => {
+        const body = (
+          <>
+            <dt className="break-words text-[9.5px] font-bold uppercase leading-tight tracking-wider text-muted">{k}</dt>
+            <dd className={`figures mt-0.5 truncate text-[16px] ${hot ? "text-accent-dark" : ""} ${onOpen ? "underline decoration-line underline-offset-4 group-hover:decoration-ink" : ""}`}>{v}</dd>
+          </>
+        );
+        return onOpen ? (
+          <button
+            key={k}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpen(); }}
+            aria-label={`${k}: ${v}. Show them.`}
+            className="group -mx-1 min-w-0 self-start rounded-md px-1 text-left transition-colors hover:bg-accent-soft/40"
+          >
+            {body}
+          </button>
+        ) : (
+          <div key={k} className="min-w-0">{body}</div>
+        );
+      })}
     </dl>
   );
 }
@@ -339,7 +357,7 @@ function Rows({ rows, empty }: { rows: [string, string, string][]; empty: string
 
 type PanelId = Parameters<ReturnType<typeof useOverviewPanel>["open"]>[0];
 
-function OverviewNew({ data, error, reload, open, panel }: { data: Board | null; error: string | null; reload: () => void; open: (id: PanelId) => void; panel: React.ReactNode }) {
+function OverviewNew({ data, error, reload, open, panel }: { data: Board | null; error: string | null; reload: () => void; open: (id: PanelId, focus?: string) => void; panel: React.ReactNode }) {
   const p = data?.properties;
   const a = data?.arrears;
   const pd = p?.ok ? p.data : null;
@@ -401,7 +419,10 @@ function OverviewNew({ data, error, reload, open, panel }: { data: Board | null;
           onOpen={md ? list("maintenance", "Open Jobs", md.open, ["Job", "Home", "Due", "Urgency", "Status"], { href: "/maintenance", label: "Open Maintenance" }, "Overdue first, then by when they're due.", "No open jobs.") : undefined} />
         <PmTile label="Inspections due" {...state(data?.inspections)} value={ind?.due ?? null}
           badge={ind && ind.overdue > 0 ? { text: `${ind.overdue} overdue`, tone: "warn" } : null}
-          sub={ind ? `${ind.booked} booked · ${ind.awaitingTenant} waiting on the tenant` : null}
+          links={ind ? [
+            { text: `${ind.booked} booked`, onOpen: () => open("inspections", "booked") },
+            { text: `${ind.awaitingTenant} waiting on the tenant`, onOpen: () => open("inspections", "awaiting") },
+          ] : null}
           strip={ind ? [ind.due - ind.overdue, ind.overdue] : null}
           onOpen={() => open("inspections")} />
         <PmTile label="Tenancy reviews" {...state(data?.reviews)} value={rd?.due ?? null}
@@ -507,12 +528,15 @@ function PmRow({ title, sub, children }: { title: string; sub: string; children:
  * dash with the reason, and opens nothing.
  */
 function PmTile({
-  label, value, loading, error, sub, badge, strip, money, suffix, onOpen, href,
+  label, value, loading, error, sub, links, badge, strip, money, suffix, onOpen, href,
 }: {
   label: string; value: number | null; loading: boolean; error: string | null; sub?: React.ReactNode; badge?: { text: string; tone: "warn" | "up" | "flat" } | null;
+  /** The sub line as figures that each open their own list (the Inspections tile's booked and waiting, 1 Nov 2026). */
+  links?: { text: string; onOpen: () => void }[] | null;
   strip?: [number, number] | null; money?: boolean; suffix?: string; onOpen?: () => void; href?: string;
 }) {
   const ready = !loading && !error && value != null;
+  const linked = ready && !!links?.length;
   const body = (
     <>
       <span className="nl-dash-stat-top">
@@ -531,7 +555,16 @@ function PmTile({
           <b className="nl-dash-stat-n">
             <CountUp value={value!} format={(n) => (money ? compact(n) : `${Math.round(n).toLocaleString("en-GB")}${suffix ?? ""}`)} />
           </b>
-          <span className="nl-dash-stat-sub">{sub}</span>
+          <span className="nl-dash-stat-sub">
+            {linked
+              ? links!.map((l, i) => (
+                  <span key={l.text}>
+                    {i > 0 && " · "}
+                    <button type="button" className="nl-dash-stat-link" onClick={(e) => { e.stopPropagation(); l.onOpen(); }}>{l.text}</button>
+                  </span>
+                ))
+              : sub}
+          </span>
           {strip && strip[0] + strip[1] > 0 && (
             <span className="nl-dash-strip" aria-hidden>
               <i className="is-ok" style={{ flexGrow: Math.max(0, strip[0]) }} />
@@ -542,6 +575,22 @@ function PmTile({
       )}
     </>
   );
+  /* A tile with its own figure buttons can't itself be a button (a button
+     may not hold another), so it is a pressable box with the same look. */
+  if (linked && onOpen) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        className="nl-dash-stat is-press"
+        onClick={onOpen}
+        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(); } }}
+        aria-label={`${label}. Show them.`}
+      >
+        {body}
+      </div>
+    );
+  }
   if (ready && onOpen) return <button type="button" className="nl-dash-stat" onClick={onOpen} aria-label={`${label}. Show them.`}>{body}</button>;
   if (ready && href) return <Link href={href} className="nl-dash-stat">{body}</Link>;
   return <div className="nl-dash-stat is-still">{body}</div>;
