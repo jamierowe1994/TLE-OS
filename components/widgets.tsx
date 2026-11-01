@@ -880,7 +880,16 @@ function PortfolioWidget({ w, h }: { w: number; h: number }) {
         {w >= 2 && book && <FlowTag from="REX" />}
       </div>
       {w === 1 && h === 1 ? (
-        <BigCount value={count} hint={hint} />
+        managed ? (
+          /* The rent on a line of its own: one line cut it off at a phone's
+             width ("managed homes · £3,..."), the figure that matters. */
+          <>
+            <BigCount value={count} hint="managed homes" />
+            <p className="figures mt-0.5 truncate text-[11px] text-muted">{money(managed.rentRoll)} pcm</p>
+          </>
+        ) : (
+          <BigCount value={count} hint={hint} />
+        )
       ) : (
         <>
           <div className="mt-2 flex items-end gap-4">
