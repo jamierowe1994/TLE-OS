@@ -67,6 +67,7 @@ import HomeKeys from "@/components/portfolio/HomeKeys";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import ListingOwner from "@/components/listing/ListingOwner";
 import ListingCompliance, { useListingHome } from "@/components/listing/ListingCompliance";
+import LandlordRegistration from "@/components/listing/LandlordRegistration";
 import FieldSelect from "@/components/FieldSelect";
 import { LET_TYPES, type LetType } from "@/lib/let-type";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
@@ -1907,6 +1908,7 @@ function ListingDrawerBody({
                   service={live?.service ?? null}
                   homeProblem={homeProblem}
                   landlordRegistration={live?.record.landlordRegistration ?? null}
+                  landlordRegistrationExpiry={live?.record.landlordRegistrationExpiry ?? null}
                   letOnly={/let\s*only|tenant\s*find/i.test(live?.service ?? "")}
                   introOnly={introOnly}
                   onHomeChanged={reloadHome}
@@ -3186,6 +3188,7 @@ function ListingDrawerBody({
                     {!testListing && <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" onClick={() => setLandlordOpen(true)}>Add the landlord</button>}
                   </>
                 )}
+                <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} look="new" onSaved={setLive} />
               </section>
 
               {/* Steve, looking for the handy next thing on this home. */}
@@ -3350,6 +3353,7 @@ function ListingDrawerBody({
               service={live?.service ?? null}
                   homeProblem={homeProblem}
               landlordRegistration={live?.record.landlordRegistration ?? null}
+                  landlordRegistrationExpiry={live?.record.landlordRegistrationExpiry ?? null}
               letOnly={/let\s*only|tenant\s*find/i.test(live?.service ?? "")}
               introOnly={introOnly}
               onHomeChanged={reloadHome}
@@ -3732,6 +3736,7 @@ function ListingDrawerBody({
                   the landlord, every field changeable, plus additional
                   landlords and points of contact kept on the home. */}
               {landlordBlock}
+              <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} onSaved={setLive} />
             </div>
 
             {/* How we get in - and, when it is through the tenant, the tenant. */}

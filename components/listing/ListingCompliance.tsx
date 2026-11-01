@@ -15,7 +15,7 @@ import { CHOICES, eicExpiry, type EicReason } from "@/lib/home-facts-shared";
 import { DOC_ACCEPT, OTHER, docTypeLabel } from "@/lib/doc-types";
 import type { LetType } from "@/lib/let-type";
 import type { TermsRequest, TermsState } from "@/lib/use-listing-terms";
-import { regNumbers, regNumbersInWords } from "@/lib/reg-numbers";
+import { regDay, regNumbers, regState, type RegState } from "@/lib/reg-numbers";
 
 /**
  * THE LISTING'S COMPLIANCE, IN ONE PLACE (James, 12 Oct 2026).
@@ -146,6 +146,7 @@ export default function ListingCompliance({
   terms,
   landlord,
   landlordRegistration,
+  landlordRegistrationExpiry = null,
   letOnly,
   introOnly,
   onHomeChanged,
@@ -164,6 +165,8 @@ export default function ListingCompliance({
   terms: TermsState;
   landlord: { contactId: string | number | null; name?: string; email?: string; phone?: string };
   landlordRegistration: string | null;
+  /** When each registration number runs out (lib/reg-numbers), from the listing's Landlord section. */
+  landlordRegistrationExpiry?: Record<string, string> | null;
   /** Let only on the listing: the certificates are the landlord's to keep in date. */
   letOnly?: boolean;
   /** Intro only (lib/intro-only): nothing here is ours to chase. */
@@ -222,7 +225,24 @@ export default function ListingCompliance({
     (home?.terms.rex ? { how: "Filed on the home's compliance record" } : null);
   const waiting = terms.status === "ready" ? terms.outstanding[0] ?? null : null;
 
-  const rows: { key: string; label: string; held: Held; need: string; action: React.ReactNode }[] = [
+  /* The registration's dates, set on the listing's Landlord section (Lianna,
+     30 Oct 2026): the worst of them sets the row - a lapsed one is to renew. */
+  const regNums = regNumbers(landlordRegistration);
+  const regRuns = regNums.map((n) => ({ n, day: landlordRegistrationExpiry?.[n] ?? null }));
+  const regWorst: RegState | null = regNums.length
+    ? (["expired", "due-soon", "no-date", "valid"] as RegState[]).find((st) => regRuns.some((r) => regState(r.day) === st)) ?? null
+    : null;
+  const regLine = regRuns
+    .map((r) => `${regNums.length > 1 ? `${r.n} ` : ""}${r.day ? `${regState(r.day) === "expired" ? "ran out" : "runs to"} ${regDay(r.day)}` : "no expiry date yet"}`)
+    .join(" · ");
+  const regPaper = paper("doc_landlord_registration");
+  const regHeld: Held = regPaper
+    ? { ...regPaper, how: regNums.length ? `${regPaper.how} · ${regLine}` : regPaper.how }
+    : regNums.length
+      ? { how: regNums.length > 1 ? regLine : `Number ${regNums[0]} · ${regLine}` }
+      : null;
+
+  const rows: { key: string; label: string; held: Held; need: string; action: React.ReactNode; reg?: RegState | null }[] = [
     {
       key: "terms",
       label: "Terms of business",
@@ -239,7 +259,7 @@ export default function ListingCompliance({
     { key: "own", label: "Proof of ownership", held: doc("landlord_proof_of_ownership") ?? paper("doc_landlord_id_ownership"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_proof_of_ownership")} /> },
     { key: "aml", label: "AML check", held: doc("landlord_aml") ?? paper("landlord_aml"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_aml")} /> },
     ...(home?.scotland
-      ? [{ key: "reg", label: "Landlord registration", held: paper("doc_landlord_registration") ?? (landlordRegistration ? { how: `${regNumbers(landlordRegistration).length > 1 ? "Numbers" : "Number"} ${regNumbersInWords(landlordRegistration)} on the record` } : null), need: "Not on file", action: <UploadButton onClick={() => upload("other")} /> }]
+      ? [{ key: "reg", label: "Landlord registration", held: regHeld, reg: regWorst, need: "Not on file", action: <UploadButton onClick={() => upload("other")} /> }]
       : []),
   ];
 
@@ -270,7 +290,7 @@ export default function ListingCompliance({
         termsReading={termsReading}
         termsHeld={termsHeld}
         waiting={waiting}
-        paperRows={rows.filter((r) => r.key !== "terms").map((r) => ({ key: r.key, label: r.label, held: r.held }))}
+        paperRows={rows.filter((r) => r.key !== "terms").map((r) => ({ key: r.key, label: r.label, held: r.held, reg: r.reg ?? null }))}
         agentLarn={agentLarn}
         service={service}
       />
@@ -353,18 +373,26 @@ export default function ListingCompliance({
           </p>
         ) : (
           <ul className="divide-y divide-line/40">
-            {rows.map((r) => (
+            {rows.map((r) => {
+              /* Held but run out, about to, or with no date to watch. */
+              const lapse = r.held && r.reg && r.reg !== "valid" ? (r.reg === "expired" ? "Expired" : r.reg === "due-soon" ? "Due soon" : "No expiry date") : null;
+              return (
               <li key={r.key} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
-                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${r.held ? "bg-[#e8f5ec] text-[#1e7a3c]" : "bg-page text-muted"}`}>
-                  {r.held ? (
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${lapse ? "bg-accent-soft text-accent-dark" : r.held ? "bg-[#e8f5ec] text-[#1e7a3c]" : "bg-page text-muted"}`}>
+                  {lapse ? (
+                    <span className="text-[12px] font-bold leading-none">!</span>
+                  ) : r.held ? (
                     <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden><path d="M3.5 8.4 L6.6 11.4 L12.5 4.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   ) : (
                     <span className="block h-1.5 w-1.5 rounded-full bg-current" />
                   )}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold">{r.label}</span>
-                  <span className={`block truncate text-[11.5px] ${!r.held && r.key === "terms" && !waiting ? "text-accent-dark" : "text-muted"}`}>
+                  <span className="flex flex-wrap items-baseline gap-x-2 text-[13px] font-semibold">
+                    {r.label}
+                    {lapse && <span className="text-[11px] font-semibold text-accent-dark">{lapse}</span>}
+                  </span>
+                  <span className={`block text-[11.5px] ${r.key === "reg" ? "" : "truncate"} ${(!r.held && r.key === "terms" && !waiting) || lapse ? "text-accent-dark" : "text-muted"}`}>
                     {r.held ? (
                       <>
                         {r.held.how}
@@ -386,7 +414,8 @@ export default function ListingCompliance({
                 </span>
                 {!r.held && <span className="flex shrink-0 items-center gap-1.5">{r.action}</span>}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
@@ -654,7 +683,7 @@ function NewLookCompliance({
   termsReading: boolean;
   termsHeld: Held;
   waiting: TermsRequest | null;
-  paperRows: { key: string; label: string; held: Held }[];
+  paperRows: { key: string; label: string; held: Held; reg?: RegState | null }[];
   agentLarn: string | null;
   service: string | null;
 }) {
@@ -975,9 +1004,18 @@ function NewLookCompliance({
       name: p.label,
       sub,
       subTitle: held ? [held.name, held.how].filter(Boolean).join(" · ") : "Not on file",
-      status: held ? { label: "On file", tone: "good" } : { label: "Missing", tone: "warning" },
-      icon: held ? "ok" : "missing",
-      count: held ? "on" : "upload",
+      /* A registration on file can still have run out, or be about to. */
+      status: !held
+        ? { label: "Missing", tone: "warning" }
+        : p.reg === "expired"
+          ? { label: "Expired", tone: "accent" }
+          : p.reg === "due-soon"
+            ? { label: "Due soon", tone: "warning" }
+            : p.reg === "no-date"
+              ? { label: "No expiry date", tone: "warning", title: "Add when it runs out under Landlord on the listing" }
+              : { label: "On file", tone: "good" },
+      icon: !held ? "missing" : p.reg === "expired" || p.reg === "due-soon" || p.reg === "no-date" ? "warn" : "ok",
+      count: !held ? "upload" : p.reg === "expired" ? "renew" : "on",
       action: !t ? null : held ? (
         <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" disabled={busy} onClick={() => pickPaper(p.key, t.type, t.name)}>
           {busy ? "Uploading…" : "Add another"}

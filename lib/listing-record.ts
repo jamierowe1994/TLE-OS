@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { isScottish } from "@/lib/property-flags";
-import { joinRegNumbers, regNumbers } from "@/lib/reg-numbers";
+import { joinRegNumbers, regExpiries, regNumbers } from "@/lib/reg-numbers";
 
 /**
  * WHAT THE OS ALREADY KNOWS ABOUT A LISTING'S HOME (6 Oct 2026).
@@ -27,6 +27,8 @@ export interface ListingRecord {
   factsKey: string | null;
   landlordName: string | null;
   landlordRegistration: string | null;
+  /** When each of those numbers runs out, YYYY-MM-DD, where known (lib/reg-numbers). */
+  landlordRegistrationExpiry: Record<string, string>;
   /** From the property record, e.g. "D (68)" off the Scottish register. */
   epc: { band: EpcBand | null; score: number | null; from: string } | null;
   scotland: boolean;
@@ -50,7 +52,7 @@ export function forgetRecord(rexPropertyId: string | null | undefined): void {
 
 export async function recordForProperty(rexPropertyId: string | null, place: { postcode?: string | null; town?: string | null; address?: string | null }): Promise<ListingRecord> {
   const scotland = isScottish(place.postcode, place.address, place.town);
-  const empty: ListingRecord = { osPropertyId: null, factsKey: rexPropertyId, landlordName: null, landlordRegistration: null, epc: null, scotland };
+  const empty: ListingRecord = { osPropertyId: null, factsKey: rexPropertyId, landlordName: null, landlordRegistration: null, landlordRegistrationExpiry: {}, epc: null, scotland };
   if (!rexPropertyId || !hasDb()) return empty;
   const hit = held.get(rexPropertyId);
   if (hit && Date.now() - hit.at < TTL_MS) return { ...hit.record, scotland };
@@ -64,13 +66,14 @@ export async function recordForProperty(rexPropertyId: string | null, place: { p
     const keys = [osId, rexPropertyId].filter(Boolean) as string[];
     const facts = await q<{ property_id: string; field: string; value: string | null; source: string | null }>(
       `SELECT property_id, field, value, source FROM os_property_facts
-        WHERE property_id = ANY($1::text[]) AND field IN ('landlord_registration', 'epc_rating')`,
+        WHERE property_id = ANY($1::text[]) AND field IN ('landlord_registration', 'landlord_registration_expiry', 'epc_rating')`,
       [keys]
     );
     /* The OS record's own fact first, then one kept under the REX id. */
     const pick = (field: string) =>
       facts.find((f) => f.field === field && f.property_id === osId && f.value) ?? facts.find((f) => f.field === field && f.value) ?? null;
     const larn = pick("landlord_registration");
+    const larnValue = larn?.value && /\d/.test(larn.value) ? larn.value.trim() : null;
     const epcRow = pick("epc_rating");
     const epc = parseEpc(epcRow?.value ?? null);
     const record: ListingRecord = {
@@ -78,7 +81,8 @@ export async function recordForProperty(rexPropertyId: string | null, place: { p
       factsKey: osId ?? rexPropertyId,
       landlordName: homes[0]?.landlord_name?.trim() || null,
       /* "Registered (Valid)" is REX PM saying there is one, not the number. */
-      landlordRegistration: larn?.value && /\d/.test(larn.value) ? larn.value.trim() : null,
+      landlordRegistration: larnValue,
+      landlordRegistrationExpiry: regExpiries(pick("landlord_registration_expiry")?.value, regNumbers(larnValue)),
       epc: epc ? { ...epc, from: epcRow?.source ?? "the property record" } : null,
       scotland,
     };

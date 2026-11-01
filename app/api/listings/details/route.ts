@@ -14,7 +14,7 @@ import { rexTokenFor } from "@/lib/rex-user";
 import { isOwner } from "@/lib/agent-words";
 import { refusalInWords } from "@/lib/rex-refusal";
 import { recordFact } from "@/lib/property-facts";
-import { MAX_REG_NUMBERS, joinRegNumbers, regNumbers } from "@/lib/reg-numbers";
+import { MAX_REG_NUMBERS, isRealDay, joinRegExpiries, joinRegNumbers, regNumbers } from "@/lib/reg-numbers";
 import { bandForScore, forgetRecord, normaliseLarn, saveAgentLarn, withScottishFooter } from "@/lib/listing-record";
 import { bandScoreClash } from "@/lib/epc-band";
 
@@ -197,6 +197,17 @@ export async function PATCH(req: NextRequest) {
       else bad.push("landlord registration number (numbers and slashes, as the council gives it)");
     }
   }
+  /* When each registration runs out, { number: YYYY-MM-DD or "" to clear }
+     (Lianna, 30 Oct 2026). A lapsed one is still a real date to keep. */
+  let regExpiry: Record<string, string | null> | undefined;
+  if (b.landlordRegistrationExpiry !== undefined) {
+    const v = b.landlordRegistrationExpiry;
+    const entries = v && typeof v === "object" && !Array.isArray(v) ? Object.entries(v as Record<string, unknown>) : null;
+    const latest = `${new Date().getUTCFullYear() + 10}-12-31`;
+    if (entries && entries.length <= MAX_REG_NUMBERS && entries.every(([n, d]) => /^[A-Za-z0-9/ -]{3,40}$/.test(n) && (d === null || d === "" || (isRealDay(d) && String(d) >= "2000-01-01" && String(d) <= latest)))) {
+      regExpiry = Object.fromEntries(entries.map(([n, d]) => [n.replace(/\s+/g, " ").trim(), d ? String(d) : null]));
+    } else bad.push("landlord registration expiry date (a real date)");
+  }
   let propertyTypeId: string | undefined;
   if (b.propertyTypeId !== undefined) {
     if (typeof b.propertyTypeId === "string" && /^[\w-]{1,40}$/.test(b.propertyTypeId)) propertyTypeId = b.propertyTypeId;
@@ -225,11 +236,17 @@ export async function PATCH(req: NextRequest) {
        Goldthorne Terrace, a3d142bd, 11 Oct 2026). */
     let epcNeedsDate = false;
     let epcWrite: Record<string, number | string> | undefined;
-    if (epcTouched || larn !== undefined || agentLarn !== undefined) {
+    if (epcTouched || larn !== undefined || agentLarn !== undefined || regExpiry !== undefined) {
       const current = await readListingDetails(id).catch(() => null);
       const key = current?.record.factsKey ?? null;
       if (key && larn) {
         await recordFact({ propertyId: key, field: "landlord_registration", value: larn, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
+      }
+      if (regExpiry !== undefined) {
+        if (!key || !current) return NextResponse.json({ ok: false, error: "This home's record didn't answer, so the expiry date wasn't kept. Try again in a minute." }, { status: 503 });
+        const numbers = regNumbers(larn !== undefined ? larn : current.record.landlordRegistration);
+        const value = joinRegExpiries({ ...current.record.landlordRegistrationExpiry, ...regExpiry }, numbers);
+        await recordFact({ propertyId: key, field: "landlord_registration_expiry", value, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
       }
       /* The agent's LARN is theirs, not the home's: kept against the
          listing's agent, so their next Scottish listing is prefilled. */
@@ -298,7 +315,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
     if (!plan.listing && !plan.property) {
-      if (epcTouched || larn !== undefined || agentLarn !== undefined || propertyTypeId) {
+      if (epcTouched || larn !== undefined || agentLarn !== undefined || regExpiry !== undefined || propertyTypeId) {
         forgetListing(id);
         const details = await readListingDetails(id).catch(() => null);
         return NextResponse.json({ ok: true, id, note: epcNeedsDate ? EPC_NEEDS_DATE : epcKeptOnly ? "Kept here. Add the potential score to send the rating to the portals." : "Saved.", epcHeld: epcNeedsDate || undefined, details });

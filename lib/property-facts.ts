@@ -63,6 +63,7 @@ export const FIELDS: FactField[] = [
   { key: "landlord_proof_of_address", label: "Landlord proof of address", group: "Landlord & service", kind: "word", quick: NEVER_HELD },
   { key: "rent_smart_wales", label: "Rent Smart Wales number", group: "Landlord & service", kind: "word", when: "wales" },
   { key: "landlord_registration", label: "Scottish landlord registration number", group: "Landlord & service", kind: "word", when: "scotland" },
+  { key: "landlord_registration_expiry", label: "Scottish landlord registration expiry", group: "Landlord & service", kind: "word", when: "scotland" },
   { key: "tenants_count", label: "Number of tenants", group: "Tenancy", kind: "number" },
   { key: "tenancy_type", label: "Tenancy type", group: "Tenancy", kind: "word" },
   { key: "tenancy_start", label: "Tenancy start", group: "Tenancy", kind: "date" },
