@@ -2,7 +2,8 @@ import "server-only";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { q } from "@/lib/db";
 import { uid } from "@/lib/auth";
-import { R2_BUCKET, safeName, withR2 } from "@/lib/r2";
+import { R2_BUCKET, jpegName, keptType, safeName, withR2 } from "@/lib/r2";
+import { expiryFromIssue, filesOnIssueDate } from "@/lib/cert-life";
 import { rexWriteBlockedBecause, writeCertificateToRex } from "@/lib/plc-rex";
 import { patchHeldHome, refreshComplianceBook } from "@/lib/compliance-cache";
 import { shareCertificate, type SharePerson, type ShareResult } from "@/lib/certificate-share";
@@ -46,6 +47,19 @@ export const CERT_TYPES = new Set([
 
 /** No certificate on this book carries a date outside these years; anything else is a misread. */
 export const PLAUSIBLE = (v: string) => REAL_DAY(v) && v >= "2000-01-01" && v <= "2045-12-31";
+
+/**
+ * The expiry a certificate is kept with: the one typed, or for a type that
+ * carries none (PAT, fire safety) the issue date plus its usual life. REX is
+ * still sent the issue date alone for those (lib/plc-rex NO_EXPIRY), and reads
+ * it back as the same day (lib/rex-compliance LIFE_MONTHS). "" when neither.
+ */
+export function certificateExpiry(type: string, expiry: string | null | undefined, issue: string | null | undefined): string {
+  const typed = (expiry ?? "").trim();
+  if (typed) return typed;
+  if (!filesOnIssueDate(type) || !issue || !REAL_DAY(issue)) return "";
+  return expiryFromIssue(type, issue) ?? "";
+}
 
 /** Why a typed or read date will not do, in words for the person filing it. */
 export function dateProblem(v: string, what: "expiry" | "issue"): string | null {
@@ -259,7 +273,17 @@ export async function shareOnceChecked(certificateId: string): Promise<ShareResu
  * returns early WITHOUT a second fan-out, so nobody is emailed the same
  * certificate again because somebody pressed upload twice.
  */
-export async function fileCertificate(input: FileCertificate): Promise<{ row: CertRow; duplicate: boolean; share: ShareResult | null }> {
+export async function fileCertificate(given: FileCertificate): Promise<{ row: CertRow; duplicate: boolean; share: ShareResult | null }> {
+  /* A .jfif is a JPEG, kept and named as one so REX's Upload takes it
+     (1 Nov 2026, lib/r2 jpegName). A PAT or fire safety certificate has no
+     expiry, only the day it was tested: it runs the type's usual life from
+     then (Lianna Denholm, 1 Nov 2026; lib/cert-life). */
+  const input: FileCertificate = {
+    ...given,
+    fileName: jpegName(given.fileName),
+    contentType: keptType(given.fileName, given.contentType),
+    expiry: certificateExpiry(given.type, given.expiry, given.issue),
+  };
   /* Every door checks the date first, but a date that is not on the calendar
      reached Postgres once (7 Oct) and failed as a bare 500; say so instead. */
   const badDate = dateProblem(input.expiry, "expiry") ?? (input.issue ? dateProblem(input.issue, "issue") : null);

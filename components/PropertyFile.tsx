@@ -10,6 +10,7 @@ import PropertyAnswers from "@/components/PropertyAnswers";
 import { useSaveReporter } from "@/components/SaveChip";
 import { CHOICES, eicExpiry, type EicReason } from "@/lib/home-facts-shared";
 import SendRecord, { stamp } from "@/components/portfolio/SendRecord";
+import { expiryFromIssue, filesOnIssueDate, lifeInWords } from "@/lib/cert-life";
 
 /**
  * The property file: one panel, the same wherever a home is opened.
@@ -122,6 +123,23 @@ const answers = (row: Row, type: string) => row.type === type || (type === "mand
 
 /** A document uploaded on the file's Documents and marked as a certificate, not yet filed as one. */
 export interface LooseDoc { type: string; name: string; url: string; at: string }
+
+/**
+ * Why the File button is greyed, in a line under it - or null when it is
+ * ready. A PAT or fire safety certificate has no expiry, only the day it was
+ * tested (Lianna Denholm, 1 Nov 2026, 7 3F1 Brougham Place: "won't allow"),
+ * so for those the Issued date is enough and Expires is optional.
+ */
+function notReadyBecause(p: { type: string; expiry: string; issue: string; eicReason?: EicReason | "" }): string | null {
+  if (!p.type) return "Choose what type of certificate it is to file it.";
+  if (p.type === EIC) {
+    if (!p.issue) return "Put in the date the EIC was issued to file it.";
+    if (!p.eicReason) return "Say why it is an EIC - a new build or a full rewire - to file it.";
+    return null;
+  }
+  if (filesOnIssueDate(p.type)) return p.expiry || p.issue ? null : `Put in the date it was ${p.type === "portable_appliance_testing" ? "tested" : "checked"} as Issued to file it.`;
+  return p.expiry ? null : "Put in the date it runs out (Expires) to file it.";
+}
 
 const day = (iso: string | null) => {
   if (!iso) return "";
@@ -266,12 +284,8 @@ export default function PropertyFile({
   }
 
   async function file() {
-    if (!pending || !pending.type || !pending.expiry) return;
+    if (!pending || notReadyBecause(pending)) return;
     const eic = pending.type === EIC;
-    if (eic && (!pending.issue || !pending.eicReason)) {
-      setPending((p) => (p ? { ...p, note: "An EIC needs the date it was issued, and whether the home is a new build or was fully rewired." } : p));
-      return;
-    }
     setPending((p) => (p ? { ...p, busy: true, note: null } : p));
     const body = new FormData();
     body.set("file", pending.file);
@@ -454,13 +468,19 @@ export default function PropertyFile({
                   </select>
                 </label>
                 <label className="text-[11px] text-muted">
-                  Expires
+                  {filesOnIssueDate(pending.type) ? "Expires (optional)" : "Expires"}
                   <input type="date" value={pending.expiry} onChange={(e) => setPending((p) => (p ? { ...p, expiry: e.target.value } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink" />
                 </label>
                 <label className="text-[11px] text-muted">
                   Issued
                   <input type="date" value={pending.issue} onChange={(e) => setPending((p) => (p ? { ...p, issue: e.target.value, expiry: p.type === EIC && e.target.value ? cappedEic(e.target.value, p.expiry) : p.expiry } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink" />
                 </label>
+                {filesOnIssueDate(pending.type) && !pending.expiry && (
+                  <p className="text-[11px] leading-snug text-muted sm:col-span-3">
+                    A {pending.type === "portable_appliance_testing" ? "PAT certificate" : "fire safety check"} has no expiry, so it is filed on the day it was {pending.type === "portable_appliance_testing" ? "tested" : "checked"} and counts for {lifeInWords(pending.type)}
+                    {pending.issue && expiryFromIssue(pending.type, pending.issue) ? `, to ${day(expiryFromIssue(pending.type, pending.issue))}` : ""}.
+                  </p>
+                )}
                 {pending.type === EIC && (
                   <label className="text-[11px] text-muted sm:col-span-3">
                     Why an EIC
@@ -482,11 +502,12 @@ export default function PropertyFile({
               </div>
               {pending.note && <p className="mt-2 text-[12px] text-accent-dark">{pending.note}</p>}
               <div className="mt-3 flex items-center gap-2">
-                <button type="button" disabled={pending.busy || !pending.type || !pending.expiry} onClick={() => void file()} className="rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-50">
+                <button type="button" disabled={pending.busy || Boolean(notReadyBecause(pending))} onClick={() => void file()} className="rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-50">
                   {pending.busy ? "Filing…" : effectiveId ? "File it on the property" : "Hold it against the address"}
                 </button>
                 <button type="button" onClick={() => setPending(null)} className="rounded-full border border-line/80 px-4 py-2 text-[12px]">Cancel</button>
               </div>
+              {!pending.busy && notReadyBecause(pending) && <p className="mt-1.5 text-[11.5px] text-muted">{notReadyBecause(pending)}</p>}
             </>
           )}
         </div>

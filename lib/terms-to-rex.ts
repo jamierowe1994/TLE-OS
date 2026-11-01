@@ -2,7 +2,7 @@ import "server-only";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { hasDb, q } from "@/lib/db";
-import { R2_BUCKET, withR2 } from "@/lib/r2";
+import { R2_BUCKET, rexReadyKey, withR2 } from "@/lib/r2";
 import { rexCall, rexRows, rexWritesLocked } from "@/lib/rex";
 
 /**
@@ -65,7 +65,9 @@ export async function fileTermsToRex(p: { propertyId: string; r2Key: string; fil
     return { ok: false, note: "Filing compliance into REX is not switched on." };
   }
   try {
-    const url = await withR2((c) => getSignedUrl(c, new GetObjectCommand({ Bucket: R2_BUCKET, Key: p.r2Key }), { expiresIn: 600 }));
+    /* A .jfif goes as a .jpg, or Upload refuses it (lib/r2 rexReadyKey). */
+    const rexKey = await rexReadyKey(p.r2Key);
+    const url = await withR2((c) => getSignedUrl(c, new GetObjectCommand({ Bucket: R2_BUCKET, Key: rexKey }), { expiresIn: 600 }));
     const up = await rexCall("Upload", "uploadFileFromUrl", { url });
     const uri = (up.result as { uri?: string } | undefined)?.uri;
     if (!up.ok || !uri) return { ok: false, note: "REX would not take the file." };

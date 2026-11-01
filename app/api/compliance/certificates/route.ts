@@ -7,9 +7,11 @@ import { r2Configured } from "@/lib/r2";
 import { rexWriteBlockedBecause } from "@/lib/plc-rex";
 import { removeCertificate } from "@/lib/certificate-remove";
 import { patchHeldHome } from "@/lib/compliance-cache";
+import { filesOnIssueDate } from "@/lib/cert-life";
 import {
   CERT_TYPES,
   FilingFailed,
+  certificateExpiry,
   dateProblem,
   fileCertificate,
   outCert,
@@ -29,6 +31,7 @@ import {
  *
  *   GET  /api/compliance/certificates?property=<id>   → what is held, and how REX took it
  *   POST /api/compliance/certificates   multipart: file, propertyId, type, expiry, issue?, propertyName?, source?
+ *        (PAT and fire safety: issue alone will do - they carry no expiry)
  *   POST /api/compliance/certificates?retry=<id>      → write an existing one to REX again
  *
  * Owner or the compliance role.
@@ -129,7 +132,7 @@ async function post(req: NextRequest) {
   const address = String(form.get("address") ?? "").trim().slice(0, 200);
   const propertyId = String(form.get("propertyId") ?? "").trim() || (address ? pendingKeyFor(address) : "");
   const type = String(form.get("type") ?? "").trim();
-  const expiry = String(form.get("expiry") ?? "").trim();
+  const typedExpiry = String(form.get("expiry") ?? "").trim();
   const issueRaw = String(form.get("issue") ?? "").trim();
   const propertyName = (String(form.get("propertyName") ?? "").trim() || address).slice(0, 200);
   const source = String(form.get("source") ?? "dropped file").trim().slice(0, 120);
@@ -139,7 +142,15 @@ async function post(req: NextRequest) {
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
   if (!/^(\d+|pending-[a-z0-9-]+|pm-[0-9a-f-]+)$/i.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, an OS property id, or give an address." }, { status: 400 });
   if (!CERT_TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...CERT_TYPES].join(", ")}.` }, { status: 400 });
-  const badDate = dateProblem(expiry, "expiry") ?? (issueRaw ? dateProblem(issueRaw, "issue") : null);
+  /* A PAT or fire safety certificate carries no expiry, only the day it was
+     tested (Lianna Denholm, 1 Nov 2026): the issue date is enough, and it runs
+     the type's usual life from there (lib/certificate-intake certificateExpiry). */
+  if (!typedExpiry && filesOnIssueDate(type) && !issueRaw) {
+    return NextResponse.json({ ok: false, error: `A ${type === "portable_appliance_testing" ? "PAT" : "fire safety"} certificate needs the date it was tested. Put it in as Issued. Nothing was kept.` }, { status: 400 });
+  }
+  const issueBad = issueRaw ? dateProblem(issueRaw, "issue") : null;
+  const expiry = issueBad ? typedExpiry : certificateExpiry(type, typedExpiry, issueRaw);
+  const badDate = issueBad ?? dateProblem(expiry, "expiry");
   if (badDate) return NextResponse.json({ ok: false, error: `${badDate} Nothing was kept.` }, { status: 400 });
   if (file.size > 50 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 50MB, so it was not kept. Save a smaller copy and upload that." }, { status: 413 });
 

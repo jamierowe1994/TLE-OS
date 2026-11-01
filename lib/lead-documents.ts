@@ -2,7 +2,7 @@ import "server-only";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { uid } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
-import { R2_BUCKET, withR2 } from "@/lib/r2";
+import { R2_BUCKET, rexReadyKey, withR2 } from "@/lib/r2";
 import { isExpiredToken, rexCall, RexWriteBlocked } from "@/lib/rex";
 import { rexContactFor } from "@/lib/rex-notes";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -161,8 +161,10 @@ async function push(
       .map((d) => ({ id: String(d.id) }));
 
     const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+    /* A .jfif goes as a .jpg, or Upload refuses it (lib/r2 rexReadyKey). */
+    const rexKey = await rexReadyKey(row.r2_key);
     const url = await withR2((client) =>
-      getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: row.r2_key }), { expiresIn: 3600 })
+      getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: rexKey }), { expiresIn: 3600 })
     );
     const up = await rexCall("Upload", "uploadFileFromUrl", { url }, token);
     const uri = (up.result as { uri?: string } | undefined)?.uri;
