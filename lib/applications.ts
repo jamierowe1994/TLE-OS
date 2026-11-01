@@ -517,6 +517,21 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
   return pull;
 }
 
+/**
+ * One page of applications, asked twice, quietly the first time (1 Nov 2026),
+ * as the lead book and the certificates are. Each page was asked once, never
+ * quiet, so one slow page among nine filed "REX TenancyApplications/search was
+ * slow or busy" (49 by 1 Nov) and threw the whole pull away. Only a second
+ * failure is a ticket, and it still refuses the pull.
+ */
+async function applicationsPage(body: Record<string, unknown>) {
+  const ask = (quiet: boolean) => rexCall("TenancyApplications", "search", body, null, { quiet });
+  const first = await ask(true).catch(() => null);
+  if (first?.ok) return first;
+  await new Promise((r) => setTimeout(r, 2000));
+  return ask(false);
+}
+
 async function pullApplications(limit: number, rexUserId: string | null | undefined, key: string): Promise<Application[]> {
   /* The pages SIDE BY SIDE (19 Sep 2026). They were asked for one after the
      other - three REX calls end to end for the 300 the dashboard wants, which
@@ -539,7 +554,7 @@ async function pullApplications(limit: number, rexUserId: string | null | undefi
   for (let offset = 0; offset < limit; offset += 100) offsets.push(offset);
   const pages = await Promise.all(
     offsets.map(async (offset) => {
-      const res = await rexCall("TenancyApplications", "search", {
+      const res = await applicationsPage({
         ...(rexUserId ? { criteria: [{ name: "application.agent_id", type: "=", value: rexUserId }] } : {}),
         limit: Math.min(100, limit - offset),
         offset,
@@ -917,7 +932,7 @@ async function swapApplications(rexUserId: string | null): Promise<Application[]
  *  half-read never passes for the whole book. */
 async function allApplications(criteria: Record<string, unknown>[]): Promise<Application[]> {
   const page = async (offset: number) => {
-    const res = await rexCall("TenancyApplications", "search", {
+    const res = await applicationsPage({
       criteria,
       limit: 100,
       offset,
