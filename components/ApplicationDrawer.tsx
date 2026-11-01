@@ -1933,7 +1933,7 @@ export default function ApplicationDrawer({
                 <>
                   <div className="nl-facts-grid">
                     {editable.map((f) => (
-                      <div key={f} className="nl-fact">
+                      <div key={f} className={LET_FIELD_KIND[f] === "date" ? "nl-fact nl-fact--wide" : "nl-fact"}>
                         <span>{f === "rent" && isSwap ? "Rent, the home" : LET_FIELD_LABEL[f]}</span>
                         <div className="nl-fact-in">{figInput(f)}</div>
                       </div>

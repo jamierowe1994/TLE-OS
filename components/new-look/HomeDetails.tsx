@@ -75,13 +75,13 @@ const tenantsOf = (list: Party[]): OverrideTenant[] => list.map((t) => ({ name: 
 const sameTenants = (a: OverrideTenant[], b: OverrideTenant[]) =>
   JSON.stringify(a.map((t) => [t.name.trim(), (t.email ?? "").trim(), (t.phone ?? "").trim()])) === JSON.stringify(b.map((t) => [t.name.trim(), (t.email ?? "").trim(), (t.phone ?? "").trim()]));
 
-/** "Changed by Rhiannon Dodge, 1 Nov · REX says Let Only" under a field the OS put right. */
-function Was({ mark, source = "REX" }: { mark?: Mark | null; source?: string }) {
+/** "Changed by Rhiannon, 1 Nov · was Let Only" under a field the OS put right. Agent screens never name REX. */
+function Was({ mark }: { mark?: Mark | null; source?: string }) {
   if (!mark) return null;
   return (
-    <small className="nl-fact-was" title={`Changed in the OS by ${mark.by}, ${stamp(mark.at)}. ${source} is not changed.`}>
+    <small className="nl-fact-was" title={`Changed by ${mark.by}, ${stamp(mark.at)}.`}>
       Changed by {mark.by.split(" ")[0]}, {short(mark.at)}
-      {mark.was ? ` · ${source} still says ${mark.was}` : ""}
+      {mark.was ? ` · was ${mark.was}` : ""}
     </small>
   );
 }
@@ -265,7 +265,7 @@ export default function HomeDetails({
           <p className="nl-hint">{opts.off}</p>
         ) : goingBack ? (
           <p className="nl-hint">
-            Back to what {sourceOf(f)} says{m?.was ? `: ${m.was}` : ""}, on save.{" "}
+            Back to the original{m?.was ? `: ${m.was}` : ""}, on save.{" "}
             <button type="button" className="nl-link" onClick={() => f && keep(f)}>Keep the OS&apos;s</button>
           </p>
         ) : (
@@ -273,8 +273,8 @@ export default function HomeDetails({
         )}
         {!opts.off && !goingBack && m && (
           <small className="nl-fact-was">
-            {m.was ? `${sourceOf(f)} still says ${m.was}. ` : ""}
-            <button type="button" className="nl-link" onClick={() => f && sendBack(f)}>Use {sourceOf(f)}&apos;s</button>
+            {m.was ? `Was ${m.was}. ` : ""}
+            <button type="button" className="nl-link" onClick={() => f && sendBack(f)}>Put the original back</button>
           </small>
         )}
         {opts.hint && <small className="nl-fact-was">{opts.hint}</small>}
@@ -304,7 +304,7 @@ export default function HomeDetails({
               <div key={r.key} className="nl-fact">
                 <span>{r.label}</span>
                 <b className={r.quiet ? "is-quiet" : ""} title={r.title}>{r.text}</b>
-                <Was mark={r.mark} source={r.source} />
+                <Was mark={r.mark} />
               </div>
             ))}
           </div>
@@ -317,7 +317,7 @@ export default function HomeDetails({
                 {(allLog ? log : log.slice(0, 3)).map((e) => (
                   <li key={e.id}>
                     <b>{FIELD_LABEL[e.field] ?? e.field}</b>
-                    {e.to == null ? ` back to REX's${e.from ? ` (was ${e.from})` : ""}` : e.from ? `: ${e.from} to ${e.to}` : `: ${e.to}`}
+                    {e.to == null ? ` put back to the original${e.from ? ` (was ${e.from})` : ""}` : e.from ? `: ${e.from} to ${e.to}` : `: ${e.to}`}
                     <span> · {e.by}, {stamp(e.at)}</span>
                   </li>
                 ))}
@@ -330,7 +330,7 @@ export default function HomeDetails({
         </>
       ) : (
         <>
-          <p className="nl-hint nl-home-edit-lead">What you save here is kept in the OS and shows on every screen. REX is not changed.</p>
+          <p className="nl-hint nl-home-edit-lead">What you save here shows on every screen.</p>
           <div className="nl-facts-grid nl-home-edit-grid">
             {field("service", "Service",
               <FieldSelect value={draft.service} onChange={(v) => set("service", v)} options={SERVICE_CHOICES.map((c) => ({ value: c.value, label: c.label, sub: c.sub }))} placeholder="Choose the service" />)}

@@ -206,3 +206,5 @@
 [data-look="new"] .nl-fact .nl-fact-note { display: flex; flex-direction: column; gap: 3px; font-size: 12px; line-height: 17px; color: var(--muted); }
 [data-look="new"] .nl-fact .nl-fact-differs { color: var(--warning); background: var(--warning-soft); border-radius: 8px; padding: 4px 8px; }
 [data-look="new"] .nl-fact .nl-fact-differs a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+/* The move-in date takes the whole row in Edit, so the day is never cut short. */
+[data-look="new"] .nl-facts-grid > .nl-fact--wide { grid-column: 1 / -1; }
