@@ -1623,7 +1623,8 @@ function ClassicViewingBooker({
                                 : mode === "takeon"
                                   ? "To the landlord, with the calendar invite and what to expect on the day. Change any of the words first."
                                   : "To the applicant, with the calendar invite. Change any of the words first."}
-                              {" "}Untick to book without telling them.
+                              {/* Rearranging, it says move: "book" read as if nothing had changed (Dan Richards, 1 Nov 2026). */}
+                              {editing && mode === "appraisal" ? " Untick to move it without telling them." : " Untick to book without telling them."}
                             </span>
                           </span>
                         </label>
