@@ -105,6 +105,9 @@ export interface VerifyItem {
   addedAt: string;
   /** `told`: the agent the query was emailed to, when it was. `replies`: the agent's answers. */
   queried: { note: string; by: string; at: string; told?: string | null; replies?: QueryReply[] } | null;
+  /** This one replaced a certificate that was queried (carryQueryToReplacement):
+   *  that query, its answers and the old file's name, so it can be re-checked against it. */
+  replaced?: { note: string; by: string; at: string; fileName: string; replies?: QueryReply[] } | null;
   /** A landlord's upload that is a certificate: verified, it is filed as one,
    *  so it needs the expiry date, and the type where the kind covers several. */
   fileAs?: { types: { id: string; label: string }[] } | null;
@@ -131,13 +134,21 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
   const [certs, docs] = await Promise.all([
     q<Record<string, unknown>>(
       `SELECT c.id, c.property_id, c.property_name, c.type_id AS type_raw, c.type_id, c.expiry, c.name, c.r2_key, c.source, c.added_by, c.added_at,
-              k.state, k.note, k.by_name, k.at AS checked_at, k.told, k.told_at, tu.name AS told_name, op.address AS op_address
+              k.state, k.note, k.by_name, k.at AS checked_at, k.told, k.told_at, tu.name AS told_name, op.address AS op_address,
+              rq.old_id, rq.old_name, rq.old_note, rq.old_by, rq.old_at
          FROM os_certificates c
          LEFT JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id
          LEFT JOIN os_users tu ON tu.id = k.told
          LEFT JOIN LATERAL (
            SELECT p.address FROM os_properties p WHERE p.id = c.property_id OR p.rex_property_id = c.property_id LIMIT 1
          ) op ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT rm.id AS old_id, rm.name AS old_name, k2.note AS old_note, k2.by_name AS old_by, k2.at AS old_at
+             FROM os_certificates_removed rm
+             JOIN os_compliance_checks k2 ON k2.kind = 'certificate' AND k2.subject_id = rm.id AND k2.state IN ('queried', 'replaced')
+            WHERE rm.replaced_by = c.id OR rm.id = c.replaces_id
+            ORDER BY rm.removed_at DESC LIMIT 1
+         ) rq ON TRUE
         WHERE c.added_at >= $1::date AND (k.state IS NULL OR k.state <> 'verified')
         ORDER BY c.added_at`,
       [CHECKS_BEGAN]
@@ -189,6 +200,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       agent: homeOf(r)?.agent?.trim() || (["Agent", "REX"].includes(doorOf(String(r.source ?? ""))) ? String(r.added_by ?? "") || null : null),
       addedAt: isoOf(r.added_at),
       queried: queried(r),
+      replaced: r.old_id ? { note: String(r.old_note ?? ""), by: String(r.old_by ?? ""), at: isoOf(r.old_at), fileName: String(r.old_name ?? "") } : null,
     })),
     ...docs.map((r): VerifyItem => ({
       kind: "landlord_document",
@@ -209,9 +221,11 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
   ];
   /* The agents' answers on what he queried (20 Oct 2026). */
   const asked = out.filter((v) => v.queried);
-  if (asked.length) {
-    const said = await repliesFor(asked.map((v) => ({ kind: v.kind, id: v.id }))).catch(() => new Map<string, QueryReply[]>());
+  const oldIds = new Map(certs.filter((r) => r.old_id).map((r) => [String(r.id), String(r.old_id)]));
+  if (asked.length || oldIds.size) {
+    const said = await repliesFor([...asked.map((v) => ({ kind: v.kind, id: v.id })), ...[...oldIds.values()].map((id) => ({ kind: "certificate", id }))]).catch(() => new Map<string, QueryReply[]>());
     for (const v of asked) v.queried!.replies = said.get(`${v.kind}:${v.id}`) ?? [];
+    for (const v of out) if (v.replaced && oldIds.has(v.id)) v.replaced.replies = said.get(`certificate:${oldIds.get(v.id)}`) ?? [];
   }
   /* The engineer's register check on every gas and electrical one. */
   const rawType = new Map<string, string>([
@@ -399,7 +413,8 @@ async function agentFor(kind: "certificate" | "landlord_document", id: string): 
       property: String(c.property_name ?? "") || "a property",
       what: TYPE_WORDS[String(c.type_id)] ?? String(c.type_id ?? "certificate"),
       fileName: String(c.name ?? ""),
-      link: /^\d+$/.test(propertyId) || /^pm-/i.test(propertyId) ? `${ORIGIN}/compliance?open=${encodeURIComponent(propertyId)}` : `${ORIGIN}/compliance`,
+      /* ?answer= opens the answer box under the query (components/QueryThread). */
+      link: /^\d+$/.test(propertyId) || /^pm-/i.test(propertyId) ? `${ORIGIN}/compliance?open=${encodeURIComponent(propertyId)}&answer=${encodeURIComponent(id)}` : `${ORIGIN}/compliance`,
     };
   }
   const rows = await q<Record<string, unknown>>(
@@ -482,6 +497,7 @@ export async function replyToQuery(p: { kind: "certificate" | "landlord_document
   if (!body) throw new Error("Write your answer first.");
   const reply: QueryReply = { id: randomUUID(), body, by: p.me.name || p.me.email, at: new Date().toISOString() };
   await q(`INSERT INTO os_compliance_query_replies (id, kind, subject_id, body, by_id, by_name, at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [reply.id, p.kind, p.id, body, p.me.id, reply.by, reply.at]);
+  if (p.kind === "certificate") await noteOnHome(p.id, (what) => `Answer to the compliance query on the ${what}: ${body}`, { id: p.me.id, name: reply.by }).catch(() => null);
   const [asker] = await q<{ name: string; email: string }>(`SELECT name, email FROM os_users WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND email <> '' LIMIT 1`, [check.by_name]).catch(() => []);
   if (!asker) return { reply, said: `Saved on the file. ${check.by_name || "Compliance"} has no login to email, so they'll see it on the desk.` };
   const a = await agentFor(p.kind, p.id);
@@ -496,30 +512,150 @@ export async function replyToQuery(p: { kind: "certificate" | "landlord_document
   }
 }
 
-/** Queries on documents an agent was told about and that are still open: their bell. */
-export async function queriesFor(userId: string): Promise<{ kind: string; id: string; note: string; by: string; at: string; property: string; what: string; link: string }[]> {
+/**
+ * Queries on documents an agent was told about and that are still open: their bell.
+ *
+ * A queried certificate can be taken off the home (Dan, 27 Oct 2026: he used
+ * Replace on the queried gas certificate). Its os_certificates row goes, so
+ * the bell read "A property ... queried the : ..." with an empty link for 30
+ * days. Now the home and the type come from os_certificates_removed, and a
+ * query whose certificate was replaced by one still on file is answered by
+ * that replacement (carryQueryToReplacement), so it leaves the bell even for
+ * a Replace made before the query was carried. A query on something gone
+ * with no record of it at all can't be answered, so it is not shown.
+ */
+export async function queriesFor(userId: string): Promise<{ kind: string; id: string; note: string; by: string; at: string; property: string; propertyId: string | null; what: string; gone: boolean; link: string }[]> {
   if (!hasDb()) return [];
   const rows = await q<Record<string, unknown>>(
     `SELECT k.kind, k.subject_id, k.note, k.by_name, k.told_at,
-            c.property_name, c.property_id, c.type_id, d.kind AS doc_kind, d.appraisal_id, m.address
+            COALESCE(NULLIF(c.property_name, ''), NULLIF(rm.row->>'property_name', ''), op.address) AS property_name,
+            COALESCE(c.property_id, rm.property_id) AS property_id,
+            COALESCE(c.type_id, rm.type_id) AS type_id,
+            (k.kind = 'certificate' AND c.id IS NULL) AS gone,
+            d.kind AS doc_kind, d.appraisal_id, m.address
        FROM os_compliance_checks k
        LEFT JOIN os_certificates c ON k.kind = 'certificate' AND c.id = k.subject_id
+       LEFT JOIN os_certificates_removed rm ON k.kind = 'certificate' AND c.id IS NULL AND rm.id = k.subject_id
+       LEFT JOIN LATERAL (
+         SELECT p.address FROM os_properties p
+          WHERE k.kind = 'certificate' AND (p.id = COALESCE(c.property_id, rm.property_id) OR p.rex_property_id = COALESCE(c.property_id, rm.property_id))
+          LIMIT 1
+       ) op ON TRUE
        LEFT JOIN os_landlord_documents d ON k.kind = 'landlord_document' AND d.id = k.subject_id
        LEFT JOIN os_market_appraisals m ON m.id = d.appraisal_id
       WHERE k.state = 'queried' AND k.told = $1 AND k.told_at > NOW() - INTERVAL '30 days'
+        AND NOT (k.kind = 'certificate' AND c.id IS NULL AND rm.id IS NULL)
+        AND NOT (k.kind = 'landlord_document' AND d.id IS NULL)
+        AND NOT (k.kind = 'certificate' AND c.id IS NULL AND EXISTS (
+              SELECT 1 FROM os_certificates n WHERE n.id = rm.replaced_by OR n.replaces_id = k.subject_id))
       ORDER BY k.told_at DESC LIMIT 20`,
     [userId]
   ).catch(() => []);
-  return rows.map((r) => ({
-    kind: String(r.kind),
-    id: String(r.subject_id),
-    note: String(r.note ?? ""),
-    by: String(r.by_name ?? ""),
-    at: isoOf(r.told_at),
-    property: String(r.property_name ?? r.address ?? "") || "A property",
-    what: r.kind === "certificate" ? TYPE_WORDS[String(r.type_id)] ?? String(r.type_id ?? "") : DOC_KINDS.find((k) => k.id === r.doc_kind)?.label ?? "Document",
-    link: r.kind === "certificate" ? `/compliance?open=${encodeURIComponent(String(r.property_id ?? ""))}` : r.appraisal_id ? `/market-appraisals/${encodeURIComponent(String(r.appraisal_id))}` : "/market-appraisals",
-  }));
+  return rows.map((r) => {
+    const propertyId = r.property_id ? String(r.property_id) : null;
+    const answer = `answer=${encodeURIComponent(String(r.subject_id))}`;
+    return {
+      kind: String(r.kind),
+      id: String(r.subject_id),
+      note: String(r.note ?? "").trim() || "Compliance has a question about it.",
+      by: String(r.by_name ?? ""),
+      at: isoOf(r.told_at),
+      property: String(r.property_name ?? r.address ?? "").trim() || "A property",
+      propertyId,
+      what: r.kind === "certificate" ? TYPE_WORDS[String(r.type_id)] ?? (String(r.type_id ?? "") || "certificate") : DOC_KINDS.find((k) => k.id === r.doc_kind)?.label ?? "Document",
+      gone: r.gone === true,
+      link:
+        r.kind === "certificate"
+          ? propertyId ? `/compliance?open=${encodeURIComponent(propertyId)}${r.gone === true ? "" : `&${answer}`}` : "/compliance"
+          : r.appraisal_id ? `/market-appraisals/${encodeURIComponent(String(r.appraisal_id))}` : "/market-appraisals",
+    };
+  });
+}
+
+/* ── The query on the home's Notes (Dan, ticket cf6364de, 1 Nov 2026) ──── */
+
+/**
+ * "The query and replies logged in Notes on the property file." Each query,
+ * each answer and each replacement goes on the home as a note (os_notes,
+ * record_type 'property', the same notes the home's Notes tab reads and
+ * writes - app/api/property/notes). OS only: nothing is written to REX.
+ * `say` is given the certificate's type in words.
+ */
+async function noteOnHome(certificateId: string, say: (what: string, fileName: string) => string, author: { id?: string | null; name: string }): Promise<void> {
+  if (!hasDb()) return;
+  const [c] = await q<{ property_id: string; type_id: string; name: string }>(
+    `SELECT property_id, type_id, name FROM os_certificates WHERE id = $1
+     UNION ALL SELECT property_id, type_id, name FROM os_certificates_removed WHERE id = $1
+     LIMIT 1`,
+    [certificateId]
+  );
+  if (!c?.property_id) return;
+  const what = TYPE_WORDS[c.type_id] ?? (c.type_id || "certificate");
+  const body = say(what, c.name ?? "").trim().slice(0, 5000);
+  if (!body) return;
+  await q(`INSERT INTO os_notes (id, record_type, record_id, body, author_id, author_name, created_at) VALUES ($1, 'property', $2, $3, $4, $5, NOW())`, [
+    randomUUID(),
+    c.property_id,
+    body,
+    author.id ?? null,
+    author.name || "Compliance",
+  ]);
+}
+
+/**
+ * A queried certificate replaced by a new one (Dan, ticket cf6364de: he used
+ * Replace on the gas certificate Josel had queried, 27 Oct 2026). The new
+ * certificate is the answer, so the query goes with it:
+ *
+ *   - the old query is closed as 'replaced' (out of the agent's bell); its
+ *     words and answers show on the new certificate on the desk, marked
+ *     "Replaced - please re-check" (verifyQueue, `replaced`)
+ *   - the replacement is kept as an answer on the query and as a note on the
+ *     home
+ *   - whoever raised it is emailed that the replacement answers it, unless
+ *     the new one is already verified (the office filed it) or they replaced
+ *     it themselves. Staff only: no landlord or tenant hears of it.
+ *
+ * Called by lib/certificate-remove when a Replace takes the old one off.
+ */
+export async function carryQueryToReplacement(p: { oldId: string; newId: string; by: string }): Promise<void> {
+  if (!hasDb() || p.oldId === p.newId) return;
+  const [check] = await q<{ state: string; note: string; by_name: string }>(`SELECT state, note, by_name FROM os_compliance_checks WHERE kind = 'certificate' AND subject_id = $1`, [p.oldId]);
+  if (check?.state !== "queried") return;
+  const [fresh] = await q<{ name: string; property_id: string; property_name: string; type_id: string; state: string | null }>(
+    `SELECT c.name, c.property_id, c.property_name, c.type_id, k.state
+       FROM os_certificates c LEFT JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id
+      WHERE c.id = $1`,
+    [p.newId]
+  );
+  if (!fresh) return;
+  /* Closed, not deleted: its words and answers stay readable. `at` is left as it was. */
+  await q(`UPDATE os_compliance_checks SET state = 'replaced' WHERE kind = 'certificate' AND subject_id = $1 AND state = 'queried'`, [p.oldId]);
+
+  const [me] = await q<{ id: string; name: string; email: string }>(`SELECT id, name, email FROM os_users WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) ORDER BY (email <> '') DESC LIMIT 1`, [p.by]).catch(() => []);
+  const byName = me?.name || p.by || "The agent";
+  const said = `Replaced with a new certificate${fresh.name ? ` (${fresh.name})` : ""}, waiting on the desk - please re-check it.`;
+  await q(`INSERT INTO os_compliance_query_replies (id, kind, subject_id, body, by_id, by_name) VALUES ($1, 'certificate', $2, $3, $4, $5)`, [randomUUID(), p.oldId, said, me?.id ?? "", byName]).catch(() => null);
+  await noteOnHome(p.newId, (what, fileName) => `The ${what} ${check.by_name || "compliance"} queried was replaced${fileName ? ` with ${fileName}` : ""}, and sent back to the compliance team to re-check.`, { id: me?.id ?? null, name: byName }).catch(() => null);
+
+  if (fresh.state === "verified") return;
+  const [asker] = await q<{ name: string; email: string }>(`SELECT name, email FROM os_users WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND email <> '' LIMIT 1`, [check.by_name]).catch(() => []);
+  if (!asker || asker.email.toLowerCase() === (me?.email ?? "").toLowerCase()) return;
+  const ORIGIN = (process.env.OS_PUBLIC_URL || process.env.OS_ORIGIN || "https://tle-os.co.uk").replace(/\/+$/, "");
+  const held = await heldComplianceBook().catch(() => null);
+  const home = held?.book.properties.find((h) => h.id === fresh.property_id) ?? null;
+  const mail = queryReplyEmail({
+    firstName: asker.name.split(/\s+/)[0] || "there",
+    agentName: byName,
+    property: fresh.property_name?.trim() || [home?.name, home?.locality].map((v) => (v ?? "").trim()).filter(Boolean).join(", ") || "a property",
+    what: TYPE_WORDS[fresh.type_id] ?? (fresh.type_id || "certificate"),
+    query: check.note || "Compliance had a question about it.",
+    reply: said,
+    link: `${ORIGIN}/compliance-desk/verify`,
+  });
+  await sendEmail({ to: asker.email, subject: mail.subject, html: mail.html, text: mail.text, ...(me?.email ? { replyTo: me.email } : {}) }).catch((e) =>
+    console.error("[compliance-desk] the replacement email did not go", p.oldId, e instanceof Error ? e.message : e)
+  );
 }
 
 /**
@@ -571,6 +707,10 @@ export async function answer(p: {
     const tenantsHaveIt = Boolean(share?.armed && share.outcomes.some((o) => o.role === "tenant" && o.sent));
     if (tenantsHaveIt) return share?.line ?? "";
     return ["Moved to Verified, ready to email the tenant.", share?.armed ? share.line : ""].filter(Boolean).join(" ");
+  }
+  if (p.state === "queried" && p.kind === "certificate") {
+    const note = (p.note ?? "").trim();
+    await noteOnHome(p.id, (what, fileName) => `Compliance query on the ${what}${fileName ? ` (${fileName})` : ""}: ${note || "no note given"}`, { name: p.by }).catch(() => null);
   }
   if (p.state === "queried" && p.kind !== "works_order") {
     return tellAgent(p.kind, p.id, (p.note ?? "").trim(), p.by).catch((e) => `Saved, but the agent was not told: ${e instanceof Error ? e.message : "it failed"}.`);

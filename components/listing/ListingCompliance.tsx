@@ -7,6 +7,7 @@ import FileDocuments, { UploadForm, type Doc } from "@/components/FileDocuments"
 import SendTermsPopout from "@/components/SendTermsPopout";
 import TermsPanel from "@/components/terms/TermsPanel";
 import HomeFacts from "@/components/HomeFacts";
+import QueryThread from "@/components/QueryThread";
 import { useSaveReporter } from "@/components/SaveChip";
 import { Badge, Ico, Menu, type Tone } from "@/components/new-look/Parts";
 import { openDocument } from "@/lib/doc-sheet";
@@ -640,6 +641,8 @@ type ListRow = {
   action: React.ReactNode;
   /** The certificate type this row files, for the filing form under it. */
   certType?: string;
+  /** Drawn under the row: compliance's query and the answer box. */
+  below?: React.ReactNode;
 };
 
 function NewLookCompliance({
@@ -975,6 +978,18 @@ function NewLookCompliance({
       count,
       action,
       certType: r.type,
+      /* Answered here, where the agent is (Dan, ticket cf6364de, 1 Nov 2026):
+         it was a Queried pill with the question in its tooltip, and the
+         answer box only on the Compliance page's property file. */
+      below:
+        queried && r.checking ? (
+          <div className="nl-cmp-query">
+            <p className="nl-cmp-query-note">
+              <span className="nl-strong">Queried by the compliance team.</span> {r.checking.queried}
+            </p>
+            <QueryThread kind="certificate" id={r.checking.id} />
+          </div>
+        ) : null,
     };
   });
 
@@ -1336,6 +1351,7 @@ function NewLookCompliance({
                   </Badge>
                   <div className="nl-cmp-act">{r.action}</div>
                 </div>
+                {r.below}
                 {filerRow?.key === r.key && filer}
               </li>
             ))}

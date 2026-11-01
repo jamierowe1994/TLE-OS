@@ -99,6 +99,14 @@
   [data-look="new"] .nl-cmp-filer { margin-left: 6px; }
   [data-look="new"] .nl-cmp-filer-grid { grid-template-columns: 1fr; }
 }
+/* Compliance's query on a certificate, and the agent's answer box (1 Nov 2026). */
+[data-look="new"] .nl-cmp-query {
+  margin: 0 6px 14px 52px; padding: 12px 16px; border-radius: 16px; background: var(--panel);
+}
+[data-look="new"] .nl-cmp-query-note { margin: 0; font-size: 13px; line-height: 19px; color: var(--warning); }
+@container (max-width: 620px) {
+  [data-look="new"] .nl-cmp-query { margin-left: 6px; }
+}
 /* The form when the row it belongs to is not on the list. */
 [data-look="new"] .nl-cmp-docs > .nl-cmp-filer { margin: 14px 0 0; }
 

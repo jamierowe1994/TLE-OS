@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * The agent's side of a compliance query (20 Oct 2026, the agents' call:
  * "when Josselle writes a note ... can agents write back, so it's logged?").
  * The answers so far and a box to add one. Each answer is kept on the record
  * and emailed to whoever raised the query (/api/compliance/query-reply).
+ *
+ * A link ending ?answer=<id> (the bell, the query email) opens the box on
+ * this one and brings it into view (Dan, ticket cf6364de, 1 Nov 2026).
  */
 
 type Reply = { id: string; body: string; by: string; at: string };
@@ -19,6 +22,20 @@ export default function QueryThread({ kind, id }: { kind: "certificate" | "landl
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
+  const here = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let asked: string | null = null;
+    try {
+      asked = new URLSearchParams(window.location.search).get("answer");
+    } catch {
+      asked = null;
+    }
+    if (asked !== id) return;
+    setOpen(true);
+    const t = window.setTimeout(() => here.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 250);
+    return () => window.clearTimeout(t);
+  }, [id]);
 
   useEffect(() => {
     let live = true;
@@ -48,7 +65,7 @@ export default function QueryThread({ kind, id }: { kind: "certificate" | "landl
   }
 
   return (
-    <div className="mt-1.5">
+    <div ref={here} className="mt-1.5">
       {(replies ?? []).map((r) => (
         <p key={r.id} className="mt-1 rounded-lg bg-box px-2.5 py-1.5 text-[12px] leading-snug">
           <span className="font-semibold">{r.by}</span> <span className="text-muted">{when(r.at)}</span>
