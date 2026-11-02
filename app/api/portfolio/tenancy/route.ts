@@ -6,6 +6,7 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { getTenancyRegister, tenancyRegisterError } from "@/lib/business/payprop-tenancy";
+import { homeTenancies, payPropTenantRows } from "@/lib/business/payprop-tenant-contacts";
 
 /**
  * The tenancy on one home, for the property's own page (James, 7 Oct 2026:
@@ -23,6 +24,11 @@ import { getTenancyRegister, tenancyRegisterError } from "@/lib/business/payprop
  * An address key can land on an older tenancy at the same address. If the
  * start PayProp gives is more than four months from the day the home was
  * let, it is not this tenancy, and nothing is said rather than a wrong date.
+ *
+ * The register keeps one tenancy a home, an Active one first, so in the days
+ * a new tenancy overlaps the old one it gave the newcomer's dates under the
+ * outgoing tenant's name (6 Ruskin Place, 2 Nov 2026). Where PayProp holds a
+ * tenancy for the tenants the home shows, those are the dates said.
  */
 
 export const dynamic = "force-dynamic";
@@ -52,6 +58,9 @@ export async function GET(req: NextRequest) {
   const key = propertyKey(home.name);
   const t = key ? register.tenancyByKey[key] ?? null : null;
   const rlp = key ? register.rlpByKey[key] ?? null : null;
+  /* The shown tenants' own tenancy, where PayProp has one for them. */
+  const shown = home.tenants.map((x) => x.name);
+  const own = shown.length ? homeTenancies(await payPropTenantRows().catch(() => []), home, shown).theirs : null;
   const off =
     t?.startDate && home.letSince
       ? Math.abs(new Date(t.startDate).getTime() - new Date(home.letSince).getTime()) / DAY > 120
@@ -60,7 +69,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     ready: true,
-    tenancy: t && !off ? { startDate: t.startDate, endDate: t.endDate, depositId: t.depositId } : null,
+    tenancy: own ?? (t && !off ? { startDate: t.startDate, endDate: t.endDate, depositId: t.depositId } : null),
     protection: rlp && !off ? rlp.status : null,
   });
 }

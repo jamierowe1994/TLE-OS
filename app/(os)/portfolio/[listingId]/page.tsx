@@ -59,7 +59,7 @@ import HomeNotes from "@/components/portfolio/HomeNotes";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Tabs, Menu, Ico, type MenuItem, type Tone } from "@/components/new-look/Parts";
 import PhotoGrid from "@/components/new-look/PhotoGrid";
-import type { IncomingLet } from "@/app/api/portfolio/incoming/route";
+import type { IncomingLet, NextTenancy } from "@/app/api/portfolio/incoming/route";
 import HomeSwitch from "@/components/HomeSwitch";
 
 /**
@@ -480,13 +480,17 @@ export default function PropertyPage() {
      into Propoly, shows who is moving in and opens their let - rather than
      a greyed-out Change the tenants and no word why. New look only. */
   const [incoming, setIncoming] = useState<IncomingLet[]>([]);
+  /* And beside a tenant still living there, the tenancy that follows theirs
+     (Lianna, 2 Nov 2026): "New tenancy starting" and the date. */
+  const [nextTenancy, setNextTenancy] = useState<NextTenancy | null>(null);
   useEffect(() => {
     if (!look || !p?.listingId || p.test) return;
     let live = true;
     setIncoming([]);
+    setNextTenancy(null);
     fetch(`/api/portfolio/incoming?listing=${encodeURIComponent(p.listingId)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => { if (live && j?.ok) setIncoming(j.lets ?? []); })
+      .then((j) => { if (live && j?.ok) { setIncoming(j.lets ?? []); setNextTenancy(j.next ?? null); } })
       .catch(() => { /* nothing shown; the home reads as before */ });
     return () => { live = false; };
   }, [look, p?.listingId, p?.test]);
@@ -1373,6 +1377,7 @@ export default function PropertyPage() {
                           : tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}
                       </p>
                     )}
+                    {tenants.length > 0 && !roomsOnly && !swapOn && nextTenancy && <NextTenancyLine next={nextTenancy} />}
                   </section>
 
                   {/* The landlords section, the same on every screen (James, 20 Oct 2026). */}
@@ -2182,6 +2187,46 @@ function TenancyLine({ t, long = false }: { t: { startDate: string | null; endDa
       {" · "}
       {ends ? <span className={soon ? "font-semibold text-accent-dark" : ""}>ends {day(t.endDate)}</span> : <span className="text-muted">rolling, no end date</span>}
     </span>
+  );
+}
+
+/**
+ * The tenancy after the one the home shows (Lianna, 2 Nov 2026). The tenant
+ * in the tenancy stands until they move out; this says a new one is coming,
+ * and opens to who, with their let where it is going through Propoly.
+ */
+function NextTenancyLine({ next }: { next: NextTenancy }) {
+  const [open, setOpen] = useState(false);
+  const today = ymd(new Date());
+  const when = !next.startDate ? "move-in date to set" : `${next.startDate > today ? "starting" : "started"} ${day(next.startDate)}`;
+  return (
+    <div className="nl-next-tenancy">
+      <button type="button" className="nl-next-tenancy-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <DoodleIcon name="key" size={13} className="shrink-0 text-accent-dark" />
+        <span className="min-w-0 flex-1">New tenancy {when}</span>
+        <svg aria-hidden viewBox="0 0 12 12" className={`h-3 w-3 shrink-0 text-muted transition-transform duration-200 ${open ? "rotate-90" : ""}`}>
+          <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="nl-next-tenancy-body">
+          <ul>
+            {next.people.map((t) => (
+              <li key={t.name}>
+                <span className="nl-strong block truncate">{t.name}</span>
+                {(t.phone || t.email) && (
+                  <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12.5px]">
+                    {t.phone && <a className="nl-link" href={`tel:${t.phone.replace(/\s+/g, "")}`}>{t.phone}</a>}
+                    {t.email && <a className="nl-link break-all" href={`mailto:${t.email}`}>{t.email}</a>}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {next.href && <Link href={next.href} className="nl-link">Open their let</Link>}
+        </div>
+      )}
+    </div>
   );
 }
 

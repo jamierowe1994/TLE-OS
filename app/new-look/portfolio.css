@@ -144,6 +144,13 @@
 [data-look="new"] .nl-prop-people > li { padding: 12px 0; border-top: 1px solid var(--line); font-size: 14px; min-width: 0; }
 [data-look="new"] .nl-prop-people > li:first-child { border-top: 0; padding-top: 4px; }
 [data-look="new"] .nl-prop-dates { margin: 4px 0 0; padding: 11px 14px; border-radius: 12px; background: var(--panel); font-size: 13.5px; }
+/* The tenancy after this one (Lianna, 2 Nov 2026): a line under the dates that opens to who is coming. */
+[data-look="new"] .nl-next-tenancy { margin: 8px 0 0; border: 1px solid var(--line); border-radius: 12px; font-size: 13.5px; }
+[data-look="new"] .nl-next-tenancy-head { font: inherit; color: inherit; display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; background: none; border: 0; text-align: left; cursor: pointer; border-radius: 12px; transition: background-color .2s; }
+[data-look="new"] .nl-next-tenancy-head:hover { background: var(--panel); }
+[data-look="new"] .nl-next-tenancy-body { padding: 2px 14px 12px 37px; display: grid; gap: 10px; }
+[data-look="new"] .nl-next-tenancy-body ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+[data-look="new"] .nl-next-tenancy-body li { min-width: 0; }
 [data-look="new"] .nl-prop-acts { list-style: none; margin: 0; padding: 0; }
 [data-look="new"] .nl-prop-act { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); }
 [data-look="new"] .nl-prop-act:first-child { border-top: 0; }

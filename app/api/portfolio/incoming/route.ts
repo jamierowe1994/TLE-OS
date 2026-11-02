@@ -6,6 +6,7 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { doorNumbers, live, sameLetAddress } from "@/lib/propoly-only-lets";
+import { homeTenancies, payPropTenantRows, personKey, type NextTenancyPerson } from "@/lib/business/payprop-tenant-contacts";
 
 /**
  * The let on its way into one home (Joe Patten, 26 Oct 2026).
@@ -21,10 +22,22 @@ import { doorNumbers, live, sameLetAddress } from "@/lib/propoly-only-lets";
  * who is on it and when they move in. Read only, from the OS's own copy of
  * Propoly's book (propoly_cache), so it costs no calls. Scoped like
  * /api/portfolio/tenancy: the home must be in the caller's own book.
+ *
+ * ── And on a home somebody still lives in (Lianna, 2 Nov 2026) ───────────
+ *
+ * James: the tenant in the tenancy stands until they move out, and the page
+ * says "New tenancy starting" and the date beside them, opening to who is
+ * coming. `next` is that tenancy: an open Propoly deal for people who are not
+ * the home's tenants, or failing one, a newer tenancy for other people that
+ * PayProp already holds (lib/business/payprop-tenant-contacts homeTenancies).
+ * A deal naming any of the sitting tenants is a swap or a renewal, not a new
+ * tenancy, and is left out.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+export type NextTenancy = { startDate: string | null; people: NextTenancyPerson[]; href: string | null };
 
 export type IncomingLet = {
   id: string;
@@ -47,10 +60,10 @@ export async function GET(req: NextRequest) {
   const home = book.properties.find((p) => String(p.listingId) === listing);
   if (!home) return NextResponse.json({ ok: false, error: "This home isn't in your book." }, { status: 404 });
 
+  /* Propoly unread still lets PayProp say who is coming. */
   const deals = await getAllPropolyDeals().catch(() => null);
-  if (!deals) return NextResponse.json({ ok: false, error: "Propoly's lets could not be read just now." });
 
-  const lets: IncomingLet[] = deals
+  const lets: IncomingLet[] = (deals ?? [])
     /* A room ("Room 1, 32 Elm Close") is only met by a deal that names it:
        a deal on the whole house could be for any of its rooms. */
     .filter((d) => live(d) && sameLetAddress(home, d) && doorNumbers(d.app.propertyName).length >= doorNumbers(home.name).length)
@@ -64,5 +77,16 @@ export async function GET(req: NextRequest) {
     }))
     .sort((a, b) => (a.moveIn ?? "9").localeCompare(b.moveIn ?? "9"));
 
-  return NextResponse.json({ ok: true, lets });
+  const shown = home.tenants.map((t) => t.name);
+  const sitting = new Set(shown.map(personKey).filter(Boolean));
+  const fromPayProp = shown.length ? homeTenancies(await payPropTenantRows().catch(() => []), home, shown).next : null;
+  const deal = shown.length ? lets.find((l) => l.tenants.length && !l.tenants.some((n) => sitting.has(personKey(n)))) : undefined;
+  const contact = (name: string) => fromPayProp?.people.find((p) => personKey(p.name) === personKey(name));
+  const next: NextTenancy | null = deal
+    ? { startDate: deal.moveIn, href: deal.href, people: deal.tenants.map((name) => ({ name, email: contact(name)?.email ?? null, phone: contact(name)?.phone ?? null })) }
+    : fromPayProp
+      ? { startDate: fromPayProp.startDate, href: null, people: fromPayProp.people }
+      : null;
+
+  return NextResponse.json({ ok: true, lets, next });
 }

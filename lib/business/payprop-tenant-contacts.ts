@@ -191,3 +191,85 @@ export async function payPropPeople(): Promise<{ current: ContactsByKey; pastOnl
   const rows = await heldRows();
   return { current: contactsByKey(rows), pastOnly: pastOnlyPeople(rows) };
 }
+
+export type TenancyDates = { startDate: string | null; endDate: string | null; depositId: string | null };
+export type NextTenancyPerson = { name: string; email: string | null; phone: string | null };
+export type HomeTenancies = {
+  /** The tenancy the home's shown tenants are on, or null when PayProp has none for them. */
+  theirs: TenancyDates | null;
+  /** Somebody else's tenancy on the home, begun after theirs and not ended. */
+  next: { startDate: string; people: NextTenancyPerson[] } | null;
+};
+
+const SIX_WEEKS = 42 * 86_400_000;
+const tidy = (s: string) => s.replace(/\s+/g, " ").trim();
+const surnameOf = (n: string) => words(n).pop() ?? "";
+
+/**
+ * WHO IS IN, AND WHO IS COMING (Lianna Denholm, 2 Nov 2026). 6 Ruskin Place
+ * showed Keanne Galloway beside "Started 1 Nov": PayProp had his tenancy
+ * ending 2 Nov and Anne McMillan-Clyne's beginning 1 Nov, and the register
+ * keeps one tenancy a home, Active first, so his name sat on her dates.
+ * James: the tenant in the tenancy stands until their move-out date, and the
+ * new one is said beside them, "New tenancy starting" and the date.
+ *
+ * From PayProp's tenant records on one home: the dates of the tenancy the
+ * shown tenants are on, and the newest tenancy on it for other people that
+ * began after theirs and has not ended. Somebody else's tenancy that began
+ * more than six weeks ago is not news - it is a name spelt another way.
+ */
+export function homeTenancies(
+  rows: Array<Record<string, unknown>>,
+  home: { address?: string | null; name: string; postcode?: string | null },
+  shown: string[],
+  today = londonToday()
+): HomeTenancies {
+  const key = rentKey(home.address || home.name, home.postcode);
+  if (!key) return { theirs: null, next: null };
+  const shownPeople = new Set(shown.map(personKey).filter(Boolean));
+  const shownSurnames = new Set(shown.map(surnameOf).filter(Boolean));
+
+  type Entry = { names: string[]; lead: string | null; email: string | null; phone: string | null; start: string; end: string; deposit: string; current: boolean };
+  const entries: Entry[] = [];
+  for (const t of rows) {
+    for (const pr of (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>) {
+      const addr = pr.address as Record<string, unknown> | undefined;
+      const keys = [rentKey(str(pr.property_name), str(addr?.postal_code)), rentKey(str(addr?.first_line), str(addr?.postal_code))];
+      if (!keys.includes(key)) continue;
+      const tn = (pr.tenant ?? {}) as Record<string, unknown>;
+      const lead = leadOf(t);
+      const display = tidy(str(t.display_name) || str(t.business_name));
+      const names = display.split(/\s*(?:,|&|\band\b)\s*/i).map(tidy).filter(Boolean);
+      entries.push({
+        names: names.length ? names : lead ? [tidy(`${lead.first} ${lead.last}`)] : [],
+        lead: lead ? tidy(`${lead.first} ${lead.last}`) : names.length === 1 ? names[0] : null,
+        email: str(t.email_address) ? str(t.email_address).toLowerCase() : null,
+        phone: ukPhone(t.mobile_number),
+        start: str(tn.start_date).slice(0, 10),
+        end: str(tn.end_date).slice(0, 10),
+        deposit: str(tn.deposit_id),
+        current: payPropTenancyCurrent(t.status, tn.end_date, today),
+      });
+    }
+  }
+  const isShown = (e: Entry) => e.names.some((n) => shownPeople.has(personKey(n)) || shownSurnames.has(surnameOf(n)));
+
+  const mine = entries.filter((e) => e.current && isShown(e)).sort((a, b) => b.start.localeCompare(a.start))[0];
+  const theirs = mine ? { startDate: mine.start || null, endDate: mine.end || null, depositId: mine.deposit || null } : null;
+
+  const after = mine?.start ?? "";
+  const since = new Date(Date.parse(`${today}T12:00:00Z`) - SIX_WEEKS).toISOString().slice(0, 10);
+  const newer = entries.filter((e) => e.current && !isShown(e) && e.start && e.start > after && e.start >= since);
+  const start = newer.map((e) => e.start).sort().pop();
+  if (!start || !shown.length) return { theirs, next: null };
+  const people: NextTenancyPerson[] = [];
+  for (const e of newer.filter((x) => x.start === start)) {
+    for (const name of e.names) {
+      if (people.some((p) => personKey(p.name) === personKey(name))) continue;
+      /* A joint record's email and mobile are its lead's, never a co-tenant's. */
+      const own = e.lead != null && personKey(e.lead) === personKey(name);
+      people.push({ name, email: own ? e.email : null, phone: own ? e.phone : null });
+    }
+  }
+  return { theirs, next: people.length ? { startDate: start, people } : null };
+}
