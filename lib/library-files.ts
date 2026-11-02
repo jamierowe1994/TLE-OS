@@ -19,17 +19,33 @@ const PREFIX = "library/shelf/";
  * all over the place otherwise"). A folder is one more step in the key,
  * library/shelf/<folder>/<timestamp>-<name>, so everything stays under the
  * shelf: the same access rule, the same delete and lock checks, and Steve
- * still reads and finds it. One level only - a carousel is a folder of
- * slides, not a tree. An empty folder is held by a zero-byte object whose
- * key ends in "/", which every list skips as a file.
+ * still reads and finds it. An empty folder is held by a zero-byte object
+ * whose key ends in "/", which every list skips as a file.
+ *
+ * Folders within folders (Francesca, 2 Nov 2026: "can we please put folders
+ * within folders"): a folder is now a path, "Carousels/Landlord tips", as
+ * deep as she likes. Each step is cleaned on its own, so a name can't climb
+ * out of the shelf, and MAX_DEPTH only stops a runaway.
  */
-export function shelfFolder(raw: unknown): string {
-  return String(raw ?? "")
-    .replace(/[/\\]+/g, " ")
+const MAX_DEPTH = 20;
+
+/** One folder name: letters, numbers, spaces, - and _, up to 60. */
+function folderName(raw: string): string {
+  return raw
     .replace(/[^\w\- ]+/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 60);
+}
+
+/** "Carousels / Landlord tips/" -> "Carousels/Landlord tips"; "" for the top. */
+export function shelfFolder(raw: unknown): string {
+  return String(raw ?? "")
+    .split(/[/\\]+/)
+    .map(folderName)
+    .filter(Boolean)
+    .slice(0, MAX_DEPTH)
+    .join("/");
 }
 
 /** "library/shelf/Pro carousel/1729-slide.png" -> { folder: "Pro carousel", name: "slide.png" }. */

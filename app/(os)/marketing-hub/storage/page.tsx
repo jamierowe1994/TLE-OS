@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 
@@ -54,6 +54,13 @@ import DoodleIcon from "@/components/DoodleIcon";
  * together: a folder is library/shelf/<folder>/ (lib/library-files), so
  * Steve still reads and finds what goes in one. Files already on the shelf
  * stay at the top, where they were.
+ *
+ * ── Folders within folders (2 Nov 2026, Francesca's ticket) ──────────────
+ *
+ * A folder is a path now, "Carousels/Landlord tips", as deep as she needs.
+ * New folder works inside any folder, the trail at the top steps back up
+ * any number of levels, and a folder counts everything beneath it, so one
+ * holding only another folder isn't called Empty or offered for deletion.
  */
 
 /** The scope and reference this shelf lives under: library/shelf/… */
@@ -185,6 +192,19 @@ function folderInAddress(): string {
   return new URLSearchParams(window.location.search).get("folder") ?? "";
 }
 
+/** "Carousels/Landlord tips" -> "Carousels"; a top folder's parent is "". */
+function parentOf(path: string): string {
+  const cut = path.lastIndexOf("/");
+  return cut > 0 ? path.slice(0, cut) : "";
+}
+
+/** The name a folder shows: the last step of its path. */
+function leafOf(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
+}
+
+const byName = (a: string, b: string) => a.localeCompare(b, "en-GB", { sensitivity: "base" });
+
 export default function Storage() {
   const [files, setFiles] = useState<StoredFile[] | null>(null);
   const [folders, setFolders] = useState<string[]>([]);
@@ -206,6 +226,16 @@ export default function Storage() {
   const [reads, setReads] = useState<Record<string, ReadNote>>({});
   const [working, setWorking] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement | null>(null);
+
+  /* Every folder, including the ones above a folder that never had a
+     marker of their own, and those directly inside the one open now. */
+  const allFolders = new Set<string>();
+  for (const f of folders) for (let p = f; p; p = parentOf(p)) allFolders.add(p);
+  const children = [...allFolders].filter((f) => parentOf(f) === folder).sort(byName);
+  /* Everything beneath a folder, however deep. */
+  const filesUnder = (path: string) =>
+    (files ?? []).filter((f) => f.folder === path || f.folder.startsWith(`${path}/`)).length;
+  const foldersUnder = (path: string) => [...allFolders].filter((f) => f.startsWith(`${path}/`)).length;
 
   const load = useCallback(async () => {
     try {
@@ -257,12 +287,13 @@ export default function Storage() {
     window.scrollTo({ top: 0 });
   }
 
-  /* Made on the server (lib/library-files cleans the name), then opened. A
-     name that matches one already there opens that one instead. */
+  /* Made on the server (lib/library-files cleans the name), inside the
+     folder open now, then opened. A name that matches one already there
+     opens that one instead. */
   async function makeFolder() {
-    const wanted = (naming ?? "").trim();
+    const wanted = (naming ?? "").replace(/[/\\]+/g, " ").trim();
     if (!wanted) return;
-    const same = folders.find((f) => f.toLowerCase() === wanted.toLowerCase());
+    const same = children.find((f) => leafOf(f).toLowerCase() === wanted.toLowerCase());
     if (same) {
       openFolder(same);
       return;
@@ -273,11 +304,11 @@ export default function Storage() {
       const r = await fetch("/api/r2/library", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "folder", folder: wanted }),
+        body: JSON.stringify({ action: "folder", folder: folder ? `${folder}/${wanted}` : wanted }),
       });
       const j = await r.json().catch(() => ({ ok: false, error: "The server didn't answer." }));
       if (!j.ok) throw new Error(j.error ?? "The folder wasn't made. Try again.");
-      setFolders((fs) => [...new Set([...fs, j.folder as string])].sort((a, b) => a.localeCompare(b, "en-GB", { sensitivity: "base" })));
+      setFolders((fs) => [...new Set([...fs, j.folder as string])].sort(byName));
       openFolder(j.folder);
     } catch (e) {
       setUploadErr(e instanceof Error ? e.message : "The folder wasn't made. Try again.");
@@ -287,7 +318,7 @@ export default function Storage() {
   }
 
   async function dropFolder(name: string) {
-    if (!window.confirm(`Delete the empty folder ${name}?`)) return;
+    if (!window.confirm(`Delete the empty folder ${leafOf(name)}?`)) return;
     setWorking(`folder:${name}`);
     setUploadErr(null);
     try {
@@ -299,7 +330,7 @@ export default function Storage() {
       const j = await r.json().catch(() => ({ ok: false, error: "The server didn't answer." }));
       if (!j.ok) throw new Error(j.error ?? "That didn't work.");
       setFolders((fs) => fs.filter((f) => f !== name));
-      setDone(`The folder ${name} is deleted.`);
+      setDone(`The folder ${leafOf(name)} is deleted.`);
     } catch (e) {
       setUploadErr(e instanceof Error ? e.message : "That didn't work.");
     } finally {
@@ -362,7 +393,7 @@ export default function Storage() {
     setBusy(false);
     if (picker.current) picker.current.value = "";
     if (failures.length) setUploadErr(failures.join(" "));
-    if (ok) setDone(`${ok} file${ok === 1 ? "" : "s"} uploaded${folder ? ` to ${folder}` : ""}.`);
+    if (ok) setDone(`${ok} file${ok === 1 ? "" : "s"} uploaded${folder ? ` to ${leafOf(folder)}` : ""}.`);
     await load();
   }
 
@@ -399,11 +430,11 @@ export default function Storage() {
     }
   }
 
-  /* What the open folder holds, and how full each folder is. */
+  /* What the open folder holds, and the trail of folders down to it. */
   const shown = files?.filter((f) => f.folder === folder) ?? null;
-  const inFolder = new Map<string, number>();
-  for (const f of files ?? []) if (f.folder) inFolder.set(f.folder, (inFolder.get(f.folder) ?? 0) + 1);
   const atTop = folder === "";
+  const trail = atTop ? [] : folder.split("/").map((_, i, steps) => steps.slice(0, i + 1).join("/"));
+  const up = parentOf(folder);
   const total = files?.length ?? 0;
 
   return (
@@ -419,17 +450,32 @@ export default function Storage() {
             {atTop ? (
               <p className="text-[15px]">The shelf</p>
             ) : (
-              <nav aria-label="Where you are" className="flex min-w-0 items-center gap-1.5 text-[15px]">
+              /* Wraps rather than squeezing, so a deep trail never runs into the buttons. */
+              <nav aria-label="Where you are" className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[15px]">
                 <button type="button" onClick={() => openFolder("")} className="shrink-0 text-muted underline-offset-2 hover:text-ink hover:underline">
                   The shelf
                 </button>
-                <svg aria-hidden viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-muted">
-                  <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <DoodleIcon name="folder" size={15} className="text-accent-dark" />
-                  <span className="truncate">{folder}</span>
-                </span>
+                {trail.map((path, i) => (
+                  <Fragment key={path}>
+                    <svg aria-hidden viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-muted">
+                      <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {i < trail.length - 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => openFolder(path)}
+                        className="max-w-[12rem] truncate text-muted underline-offset-2 hover:text-ink hover:underline"
+                      >
+                        {leafOf(path)}
+                      </button>
+                    ) : (
+                      <span className="flex min-w-0 max-w-full items-center gap-1.5">
+                        <DoodleIcon name="folder" size={15} className="shrink-0 text-accent-dark" />
+                        <span className="truncate">{leafOf(path)}</span>
+                      </span>
+                    )}
+                  </Fragment>
+                ))}
               </nav>
             )}
             <p className="mt-1 text-[12px] text-muted">
@@ -438,8 +484,8 @@ export default function Storage() {
                 : failed
                   ? "Couldn't read the shelf."
                   : atTop
-                    ? `${total} file${total === 1 ? "" : "s"}${folders.length ? ` · ${folders.length} folder${folders.length === 1 ? "" : "s"}` : ""} · PDFs, images, video, Word and PowerPoint, up to 500MB each`
-                    : `${shown.length} file${shown.length === 1 ? "" : "s"} in this folder · uploads go into it`}
+                    ? `${total} file${total === 1 ? "" : "s"}${children.length ? ` · ${children.length} folder${children.length === 1 ? "" : "s"}` : ""} · PDFs, images, video, Word and PowerPoint, up to 500MB each`
+                    : `${shown.length} file${shown.length === 1 ? "" : "s"}${children.length ? ` · ${children.length} folder${children.length === 1 ? "" : "s"}` : ""} in this folder · uploads go into it`}
             </p>
           </div>
 
@@ -451,17 +497,17 @@ export default function Storage() {
             className="hidden"
             onChange={(e) => upload(e.target.files)}
           />
-          <span className="flex shrink-0 flex-wrap gap-2">
+          <span className="flex min-w-0 max-w-full flex-wrap gap-2">
             {!atTop && (
               <button
                 type="button"
-                onClick={() => openFolder("")}
-                className="rounded-lg border border-line/80 px-3 py-2 text-[12.5px]"
+                onClick={() => openFolder(up)}
+                className="max-w-[16rem] truncate rounded-lg border border-line/80 px-3 py-2 text-[12.5px]"
               >
-                Back to the shelf
+                {up ? `Back to ${leafOf(up)}` : "Back to the shelf"}
               </button>
             )}
-            {atTop && canManage && configured !== false && (
+            {canManage && configured !== false && (
               <button
                 type="button"
                 disabled={busy || naming !== null}
@@ -499,7 +545,7 @@ export default function Storage() {
               maxLength={60}
               onChange={(e) => setNaming(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && setNaming(null)}
-              placeholder="Folder name, e.g. Pro carousel - landlord tips"
+              placeholder={atTop ? "Folder name, e.g. Pro carousel - landlord tips" : `A folder inside ${leafOf(folder)}`}
               className="min-w-0 flex-1 basis-56 rounded-lg border border-line/80 bg-panel px-3 py-2 text-[13px] outline-none focus:border-ink"
             />
             <span className="flex gap-2">
@@ -569,10 +615,15 @@ export default function Storage() {
           </div>
         )}
 
-        {atTop && files !== null && !failed && folders.length > 0 && (
+        {files !== null && !failed && children.length > 0 && (
           <ul className="mt-4 grid gap-1.5 sm:grid-cols-2">
-            {folders.map((name) => {
-              const n = inFolder.get(name) ?? 0;
+            {children.map((name) => {
+              const n = filesUnder(name);
+              const sub = foldersUnder(name);
+              const holds = [
+                n ? `${n} file${n === 1 ? "" : "s"}` : "",
+                sub ? `${sub} folder${sub === 1 ? "" : "s"}` : "",
+              ].filter(Boolean).join(" · ");
               return (
                 <li key={name} className="flex items-center gap-2">
                   <button
@@ -584,14 +635,14 @@ export default function Storage() {
                       <DoodleIcon name="folder" size={17} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px]">{name}</span>
-                      <span className="block text-[11px] text-muted">{n ? `${n} file${n === 1 ? "" : "s"}` : "Empty"}</span>
+                      <span className="block truncate text-[13px]">{leafOf(name)}</span>
+                      <span className="block text-[11px] text-muted">{holds || "Empty"}</span>
                     </span>
                     <svg aria-hidden viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-muted">
                       <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
-                  {canManage && n === 0 && (
+                  {canManage && n === 0 && sub === 0 && (
                     <button
                       type="button"
                       disabled={working === `folder:${name}`}
@@ -608,7 +659,7 @@ export default function Storage() {
           </ul>
         )}
 
-        {shown !== null && shown.length === 0 && !failed && configured !== false && (atTop ? folders.length === 0 : true) && (
+        {shown !== null && shown.length === 0 && !failed && configured !== false && children.length === 0 && (
           <p className="mt-4 text-[12.5px] text-muted">
             {atTop
               ? "Nothing filed yet. Anything you put here is available to the rest of the OS."
@@ -618,8 +669,10 @@ export default function Storage() {
 
         {shown !== null && shown.length > 0 && (
           <ul className="mt-4 space-y-1.5">
-            {atTop && folders.length > 0 && (
-              <li className="pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Not in a folder</li>
+            {children.length > 0 && (
+              <li className="pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                {atTop ? "Not in a folder" : "Files in this folder"}
+              </li>
             )}
             {shown.map((f) => (
               /* On a phone the buttons go under the file rather than
