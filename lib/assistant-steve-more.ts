@@ -16,6 +16,8 @@ import { MA_STAGES } from "@/lib/market-appraisal";
 import { hasDb, q } from "@/lib/db";
 import { noDashes } from "@/lib/no-dashes";
 import { shelfFiles } from "@/lib/library-files";
+import { keyVisible, readFolderAccess, shelfViewer } from "@/lib/shelf-access";
+import { findUserById } from "@/lib/users";
 
 /**
  * STEVE, FURTHER (James, 2 Oct 2026): "we should be able to pull any details
@@ -431,9 +433,18 @@ const findFile: AssistantTool = {
     properties: { query: { type: "string", description: "Words from the file's name, e.g. 'landlord guide' or 'fees'." } },
   },
   label: (i) => (str(i.query) ? `Looking in the File Store for ${str(i.query)}…` : "Looking in the File Store…"),
-  async run(input) {
-    const [files, library] = await Promise.all([shelfFiles().catch(() => null), libraryEntries().catch(() => [])]);
-    if (!files) return { error: "I couldn't open the File Store just now." };
+  async run(input, ctx) {
+    /* Only the folders the person asking may see (lib/shelf-access, 2 Nov
+       2026): Office only stays with the office, Pro with Pro agents. */
+    const me = ctx.me?.id ? await findUserById(ctx.me.id).catch(() => null) : null;
+    const [all, library, viewer, access] = await Promise.all([
+      shelfFiles().catch(() => null),
+      libraryEntries().catch(() => []),
+      shelfViewer(me),
+      readFolderAccess().catch(() => null),
+    ]);
+    if (!all || !access) return { error: "I couldn't open the File Store just now." };
+    const files = all.filter((f) => keyVisible(f.key, viewer.tier, access));
     const words = str(input.query).toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((w) => w.length > 1);
     const byName = words.length
       ? files.filter((f) => {

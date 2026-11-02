@@ -36,6 +36,13 @@ const ICON: Record<string, React.ReactNode> = {
       <circle cx="12" cy="10" r="2.4" />
     </>
   ),
+  "marketing-pack": (
+    <>
+      <rect x="4" y="4.5" width="16" height="15" rx="2" />
+      <path d="M4 15.5l4.5-4.5 4 4 2.5-2.5 5 5" />
+      <circle cx="15.5" cy="9" r="1.4" />
+    </>
+  ),
   learning: (
     <>
       <path d="M4.5 5.5c2.5-1 5-1 7.5.5v13c-2.5-1.5-5-1.5-7.5-.5z" />

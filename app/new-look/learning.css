@@ -193,3 +193,33 @@
   [data-look="new"] .nl-lr-door, [data-look="new"] .nl-lr-journey, [data-look="new"] .nl-lr-book, [data-look="new"] .nl-lr-top li, [data-look="new"] .nl-lr-stop-body { animation: none; transition: none; }
   [data-look="new"] .nl-cv .cv-a, [data-look="new"] .nl-cv .cv-b, [data-look="new"] .nl-cv .cv-c, [data-look="new"] .nl-cv .cv-f { transition: none; animation: none !important; transform: none !important; }
 }
+
+/* ── Tools > Marketing Pack (components/new-look/tools/MarketingPack) ──── */
+[data-look="new"] .nl-mp-note { margin-bottom: 24px; padding: 14px 18px; border-radius: 16px; background: #fbe6dc; color: #8a3f2a; font-size: 14px; }
+[data-look="new"] .nl-mp-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 26px; font-size: 14px; color: var(--muted); }
+[data-look="new"] .nl-mp-trail button { font: inherit; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-underline-offset: 3px; }
+[data-look="new"] .nl-mp-trail button:hover { color: var(--ink); text-decoration: underline; }
+[data-look="new"] .nl-mp-trail b { font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+[data-look="new"] .nl-mp-folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+[data-look="new"] .nl-mp-folder { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 16px 18px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: transform .3s var(--nl-ease), border-color .3s, box-shadow .3s var(--nl-ease); animation: nl-in .5s var(--nl-ease) both; }
+[data-look="new"] .nl-mp-folder:hover { transform: translateY(-2px); border-color: var(--line-strong); box-shadow: 0 18px 40px -30px rgba(20, 20, 19, .4); }
+[data-look="new"] .nl-mp-folder:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+[data-look="new"] .nl-mp-folder.is-locked { cursor: default; background: transparent; border-style: dashed; color: var(--muted); }
+[data-look="new"] .nl-mp-folder.is-locked:hover { transform: none; box-shadow: none; border-color: var(--line); }
+[data-look="new"] .nl-mp-folder-ico { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; background: var(--lr-clay); color: var(--lr-clay-ink); }
+[data-look="new"] .nl-mp-folder.is-locked .nl-mp-folder-ico { background: var(--lr-brown); color: var(--lr-brown-ink); }
+[data-look="new"] .nl-mp-folder-name { display: block; font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-mp-folder .nl-meta { display: block; }
+[data-look="new"] .nl-mp-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+[data-look="new"] .nl-mp-file { display: flex; flex-direction: column; min-width: 0; border-radius: 18px; border: 1px solid var(--line); background: var(--card); overflow: hidden; animation: nl-in .5s var(--nl-ease) both; }
+[data-look="new"] .nl-mp-thumb { display: block; aspect-ratio: 1 / 1; background: var(--lr-sage); overflow: hidden; }
+[data-look="new"] .nl-mp-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--nl-ease); }
+[data-look="new"] .nl-mp-thumb:hover img { transform: scale(1.03); }
+[data-look="new"] .nl-mp-doc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; color: var(--lr-sage-ink); }
+[data-look="new"] .nl-mp-doc em { font-style: normal; font-size: 12px; letter-spacing: .04em; }
+[data-look="new"] .nl-mp-file-name { padding: 12px 14px 0; font-size: 13.5px; line-height: 19px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+[data-look="new"] .nl-mp-file-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding: 8px 14px 12px; }
+@media (max-width: 640px) {
+  [data-look="new"] .nl-mp-files { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  [data-look="new"] .nl-mp-folders { grid-template-columns: minmax(0, 1fr); }
+}

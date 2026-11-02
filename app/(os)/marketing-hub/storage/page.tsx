@@ -40,6 +40,8 @@ import DoodleIcon from "@/components/DoodleIcon";
  * receive more than 10MB. Files now go to /api/r2/library/upload in 8MB
  * pieces with a progress bar, and a file that fails says which and why while
  * the rest carry on. Files can be deleted, and locked so they can't be.
+ * Lock only stops a delete; who sees a folder is its own setting, Office only,
+ * Pro agents or Every agent (lib/shelf-access, 2 Nov 2026).
  *
  * ── Steve reads what arrives (13 Oct 2026) ────────────────────────────────
  *
@@ -88,6 +90,23 @@ const ACCEPT = [
 const MAX_BYTES = 500 * 1024 * 1024;
 
 type Lock = { by: string; at: string };
+/** Who sees a folder (lib/shelf-access): set per folder, inherited by what is inside. */
+type Level = "office" | "pro" | "everyone";
+type FolderAccess = Record<string, { level: Level; by: string; at: string }>;
+const LEVELS: { id: Level; label: string; says: string }[] = [
+  { id: "office", label: "Office only", says: "Only marketing and the office see it." },
+  { id: "pro", label: "Pro agents", says: "Pro agents see it on Tools > Marketing Pack, and Steve hands it to them." },
+  { id: "everyone", label: "Every agent", says: "Every agent sees it on Tools > Marketing Pack, and Steve hands it to anyone." },
+];
+/** A folder's own setting or its nearest parent's; the top of the shelf is Every agent. */
+function levelOf(folder: string, access: FolderAccess): { level: Level; from: string | null } {
+  const steps = folder.split("/").filter(Boolean);
+  for (let n = steps.length; n > 0; n--) {
+    const path = steps.slice(0, n).join("/");
+    if (access[path]) return { level: access[path].level, from: n === steps.length ? null : path };
+  }
+  return { level: "everyone", from: "" };
+}
 type ReadNote = { state: "reading" | "failed" | "skipped"; at: string; note?: string };
 
 /** A read that hasn't finished in ten minutes isn't going to (a deploy cut it off). */
@@ -221,6 +240,8 @@ export default function Storage() {
   const [progress, setProgress] = useState<{ name: string; sent: number; total: number; index: number; of: number } | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [locks, setLocks] = useState<Record<string, Lock>>({});
+  /** Null until read, and stays null when it couldn't be: then nothing claims who sees what. */
+  const [folderAccess, setFolderAccess] = useState<FolderAccess | null>(null);
   const [canManage, setCanManage] = useState(false);
   const [read, setRead] = useState<Set<string>>(new Set());
   const [reads, setReads] = useState<Record<string, ReadNote>>({});
@@ -254,6 +275,7 @@ export default function Storage() {
         setCanManage(Boolean(l.canManage));
         setRead(new Set<string>(l.read ?? []));
         setReads(l.reads ?? {});
+        setFolderAccess(l.folderAccess ?? null);
       }
     } catch (e) {
       /* Say which failed. "No files" and "could not look" are different facts
@@ -308,6 +330,7 @@ export default function Storage() {
       });
       const j = await r.json().catch(() => ({ ok: false, error: "The server didn't answer." }));
       if (!j.ok) throw new Error(j.error ?? "The folder wasn't made. Try again.");
+      if (j.folderAccess) setFolderAccess(j.folderAccess);
       setFolders((fs) => [...new Set([...fs, j.folder as string])].sort(byName));
       openFolder(j.folder);
     } catch (e) {
@@ -337,6 +360,27 @@ export default function Storage() {
       setWorking(null);
     }
   }
+  async function setLevel(level: Level) {
+    setWorking("access");
+    setUploadErr(null);
+    setDone(null);
+    try {
+      const r = await fetch("/api/r2/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "access", folder, level }),
+      });
+      const j = await r.json().catch(() => ({ ok: false, error: "The server didn't answer." }));
+      if (!j.ok) throw new Error(j.error ?? "That didn't save. Try again.");
+      setFolderAccess(j.folderAccess ?? null);
+      setDone(`${leafOf(folder)} is now ${LEVELS.find((l) => l.id === level)?.label.toLowerCase()}.`);
+    } catch (e) {
+      setUploadErr(e instanceof Error ? e.message : "That didn't save. Try again.");
+    } finally {
+      setWorking(null);
+    }
+  }
+
   /* How Steve's read of a file stands. A file uploaded in the last few
      minutes with no write-up yet is still being read. */
   function readState(f: StoredFile): { tone: "ok" | "busy" | "bad" | "off"; text: string } | null {
@@ -529,6 +573,36 @@ export default function Storage() {
           </span>
         </div>
 
+        {canManage && !atTop && folderAccess && (() => {
+          const { level, from } = levelOf(folder, folderAccess);
+          return (
+            <div className="mt-3 rounded-xl border border-line/70 bg-box p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[12.5px]">Who can see this folder</p>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Who can see this folder">
+                  {LEVELS.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      aria-pressed={level === l.id}
+                      disabled={working === "access"}
+                      onClick={() => level !== l.id || from !== null ? setLevel(l.id) : undefined}
+                      className={`rounded-lg border px-2.5 py-1.5 text-[12px] disabled:opacity-40 ${level === l.id ? "border-ink bg-ink text-white" : "border-line/80 bg-panel"}`}
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                {LEVELS.find((l) => l.id === level)?.says}
+                {from ? ` Set on ${leafOf(from)}; choose here to set this folder on its own.` : from === "" ? " Nothing is set on this folder or above it yet." : ""}
+                {" "}Folders inside follow this one.
+              </p>
+            </div>
+          );
+        })()}
+
         {naming !== null && (
           <form
             className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-line/70 bg-box p-3"
@@ -636,7 +710,10 @@ export default function Storage() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px]">{leafOf(name)}</span>
-                      <span className="block text-[11px] text-muted">{holds || "Empty"}</span>
+                      <span className="block text-[11px] text-muted">
+                        {holds || "Empty"}
+                        {folderAccess ? ` · ${LEVELS.find((l) => l.id === levelOf(name, folderAccess).level)?.label}` : ""}
+                      </span>
                     </span>
                     <svg aria-hidden viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-muted">
                       <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -694,7 +771,7 @@ export default function Storage() {
                     <span className="block text-[11px] text-muted">
                       {size(f.size)}
                       {f.uploadedAt ? ` · ${when(f.uploadedAt)}` : ""}
-                      {locks[f.key] ? ` · Locked by ${locks[f.key].by}` : ""}
+                      {locks[f.key] ? ` · Locked from deleting by ${locks[f.key].by}` : ""}
                     </span>
                     {(() => {
                       const r = readState(f);
@@ -734,9 +811,9 @@ export default function Storage() {
                       disabled={working === f.key}
                       onClick={() => manage(locks[f.key] ? "unlock" : "lock", f)}
                       className="rounded-lg border border-line/80 px-2.5 py-2 text-[12px] disabled:opacity-40"
-                      title={locks[f.key] ? "Unlock so it can be deleted" : "Lock so it can't be deleted"}
+                      title={locks[f.key] ? "Unlock so it can be deleted" : "Stops it being deleted. It doesn't change who can see it."}
                     >
-                      {locks[f.key] ? "Unlock" : "Lock"}
+                      {locks[f.key] ? "Unlock" : "Lock From Deleting"}
                     </button>
                     <button
                       type="button"

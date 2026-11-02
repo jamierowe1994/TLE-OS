@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
+import { cookies } from "next/headers";
 import { getKnowledge } from "@/lib/business/knowledge-store";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { LIBRARY_SECTION } from "@/lib/marketing-library";
+import { keyVisible, readFolderAccess, shelfViewer } from "@/lib/shelf-access";
+import { findUserById } from "@/lib/users";
 import { renderPlainText } from "@/lib/plain-text";
 
 /**
  * A guide, read.
  *
  * Any signed-in person can read a knowledge entry - they are written for the
- * agents, and Steve quotes them anyway. Editing is the hub's job, behind
+ * agents, and Steve quotes them anyway - except a File Store write-up from an
+ * Office only or Pro folder. Editing is the hub's job, behind
  * edit:knowledge; this page only shows.
  */
 
@@ -18,6 +24,15 @@ export default async function KnowledgeReader({ params }: { params: Promise<{ id
   const { id } = await params;
   const entry = await getKnowledge(id).catch(() => null);
   if (!entry) notFound();
+  /* A File Store write-up follows its file's folder: Office only and Pro stay
+     with whoever may see them (lib/shelf-access, 2 Nov 2026). */
+  if (entry.section === LIBRARY_SECTION) {
+    const key = entry.content.match(/^File key:\s*(library\/shelf\/[^\n]+)$/m)?.[1]?.trim();
+    const uid = verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value);
+    const me = uid ? await findUserById(uid).catch(() => null) : null;
+    const access = await readFolderAccess().catch(() => null);
+    if (!key || !access || !keyVisible(key, (await shelfViewer(me)).tier, access)) notFound();
+  }
 
   const when = new Date(entry.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 

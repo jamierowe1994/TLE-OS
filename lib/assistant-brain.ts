@@ -1,5 +1,6 @@
 import "server-only";
 import { LIBRARY_SECTION, libraryEntries, libraryIndex } from "@/lib/marketing-library";
+import { keyVisible, readFolderAccess } from "@/lib/shelf-access";
 import type { OpenSurface } from "@/lib/open-record";
 import Anthropic from "@anthropic-ai/sdk";
 import { aiCreate } from "@/lib/ai";
@@ -333,14 +334,20 @@ guidance above:\n\n${brief.body.trim()}`,
    * A read FAILURE is called out separately. Under the old catch it looked
    * identical to an empty table, so a broken database read would have had him
    * confidently telling agents the business had written nothing down. */
-  if (library.length) {
+  /* Only what every agent may see goes in the prompt, which is one cached
+     prefix for everybody (lib/shelf-access, 2 Nov 2026): a Basic agent must
+     not be told what is in the Pro package. find_file still finds Office only
+     and Pro files for whoever may have them. A failed read lists nothing. */
+  const folderAccess = await readFolderAccess().catch(() => null);
+  const everyAgent = folderAccess ? (await libraryEntries(library)).filter((e) => e.key && keyVisible(e.key, "agent", folderAccess)) : [];
+  if (everyAgent.length) {
     blocks.push({
       type: "text",
       text:
         `The marketing library: every file on the File Store has been read and written up. One line each below. ` +
         `When someone asks about something one of these covers - a landlord guide, a checklist, a letter campaign, a social media how-to - ` +
         `call find_file with words from its title: it gives you the full write-up to answer from in a line or two, and puts the PDF under your reply to download. ` +
-        `Offer the landlord guides for the right country (England and Wales or Scotland).\n\n${libraryIndex(await libraryEntries(library))}`,
+        `Offer the landlord guides for the right country (England and Wales or Scotland).\n\n${libraryIndex(everyAgent)}`,
     });
   }
   if (knowledge) {

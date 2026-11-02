@@ -3,6 +3,7 @@ import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { isScope, R2_BUCKET, r2Configured, r2Problem, safeName, SCOPES, withR2 } from "@/lib/r2";
 import { whoIs } from "@/lib/admin";
 import { refusal } from "@/lib/r2-access";
+import { shelfViewer } from "@/lib/shelf-access";
 
 /**
  * What's already filed against a record.
@@ -61,6 +62,12 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const no = await refusal(actor, scopeRaw, ref);
   if (no) return NextResponse.json({ ok: false, error: no }, { status: 403 });
+  /* The File Store's own listing is the office's: agents get their folders
+     through Tools > Marketing Pack, which knows Office only and Pro
+     (lib/shelf-access, 2 Nov 2026). */
+  if (scopeRaw === "library" && ref === "shelf" && (await shelfViewer(actor)).tier !== "office") {
+    return NextResponse.json({ ok: false, error: "The File Store is for marketing and the office. Your files are on Tools > Marketing Pack." }, { status: 403 });
+  }
 
   if (!r2Configured) {
     // Not an error the user needs to see — the screen simply shows nothing

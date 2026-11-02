@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { libraryEntries } from "@/lib/marketing-library";
+import { keyVisible, readFolderAccess, shelfViewer } from "@/lib/shelf-access";
 
 /**
  * GET /api/tools/learning/guides - Tools > Learning > Guides (James, 26 Oct
@@ -21,16 +22,19 @@ export async function GET(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor && hasDb()) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   try {
-    const [entries, top] = await Promise.all([
+    const [entries, top, viewer, access] = await Promise.all([
       libraryEntries(),
       hasDb()
         ? q<{ entry_id: string; n: string }>(
             `SELECT entry_id, COUNT(*) AS n FROM os_guide_opens WHERE opened_at > NOW() - INTERVAL '90 days' GROUP BY entry_id ORDER BY n DESC, MAX(opened_at) DESC LIMIT 10`
           )
         : Promise.resolve([]),
+      shelfViewer(actor),
+      /* Office only and Pro folders stay with whoever may see them (lib/shelf-access). */
+      readFolderAccess(),
     ]);
     const guides: Guide[] = entries
-      .filter((e) => /^library-[a-f0-9]{12}$/.test(e.id) && e.key)
+      .filter((e) => /^library-[a-f0-9]{12}$/.test(e.id) && e.key && keyVisible(e.key, viewer.tier, access))
       .map((e): Guide => {
         const [who, where] = e.audience.split("·").map((x) => x.trim());
         return {

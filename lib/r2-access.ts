@@ -32,7 +32,7 @@ export function refOf(key: string): { scope: Scope; ref: string } | null {
   return scope && ref ? { scope, ref } : null;
 }
 
-const STAFF_SEES_ALL = new Set(["owner", "super_admin", "developer", "support", "pretenancy", "compliance", "marketing"]);
+export const STAFF_SEES_ALL = new Set(["owner", "super_admin", "developer", "support", "pretenancy", "compliance", "marketing"]);
 
 /** A sentence when this person may not open files under this record, else null. */
 export async function refusal(actor: Pick<OsUser, "role" | "email" | "id">, scopeRaw: string, ref: string): Promise<string | null> {

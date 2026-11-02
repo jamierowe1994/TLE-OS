@@ -4,6 +4,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { keyIsOurs, R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { whoIs } from "@/lib/admin";
 import { refOf, refusal } from "@/lib/r2-access";
+import { keyVisible, readFolderAccess, shelfViewer } from "@/lib/shelf-access";
 
 /**
  * Handing a file back.
@@ -45,6 +46,17 @@ export async function GET(req: NextRequest) {
   const under = refOf(key);
   const no = under ? await refusal(actor, under.scope, under.ref) : "Not a valid file reference.";
   if (no) return NextResponse.json({ ok: false, error: no }, { status: 403 });
+  /* A File Store folder can be Office only or Pro agents (lib/shelf-access,
+     2 Nov 2026). A read that fails shuts the door rather than opening it. */
+  if (key.startsWith("library/shelf/")) {
+    const viewer = await shelfViewer(actor);
+    if (viewer.tier !== "office") {
+      const access = await readFolderAccess().catch(() => null);
+      if (!access || !keyVisible(key, viewer.tier, access)) {
+        return NextResponse.json({ ok: false, error: "That file is part of the Pro package." }, { status: 403 });
+      }
+    }
+  }
 
   /* ?bytes=1: the file itself through the OS, for the certificate reader to
      read a document already on file (12 Oct 2026). Same check as the link;

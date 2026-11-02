@@ -146,6 +146,19 @@ export const TOOLS: Tool[] = [
     gate: "launchpad",
   },
   {
+    /* Francesca's File Store, the folders this person may see (lib/shelf-access,
+       2 Nov 2026). Every agent can open it; what is inside depends on the
+       folder settings and, for Pro folders, Launch Pad's answer. */
+    key: "marketing-pack",
+    name: "Marketing Pack",
+    blurb: "Social posts, carousels and artwork from marketing, ready to post or send on.",
+    icon: "note",
+    href: "/tools/marketing-pack",
+    status: "live",
+    access: "included",
+    group: "prospecting",
+  },
+  {
     key: "bond",
     name: "Bond",
     blurb:

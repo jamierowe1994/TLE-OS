@@ -4,13 +4,16 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { getKnowledge } from "@/lib/business/knowledge-store";
 import { LIBRARY_SECTION } from "@/lib/marketing-library";
+import { whoIs } from "@/lib/admin";
+import { keyVisible, readFolderAccess, shelfViewer } from "@/lib/shelf-access";
 
 /**
  * GET /library/<entry id> - a marketing library file, for anybody with the
  * link (James, 13 Oct 2026: the tour's Steve hands out all 63 of them, and
  * the tour is public). Only a file that has a "Marketing library" knowledge
  * entry is served, by that entry's id - nothing else on the File Store, or
- * anywhere else in storage, can be reached through here. A five-minute
+ * anywhere else in storage, can be reached through here. A file in an Office
+ * only or Pro folder is served only to a signed-in person who may see it. A five-minute
  * signed link to read it in the browser; ?save=1 downloads it.
  */
 
@@ -25,6 +28,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const key = entry.content.match(/^File key:\s*(library\/shelf\/[^\n]+)$/m)?.[1]?.trim();
   const name = entry.content.match(/^File:\s*(.+)$/m)?.[1]?.trim() ?? `${entry.title}.pdf`;
   if (!key) return new NextResponse("Not found.", { status: 404 });
+  /* Open to anybody with the link only while its folder is Every agent
+     (lib/shelf-access, 2 Nov 2026). An Office only or Pro folder needs the
+     signed-in person who may see it; to anybody else it isn't there. */
+  const access = await readFolderAccess().catch(() => null);
+  if (!access) return new NextResponse("Not found.", { status: 404 });
+  if (!keyVisible(key, "agent", access)) {
+    const { actor } = await whoIs(req);
+    if (!actor || !keyVisible(key, (await shelfViewer(actor)).tier, access)) return new NextResponse("Not found.", { status: 404 });
+  }
   const save = req.nextUrl.searchParams.get("save") === "1";
   const url = await withR2((client) =>
     getSignedUrl(
