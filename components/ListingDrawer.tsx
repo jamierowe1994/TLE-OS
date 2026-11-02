@@ -1909,6 +1909,7 @@ function ListingDrawerBody({
                   homeProblem={homeProblem}
                   landlordRegistration={live?.record.landlordRegistration ?? null}
                   landlordRegistrationExpiry={live?.record.landlordRegistrationExpiry ?? null}
+                  landlordRegistrationOwner={live?.record.landlordRegistrationOwner ?? null}
                   letOnly={/let\s*only|tenant\s*find/i.test(live?.service ?? "")}
                   introOnly={introOnly}
                   onHomeChanged={reloadHome}
@@ -3188,7 +3189,7 @@ function ListingDrawerBody({
                     {!testListing && <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" onClick={() => setLandlordOpen(true)}>Add the landlord</button>}
                   </>
                 )}
-                <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} look="new" onSaved={setLive} />
+                <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} look="new" onSaved={setLive} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
               </section>
 
               {/* Steve, looking for the handy next thing on this home. */}
@@ -3354,6 +3355,7 @@ function ListingDrawerBody({
                   homeProblem={homeProblem}
               landlordRegistration={live?.record.landlordRegistration ?? null}
                   landlordRegistrationExpiry={live?.record.landlordRegistrationExpiry ?? null}
+                  landlordRegistrationOwner={live?.record.landlordRegistrationOwner ?? null}
               letOnly={/let\s*only|tenant\s*find/i.test(live?.service ?? "")}
               introOnly={introOnly}
               onHomeChanged={reloadHome}
@@ -3736,7 +3738,7 @@ function ListingDrawerBody({
                   the landlord, every field changeable, plus additional
                   landlords and points of contact kept on the home. */}
               {landlordBlock}
-              <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} onSaved={setLive} />
+              <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} onSaved={setLive} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
             </div>
 
             {/* How we get in - and, when it is through the tenant, the tenant. */}

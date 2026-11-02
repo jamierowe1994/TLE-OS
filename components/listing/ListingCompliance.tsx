@@ -149,6 +149,7 @@ export default function ListingCompliance({
   landlord,
   landlordRegistration,
   landlordRegistrationExpiry = null,
+  landlordRegistrationOwner = null,
   letOnly,
   introOnly,
   onHomeChanged,
@@ -169,6 +170,8 @@ export default function ListingCompliance({
   landlordRegistration: string | null;
   /** When each registration number runs out (lib/reg-numbers), from the listing's Landlord section. */
   landlordRegistrationExpiry?: Record<string, string> | null;
+  /** Whose each number is, by landlord name (lib/reg-numbers). */
+  landlordRegistrationOwner?: Record<string, string> | null;
   /** Let only on the listing: the certificates are the landlord's to keep in date. */
   letOnly?: boolean;
   /** Intro only (lib/intro-only): nothing here is ours to chase. */
@@ -249,7 +252,7 @@ export default function ListingCompliance({
     ? (["expired", "due-soon", "no-date", "valid"] as RegState[]).find((st) => regRuns.some((r) => regState(r.day) === st)) ?? null
     : null;
   const regLine = regRuns
-    .map((r) => `${regNums.length > 1 ? `${r.n} ` : ""}${r.day ? `${regState(r.day) === "expired" ? "ran out" : "runs to"} ${regDay(r.day)}` : "no expiry date yet"}`)
+    .map((r) => `${regNums.length > 1 ? `${landlordRegistrationOwner?.[r.n] ?? r.n} ` : ""}${r.day ? `${regState(r.day) === "expired" ? "ran out" : "runs to"} ${regDay(r.day)}` : "no expiry date yet"}`)
     .join(" · ");
   const regPaper = paper("doc_landlord_registration");
   const regHeld: Held = regPaper

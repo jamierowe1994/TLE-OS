@@ -14,7 +14,7 @@ import { rexTokenFor } from "@/lib/rex-user";
 import { isOwner } from "@/lib/agent-words";
 import { refusalInWords } from "@/lib/rex-refusal";
 import { recordFact } from "@/lib/property-facts";
-import { MAX_REG_NUMBERS, isRealDay, joinRegExpiries, joinRegNumbers, regNumbers } from "@/lib/reg-numbers";
+import { MAX_REG_NUMBERS, isRealDay, joinRegExpiries, joinRegNumbers, joinRegOwners, regNumbers, regOwnerName } from "@/lib/reg-numbers";
 import { bandForScore, forgetRecord, normaliseLarn, saveAgentLarn, withScottishFooter } from "@/lib/listing-record";
 import { bandScoreClash } from "@/lib/epc-band";
 
@@ -208,6 +208,15 @@ export async function PATCH(req: NextRequest) {
       regExpiry = Object.fromEntries(entries.map(([n, d]) => [n.replace(/\s+/g, " ").trim(), d ? String(d) : null]));
     } else bad.push("landlord registration expiry date (a real date)");
   }
+  /* Whose each number is, { number: landlord's name or "" } (Lianna, 2 Nov 2026). */
+  let regOwner: Record<string, string | null> | undefined;
+  if (b.landlordRegistrationOwner !== undefined) {
+    const v = b.landlordRegistrationOwner;
+    const entries = v && typeof v === "object" && !Array.isArray(v) ? Object.entries(v as Record<string, unknown>) : null;
+    if (entries && entries.length <= MAX_REG_NUMBERS && entries.every(([n, o]) => /^[A-Za-z0-9/ -]{3,40}$/.test(n) && (o === null || typeof o === "string"))) {
+      regOwner = Object.fromEntries(entries.map(([n, o]) => [n.replace(/\s+/g, " ").trim(), regOwnerName(o) || null]));
+    } else bad.push("whose landlord registration number it is");
+  }
   let propertyTypeId: string | undefined;
   if (b.propertyTypeId !== undefined) {
     if (typeof b.propertyTypeId === "string" && /^[\w-]{1,40}$/.test(b.propertyTypeId)) propertyTypeId = b.propertyTypeId;
@@ -236,7 +245,7 @@ export async function PATCH(req: NextRequest) {
        Goldthorne Terrace, a3d142bd, 11 Oct 2026). */
     let epcNeedsDate = false;
     let epcWrite: Record<string, number | string> | undefined;
-    if (epcTouched || larn !== undefined || agentLarn !== undefined || regExpiry !== undefined) {
+    if (epcTouched || larn !== undefined || agentLarn !== undefined || regExpiry !== undefined || regOwner !== undefined) {
       const current = await readListingDetails(id).catch(() => null);
       const key = current?.record.factsKey ?? null;
       if (key && larn) {
@@ -247,6 +256,11 @@ export async function PATCH(req: NextRequest) {
         const numbers = regNumbers(larn !== undefined ? larn : current.record.landlordRegistration);
         const value = joinRegExpiries({ ...current.record.landlordRegistrationExpiry, ...regExpiry }, numbers);
         await recordFact({ propertyId: key, field: "landlord_registration_expiry", value, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
+      }
+      if (regOwner !== undefined && key && current) {
+        const numbers = regNumbers(larn !== undefined ? larn : current.record.landlordRegistration);
+        const value = joinRegOwners({ ...current.record.landlordRegistrationOwner, ...regOwner }, numbers);
+        await recordFact({ propertyId: key, field: "landlord_registration_owner", value, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
       }
       /* The agent's LARN is theirs, not the home's: kept against the
          listing's agent, so their next Scottish listing is prefilled. */
@@ -315,7 +329,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
     if (!plan.listing && !plan.property) {
-      if (epcTouched || larn !== undefined || agentLarn !== undefined || regExpiry !== undefined || propertyTypeId) {
+      if (epcTouched || larn !== undefined || agentLarn !== undefined || regExpiry !== undefined || regOwner !== undefined || propertyTypeId) {
         forgetListing(id);
         const details = await readListingDetails(id).catch(() => null);
         return NextResponse.json({ ok: true, id, note: epcNeedsDate ? EPC_NEEDS_DATE : epcKeptOnly ? "Kept here. Add the potential score to send the rating to the portals." : "Saved.", epcHeld: epcNeedsDate || undefined, details });
