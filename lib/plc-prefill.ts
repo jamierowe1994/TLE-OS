@@ -2,7 +2,9 @@ import "server-only";
 import { getApplications, type Application } from "@/lib/applications";
 import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 import { isTestId, testApplication } from "@/lib/test-overlay";
-import { factsByRexId } from "@/lib/os-properties";
+import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
+import { findPropolyDeal, type BusinessDeal } from "@/lib/business/propoly-deals";
+import { sameHome } from "@/lib/address-parse";
 
 /**
  * Everything the handover already knows before anybody types.
@@ -116,6 +118,48 @@ function shape(a: Application, facts?: { hmo: boolean; landlordName: string | nu
   };
 }
 
+/** A Propoly deal's id, as the let page uses it for a home let through Propoly alone. */
+const DEAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A let that only Propoly knows about (Joe Patten, 2 Nov 2026): 340 Four
+ * Chimneys Crescent was agreed in REX's day and went straight into Propoly,
+ * so REX has no application and the PLC check had nothing to start from.
+ * The deal has everything the first screen asks for - the home, the tenants,
+ * the move-in date, the rent and the landlords - and the OS's own property
+ * record gives the REX property, so the certificates on file are found.
+ */
+async function shapeDeal(deal: BusinessDeal): Promise<Prefill> {
+  const d = deal.app;
+  const full = `${d.propertyName}, ${d.locality ?? ""}`;
+  const [homes, facts] = await Promise.all([
+    activeOsProperties().catch(() => []),
+    factsByRexId().catch(() => new Map<string, { hmo: boolean; landlordName: string | null }>()),
+  ]);
+  const home = homes.find((h) => sameHome(full, h.address) || sameHome(full, `${h.name}, ${h.postcode ?? ""}`)) ?? null;
+  const fact = home?.rexPropertyId ? facts.get(home.rexPropertyId) ?? null : null;
+  const landlords = (d.propoly?.landlords ?? []).map((l) => (l.name ?? "").trim()).filter(Boolean);
+  const moveInDate = asYmd(d.startDate);
+  const warnings: string[] = [];
+  if (!moveInDate) warnings.push("No move-in date on the Propoly deal, so you will need to add it.");
+  if (!d.tenants.length) warnings.push("No tenants are on the Propoly deal yet.");
+  return {
+    applicationRef: d.id,
+    applicationId: d.id,
+    listingId: d.listingId != null ? Number(d.listingId) : null,
+    address: d.propertyName,
+    locality: d.locality ?? "",
+    tenants: d.tenants.map((t) => ({ name: t.name, email: t.email ?? null, isPrimary: Boolean(t.isPrimary) })),
+    moveInDate,
+    agentName: deal.managerName,
+    rentPcm: d.offer == null ? null : d.offerPeriod === "week" ? Math.round((d.offer * 52) / 12) : d.offer,
+    warnings,
+    hmo: Boolean(home?.hmo) || Boolean(fact?.hmo) || ROOM.test(d.propertyName),
+    landlordName: fact?.landlordName ?? home?.landlordName ?? landlords[0] ?? null,
+    propertyId: home?.rexPropertyId ?? null,
+  };
+}
+
 /**
  * Find the application to hand over.
  *
@@ -142,7 +186,10 @@ export async function prefillFor(opts: {
 
   if (opts.applicationId) {
     const found = book.find((a) => String(a.id) === String(opts.applicationId));
-    return found ? shape(found, factsOf(found)) : null;
+    if (found) return shape(found, factsOf(found));
+    if (!DEAL_ID.test(opts.applicationId)) return null;
+    const deal = await findPropolyDeal(opts.applicationId);
+    return deal ? shapeDeal(deal) : null;
   }
 
   if (opts.listingId) {

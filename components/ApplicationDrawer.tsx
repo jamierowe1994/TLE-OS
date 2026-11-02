@@ -1058,6 +1058,11 @@ export default function ApplicationDrawer({
   /* A recorded expiry means the check was made, whatever the notes say. */
   const answered = people.filter((p) => p.rightToRent === true || rtrOf(p)).length;
   const offerIn = app ? app.stageKey === "accepted" || app.stageKey === "communicated" : false;
+  /* The PLC check starts from the application, or - for a home let through
+     Propoly alone, agreed before the OS (Joe Patten's 340 Four Chimneys
+     Crescent, 2 Nov 2026) - from the deal itself: a deal is an accepted let. */
+  const plcStartHref = app ? `/plc/start?application=${encodeURIComponent(app.id)}` : deal ? `/plc/start?application=${encodeURIComponent(deal.app.id)}` : null;
+  const plcReady = app ? offerIn : Boolean(deal);
   const lead = people.find((p) => p.isPrimary) ?? people[0];
   const name = app?.property ?? deal?.app.propertyName ?? "This let";
   /* "44 South Bridge (tenant swap)" in the heading (13 Oct 2026); the record keeps the plain address. */
@@ -1546,10 +1551,10 @@ export default function ApplicationDrawer({
     const landlordName = landlordFirst?.name ?? info?.landlord?.name ?? null;
     const landlordPhone = landlordFirst?.phone ?? info?.landlord?.phone ?? null;
     const noLandlord = info !== null && !landlordsAll.length && !info.landlord;
-    const plcHref = app ? `/plc/start?application=${encodeURIComponent(app.id)}` : null;
-    const plcCan = Boolean(app) && !intro && !cancelled && offerIn && !plcDone;
+    const plcHref = plcStartHref;
+    const plcCan = Boolean(plcHref) && !intro && !cancelled && plcReady && !plcDone;
     const plcLabel = plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check";
-    const plcSub = intro ? "Marketing only - the landlord's" : cancelled ? "The deal is cancelled" : !app ? "Needs an application in the OS" : plcDone ? "PLC check done" : offerIn ? "Before the tenancy starts" : "Once the offer is accepted";
+    const plcSub = intro ? "Marketing only - the landlord's" : cancelled ? "The deal is cancelled" : !plcHref ? "Needs an application in the OS" : plcDone ? "PLC check done" : plcReady ? "Before the tenancy starts" : "Once the offer is accepted";
     const telOf = (p: string) => `tel:${p.replace(/\s/g, "")}`;
 
     /* The one orange job: whatever the let is waiting on us for. */
@@ -2524,10 +2529,10 @@ export default function ApplicationDrawer({
                 icon="shield"
                 dark
                 label={plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check"}
-                sub={cancelled ? "The deal is cancelled" : !app ? "Needs an application in the OS" : plcDone ? "PLC check done" : offerIn ? "Before the tenancy starts" : "Once the offer is accepted"}
+                sub={cancelled ? "The deal is cancelled" : !plcStartHref ? "Needs an application in the OS" : plcDone ? "PLC check done" : plcReady ? "Before the tenancy starts" : "Once the offer is accepted"}
                 done={plcDone}
-                off={!plcDone && (Boolean(cancelled) || !app || !offerIn)}
-                href={app ? `/plc/start?application=${encodeURIComponent(app.id)}` : undefined}
+                off={!plcDone && (Boolean(cancelled) || !plcStartHref || !plcReady)}
+                href={plcStartHref ?? undefined}
               />
               )}
               <Tile icon="message" label="Add a comment" sub="For the whole team" onClick={() => setPanel("notes")} steve="application.add-comment" />
