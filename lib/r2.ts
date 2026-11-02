@@ -250,11 +250,19 @@ export type Scope = keyof typeof SCOPES;
 
 export const isScope = (s: string): s is Scope => s in SCOPES;
 
-/** Anything that could climb out of its prefix, or upset a URL, is stripped. */
+/**
+ * Anything that could climb out of its prefix, or upset a URL, is stripped.
+ *
+ * A run of dots becomes one (2 Nov 2026). Francesca's "Guide To... 1 LL.png"
+ * kept its "..." and every key check below (keyIsOurs, the File Store's
+ * onShelf) refuses a key with ".." in it, so the upload started and then
+ * every piece was turned away as "That upload isn't one of ours."
+ */
 export function safeName(name: string): string {
   const cleaned = name
     .replace(/[/\\]/g, "-")
     .replace(/[^\w.\- ]+/g, "")
+    .replace(/\.{2,}/g, ".")
     .replace(/\s+/g, " ")
     .trim();
   return (cleaned || "file").slice(-120);
