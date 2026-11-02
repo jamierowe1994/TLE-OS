@@ -518,7 +518,16 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   const pmRexIds = pm ? new Set(pm.map((h) => h.rexPropertyId).filter(Boolean) as string[]) : null;
   /* Intro only is never ours to look after (lib/intro-only, 16 Oct 2026). */
   const intro = await introOnlyIds().catch(() => new Set<string>());
-  const properties = lets.filter((p) => p.listingId && !intro.has(String(p.listingId)) && (!pmRexIds || (p.propertyId && pmRexIds.has(p.propertyId))));
+  /* A NEW LET SINCE REX PM WAS READ (Lorna, 2 Nov 2026: 44 Rosedale Grove,
+     moved in 30 Oct, rent collect, leased in REX and nowhere in her
+     Portfolio). REX PM's list is a read taken on a day (2 Oct), so a home let
+     after it can't be on it - 19 of the 24 lets that moved in from 2 Oct to
+     2 Nov were missing. A letting that went leased after that read, on a
+     service we look after, is ours until the next read says otherwise. Let
+     Only stays out, as it does on REX PM's list. */
+  const pmReadDay = pm ? pm.reduce((m, h) => (h.pmReadAt && h.pmReadAt > m ? h.pmReadAt : m), "").slice(0, 10) : "";
+  const newSincePm = (p: ManagedProperty) => Boolean(pmReadDay && p.letSince && p.letSince > pmReadDay && MANAGED_SERVICES.has(p.service ?? ""));
+  const properties = lets.filter((p) => p.listingId && !intro.has(String(p.listingId)) && (!pmRexIds || (p.propertyId && (pmRexIds.has(p.propertyId) || newSincePm(p)))));
 
   /**
    * The sitting tenant, where the listing does not name one.
