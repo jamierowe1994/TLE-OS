@@ -4,7 +4,8 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
-import { attach, payPropPeople, personKey } from "@/lib/business/payprop-tenant-contacts";
+import { attach, homeTenancies, payPropPeople, payPropTenantRows, personKey } from "@/lib/business/payprop-tenant-contacts";
+import { londonToday } from "@/lib/london-clock";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { addrOf, parseAddress, postcodeOf, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
@@ -753,6 +754,8 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   const held = await tenantContacts().catch(() => new Map<string, Map<string, { email: string | null; phone: string | null }>>());
   /* Not caught past here: no PayProp read means nothing is set aside. */
   const people = await payPropPeople().catch(() => null);
+  const ppRows = people ? await payPropTenantRows().catch(() => null) : null;
+  const today = londonToday();
   for (const p of currentLets(properties)) {
     if (p.tenants.length || !p.propertyId) continue;
     const o = pmFor.get(p.propertyId);
@@ -778,6 +781,14 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
         .map((n) => n.replace(/\s+/g, " ").trim())
         .filter(Boolean);
     }
+    /* A NEWER TENANCY HAS BEGUN (James, 2 Nov 2026). 6 Ruskin Place kept
+       Keanne Galloway after Anne McMillan-Clyne's tenancy began on 1 Nov:
+       PayProp's own end date for his was 2 Nov, though Propoly and the team
+       had it ending 31 Oct. The tenant stands until the next tenancy begins,
+       and from its first day the people on it are who lives there. Before
+       then the home's page says "New tenancy starting" beside them. */
+    const fresh = ppRows && names.length ? homeTenancies(ppRows, p, names, today).next : null;
+    if (fresh && fresh.startDate <= today) names = fresh.people.map((x) => x.name);
     p.tenants = names.map((name, i) => {
       /* A contact held under the pair's joined name ("Lorna McLeod & Calum
          More") is the first-named person's, as PayProp's joint record is. */
