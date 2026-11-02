@@ -105,6 +105,22 @@ export default function ContractorsPage() {
   }, []);
   useEffect(load, [load]);
 
+  /* On the payment run from To Pay itself (Michael Healy, 2 Nov 2026: "the
+     uploaded on payprop button has disappeared?"). It was only ever on
+     Maintenance > Accounts and the job's page; the office works from this
+     list, so the button sits on each row still to go on PayProp. Office only,
+     as the route checks. */
+  const [paying, setPaying] = useState<string | null>(null);
+  const [payErr, setPayErr] = useState<string | null>(null);
+  const payrun = useCallback(async (id: string) => {
+    setPaying(id);
+    setPayErr(null);
+    const r = await fetch(`/api/works-orders/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "payrun" }) }).then((x) => x.json()).catch(() => null);
+    setPaying(null);
+    if (!r?.ok) return setPayErr(r?.error ?? "Could not put it on the payment run.");
+    load();
+  }, [load]);
+
   /* Paid out of the rent (James to Lianna Denholm, 29 Oct 2026: "it will
      cross-reference PayProp ... once it is paid out of the rent, it will then
      mark as done"). Once a visit, after the board: PayProp is asked which of
@@ -391,6 +407,7 @@ export default function ContractorsPage() {
               <div className="nl-ct-sh"><h2>To Pay</h2><span className="nl-ct-total">{pounds(owedPence)}</span></div>
               <p className="nl-meta nl-ct-shnote">Their invoice is on the job and accounts have been told. Oldest first. Over {WAITING_DAYS} days is marked.</p>
               <PayPropLine c={payCheck} look="new" />
+              {payErr && <p className="nl-meta nl-ct-shnote" style={{ color: "var(--accent-dark)" }} role="alert">{payErr}</p>}
               {(unpaid.length > 0 || recentlyPaid.length > 0) && (
                 <div className="nl-ct-tools nl-ct-paytools">
                   <label className="nl-fsearch">
@@ -404,7 +421,7 @@ export default function ContractorsPage() {
                 <p className="nl-ct-calm">Nothing owed. Every contractor invoice on the OS is paid.</p>
               ) : shownUnpaid.length === 0 ? (
                 <p className="nl-ct-calm">Nothing to pay matches &ldquo;{payNeedle}&rdquo;.</p>
-              ) : shownUnpaid.map((j) => <CtInvRow key={j.id} j={j} waited={waitedDays(j)} />)}
+              ) : shownUnpaid.map((j) => <CtInvRow key={j.id} j={j} waited={waitedDays(j)} onPayrun={data.office ? payrun : undefined} busy={paying === j.id} />)}
             </section>
             <section className="nl-ct-sec">
               <div className="nl-ct-sh"><h2>Paid in the Last 90 Days</h2><span>{payNeedle ? shownPaid.length : recentlyPaid.length}</span></div>
@@ -654,6 +671,9 @@ export default function ContractorsPage() {
                       <span className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
                         {/* The payment run (21 Oct 2026): keyed on PayProp yet, or still to go on. */}
                         <PayrunTag o={j} />
+                        {data.office && awaitingPay(j) && !j.payrunAt && (
+                          <button type="button" disabled={paying === j.id} onClick={() => void payrun(j.id)} title="Keyed on PayProp: the agent sees it's coming out of the rent" className="whitespace-nowrap rounded-full border border-ink px-3 py-1 text-[11.5px] font-semibold disabled:opacity-50">{PAYRUN_LABEL}</button>
+                        )}
                         <Pill tone={w > WAITING_DAYS ? "accent" : "neutral"}>{w <= 0 ? "in today" : `${plural(w, "day")}`}</Pill>
                         <span className="figures min-w-[64px] text-right text-[13px]">{j.invoicePence != null ? pounds(j.invoicePence) : ""}</span>
                       </span>
@@ -966,10 +986,10 @@ function CtBookedRow({ j, today, onWho }: { j: Job; today: string; onWho: (id: s
 }
 
 /** An invoice to pay, or one paid: the day it came in or was paid, who, the job, the payment run, the figure. */
-function CtInvRow({ j, waited, paid = false }: { j: Job; waited: number; paid?: boolean }) {
+function CtInvRow({ j, waited, paid = false, onPayrun, busy = false }: { j: Job; waited: number; paid?: boolean; onPayrun?: (id: string) => void; busy?: boolean }) {
   const long = !paid && waited > WAITING_DAYS;
   return (
-    <div className={`nl-ct-inv${paid ? " is-paid" : ""}`}>
+    <div className={`nl-ct-inv${paid ? " is-paid" : ""}${onPayrun ? " has-payrun" : ""}`}>
       <DateCol iso={paid ? j.paidAt : j.invoicedAt} hot={long} sub={paid ? "paid" : "in"} />
       <div className="nl-ct-t">
         <a href={jobHref(j.id)} className="nl-ct-home">{j.payee === "agent" ? `${j.raisedBy} (paid it themselves)` : j.contractorName}</a>
@@ -988,7 +1008,12 @@ function CtInvRow({ j, waited, paid = false }: { j: Job; waited: number; paid?: 
         )}
       </div>
       <span className="nl-ct-amt">{j.invoicePence != null ? pounds(j.invoicePence) : ""}</span>
-      <div className="nl-ct-q">{!paid && <a href={jobHref(j.id)} className="nl-btn nl-btn--secondary nl-btn--sm">Mark it paid</a>}</div>
+      <div className="nl-ct-q">
+        {!paid && onPayrun && awaitingPay(j) && !j.payrunAt && (
+          <button type="button" disabled={busy} onClick={() => onPayrun(j.id)} title="Keyed on PayProp: the agent sees it's coming out of the rent" className="nl-btn nl-btn--secondary nl-btn--sm">{busy ? "Saving…" : PAYRUN_LABEL}</button>
+        )}
+        {!paid && <a href={jobHref(j.id)} className="nl-btn nl-btn--secondary nl-btn--sm">Mark it paid</a>}
+      </div>
     </div>
   );
 }

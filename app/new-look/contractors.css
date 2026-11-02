@@ -61,6 +61,8 @@
 }
 [data-look="new"] .nl-ct-inv { grid-template-columns: 76px minmax(0, 1fr) 100px auto; }
 [data-look="new"] .nl-ct-inv.is-paid { opacity: 0.6; }
+/* The office's rows carry On the payment run too: one width, so the amounts line up. */
+[data-look="new"] .nl-ct-inv.has-payrun .nl-ct-q { min-width: 264px; }
 [data-look="new"] .nl-ct-later + .nl-ct-job { border-top: 0; }
 [data-look="new"] .nl-ct-dt { display: block; padding-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
 [data-look="new"] .nl-ct-dt b { display: block; font-weight: 500; font-size: 14px; color: var(--ink); white-space: nowrap; }
@@ -148,6 +150,7 @@
   [data-look="new"] .nl-ct-job, [data-look="new"] .nl-ct-inv { grid-template-columns: 64px minmax(0, 1fr); gap: 10px 16px; }
   [data-look="new"] .nl-ct-job .nl-ct-q, [data-look="new"] .nl-ct-inv .nl-ct-q { grid-column: 2; justify-content: flex-start; }
   [data-look="new"] .nl-ct-inv .nl-ct-amt { grid-column: 2; text-align: left; }
+  [data-look="new"] .nl-ct-inv.has-payrun .nl-ct-q { min-width: 0; }
   [data-look="new"] .nl-ct-crow { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; }
   [data-look="new"] .nl-ct-chead { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; }
   [data-look="new"] .nl-ct-work, [data-look="new"] .nl-ct-chead-work { display: none; }
