@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireCapability } from "@/lib/admin";
+import { requireAnyCapability } from "@/lib/admin";
 import { getAllPropolyDeals, getPropolyMoveInRows } from "@/lib/business/propoly-deals";
 import { propolyConfigured } from "@/lib/business/propoly";
+import { currentMonth } from "@/lib/business/format";
 
 // The two Move-ins tables, live from Propoly.
 //
@@ -15,7 +16,9 @@ import { propolyConfigured } from "@/lib/business/propoly";
 //   moveIns   completed deals with a move-in date IN that month
 //   pipeline  deals still in progression, expected in that month or undated
 export async function GET(req: NextRequest) {
-  if (!(await requireCapability(req, "see:business"))) {
+  /* Kirstie reads the move-ins too (Susan, 2 Nov 2026: "Kirsties view needs
+     to include oversight of the move-ins and Pipeline like mine"). */
+  if (!(await requireAnyCapability(req, ["see:business", "see:pretenancy"]))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
   if (!propolyConfigured()) {
@@ -34,13 +37,17 @@ export async function GET(req: NextRequest) {
 
   // A deal with no expected date is still real work - it belongs to the month
   // being looked at rather than disappearing because nobody has typed a date.
+  // Only up to this month, though: December and January are on the toggle now
+  // (Susan, 2 Nov 2026), and an undated deal listed under every month ahead
+  // would count the same deal three times.
+  const thisMonth = currentMonth();
   const pipeline =
     deals == null
       ? null
       : deals
           .filter((d) => {
             const start = d.app.startDate ?? "";
-            return start ? start.slice(0, 7) === month : true;
+            return start ? start.slice(0, 7) === month : month <= thisMonth;
           })
           .map((d) => ({
             id: d.app.id,

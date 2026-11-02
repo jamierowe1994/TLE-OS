@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireCapability } from "@/lib/admin";
+import { requireAnyCapability } from "@/lib/admin";
+import { can } from "@/lib/roles";
 import { rexConfigured, rexLettingsAgents } from "@/lib/business/rex";
 import {
   getAgentFunnel,
@@ -102,11 +103,19 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await requireCapability(req, "see:business"))) {
+  const actor = await requireAnyCapability(req, ["see:business", "see:pretenancy"]);
+  if (!actor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const monthParam = req.nextUrl.searchParams.get("month");
   const month = monthParam && MONTH_RE.test(monthParam) ? monthParam : currentMonth();
+
+  /* Kirstie's Move-ins screen reads the Propoly progression strip and nothing
+     else: no per-agent rent roll, no headcount, no REX sweep. */
+  if (!can(actor.role, "see:business")) {
+    const propoly = await getPropolyBusinessStats(month).catch(() => null);
+    return NextResponse.json({ month, propoly });
+  }
   const force = req.nextUrl.searchParams.get("refresh") === "1";
 
   if (!rexConfigured()) {

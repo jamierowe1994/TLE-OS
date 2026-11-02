@@ -99,6 +99,20 @@ export function recentMonths(count = 12): string[] {
 }
 
 /**
+ * The `count` months after the current one, soonest first - "2026-12",
+ * "2027-01" during November. Rolls itself like recentMonths.
+ */
+export function monthsAhead(count = 2): string[] {
+  const now = new Date();
+  const out: string[] = [];
+  for (let i = 1; i <= count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+/**
  * The last month that has actually finished — "2026-07" during August.
  *
  * The reporting rule for anything that counts completed work: a figure for the

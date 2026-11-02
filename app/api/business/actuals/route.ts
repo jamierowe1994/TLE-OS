@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireCapability } from "@/lib/admin";
+import { requireAnyCapability, requireCapability } from "@/lib/admin";
+import { can } from "@/lib/roles";
 import {
   getOverrides,
   upsertOverride,
@@ -28,12 +29,18 @@ async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
 }
 
 export async function GET(req: NextRequest) {
-  const denied = await requireAdmin(req);
-  if (denied) return denied;
+  /* Kirstie's Move-ins screen counts the move-ins Susan added by hand, so her
+     figure matches Susan's. She reads those rows and nothing else; writing
+     stays Susan's (requireAdmin on PUT and DELETE). */
+  const actor = await requireAnyCapability(req, ["see:business", "see:pretenancy"]);
+  if (!actor) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
   const monthParam = req.nextUrl.searchParams.get("month");
   const month = monthParam && MONTH_RE.test(monthParam) ? monthParam : currentMonth();
-  const overrides = await getOverrides(month);
+  const all = await getOverrides(month);
+  const overrides = can(actor.role, "see:business")
+    ? all
+    : all.filter((o) => o.scope === "business" && (o.metric === "funnel.moveIns" || o.metric.startsWith("moveIns.row.")));
   return NextResponse.json({ month, overrides });
 }
 

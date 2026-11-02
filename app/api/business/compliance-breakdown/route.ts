@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
-import { requireCapability } from "@/lib/admin";
+import { requireAnyCapability } from "@/lib/admin";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { complianceBreakdown } from "@/lib/compliance-breakdown";
 import { rexConfigured } from "@/lib/rex";
@@ -22,7 +22,9 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function GET(req: NextRequest) {
-  if (!(await requireCapability(req, "see:business"))) {
+  /* Michael's desk shows the same overview (Susan, 2 Nov 2026: "needs to be on
+     Michaels view also"). Certificates only - nothing about money. */
+  if (!(await requireAnyCapability(req, ["see:business", "see:agent-compliance"]))) {
     return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
   }
   if (!rexConfigured()) {
