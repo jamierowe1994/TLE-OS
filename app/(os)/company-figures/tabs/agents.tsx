@@ -7,6 +7,7 @@
 // account ↔ agentKey / REX / Meta, reset password).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useListingStages } from "../use-listing-stages";
 import { londonToday } from "@/lib/london-clock";
 import type { ReactNode } from "react";
 import DataTable from "@/components/business/DataTable";
@@ -368,6 +369,24 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   const [error, setError] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [live, setLive] = useState<LivePayload | null>(null);
+  const stages = useListingStages();
+  /* The pipeline as the Move-ins & Pipeline tab counts it: Propoly's deals in
+     progression (Susan, 2 Nov 2026), read from the same cached live-business. */
+  const [pipe, setPipe] = useState<{ total: number } | { error: true } | null>(null);
+  useEffect(() => {
+    let gone = false;
+    setPipe(null);
+    fetch(`/api/business/live-business?month=${encodeURIComponent(month)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { propoly?: { pipelineTotal?: number } | null }) => {
+        if (gone) return;
+        setPipe(typeof j?.propoly?.pipelineTotal === "number" ? { total: j.propoly.pipelineTotal } : { error: true });
+      })
+      .catch(() => !gone && setPipe({ error: true }));
+    return () => {
+      gone = true;
+    };
+  }, [month]);
   const [agentMoney, setAgentMoney] = useState<AgentMoney[]>([]);
   const [liveLoading, setLiveLoading] = useState(true);
   // Each partner's managed book and commission, live from PayProp.
@@ -572,12 +591,15 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   );
 
   const num = (v: unknown) => formatNum(v as number | null);
+  /* On the market and let agreed by the Listings board's rule, as the Overview
+     reads them (Susan, 2 Nov 2026): REX's own sums took in drafts. */
+  const board = (k: "available") => (stages === null ? "…" : stages.ok ? formatNum(stages[k]) : "—");
 
   const liveCards = live
     ? [
         { label: "Market appraisals", value: formatNum(live.totals.marketAppraisals), sub: monthLabel(month) },
-        { label: "On-market listings", value: formatNum(live.totals.listings), sub: "Currently listed" },
-        { label: "Pipeline", value: formatNum(live.totals.pipeline), sub: "Let agreed" },
+        { label: "On-market listings", value: board("available"), sub: stages && !stages.ok ? stages.error : "Available on Listings" },
+        { label: "Pipeline", value: pipe === null ? "…" : "total" in pipe ? formatNum(pipe.total) : "—", sub: pipe && !("total" in pipe) ? "Propoly couldn't be read" : "In progression in Propoly" },
         { label: "Managed properties", value: formatNum(live.totals.managed), sub: "Let & managed" },
         { label: "Rent roll / month", value: formatGBP(live.totals.rentRoll), sub: "Under management" },
       ]
