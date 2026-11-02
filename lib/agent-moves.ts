@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { currentLets } from "@/lib/current-lets";
 import { countsOf, landlordsOf, pmCountsFor } from "@/lib/managed-book";
 import type { ManagedBook, ManagedProperty } from "@/lib/portfolio-types";
+import type { ComplianceBook } from "@/lib/rex-compliance";
 
 /**
  * WHOSE HOME IT IS, HELD IN THE OS (Sean McMahon, 15 Oct 2026: "tons of
@@ -96,13 +97,39 @@ const personKey = (n: string | null | undefined) => {
 };
 
 /** The move that applies to this row, if any. A home move wins over an agent move. */
-export function moveFor(p: ManagedProperty, moves: AgentMove[]): AgentMove | null {
+export function moveFor(p: Pick<ManagedProperty, "propertyId" | "listingId" | "agent">, moves: AgentMove[]): AgentMove | null {
   const ids = [p.propertyId, p.listingId].filter(Boolean).map(String);
   const home = moves.find((m) => m.kind === "home" && ids.includes(m.key));
   if (home) return home;
   if (!p.agent) return null;
   const who = personKey(p.agent.name);
   return moves.find((m) => m.kind === "agent" && (m.key === p.agent!.id || (who && personKey(m.label) === who))) ?? null;
+}
+
+/**
+ * The compliance book with the moves laid over it (Michael Healy, 2 Nov 2026:
+ * his chase list still sent Margo's Glasgow homes "via Margaret Wilson", two
+ * weeks after they became Sean's). The book knows an agent by name only, so
+ * an agent move matches on the name and a home move on the REX property id.
+ * Only the name changes: whether the home is ours (agentLeft) is REX's, as
+ * before. A copy, like the service overrides - the held book is not touched.
+ */
+export async function complianceWithAgentMoves(book: ComplianceBook): Promise<ComplianceBook> {
+  let moves: AgentMove[];
+  try {
+    moves = await agentMoves();
+  } catch {
+    return book;
+  }
+  if (!moves.length) return book;
+  let changed = false;
+  const properties = book.properties.map((p) => {
+    const m = moveFor({ propertyId: String(p.id), listingId: "", agent: p.agent ? { id: "", name: p.agent } : null }, moves);
+    if (!m || m.toName === p.agent) return p;
+    changed = true;
+    return { ...p, agent: m.toName };
+  });
+  return changed ? { ...book, properties } : book;
 }
 
 function moved(p: ManagedProperty, m: AgentMove): ManagedProperty {
