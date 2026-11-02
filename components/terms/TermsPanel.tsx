@@ -2,7 +2,7 @@
 
 import { useNewLook } from "@/lib/use-new-look";
 import TermsPanelClassic from "@/components/terms/TermsPanelClassic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import TermsSendScreen, { type Editions, type StaffParty, type StaffTerms } from "@/components/terms/TermsSendScreen";
 import { Badge, Ico } from "@/components/new-look/Parts";
 
@@ -56,7 +56,14 @@ function OnPagePanel({
   more,
   openNew = 0,
   quiet = false,
+  reissue = null,
 }: {
+  /**
+   * A change of service on the home's page (2 Nov 2026): each new `at` opens the send screen
+   * on that service. Over terms that are out and not yet signed it adjusts them (the new set
+   * replaces them when it goes); over signed terms, or none, it is a fresh set.
+   */
+  reissue?: { at: number; service: string | null } | null;
   listingId?: string | null;
   propertyId?: string | null;
   appraisalId?: string | null;
@@ -112,6 +119,15 @@ function OnPagePanel({
   }, [openNew]);
 
   const live = (all ?? []).find((t) => t.status !== "cancelled") ?? null;
+  /* Opened for a change of service: waits for the home's terms to be read, then once per `at`. */
+  const [wanted, setWanted] = useState<string | null>(null);
+  const reissued = useRef(0);
+  useEffect(() => {
+    if (!reissue || !reissue.at || reissue.at === reissued.current || all === null) return;
+    reissued.current = reissue.at;
+    setWanted(reissue.service);
+    setScreen(live && live.status === "sent" ? { mode: "adjust", from: live } : { mode: "new" });
+  }, [reissue, all, live]);
   /* While an adjusted set waits for the agent's signature, the one it replaces is still out. */
   const replacing = live?.replaces ? (all ?? []).find((t) => t.id === live.replaces && t.status === "sent") ?? null : null;
 
@@ -314,12 +330,14 @@ function OnPagePanel({
           landlords={landlords}
           agentLarn={agentLarn}
           serviceOnRecord={serviceOnRecord}
+          serviceWanted={wanted}
           feesOnRecord={feesOnRecord}
           scottish={scottish}
           editions={editions}
           preview={preview}
           onClose={(changed) => {
             setScreen(null);
+            setWanted(null);
             /* A contract was made on the way but not signed: the banner now offers Sign your part. */
             if (changed) {
               void load();
@@ -328,6 +346,7 @@ function OnPagePanel({
           }}
           onSent={async () => {
             setScreen(null);
+            setWanted(null);
             setSaid(null);
             setJustSent(true);
             await load();

@@ -11,6 +11,9 @@ import { propolyPicture, syncPerson, type SyncResult } from "@/lib/let-propoly-s
 import { saveHomeAddress } from "@/lib/landlord-home";
 import { forgetApplications } from "@/lib/applications";
 import { forgetListing } from "@/lib/listing-details";
+import { letAccess } from "@/lib/let-people";
+import { saveLetEdits } from "@/lib/let-edits";
+import { tenantField } from "@/lib/let-edit-fields";
 import { forgetLandlord } from "@/lib/rex-landlord";
 
 /**
@@ -22,7 +25,9 @@ import { forgetLandlord } from "@/lib/rex-landlord";
  * POST → change the people on the let (James, 20 Oct 2026):
  *   { action: "add-landlord", name, email, phone, address }
  *   { action: "edit", key, name?, email?, phone?, address? }  - anyone not in
- *        REX (REX contacts change through PATCH /api/people/contact)
+ *        REX (REX contacts change through PATCH /api/people/contact); with
+ *        onLet: true, a tenant the application names too, kept on the let
+ *        in the OS and never sent to REX (1 Nov 2026)
  *   { action: "remove-landlord", key }                         - one added here
  *   { action: "send", key }                                    - Add to the Propoly deal
  *   { action: "changed", key }                                 - after a REX edit
@@ -96,7 +101,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!person) return bad("That person isn't on this let.", 404);
 
   if (action === "edit") {
-    if (person.source === "rex") return bad("Change them in the contact block - that keeps REX in step.");
+    /* A tenant the application names (Rhiannon, let 39739, 1 Nov 2026: Ben
+       Turner's email was wrong on the let and couldn't be changed): their
+       details are kept on the let in the OS, over the application's copy,
+       by the let's agent or the office. Never written to REX. A landlord
+       still changes in the contact block. */
+    const onLet = b.onLet === true && person.source === "rex" && person.role === "tenant";
+    if (onLet) {
+      const access = await letAccess(id, actor);
+      if (!access.ok || !access.canEdit) return bad("Only the let's agent or the office can change the tenants' details.", 403);
+    }
+    if (person.source === "rex" && !onLet) return bad("Change them in the contact block - that keeps REX in step.");
     if (person.source === "record") return bad("Change them in the contact block - that keeps the home's record in step.");
     const change: { name?: string; email?: string | null; phone?: string | null; address?: string | null } = {};
     if (typeof b.name === "string") {
@@ -112,6 +127,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (typeof b.phone === "string") change.phone = clean(b.phone, 40) || null;
     if (typeof b.address === "string") change.address = clean(b.address, 300) || null;
     if (!Object.keys(change).length) return bad("Nothing to change.");
+    /* On the let's history (lib/let-edits), whoever holds them. */
+    const logged = (["name", "email", "phone"] as const)
+      .filter((k) => k in change && (change[k] ?? null) !== (person[k] ?? null))
+      .map((k) => ({ field: tenantField(key, k), value: change[k] ?? null, was: person[k] ?? null }));
+    if (logged.length) await saveLetEdits(id, r.let.deal?.id ?? null, logged, { id: actor.id, name: by, email: actor.email ?? "" }).catch(() => undefined);
     if (key.startsWith("home-person:")) {
       const was = await personById(key.slice("home-person:".length));
       if (!was) return bad("That person isn't on the home any more.", 404);

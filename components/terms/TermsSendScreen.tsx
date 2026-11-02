@@ -191,6 +191,7 @@ export default function TermsSendScreen({
   landlords,
   agentLarn,
   serviceOnRecord,
+  serviceWanted = null,
   feesOnRecord,
   scottish,
   editions,
@@ -198,6 +199,8 @@ export default function TermsSendScreen({
   onClose,
   onSent,
 }: {
+  /** A service just chosen on the home's page ("Managed", "Let Only", "Rent Collect"): it wins over the record's and the set being adjusted. */
+  serviceWanted?: string | null;
   /** Adjust contract: the set out now, whose answers the screen starts from and which the new one replaces. */
   from?: StaffTerms | null;
   /** Sign your part: a contract already made and waiting for the agent. Opens on step 2. */
@@ -250,10 +253,14 @@ export default function TermsSendScreen({
   });
 
   const base = signing ?? from;
-  const start = (base && servicesFor(country).find((o) => o.label === base.values.serviceLevel)) || guessService(country, base?.values.serviceLevel ?? serviceOnRecord);
+  /* Opened from a change of service on the home's page (2 Nov 2026): that service is chosen,
+     with its own standard fees unless the set being adjusted is already on it. */
+  const wanted = !signing && serviceWanted ? guessService(country, serviceWanted) : null;
+  const start = wanted ?? ((base && servicesFor(country).find((o) => o.label === base.values.serviceLevel)) || guessService(country, base?.values.serviceLevel ?? serviceOnRecord));
+  const feesFromBase = !wanted || base?.values.serviceLevel === wanted.label;
   const [service, setService] = useState(start.id);
-  const [setUpFee, setSetUpFee] = useState(base?.values.setUpFee ?? feesOnRecord?.setUpFee ?? start.setUpFee);
-  const [managementFee, setManagementFee] = useState(base?.values.managementFee ?? feesOnRecord?.managementFee ?? start.managementFee);
+  const [setUpFee, setSetUpFee] = useState((feesFromBase ? base?.values.setUpFee ?? feesOnRecord?.setUpFee : null) ?? start.setUpFee);
+  const [managementFee, setManagementFee] = useState((feesFromBase ? base?.values.managementFee ?? feesOnRecord?.managementFee : null) ?? start.managementFee);
   const [additional, setAdditional] = useState(base && base.values.additionalFees !== "None" ? base.values.additionalFees : "");
   const [larn, setLarn] = useState(base && base.values.agentLarn !== "Not recorded" ? base.values.agentLarn : agentLarn ?? "");
   const serviceLabel = servicesFor(country).find((o) => o.id === service)?.label ?? service;

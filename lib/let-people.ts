@@ -16,6 +16,7 @@ import { sameHome } from "@/lib/address-parse";
 import { letTenants } from "@/lib/let-tenants";
 import { dealForLet, type LetDeal } from "@/lib/let-deal";
 import { isOwnerReln } from "@/lib/rex-reln";
+import { can } from "@/lib/roles";
 
 /**
  * Who is on a let, read on the server from the let itself - never from the
@@ -167,6 +168,7 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
     listingId,
     dealId: d.app.id,
     agentName: d.managerName,
+    /* Already the OS's where the agent put it right (the book lays lib/let-edits over Propoly's). */
     moveIn: d.app.startDate,
     tenants: d.app.tenants.map((t) => ({ name: t.name, email: t.email, phone: t.phone, contactId: null, isPrimary: t.isPrimary })),
     landlord,
@@ -189,6 +191,33 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
         }))),
   ];
   return { ok: true, app: null, let: await withPeople(base, held, deal) };
+}
+
+/**
+ * Whether somebody may open a let, and its Propoly deal, without reading who
+ * is on it (lib/let-edits' route, 1 Nov 2026): the same rule letPeople keeps
+ * (an agent reads their own lets), and the same deal it would name.
+ * `canEdit`: an agent on their own let, or the office and the owners
+ * (see:pretenancy) - nobody else changes a let's figures.
+ */
+export async function letAccess(ref: string, me: OsUser): Promise<{ ok: true; app: Application | null; dealId: string | null; canEdit: boolean } | { ok: false; status: number; error: string }> {
+  const office = can(me.role, "see:pretenancy");
+  let app: Application | null = null;
+  if (isTestId(ref)) app = (await testApplication(ref).catch(() => null))?.app ?? null;
+  else if (!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(ref)) app = await getApplicationById(ref).catch(() => null);
+  if (app) {
+    if (me.role === "agent" && app.agent && !sameName(app.agent, me.name)) return { ok: false, status: 403, error: `That let is ${app.agent.split(/\s+/)[0]}'s.` };
+    const listingId = app.listingId != null ? String(app.listingId) : null;
+    const deal = await dealForLet({ ref, app, propertyName: app.property, locality: app.locality, listingId }).catch(() => null);
+    return { ok: true, app, dealId: deal?.id ?? null, canEdit: me.role === "agent" || office };
+  }
+  const deals = await getAllPropolyDeals().catch(() => null);
+  const d = deals?.find((x) => x.app.id === ref) ?? null;
+  if (!d) return { ok: false, status: 404, error: "That let isn't here any more." };
+  if (me.role === "agent" && d.managerName && !sameName(d.managerName.split(/\s+/)[0], (me.name ?? "").split(/\s+/)[0])) {
+    return { ok: false, status: 403, error: `That let is ${d.managerName.split(/\s+/)[0]}'s.` };
+  }
+  return { ok: true, app: null, dealId: d.app.id, canEdit: me.role === "agent" || office };
 }
 
 /**

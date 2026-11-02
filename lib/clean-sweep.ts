@@ -42,7 +42,7 @@ const INFO = new Set([
   "property_type", "service_package", "fee_setup", "letting_agreement_start", "landlord_proof_of_address",
   "tenancy_end", "tenancy_signed", "occupants", "rent_rex_pm", "rent_review_next", "visit_last",
   "deposit_status", "landlord_photo_id", "landlord_proof_of_ownership", "doc_guarantor",
-  "propoly_deal", "check_signed_off", "check_notes", "deposit_registered_by",
+  "propoly_deal", "check_signed_off", "check_notes", "deposit_registered_by", "landlord_registration_owner",
 ]);
 
 export interface SweepHome {

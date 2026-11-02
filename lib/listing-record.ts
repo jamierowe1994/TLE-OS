@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { isScottish } from "@/lib/property-flags";
-import { joinRegNumbers, regExpiries, regNumbers } from "@/lib/reg-numbers";
+import { joinRegNumbers, regExpiries, regNumbers, regOwners } from "@/lib/reg-numbers";
 
 /**
  * WHAT THE OS ALREADY KNOWS ABOUT A LISTING'S HOME (6 Oct 2026).
@@ -29,6 +29,8 @@ export interface ListingRecord {
   landlordRegistration: string | null;
   /** When each of those numbers runs out, YYYY-MM-DD, where known (lib/reg-numbers). */
   landlordRegistrationExpiry: Record<string, string>;
+  /** Whose each of those numbers is, by landlord name, where kept (lib/reg-numbers). */
+  landlordRegistrationOwner: Record<string, string>;
   /** From the property record, e.g. "D (68)" off the Scottish register. */
   epc: { band: EpcBand | null; score: number | null; from: string } | null;
   scotland: boolean;
@@ -52,7 +54,7 @@ export function forgetRecord(rexPropertyId: string | null | undefined): void {
 
 export async function recordForProperty(rexPropertyId: string | null, place: { postcode?: string | null; town?: string | null; address?: string | null }): Promise<ListingRecord> {
   const scotland = isScottish(place.postcode, place.address, place.town);
-  const empty: ListingRecord = { osPropertyId: null, factsKey: rexPropertyId, landlordName: null, landlordRegistration: null, landlordRegistrationExpiry: {}, epc: null, scotland };
+  const empty: ListingRecord = { osPropertyId: null, factsKey: rexPropertyId, landlordName: null, landlordRegistration: null, landlordRegistrationExpiry: {}, landlordRegistrationOwner: {}, epc: null, scotland };
   if (!rexPropertyId || !hasDb()) return empty;
   const hit = held.get(rexPropertyId);
   if (hit && Date.now() - hit.at < TTL_MS) return { ...hit.record, scotland };
@@ -66,7 +68,7 @@ export async function recordForProperty(rexPropertyId: string | null, place: { p
     const keys = [osId, rexPropertyId].filter(Boolean) as string[];
     const facts = await q<{ property_id: string; field: string; value: string | null; source: string | null }>(
       `SELECT property_id, field, value, source FROM os_property_facts
-        WHERE property_id = ANY($1::text[]) AND field IN ('landlord_registration', 'landlord_registration_expiry', 'epc_rating')`,
+        WHERE property_id = ANY($1::text[]) AND field IN ('landlord_registration', 'landlord_registration_expiry', 'landlord_registration_owner', 'epc_rating')`,
       [keys]
     );
     /* The OS record's own fact first, then one kept under the REX id. */
@@ -84,6 +86,7 @@ export async function recordForProperty(rexPropertyId: string | null, place: { p
       /* "Registered (Valid)" is REX PM saying there is one, not the number. */
       landlordRegistration: larnValue,
       landlordRegistrationExpiry: regExpiries(pick("landlord_registration_expiry")?.value, regNumbers(larnValue)),
+      landlordRegistrationOwner: regOwners(pick("landlord_registration_owner")?.value, regNumbers(larnValue)),
       epc: epc ? { ...epc, from: epcRow?.source ?? "the property record" } : null,
       scotland,
     };

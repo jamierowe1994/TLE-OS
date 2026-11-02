@@ -7,6 +7,14 @@ import type { ConditionKey, Params, Step, TriggerKey } from "@/lib/automations/c
 import type { Subject } from "@/lib/automations/store";
 
 /**
+ * A let's move-in date for the automations: the handover packet's, unless an
+ * agent put it right on the let in the OS after the handover ran - the newest
+ * figure always wins (lib/let-edits, James 2 Nov 2026). os_let_edits is
+ * declared in lib/db.ts, so it is always there to read.
+ */
+const MOVE_IN = `COALESCE((SELECT e.value FROM os_let_edits e WHERE e.let_ref = h.application_id AND e.field = 'moveIn' AND e.at > h.started_at ORDER BY e.at DESC LIMIT 1), h.packet->>'startDate')`;
+
+/**
  * WHAT HAPPENED, read from the tables where it already happens.
  *
  * No hooks in the screens: each trigger is a question asked of the OS's own
@@ -143,8 +151,8 @@ export async function findEvents(trigger: TriggerKey, params: Params, owner: OsU
         /* A let is agreed when its handover runs (os_handovers): the packet
            carries the tenants, the home and the move-in date. Live or
            rehearsed alike - the let was accepted either way. */
-        const rows = await q<{ application_id: string; at: Date; packet: { tenants?: Tenant[]; property?: string; locality?: string; listingId?: string; startDate?: string } }>(
-          `SELECT DISTINCT ON (h.application_id) h.application_id, COALESCE(h.finished_at, h.started_at) AS at, h.packet
+        const rows = await q<{ application_id: string; at: Date; move_in: string | null; packet: { tenants?: Tenant[]; property?: string; locality?: string; listingId?: string; startDate?: string } }>(
+          `SELECT DISTINCT ON (h.application_id) h.application_id, COALESCE(h.finished_at, h.started_at) AS at, h.packet, ${MOVE_IN} AS move_in
              FROM os_handovers h
             WHERE h.packet IS NOT NULL AND h.status IN ('ok', 'blocked')
               AND COALESCE(h.finished_at, h.started_at) > $1 AND COALESCE(h.finished_at, h.started_at) <= $2
@@ -155,7 +163,7 @@ export async function findEvents(trigger: TriggerKey, params: Params, owner: OsU
         for (const r of rows) {
           const home = [r.packet.property, r.packet.locality].filter(Boolean).join(", ");
           for (const t of r.packet.tenants ?? []) {
-            out.push(subject({ key: `c:${who(t.email, t.phone, `${r.application_id}:${t.name}`)}`, at: r.at, name: t.name ?? "", email: t.email, phone: t.phone, address: home, listingId: r.packet.listingId, what: `Let agreed on ${home}`, facts: { moveIn: r.packet.startDate ?? null } }));
+            out.push(subject({ key: `c:${who(t.email, t.phone, `${r.application_id}:${t.name}`)}`, at: r.at, name: t.name ?? "", email: t.email, phone: t.phone, address: home, listingId: r.packet.listingId, what: `Let agreed on ${home}`, facts: { moveIn: r.move_in ?? r.packet.startDate ?? null } }));
           }
         }
         break;
@@ -271,12 +279,14 @@ export async function findEvents(trigger: TriggerKey, params: Params, owner: OsU
     case "tenancy.anniversary": {
       if (trigger === "tenancy.move_in") {
         const rows = await q<{ application_id: string; at: Date; packet: { tenants?: Tenant[]; property?: string; locality?: string; listingId?: string; startDate?: string } }>(
-          `SELECT DISTINCT ON (h.application_id) h.application_id, ${nineAm(`(h.packet->>'startDate')::date`)} AS at, h.packet
-             FROM os_handovers h
-            WHERE h.packet ? 'startDate' AND (h.packet->>'startDate') ~ '^\\d{4}-\\d{2}-\\d{2}$' AND h.status IN ('ok', 'blocked')
-              AND ${nameIs("h.packet->>'agent'", 3, 4)}
-              AND ${nineAm(`(h.packet->>'startDate')::date`)} > $1 AND ${nineAm(`(h.packet->>'startDate')::date`)} <= $2
-            ORDER BY h.application_id, h.started_at DESC`,
+          `SELECT x.*, ${nineAm(`x.move_in::date`)} AS at FROM (
+             SELECT DISTINCT ON (h.application_id) h.application_id, h.packet, ${MOVE_IN} AS move_in
+               FROM os_handovers h
+              WHERE h.status IN ('ok', 'blocked') AND ${nameIs("h.packet->>'agent'", 3, 4)}
+              ORDER BY h.application_id, h.started_at DESC
+           ) x
+            WHERE x.move_in ~ '^\\d{4}-\\d{2}-\\d{2}$'
+              AND ${nineAm(`x.move_in::date`)} > $1 AND ${nineAm(`x.move_in::date`)} <= $2`,
           [w.since, w.until, first, last]
         ).catch(() => []);
         for (const r of rows) {

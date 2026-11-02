@@ -27,6 +27,8 @@ import { PORTAL_STAGES, portalStageOf } from "@/lib/business/propoly-stages";
 import type { DealPortalOverlay } from "@/lib/business/types";
 import { testDealsForBoard } from "@/lib/test-overlay";
 import { allOptOuts, optOutIn, type OptOut } from "@/lib/zero-deposit-optout";
+import type { DealEditMark } from "@/lib/let-edits";
+import type { LetField } from "@/lib/let-edit-fields";
 
 // GET /api/pretenancy/deals — every Propoly deal across all TLE agents with
 // the portal overlay (notes, stage moves, checklist) merged in, plus the
@@ -62,6 +64,12 @@ export interface PreTenancyDeal {
   compliance?: DealCompliance | null;
   /** Live RAW Propoly status (start_deal … cancelled). */
   statusKey: string;
+  /**
+   * Figures an agent put right on the let in the OS (lib/let-edits, 1 Nov
+   * 2026), already laid over `app`, each with what Propoly itself still has.
+   * Absent: none changed.
+   */
+  letEdits?: Partial<Record<LetField, DealEditMark>> | null;
   /** Move-in slipped 30+ days and not reactivated — hidden from the stages. */
   archived: boolean;
   /** PORTAL stage (8-stage pipeline), derived from the records (deal-stage). */
@@ -285,6 +293,10 @@ export async function GET(req: NextRequest) {
     /* Cancelling a duplicate is Kirstie's job, in Propoly. */
     duplicates = [];
   }
+  /* The let's figures as the agent put them right in the OS are already
+     laid over Propoly's by the book itself (lib/business/propoly-deals,
+     lib/let-edits), before anything here is worked out from them - so a
+     move-in moved on in the OS is not "slipped". Each carries its marks. */
   const [overlays, optOuts] = await Promise.all([getOverlays(deals.map((d) => d.app.id)), allOptOuts()]);
   /* The records seven of the eight stages are read from. See deal-stage. */
   const stageSources = await loadStageSources(deals.map((d) => d.app.id));
@@ -498,6 +510,7 @@ export async function GET(req: NextRequest) {
         ? { ...d.app, image: match.image, images: match.images, listingId: match.listingId }
         : d.app,
       statusKey: d.statusKey,
+      ...(d.letEdits ? { letEdits: d.letEdits } : {}),
       effectiveStatusKey: effective,
       plc,
       money: {

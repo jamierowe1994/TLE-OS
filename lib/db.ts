@@ -4968,11 +4968,58 @@ CREATE TABLE IF NOT EXISTS os_take_ons (
   cancelled_at    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS os_take_ons_home ON os_take_ons (home_ref);
+-- A let's figures put right in the OS (lib/let-edits, 1-2 Nov 2026). Made
+-- lazily there too; declared here so readers that join it (the automations'
+-- move-in, lib/automations/sources) never meet a missing table. Same definition.
+CREATE TABLE IF NOT EXISTS os_let_edits (
+  id        TEXT PRIMARY KEY,
+  let_ref   TEXT NOT NULL,
+  deal_id   TEXT,
+  field     TEXT NOT NULL,
+  value     TEXT,
+  was       TEXT,
+  by_id     TEXT,
+  by_name   TEXT NOT NULL DEFAULT '',
+  by_email  TEXT NOT NULL DEFAULT '',
+  at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE os_let_edits ADD COLUMN IF NOT EXISTS seen JSONB;
+CREATE INDEX IF NOT EXISTS os_let_edits_ref ON os_let_edits (let_ref, field, at);
+CREATE INDEX IF NOT EXISTS os_let_edits_deal ON os_let_edits (deal_id, field, at);
 -- The last push of a take-on into Propoly and into REX (lib/take-on-push):
 -- rehearsed or live, every step with its outcome and the other system's own
 -- reason, and the ids it made so a second push reuses them.
 ALTER TABLE os_take_ons ADD COLUMN IF NOT EXISTS propoly_push JSONB;
 ALTER TABLE os_take_ons ADD COLUMN IF NOT EXISTS rex_push JSONB;
+
+-- A home's details put right in the OS (lib/home-overrides, 2 Nov 2026): the
+-- service, let type, tenancy dates and tenants an agent saved with Edit on the
+-- property page. The OS's answer beats REX, REX PM and PayProp on every read
+-- and is never written to them. home_key is the REX property id or pm- id for
+-- a field of the home, 'listing:<id>' for a field of one let. Clearing a field
+-- deletes its row; every change, cleared ones too, is in the log below.
+CREATE TABLE IF NOT EXISTS os_home_overrides (
+  home_key      TEXT NOT NULL,
+  field         TEXT NOT NULL,
+  value         JSONB NOT NULL,
+  set_by        TEXT NOT NULL DEFAULT '',
+  set_by_email  TEXT NOT NULL DEFAULT '',
+  set_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (home_key, field)
+);
+CREATE TABLE IF NOT EXISTS os_home_override_log (
+  id            TEXT PRIMARY KEY,
+  home_key      TEXT NOT NULL,
+  listing_id    TEXT,
+  field         TEXT NOT NULL,
+  from_text     TEXT,
+  to_text       TEXT,
+  to_value      JSONB,
+  by_name       TEXT NOT NULL DEFAULT '',
+  by_email      TEXT NOT NULL DEFAULT '',
+  at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_home_override_log_home ON os_home_override_log (home_key, at DESC);
 
 `;
 

@@ -8,6 +8,8 @@ import { agentBookOf, bookScope } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 import { factsByRexId } from "@/lib/os-properties";
+import { allHomeFacts } from "@/lib/home-facts";
+import type { HomeFacts } from "@/lib/home-facts-shared";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { isOurs } from "@/lib/compliance";
 import { homesOff, withoutOff } from "@/lib/inspections-off";
@@ -96,6 +98,13 @@ export async function GET(req: NextRequest) {
           ? new Set(book.properties.flatMap((p) => [String(p.propertyId ?? ""), String(p.listingId ?? "")]).filter(Boolean))
           : null;
         const hmoIds = new Set([...facts.entries()].filter(([, f]) => f.hmo).map(([id]) => id));
+        /* What an agent said the home is, on its page or the compliance drawer
+           (lib/home-facts): an HMO is on the HMO cycle, a flat is not, whatever
+           REX PM's categories said (Rhiannon's flat, 2 Nov 2026). */
+        for (const [id, f] of await allHomeFacts().catch(() => new Map<string, HomeFacts>())) {
+          if (f.homeType === "hmo") hmoIds.add(id);
+          if (f.homeType === "single") hmoIds.delete(id);
+        }
         /* Only the homes we actually look after (James, 18 Sep 2026): the
            board said 257 when the real job was 150. REX's leased listings
            carry every home ever let, including tenant-find-only lets and the

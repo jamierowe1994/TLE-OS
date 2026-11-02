@@ -12,6 +12,7 @@ import {
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { scopeFor } from "@/lib/scope";
 import { testApplicationsFor } from "@/lib/test-overlay";
+import { applyLetEdits } from "@/lib/let-edits";
 import { allCancellations } from "@/lib/let-cancel";
 import { whoIs } from "@/lib/admin";
 import { ASSEMBLE_AT, assembled, cut, markApplicationsFiled } from "@/lib/applications-board";
@@ -43,6 +44,8 @@ async function testsOnly(req: NextRequest, email: string | null | undefined) {
   if (!email || req.nextUrl.searchParams.get("tests") === "0") return null;
   const rows = await testApplicationsFor(email).catch(() => []);
   if (!rows.length) return null;
+  /* Figures put right on the let in the OS (lib/let-edits), as on a real one. */
+  await applyLetEdits(rows).catch(() => null);
   const cancelled = new Set((await allCancellations().catch(() => [])).flatMap((c) => [c.ref, c.dealId ?? ""]).filter(Boolean));
   return {
     applications: rows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true, ...(cancelled.has(String(a.id)) ? { closed: "Deal cancelled" } : {}) })),
@@ -106,6 +109,8 @@ export async function GET(req: NextRequest) {
     /* The lead tenant as changed in the OS (lib/lead-tenant), over a held copy too. */
     const leads = await leadOverrides().catch(() => new Map<string, string>());
     if (leads.size) for (const a of [...applications, ...testRows]) applyLead(a, leads);
+    /* Figures put right on a test let in the OS (lib/let-edits); the book's own carry them already. */
+    await applyLetEdits(testRows).catch(() => null);
     /* Intro only ends at the landlord's yes, here or in REX (lib/intro-only).
        The held board knows REX's yes; the OS's own is only known here. */
     const intro = await introOnlyIds().catch(() => new Set<string>());

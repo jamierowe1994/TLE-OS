@@ -99,3 +99,51 @@ export function regState(day: string | null | undefined, today = new Date()): Re
 export function regDay(day: string): string {
   return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
+
+/* ── Whose number is whose ────────────────────────────────────────────────
+   Joint owners each register, so a number is labelled with its landlord's
+   name (Lianna Denholm, 2 Nov 2026: "No place to add LL reg expiry date on
+   2nd LL" - the box listed bare numbers and never named the second landlord).
+   Kept beside the numbers on the home's record as "123/230/1: Maureen Hood". */
+
+/** A name as it can be kept between the commas and colons. */
+export function regOwnerName(v: unknown): string {
+  return typeof v === "string" ? v.replace(/[,:;\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) : "";
+}
+
+/** The kept value -> { number: name }, for the numbers given. */
+export function regOwners(value: string | null | undefined, numbers: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of (value ?? "").split(/[,;\n]+/)) {
+    const m = part.match(/^\s*(.+?)\s*:\s*(.+?)\s*$/);
+    if (!m) continue;
+    const num = m[1].replace(/\s+/g, " ").trim();
+    if (numbers.includes(num) && m[2]) out[num] = m[2];
+  }
+  return out;
+}
+
+/** { number: name } -> the kept value, in the numbers' own order. */
+export function joinRegOwners(map: Record<string, string | null | undefined>, numbers: string[]): string | null {
+  const kept = numbers.filter((n) => regOwnerName(map[n])).map((n) => `${n}: ${regOwnerName(map[n])}`);
+  return kept.length ? kept.join(", ") : null;
+}
+
+/**
+ * Each number with the landlord it belongs to: the name kept with it, else -
+ * for a number typed before names were kept - the next landlord on the home
+ * still without one, the main landlord first. Then every landlord with no
+ * number at all, so the screen can ask for theirs.
+ */
+export function regByLandlord(
+  numbers: string[],
+  owners: Record<string, string>,
+  landlords: string[]
+): { rows: { n: string; owner: string | null }[]; missing: string[] } {
+  const key = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const named = new Set(Object.values(owners).map(key));
+  const free = landlords.filter((l) => !named.has(key(l)));
+  const rows = numbers.map((n) => ({ n, owner: owners[n] ?? free.shift() ?? null }));
+  const covered = new Set(rows.map((r) => (r.owner ? key(r.owner) : "")));
+  return { rows, missing: landlords.filter((l) => !covered.has(key(l))) };
+}

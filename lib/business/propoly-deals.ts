@@ -3,6 +3,8 @@ import { propolyConfigured, propolyGet } from "@/lib/business/propoly";
 import { loadSnapshot, saveSnapshot } from "@/lib/business/propoly-snapshot";
 import { hasDb, q } from "@/lib/business/db";
 import { agentKeysForName } from "@/lib/business/roster";
+import { overlayCompletes, overlayDealBook, type DealEditMark } from "@/lib/let-edits";
+import type { LetField } from "@/lib/let-edit-fields";
 import type {
   AgentApplication,
   ApplicationStage,
@@ -422,6 +424,8 @@ interface CachedDeal {
   statusKey: string;
   managerEmail: string | null;
   managerName: string | null;
+  /** Figures an agent put right on the let in the OS, laid over `app` (lib/let-edits), each with what Propoly itself still has. */
+  letEdits?: Partial<Record<LetField, DealEditMark>> | null;
 }
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -652,8 +656,15 @@ function firstParty(
   return (leadAt >= 0 ? list[leadAt] : list[0]) ?? null;
 }
 
+/**
+ * The deals as every screen reads them: the held book with the OS's newer
+ * figures laid over Propoly's (lib/let-edits, James 2 Nov 2026: "the newest
+ * figure always wins, everywhere") - move-in, rent, deposit, holding fee,
+ * tenancy length. The held book itself stays Propoly's own.
+ */
 async function fetchAllDeals(): Promise<CachedDeal[] | null> {
-  return readBook<CachedDeal[]>("deals");
+  const book = await readBook<CachedDeal[]>("deals");
+  return book ? overlayDealBook(book).catch(() => book) : book;
 }
 
 async function runDealsFetch(): Promise<CachedDeal[] | null> {
@@ -704,6 +715,8 @@ export interface BusinessDeal {
   statusKey: string;
   managerEmail: string | null;
   managerName: string | null;
+  /** Figures put right in the OS, already laid over `app`, each with what Propoly still has (lib/let-edits). */
+  letEdits?: Partial<Record<LetField, DealEditMark>> | null;
 }
 
 /**
@@ -821,7 +834,9 @@ export interface CompletedDeal {
 // mapper that read Propoly's pre-6-Sep field names, so a stored v3 blob has a
 // null date and null agent on every row — the silent-zero shape.
 async function ensureCompletes(): Promise<CompletedDeal[] | null> {
-  return readBook<CompletedDeal[]>("completes");
+  const book = await readBook<CompletedDeal[]>("completes");
+  /* A move-in or rent put right in the OS, newer than Propoly's (lib/let-edits). */
+  return book ? overlayCompletes(book).catch(() => book) : book;
 }
 
 /** Every deal Propoly has finished, from the hourly copy. Null = Propoly unconfigured or unreadable. */

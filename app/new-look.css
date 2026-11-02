@@ -579,6 +579,11 @@
 .nl-facts-flag i { width: 6px; height: 6px; border-radius: 50%; background: var(--sage-deep); }
 .nl-fact > span em { font-style: normal; color: var(--faint); }
 .nl-fact-in { animation: nl-fade .4s var(--nl-ease) both; }
+/* The fade makes each field its own layer, so an open drop-down or calendar
+   sat UNDER the fields after it (2 Nov 2026: the property's Service list was
+   covered by Tenancy start, the let's Move-in calendar by Rent). The field
+   with something open is lifted over the rest. */
+.nl-fact-in:focus-within, .nl-fact-in:has([role="listbox"], [role="dialog"]) { position: relative; z-index: 40; }
 .nl-fact-in select, .nl-fact-in input { font: inherit; font-size: 15px; width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--page); color: var(--ink); transition: border-color .2s; }
 .nl-fact-in select:focus, .nl-fact-in input:focus { outline: none; border-color: var(--sage-deep); }
 .nl-fact-money { display: flex; align-items: center; gap: 6px; }

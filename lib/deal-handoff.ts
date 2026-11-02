@@ -196,6 +196,8 @@ export interface HandoffParty {
   phone: string | null;
 }
 
+export type OtherLandlord = HandoffParty & { joint: boolean };
+
 export interface Handoff {
   applicationId: string;
   listingId: number | null;
@@ -205,6 +207,12 @@ export interface Handoff {
   /** Where the landlord was found (see landlordsForListing), and that in the agent's words. */
   landlordFrom?: LandlordFrom | null;
   landlordNote?: string | null;
+  /**
+   * Every other landlord the push sends: the listing's other owners, then the
+   * home's joint landlords (`joint`). One with no mobile is not sent, and
+   * never holds up the rest (Propoly refuses a landlord without one).
+   */
+  otherLandlords?: OtherLandlord[];
   /** `reference: false` - already a tenant, on the deal but not referenced (a tenant swap). */
   tenants: (HandoffParty & { isPrimary: boolean; reference?: boolean; rentSharePcm?: number | null })[];
   /** A tenant swap (lib/tenant-swaps): the push starts a NEW deal rather than
@@ -261,6 +269,13 @@ export interface Handoff {
  *             landlord (record_landlord_saved).
  *   joint     the joint landlords added on the home (lib/property-people).
  *
+ * A JOINT LANDLORD ALWAYS GOES (James, 2 Nov 2026): the joint landlords on
+ * the home were only the last resort, so a home with a landlord on the
+ * listing went to Propoly without its second owner. Now they go with
+ * whoever the landlord is, after them, one each by email or name. A point of
+ * contact (kind "contact") is not an owner and never goes. A swap still
+ * sends nobody new: the home and its landlords are already in Propoly.
+ *
  * Every one comes back in the shape of a REX contact (id, name,
  * email_address, phone_number, company_name), so lib/handover reads them as
  * it reads the listing's owners. Only the REX ones carry a numeric id; an OS
@@ -287,14 +302,42 @@ export interface LandlordsFound {
   note: string | null;
 }
 
+/** A joint landlord from the home (lib/property-people), as the owners list carries them. */
+export const isJointOwner = (c: Row): boolean => String(c.id ?? "").startsWith("person:");
+
 const idOf = (v: unknown): string | null => (v == null || v === "" ? null : String(v).trim() || null);
 /* An OS landlord carries no company flag, so a name that is plainly a company
    ("Home Select Finance (No 3) Limited") goes to Propoly as one, not as Mr
    Limited. */
 const asCompany = (name: string | null | undefined) => (/\b(limited|ltd|llp|plc)\.?$/i.test((name ?? "").trim()) ? { company_name: (name ?? "").trim() } : {});
 
-/** The landlords for a listing REX has read, as REX-shaped contacts. Reads only. */
+/** The landlords for a listing REX has read, as REX-shaped contacts, the home's joint landlords after them. Reads only. */
 export async function landlordsForListing(listing: Row, opts: { listingId: number | string | null; swap?: boolean }): Promise<LandlordsFound> {
+  const main = await mainLandlords(listing, opts);
+  if (opts.swap) return main;
+  const listingId = idOf(opts.listingId);
+  const propertyId = idOf((listing.property as Row | null)?.id) ?? idOf(listing.property_id);
+  const homeKey = propertyId ?? (listingId ? `listing:${listingId}` : null);
+  const joint = homeKey ? (await peopleOn(homeKey).catch(() => [])).filter((p) => p.kind === "joint_landlord") : [];
+  const key = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const emails = new Set(main.owners.map((c) => key(c.email_address)).filter(Boolean));
+  const names = new Set(main.owners.map((c) => key(c.name)).filter(Boolean));
+  const extra: Row[] = [];
+  for (const p of joint) {
+    const e = key(p.email);
+    const n = key(p.name);
+    if ((e && emails.has(e)) || (n && names.has(n))) continue;
+    if (e) emails.add(e);
+    if (n) names.add(n);
+    extra.push({ id: `person:${p.id}`, name: p.name, email_address: p.email, phone_number: p.phone, ...asCompany(p.name) });
+  }
+  if (!extra.length) return main;
+  if (!main.owners.length) return { owners: extra, from: "joint", note: FROM_NOTE.joint };
+  return { ...main, owners: [...main.owners, ...extra] };
+}
+
+/** The landlord the record holds, from the first place that has one (see above). */
+async function mainLandlords(listing: Row, opts: { listingId: number | string | null; swap?: boolean }): Promise<LandlordsFound> {
   const found = (owners: Row[], from: LandlordFrom): LandlordsFound => ({ owners, from, note: FROM_NOTE[from] });
   const related = (listing.related ?? {}) as Row;
   /* "Listing Owner" or a sub-type of it ("Landlord", 68 Main Street, 26 Oct 2026). */
@@ -332,17 +375,13 @@ export async function landlordsForListing(listing: Row, opts: { listingId: numbe
     if (record) return found([{ id: record.contactId, name: record.name, email_address: record.email, phone_number: record.phone, ...asCompany(record.name) }], "record");
   }
 
-  const homeKey = propertyId ?? (listingId ? `listing:${listingId}` : null);
-  const joint = homeKey ? (await peopleOn(homeKey).catch(() => [])).filter((p) => p.kind === "joint_landlord") : [];
-  if (joint.length) return found(joint.map((p) => ({ id: `person:${p.id}`, name: p.name, email_address: p.email, phone_number: p.phone, ...asCompany(p.name) })), "joint");
-
   return { owners: [], from: null, note: null };
 }
 
 /** The landlord, the listing's uploads and its service. */
-async function landlordOf(listingId: number, swap: boolean): Promise<{ landlord: HandoffParty | null; from: LandlordFrom | null; note: string | null; docs: HandoffDoc[]; letOnly: boolean }> {
+async function landlordOf(listingId: number, swap: boolean): Promise<{ landlord: HandoffParty | null; others: OtherLandlord[]; from: LandlordFrom | null; note: string | null; docs: HandoffDoc[]; letOnly: boolean }> {
   const res = await rexCall("Listings", "read", { id: listingId });
-  if (!res.ok) return { landlord: null, from: null, note: null, docs: [], letOnly: false };
+  if (!res.ok) return { landlord: null, others: [], from: null, note: null, docs: [], letOnly: false };
   const l = (res.result ?? {}) as Row;
   const service = l.lettings_service_type as Row | string | null | undefined;
   const serviceId = (typeof service === "string" ? service : str(service?.id) ?? str(service?.text) ?? "").toLowerCase().replace(/[\s-]+/g, "_");
@@ -350,6 +389,7 @@ async function landlordOf(listingId: number, swap: boolean): Promise<{ landlord:
 
   const { owners, from, note } = await landlordsForListing(l, { listingId, swap });
   const c = owners[0] ?? null;
+  const party = (o: Row): HandoffParty => ({ contactId: idOf(o.id), name: str(o.name) ?? "Name not recorded", email: str(o.email_address), phone: str(o.phone_number) });
 
   const docs = ((related.listing_documents ?? []) as Row[])
     .filter((d) => str(d.uri))
@@ -367,14 +407,8 @@ async function landlordOf(listingId: number, swap: boolean): Promise<{ landlord:
   return {
     from,
     note,
-    landlord: c
-      ? {
-          contactId: idOf(c.id),
-          name: str(c.name) ?? "Name not recorded",
-          email: str(c.email_address),
-          phone: str(c.phone_number),
-        }
-      : null,
+    landlord: c ? party(c) : null,
+    others: owners.slice(1).map((o) => ({ ...party(o), joint: isJointOwner(o) })),
     docs,
     letOnly: /^(let_only|tenant_find)$/.test(serviceId),
   };
@@ -388,9 +422,9 @@ export function handoffFlowConfigured(): boolean {
 
 export async function buildHandoff(application: Application): Promise<Handoff> {
   const listingId = application.listingId;
-  const { landlord, from: landlordFrom, note: landlordNote, docs, letOnly } = listingId
+  const { landlord, others: otherLandlords, from: landlordFrom, note: landlordNote, docs, letOnly } = listingId
     ? await landlordOf(listingId, Boolean(application.swap))
-    : { landlord: null, from: null, note: null, docs: [] as HandoffDoc[], letOnly: false };
+    : { landlord: null, others: [] as OtherLandlord[], from: null, note: null, docs: [] as HandoffDoc[], letOnly: false };
 
   const certificates = application.propertyId
     ? await certificatesFor(application.propertyId, application.startDate)
@@ -499,6 +533,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
     landlord,
     landlordFrom,
     landlordNote,
+    ...(otherLandlords.length ? { otherLandlords } : {}),
     tenants,
     letOnly,
     rentPcm: application.offerAmount,

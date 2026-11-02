@@ -416,7 +416,8 @@ export async function tenantAnswersFor(c: PlcCase): Promise<TenantAnswers> {
       title: "Terms",
       rows: rows([
         rent ? row("Rent, a month", gbp(rent), String(rent)) : null,
-        dateRow("Move-in date", first<string>(c.moveInDate, pl.moveIn, app?.startDate)),
+        /* A move-in put right on the let in the OS is the newest (lib/let-edits, 2 Nov 2026). */
+        dateRow("Move-in date", first<string>(app?.letEdits?.moveIn?.value, c.moveInDate, pl.moveIn, app?.startDate)),
         app?.agreementMonths ? row("Term", `${app.agreementMonths} months`, String(app.agreementMonths)) : null,
         row("Pets", pets ? petsNote || "Yes" : yn(pets)),
         anyoneSmokeAnswer ? row("Smokers", smokers.length ? `Yes, ${smokers.join(" and ")}` : "No") : null,

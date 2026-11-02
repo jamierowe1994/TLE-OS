@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import TermsPanel from "@/components/terms/TermsPanel";
 import TermsBanner from "@/components/appraisal/TermsBanner";
 import { SERVICE_LEVELS, type MarketAppraisal } from "@/lib/market-appraisal";
+import { everyLandlord, useJointLandlords } from "@/lib/use-home-landlords";
 
 /**
  * THE APPRAISAL'S TERMS OF BUSINESS, on its Documents tab (new look).
@@ -46,8 +47,11 @@ export default function AppraisalTerms({ ma, onChanged }: { ma: MarketAppraisal;
       live = false;
     };
   }, [ma.id, ma.termsSentAt]);
+  /* The additional landlords added on the appraisal's Landlord card sign too
+     (Lianna, 1 Nov 2026), kept under the same key that card uses. */
+  const joint = useJointLandlords(ma.rexPropertyId ?? `appraisal:${ma.id}`);
 
-  if (older === null) {
+  if (older === null || (!older && joint === null)) {
     return (
       <section data-look="new" className="nl-cmp-tob is-loading">
         <p className="nl-meta">Reading the terms…</p>
@@ -64,7 +68,7 @@ export default function AppraisalTerms({ ma, onChanged }: { ma: MarketAppraisal;
       listingId={ma.listingId ?? null}
       propertyId={ma.rexPropertyId ?? null}
       propertyAddress={ma.postcode && !ma.address.toUpperCase().includes(ma.postcode.toUpperCase()) ? `${ma.address}, ${ma.postcode}` : ma.address}
-      landlords={ma.landlord || ma.landlordEmail ? [{ name: ma.landlord, email: ma.landlordEmail ?? "" }] : []}
+      landlords={everyLandlord([{ name: ma.landlord, email: ma.landlordEmail ?? "", phone: ma.landlordMobile ?? "" }], joint ?? [])}
       serviceOnRecord={service}
       feesOnRecord={{
         /* The contract's own wording, VAT out then in, from what was agreed at the appraisal. */

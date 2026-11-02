@@ -5,7 +5,7 @@ import { propolyConfigured, propolyErrorText, propolyGet, propolyPatch, propolyP
 import { osAddressForRexProperty } from "@/lib/os-property-address";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { switchOn } from "@/lib/switches";
-import { handoffFor, landlordsForListing, type Handoff } from "@/lib/deal-handoff";
+import { handoffFor, isJointOwner, landlordsForListing, type Handoff } from "@/lib/deal-handoff";
 import { findUserById } from "@/lib/users";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { HOLDING_FEE_WORDING, SITE, WEEK_AHEAD_LINES, WEEK_AHEAD_LINES_SCOTLAND } from "@/lib/email/tle-documents";
@@ -13,7 +13,7 @@ import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { userByName } from "@/lib/tenant-email-send";
 import { isScottish } from "@/lib/property-flags";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
-import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, isScottishListing, swapStandIn, withChanges, withLandlordOptOut, type DealTerms } from "@/lib/handover-deal";
+import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, isScottishListing, swapStandIn, withChanges, withLandlordOptOut, withLetFigures, type DealTerms } from "@/lib/handover-deal";
 import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 import { guaranteedEmails, guarantorLines, planGuarantors, propolyGuarantorsLive, sendGuarantors } from "@/lib/deal-guarantors";
 
@@ -273,6 +273,9 @@ export async function runHandover(
       seen.add(key);
       uniqueOwners.push(c);
     }
+    /* The joint landlords on the home, said apart from the listing's own (lib/deal-handoff). */
+    const jointOwners = found.from === "joint" ? [] : uniqueOwners.filter(isJointOwner);
+    const mainOwners = uniqueOwners.filter((c) => !jointOwners.includes(c));
     await rec.add({
       id: "listing",
       label: "The listing",
@@ -280,9 +283,10 @@ export async function runHandover(
       detail: packet.swap
         ? "A change of tenants: the home and its landlord are already in Propoly, so only the new deal and its tenants go over."
         : uniqueOwners.length
-          ? found.from === "listing"
-            ? `${uniqueOwners.length} owner${uniqueOwners.length === 1 ? "" : "s"} on the listing: ${uniqueOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
-            : `${found.note} ${uniqueOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
+          ? (found.from === "listing"
+              ? `${mainOwners.length} owner${mainOwners.length === 1 ? "" : "s"} on the listing: ${mainOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
+              : `${found.note} ${mainOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`) +
+            (found.from !== "joint" && jointOwners.length ? ` Joint landlord${jointOwners.length === 1 ? "" : "s"} on the home, going too: ${jointOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.` : "")
           : "No landlord on the listing or the home, so there is no landlord to create.",
       ...(found.from && found.from !== "listing" ? { response: { landlordFrom: found.from, owners: uniqueOwners.map((c) => ({ id: str(c.id), name: str(c.name), email: str(c.email_address) })) } } : {}),
     });
@@ -424,11 +428,28 @@ export async function runHandover(
       await rec.add({ id: "property-match", label: "Property in Propoly", state: "ok", detail: `${opts.by} confirmed this home is new to Propoly.` });
     }
 
-    /* 3. Each landlord in Propoly - only once the property is settled. */
+    /* 3. Each landlord in Propoly - only once the property is settled.
+
+       A joint landlord on the home goes too (James, 2 Nov 2026), and one
+       Propoly can't take - no email, or no mobile, which Propoly refuses -
+       is left off with a line saying who and where to put it right. The rest
+       of the push carries on and the run is not failed for it: they go later
+       from the let with Add to the Propoly deal (lib/let-propoly-sync). */
     const landlordUuids: string[] = [];
+    const notSent = (c: Row, name: string, what: string) =>
+      rec.add({
+        id: `landlord:${str(c.id)}`,
+        label: `Landlord: ${name}`,
+        state: "skipped",
+        detail: `Not sent: Propoly needs ${what} for ${name}, the joint landlord. Add it under Landlords on this let, then press Add to the Propoly deal on them. Everything else went without them.`,
+      });
     for (const c of uniqueOwners) {
       const email = str(c.email_address);
       const name = str(c.name) ?? "the landlord";
+      if (!email && jointOwners.includes(c)) {
+        await notSent(c, name, "an email address");
+        continue;
+      }
       if (!email) {
         await rec.add({ id: `landlord:${str(c.id)}`, label: `Landlord: ${name}`, state: "failed", detail: "No email on the REX contact, and Propoly finds landlords by email." });
         status = "failed";
@@ -451,6 +472,10 @@ export async function runHandover(
       const contact = rexContact ? await rexCall("Contacts", "read", { id: String(c.id) }) : null;
       const cc = ((contact?.ok ? contact.result : null) ?? c) as Row;
       const payload = { landlord: landlordPayload(cc, name, email) };
+      if (jointOwners.includes(c) && !payload.landlord.mobileno) {
+        await notSent(c, name, "a mobile number");
+        continue;
+      }
       if (!live) {
         await rec.add({ id: `landlord:${str(c.id)}`, label: `Landlord: ${name}`, state: "would", detail: `Not in Propoly. Would create with these details.`, request: payload });
         landlordUuids.push(`(new landlord: ${email})`);
@@ -748,7 +773,8 @@ async function pushDeal(
   }
 ): Promise<"ok" | "would" | "blocked" | "failed"> {
   const label = "The deal in Propoly";
-  const terms = withChanges(await withLandlordOptOut(dealDefaults(o.packet, o.listing), o.packet), o.change);
+  /* The OS's edited figures (lib/let-edits) before the agent's push-panel changes, which are newer still. */
+  const terms = withChanges(await withLetFigures(await withLandlordOptOut(dealDefaults(o.packet, o.listing), o.packet), o.packet), o.change);
   const realProperty = o.propertyUuid && !o.propertyUuid.startsWith("(") ? o.propertyUuid : null;
 
   /* 1. A deal an earlier push of this application started. */

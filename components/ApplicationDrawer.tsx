@@ -37,6 +37,9 @@ import PhotoGrid from "@/components/new-look/PhotoGrid";
 import SteveFace from "@/components/SteveFace";
 import { AMBER_PILL, GREEN_PILL, RED_PILL } from "@/components/applications/LetsBoard";
 import { applicantKey } from "@/lib/lead-tenant-key";
+import FieldDate from "@/components/FieldDate";
+import LetTenantCard from "@/components/new-look/LetTenantCard";
+import { isLetField, LET_FIELD_KIND, LET_FIELD_LABEL, sameLetValue, sayLetValue, type LetEditEvent, type LetEditNow, type LetField } from "@/lib/let-edit-fields";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
 type JourneyAction = NextAction;
@@ -132,6 +135,13 @@ export interface AppRecord {
   image: string | null;
   rent: string;
   moveIn: string;
+  /**
+   * The application's own figures, before anything put right in the OS, as
+   * stored strings (lib/let-edit-fields), and what the OS holds over them
+   * (lib/let-edits, 1 Nov 2026). The new look's The Deal reads these.
+   */
+  figures?: { moveIn: string | null; rent: string | null; holdingFee: string | null; termMonths: string | null };
+  osEdits?: Partial<Record<LetField, { value: string | null; by: string; at: string }>> | null;
   stageKey: string;
   ticked: number;
   agent: string;
@@ -405,6 +415,21 @@ type LetPerson = { name: string; email: string | null; phone: string | null; con
 type LetLandlord = { name: string; email: string | null; phone: string | null; contactId: string | null; from?: "rex" | "record" };
 type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string };
 type Cancellation = { reason: string; note: string; by: string; at: string };
+type LetDetails = { canEdit: boolean; dealId: string | null; edits: Partial<Record<LetField, LetEditNow>>; history: LetEditEvent[] };
+
+/** What the deal itself holds for a field (as lib/let-edits dealValue), as a stored string. */
+function dealFigure(d: PreTenancyDeal, f: LetField): string | null {
+  const mark = d.letEdits?.[f];
+  if (mark) return mark.propoly;
+  const s = (n: number | null | undefined) => (n == null ? null : String(n));
+  switch (f) {
+    case "moveIn": return d.app.startDate ? d.app.startDate.slice(0, 10) : null;
+    case "rent": return s(d.app.offer);
+    case "deposit": return s(d.app.propoly?.deposit);
+    case "holdingFee": return s(d.app.propoly?.holdingFee);
+    case "termMonths": return s(d.app.agreementMonths);
+  }
+}
 
 function EmailBuilder({ letId, mode, people, start, scotland, onClose }: {
   letId: string;
@@ -779,6 +804,25 @@ export default function ApplicationDrawer({
     return () => { live = false; };
   }, [letId]);
 
+  /* The let's figures as put right in the OS, and every change made on it
+     (lib/let-edits, 1 Nov 2026): the new look's Edit on The Deal. */
+  const [details, setDetails] = useState<LetDetails | null>(null);
+  const [detailsTick, setDetailsTick] = useState(0);
+  useEffect(() => {
+    if (!letId || !newLook) return;
+    let live = true;
+    fetch(`/api/applications/${encodeURIComponent(letId)}/details`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: LetDetails & { ok?: boolean }) => { if (live && j?.ok) setDetails({ canEdit: Boolean(j.canEdit), dealId: j.dealId ?? null, edits: j.edits ?? {}, history: j.history ?? [] }); })
+      .catch(() => { /* the figures still show as read; Edit waits for this */ });
+    return () => { live = false; };
+  }, [letId, newLook, detailsTick]);
+  const [figEdit, setFigEdit] = useState(false);
+  const [figDraft, setFigDraft] = useState<Partial<Record<LetField, string>> | null>(null);
+  const [figFrom, setFigFrom] = useState<Partial<Record<LetField, string>> | null>(null);
+  const [figSave, setFigSave] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [figErr, setFigErr] = useState<string | null>(null);
+
   /* Each tenant's right to rent expiry, recorded on the let (lib/application-rtr,
      15 Oct 2026). Kept apart from the yes/no answer it sits beside. */
   const [rtr, setRtr] = useState<RtrShown[]>([]);
@@ -1149,10 +1193,18 @@ export default function ApplicationDrawer({
   const landlordShown = landlordParty ?? info?.landlord ?? null;
   const [addLandlordOpen, setAddLandlordOpen] = useState(false);
   /* The server's person for an applicant card, matched as the cards are named. */
-  const partyFor = (p: { name: string; email?: string | null }): Party | null =>
-    (info?.people ?? []).find(
-      (x) => x.role === "tenant" && ((p.email && x.email && x.email.toLowerCase() === p.email.toLowerCase()) || x.name.trim().toLowerCase() === p.name.trim().toLowerCase())
-    ) ?? null;
+  const partyFor = (p: { name: string; email?: string | null; contactId?: string | null }): Party | null => {
+    const tenants = (info?.people ?? []).filter((x) => x.role === "tenant");
+    /* By the let's own key first (lib/let-people tenantParty), so somebody
+       whose name or email was changed on the let is still found. */
+    const said = (p.email ?? p.name ?? "").trim().toLowerCase();
+    const keys = [p.contactId && /^\d+$/.test(p.contactId) ? `rex:${p.contactId}` : null, `app:tenant:${said}`, `propoly:tenant:${said}`];
+    return (
+      tenants.find((x) => keys.includes(x.key)) ??
+      tenants.find((x) => (p.email && x.email && x.email.toLowerCase() === p.email.toLowerCase()) || x.name.trim().toLowerCase() === p.name.trim().toLowerCase()) ??
+      null
+    );
+  };
 
   /* Everything that opens over the page, the same in both looks. */
   const overlays = (
@@ -1609,6 +1661,161 @@ export default function ApplicationDrawer({
     const history = journey?.ok ? journey.history ?? [] : [];
     const recordLog = (app?.activity ?? []).filter((a) => !a.note);
 
+    /* ── The Deal's figures, the OS's own where an agent put them right ──
+       (lib/let-edits, James 1 Nov 2026). What the application and the
+       Propoly deal said is kept apart (figures, letEdits marks), so the
+       page can say when Propoly still has something else, and an emptied
+       box goes back to it. */
+    const dealHas = (f: LetField): string | null => (deal ? dealFigure(deal, f) : null);
+    const appHas = (f: LetField): string | null => (f === "deposit" ? null : app?.figures?.[f] ?? null);
+    const osNow = (f: LetField): LetEditNow | null => (details ? details.edits[f] ?? null : deal?.letEdits?.[f] ?? app?.osEdits?.[f] ?? null);
+    const readOf = (f: LetField): string | null => {
+      if (f === "moveIn") return dealHas("moveIn") ?? appHas("moveIn");
+      if (f === "rent") return app ? appHas("rent") : dealHas("rent");
+      if (f === "deposit") return dealHas("deposit");
+      return dealHas(f) ?? appHas(f);
+    };
+    const figureOf = (f: LetField): string | null => osNow(f)?.value ?? readOf(f);
+    const fromWord = deal ? "Propoly's" : "the application's";
+    const shortWhen = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    const moveInNl = figureOf("moveIn");
+    const rentNl = figureOf("rent");
+    const termNl = figureOf("termMonths");
+    const holdNl = figureOf("holdingFee");
+    const holdStatus = deal ? stageStatus(deal, "holding_fee").text : "No deal yet";
+    const depositNl = osNow("deposit")?.value != null
+      ? sayLetValue("deposit", osNow("deposit")!.value)
+      : deal?.app.propoly?.depositReplacement
+        ? "Zero deposit (Flatfair)"
+        : dealHas("deposit") != null
+          ? sayLetValue("deposit", dealHas("deposit"))
+          : listingDeposit != null
+            ? `${gbp(listingDeposit)} on the listing`
+            : "Not set yet";
+    const editable: LetField[] = [
+      "moveIn",
+      ...(intro || isSwap ? [] : (["deposit"] as LetField[])),
+      "rent",
+      ...(intro || isSwap || scottishLet ? [] : (["holdingFee"] as LetField[])),
+      ...(intro ? [] : (["termMonths"] as LetField[])),
+    ];
+    const nlFacts: { label: string; text: string; field?: LetField }[] = facts.flatMap((f) => {
+      if (f.label === "Move-in") return [{ label: f.label, text: moveInNl ? niceDate(moveInNl) : "Not set yet", field: "moveIn" as LetField }];
+      if (f.label === "Deposit") return [{ label: f.label, text: depositNl, field: "deposit" as LetField }];
+      if (f.label === "Rent" || f.label === "Rent, the home") {
+        return [
+          { label: f.label, text: rentNl ? `${sayLetValue("rent", rentNl)} ${per}` : "No offer recorded", field: "rent" as LetField },
+          ...(intro ? [] : [{ label: "Tenancy length", text: termNl ? sayLetValue("termMonths", termNl) : "Not set yet", field: "termMonths" as LetField }]),
+        ];
+      }
+      if (f.label === "Holding fee") {
+        const fees = editable.includes("holdingFee");
+        return [{ label: f.label, text: fees && holdNl ? `${sayLetValue("holdingFee", holdNl)} · ${holdStatus.toLowerCase()}` : f.text, field: fees ? ("holdingFee" as LetField) : undefined }];
+      }
+      return [{ label: f.label, text: f.text }];
+    });
+    /* Under a figure the OS changed: who, and whether Propoly still has another. */
+    const factNote = (f: LetField) => {
+      const os = osNow(f);
+      if (!os || os.value === null) return null;
+      const theirs = dealHas(f);
+      const differs = Boolean(deal) && !sameLetValue(f, os.value, theirs);
+      return (
+        <small className="nl-fact-note">
+          <span>Changed by {firstName(os.by) || os.by}, {shortWhen(os.at)}</span>
+          {differs && deal && (
+            <span className="nl-fact-differs">
+              {theirs == null ? "Propoly has none yet - add it in Propoly." : `Propoly still has ${f === "rent" ? `${sayLetValue(f, theirs)} ${per}` : sayLetValue(f, theirs)} - change it in Propoly.`}{" "}
+              <a href={propolyDealUrl(deal.app.id)} target="_blank" rel="noopener noreferrer">Open the deal ↗</a>
+            </span>
+          )}
+        </small>
+      );
+    };
+    const startFigures = () => {
+      const from = Object.fromEntries(editable.map((f) => [f, (f === "deposit" ? osNow("deposit")?.value ?? dealHas("deposit") ?? (listingDeposit != null ? String(listingDeposit) : null) : figureOf(f)) ?? ""])) as Partial<Record<LetField, string>>;
+      setFigFrom(from);
+      setFigDraft(from);
+      setFigSave("idle");
+      setFigErr(null);
+      setFigEdit(true);
+    };
+    const figDirty = Boolean(figDraft && figFrom && editable.some((f) => (figDraft[f] ?? "").trim() !== (figFrom[f] ?? "")));
+    const saveFigures = async () => {
+      const d = figDraft;
+      const from = figFrom;
+      if (!d || !from || !letId) return;
+      const changes: Record<string, string | null> = {};
+      const shownWas: Record<string, string | null> = {};
+      for (const f of editable) {
+        const v = (d[f] ?? "").trim();
+        if (v === (from[f] ?? "")) continue;
+        changes[f] = v || null;
+        shownWas[f] = from[f] || null;
+      }
+      if (!Object.keys(changes).length) { setFigEdit(false); return; }
+      setFigSave("saving");
+      setFigErr(null);
+      const settle = saves.reporter.begin("The deal's figures");
+      try {
+        const r = await fetch(`/api/applications/${encodeURIComponent(letId)}/details`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ changes, shown: shownWas }),
+        });
+        const j = (await r.json().catch(() => ({}))) as Partial<LetDetails> & { ok?: boolean; error?: string };
+        if (!r.ok || !j.ok) throw new Error(j.error ?? "The figures didn't save. Try again.");
+        setDetails({ canEdit: Boolean(j.canEdit), dealId: j.dealId ?? null, edits: j.edits ?? {}, history: j.history ?? [] });
+        /* The board reads them again rather than show its held copy. */
+        dropJson("/api/applications?limit=200");
+        settle({ ok: true });
+        setFigSave("done");
+        window.setTimeout(() => { setFigEdit(false); setFigSave("idle"); }, 1700);
+      } catch (e) {
+        const said = e instanceof Error ? e.message : "The figures didn't save. Try again.";
+        settle({ ok: false, problem: said, retry: () => void saveFigures() });
+        setFigErr(said);
+        setFigSave("error");
+      }
+    };
+    const figInput = (f: LetField) => {
+      const v = figDraft?.[f] ?? "";
+      const set = (x: string) => setFigDraft((cur) => ({ ...(cur ?? {}), [f]: x }));
+      const kind = LET_FIELD_KIND[f];
+      if (kind === "date") return <FieldDate value={v} onChange={set} clearable placeholder="Choose the day" />;
+      if (kind === "months") return <span className="nl-fact-money"><input type="number" inputMode="numeric" min={1} max={120} value={v} onChange={(e) => set(e.target.value)} aria-label={LET_FIELD_LABEL[f]} /><i>months</i></span>;
+      return (
+        <span className="nl-fact-money">
+          <i>£</i>
+          <input type="number" inputMode="decimal" min={0} step="0.01" value={v} onChange={(e) => set(e.target.value)} aria-label={LET_FIELD_LABEL[f]} />
+          {f === "rent" && <i>{per}</i>}
+        </span>
+      );
+    };
+    /* Every change made on the let, for Activity, in words. */
+    const editWords = (e: LetEditEvent): string => {
+      const who = firstName(e.by) || e.by;
+      if (isLetField(e.field)) {
+        const label = LET_FIELD_LABEL[e.field].toLowerCase();
+        if (e.value === null) return `${who} put the ${label} back to ${fromWord} figure (it was ${sayLetValue(e.field, e.was)} here).`;
+        return `${who} changed the ${label} from ${sayLetValue(e.field, e.was)} to ${sayLetValue(e.field, e.value)}.`;
+      }
+      const m = /^tenant:(.+):(name|email|phone)$/.exec(e.field);
+      if (m) {
+        const who2 = (info?.people ?? []).find((x) => x.key === m[1])?.name;
+        const part = m[2] === "phone" ? "mobile" : m[2];
+        return `${who} changed ${who2 ? `${who2}'s` : "a tenant's"} ${part} from ${e.was || "nothing"} to ${e.value || "nothing"}.`;
+      }
+      return `${who} changed ${e.field}.`;
+    };
+    const edits = details?.history ?? [];
+    /* The tenants as the let now holds them: changed on the let, or as read. */
+    const shownPerson = (p: AppPerson): AppPerson => {
+      const x = partyFor(p);
+      return x ? { ...p, name: x.name, email: x.email, phone: x.phone } : p;
+    };
+    const leadShown = lead ? shownPerson(lead) : lead;
+
     return (
       <SaveScopeProvider scope={saves}>
         <div data-look="new" data-steve="application.drawer" className="nl-page nl-rise nl-app">
@@ -1643,9 +1850,9 @@ export default function ApplicationDrawer({
               <p className="nl-rhead-sub">
                 {[
                   locality || null,
-                  lead ? `${lead.name}${others ? ` +${others}` : ""}` : null,
-                  rent ? `${rent} ${per}` : "no offer recorded",
-                  moveIn ? `moves in ${niceDate(moveIn)}` : null,
+                  leadShown ? `${leadShown.name}${others ? ` +${others}` : ""}` : null,
+                  rentNl ? `${sayLetValue("rent", rentNl)} ${per}` : "no offer recorded",
+                  moveInNl ? `moves in ${niceDate(moveInNl)}` : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")}
@@ -1698,19 +1905,68 @@ export default function ApplicationDrawer({
               </button>
             </div>
 
-            <section className="nl-facts">
+            <section className={`nl-facts${figEdit ? " is-editing" : ""}`} data-steve="application.deal-figures">
               <div className="nl-facts-head">
                 <h3 className="nl-block-title">The Deal</h3>
-                {waitingOn && !cancelled && <span className="nl-meta">{waitingOn === "you" ? "Waiting on you" : `Waiting on ${waitingOn}`}</span>}
+                <span className="flex items-center gap-3">
+                  {waitingOn && !cancelled && !figEdit && <span className="nl-meta">{waitingOn === "you" ? "Waiting on you" : `Waiting on ${waitingOn}`}</span>}
+                  {figEdit ? (
+                    <span className="nl-facts-flag"><i /> Editing</span>
+                  ) : details?.canEdit && letId ? (
+                    <button type="button" onClick={startFigures} className="nl-link" data-steve="application.edit-figures">
+                      <Ico name="pen" size={13} /> Edit
+                    </button>
+                  ) : null}
+                </span>
               </div>
-              <div className="nl-facts-grid">
-                {facts.map((f) => (
-                  <div key={f.label} className="nl-fact">
-                    <span>{f.label}</span>
-                    <b className={quiet(f.text) ? "is-quiet" : ""} title={f.text}>{f.text}</b>
+              {!figEdit || !figDraft ? (
+                <div className="nl-facts-grid">
+                  {nlFacts.map((f) => (
+                    <div key={f.label} className="nl-fact">
+                      <span>{f.label}</span>
+                      <b className={quiet(f.text) ? "is-quiet" : ""} title={f.text}>{f.text}</b>
+                      {f.field && factNote(f.field)}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div className="nl-facts-grid">
+                    {editable.map((f) => (
+                      <div key={f} className={LET_FIELD_KIND[f] === "date" ? "nl-fact nl-fact--wide" : "nl-fact"}>
+                        <span>{f === "rent" && isSwap ? "Rent, the home" : LET_FIELD_LABEL[f]}</span>
+                        <div className="nl-fact-in">{figInput(f)}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <p className="nl-hint mt-2">
+                    Kept on this let{deal ? ". Propoly can't take changes from here, so anything it still has differently is shown under the figure" : ""}. Empty a box to go back to {fromWord} figure.
+                  </p>
+                  {(figDirty || figSave !== "idle") && (
+                    <div className={`nl-saverow${figSave === "done" ? " is-done" : figSave === "error" ? " is-error" : ""}`}>
+                      {figSave === "done" ? (
+                        <><SteveFace size={22} mood="happy" /><span>Saved on the let.</span></>
+                      ) : figSave === "error" ? (
+                        <span className="min-w-0 flex-1">{figErr}</span>
+                      ) : (
+                        <><span className="nl-saverow-dot" /><span>Not saved yet</span></>
+                      )}
+                      <span className="flex-1" />
+                      {figSave !== "done" && (
+                        <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" disabled={figSave === "saving"} onClick={() => { setFigEdit(false); setFigSave("idle"); }}>Cancel</button>
+                      )}
+                      {figSave !== "done" && (
+                        <button type="button" disabled={figSave === "saving" || !figDirty} className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => void saveFigures()}>
+                          {figSave === "saving" ? "Saving…" : "Save"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {!figDirty && figSave === "idle" && (
+                    <button type="button" className="nl-link mt-2 self-start" onClick={() => setFigEdit(false)}>Cancel</button>
+                  )}
+                </>
+              )}
             </section>
           </div>
 
@@ -1852,21 +2108,21 @@ export default function ApplicationDrawer({
                     <h3 className="nl-block-title">{people.length > 1 ? "The Applicants" : "The Applicant"}</h3>
                     {people.length > 0 && <button type="button" className="nl-link" onClick={() => setPerson({ role: "tenant", index: 0 })}>Open</button>}
                   </div>
-                  {lead ? (
+                  {leadShown ? (
                     <>
                       <div className="nl-person">
-                        <span className="nl-avatar">{initialsOf(lead.name)}</span>
+                        <span className="nl-avatar">{initialsOf(leadShown.name)}</span>
                         <span className="min-w-0">
-                          <span className="nl-strong block truncate">{lead.name}{others ? ` +${others}` : ""}</span>
+                          <span className="nl-strong block truncate">{leadShown.name}{others ? ` +${others}` : ""}</span>
                           <span className="nl-meta block">Lead applicant</span>
                         </span>
                       </div>
                       <div className="nl-contact">
-                        {lead.phone ? <a href={telOf(lead.phone)}><Ico name="phone" size={14} />{lead.phone}</a> : <span className="text-muted"><Ico name="phone" size={14} />No phone on file</span>}
-                        {lead.email ? <a href={`mailto:${lead.email}`}><Ico name="mail" size={14} />{lead.email}</a> : <span className="text-muted"><Ico name="mail" size={14} />No email on file</span>}
+                        {leadShown.phone ? <a href={telOf(leadShown.phone)}><Ico name="phone" size={14} />{leadShown.phone}</a> : <span className="text-muted"><Ico name="phone" size={14} />No phone on file</span>}
+                        {leadShown.email ? <a href={`mailto:${leadShown.email}`}><Ico name="mail" size={14} />{leadShown.email}</a> : <span className="text-muted"><Ico name="mail" size={14} />No email on file</span>}
                       </div>
                       <div className="mt-auto flex flex-wrap items-center gap-3 pt-1">
-                        {lead.phone && <a href={telOf(lead.phone)} className="nl-btn nl-btn--secondary nl-btn--sm"><Ico name="phone" size={14} /> Call</a>}
+                        {leadShown.phone && <a href={telOf(leadShown.phone)} className="nl-btn nl-btn--secondary nl-btn--sm"><Ico name="phone" size={14} /> Call</a>}
                         <button type="button" className="nl-link" onClick={() => setPanel("messages")}>Messages</button>
                       </div>
                     </>
@@ -1953,13 +2209,14 @@ export default function ApplicationDrawer({
                   <div className="nl-apps-people">
                     {people.map((p, i) => {
                       const party = partyFor(p);
+                      const shown = shownPerson(p);
                       return (
                         <section key={(p.contactId ?? "") + i} className="nl-cell nl-apps-personcard">
                           <div className="nl-cell-head">
                             <button type="button" onClick={() => setPerson({ role: "tenant", index: i })} className="nl-person min-w-0 text-left">
-                              <span className="nl-avatar">{initialsOf(p.name)}</span>
+                              <span className="nl-avatar">{initialsOf(shown.name)}</span>
                               <span className="min-w-0">
-                                <span className="nl-strong block truncate hover:underline">{p.name}</span>
+                                <span className="nl-strong block truncate hover:underline">{shown.name}</span>
                                 <span className="nl-meta block">{p.isPrimary ? "Lead applicant" : "Applicant"}</span>
                               </span>
                             </button>
@@ -1972,10 +2229,15 @@ export default function ApplicationDrawer({
                             ) : null}
                           </div>
                           {party && letId ? (
-                            <>
-                              <PartyContact letId={letId} party={{ ...party, isPrimary: p.isPrimary }} propertyAddress={name} onAnswer={takePeople} />
-                              <PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />
-                            </>
+                            /* Fixed until Edit, saved on the let (1 Nov 2026). */
+                            <LetTenantCard
+                              letId={letId}
+                              party={{ ...party, isPrimary: p.isPrimary }}
+                              about={name}
+                              canEdit={Boolean(details?.canEdit)}
+                              onAnswer={(j) => { takePeople(j); setDetailsTick((n) => n + 1); }}
+                              after={<PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />}
+                            />
                           ) : (
                             <ContactBlock
                               showName={false}
@@ -2066,8 +2328,15 @@ export default function ApplicationDrawer({
               <div>
                 {app && journey === null ? (
                   <p className="nl-meta flex items-center gap-2 py-6"><span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-ink" />Reading what moved…</p>
-                ) : history.length + recordLog.length ? (
+                ) : edits.length + history.length + recordLog.length ? (
                   <ul className="nl-timeline">
+                    {/* Changed on the let in the OS: who, from what, to what, when. */}
+                    {edits.map((e) => (
+                      <li key={e.id}>
+                        <span className="nl-mono">{whenWords(e.at)}</span>
+                        <span>{editWords(e)} <span className="nl-meta">Kept on the let</span></span>
+                      </li>
+                    ))}
                     {history.map((e) => (
                       <li key={e.id}>
                         <span className="nl-mono">{whenWords(e.at)}</span>
