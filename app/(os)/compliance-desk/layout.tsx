@@ -38,6 +38,8 @@ const RAIL: RailGroup[] = [
     title: null,
     items: [
       { href: "/compliance-desk", label: "Dashboard", exact: true, icon: "home" },
+      /* Susan's Compliance overview beside his task lists (2 Nov 2026). */
+      { href: "/compliance-desk/overview", label: "Compliance Overview", icon: "dashboard" },
       { href: "/compliance-desk/properties", label: "Property Compliance", icon: "shield" },
       { href: "/compliance-desk/verify", label: "Gas & Electric Check", icon: "checklist", also: ["/compliance-desk/verified"] },
       { href: "/compliance-desk/sections", label: "Section 8 & 13", icon: "file-contract" },

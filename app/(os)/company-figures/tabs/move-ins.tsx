@@ -16,7 +16,7 @@ import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased 
 import { ROSTER } from "@/lib/business/roster";
 import type { PipelineRow, MoveInRow } from "@/lib/business/seed-types";
 import { resolveStat, type ManualOverride } from "@/lib/business/stats";
-import { currentMonth, formatDate, formatGBP, monthLabel, recentMonths } from "@/lib/business/format";
+import { currentMonth, formatDate, formatGBP, monthLabel, monthsAhead, recentMonths } from "@/lib/business/format";
 import type { ActualOverride, StatValue } from "@/lib/business/types";
 
 /* ------------------------------ status chips ------------------------------ */
@@ -241,8 +241,11 @@ function Trend({ curr, prev, vs }: { curr: number; prev: number; vs: string }) {
 const MONTH_NAME = (m: string) =>
   new Date(`${m}-01T00:00:00Z`).toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
 
-export default function MoveInsTab({ month, seed }: { month: string; seed: SeedData }) {
-  const h = seed.moveInHeader;
+/* `office`: Kirstie's copy on the pre-tenancy rail (Susan, 2 Nov 2026). The
+   same figures and tables, read-only - adding a move-in by hand stays Susan's.
+   It has no seed, so the completed count is Propoly's live figure or nothing. */
+export default function MoveInsTab({ month, seed, office = false }: { month: string; seed?: SeedData | null; office?: boolean }) {
+  const h = { julyMtdCompleted: seed?.moveInHeader?.julyMtdCompleted ?? null };
 
   /* The two tables, live from Propoly, on their own month.
      They have their own picker rather than following the tab's: the tab reports
@@ -549,6 +552,8 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
               value: number;
               sub?: string;
               trend?: { prev: number; vs: string };
+              /** Clicking it shows that month's list below. */
+              pick?: string;
             }> = [
               {
                 label: "Completed MTD",
@@ -558,16 +563,19 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
               },
               {
                 label: `Remaining ${MONTH_NAME(m0)} forecast`,
+                pick: m0,
                 value: tracker.forecastByMonth[m0] ?? 0,
                 sub: "In progression, move-in date this month",
               },
               {
                 label: MONTH_NAME(m1),
+                pick: m1,
                 value: tracker.forecastByMonth[m1] ?? 0,
                 sub: "Forecast from progression",
               },
               {
                 label: MONTH_NAME(m2),
+                pick: m2,
                 value: tracker.forecastByMonth[m2] ?? 0,
                 sub: "Forecast from progression",
               },
@@ -602,8 +610,23 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
                   />
                 </div>
                 <div className="mt-3 grid gap-3 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
-                  {tiles.map((t) => (
-                    <div key={t.label} className="rounded-xl border border-green-200 bg-white p-3 shadow-sm">
+                  {tiles.map((t) => {
+                    const Tile = t.pick ? "button" : "div";
+                    return (
+                    <Tile
+                      key={t.label}
+                      {...(t.pick
+                        ? {
+                            type: "button" as const,
+                            onClick: () => setTableMonth(t.pick!),
+                            "aria-pressed": tableMonth === t.pick,
+                            title: `Show ${monthLabel(t.pick)} in the lists below`,
+                          }
+                        : {})}
+                      className={`rounded-xl border bg-white p-3 text-left shadow-sm ${
+                        t.pick && tableMonth === t.pick ? "border-ink" : "border-green-200"
+                      } ${t.pick ? "transition-colors hover:border-ink/50" : ""}`}
+                    >
                       <div className="stat-value text-[24px] leading-tight">{t.value}</div>
                       {t.trend ? (
                         <div className="mt-0.5">
@@ -614,8 +637,9 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
                         {t.label}
                       </div>
                       {t.sub ? <div className="mt-0.5 text-[10px] text-muted">{t.sub}</div> : null}
-                    </div>
-                  ))}
+                    </Tile>
+                    );
+                  })}
                 </div>
               </section>
             );
@@ -652,169 +676,171 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
 
       </div>
 
-      {/* Add a move-in */}
-      <section className="card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">
-              Add a move-in
-              <SourceNote tone="derived">
-                Typed here and stored in the portal as a manual actual. It bumps the
-                completed count and appends a row marked ADDED - it does not write
-                back to Propoly.
-              </SourceNote>
-            </h2>
-            <p className="mt-0.5 text-xs text-muted">
-              Adds a row to the move-ins table for {monthLabel(month)} (marked
-              ADDED, stored as a manual actual) and bumps the completed count —
-              the Propoly rows themselves are never edited here.
-            </p>
-          </div>
-          {!formOpen ? (
-            <button
-              type="button"
-              onClick={() => {
-                setFormOpen(true);
-                setError(null);
-              }}
-              className="btn-press rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-white"
-            >
-              Add move-in
-            </button>
-          ) : null}
-        </div>
-
-        {formOpen ? (
-          <div className="mt-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Agent
-                </span>
-                <select
-                  value={fAgent}
-                  onChange={(e) => setFAgent(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">Pick an agent</option>
-                  {ROSTER.filter((r) => r.active).map((r) => (
-                    <option key={r.agentKey} value={r.displayName}>
-                      {r.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Property
-                </span>
-                <input
-                  type="text"
-                  value={fProperty}
-                  onChange={(e) => setFProperty(e.target.value)}
-                  placeholder="e.g. 14 The Avenue"
-                  className={inputClass}
-                />
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Move-in date
-                </span>
-                <input
-                  type="date"
-                  value={fDate}
-                  onChange={(e) => setFDate(e.target.value)}
-                  className={inputClass}
-                />
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Let type
-                </span>
-                <select
-                  value={fLetType}
-                  onChange={(e) => setFLetType(e.target.value === "Relet" ? "Relet" : "New Let")}
-                  className={inputClass}
-                >
-                  <option value="New Let">New Let</option>
-                  <option value="Relet">Relet</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Service level
-                </span>
-                <select
-                  value={fService}
-                  onChange={(e) => setFService(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="Tenant Find">Tenant Find</option>
-                  <option value="EFM no RLP">EFM no RLP</option>
-                  <option value="EFM with RLP">EFM with RLP</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Rent pcm (£)
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  value={fRent}
-                  onChange={(e) => setFRent(e.target.value)}
-                  className={`${inputClass} tnum`}
-                />
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Set-up fee (£)
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  value={fSetup}
-                  onChange={(e) => setFSetup(e.target.value)}
-                  className={`${inputClass} tnum`}
-                />
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Mgmt fee /mo (£)
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  value={fMgmt}
-                  onChange={(e) => setFMgmt(e.target.value)}
-                  className={`${inputClass} tnum`}
-                />
-              </label>
+      {/* Add a move-in - Susan's alone; Kirstie's copy reads the same rows. */}
+      {!office ? (
+        <section className="card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">
+                Add a move-in
+                <SourceNote tone="derived">
+                  Typed here and stored in the portal as a manual actual. It bumps the
+                  completed count and appends a row marked ADDED - it does not write
+                  back to Propoly.
+                </SourceNote>
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Adds a row to the move-ins table for {monthLabel(month)} (marked
+                ADDED, stored as a manual actual) and bumps the completed count —
+                the Propoly rows themselves are never edited here.
+              </p>
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void saveMoveIn()}
-                disabled={saving}
-                className="btn-press rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Save move-in"}
-              </button>
+            {!formOpen ? (
               <button
                 type="button"
                 onClick={() => {
-                  setFormOpen(false);
+                  setFormOpen(true);
                   setError(null);
                 }}
-                className="btn-press rounded-full border border-line px-4 py-2 text-[13px] font-semibold"
+                className="btn-press rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-white"
               >
-                Cancel
+                Add move-in
               </button>
-              {error ? <p className="text-xs text-accent">{error}</p> : null}
-            </div>
+            ) : null}
           </div>
-        ) : null}
-      </section>
+
+          {formOpen ? (
+            <div className="mt-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Agent
+                  </span>
+                  <select
+                    value={fAgent}
+                    onChange={(e) => setFAgent(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Pick an agent</option>
+                    {ROSTER.filter((r) => r.active).map((r) => (
+                      <option key={r.agentKey} value={r.displayName}>
+                        {r.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Property
+                  </span>
+                  <input
+                    type="text"
+                    value={fProperty}
+                    onChange={(e) => setFProperty(e.target.value)}
+                    placeholder="e.g. 14 The Avenue"
+                    className={inputClass}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Move-in date
+                  </span>
+                  <input
+                    type="date"
+                    value={fDate}
+                    onChange={(e) => setFDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Let type
+                  </span>
+                  <select
+                    value={fLetType}
+                    onChange={(e) => setFLetType(e.target.value === "Relet" ? "Relet" : "New Let")}
+                    className={inputClass}
+                  >
+                    <option value="New Let">New Let</option>
+                    <option value="Relet">Relet</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Service level
+                  </span>
+                  <select
+                    value={fService}
+                    onChange={(e) => setFService(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="Tenant Find">Tenant Find</option>
+                    <option value="EFM no RLP">EFM no RLP</option>
+                    <option value="EFM with RLP">EFM with RLP</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Rent pcm (£)
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={fRent}
+                    onChange={(e) => setFRent(e.target.value)}
+                    className={`${inputClass} tnum`}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Set-up fee (£)
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={fSetup}
+                    onChange={(e) => setFSetup(e.target.value)}
+                    className={`${inputClass} tnum`}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Mgmt fee /mo (£)
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={fMgmt}
+                    onChange={(e) => setFMgmt(e.target.value)}
+                    className={`${inputClass} tnum`}
+                  />
+                </label>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void saveMoveIn()}
+                  disabled={saving}
+                  className="btn-press rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save move-in"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormOpen(false);
+                    setError(null);
+                  }}
+                  className="btn-press rounded-full border border-line px-4 py-2 text-[13px] font-semibold"
+                >
+                  Cancel
+                </button>
+                {error ? <p className="text-xs text-accent">{error}</p> : null}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* The amber "these tables are the 11 Jul capture and don't follow the
           month selector" banner stood here. Both statements stopped being true
@@ -868,20 +894,30 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
               rather than dropping a real move-in.
             </SourceNote>
           </h2>
-          <div className="flex items-center gap-1.5">
-            {recentMonths(6).slice().reverse().map((m: string) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setTableMonth(m)}
-                className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  m === tableMonth
-                    ? "border-ink bg-ink text-white"
-                    : "border-line text-muted hover:border-ink/40"
-                }`}
-              >
-                {monthLabel(m).split(" ")[0].slice(0, 3)}
-              </button>
+          {/* Oldest on the left, this month, then the next two (Susan, 2 Nov
+              2026: "the forward-month pipeline ... current month and next 2
+              months also"). The two ahead roll on the 1st like the rest. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[...recentMonths(6), ...monthsAhead(2)].map((m: string) => (
+              <span key={m} className="flex items-center gap-1.5">
+                {m === monthsAhead(1)[0] ? (
+                  <span className="pl-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Ahead</span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setTableMonth(m)}
+                  aria-pressed={m === tableMonth}
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    m === tableMonth
+                      ? "border-ink bg-ink text-white"
+                      : m > currentMonth()
+                        ? "border-dashed border-line text-muted hover:border-ink/40"
+                        : "border-line text-muted hover:border-ink/40"
+                  }`}
+                >
+                  {monthLabel(m).split(" ")[0].slice(0, 3)}
+                </button>
+              </span>
             ))}
           </div>
         </div>
@@ -893,7 +929,9 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
           </p>
         ) : rows.moveIns.length === 0 ? (
           <p className="text-xs text-muted">
-            No completed move-ins with a {monthLabel(tableMonth)} date.
+            {tableMonth > currentMonth()
+              ? `${monthLabel(tableMonth)} hasn't started yet. Who is expected is below.`
+              : `No completed move-ins with a ${monthLabel(tableMonth)} date.`}
           </p>
         ) : (
           <DataTable columns={LIVE_MOVE_IN_COLUMNS} rows={rows.moveIns} compact />

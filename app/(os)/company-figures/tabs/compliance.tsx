@@ -128,7 +128,9 @@ function CertCard({ row, homes }: { row: CertRow; homes: number }) {
   );
 }
 
-export default function ComplianceTab({ month }: { month: string; seed: SeedData }) {
+/* `openHref`: where "Open Compliance" goes. Susan's is the agents' Compliance
+   page; on Michael's desk it is his own Property Compliance list. */
+export default function ComplianceTab({ month, openHref = "/compliance" }: { month: string; seed?: SeedData | null; openHref?: string }) {
   const [data, setData] = useState<Breakdown | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -273,7 +275,7 @@ export default function ComplianceTab({ month }: { month: string; seed: SeedData
           {data.gasUnanswered > 0
             ? ` ${n(data.gasUnanswered)} ${data.gasUnanswered === 1 ? "home has" : "homes have"} no answer yet on whether there is gas.`
             : ""}{" "}
-          <Link href="/compliance" className="font-semibold text-ink underline underline-offset-2">
+          <Link href={openHref} className="font-semibold text-ink underline underline-offset-2">
             Open Compliance
           </Link>{" "}
           for the homes behind each figure.
