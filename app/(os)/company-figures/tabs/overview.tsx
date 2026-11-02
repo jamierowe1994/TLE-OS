@@ -12,6 +12,7 @@
 // MAs by Partner Type → Monthly GCI vs Budget → Year on Year Growth.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useListingStages } from "../use-listing-stages";
 import DoodleIcon from "@/components/DoodleIcon";
 import { londonToday } from "@/lib/london-clock";
 import Bars from "@/components/business/charts/Bars";
@@ -224,6 +225,7 @@ function Tile({
   flag,
   compact = false,
   money,
+  loading = false,
 }: {
   label: string;
   stat: StatValue;
@@ -242,6 +244,8 @@ function Tile({
    * to tie it back to the accounts.
    */
   money?: number | null;
+  /** Still being read: a spinner in place of the figure, never a number. */
+  loading?: boolean;
 }) {
   const isLive = stat.source.startsWith("live-");
   const isManual = stat.source === "manual";
@@ -277,7 +281,11 @@ function Tile({
           isLive || isManual ? "text-ink" : "text-ink/60"
         }`}
       >
-        {value}
+        {loading ? (
+          <span className="mx-auto my-1.5 block h-5 w-5 animate-spin rounded-full border-2 border-line border-t-ink/60" aria-label="Reading" />
+        ) : (
+          value
+        )}
       </div>
       {flag ? (
         <span
@@ -461,6 +469,8 @@ export default function Overview({ month }: { month: string }) {
   const [data, setData] = useState<OverviewPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<LiveBusiness | null>(null);
+  /* Live Listings and the pipeline by the Listings board's own rule. */
+  const stages = useListingStages();
   const [liveLoading, setLiveLoading] = useState(false);
   const [hist, setHist] = useState<HistoryPayload | null>(null);
   /* The managed book, counted where Overview and the Dashboard count it
@@ -830,19 +840,30 @@ export default function Overview({ month }: { month: string }) {
   // amber permanently and showed a July capture instead. A stock is better
   // reported as today's and SAID to be today's than swapped for a stale one —
   // the same call as the rent roll on business value.
-  const funnelLiveListings = live?.totals
-    ? asLive(
-        live.totals.onMarketListings,
-        "Live from REX - on-market listings as at TODAY. This is a stock: REX keeps no history of it, so it cannot answer for a past month and is not trying to."
-      )
-    : kpiPeriod.funnel.liveListings;
-  // STOCK, same as Live Listings above, and treated the same way.
-  const funnelPipeline = live?.totals
-    ? asLive(
-        live.totals.pipeline,
-        "Live from REX - let-agreed forward pipeline as at TODAY. A stock, like Live Listings: today's figure, not the selected month's."
-      )
-    : kpiPeriod.funnel.pipeline;
+  //
+  // Counted the Listings board's way (lib/listing-stages, via
+  // /api/business/listing-stages), not REX's: REX's "current" listings take in
+  // drafts, and its let-agreed flag misses homes let through an accepted offer
+  // or Propoly (Susan, 2 Nov 2026: 190 and 54, against a board far smaller).
+  const fromBoard = (pick: "available", note: string): StatValue =>
+    stages?.ok
+      ? { value: stages[pick], source: "live-rex", note, asOf: stages.readAt.slice(0, 10) }
+      : { value: null, source: "unavailable", note: stages ? stages.error : "Reading the Listings board…" };
+  const funnelLiveListings = fromBoard(
+    "available",
+    "Live: listings Available on the Listings board as at TODAY - published to the portals, not let agreed, and not let through an accepted offer or Propoly. A stock, not the selected month's."
+  );
+  // The forward pipeline is Propoly's deals still in progression, the same
+  // figure as the Move-ins & Pipeline tab's strip. Not "let agreed" by any
+  // listing flag: REX's stays on long after the tenant has moved in.
+  const funnelPipeline: StatValue = live?.propoly
+    ? {
+        value: live.propoly.pipelineTotal,
+        source: "live-propoly",
+        note: "Live from Propoly - deals in progression now (agreed, not yet moved in), the same count as the Move-ins & Pipeline tab. A stock, not the selected month's.",
+        asOf: live.propoly.generatedAt.slice(0, 10),
+      }
+    : { value: null, source: "unavailable", note: liveLoading ? "Reading Propoly…" : "Propoly's deals couldn't be read just now, so the pipeline isn't shown rather than a stale count." };
   const funnelMoveIns: StatValue =
     live?.propoly && live.propoly.moveInsThisMonth != null
       ? {
@@ -1180,12 +1201,7 @@ export default function Overview({ month }: { month: string }) {
     `Live from Propoly - completed move-ins ${ytdWindowLabel}. Susan's Move-In Report also counts managed transfers + marketing-only, so hers can run higher.`,
     "live-propoly"
   );
-  const hlPipeline: StatValue = live?.totals
-    ? asLive(
-        live.totals.pipeline,
-        "Live from REX - let-agreed forward pipeline RIGHT NOW ."
-      )
-    : d.headline.pipeline;
+  const hlPipeline: StatValue = funnelPipeline;
 
   // Conversion rates go live only when BOTH inputs are live - a live/snapshot
   // hybrid ratio would be a made-up number.
@@ -1449,7 +1465,7 @@ export default function Overview({ month }: { month: string }) {
             }
             compact
           />
-          <Tile label="Pipeline now" stat={hlPipeline} compact />
+          <Tile label="Pipeline now" stat={hlPipeline} compact loading={!live?.propoly && liveLoading} />
         </div>
       </div>
 
@@ -1501,8 +1517,8 @@ export default function Overview({ month }: { month: string }) {
           <Tile label="Viewings" stat={effViewings} flag={hViewings?.flag} />
           <Tile label="Applications" stat={effApplications} flag={hApplications?.flag} />
           <Tile label="Move-ins" stat={effMoveIns} flag={hMoveIns?.flag} />
-          <Tile label="Live Listings" stat={funnelLiveListings} />
-          <Tile label="Forward Pipeline" stat={funnelPipeline} />
+          <Tile label="Live Listings" stat={funnelLiveListings} loading={stages === null} />
+          <Tile label="Forward Pipeline" stat={funnelPipeline} loading={!live?.propoly && liveLoading} />
         </div>
       </Section>
 
