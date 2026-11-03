@@ -1,7 +1,7 @@
 import "server-only";
 import type { AssistantTool, ToolContext } from "@/lib/assistant-tools";
 import { libraryEntries, searchLibrary } from "@/lib/marketing-library";
-import { bookFor } from "@/lib/listings-cache";
+import { onTheirBook } from "@/lib/assistant-book";
 import { fetchViewingsFor } from "@/lib/rex-viewings";
 import { feedbackForListing } from "@/lib/rex-feedback";
 import { osFeedbackFor } from "@/lib/viewing-feedback-store";
@@ -42,10 +42,9 @@ const money = (n: number | null | undefined, period?: string | null) =>
 async function theirListing(listingId: string, ctx: ToolContext): Promise<{ ok: true; propertyId: string | null; address: string } | { ok: false; error: string }> {
   if (ctx.scope.unlinked) return { ok: false, error: "I can't tell which REX user you are, so I can't read any property. Ask James to link your account." };
   if (!listingId) return { ok: false, error: "I need a listingId - use find_property first." };
-  const book = await bookFor(ctx.scope.rexUserId);
-  const l = book.listings.find((x) => String(x.id) === listingId);
-  if (!l && !ctx.scope.everything) return { ok: false, error: "That property isn't on your book, so I can't read it for you." };
-  return { ok: true, propertyId: l?.propertyId ? String(l.propertyId) : null, address: l ? `${l.name}, ${l.locality}` : `listing ${listingId}` };
+  const { listing, home, propertyId, address } = await onTheirBook(ctx.scope.rexUserId, listingId);
+  if (!listing && !home && !ctx.scope.everything) return { ok: false, error: "That property isn't on your book, so I can't read it for you." };
+  return { ok: true, propertyId, address: address ?? `listing ${listingId}` };
 }
 
 const listingOnly = {

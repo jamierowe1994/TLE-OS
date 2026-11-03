@@ -2,6 +2,7 @@ import { noDashes } from "@/lib/no-dashes";
 import "server-only";
 import type { Scope } from "@/lib/scope";
 import { bookFor, invalidateListingBook } from "@/lib/listings-cache";
+import { onTheirBook } from "@/lib/assistant-book";
 import { getListingContacts } from "@/lib/business/rex-stats";
 import { isExpiredToken, rexCall, RexWriteBlocked } from "@/lib/rex";
 import { previewMerge } from "@/lib/rex-mailmerge";
@@ -179,13 +180,12 @@ async function listingInScope(
   if (scope.unlinked) {
     return { ok: false, why: "We can't tell which REX user you are, so I can't act on any property." };
   }
-  const book = await bookFor(scope.rexUserId);
-  const found = book.listings.find((l) => String(l.id) === String(listingId));
-  if (!found) {
+  const { listing, home, address } = await onTheirBook(scope.rexUserId, String(listingId));
+  if (!listing && !home) {
     if (scope.everything) return { ok: true, address: `listing ${listingId}` };
     return { ok: false, why: "That property isn't on your book, so I can't act on it." };
   }
-  return { ok: true, address: `${found.name}, ${found.locality}` };
+  return { ok: true, address: address ?? `listing ${listingId}` };
 }
 
 /**

@@ -12,6 +12,7 @@ import { requiredCerts, statusOf, type CompProperty } from "@/lib/compliance";
 import type { ActionProposal } from "@/lib/assistant-actions";
 import { GUIDE_TARGETS, guideTarget } from "@/lib/steve-guide";
 import { managedBookFor } from "@/lib/managed-book-cache";
+import { onTheirBook } from "@/lib/assistant-book";
 import { listAppraisals } from "@/lib/appraisal-store";
 import { MORE_TOOLS } from "@/lib/assistant-steve-more";
 import { PA_TOOLS } from "@/lib/assistant-steve-pa";
@@ -175,6 +176,27 @@ const findProperty: AssistantTool = {
         onYourBook: true,
       }));
 
+    /* ...and the homes of theirs we look after, which are just as much their
+       book (Lorna, 2 Nov 2026: 44 Rosedale Grove, let and in her Portfolio,
+       came back as REX-only "not on your listings" and Steve told her it
+       wasn't hers). */
+    const managed = await managedBookFor(ctx.scope.rexUserId).catch(() => null);
+    const listed = new Set(mine.map((m) => String(m.listingId)));
+    const homes = (managed?.book.properties ?? [])
+      .filter((m) => !listed.has(String(m.listingId)) && (hits(m.name, m.locality, m.address) || String(m.listingId) === query))
+      .slice(0, 8)
+      .map((m) => ({
+        listingId: m.listingId,
+        propertyId: m.propertyId,
+        address: `${m.name}, ${m.locality}`,
+        opens: { kind: "portfolio" as const, id: String(m.listingId) },
+        rent: m.rent ? `£${m.rent.toLocaleString("en-GB")} ${m.rentPeriod === "week" ? "pw" : "pcm"}` : "not recorded",
+        status: `let, a home of yours we look after${m.service ? ` (${m.service})` : ""}${m.letSince ? `, let since ${m.letSince}` : ""}`,
+        agent: m.agent?.name ?? "not recorded",
+        landlord: m.landlord?.name ?? "not recorded on the home - try property_contacts",
+        onYourBook: true,
+      }));
+
     /* 2. REX's address index, for anything with no listing behind it. */
     let others: { propertyId: string; address: string; onYourBook: false; note: string }[] = [];
     if (rexConfigured()) {
@@ -185,7 +207,7 @@ const findProperty: AssistantTool = {
         res = await rexCall("Properties", "autocomplete", { search_string: query.split(",")[0].trim(), limit: 12 });
       }
       if (res.ok) {
-        const known = new Set(book.listings.map((l) => String(l.propertyId)));
+        const known = new Set([...book.listings.map((l) => String(l.propertyId)), ...homes.map((h) => String(h.propertyId))]);
         others = rowsOf(res.result)
           .filter((r) => !known.has(String(r.id)))
           .slice(0, 8)
@@ -203,7 +225,6 @@ const findProperty: AssistantTool = {
           A managed home opens on Portfolio, an appraisal on its own page.
           Both are scoped the same way the screens are. */
     const files: { kind: FileKind; id: string; address: string; what: string }[] = [];
-    const managed = await managedBookFor(ctx.scope.rexUserId).catch(() => null);
     for (const m of managed?.book.properties ?? []) {
       if (files.length >= 6) break;
       if (!hits(m.name, m.locality, m.address)) continue;
@@ -225,14 +246,14 @@ const findProperty: AssistantTool = {
     return {
       query,
       searchedAs: ctx.scope.label || "you",
-      matches: [...mine, ...others],
+      matches: [...mine, ...homes, ...others],
       /* What can be opened on screen for these, with offer_to_open. */
       files: [...mine.map((m) => ({ kind: "listing" as const, id: String(m.listingId), address: m.address, what: "the listing" })), ...files],
-      found: mine.length + others.length + files.length,
+      found: mine.length + homes.length + others.length + files.length,
       ...(hidden
         ? { note: `${hidden} further ${hidden === 1 ? "match is" : "matches are"} in REX but not on your book, so I haven't listed ${hidden === 1 ? "it" : "them"}.` }
         : {}),
-      ...(mine.length + others.length + files.length === 0
+      ...(mine.length + homes.length + others.length + files.length === 0
         ? { note: "Nothing matched. It may be spelled differently in REX, or belong to another brand in the group." }
         : {}),
     };
@@ -267,18 +288,40 @@ const propertyDetail: AssistantTool = {
 
     /* Scope is enforced on the BOOK, not on the detail call: REX will happily
        read any listing by id, so the check has to be ours. */
-    const book = await bookFor(ctx.scope.rexUserId);
-    const listing = book.listings.find((l) => String(l.id) === listingId);
-    if (!listing && !ctx.scope.everything) {
+    const { listing, home, address } = await onTheirBook(ctx.scope.rexUserId, listingId);
+    if (!listing && !home && !ctx.scope.everything) {
       return { error: "That property isn't on your book, so I can't open it. If it should be, ask James to check who it's assigned to in REX." };
     }
 
     const detail = await getListingDetail(listingId);
-    if (!detail && !listing) return { error: "REX wouldn't answer for that property." };
+    if (!detail && !listing && !home) return { error: "REX wouldn't answer for that property." };
+
+    /* A home of theirs we look after: what Portfolio holds for it. */
+    if (home) {
+      return {
+        listingId,
+        address,
+        status: `let, a home of yours we look after${home.service ? ` (${home.service})` : ""}`,
+        agent: home.agent?.name ?? "not recorded",
+        letSince: orMissing(home.letSince),
+        landlord: home.landlord?.name ?? "not recorded on the home",
+        tenants: home.tenants.length ? home.tenants.map((t) => t.name) : "none recorded on the home",
+        rent: home.rent ? `£${home.rent.toLocaleString("en-GB")} ${home.rentPeriod === "week" ? "pw" : "pcm"}` : "not recorded",
+        bedrooms: orMissing(detail?.bedrooms),
+        bathrooms: orMissing(detail?.bathrooms),
+        receptions: orMissing(detail?.receptions),
+        propertyType: orMissing(detail?.propertyType),
+        furnishing: orMissing(detail?.furnishing),
+        councilTaxBand: orMissing(detail?.councilTaxBand),
+        deposit: orMissing(detail?.deposit),
+        epcExpiry: orMissing(home.epcExpiry),
+        epcRating: orMissing(home.epcRating),
+      };
+    }
 
     return {
       listingId,
-      address: listing ? `${listing.name}, ${listing.locality}` : "on REX, not on your book",
+      address: address ?? "on REX, not on your book",
       bedrooms: orMissing(detail?.bedrooms),
       bathrooms: orMissing(detail?.bathrooms),
       receptions: orMissing(detail?.receptions),
@@ -320,12 +363,20 @@ const propertyContacts: AssistantTool = {
     const listingId = str(input.listingId);
     if (!listingId) return { error: "I need a listingId — use find_property first." };
 
-    const book = await bookFor(ctx.scope.rexUserId);
-    if (!book.listings.some((l) => String(l.id) === listingId) && !ctx.scope.everything) {
+    const { listing, home } = await onTheirBook(ctx.scope.rexUserId, listingId);
+    if (!listing && !home && !ctx.scope.everything) {
       return { error: "That property isn't on your book, so I can't show you its contacts." };
     }
 
-    const people = await getListingContacts(listingId);
+    let people = await getListingContacts(listingId);
+    /* REX names nobody on the listing, but the home in Portfolio has its
+       landlord and tenants: those are the people. */
+    if (!people.length && home && (home.landlord || home.tenants.length)) {
+      people = [
+        ...(home.landlord ? [{ id: home.landlord.contactId, name: home.landlord.name, role: "Landlord", email: home.landlord.email, phone: home.landlord.phone }] : []),
+        ...home.tenants.map((t) => ({ id: t.contactId, name: t.name, role: "Tenant", email: t.email, phone: t.phone })),
+      ];
+    }
     if (!people.length) {
       return { listingId, contacts: [], note: "REX returned nothing for this property. That means the lookup failed or nobody is attached — it does NOT mean the property has no landlord. Worth checking in REX directly." };
     }
@@ -379,8 +430,8 @@ const complianceDue: AssistantTool = {
        is narrowed to the caller's own properties here rather than trusted. */
     const wanted = str(input.listingId);
     const mineByProperty = new Set(listings.listings.map((l) => String(l.propertyId)));
-    const one = wanted ? listings.listings.find((l) => String(l.id) === wanted) : null;
-    if (wanted && !one && !ctx.scope.everything) {
+    const one = wanted ? await onTheirBook(ctx.scope.rexUserId, wanted) : null;
+    if (wanted && !one?.listing && !one?.home && !ctx.scope.everything) {
       return { error: "That property isn't on your book, so I can't check its certificates." };
     }
 
@@ -412,7 +463,7 @@ const complianceDue: AssistantTool = {
     rows.sort((a, b) => (typeof a.daysLeft === "number" ? a.daysLeft : -9999) - (typeof b.daysLeft === "number" ? b.daysLeft : -9999));
 
     return {
-      scope: one ? `${one.name}, ${one.locality}` : ctx.scope.everything ? "the whole business" : `${ctx.scope.label || "your"} book`,
+      scope: one ? one.address ?? `listing ${wanted}` : ctx.scope.everything ? "the whole business" : `${ctx.scope.label || "your"} book`,
       propertiesChecked: scoped.length,
       outstanding: rows.slice(0, 40),
       total: rows.length,
@@ -438,8 +489,8 @@ const portalPresence: AssistantTool = {
     if (refusal) return refusal;
     const listingId = str(input.listingId);
     if (!listingId) return { error: "I need a listingId — use find_property first." };
-    const book = await bookFor(ctx.scope.rexUserId);
-    if (!book.listings.some((l) => String(l.id) === listingId) && !ctx.scope.everything) {
+    const { listing, home } = await onTheirBook(ctx.scope.rexUserId, listingId);
+    if (!listing && !home && !ctx.scope.everything) {
       return { error: "That property isn't on your book." };
     }
     const links = await portalLinksFor(listingId);
@@ -519,12 +570,11 @@ async function scopedListing(listingId: string, ctx: ToolContext) {
   const refusal = refuseUnscoped(ctx.scope);
   if (refusal) return refusal;
   if (!listingId) return { error: "I need a listingId — use find_property first." };
-  const book = await bookFor(ctx.scope.rexUserId);
-  const found = book.listings.find((l) => String(l.id) === listingId);
-  if (!found && !ctx.scope.everything) {
+  const { listing, home, address } = await onTheirBook(ctx.scope.rexUserId, listingId);
+  if (!listing && !home && !ctx.scope.everything) {
     return { error: "That property isn't on your book, so I can't act on it." };
   }
-  return { listing: found ?? null, address: found ? `${found.name}, ${found.locality}` : `listing ${listingId}` };
+  return { listing, address: address ?? `listing ${listingId}` };
 }
 
 const proposeNote: AssistantTool = {
