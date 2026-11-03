@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import { DEFAULT_PLC_APPROVERS } from "@/lib/plc";
+import { DEFAULT_PLC_APPROVERS, type PlcViewer } from "@/lib/plc";
+import { can } from "@/lib/roles";
 
 /**
  * Who may give a PLC pack its final approval.
@@ -99,4 +100,25 @@ export async function finalApprover(): Promise<FinalApprover | null> {
   const name = (r.name ?? "").trim() || r.email.split("@")[0];
   const first = name.split(/\s+/)[0];
   return { email: r.email, name, firstName: first.charAt(0).toUpperCase() + first.slice(1) };
+}
+
+/**
+ * The person looking at the PLC queue or a pack, for plcTurn in lib/plc
+ * (Susan Liles, 3 Nov 2026). Built here and sent with the queue and with each
+ * pack, so the list and the pack read whose turn it is from the same facts.
+ */
+export async function plcViewer(me: { email?: string | null; role: string } | null): Promise<PlcViewer> {
+  const email = (me?.email ?? "").trim().toLowerCase() || null;
+  const [approver, final, approverNames] = await Promise.all([
+    isPlcApprover(email),
+    finalApprover().catch(() => null),
+    plcApproverNames(),
+  ]);
+  return {
+    email,
+    canCheck: Boolean(me && can(me.role, "work:plc")),
+    approver,
+    finalApprover: Boolean(email && final && final.email === email),
+    approverNames,
+  };
 }

@@ -9,8 +9,8 @@ import PreTenancyHero from "@/components/pretenancy/Hero";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import { PlcEmails } from "@/components/MailThreads";
 import PlcSplitReview, { type SplitSample } from "@/components/PlcSplitReview";
-import { api, Note, Pill, prettyDate, prettyWhen, PLC_GREEN, PLC_RED, SentAnywayTag, FinalAskTag, type Loaded } from "@/components/PlcReview";
-import type { PlcCase } from "@/lib/plc";
+import { api, Note, Pill, prettyDate, prettyWhen, PLC_GREEN, PLC_RED, SentAnywayTag, TurnTag, type Loaded } from "@/components/PlcReview";
+import { plcTurn, type PlcCase, type PlcViewer } from "@/lib/plc";
 
 /**
  * The PLC queue: what is with compliance, longest wait first.
@@ -51,7 +51,12 @@ import type { PlcCase } from "@/lib/plc";
  * (the queue, as before), sent back (with the agent, or being fixed),
  * approved, declined, and everything together.
  */
-type Stage = "waiting" | "back" | "approved" | "declined" | "all";
+/* "Waiting on you" was every open pack, whatever its stage (Susan Liles,
+   3 Nov 2026: 12 South Chesters Lane, at First check, sat under it on her
+   screen). It is now only the packs whose turn is the viewer's, by plcTurn
+   in lib/plc - the same reading the pack's own head makes - and the rest of
+   the open packs are under "With others", each saying who has it. */
+type Stage = "waiting" | "others" | "back" | "approved" | "declined" | "all";
 const OPEN_STATES: PlcCase["state"][] = ["submitted", "scanning", "reviewing", "checked"];
 /** Sent back: deferred to the agent, or reopened by them and being fixed (the reason stays on it). */
 const isBack = (c: PlcCase) => c.state === "deferred" || (c.state === "assembling" && Boolean(c.decidedAt));
@@ -95,6 +100,8 @@ function Tile({ icon, tone, value, label, note }: { icon: string; tone: "green" 
 
 export default function PlcQueuePage() {
   const [queue, setQueue] = useState<PlcCase[] | null>(null);
+  /* Who is looking, from the server, for plcTurn. Null on the sample: every open pack is then yours, as before. */
+  const [viewer, setViewer] = useState<PlcViewer | null>(null);
   const [stage, setStage] = useState<Stage>("waiting");
   const [openId, setOpenId] = useState<string | null>(null);
   const [open, setOpen] = useState<Loaded | null>(null);
@@ -152,7 +159,8 @@ export default function PlcQueuePage() {
         return;
       }
       /* Every pack, so the page can show each stage, not just the queue (23 Oct 2026). */
-      const res = await api<{ cases: PlcCase[] }>("/api/plc");
+      const res = await api<{ cases: PlcCase[]; viewer?: PlcViewer }>("/api/plc");
+      setViewer(res.viewer ?? null);
       setQueue(res.cases);
     } catch (e) {
       setError((e as Error).message);
@@ -204,9 +212,13 @@ export default function PlcQueuePage() {
 
   const every = (queue ?? []).filter(handedOver);
   /* The queue: what is with the team, longest wait first, as it always was. */
-  const list = every
+  const openPacks = every
     .filter((c) => OPEN_STATES.includes(c.state))
     .sort((a, b) => (a.submittedAt ?? a.createdAt).localeCompare(b.submittedAt ?? b.createdAt));
+  /* Yours, and with somebody else: one reading, plcTurn (3 Nov 2026). */
+  const isMine = (c: PlcCase) => (viewer ? plcTurn(c, viewer)?.mine ?? false : true);
+  const list = openPacks.filter(isMine);
+  const others = openPacks.filter((c) => !isMine(c));
   const byLatest = (xs: PlcCase[]) => [...xs].sort((a, b) => lastMove(b).localeCompare(lastMove(a)));
   const back = byLatest(every.filter(isBack));
   const approved = byLatest(every.filter((c) => c.state === "approved"));
@@ -214,17 +226,20 @@ export default function PlcQueuePage() {
   const all = byLatest(every);
   const stages: { id: Stage; label: string; n: number }[] = [
     { id: "waiting", label: "Waiting on you", n: list.length },
+    { id: "others", label: "With others", n: others.length },
     { id: "back", label: "Sent back", n: back.length },
     { id: "approved", label: "Approved", n: approved.length },
     { id: "declined", label: "Declined", n: declined.length },
     { id: "all", label: "Everything", n: all.length },
   ];
+  const queued = stage === "others" ? others : list;
   const shown = stage === "back" ? back : stage === "approved" ? approved : stage === "declined" ? declined : stage === "all" ? all : list;
   /* Not read is not empty (Rig run 4, P-075): with the queue unread the tiles
      said 0 and "The queue is clear" under the error. */
   const unread = queue === null && Boolean(error);
-  const overdue = list.filter((c) => ageOf(c.submittedAt).over);
-  const soon = list.filter((c) => {
+  /* The 48 hours and the move-in week stay the team's measure: every open pack. */
+  const overdue = openPacks.filter((c) => ageOf(c.submittedAt).over);
+  const soon = openPacks.filter((c) => {
     const d = daysUntil(c.moveInDate);
     return d != null && d <= 7;
   });
@@ -249,7 +264,7 @@ export default function PlcQueuePage() {
 
       {/* ── the three numbers ── */}
       <div className="fade-up grid gap-3 sm:grid-cols-3">
-        <Tile icon="shield" tone={list.length ? "green" : "green"} value={unread ? "—" : list.length} label="Waiting on you" note={unread ? "Couldn't read the queue" : list.length ? "Longest wait first" : "The queue is clear"} />
+        <Tile icon="shield" tone={list.length ? "green" : "green"} value={unread ? "—" : list.length} label="Waiting on you" note={unread ? "Couldn't read the queue" : list.length ? "Longest wait first" : others.length ? `${others.length} with others` : "The queue is clear"} />
         <Tile icon="clock" tone="red" value={unread ? "—" : overdue.length} label={`Past ${TARGET_HOURS} hours`} note={unread ? "Couldn't read the queue" : overdue.length ? "The agent has been told 48" : "Everything inside the target"} />
         <Tile icon="key" tone={soon.length ? "red" : "green"} value={unread ? "—" : soon.length} label="Moving in this week" note={unread ? "Couldn't read the queue" : soon.length ? "Decide these first" : "Nothing this close"} />
       </div>
@@ -273,7 +288,7 @@ export default function PlcQueuePage() {
       )}
 
       {/* ── the other stages: newest move first, each opening the same review ── */}
-      {!unread && stage !== "waiting" && (
+      {!unread && stage !== "waiting" && stage !== "others" && (
         shown.length === 0 ? (
           <section className="fade-up rounded-[22px] border border-line/70 bg-card p-6 text-[13px] text-muted">
             {stage === "back" ? "Nothing sent back at the moment." : stage === "approved" ? "Nothing approved yet." : stage === "declined" ? "Nothing declined." : "No packs handed over yet."}
@@ -320,18 +335,24 @@ export default function PlcQueuePage() {
       )}
 
       {/* ── the queue ── */}
-      {unread || stage !== "waiting" ? null : list.length === 0 ? (
+      {unread || (stage !== "waiting" && stage !== "others") ? null : queued.length === 0 ? (
         <section className="fade-up flex items-center gap-4 rounded-[22px] border border-line/70 bg-card p-6">
           <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${PLC_GREEN}`}>✓</span>
           <div>
-            <h2 className="text-[17px] font-bold">Nothing waiting</h2>
-            <p className="mt-0.5 text-[13px] text-muted">Every pack an agent has handed over has been decided.</p>
+            <h2 className="text-[17px] font-bold">{stage === "others" ? "Nothing with others" : "Nothing waiting"}</h2>
+            <p className="mt-0.5 text-[13px] text-muted">
+              {stage === "others"
+                ? "Every open pack is with you."
+                : others.length
+                  ? `${others.length === 1 ? "One pack is" : `${others.length} packs are`} with somebody else - see With others.`
+                  : "Every pack an agent has handed over has been decided."}
+            </p>
           </div>
         </section>
       ) : (
         <section className="fade-up rounded-[22px] border border-line/70 bg-card p-2">
           <ul className="divide-y divide-line/50">
-            {list.map((c) => {
+            {queued.map((c) => {
               const age = ageOf(c.submittedAt);
               const d = daysUntil(c.moveInDate);
               return (
@@ -354,7 +375,7 @@ export default function PlcQueuePage() {
                       </span>
                     </span>
                     <SentAnywayTag c={c} />
-                    <FinalAskTag c={c} />
+                    <TurnTag c={c} viewer={viewer} />
                     {/* Sent back once and handed over again: the old reason is still on it. */}
                     {c.decidedAt && <span className="shrink-0 whitespace-nowrap rounded-full bg-page px-2.5 py-1 text-[11px] font-semibold text-muted" title={c.decisionNote ? `Sent back: ${c.decisionNote}` : undefined}>Resent after a send-back</span>}
                     <Pill state={c.state} />
@@ -402,7 +423,7 @@ export default function PlcQueuePage() {
                       </span>
                       <Pill state={openCase.state} />
                       <SentAnywayTag c={openCase} />
-                      <FinalAskTag c={openCase} />
+                      <TurnTag c={openCase} viewer={open?.me?.viewer ?? viewer} />
                       {ageOf(openCase.submittedAt).over ? <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${PLC_RED}`}>Past {TARGET_HOURS} hours</span> : null}
                     </div>
                   </div>

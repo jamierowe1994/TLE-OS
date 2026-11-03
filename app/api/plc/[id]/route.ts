@@ -21,7 +21,7 @@ import {
 import { clausesAnswered, gateFor, missingDocuments, PLC_CHECKS, readingStillFresh, rlpAnswered, scanSummary, softenWaived, sortFindings, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName, currentUser } from "@/lib/plc-actor";
-import { isPlcApprover, plcApproverNames } from "@/lib/plc-approvers";
+import { isPlcApprover, plcApproverNames, plcViewer } from "@/lib/plc-approvers";
 import { rlpEmail, rlpTeamEmail, sendRlpRequest } from "@/lib/plc-rlp";
 import { can } from "@/lib/roles";
 import { requireCapability } from "@/lib/admin";
@@ -122,6 +122,9 @@ async function payload(c: PlcCase | null, req: NextRequest) {
       /* Send to Susan for Final Approval (20 Oct 2026): who it would go to,
          and whether this person may press it. */
       finalAsk: await finalAskOffer(c, me, canCheck),
+      /* Who is looking, for plcTurn: the pack's head says whose turn it is
+         from the same facts the queue row reads (Susan Liles, 3 Nov 2026). */
+      viewer: await plcViewer(me),
     },
     rlp: c.rlpWanted
       ? { preview: rlpEmail(c), teamSet: Boolean(rlpTeamEmail()), switchOn: rlpOn }

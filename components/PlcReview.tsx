@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { CopyButton } from "@/components/Bits";
 import type { AnswerGroup, TenantAnswers } from "@/lib/plc-tenant-answers";
-import { finalAskNow, finalAskSent, gateOf, sentAnywayNow, type Check, type CheckId, type Finding, type PlcAiSummary, type PlcCase, type SentAnyway } from "@/lib/plc";
+import { finalAskNow, finalAskSent, gateOf, plcTurn, sentAnywayNow, type PlcViewer, type Check, type CheckId, type Finding, type PlcAiSummary, type PlcCase, type SentAnyway } from "@/lib/plc";
 
 /**
  * The compliance side of a PLC handover, and the pieces it is built from.
@@ -36,6 +36,8 @@ export type Loaded = {
     approvers?: string;
     /** Send to Susan for Final Approval: who it goes to, and whether this person may press it. */
     finalAsk?: { approver: { name: string; firstName: string } | null; canSend: boolean; blocked: string | null };
+    /** The person looking, for plcTurn in lib/plc (3 Nov 2026). */
+    viewer?: PlcViewer;
   };
   /** The RLP request as it would go, when the agent asked for cover. */
   rlp?: { preview: { subject: string; html: string; files: string[] }; teamSet: boolean; switchOn: boolean } | null;
@@ -224,6 +226,26 @@ export function FinalAskTag({ c }: { c: Pick<PlcCase, "finalAsks" | "checkedAt" 
   return (
     <span className="shrink-0 whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
       With {ask.test ? "you (test)" : firstOf(ask.toName)}
+    </span>
+  );
+}
+
+/**
+ * Whose turn the pack is, on the queue row and on the pack's head alike
+ * (Susan Liles, 3 Nov 2026): both read plcTurn with the viewer the server
+ * sent, so a pack at First check says "With Josel or Kirstie" to Susan in
+ * both places. Without a viewer (the sample) it is the old final-ask tag.
+ */
+export function TurnTag({ c, viewer }: { c: Pick<PlcCase, "state" | "checkedAt" | "checkedByEmail" | "finalAsks">; viewer?: PlcViewer | null }) {
+  if (!viewer) return <FinalAskTag c={c} />;
+  const turn = plcTurn(c, viewer);
+  if (!turn) return null;
+  return (
+    <span
+      data-plc-turn={turn.mine ? "mine" : "theirs"}
+      className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${turn.mine ? "bg-accent-soft text-accent-dark" : "bg-amber-50 text-amber-700"}`}
+    >
+      {turn.mine ? "With you" : `With ${turn.with}`}
     </span>
   );
 }

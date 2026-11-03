@@ -8,6 +8,7 @@ import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { moveInToRex } from "@/lib/plc-move-in-rex";
 import { applicationIsIntroOnly } from "@/lib/intro-only";
+import { plcViewer } from "@/lib/plc-approvers";
 
 /**
  * GET  /api/plc          → every handover, newest first
@@ -40,6 +41,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       cases,
+      /* Who is looking, so the queue says whose turn each pack is with
+         plcTurn - the same reading the pack itself makes (3 Nov 2026). */
+      viewer: await plcViewer(actor),
       checks: PLC_CHECKS,
       scanConfigured: scanConfigured(),
     });

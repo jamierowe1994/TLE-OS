@@ -694,6 +694,56 @@ export const finalAskSent = (c: Pick<PlcCase, "finalAsks" | "checkedAt" | "state
   return sent.length ? sent[sent.length - 1] : null;
 };
 
+/**
+ * Whose turn a pack is, for the person looking (Susan Liles, 3 Nov 2026:
+ * "This PLC check shows as waiting on me in the PLC Queue however when I
+ * click onto the property it says it is at first check which should be with
+ * Kirstie"). The queue's "Waiting on you" was every open pack, whatever its
+ * stage, so 12 South Chesters Lane sat under it on Susan's screen while the
+ * pack itself said First check. The queue row, the queue's count and the
+ * pack's own head all read this one function now, with the same viewer from
+ * the server, so they cannot disagree.
+ *
+ * First check (submitted, scanning, reviewing): the compliance team's - Josel
+ * or Kirstie, anyone holding work:plc - but never the final approver's, whose
+ * step is the second one. Final approval (checked): the person it was sent
+ * to, when Send for Final Approval went; otherwise any approver who did not
+ * do the first check. Anything else is with the agent or finished: null.
+ */
+export type PlcViewer = {
+  email: string | null;
+  /** Holds work:plc: may do a first check. */
+  canCheck: boolean;
+  /** On the final approvers list (lib/plc-approvers). */
+  approver: boolean;
+  /** The final approver Send for Final Approval emails (Susan). Her step is the second. */
+  finalApprover: boolean;
+  /** "Kirstie, Michael or Susan", from the approvers list. */
+  approverNames: string;
+};
+
+export type PlcTurn = { mine: boolean; with: string };
+
+export function plcTurn(
+  c: Pick<PlcCase, "state" | "checkedAt" | "checkedByEmail" | "finalAsks">,
+  v: PlcViewer
+): PlcTurn | null {
+  const me = (v.email ?? "").trim().toLowerCase();
+  if (c.state === "submitted" || c.state === "scanning" || c.state === "reviewing") {
+    return { mine: v.canCheck && !v.finalApprover, with: waitingOn("reviewing") };
+  }
+  if (c.state === "checked") {
+    const sent = finalAskSent(c);
+    if (sent && !sent.test) {
+      const to = sent.to.trim().toLowerCase();
+      return { mine: me !== "" && me === to, with: sent.toName.trim().split(/\s+/)[0] || sent.toName };
+    }
+    const checker = (c.checkedByEmail ?? "").trim().toLowerCase();
+    return { mine: v.approver && me !== "" && me !== checker, with: v.approverNames };
+  }
+  return null;
+}
+
 /** One document's fate in a push to Propoly. */
 export type PushResult = {
   checkId: CheckId;
