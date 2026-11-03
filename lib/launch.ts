@@ -256,6 +256,11 @@ export async function launchBoard(): Promise<{ toInvite: LaunchPerson[]; on: OnP
     claimed.add(email);
     const inv = inviteBy.get(email);
     const left = departed.has(d.key) || [...d.emails].some((e) => departed.has(e));
+    /* Somebody who has left comes off the list altogether, unless James
+       ticked them himself (Susan Liles, 3 Nov 2026: Jay Gorania left over a
+       year ago and still sat on Invites, because REX keeps him active and
+       Remove only clears people added by hand). */
+    if (left && !(keep && !keep.excluded)) continue;
     if (left) d.sources.add("departed");
     toInvite.push({
       email,
