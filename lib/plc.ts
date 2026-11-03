@@ -155,7 +155,11 @@ export const PLC_CHECKS: Check[] = [
     needs: "Referencing outcome for each tenant",
     scan: "reading",
     why: "Affordability and history, per person on the tenancy rather than per household.",
-    gate: "required",
+    /* Conditional, not required (Richard Callow, 3 Nov 2026, 20 Coghill: "a
+       management transfer which doesn't need tenant references"). Tenants
+       already living in a home we take over were never referenced by us, so
+       the agent says why and the first check reads it beside the empty slot. */
+    gate: "conditional",
   },
   {
     id: "guarantor-checks",
@@ -285,6 +289,7 @@ export const checkById = (id: CheckId) => PLC_CHECKS.find((c) => c.id === id) ??
 export const whyPlaceholder = (id: CheckId): string =>
   ({
     "gas-safety": "Why not needed? e.g. No gas supply to the property",
+    "tenant-checks": "Why not needed? e.g. Management transfer, tenants already living there",
     "guarantor-checks": "Why not needed? e.g. No guarantor on this tenancy",
     pat: "Why not needed? e.g. The landlord supplies no electrical appliances",
     "fire-safety": "Why not needed? e.g. Booked for the 8th, will follow",
