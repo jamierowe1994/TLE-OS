@@ -812,6 +812,14 @@ export interface PropolyBusinessStats {
   /** Completed deals whose move-in falls in `month`; null when the completed
    *  list could not be read - never 0 for "unknown" (Rig run 4, P-079). */
   moveInsThisMonth: number | null;
+  /**
+   * The same two figures split by the property's manager (Susan Liles, 3 Nov
+   * 2026), for the Agents tab's per-agent KPIs. Agent is null where Propoly's
+   * property book has no manager for the home - kept, so each split still adds
+   * up to the figure above it. moveInsByAgent is null when moveInsThisMonth is.
+   */
+  pipelineByAgent?: Array<{ agent: string | null; count: number }>;
+  moveInsByAgent?: Array<{ agent: string | null; count: number }> | null;
   generatedAt: string;
 }
 
@@ -1042,9 +1050,15 @@ export async function getPropolyBusinessStats(
     const deals = await fetchAllDeals();
     if (!deals) return null;
 
-    const completes = await ensureCompletes();
+    const [completes, managerMap] = await Promise.all([ensureCompletes(), propertyManagers()]);
 
     const active = deals.filter((d) => d.statusKey !== "cancelled");
+    const movedIn = completes ? completes.filter((c) => c.date?.startsWith(month)) : null;
+    const split = (names: Array<string | null>) => {
+      const by = new Map<string | null, number>();
+      for (const n of names) by.set(n, (by.get(n) ?? 0) + 1);
+      return [...by.entries()].map(([agent, count]) => ({ agent, count }));
+    };
     return {
       month,
       pipelineTotal: active.length,
@@ -1053,7 +1067,11 @@ export async function getPropolyBusinessStats(
         label: STATUS_INFO[key].label,
         count: active.filter((d) => d.statusKey === key).length,
       })),
-      moveInsThisMonth: completes ? completes.filter((c) => c.date?.startsWith(month)).length : null,
+      moveInsThisMonth: movedIn ? movedIn.length : null,
+      pipelineByAgent: split(active.map((d) => d.managerName)),
+      moveInsByAgent: movedIn
+        ? split(movedIn.map((c) => (c.propertyUuid ? managerMap?.get(c.propertyUuid)?.name ?? null : null)))
+        : null,
       generatedAt: new Date().toISOString(),
     };
   })();

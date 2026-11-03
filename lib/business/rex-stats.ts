@@ -79,12 +79,6 @@ async function searchRows(
   }
 }
 
-// Count rows a search returns, or null on any failure.
-async function countSearch(service: string, criteria: Criterion[]): Promise<number | null> {
-  const rows = await searchRows(service, criteria);
-  return rows ? rows.length : null;
-}
-
 async function probeCapabilities(): Promise<CapsCache> {
   const capabilities: Record<string, boolean> = {
     login: false,
@@ -449,6 +443,35 @@ export interface BusinessMonthCounts {
   /** Susan's "combined MAs": recorded + listings created in month whose
    *  property has no same-month recorded appraisal (June check: 41 vs her 40). */
   combinedMas: number | null;
+  /**
+   * The same month's rows, split by the agent on each one, keyed by REX user
+   * id (Susan Liles, 3 Nov 2026: "not showing the breakdown of KPIs for each
+   * agent for October"). The Agents tab used to ask REX per agent through the
+   * old portal's account list, which had two people linked, so every other
+   * partner's MA, listings and pipeline were blank whatever month was picked.
+   *
+   * Split from the rows above rather than asked again, so each column adds up
+   * to the Overview's figure for the month. A figure is null where its search
+   * failed - never zero. Viewings have no owning agent, so are not split.
+   * Rows with no agent on them sit under the key "none".
+   */
+  byAgent?: Record<string, AgentMonthCounts>;
+}
+
+export interface AgentMonthCounts {
+  name: string | null;
+  /** Combined MAs, Susan's definition, split by agent. */
+  marketAppraisals: number | null;
+  newListings: number | null;
+  applications: number | null;
+}
+
+/** The agent on a REX row's link field: `{ id, name }` or `{ id, text }`. */
+function rowAgent(r: Record<string, unknown>, field: string): { id: string; name: string | null } | null {
+  const a = r[field] as { id?: unknown; name?: unknown; text?: unknown } | null | undefined;
+  if (!a || a.id == null || a.id === "") return null;
+  const name = typeof a.name === "string" ? a.name : typeof a.text === "string" ? a.text : null;
+  return { id: String(a.id), name: name?.trim() || null };
 }
 
 const TLE_VIEWING_TYPE_IDS = ["953", "956"];
@@ -528,8 +551,10 @@ export async function getBusinessMonthCounts(
   if (!force && cached && Date.now() - cached.at < MONTH_COUNTS_TTL_MS) return cached.data;
 
   const work = (async (): Promise<BusinessMonthCounts | null> => {
-    const [applications, appraisalRows, listingRows, viewingRows] = await Promise.all([
-      countSearch("TenancyApplications", [
+    const [applicationRows, appraisalRows, listingRows, viewingRows] = await Promise.all([
+      /* Rows rather than a count (3 Nov 2026), so they can be split by agent
+         and are no longer capped at REX's 100-row page. */
+      pagedSearch("TenancyApplications", [
         { name: "application.agent_id", type: "in", value: agentIds },
         { name: "application.date_accepted", type: ">=", value: range.start },
         { name: "application.date_accepted", type: "<=", value: range.end },
@@ -573,6 +598,9 @@ export async function getBusinessMonthCounts(
     // Combined MAs (Susan's definition): recorded appraisals + this month's
     // listings whose property has NO same-month recorded appraisal.
     let combinedMas: number | null = null;
+    /* The listing-only instructions themselves, so they can be put against
+       their listing agent below. */
+    let listingOnlyRows: Array<Record<string, unknown>> | null = null;
     if (marketAppraisals != null && keptListings) {
       // Per-listing property ids (dupes kept — two listings on one property
       // are two instructions); unique set only for the overlap query.
@@ -598,7 +626,13 @@ export async function getBusinessMonthCounts(
               .map((r) => String(((r.property as { id?: unknown }) ?? {}).id ?? ""))
           );
           listingOnly = perListing.filter((p) => !withMa.has(p)).length;
+          listingOnlyRows = keptListings.filter((r) => {
+            const p = String(((r.property as { id?: unknown }) ?? {}).id ?? "");
+            return p !== "" && !withMa.has(p);
+          });
         }
+      } else {
+        listingOnlyRows = [];
       }
       if (listingOnly != null) combinedMas = marketAppraisals + listingOnly;
     }
@@ -607,10 +641,46 @@ export async function getBusinessMonthCounts(
       ? viewingRows.filter((r) => !(r.is_cancelled === true || r.is_cancelled === 1)).length
       : null;
 
+    const applications = applicationRows ? applicationRows.length : null;
+
     if (applications == null && newListings == null && viewings == null && marketAppraisals == null) {
       return null;
     }
-    const data = { applications, newListings, viewings, marketAppraisals, combinedMas };
+
+    /* Per agent, off the same rows (Susan Liles, 3 Nov 2026). A column whose
+       search failed stays null for everybody rather than reading as zero. */
+    const byAgent: Record<string, AgentMonthCounts> = {};
+    const tally = (
+      rows: Array<Record<string, unknown>> | null,
+      field: string,
+      key: "marketAppraisals" | "newListings" | "applications"
+    ) => {
+      for (const r of rows ?? []) {
+        /* A row with no agent on it is kept under "none", so each column
+           still adds up to the business figure. */
+        const a = rowAgent(r, field) ?? { id: "none", name: null };
+        const row = (byAgent[a.id] ??= { name: a.name, marketAppraisals: null, newListings: null, applications: null });
+        row.name ??= a.name;
+        row[key] = (row[key] ?? 0) + 1;
+      }
+    };
+    /* Combined MAs or nothing: recorded appraisals alone would be a smaller
+       figure under the same heading. */
+    if (combinedMas != null) {
+      tally(appraisalRows ? appraisalRows.filter(isLettingsAppraisal) : null, "agent_1", "marketAppraisals");
+      tally(listingOnlyRows, "listing_agent_1", "marketAppraisals");
+    }
+    tally(keptListings, "listing_agent_1", "newListings");
+    tally(applicationRows, "agent", "applications");
+    /* Somebody with a listing but no appraisal has 0 MAs, not an unknown -
+       as long as the search behind that column answered. */
+    for (const row of Object.values(byAgent)) {
+      if (combinedMas != null) row.marketAppraisals ??= 0;
+      if (newListings != null) row.newListings ??= 0;
+      if (applications != null) row.applications ??= 0;
+    }
+
+    const data = { applications, newListings, viewings, marketAppraisals, combinedMas, byAgent };
     monthCountsCache.set(cacheKey, { at: Date.now(), data });
     return data;
   })();

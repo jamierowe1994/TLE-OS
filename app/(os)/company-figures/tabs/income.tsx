@@ -180,6 +180,13 @@ interface LiveMoveIns {
   count: number;
   rentAdded: number;
 }
+/** The parts of Susan's uploaded year sheet this tab reads (lib/business/plan-import YearPlan). */
+interface SheetPlan {
+  months: string[];
+  basis: Record<string, "actual" | "forecast">;
+  lines: Record<string, Record<string, number | null>>;
+  fileName: string | null;
+}
 
 /* The rows this table can show, in Susan's reading order. They must match the
    labels /api/business/income-months answers with, verbatim - the route keys
@@ -204,6 +211,10 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   const [prev, setPrev] = useState<LiveIncome | null>(null);
   const [moveIns, setMoveIns] = useState<LiveMoveIns | null>(null);
   const [margo, setMargo] = useState<{ now: PortfolioMoney | null; prev: PortfolioMoney | null } | null>(null);
+  /* True once the poll below has stopped asking. Margo's boxes said "Loading
+     from PayProp" for ever before (3 Nov 2026), long after anybody was still
+     fetching them. */
+  const [pollDone, setPollDone] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let tries = 0;
@@ -211,6 +222,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     setPrev(null);
     setMoveIns(null);
     setMargo(null);
+    setPollDone(false);
     const ask = () => {
       fetch(`/api/business/payprop-live?month=${month}`, { cache: "no-store" })
         .then((r) => r.json())
@@ -230,8 +242,9 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           // The previous month is a second walk and lands later than this
           // month's, so keep asking until both are in.
           if ((!d.income || !d.prevIncome || !d.margo || !d.prevMargo) && tries++ < 40) setTimeout(ask, 5000);
+          else setPollDone(true);
         })
-        .catch(() => {});
+        .catch(() => !cancelled && setPollDone(true));
     };
     ask();
     return () => {
@@ -315,6 +328,85 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       }
     }
   };
+
+  /**
+   * Licence and joining fees for the month just gone, from Susan's own year
+   * sheet (the P&L upload) - they never run through PayProp.
+   *
+   * Susan Liles, 3 Nov 2026: "Income tab not showing the october breakdown in
+   * all boxes". Four of the final boxes were blank in every month whatever was
+   * uploaded, saying "Needs the P&L upload" when the upload was there. They
+   * now read the sheet's ACTUAL column for that month, and where the sheet
+   * only has a forecast for it (October, on the sheet uploaded 2 Nov) they say
+   * so by name rather than show a forecast as a final, or September's figure.
+   */
+  const [sheet, setSheet] = useState<
+    { state: "loading" } | { state: "error" } | { state: "ready"; plan: SheetPlan | null }
+  >({ state: "loading" });
+  const sheetYear = Number(prevMonthKey.slice(0, 4));
+  useEffect(() => {
+    let alive = true;
+    setSheet({ state: "loading" });
+    fetch(`/api/business/plan?year=${sheetYear}`, { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json() as Promise<{ plan: SheetPlan | null }>;
+      })
+      .then((d) => alive && setSheet({ state: "ready", plan: d.plan ?? null }))
+      .catch(() => alive && setSheet({ state: "error" }));
+    return () => {
+      alive = false;
+    };
+  }, [sheetYear]);
+
+  /** One fee line off the sheet for the month just gone, as income (the sheet
+   *  keeps licence and joining fees as negative costs). */
+  const sheetFee = (key: "licenceFeeIncome" | "joiningFeeIncome") => {
+    if (sheet.state === "loading") return { value: null, source: "unavailable" as const, note: "Loading your uploaded sheet." };
+    if (sheet.state === "error") return gap("Your uploaded sheet couldn't be read just now. Refresh to try again.");
+    const plan = sheet.plan;
+    if (!plan) return gap(`No year sheet for ${sheetYear} has been uploaded. Upload it on the P&L tab and these fill in.`);
+    if (plan.basis[prevMonthKey] !== "actual") {
+      const actuals = plan.months.filter((m) => plan.basis[m] === "actual");
+      const last = actuals[actuals.length - 1];
+      return gap(
+        `${prevLabel} isn't on your uploaded sheet as an actual yet${last ? ` - it has actuals to ${monthLabel(last)}` : ""}. Upload the sheet with ${prevLabel}'s actuals on the P&L tab and this fills in.`
+      );
+    }
+    const raw = plan.lines[key]?.[prevMonthKey];
+    if (raw == null) return gap(`Your uploaded sheet has no figure on this line for ${prevLabel}.`);
+    const v = Math.round(-raw);
+    return { value: v, display: gbp(v), source: "manual" as const, note: `From your uploaded sheet (${plan.fileName ?? "year sheet"}), ${prevLabel} actual.` };
+  };
+  /* What a blank sheet box says on its face, not only in the tooltip. */
+  const sheetGapSub = (() => {
+    if (sheet.state !== "ready") return sheet.state === "error" ? "Your sheet couldn't be read" : undefined;
+    const plan = sheet.plan;
+    if (!plan) return `No ${sheetYear} sheet uploaded on P&L`;
+    if (plan.basis[prevMonthKey] !== "actual") {
+      const actuals = plan.months.filter((m) => plan.basis[m] === "actual");
+      const last = actuals[actuals.length - 1];
+      return `${prevLabel} not on your sheet yet${last ? ` - actuals to ${monthLabel(last)}` : ""}`;
+    }
+    return prev ? `Not on your sheet for ${prevLabel}` : "Waiting on PayProp";
+  })();
+  const licenceStat = sheetFee("licenceFeeIncome");
+  const joiningStat = sheetFee("joiningFeeIncome");
+  /* GCI from PayProp plus the two fee lines from the sheet - each figure from
+     the one source that holds it. Only when all three are in. */
+  const totalIncomeStat =
+    prev && licenceStat.value != null && joiningStat.value != null
+      ? {
+          value: Math.round(prev.combinedGci + licenceStat.value + joiningStat.value),
+          display: gbp(prev.combinedGci + licenceStat.value + joiningStat.value),
+          source: "derived" as const,
+          note: `${netGbp(prev.combinedGci)} GCI exc VAT from PayProp, plus ${gbp(licenceStat.value)} licence and ${gbp(joiningStat.value)} joining fees from your uploaded sheet.`,
+        }
+      : !prev
+        ? gap(`${prevLabel} hasn't been walked from PayProp yet.`)
+        : licenceStat.value == null
+          ? { ...licenceStat, note: `GCI plus licence and joining fees. ${licenceStat.note ?? ""}`.trim() }
+          : { ...joiningStat, note: `GCI plus licence and joining fees. ${joiningStat.note ?? ""}`.trim() };
 
   // Resolved once so the card and its sub-line quote the SAME split - computed
   // twice, the sub kept reading the snapshot while the stat had gone live.
@@ -644,9 +736,10 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
             <StatCard
               key={label}
               label={`Fees, ${label}`}
-              stat={m ? { value: Math.round(m.gciNet), display: gbp(m.gciNet), source: "live-payprop", note: `Fees on the ${m.homes} homes in the portfolio, exc VAT (${gbp(m.gciGross)} inc VAT), before Sean's loan payment.` } : { value: null, source: "live-payprop" }}
+              loading={!m && !pollDone}
+              stat={m ? { value: Math.round(m.gciNet), display: gbp(m.gciNet), source: "live-payprop", note: `Fees on the ${m.homes} homes in the portfolio, exc VAT (${gbp(m.gciGross)} inc VAT), before Sean's loan payment.` } : gap("PayProp hasn't answered for this portfolio yet. Refresh in a few minutes.")}
               big
-              sub={m ? `${m.paying} of ${m.homes} homes paying · ${gbp(m.rent)} rent to landlords` : "Loading from PayProp"}
+              sub={m ? `${m.paying} of ${m.homes} homes paying · ${gbp(m.rent)} rent to landlords` : "PayProp hasn't answered yet - refresh in a few minutes"}
             />
           ))}
         </div>
@@ -749,19 +842,41 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
                 heading that renders the PREVIOUS month's name. On 28 August that
                 put June's £44,309 under "July 2026 - final". The fallback is
                 gone; the live figure or a dash. */}
-            <StatCard label="Total GCI" stat={pv("totalGci") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
+            {/* The same breakdown the live month has above - E&W, Glasgow,
+                partners, rent - so the month just gone reads in full without
+                picking it from the month list (Susan Liles, 3 Nov 2026). */}
+            <StatCard label="Total GCI" loading={!prev && !pollDone} stat={pv("totalGci") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
+            <StatCard label="E&W GCI" loading={!prev && !pollDone} stat={accountGci(prev, "E&W") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
+            <StatCard label="Glasgow GCI" loading={!prev && !pollDone} stat={accountGci(prev, "Glasgow") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
+            <StatCard label="TLE net income" loading={!prev && !pollDone} stat={pv("tleNet") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
             <StatCard
-              label="Total income"
-              stat={gap("GCI plus licence and joining fees. Licence fees need the P&L upload and joining fees run through a separate bank account, so this can't be totalled live yet.")}
+              label="Paid to partners"
+              loading={!prev && !pollDone}
+              stat={
+                prev
+                  ? { value: Math.round(prev.paidToBeneficiaries), display: gbp(prev.paidToBeneficiaries), source: "live-payprop", note: `The partners' share of ${prevLabel}'s fees, exc VAT.` }
+                  : gap(`${prevLabel} hasn't been walked from PayProp yet.`)
+              }
             />
-            <StatCard label="TLE net income" stat={pv("tleNet") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
-            <StatCard label="GCI per agent" stat={pv("gciPerAgent") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
+            <StatCard
+              label="Rent to landlords"
+              loading={!prev && !pollDone}
+              stat={
+                prev
+                  ? { value: Math.round(prev.ownerPayments), display: gbp(prev.ownerPayments), source: "live-payprop", note: "Rent passed through to owners - volume, not income." }
+                  : gap(`${prevLabel} hasn't been walked from PayProp yet.`)
+              }
+              sub={prev ? "Passed through, not income" : undefined}
+            />
+            <StatCard label="GCI per agent" loading={!prev && !pollDone} stat={pv("gciPerAgent") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
             <StatCard
               label="Net income per agent"
+              loading={!prev && !pollDone}
               stat={pv("netPerAgent") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)}
             />
             <StatCard
               label="TLE split of E&W GCI"
+              loading={!prev && !pollDone}
               stat={splitStat}
               sub={
                 splitStat.value != null
@@ -769,10 +884,46 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
                   : undefined
               }
             />
-            <StatCard label="Monthly licence" stat={gap("Licence fees don't run through PayProp. Needs the P&L upload.")} />
-            <StatCard label="Pro licence" stat={gap("Licence fees don't run through PayProp. Needs the P&L upload.")} />
-            <StatCard label="Joining fees" stat={gap("Joining fees run through a separate bank account we can't read - Barclays/QuickBooks only.")} />
+            {/* Licence and joining fees come off Susan's uploaded sheet, and
+                say plainly when that month isn't on it yet. "Monthly licence"
+                and "Pro licence" were two boxes, but the sheet keeps licence
+                fees as one line, so they are one box. */}
+            <StatCard
+              label="Total income"
+              loading={sheet.state === "loading" || (!prev && !pollDone)}
+              stat={totalIncomeStat}
+              sub={totalIncomeStat.value == null ? sheetGapSub : "GCI plus licence and joining fees"}
+            />
+            <StatCard
+              label="Licence fees"
+              loading={sheet.state === "loading"}
+              stat={licenceStat}
+              sub={licenceStat.value == null ? sheetGapSub : "Monthly and pro, from your sheet"}
+            />
+            <StatCard
+              label="Joining fees"
+              loading={sheet.state === "loading"}
+              stat={joiningStat}
+              sub={joiningStat.value == null ? sheetGapSub : "From your sheet"}
+            />
           </div>
+          {prev?.byCategory?.length ? (
+            <div className="card mt-4 p-5">
+              <h3 className="text-[13px] font-semibold">Agency income by fee type - {prevLabel}</h3>
+              <div className="mt-3 space-y-1.5">
+                {prev.byCategory.map((c) => (
+                  <div key={c.category} className="flex items-center gap-3">
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{c.category}</span>
+                    <span
+                      className="h-1.5 rounded-full bg-accent/70"
+                      style={{ width: `${Math.max(4, (c.amount / Math.max(1, prev.agencyIncome)) * 160)}px` }}
+                    />
+                    <span className="shrink-0 text-[12.5px] font-semibold text-ink tnum">{gbp(c.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
 
@@ -813,8 +964,9 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       <section className="card space-y-2 p-5">
         <h2 className="text-sm font-semibold">Licence fees and year-on-year growth</h2>
         <p className="max-w-2xl text-[12.5px] leading-relaxed text-muted">
-          Not shown yet. Licence and joining fees don&rsquo;t run through PayProp - they need
-          the P&amp;L upload before they can be reported. Year-on-year growth needs two full
+          Licence and joining fees don&rsquo;t run through PayProp, so they come from your
+          uploaded sheet - month by month in the final boxes above, once a month is on it as
+          an actual. Year-on-year growth needs two full
           years measured the same way, and the portal has measured its own figures since
           August 2026.
         </p>

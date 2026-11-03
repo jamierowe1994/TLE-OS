@@ -294,24 +294,46 @@ function UserRow({
 
 /* --------------------------------- tab --------------------------------- */
 
-interface AgentLive {
-  name: string;
-  agentKey: string | null;
+/** One agent's month from REX, split off the Overview's own month counts. */
+interface AgentMonthCounts {
+  name: string | null;
   marketAppraisals: number | null;
-  listings: number | null;
-  pipeline: number | null;
-  managed: number | null;
-  rentRoll: number | null;
+  newListings: number | null;
+  applications: number | null;
 }
 
-interface LivePayload {
-  month: string;
-  linkedCount: number;
-  totalAgents: number;
-  totals: { marketAppraisals: number; listings: number; pipeline: number; managed: number; rentRoll: number };
-  /** Per agent from REX, for the selected month. Fetched all along and never
-   *  read - the table below was built entirely from the July seed. */
-  perAgent?: AgentLive[];
+type AgentCount = { agent: string | null; count: number };
+
+/** What this tab reads from /api/business/live-business. */
+interface LiveBusiness {
+  stale?: boolean;
+  agentsCounted?: number;
+  agentsTotal?: number;
+  totals?: { managed: number; rentRoll: number } | null;
+  monthCounts?: {
+    combinedMas: number | null;
+    newListings: number | null;
+    applications: number | null;
+    byAgent?: Record<string, AgentMonthCounts>;
+  } | null;
+  propoly?: {
+    pipelineTotal?: number;
+    pipelineByAgent?: AgentCount[];
+    moveInsByAgent?: AgentCount[] | null;
+  } | null;
+}
+
+interface BizMonth {
+  byAgent: Record<string, AgentMonthCounts> | null;
+  pipelineByAgent: AgentCount[] | null;
+  moveInsByAgent: AgentCount[] | null;
+  combinedMas: number | null;
+  /** Which REX columns the month's search answered: an agent missing from
+   *  byAgent then had none (0) rather than an unknown. */
+  answered: { ma: boolean; li: boolean; ap: boolean };
+  totals: { managed: number; rentRoll: number } | null;
+  agentsCounted: number | null;
+  agentsTotal: number | null;
 }
 
 /** Per agent from PayProp for the selected month, attributed by property. */
@@ -368,36 +390,81 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [live, setLive] = useState<LivePayload | null>(null);
   const stages = useListingStages();
   /* The pipeline as the Move-ins & Pipeline tab counts it: Propoly's deals in
      progression (Susan, 2 Nov 2026), read from the same cached live-business. */
   const [pipe, setPipe] = useState<{ total: number } | { error: true } | null>(null);
+  /* The month's per-agent KPIs, from the same live-business sweep as the
+     Overview (Susan Liles, 3 Nov 2026: "not showing the breakdown of KPIs for
+     each agent for October"). They came from /api/business/live-funnel, which
+     walks the old portal's account list - two people linked to REX - so every
+     other partner's MA, listings and pipeline were blank in every month, and
+     the Market appraisals card added up those two people alone. */
+  const [biz, setBiz] = useState<BizMonth | null>(null);
+  const [bizState, setBizState] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
     let gone = false;
+    let tries = 0;
     setPipe(null);
-    fetch(`/api/business/live-business?month=${encodeURIComponent(month)}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j: { propoly?: { pipelineTotal?: number } | null }) => {
-        if (gone) return;
-        setPipe(typeof j?.propoly?.pipelineTotal === "number" ? { total: j.propoly.pipelineTotal } : { error: true });
-      })
-      .catch(() => !gone && setPipe({ error: true }));
+    setBiz(null);
+    setBizState("loading");
+    const ask = () => {
+      fetch(`/api/business/live-business?month=${encodeURIComponent(month)}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: LiveBusiness) => {
+          if (gone) return;
+          setPipe(typeof j?.propoly?.pipelineTotal === "number" ? { total: j.propoly.pipelineTotal } : { error: true });
+          const split = j?.monthCounts?.byAgent;
+          setBiz({
+            byAgent: split ?? null,
+            pipelineByAgent: j?.propoly?.pipelineByAgent ?? null,
+            moveInsByAgent: j?.propoly?.moveInsByAgent ?? null,
+            combinedMas: j?.monthCounts?.combinedMas ?? null,
+            answered: {
+              ma: j?.monthCounts?.combinedMas != null,
+              li: j?.monthCounts?.newListings != null,
+              ap: j?.monthCounts?.applications != null,
+            },
+            totals: j?.totals ?? null,
+            agentsCounted: j?.agentsCounted ?? null,
+            agentsTotal: j?.agentsTotal ?? null,
+          });
+          /* A saved copy is served while the sweep re-reads REX behind it, and
+             one saved before the per-agent split existed has none. Ask again
+             until the fresh sweep lands, then say plainly if it never did. */
+          const settled = Boolean(split) && j?.propoly?.moveInsByAgent !== undefined && !j?.stale;
+          if (!settled && tries++ < 12) setTimeout(ask, 8000);
+          else setBizState(split ? "ready" : "error");
+        })
+        .catch(() => {
+          if (gone) return;
+          setPipe({ error: true });
+          setBizState("error");
+        });
+    };
+    ask();
     return () => {
       gone = true;
     };
   }, [month]);
   const [agentMoney, setAgentMoney] = useState<AgentMoney[]>([]);
-  const [liveLoading, setLiveLoading] = useState(true);
   // Each partner's managed book and commission, live from PayProp.
   const [book, setBook] = useState<{
     byAgent: Record<string, { names: string[]; properties: number; rentRoll: number; activeTenancies: number }>;
   } | null>(null);
   const [earnings, setEarnings] = useState<Array<{ name: string; amount: number; payments: number }> | null>(null);
 
+  /* "loading" until this month's PayProp walk has answered. The last month's
+     money used to stay on screen under the new month's heading until the new
+     walk landed (3 Nov 2026). */
+  const [moneyState, setMoneyState] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
     let cancelled = false;
     let tries = 0;
+    setAgentMoney([]);
+    setBook(null);
+    setEarnings(null);
+    setMoneyState("loading");
     const ask = () => {
       fetch(`/api/business/payprop-live?month=${encodeURIComponent(month)}`, { cache: "no-store" })
         .then((r) => r.json())
@@ -414,30 +481,13 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
           // because Scotland's fees go straight to the agency - so this is the
           // figure the table actually uses.
           if (d.byAgent?.length) setAgentMoney(d.byAgent);
+          if (d.income) setMoneyState("ready");
           if ((!d.portfolio || !d.income) && tries++ < 40) setTimeout(ask, 5000);
+          else if (!d.income) setMoneyState("error");
         })
-        .catch(() => {});
+        .catch(() => !cancelled && setMoneyState("error"));
     };
     ask();
-    return () => {
-      cancelled = true;
-    };
-  }, [month]);
-
-  // Live REX totals across linked agents - separate from the fast seed render
-  // because it fans out several REX calls (cached server-side for 3 min).
-  useEffect(() => {
-    let cancelled = false;
-    setLiveLoading(true);
-    fetch(`/api/business/live-funnel?month=${encodeURIComponent(month)}`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!cancelled) setLive(d);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLiveLoading(false);
-      });
     return () => {
       cancelled = true;
     };
@@ -507,24 +557,91 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
    * even if they're not starting up" wasn't possible.
    *
    * Now the row set is the UNION of everyone the live sources know about, so a
-   * partner appears the moment they transact. Two sources, joined on the
-   * normalised name:
-   *   REX      (live.perAgent)  - market appraisals, listings, pipeline
-   *   PayProp  (agentMoney)     - GCI, rent, properties, tenancies
-   * The seed fills only what neither can answer (viewings, applications), and
-   * is badged so it can't be mistaken for the selected month.
+   * partner appears the moment they transact. Three sources, joined on the
+   * normalised name, all for the selected month (Susan Liles, 3 Nov 2026):
+   *   PayProp  (agentMoney)         - GCI, rent, properties, tenancies
+   *   REX      (biz.byAgent)        - MAs, listings instructed, applications
+   *                                   accepted: the Overview's month counts,
+   *                                   split by agent, so each column adds up
+   *                                   to the Overview's figure
+   *   Propoly  (biz.moveInsByAgent) - move-ins; pipeline is today's deals in
+   *                                   progression, as on the Pipeline card
+   * Viewings have no owning agent in REX, so that column stays blank.
    */
   const norm = (n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const rexByName = new Map((live?.perAgent ?? []).map((a) => [norm(a.name), a]));
-  const moneyByName = new Map(agentMoney.map((a) => [norm(a.name), a]));
+  /* The join between the three systems. Each spells people its own way - on
+     October's figures PayProp had "Dan Richards" and "Lorna Filedson" where
+     Propoly and REX had "Daniel Richards" and "Lorna Fieldson" - so a plain
+     name match split one person into two half-empty rows. First initial plus
+     the surname's letters in order joins both. A name with a qualifier
+     ("Sean Mcmahon (Glasgow)", Margo's portfolio) is matched exactly, so it
+     stays apart from the person. */
+  const joinKey = (n: string) => {
+    if (n.includes("(")) return norm(n);
+    const words = n.toLowerCase().replace(/[^a-z\s-]/g, "").split(/[\s-]+/).filter(Boolean);
+    if (words.length < 2) return norm(n);
+    return `${words[0][0]}:${[...words[words.length - 1]].sort().join("")}`;
+  };
+  /* The rows no source could put against an agent, kept as one row so the
+     TOTAL still matches the business figure. */
+  const NO_AGENT = "No agent on the record";
+  /* Summed, not overwritten: PayProp itself holds October's Lorna Fieldson
+     under two spellings (£537 and £170), and a plain map kept only one. */
+  const moneyByName = new Map<string, AgentMoney>();
+  for (const a of agentMoney) {
+    const k = joinKey(a.name);
+    const had = moneyByName.get(k);
+    moneyByName.set(
+      k,
+      had
+        ? {
+            ...had,
+            gciGross: had.gciGross + a.gciGross,
+            gciNet: had.gciNet + a.gciNet,
+            rent: had.rent + a.rent,
+            properties: had.properties + a.properties,
+            tenancies: had.tenancies + a.tenancies,
+            payments: had.payments + a.payments,
+          }
+        : a
+    );
+  }
+  const rexByName = new Map<string, AgentMonthCounts>();
+  for (const [id, a] of Object.entries(biz?.byAgent ?? {})) {
+    const name = id === "none" || !a.name ? NO_AGENT : a.name;
+    rexByName.set(joinKey(name), { ...a, name });
+  }
+  const countsByName = (list: AgentCount[] | null | undefined) => {
+    const out = new Map<string, number>();
+    for (const c of list ?? []) {
+      const k = joinKey(c.agent || NO_AGENT);
+      out.set(k, (out.get(k) ?? 0) + c.count);
+    }
+    return out;
+  };
+  const movedInByName = countsByName(biz?.moveInsByAgent);
+  const pipelineByName = countsByName(biz?.pipelineByAgent);
 
   // Everyone any source knows, not just whoever was in the July capture.
+  // PayProp's spelling first, as before: the drill-down finds the partner's
+  // PayProp book by it.
   const everyName = new Map<string, string>();
-  for (const a of agentMoney) everyName.set(norm(a.name), a.name);
-  for (const a of live?.perAgent ?? []) everyName.set(norm(a.name), a.name);
+  const know = (name: string) => {
+    /* Propoly keeps some managers in lower case ("rhiannon dodge"). */
+    const tidy = name.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+    if (!everyName.has(joinKey(name))) everyName.set(joinKey(name), tidy);
+  };
+  for (const a of agentMoney) know(a.name);
+  for (const a of rexByName.values()) know(a.name ?? NO_AGENT);
+  for (const c of [...(biz?.moveInsByAgent ?? []), ...(biz?.pipelineByAgent ?? [])]) know(c.agent || NO_AGENT);
   /* Only names a live source knows. The July capture's roster used to be
      merged in, which kept twelve July names (and their tier) on the table
      whatever month was picked. */
+
+  /* A source that answered for the month gives 0 to somebody it has nothing
+     for; one that did not answer gives a dash, never a zero. */
+  const answered = biz?.byAgent ? biz.answered : { ma: false, li: false, ap: false };
+  const count = (have: boolean, v: number | null | undefined) => (v != null ? v : have ? 0 : null);
 
   /* `isSeedMonth = month === "2026-07"` stood here - a hardcoded month
      literal, the exact fault that had this dashboard reporting July in
@@ -532,24 +649,28 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   const liveRows = [...everyName.entries()].map(([key, displayName]) => {
     const rex = rexByName.get(key);
     const cash = moneyByName.get(key);
-    const linked = linkedUserForName(displayName);
-    const forecast = forecastForName(displayName);
+    const linked = displayName === NO_AGENT ? null : linkedUserForName(displayName);
+    const forecast = displayName === NO_AGENT ? null : forecastForName(displayName);
     return {
       agent: displayName,
-      portal: linked
-        ? forecast?.gciTarget != null
-          ? `Linked · forecast ${formatGBP(forecast.gciTarget)}`
-          : "Linked"
-        : "No portal account",
+      portal: displayName === NO_AGENT
+        ? ""
+        : linked
+          ? forecast?.gciTarget != null
+            ? `Linked · forecast ${formatGBP(forecast.gciTarget)}`
+            : "Linked"
+          : "No portal account",
       isLinked: !!linked,
-      // Money and REX counts are for the SELECTED month.
+      // Every column but pipeline is for the SELECTED month.
       gci: cash ? Math.round(cash.gciNet) : null,
       rent: cash ? Math.round(cash.rent) : null,
       props: cash?.properties ?? null,
       tens: cash?.tenancies ?? null,
-      ma: rex?.marketAppraisals ?? null,
-      li: rex?.listings ?? null,
-      pn: rex?.pipeline ?? null,
+      ma: count(answered.ma, rex?.marketAppraisals),
+      li: count(answered.li, rex?.newListings),
+      ap: count(answered.ap, rex?.applications),
+      mi: count(biz?.moveInsByAgent != null, movedInByName.get(key)),
+      pn: count(biz?.pipelineByAgent != null, pipelineByName.get(key)),
     };
   });
   // Biggest earner first; unmatched people fall to the bottom rather than
@@ -557,16 +678,19 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   liveRows.sort((a, b) => (b.gci ?? -1) - (a.gci ?? -1));
 
   const banded = liveRows.map((r) => ({ ...r, band: bandFor(r.gci) }));
+  /* The no-agent row is not a person, so it sits in no band. */
+  const people = banded.filter((r) => r.agent !== NO_AGENT);
   const bandCounts = BANDS.map((b) => ({
     ...b,
-    n: banded.filter((r) => r.band === b.id).length,
-    gci: banded.filter((r) => r.band === b.id).reduce((t, r) => t + (r.gci ?? 0), 0),
+    n: people.filter((r) => r.band === b.id).length,
+    gci: people.filter((r) => r.band === b.id).reduce((t, r) => t + (r.gci ?? 0), 0),
   }));
 
   // TOTAL row summed from the very rows above it, so the table proves its own
-  // arithmetic - the reconciliation check this page exists for.
-  const sum = (k: "gci" | "rent" | "props" | "tens" | "ma" | "li" | "pn") =>
-    liveRows.reduce((t, r) => t + ((r[k] as number | null) ?? 0), 0);
+  // arithmetic - the reconciliation check this page exists for. A column no
+  // source answered totals to a dash, not a zero.
+  const sum = (k: "gci" | "rent" | "props" | "tens" | "ma" | "li" | "ap" | "mi" | "pn") =>
+    liveRows.some((r) => r[k] != null) ? liveRows.reduce((t, r) => t + ((r[k] as number | null) ?? 0), 0) : null;
   const totalRow = {
     tier: "TOTAL",
     agent: "TOTAL",
@@ -580,8 +704,8 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
     li: sum("li"),
     pn: sum("pn"),
     vw: null,
-    ap: null,
-    mi: null,
+    ap: sum("ap"),
+    mi: sum("mi"),
   };
   const kpiRowsLive = [...banded, { ...totalRow, band: "none" as BandId }];
 
@@ -595,15 +719,30 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
      reads them (Susan, 2 Nov 2026): REX's own sums took in drafts. */
   const board = (k: "available") => (stages === null ? "…" : stages.ok ? formatNum(stages[k]) : "—");
 
-  const liveCards = live
+  /* Every lettings agent in REX, from the live-business sweep the Overview
+     reads - not the two accounts the old portal list had linked. Market
+     appraisals is the Overview's combined-MA figure for the month. */
+  const liveCards = biz
     ? [
-        { label: "Market appraisals", value: formatNum(live.totals.marketAppraisals), sub: monthLabel(month) },
+        { label: "Market appraisals", value: formatNum(biz.combinedMas), sub: monthLabel(month) },
         { label: "On-market listings", value: board("available"), sub: stages && !stages.ok ? stages.error : "Available on Listings" },
         { label: "Pipeline", value: pipe === null ? "…" : "total" in pipe ? formatNum(pipe.total) : "—", sub: pipe && !("total" in pipe) ? "Propoly couldn't be read" : "In progression in Propoly" },
-        { label: "Managed properties", value: formatNum(live.totals.managed), sub: "Let & managed" },
-        { label: "Rent roll / month", value: formatGBP(live.totals.rentRoll), sub: "Under management" },
+        { label: "Managed properties", value: biz.totals ? formatNum(biz.totals.managed) : "—", sub: "Let & managed" },
+        { label: "Rent roll / month", value: biz.totals ? formatGBP(biz.totals.rentRoll) : "—", sub: "Under management" },
       ]
     : [];
+  /* A spinner until either half of the month is in, then a line naming the
+     half still coming, so a dash that is only waiting never reads as a gap. */
+  const repLoading = bizState === "loading" && !biz?.byAgent;
+  const tableLoading = moneyState === "loading" && repLoading;
+  const stillComing = [
+    moneyState === "loading" ? "PayProp (GCI, rent, properties, tenancies)" : null,
+    bizState === "loading" ? "REX and Propoly (MA, listings, applications, move-ins, pipeline)" : null,
+  ].filter(Boolean);
+  const failed = [
+    moneyState === "error" ? "PayProp didn't answer for this month, so GCI, rent, properties and tenancies are blank." : null,
+    bizState === "error" ? "REX and Propoly didn't answer for this month, so MA, listings, applications, move-ins and pipeline are blank." : null,
+  ].filter(Boolean);
 
   return (
     <div>
@@ -617,9 +756,12 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         Click an agent&rsquo;s row to open their drill-down (forecast, ads,
         portfolio, compliance). GCI, rent, properties and tenancies are{" "}
         {monthLabel(month)} from PayProp, attributed by property - so the TOTAL row
-        is the same figure the Overview shows, split. MA, listings and pipeline are
-        live from Rex.{" "}
-        Viewings and applications have no live per-partner source yet, so those columns are blank.{" "}
+        is the same figure the Overview shows, split. MA (combined), listings
+        instructed and applications accepted are {monthLabel(month)} from REX, and
+        move-ins are {monthLabel(month)} from Propoly - each adds up to the
+        Overview&rsquo;s figure for the month. Pipeline is today&rsquo;s deals in
+        progression in Propoly, whichever month is picked.{" "}
+        Viewings are blank: REX doesn&rsquo;t record which agent a viewing belongs to.{" "}
         Properties and tenancies count what actually transacted that month, which
         is lower than a partner&rsquo;s book where a property took no payment.
         Attribution uses today&rsquo;s property map, so a property that changed
@@ -654,6 +796,24 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         underperforming.
       </p>
 
+      {failed.map((f) => (
+        <p key={f} className="mb-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700">
+          {f}
+        </p>
+      ))}
+      {tableLoading ? (
+        <div className="flex items-center gap-2 py-6 text-[13px] text-muted" aria-busy="true">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+          Loading {monthLabel(month)} for every agent
+        </div>
+      ) : (
+      <>
+      {stillComing.length ? (
+        <p className="mb-2 flex items-center gap-2 text-[11.5px] text-muted" aria-busy="true">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+          Still reading {stillComing.join(" and ")} - those columns fill in when it lands.
+        </p>
+      ) : null}
       <DataTable
         columns={[
           { key: "agent", label: "Agent" },
@@ -704,12 +864,14 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         compact
         onRowClick={(row) => {
           const name = String(row.agent);
-          if (name !== "TOTAL") setSelectedAgent(name);
+          if (name !== "TOTAL" && name !== NO_AGENT) setSelectedAgent(name);
         }}
       />
+      </>
+      )}
       <p className="mt-2 flex items-center gap-2 text-[11px] text-muted">
-        MA = market appraisals · Li = listings · Vw = viewings · Ap =
-        applications · MI = move-ins · Pn = pipeline.
+        MA = market appraisals · Li = listings instructed · Vw = viewings · Ap =
+        applications accepted · MI = move-ins · Pn = pipeline.
       </p>
 
       {/* ------------------------- agent drill-down ------------------------- */}
@@ -783,13 +945,13 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
       ) : null}
 
       <SectionTitle>Live from REX</SectionTitle>
-      {liveLoading && !live ? (
+      {!biz && bizState === "loading" ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="card h-24 animate-pulse" />
           ))}
         </div>
-      ) : live && live.linkedCount > 0 ? (
+      ) : biz ? (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {liveCards.map((c) => (
@@ -805,18 +967,19 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
               </div>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-muted">
-            Live from REX across{" "}
-            <span className="font-semibold text-ink">
-              {live.linkedCount} of {live.totalAgents}
-            </span>{" "}
-            agents linked to a REX id. Link more accounts below to grow the live figures.
-          </p>
+          {biz.agentsTotal != null ? (
+            <p className="mt-2 text-[11px] text-muted">
+              Live from REX across{" "}
+              <span className="font-semibold text-ink">
+                {biz.agentsCounted ?? 0} of {biz.agentsTotal}
+              </span>{" "}
+              lettings agents in REX - every one, whether or not they have a portal account.
+            </p>
+          ) : null}
         </>
       ) : (
-        <p className="rounded-xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
-          No agents are linked to a REX id yet. Set an agent&rsquo;s REX id in the accounts below and
-          their live appraisals, listings, pipeline and portfolio will roll up here.
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          REX didn&rsquo;t answer for {monthLabel(month)}. Refresh to try again.
         </p>
       )}
 
@@ -962,7 +1125,7 @@ function AgentDrilldown({
    *  drill-down cannot disagree with the row that opened it. */
   live: {
     gci: number | null; rent: number | null; props: number | null; tens: number | null;
-    ma: number | null; li: number | null; pn: number | null;
+    ma: number | null; li: number | null; ap: number | null; mi: number | null; pn: number | null;
     } | null;
   user: (UserProfile & { adminNotes?: { at: string; text: string }[] }) | null;
   forecast: AgentForecast | null;
@@ -1114,18 +1277,18 @@ function AgentDrilldown({
               stat={liveStat(live.tens, undefined, "live-payprop",
                 "Distinct tenants who paid in the selected month.")}
             />
-            <StatCard label="MAs" stat={liveStat(live.ma, undefined, "live-rex", "Market appraisals recorded in Rex for the selected month.")} />
+            <StatCard label="MAs" stat={liveStat(live.ma, undefined, "live-rex", "Combined market appraisals in REX for the selected month: recorded appraisals plus listings with no appraisal that month.")} />
             <StatCard label="Listings" stat={liveStat(live.li, undefined, "live-rex", "Rental listings instructed in the selected month.")} />
-            <StatCard label="Pipeline" stat={liveStat(live.pn, undefined, "live-rex", "Deals in progression right now - a current-state figure, not a month figure.")} />
+            <StatCard label="Applications" stat={liveStat(live.ap, undefined, "live-rex", "Applications accepted in REX in the selected month.")} />
+            <StatCard label="Move-ins" stat={liveStat(live.mi, undefined, "live-propoly", "Tenancies completed in Propoly with a move-in date in the selected month, on this partner's homes.")} />
+            <StatCard label="Pipeline" stat={liveStat(live.pn, undefined, "live-propoly", "Deals in progression in Propoly right now - a current-state figure, not a month figure.")} />
           </div>
-          {/* Viewings / applications / move-ins per partner came only from the
-              July capture, so with it gone this is a standing gap rather than
-              a month-by-month one. Named, because a partner quietly missing
-              three activity figures reads as three zeros. */}
+          {/* Applications and move-ins are split per partner since 3 Nov 2026
+              (Susan Liles). Viewings still cannot be: named, because a partner
+              quietly missing a figure reads as a zero. */}
           <p className="mt-2 text-xs text-muted">
-            Viewings, applications and move-ins aren&rsquo;t broken down per partner by any
-            live source yet. REX holds the appointments; nothing attributes them to a
-            partner we can query.
+            Viewings aren&rsquo;t broken down per partner: REX doesn&rsquo;t record which
+            agent a viewing belongs to.
           </p>
         </>
       ) : (

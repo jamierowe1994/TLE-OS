@@ -50,7 +50,10 @@ export async function GET(req: NextRequest) {
      says it is still loading rather than holding the whole tab up. */
   const margoFor = (mm: string) =>
     Promise.race([
-      getPortfolioIncome(mm, isMargoHome).catch(() => null),
+      /* Held and served at once while it refreshes (3 Nov 2026) - see
+         getPortfolioIncome. Unheld it re-walked the month every time and
+         never beat the four seconds below. */
+      getPortfolioIncome(mm, isMargoHome, "margo").catch(() => null),
       new Promise<null>((r) => setTimeout(() => r(null), 4000)),
     ]);
   const [income, prevIncome, ytd, arrears, moveIns, portfolio, margo, prevMargo] = await Promise.all([

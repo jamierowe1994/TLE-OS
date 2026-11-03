@@ -644,7 +644,13 @@ async function paymentsForRange(from: string, to: string): Promise<AccountRows> 
     // year to date) — don't let this grow unbounded.
     if (rangeCache.size > 6) {
       const oldest = [...rangeCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
-      if (oldest) rangeCache.delete(oldest[0]);
+      if (oldest) {
+        rangeCache.delete(oldest[0]);
+        /* Let the next ask read the durable copy again rather than re-walk
+           PayProp: "already read" was never cleared, so an evicted range
+           could only come back by a walk of minutes (3 Nov 2026). */
+        rangeRead.delete(oldest[0]);
+      }
     }
     return data;
   } finally {
@@ -2047,8 +2053,23 @@ export interface PortfolioIncome {
  * Same basis as the per-agent split above - batch transfer date, fee
  * categories, VAT-inclusive gross and exVat net - so it reconciles with the
  * Agents page. Null when the book or the month isn't in yet.
+ *
+ * Pass `cacheKey` to hold the answer like the month's income is held: kept for
+ * the hour, kept across deploys, and served at once while a refresh runs
+ * behind it (3 Nov 2026). Uncached, every call re-walked the month's payments
+ * once the range had dropped out of memory, which took minutes - so the Income
+ * tab's 4-second wait gave up every time and Margo's boxes never filled.
  */
-export async function getPortfolioIncome(
+export function getPortfolioIncome(
+  month: string,
+  inPortfolio: (account: PayPropAccountId, agent: string) => boolean,
+  cacheKey?: string
+): Promise<PortfolioIncome | null> {
+  if (cacheKey) return cachedAsync(`portfolio-income:${cacheKey}:${month}`, () => computePortfolioIncome(month, inPortfolio));
+  return computePortfolioIncome(month, inPortfolio);
+}
+
+async function computePortfolioIncome(
   month: string,
   inPortfolio: (account: PayPropAccountId, agent: string) => boolean
 ): Promise<PortfolioIncome | null> {

@@ -221,6 +221,30 @@ function complete(m: MonthlyGci): boolean {
   );
 }
 
+/**
+ * How long after a month ends before its figure is frozen as final.
+ *
+ * Susan Liles, 3 Nov 2026 (Income tab). October was walked and frozen at
+ * 17:20 on 1 November: £39,966 exc VAT over 1,294 payments. The same month
+ * walked on 3 November is £47,900 over 1,526 - payments that settle on a
+ * batch dated in October keep arriving for days after the month closes, and
+ * a month frozen on the 1st loses them for good. September, frozen on 10
+ * October, has stayed within £500.
+ *
+ * So a closed month is recomputed like the live one (hourly, never stored)
+ * until this many days have passed, and a month stored before then is not
+ * trusted as final. Counted from the 1st of the next month, so it rolls on by
+ * itself every month.
+ */
+const SETTLE_DAYS = 10;
+
+/** Has `month` had SETTLE_DAYS since it ended, as at `at`? */
+export function settledBy(month: string, at: Date | string): boolean {
+  const [y, m] = month.split("-").map(Number);
+  const settles = Date.UTC(y, m, 1) + SETTLE_DAYS * 86_400_000; // 1st of next month + settle days
+  return new Date(at).getTime() >= settles;
+}
+
 /** Months from `from` (floored) up to and including `to`. */
 function monthsBetween(from: string, to: string): string[] {
   const out: string[] = [];
@@ -256,8 +280,10 @@ export async function getGciHistory(
   const out: Record<string, MonthlyGci> = {};
 
   for (const m of months) {
-    const isLive = m >= live;
-    if (!isLive && stored[m] && complete(stored[m])) {
+    /* A month still settling counts as live: recomputed, never frozen, and a
+       copy frozen while it was settling is not final (see SETTLE_DAYS). */
+    const isLive = m >= live || !settledBy(m, new Date());
+    if (!isLive && stored[m] && complete(stored[m]) && settledBy(m, stored[m].computedAt)) {
       out[m] = stored[m];
       continue;
     }
