@@ -53,6 +53,9 @@ export interface PnlYear {
     missingMonths: string[];
     /** Closed months before PayProp's figures begin: not held, not "waiting" (P-068). */
     notHeld: string[];
+    /** Closed months whose costs are still the forecast: no accounts for them
+     *  yet, so they sit outside the year to date (Susan Liles, 3 Nov 2026). */
+    awaitingAccounts: string[];
   };
   plan: { fileName: string | null; importedAt: string; importedBy: string; accountsMonths: string[]; accountsFileName: string | null } | null;
 }
@@ -97,7 +100,19 @@ export function buildPnl(
   /* Year to date over the closed months that are HELD (P-068): before the
      money floor there is nothing to wait for. */
   const heldClosed = (c: PnlColumn) => c.kind === "actual" && (!floor || c.month >= floor);
-  const row = (r: Omit<PnlRow, "total">, totalOver: (c: PnlColumn) => boolean = heldClosed) => {
+  /* Susan Liles, 3 Nov 2026: "P&L tab shows net profit £164,370 - Sep P&L
+     shows net profit £137,424". Both are losses. Hers is the accountant's
+     January-September; ours ran to October, whose costs are still her
+     forecast - a commission line sized for £58k of income set against what
+     PayProp had for the month - and that month alone was £25,266 of the gap.
+     A closed month counts towards the year to date once its costs are real:
+     the accounts for it are uploaded, or her sheet calls the column an
+     actual. Until then its income shows and its profit waits. */
+  const costsReal = (m: string) => !!plan && (!!plan.accountsMonths?.includes(m) || plan.basis[m] === "actual");
+  const awaitingAccounts = (c: PnlColumn) => !!plan && heldClosed(c) && !costsReal(c.month);
+  /* With no plan there are no costs at all, and the income still adds up. */
+  const inYtd = (c: PnlColumn) => heldClosed(c) && (!plan || costsReal(c.month));
+  const row = (r: Omit<PnlRow, "total">, totalOver: (c: PnlColumn) => boolean = inYtd) => {
     const vals = columns.filter(totalOver).map((c) => r.cells[c.month]?.value);
     const total = r.pct || !vals.length || vals.some((v) => v == null) ? null : round(vals.reduce<number>((t, v) => t + (v as number), 0));
     const full = { ...r, total };
@@ -208,6 +223,7 @@ export function buildPnl(
     emphasis: true,
     cells: byMonth((c) => {
       if (c.kind === "mtd") return { value: null, source: null }; // part-month income, whole-month costs
+      if (awaitingAccounts(c)) return { value: null, source: null }; // real income, forecast costs
       const i = income.cells[c.month].value;
       const k = cos.cells[c.month].value;
       return i == null || k == null ? { value: null, source: null } : { value: round(i - k), source: "computed" };
@@ -246,7 +262,8 @@ export function buildPnl(
   });
   if (Object.values(unitemised).some((c) => c.value != null)) {
     const r = { key: "unitemised", label: "Not itemised on the sheet", group: "expenditure" as const, cells: unitemised };
-    rows.push({ ...r, total: round(Object.values(unitemised).reduce((t, c) => t + (c.value ?? 0), 0)) });
+    // Year to date like every other row, not the plan months as well.
+    rows.push({ ...r, total: round(columns.filter(inYtd).reduce((t, c) => t + (unitemised[c.month].value ?? 0), 0)) });
   }
   const expenditure = row({
     key: "expenditure",
@@ -264,14 +281,15 @@ export function buildPnl(
       group: "net",
       emphasis: true,
       cells: byMonth((c) => {
-        // A part-month of income against a whole month of costs is not a result.
-        if (c.kind === "mtd") return { value: null, source: null };
+        // A part-month of income against a whole month of costs is not a result,
+        // and nor is a month's real income against its forecast costs.
+        if (c.kind === "mtd" || awaitingAccounts(c)) return { value: null, source: null };
         const g = gross.cells[c.month].value;
         const e = expenditure.cells[c.month].value;
         return g == null || e == null ? { value: null, source: null } : { value: round(g - e), source: "computed" };
       }),
     },
-    heldClosed
+    inYtd
   );
   let running = 0;
   let broken = false;
@@ -280,19 +298,20 @@ export function buildPnl(
     label: "Year to date",
     group: "net",
     cells: byMonth((c) => {
-      const v = c.kind === "mtd" ? sheet("netProfit", c.month) : net.cells[c.month].value;
+      const planned = c.kind === "mtd" || awaitingAccounts(c);
+      const v = planned ? sheet("netProfit", c.month) : net.cells[c.month].value;
       if (v == null || broken) {
         broken = true;
         return { value: null, source: null };
       }
       running += v;
-      return { value: round(running), source: c.kind === "mtd" ? fromPlan(c.month) : "computed" };
+      return { value: round(running), source: planned ? fromPlan(c.month) : "computed" };
     }),
     total: null,
   });
 
   /* ------------------------------ tiles ------------------------------ */
-  const closed = columns.filter(heldClosed);
+  const closed = columns.filter(inYtd);
   const notHeld = columns.filter((c) => c.kind === "actual" && !heldClosed(c)).map((c) => c.month);
   const missingMonths = closed.filter((c) => !money[c.month]).map((c) => c.month);
   /* Nothing closed is no figure, not £0 (P-069): in January every year-to-date
@@ -310,7 +329,9 @@ export function buildPnl(
   const sheetIncomeYtd = closed.length && closed.every((c) => sheet("totalIncome", c.month) != null)
     ? round(closed.reduce((t, c) => t + (sheet("totalIncome", c.month) as number), 0))
     : null;
-  const rest = columns.filter((c) => c.kind !== "actual");
+  // Everything after the year to date: a closed month still waiting for its
+  // accounts goes into the outlook at its forecast, like the months to come.
+  const rest = columns.filter((c) => c.kind !== "actual" || awaitingAccounts(c));
   const restPlan = rest.every((c) => sheet("netProfit", c.month) != null)
     ? rest.reduce((t, c) => t + (sheet("netProfit", c.month) as number), 0)
     : null;
@@ -331,6 +352,7 @@ export function buildPnl(
       toMonth: closed[closed.length - 1]?.month ?? null,
       missingMonths,
       notHeld,
+      awaitingAccounts: columns.filter(awaitingAccounts).map((c) => c.month),
     },
     plan: plan
       ? { fileName: plan.fileName, importedAt: plan.importedAt, importedBy: plan.importedBy, accountsMonths: plan.accountsMonths ?? [], accountsFileName: plan.accountsFileName ?? null }

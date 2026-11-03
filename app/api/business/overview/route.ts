@@ -91,10 +91,16 @@ export async function GET(req: NextRequest) {
         // until now the only way to find out was to ask someone.
         detail: live.map((m) => {
           const gbp = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+          /* Susan Liles, 3 Nov 2026: the agency lines were PayProp's figures
+             WITH VAT under a combined figure without it, so October read
+             Glasgow £3,566 + E&W £44,393 under £39,966. Paula's Summary of
+             Fees splits the two net of VAT, so this does too: VAT is one rate
+             across the month, so each agency takes the month's own net share. */
+          const exVat = m.combinedGciGross > 0 ? m.combinedGciNet / m.combinedGciGross : 0;
           return [
             ["Combined GCI", gbp(m.combinedGciNet)] as [string, string],
             ...m.byAccount.map(
-              (a) => [a.label, gbp(a.combinedGci)] as [string, string]
+              (a) => [a.label, gbp(a.combinedGci * exVat)] as [string, string]
             ),
             ["TLE kept", gbp(m.agencyIncomeNet)] as [string, string],
             ["Partners", gbp(m.combinedGciNet - m.agencyIncomeNet)] as [string, string],

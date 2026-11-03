@@ -96,7 +96,16 @@ export interface MonthlyGci {
 /*
  * 5 — 17 Sep 2026. Tenant Find Fee and Transaction Fee count as commission.
  */
-const DEFINITION_VERSION = 5;
+/*
+ * 6 — 3 Nov 2026 (Susan Liles: the Overview's monthly GCI didn't match
+ *     Paula's Summary of Fees). A closed month is only kept from a PayProp
+ *     read made AFTER the month ended. October was stored on 1 Nov from the
+ *     copy read while October was still running: £39,966 kept, against
+ *     £47,900 on a fresh read (Paula's sheet: £46,541). Nothing on a stored
+ *     row says how old its read was, so every month is re-read once; the old
+ *     figure stands in while it does.
+ */
+const DEFINITION_VERSION = 6;
 
 /** Both agencies. Fixed, not read from what happens to be connected today -
  *  a month walked while one connection is down must not look whole. */
@@ -263,12 +272,16 @@ export async function getGciHistory(
      * and the next load picks it up). With `wait`, we poll until it lands, so
      * an explicit backfill actually backfills.
      */
-    let income = await getAgencyIncome(m).catch(() => null);
+    /* A closed month is about to be kept for ever, so only a read made after
+       it ended will do (definition 6): midnight UTC on the 1st, which is at
+       or after midnight in London whatever the clocks are doing. */
+    const read = isLive ? {} : { notBefore: Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 1) };
+    let income = await getAgencyIncome(m, read).catch(() => null);
     if (!income && opts.wait) {
       const deadline = Date.now() + PER_MONTH_WAIT_MS;
       while (!income && Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 3000));
-        income = await getAgencyIncome(m).catch(() => null);
+        income = await getAgencyIncome(m, read).catch(() => null);
       }
     }
     if (!income) {

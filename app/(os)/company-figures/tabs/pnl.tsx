@@ -20,6 +20,8 @@ import { formatGBP, formatDate } from "@/lib/business/format";
 
 const SHORT = (m: string) =>
   new Date(`${m}-01T00:00:00Z`).toLocaleString("en-GB", { month: "short", timeZone: "UTC" });
+const LONG = (m: string) =>
+  new Date(`${m}-01T00:00:00Z`).toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
 
 function money(v: number | null, pct = false): string {
   if (v == null) return "-";
@@ -69,6 +71,7 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
   }
 
   const t = data.tiles;
+  const awaiting = new Set(t.awaitingAccounts ?? []);
   const closedLabel = t.fromMonth && t.toMonth ? `${SHORT(t.fromMonth)} to ${SHORT(t.toMonth)} ${year}` : "No closed months yet";
   const diff = (a: number | null, b: number | null) =>
     a == null || b == null ? null : `${a - b >= 0 ? "+" : "-"}${formatGBP(Math.abs(Math.round(a - b)))} against the accounts and sheet`;
@@ -90,7 +93,7 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
             value: t.netYtd,
             display: t.netYtd == null ? undefined : money(t.netYtd),
             source: "derived",
-            note: "PayProp commission income less the costs on Susan's sheet, for every closed month.",
+            note: "PayProp commission income less the costs in the accounts, for every month the accounts cover.",
           }}
           sub={diff(t.netYtd, t.netYtdSheet) ?? closedLabel}
         />
@@ -131,6 +134,13 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
           PayProp&rsquo;s figures start in {SHORT(MONEY_FLOOR_LABEL)} 2025, so {t.notHeld.map(SHORT).join(", ")} {t.notHeld.length === 1 ? "isn't" : "aren't"} held and the year to date starts after them.
         </p>
       ) : null}
+      {awaiting.size ? (
+        <p className="text-[12px] text-muted">
+          {[...awaiting].map(LONG).join(", ").replace(/, ([^,]+)$/, " and $1")} {awaiting.size === 1 ? "has" : "have"} closed, but the costs are still
+          Susan&rsquo;s forecast until the accountant&rsquo;s P&amp;L for {awaiting.size === 1 ? "it is" : "them is"} uploaded.
+          The income is shown; the profit is left out of the year to date until then.
+        </p>
+      ) : null}
       {t.missingMonths.length ? (
         <p className="text-[12px] text-red-700">
           PayProp hasn&rsquo;t answered in full for {t.missingMonths.map(SHORT).join(", ")}, so the year-to-date figures
@@ -159,7 +169,7 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
                   <th key={c.month} className="px-2.5 py-3 text-right font-semibold">
                     <div>{SHORT(c.month)}</div>
                     <div className={`mt-0.5 text-[9.5px] font-semibold ${c.kind === "mtd" ? "text-accent-dark" : "text-muted/70"}`}>
-                      {c.kind === "actual" ? "Actual" : c.kind === "mtd" ? "So far" : "Plan"}
+                      {awaiting.has(c.month) ? "No accounts" : c.kind === "actual" ? "Actual" : c.kind === "mtd" ? "So far" : "Plan"}
                     </div>
                   </th>
                 ))}
@@ -184,7 +194,9 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
           from Susan&rsquo;s sheet for the months after, because the accounts are the only place costs exist. Agent
           commission included: PayProp only sees partners it pays, and Glasgow&rsquo;s are paid outside it, so what
           PayProp paid out is shown for comparison but not used. This month&rsquo;s profit is left blank until the
-          month closes - part of a month&rsquo;s income against a whole month&rsquo;s costs is not a result.
+          month closes - part of a month&rsquo;s income against a whole month&rsquo;s costs is not a result - and a
+          closed month&rsquo;s stays blank until its accounts arrive, so the year to date covers the same months as
+          the accounts.
           {data.plan ? ` Last upload ${formatDate(data.plan.importedAt)} by ${data.plan.importedBy}.` : ""}
           {data.plan?.accountsMonths.length ? ` Accounts cover ${data.plan.accountsMonths.map(SHORT).join(", ")}.` : ""}
         </p>

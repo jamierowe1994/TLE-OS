@@ -293,7 +293,7 @@ const CACHE_VERSION = "v17"; // v17, 17 Sep 2026: Tenant Find and Transaction fe
 async function cachedAsync<T>(
   rawKey: string,
   run: () => Promise<T>,
-  opts: { wait?: boolean } = {}
+  opts: CacheOpts = {}
 ): Promise<T | null> {
   const key = `${CACHE_VERSION}:${rawKey}`;
   return cachedAsyncInner(key, run, opts);
@@ -309,10 +309,23 @@ async function cachedAsync<T>(
 const FAILURE_COOLDOWN_MS = 45_000;
 const failedAt = new Map<string, number>();
 
+/**
+ * `notBefore` (epoch ms) - a copy read before then is no answer at all: it is
+ * neither served nor allowed to stand in while the refresh runs.
+ *
+ * Susan Liles, 3 Nov 2026: October was frozen into the monthly store on
+ * 1 Nov at £39,966 when the business took £47,900. The store asked for a
+ * closed month, and this cache handed back the copy read while October was
+ * still running - "stale beats nothing" is right for a live tile and wrong
+ * for a figure that is about to be kept for ever. gci-history now asks for a
+ * copy read after the month closed.
+ */
+type CacheOpts = { wait?: boolean; notBefore?: number };
+
 async function cachedAsyncInner<T>(
   key: string,
   run: () => Promise<T>,
-  opts: { wait?: boolean } = {}
+  opts: CacheOpts = {}
 ): Promise<T | null> {
   let hit = cache.get(key);
 
@@ -332,6 +345,9 @@ async function cachedAsyncInner<T>(
       cache.set(key, hit);
     }
   }
+
+  // Read too early to answer for this caller: start a fresh read, serve nothing.
+  if (hit && opts.notBefore && hit.at < opts.notBefore) hit = undefined;
 
   if (hit && Date.now() - hit.at < TTL_MS) return hit.data as T;
 
@@ -648,9 +664,12 @@ function monthRange(month: string): { from: string; to: string } {
  * PayProp account (the business runs Scotland and the rest of the UK as
  * separate agencies).
  */
-export function getAgencyIncome(month: string): Promise<AgencyIncome | null> {
+export function getAgencyIncome(
+  month: string,
+  opts: { notBefore?: number } = {}
+): Promise<AgencyIncome | null> {
   const { from, to } = monthRange(month);
-  return cachedAsync(`income:${month}`, () => computeIncomeRange(month, from, to));
+  return cachedAsync(`income:${month}`, () => computeIncomeRange(month, from, to), opts);
 }
 
 /**
