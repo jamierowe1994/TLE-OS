@@ -1,15 +1,17 @@
 "use client";
 
-// Admin tab: Paid leads & pro licence (GoHighLevel - no API access yet), plus a
-// live Socials snapshot (Facebook + Instagram followers + growth) pulled from
-// the sister ads platform's partner API.
+// Admin tab: Paid leads, read from Launch Pad (the paid leads admin site) so it
+// shows what Susan's MD screen there shows, plus the pro licence and a live
+// Socials snapshot (Facebook + Instagram followers + growth) pulled from the
+// same app's partner API.
 
 import { useEffect, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
 import StatCard from "@/components/business/StatCard";
-import FunnelBar from "@/components/business/charts/FunnelBar";
 import TimescaleSelect from "@/components/business/TimescaleSelect";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
+import type { StatValue } from "@/lib/business/types";
+import type { LaunchPadFigures } from "@/lib/business/launchpad-figures"; // type-only
 import { currentMonth, monthLabel } from "@/lib/business/format";
 
 /* ------------------------------- socials ------------------------------- */
@@ -184,116 +186,119 @@ function SocialsSection() {
 
 /* --------------------------------- tab --------------------------------- */
 
+/* Susan Liles, 3 Nov 2026: "The paid leads tab on here doesn't show the same
+   details as the paid leads admin site?" It counted Meta's leads for the whole
+   ad account and asked Go High Level (retired, token refused) for the rest, so
+   it disagreed with Launch Pad on the one number it had and showed dashes for
+   everything else. Every paid-lead figure below now comes from Launch Pad's
+   own sums for the picked month - see lib/business/launchpad-figures.ts. */
+
+/** Launch Pad's own duration format, so "Speed to lead" reads the same. */
+function fmtDuration(ms: number): string {
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h < 24) return m ? `${h}h ${m}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h`;
+}
+
+const gbp = (n: number) =>
+  `£${n.toLocaleString("en-GB", { minimumFractionDigits: n < 100 && n % 1 ? 2 : 0, maximumFractionDigits: n < 100 ? 2 : 0 })}`;
+const money = (n: number | null | undefined) => (n == null ? "—" : gbp(n));
+const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`);
+
+const LAUNCHPAD_DOWN: Record<string, string> = {
+  "not-configured": "Launch Pad isn't connected to TLE OS, so there are no paid lead figures to show.",
+  "not-deployed": "Launch Pad doesn't share these figures with TLE OS yet, so there are no paid lead figures to show.",
+  unavailable: "Launch Pad hasn't answered, so there are no paid lead figures to show. Try again shortly.",
+};
+
+function BarList({ rows }: { rows: { label: string; value: number }[] }) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  if (!rows.length) return <p className="text-[13px] text-muted">No leads this month yet.</p>;
+  return (
+    <div className="space-y-3">
+      {rows.map((r) => (
+        <div key={r.label}>
+          <div className="flex items-baseline justify-between gap-3 text-[13px]">
+            <span className="truncate">{r.label}</span>
+            <span className="font-semibold tabular-nums">{r.value}</span>
+          </div>
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-line/50">
+            <div className="h-full rounded-full bg-accent" style={{ width: `${(r.value / max) * 100}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PaidLeadsTab({ month, seed }: { month: string; seed: SeedData }) {
   const pl = seed.paidLeads;
 
-  // Live layer: Meta answers leads/spend/CPL; GHL answers the funnel
-  // (created → referred to agents → MAs booked) from the paid pipelines.
-  const [liveLeads, setLiveLeads] = useState<{
-    leads: number | null;
-    spend?: number;
-    cpl?: number | null;
-    source?: string;
-    ghl?: {
-      leads: number;
-      referred: number;
-      masBooked: number;
-      pipelines: string[];
-    } | null;
-  } | null>(null);
+  const [lp, setLp] = useState<LaunchPadFigures | null>(null);
+  const [lpState, setLpState] = useState<"loading" | "ready" | "not-configured" | "not-deployed" | "unavailable">(
+    "loading"
+  );
   /* Asked for the picked month, and asked again when it changes. It took no
      month and ran once until 10 Oct 2026 (Rig P-018): the heading followed
      the picker while every figure under it stayed this month's. */
   useEffect(() => {
     let cancelled = false;
-    setLiveLeads(null);
+    setLp(null);
+    setLpState("loading");
     (async () => {
       try {
         const res = await fetch(`/api/business/paid-leads-live?month=${month}`, { cache: "no-store" });
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(String(res.status));
         const j = await res.json();
+        if (cancelled) return;
         if (j.month && j.month !== month) return;
-        if (!cancelled && (j.leads != null || j.ghl != null)) setLiveLeads(j);
+        if (j.launchpad) {
+          setLp(j.launchpad as LaunchPadFigures);
+          setLpState("ready");
+        } else {
+          setLpState(j.launchpadError ?? "unavailable");
+        }
       } catch {
-        /* the dashes stay */
+        if (!cancelled) setLpState("unavailable");
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [month]);
+
   const isCurrent = month === currentMonth();
   /** "this month" or "September 2026" - what the live notes are about. */
   const periodWords = isCurrent ? "this month" : monthLabel(month);
-
-  const leadsStat =
-    liveLeads?.leads != null
-      ? {
-          value: liveLeads.leads,
-          source: "live-meta" as const,
-          note:
-            liveLeads.source === "account"
-              ? `Live from Meta - TLE ad account, ${periodWords}.`
-              : `Live from Meta - summed across every agent's tagged campaigns, ${periodWords}.`,
-          asOf: londonToday(),
-        }
-      : pl.leadsGenerated;
-  const leadsSub =
-    liveLeads?.leads != null && liveLeads.spend != null
-      ? `£${Math.round(liveLeads.spend).toLocaleString("en-GB")} spend${
-          liveLeads.cpl != null ? ` · £${liveLeads.cpl.toFixed(2)} per lead` : ""
-        }`
-      : undefined;
-
-  // GHL funnel - live when connected, Susan's 11 Jul snapshot otherwise.
-  const ghl = liveLeads?.ghl ?? null;
+  const loading = lpState === "loading";
+  const t = lp?.totals;
   const asOf = londonToday();
-  const ghlNote = ghl
-    ? `Live from Go High Level - ${ghl.pipelines.join(" + ")}, ${periodWords}.`
-    : "";
-  const referredStat = ghl
-    ? {
-        value: ghl.referred,
-        source: "live-ghl" as const,
-        note: `${ghlNote} Referred = reached "Initial Call Booked" (or beyond).`,
-        asOf,
-      }
-    : pl.referredToAgents;
-  const masStat = ghl
-    ? {
-        value: ghl.masBooked,
-        source: "live-ghl" as const,
-        note: `${ghlNote} MA booked = "MA Booked" stage or the opportunity marked won.`,
-        asOf,
-      }
-    : pl.masBooked;
-  // Conversions off the CRM's own lead count so numerator/denominator match.
-  const funnelLeads = ghl ? ghl.leads : (pl.funnel[0]?.value ?? null);
-  const leadToReferralStat = ghl
-    ? {
-        value: funnelLeads ? (ghl.referred / funnelLeads) * 100 : null,
-        display: funnelLeads ? `${((ghl.referred / funnelLeads) * 100).toFixed(1)}%` : "—",
-        source: "live-ghl" as const,
-        note: ghlNote,
-        asOf,
-      }
-    : pl.leadToReferralPct;
-  const leadToMaStat = ghl
-    ? {
-        value: ghl.referred ? (ghl.masBooked / ghl.referred) * 100 : null,
-        display: ghl.referred ? `${((ghl.masBooked / ghl.referred) * 100).toFixed(0)}%` : "—",
-        source: "live-ghl" as const,
-        note: ghlNote,
-        asOf,
-      }
-    : pl.leadToMaPct;
-  const funnelStages = ghl
-    ? [
-        { label: "Leads", value: ghl.leads },
-        { label: "Referred", value: ghl.referred },
-        { label: "MAs Booked", value: ghl.masBooked },
-      ]
-    : []; // no typed July funnel while GoHighLevel is down
+  const ma = "Market Appraisals";
+
+  /** A Launch Pad figure, or nothing at all - never a stand-in. */
+  const live = (value: number | null | undefined, display?: string, note?: string): StatValue =>
+    lp && value != null
+      ? {
+          value,
+          display,
+          source: "live-teg",
+          note: note ?? `Live from Launch Pad, ${periodWords}.`,
+          asOf,
+        }
+      : {
+          value: null,
+          source: "unavailable",
+          note: lp ? `Launch Pad has no figure for ${periodWords}.` : LAUNCHPAD_DOWN[lpState] ?? LAUNCHPAD_DOWN.unavailable,
+        };
+
+  const spendNote =
+    lp?.metaWindow == null
+      ? "Meta only gives spend for this month and last month."
+      : "Live from Meta via Launch Pad - spend on every agent's own campaigns.";
 
   return (
     <div className="space-y-6">
@@ -301,80 +306,221 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
       <SocialsSection />
 
       {/* Source banner */}
-      {ghl ? (
+      {lpState === "ready" ? (
         <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-[13px] text-green-800">
-          <span className="font-semibold">Sources:</span> Leads generated is
-          live from Meta; referrals &amp; MAs booked are live from Go High
-          Level ({ghl.pipelines.join(" + ")}).
+          <span className="font-semibold">Source:</span> Launch Pad, the paid leads admin site - the same figures
+          as its managing director screen for {monthLabel(month)}
+          {isCurrent ? " so far" : ""}.
+        </div>
+      ) : lpState === "loading" ? (
+        <div className="flex items-center gap-2 rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+          Asking Launch Pad for {monthLabel(month)}
         </div>
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-          <span className="font-semibold">Sources:</span> Leads generated is live
-          from Meta. Referrals and MAs booked show a dash until the Go High Level
-          connection answers.
+          {LAUNCHPAD_DOWN[lpState] ?? LAUNCHPAD_DOWN.unavailable}
         </div>
       )}
 
-      {/* A FLOW tab: the month selector genuinely re-queries the source, so
-          most figures below really are {monthLabel(month)}. The warning is
-          only about the ones still on the seed, which stay badged and dated
-          - the old wording condemned the whole tab as stale, including the
-          live figures it had just fetched for the selected month. */}
-      {/* A banner stood here telling the reader that anything badged
-          "snapshot" was really 11 Jul 2026. There is no such badge any more —
-          the capture is gone and the source is retired - so it was pointing at
-          something that does not exist, while implying the remaining dashes
-          were July figures rather than nothing at all. Each figure carries its
-          own source; a page-wide disclaimer only competed with them. */}
-
-      {/* Month cards - the selected month, not a fixed July */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard label={isCurrent ? "Leads generated (MTD)" : "Leads generated"} stat={leadsStat} sub={leadsSub} big />
-        <StatCard label="Referred to agents" stat={referredStat} />
-        <StatCard label="MAs booked" stat={masStat} />
+      {/* Month cards - Launch Pad's overview and ads totals, for the picked month */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Lead → referral"
-          stat={leadToReferralStat}
-          sub={
-            ghl
-              ? `${ghl.referred} of ${ghl.leads} leads referred`
-              : "GoHighLevel hasn't answered"
-          }
+          label={isCurrent ? "Leads (MTD)" : "Leads"}
+          stat={live(t?.leads, undefined, `Live from Launch Pad - leads that landed in an agent's funnel, ${periodWords}.`)}
+          sub="Landed in agents' funnels"
+          big
+          loading={loading}
         />
         <StatCard
-          label="Referral → MA"
-          stat={leadToMaStat}
-          sub={
-            ghl
-              ? `${ghl.masBooked} MA${ghl.masBooked === 1 ? "" : "s"} from ${ghl.referred} referred lead${ghl.referred === 1 ? "" : "s"}`
-              : "GoHighLevel hasn't answered"
-          }
+          label={ma}
+          stat={live(t?.converted)}
+          sub={t ? `${pct(t.rate)} of leads` : undefined}
+          loading={loading}
         />
         <StatCard
-          label="Pro licence income (MTD)"
-          stat={pl.proLicenceIncome}
+          label="Speed to Lead"
+          stat={live(t?.speedMs, t?.speedMs != null ? fmtDuration(t.speedMs) : undefined, `Live from Launch Pad - average time from a lead arriving to the first call, ${periodWords}.`)}
+          sub="Lead in to first call"
+          loading={loading}
+        />
+        <StatCard
+          label="Team"
+          stat={live(t?.team)}
+          sub={t ? `${t.started} started` : undefined}
+          loading={loading}
+        />
+        <StatCard
+          label="Ad Spend"
+          stat={live(t?.spend, t?.spend != null ? gbp(t.spend) : undefined, spendNote)}
+          sub={
+            t?.spend != null
+              ? `${t.metaLeads ?? 0} Meta lead${t.metaLeads === 1 ? "" : "s"} on agents' campaigns`
+              : lp
+                ? "Meta only gives this month and last month"
+                : undefined
+          }
+          loading={loading}
+        />
+        <StatCard label="Cost per Lead" stat={live(t?.cpl, t?.cpl != null ? gbp(t.cpl) : undefined)} loading={loading} />
+        <StatCard
+          label="Cost per Market Appraisal"
+          /* No MAs yet is an answer, not an outage - a dash with the live dot. */
+          stat={
+            t && t.spend != null && t.converted === 0
+              ? live(0, "—", `Live from Launch Pad - no ${ma.toLowerCase()} ${periodWords} to divide the spend by.`)
+              : live(t?.costPerConversion, t?.costPerConversion != null ? gbp(t.costPerConversion) : undefined)
+          }
+          sub={t && t.costPerConversion == null && t.converted === 0 ? `No ${ma.toLowerCase()} yet` : undefined}
+          loading={loading}
+        />
+        <StatCard
+          label="Monthly Ad Budget"
+          stat={live(t?.monthlyBudget, t ? gbp(t.monthlyBudget) : undefined, "Launch Pad - £100 a month per partner, the Pro licence cap.")}
+          sub="£100 a month per partner"
+          loading={loading}
         />
       </div>
 
-      {/* Lead funnel */}
+      {/* Leads by team member - Launch Pad's Team and Ads tabs in one table */}
       <section className="card p-5">
-        <h2 className="text-sm font-semibold">
-          Paid Lead Funnel - {monthLabel(month)}
-        </h2>
+        <h2 className="text-sm font-semibold">Leads by Team Member - {monthLabel(month)}</h2>
         <p className="mt-0.5 text-xs text-muted">
-          {ghl
-            ? `${ghl.leads} leads → ${ghl.referred} referred to agents → ${ghl.masBooked} market appraisal${ghl.masBooked === 1 ? "" : "s"} booked`
-            : "GoHighLevel hasn't answered, so there is no funnel to show. Nothing typed stands in for it."}
+          Leads that landed in each agent&rsquo;s funnel, what they turned into, and what their ads cost.
         </p>
-        <div className="mt-4">
-          <FunnelBar stages={funnelStages} />
-        </div>
+        {loading ? (
+          <div className="mt-4 flex items-center gap-2 text-xs text-muted">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+            Loading
+          </div>
+        ) : !lp ? (
+          <p className="mt-4 text-[13px] text-muted">{LAUNCHPAD_DOWN[lpState] ?? LAUNCHPAD_DOWN.unavailable}</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-[13px]">
+              <thead>
+                <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-muted">
+                  <th className="pb-2 pr-3 font-semibold">Agent</th>
+                  {/* Leads and MAs first, so a phone sees them before it scrolls. */}
+                  <th className="pb-2 pr-3 text-right font-semibold">Leads</th>
+                  <th className="pb-2 pr-3 text-right font-semibold">MAs</th>
+                  <th className="pb-2 pr-3 text-right font-semibold">Spend</th>
+                  <th className="pb-2 pr-3 text-right font-semibold">Meta Leads</th>
+                  <th className="pb-2 pr-3 text-right font-semibold">Rate</th>
+                  <th className="pb-2 pr-3 text-right font-semibold">Cost / Lead</th>
+                  <th className="pb-2 text-right font-semibold">Speed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lp.agents.map((a, i) => (
+                  <tr key={`${a.name}-${i}`} className="border-b border-line/50 last:border-0">
+                    <td className="py-2.5 pr-3">
+                      <div className="font-medium">{a.name}</div>
+                      <div className="text-[11px] text-muted">
+                        {[
+                          a.started ? null : "Not started",
+                          a.active ? null : "Left",
+                          a.connected ? null : "No ads connected",
+                          a.error ? "Meta didn't answer" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "Active"}
+                      </div>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right font-semibold tabular-nums">{a.leads}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{a.converted}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{money(a.spend)}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums text-muted">{a.metaLeads ?? "—"}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums text-muted">{pct(a.rate)}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums text-muted">{money(a.cpl)}</td>
+                    <td className="py-2.5 text-right tabular-nums text-muted">
+                      {a.speedMs != null ? fmtDuration(a.speedMs) : "—"}
+                    </td>
+                  </tr>
+                ))}
+                {lp.agents.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-muted">
+                      Nobody at TLE has a Launch Pad account yet.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Where leads came from */}
+        <section className="card p-5">
+          <h2 className="text-sm font-semibold">Where Leads Came From</h2>
+          <p className="mt-0.5 text-xs text-muted">{monthLabel(month)}</p>
+          <div className="mt-4">
+            {loading ? (
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+                Loading
+              </div>
+            ) : !lp ? (
+              <p className="text-[13px] text-muted">{LAUNCHPAD_DOWN[lpState] ?? LAUNCHPAD_DOWN.unavailable}</p>
+            ) : (
+              <BarList
+                rows={lp.sources.map((s) => ({
+                  label: s.source.charAt(0).toUpperCase() + s.source.slice(1),
+                  value: s.leads,
+                }))}
+              />
+            )}
+          </div>
+        </section>
+
+        {/* Needs attention - about today, so only on the current month */}
+        <section className="card p-5">
+          <h2 className="text-sm font-semibold">Needs Attention</h2>
+          <p className="mt-0.5 text-xs text-muted">
+            {lp && isCurrent
+              ? `${lp.attentionCount.toLocaleString("en-GB")} lead${lp.attentionCount === 1 ? "" : "s"} going cold across the business`
+              : "Leads going cold across the business"}
+          </p>
+          <div className="mt-4">
+            {loading ? (
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+                Loading
+              </div>
+            ) : !lp ? (
+              <p className="text-[13px] text-muted">{LAUNCHPAD_DOWN[lpState] ?? LAUNCHPAD_DOWN.unavailable}</p>
+            ) : !isCurrent ? (
+              <p className="text-[13px] text-muted">This is about today, so it shows on the current month only.</p>
+            ) : lp.attention.length === 0 ? (
+              <p className="text-[13px] text-muted">Nothing needs chasing - everything&rsquo;s being worked.</p>
+            ) : (
+              <div className="space-y-2">
+                {lp.attention.slice(0, 6).map((a, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium">{a.leadName}</p>
+                      <p className="truncate text-xs text-muted">{a.agentName}</p>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted">
+                      {a.kind === "unanswered" ? "No answer" : "Going cold"} · {fmtDuration(a.ageMs)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
 
       {/* Licence economics */}
       <section className="card p-5">
-        <h2 className="text-sm font-semibold">Licence economics</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <h2 className="text-sm font-semibold">Licence Economics</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
               Joining fee
@@ -390,13 +536,20 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
             <div className="mt-1 text-xs text-muted">Per partner, per month</div>
           </div>
           <StatCard
+            label="Pro licence income (MTD)"
+            stat={pl.proLicenceIncome}
+          />
+          <StatCard
             label="YTD joining fees"
             stat={pl.ytdJoiningFees}
             /* Was "Jan–Jun 2026", typed (Rig run 2, P-021). The year off the clock. */
             sub={`Joining fees received so far in ${new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London", year: "numeric" })}`}
           />
         </div>
-        <p className="mt-4 text-xs text-muted">{pl.note}</p>
+        {/* pl.note named Go High Level as the lead source; Launch Pad is now. */}
+        <p className="mt-4 text-xs text-muted">
+          Pro licence = £100+VAT a month per partner · Joining fee = £1,000+VAT one-off
+        </p>
       </section>
     </div>
   );

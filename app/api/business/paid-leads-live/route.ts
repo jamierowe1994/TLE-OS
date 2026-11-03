@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAnyCapability } from "@/lib/admin";
-import { findById, listUsers } from "@/lib/business/users-store";
+import { listUsers } from "@/lib/business/users-store";
 import { getBusinessLeadsMTD, metaTokenSet, parseCampaignIds } from "@/lib/business/meta";
-import { getGhlPaidLeadsMtd } from "@/lib/business/ghl";
+import { fetchLaunchPadFigures } from "@/lib/business/launchpad-figures";
 import { currentMonth } from "@/lib/business/format";
 
-// Live figures for the Paid Leads tab, from both ends of the funnel:
-//   Meta - leads generated + spend + CPL (the ads platform's own numbers).
-//   GHL  - the CRM funnel: leads created, referred to agents (Initial Call
-//          Booked), MAs booked (MA Booked stage / won). Cached in lib/ghl.ts.
+// Live figures for the Paid Leads tab.
+//   Launch Pad - the paid leads admin site. Leads that landed in each agent's
+//                funnel, MAs, speed to lead, spend on the agents' campaigns,
+//                per agent, by source, and what needs chasing. What the tab shows.
+//   Meta       - the TLE ad account's own totals, kept for the Marketing hub.
+//
+// Susan Liles, 3 Nov 2026: Go High Level is gone from here. Its token has been
+// refused (401) since GHL was retired, so referrals and MAs were dashes while
+// Launch Pad held the real numbers. See lib/business/launchpad-figures.ts.
 
 // Two audiences: Susan reads the spend and CPL as business performance,
 // Francesca reads the same numbers as her own campaigns' results.
@@ -32,16 +37,14 @@ export async function GET(req: NextRequest) {
     return getBusinessLeadsMTD(campaignIds, month).catch(() => null);
   })();
 
-  const [mtd, ghl] = await Promise.all([
-    metaWork,
-    getGhlPaidLeadsMtd(month).catch(() => null),
-  ]);
+  const [mtd, launchpad] = await Promise.all([metaWork, fetchLaunchPadFigures(month)]);
 
   return NextResponse.json({
     configured: metaTokenSet(),
     month,
     ...(mtd ?? { leads: null }),
-    ghl,
+    launchpad: launchpad.ok ? launchpad.figures : null,
+    launchpadError: launchpad.ok ? null : launchpad.reason,
     generatedAt: new Date().toISOString(),
   });
 }
