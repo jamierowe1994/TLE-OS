@@ -51,7 +51,8 @@ import { isTestId } from "@/lib/test-overlay";
  * be checked. Taking the advert down still sends every feed "withdrawn".
  *
  * Read only. Nothing here writes to the listing system; the screen's Take the
- * advert down is the existing /api/listings/publish "off".
+ * advert down is the existing /api/listings/publish "off". The once-a-day
+ * automatic take-down, behind its own switch, is lib/listings-auto-takedown.
  */
 
 /** Susan's fortnight. */

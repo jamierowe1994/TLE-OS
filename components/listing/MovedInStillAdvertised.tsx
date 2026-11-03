@@ -20,6 +20,11 @@ import DoodleIcon from "@/components/DoodleIcon";
  *
  * Renders nothing for anyone but an owner, and nothing while an owner is
  * viewing as somebody else.
+ *
+ * The setting Susan asked for (3 Nov 2026): Take let adverts down
+ * automatically on Admin > Switches, off until an owner arms it, takes this
+ * whole list down once a day (lib/listings-auto-takedown). The panel says
+ * whether it is on and what the last run did.
  */
 
 type Row = {
@@ -33,6 +38,13 @@ type Row = {
   portals: string[];
 };
 type Report = { rows: Row[]; looked: number; notYet: number; noDate: number; unreadable: number; checkedAt: string; afterDays: number };
+/* The automatic take-down's switch (lib/listings-auto-takedown, 3 Nov 2026). */
+type Auto = {
+  on?: boolean;
+  cap?: number;
+  canArm: boolean;
+  last?: { day: string; startedAt: string; finishedAt: string | null; listed: number | null; taken: number; failed: number; held: number; note: string } | null;
+};
 type Line = { state: "ask" | "doing" | "failed"; note?: string };
 
 const SOURCE: Record<Row["source"], string> = {
@@ -51,6 +63,53 @@ const portalWords = (p: string[]) => (p.length > 1 ? `${p.slice(0, -1).join(", "
 const primary = "press-ring inline-flex items-center justify-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50";
 const quiet = "press-ring inline-flex items-center justify-center gap-2 rounded-full border border-line/70 bg-white px-3.5 py-1.5 text-[12px] font-semibold disabled:opacity-50";
 
+/**
+ * Whether the list is also taken down by itself (Susan Liles, 3 Nov 2026):
+ * the switch on Admin > Switches, and what the last run did.
+ */
+function AutoLine({ auto }: { auto: Auto }) {
+  const last = auto.last;
+  const cap = auto.cap ?? 100;
+  const where = auto.canArm ? (
+    <>
+      Turn it on in{" "}
+      <Link href="/admin/switches" className="underline underline-offset-2 hover:text-accent-dark">
+        Admin &gt; Switches
+      </Link>
+    </>
+  ) : (
+    <>An owner can turn it on in Admin &gt; Switches</>
+  );
+  const lastWords = !last
+    ? null
+    : !last.finishedAt
+      ? `Running now, started at ${timeWords(last.startedAt)}.`
+      : [
+          `Last run ${dateWords(last.day)} at ${timeWords(last.startedAt)}: ${last.taken} taken down`,
+          last.failed ? `, ${last.failed} refused` : "",
+          last.held ? `, ${last.held} left for the next day` : "",
+          ".",
+          last.note ? ` ${last.note}` : "",
+        ].join("");
+  return (
+    <div className={`mt-3 flex max-w-[640px] items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed ${auto.on ? "bg-[#eef2ea] text-[#3f5a32]" : "bg-[#f4f1ee] text-ink"}`} role="status">
+      <DoodleIcon name="clock" size={14} className="mt-[2px]" />
+      <p className="min-w-0">
+        {auto.on ? (
+          <>
+            <span className="font-semibold">Automatic take-down is on.</span> Once a day, soon after 11am, every home on this list is taken off the portals, up to {cap} a day.
+          </>
+        ) : (
+          <>
+            <span className="font-semibold">Automatic take-down is off.</span> {where}, under Take let adverts down automatically, and every home on this list is taken off the portals once a day.
+          </>
+        )}
+        {lastWords && <span className="mt-0.5 block opacity-80">{lastWords}</span>}
+      </p>
+    </div>
+  );
+}
+
 export default function MovedInStillAdvertised({ className = "" }: { className?: string }) {
   const [owner, setOwner] = useState<boolean | null>(null);
   const [report, setReport] = useState<Report | null>(null);
@@ -61,6 +120,7 @@ export default function MovedInStillAdvertised({ className = "" }: { className?:
   const [all, setAll] = useState(false);
   const [lines, setLines] = useState<Record<string, Line>>({});
   const [done, setDone] = useState<string | null>(null);
+  const [auto, setAuto] = useState<Auto | null>(null);
 
   /* Owners and Susan, decided on the actor (as the Tools grid does). */
   useEffect(() => {
@@ -83,7 +143,8 @@ export default function MovedInStillAdvertised({ className = "" }: { className?:
     setError(null);
     try {
       const r = await fetch(`/api/listings/moved-in${fresh ? "?fresh=1" : ""}`, { cache: "no-store" });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string } & Partial<Report>;
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; auto?: Auto } & Partial<Report>;
+      setAuto(j.auto ?? null);
       if (!j.ok || !Array.isArray(j.rows)) throw new Error(j.error ?? "The list could not be checked. Try again in a minute.");
       setReport(j as Report);
     } catch (e) {
@@ -145,6 +206,7 @@ export default function MovedInStillAdvertised({ className = "" }: { className?:
           <p className="mt-1.5 max-w-[640px] text-[12.5px] leading-relaxed text-muted">
             Let agreed or let, the tenant moved in {after} days ago or more, and the listing system is still sending the advert to the portals as on the market. Rightmove and OnTheMarket take some let adverts down by themselves, so not every one here is still showing there.
           </p>
+          {auto && typeof auto.on === "boolean" && <AutoLine auto={auto} />}
         </div>
         {report && !loading && (
           <button type="button" onClick={() => void load(true)} className={quiet}>

@@ -6,10 +6,10 @@ import { accessFor } from "@/lib/area-access";
 import { AREA_DEFS, canAct, levelOf, lockedSentence } from "@/lib/area-map";
 import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
-import { forgetMovedIn } from "@/lib/listings-moved-in";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
 import { stillOnPortalFeeds } from "@/lib/advert-offline";
+import { ALL_CHANNELS, OFF_CHANNELS, queueUpload, takeAdvertOff, whereFrom } from "@/lib/listing-take-off";
 import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked, type RexResponse } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -95,37 +95,10 @@ const TERMS_UNCHECKED_SENTENCE =
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ALL_CHANNELS = ["portals", "automatch", "external", "general"];
-const OFF_CHANNELS = ["general"];
 const PUBLISH_AREA = AREA_DEFS.find((a) => a.id === "listing-publish")!;
 /* For a portal message that names the system behind it: agents get these instead. */
 const PORTAL_CHECK = "One of the portal checks has not passed yet.";
 const PORTAL_WARNING = "One of the portal checks has a warning.";
-
-type Where = { status: string | null; channels: string[]; onPortals: boolean };
-
-/**
- * `feeds` is ListingPortalUploads/getStatuses: still on a portal when a feed
- * is running there and the last upload sent was "current" (see the header).
- */
-function whereFrom(result: unknown, feeds?: unknown): Where {
-  const r = (result ?? {}) as { status?: unknown; active_targets?: unknown };
-  const status = typeof r.status === "string" ? r.status : null;
-  const channels = Array.isArray(r.active_targets) ? r.active_targets.filter((c): c is string => typeof c === "string") : [];
-  return { status, channels, onPortals: status === "published" && (channels.includes("portals") || stillOnPortalFeeds(feeds)) };
-}
-
-/** Tell the portal feeds what to show: "withdrawn" for off, the listing's own status for on. */
-async function queueUpload(id: number, action: "off" | "on", token: string | null) {
-  const res = await rexCall("ListingPortalUploads", "queue", { listing_id: id, ...(action === "off" ? { portal_listing_status: "withdrawn" } : {}) }, token);
-  const r = (res.result ?? {}) as { queued?: unknown; detail?: unknown };
-  const detail = res.ok ? String(r.detail ?? "") : String(res.error ?? `HTTP ${res.status}`);
-  /* "Already queued" on the way back on is a send already waiting to go,
-     not a refusal (Sean, 2 Nov 2026: 285 Leith Walk was feeding all three
-     portals while the screen told him it had failed). */
-  const waiting = action === "on" && /already queued/i.test(detail);
-  return { ok: (res.ok && r.queued === true) || waiting, res, detail };
-}
 
 /** getErrorsPreventingUpload answers a list, or messages keyed by portal. */
 function portalMessages(v: unknown): string[] {
@@ -149,6 +122,44 @@ async function agentToken(actor: OsUser, agent: { id: string | null; name: strin
      (components/SignInAgain) and tries again, 6 Oct 2026. */
   if (same) return { error: "Your REX sign-in has run out. Enquiries go to whoever puts a listing live, so it has to go out under your name - sign in again and it carries on.", signIn: true };
   return { error: `This one has to go live as ${first}, because enquiries go to whoever puts a listing live, and ${first}'s REX sign-in has run out. ${first} signs in again on their Profile (Connect to REX), then either of you can push it.` };
+}
+
+/** REX said no: a lapsed sign-in is asked for again, anything else logged with REX's own words. */
+async function refusedAnswer(
+  res: RexResponse,
+  id: number,
+  action: "publish" | "quiet" | "off" | "on",
+  token: string | null,
+  as: { asActor: boolean; name: string },
+  actor: OsUser
+): Promise<NextResponse> {
+  if (token && isExpiredToken(res)) {
+    const whose = as.asActor ? "Your REX sign-in has run out. Sign in again" : `${as.name}'s REX sign-in has run out. They sign in again on their Profile (Connect to REX)`;
+    return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
+  }
+  const plain = "The portals did not take that change. Try again in a minute.";
+  /* Kept (6 Oct 2026): 6 Ruskin Place was refused twice for Lianna and
+     nothing said why - the agent saw the plain sentence and the reason
+     went nowhere. REX's message goes in the audit log, with anything
+     shaped like a session token taken out first. */
+  const why = String(res.error ?? `HTTP ${res.status}`)
+    .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"[removed]"')
+    .replace(/\b[0-9a-f]{4}(?:-[0-9a-f]{4}){4,}\b/gi, "[removed]")
+    .slice(0, 400);
+  console.error("[publish] REX refused", { id, action, status: res.status, why });
+  await record({
+    kind: "listing_publication",
+    actorId: actor.id,
+    actorEmail: actor.email,
+    detail: `${id}: ${action} REFUSED${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"} - ${why}`,
+  }).catch(() => {});
+  /* REX's own terms rule (15 Oct 2026, bugs 2fb80600 and 718558c6):
+     something the agent can do, so it is said as such - the same
+     sentence as the go-live check - and not as the portals being down. */
+  if ((action === "publish" || action === "quiet") && /terms of business is required/i.test(String(res.error ?? ""))) {
+    return NextResponse.json({ ok: false, error: TERMS_SENTENCE, missing: ["terms"] }, { status: 422 });
+  }
+  return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });
 }
 
 function listingId(v: unknown): number | null {
@@ -265,6 +276,34 @@ export async function POST(req: NextRequest) {
   if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
 
   try {
+    /* Off is the shared steps (lib/listing-take-off), the same ones the
+       automatic take-down runs (Susan Liles, 3 Nov 2026), so the two cannot
+       differ. As THEM, so REX says who did it. No token falls to the office
+       account, the same as the write-up. */
+    if (action === "off") {
+      const token = await rexTokenFor(actor.id);
+      const as = { asActor: true, name: actor.name };
+      const done = await takeAdvertOff(id, token);
+      if (!done.ok) {
+        if (done.step === "read") {
+          const plain = "The listings system did not say where the listing is. Try again in a minute.";
+          return NextResponse.json({ ok: false, error: isOwner(actor) ? done.error ?? "REX did not say where the listing is." : plain }, { status: 502 });
+        }
+        if (done.step === "not-published") return NextResponse.json({ ok: false, error: "It is not published yet, so there is nothing to take off." }, { status: 409 });
+        if (done.step === "reopen") {
+          return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not open to send the withdrawal: ${done.error ?? "REX did not say."}` : "The portals did not take that change. Try again in a minute." }, { status: 502 });
+        }
+        return refusedAnswer(done.res, id, action, token, as, actor);
+      }
+      await record({
+        kind: "listing_publication",
+        actorId: actor.id,
+        actorEmail: actor.email,
+        detail: `${id}: off (${done.was.status ?? "?"} [${done.was.channels.join(",")}] -> ${done.now.status ?? "?"} [${done.now.channels.join(",")}])${token ? "" : " as the office account"}`,
+      });
+      return NextResponse.json({ ok: true, id, action, ...done.now });
+    }
+
     const before = await rexCall("ListingPublication", "getPublicationStatus", { listing_id: id });
     if (!before.ok) {
       const plain = "The listings system did not say where the listing is. Try again in a minute.";
@@ -348,15 +387,8 @@ export async function POST(req: NextRequest) {
          account, the same as the write-up. */
       token = await rexTokenFor(actor.id);
     }
-    /* Off: the portals are told "withdrawn" BEFORE the channel goes, so a
-       refusal leaves the listing exactly as it was rather than off in REX and
-       still on Rightmove (the header, 22 Oct 2026). On: told after. */
-    /* Already off the portals channel but a feed still shows it (the seven
-       of 20-21 Oct): REX refuses the queue with "Not published to portals"
-       while the channel is off. So the channel comes back for the moment the
-       withdrawn upload is queued, and goes again just below - proven on 6
-       Ruskin Place, 22 Oct 2026, with James's yes. A refusal puts the
-       channels back as they were. */
+    /* On: the portals are told after the channels come back. Off, with the
+       withdrawn upload sent BEFORE the channel goes, is lib/listing-take-off. */
     /* Live without Portals: the outward channels go BEFORE the publish, so no
        feed is ever sent it. Refused, nothing has changed. */
     if (action === "quiet") {
@@ -369,61 +401,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not close before going live: ${closed.error ?? "REX did not say."}` : "It could not be kept off the portals, so it has not gone live. Try again in a minute." }, { status: 502 });
       }
     }
-    const reopen = action === "off" && !was.channels.includes("portals");
-    if (reopen) {
-      const opened = await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: [...was.channels, "portals"] }, token);
-      if (!opened.ok) {
-        return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not open to send the withdrawal: ${opened.error ?? "REX did not say."}` : "The portals did not take that change. Try again in a minute." }, { status: 502 });
-      }
-    }
-    const told = action === "off" ? await queueUpload(id, "off", token) : null;
-    if (reopen && told && !told.ok) {
-      await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: was.channels }, token).catch(() => null);
-    }
     let res: RexResponse =
-      told && !told.ok
-        ? { status: told.res.status, ok: false, result: told.res.result, error: `The portals were not told to withdraw it: ${told.detail}` }
-        : action === "publish" || action === "quiet"
-          ? await rexCall("ListingPublication", "publish", { listing_id: id }, token)
-          : await rexCall(
-              "ListingPublication",
-              "setActivePublicationChannels",
-              { listing_id: id, channels: action === "off" ? OFF_CHANNELS : ALL_CHANNELS },
-              token
-            );
+      action === "publish" || action === "quiet"
+        ? await rexCall("ListingPublication", "publish", { listing_id: id }, token)
+        : await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: ALL_CHANNELS }, token);
     if (res.ok && action === "on") {
       const back = await queueUpload(id, "on", token);
       if (!back.ok) res = { status: back.res.status, ok: false, result: back.res.result, error: `The channels are back on but the portals were not sent it again: ${back.detail}` };
     }
-    if (!res.ok) {
-      if (token && isExpiredToken(res)) {
-        const whose = as.asActor ? "Your REX sign-in has run out. Sign in again" : `${as.name}'s REX sign-in has run out. They sign in again on their Profile (Connect to REX)`;
-        return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
-      }
-      const plain = "The portals did not take that change. Try again in a minute.";
-      /* Kept (6 Oct 2026): 6 Ruskin Place was refused twice for Lianna and
-         nothing said why - the agent saw the plain sentence and the reason
-         went nowhere. REX's message goes in the audit log, with anything
-         shaped like a session token taken out first. */
-      const why = String(res.error ?? `HTTP ${res.status}`)
-        .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"[removed]"')
-        .replace(/\b[0-9a-f]{4}(?:-[0-9a-f]{4}){4,}\b/gi, "[removed]")
-        .slice(0, 400);
-      console.error("[publish] REX refused", { id, action, status: res.status, why });
-      await record({
-        kind: "listing_publication",
-        actorId: actor.id,
-        actorEmail: actor.email,
-        detail: `${id}: ${action} REFUSED${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"} - ${why}`,
-      }).catch(() => {});
-      /* REX's own terms rule (15 Oct 2026, bugs 2fb80600 and 718558c6):
-         something the agent can do, so it is said as such - the same
-         sentence as the go-live check - and not as the portals being down. */
-      if ((action === "publish" || action === "quiet") && /terms of business is required/i.test(String(res.error ?? ""))) {
-        return NextResponse.json({ ok: false, error: TERMS_SENTENCE, missing: ["terms"] }, { status: 422 });
-      }
-      return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });
-    }
+    if (!res.ok) return refusedAnswer(res, id, action, token, as, actor);
 
     /* Read it back rather than trusting the answer. */
     const [after, feeds] = await Promise.all([
@@ -434,8 +420,6 @@ export async function POST(req: NextRequest) {
 
     await invalidateListingBook();
     forgetListing(id);
-    /* Off the owners' moved-in list at once (lib/listings-moved-in, 3 Nov 2026). */
-    if (action === "off") forgetMovedIn(String(id));
     await record({
       kind: "listing_publication",
       actorId: actor.id,

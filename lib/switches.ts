@@ -618,6 +618,21 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "LISTING_LET_AGREED",
     legacyOn: "on",
   },
+  {
+    /* Susan Liles, 3 Nov 2026: "any properties Let Agreed that have actually
+       moved in and past 14 days from move in date that the adverts are
+       removed from the portals". lib/listings-auto-takedown, once a day on
+       the hourly reminders run, from 11:00. Off, nothing is taken down and nothing reaches
+       REX; the owners' list on Listings still shows the homes, each with its
+       own Take the advert down. No new variable: unset is off. */
+    key: "listing_auto_takedown",
+    label: "Take let adverts down automatically",
+    what: "Once a day, soon after 11am, takes every home on Listings > Moved In and Still Advertised off Rightmove, Zoopla and OnTheMarket: let agreed or let, the tenant moved in 14 days ago or more, and the advert still being sent to the portals. The same steps as Take the advert down on that list: the portals are sent \"withdrawn\", the listing stays published in REX on no portal, and it is marked Offline in the OS. At most 100 homes a day; never test listings. Each one is written to the activity log.",
+    who: "Nobody is emailed. REX is WRITTEN TO as the office account and the PUBLIC portals drop the advert. REX_ALLOW_WRITES must name ListingPortalUploads/queue and ListingPublication/setActivePublicationChannels.",
+    confirm: "TAKE ADVERTS DOWN",
+    legacyEnv: "LISTING_AUTO_TAKEDOWN",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

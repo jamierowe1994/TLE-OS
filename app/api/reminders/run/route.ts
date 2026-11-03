@@ -1,9 +1,11 @@
 import { warmDiary } from "@/lib/diary-cache";
 import { publicError } from "@/lib/public-error";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
+import { AUTO_TAKEDOWN_SWITCH, runAutoTakeDown } from "@/lib/listings-auto-takedown";
 import { runReminders } from "@/lib/reminders";
+import { switchOn } from "@/lib/switches";
 import { worksSweep } from "@/lib/works-sweep";
 
 /**
@@ -16,6 +18,10 @@ import { worksSweep } from "@/lib/works-sweep";
  * today (lib/reminders), writes it to os_reminders, and clears whatever has
  * been dealt with since. An owner can also press it to see the run's own
  * account of itself.
+ *
+ * From the cron it also starts the day's automatic take-down of let adverts
+ * when Take let adverts down automatically is on (lib/listings-auto-takedown,
+ * 3 Nov 2026).
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,7 +42,23 @@ export async function POST(req: NextRequest) {
      in the first dashboard of the morning. Started first so it runs beside the
      reminders rather than after them; it never throws. */
   const diaryWarm = warmDiary();
+  /* LET ADVERTS TAKEN DOWN (Susan Liles, 3 Nov 2026; lib/listings-auto-takedown).
+     On this hourly timer because it is one that is proven to run: the
+     lunchtime cron's deployment still carries its old command and never
+     calls the portal-figures sweep. From the cron only, never an owner's
+     press. The switch is read now: off, nothing else happens. On, the run
+     goes on after the answer (a fresh read of every let home's feeds, then
+     the take-downs, longer than the cron waits) and keeps its own guards:
+     from 11:00 London, at most once a London day. */
+  const autoOn = cronAuthorised(req) ? await switchOn(AUTO_TAKEDOWN_SWITCH).catch(() => false) : false;
+  if (autoOn) {
+    after(() =>
+      runAutoTakeDown()
+        .then((r) => console.log("[reminders/run] automatic take-down", r.why ?? `${r.taken.length} taken down, ${r.failed.length} refused, ${r.held} held over`))
+        .catch((e) => console.error("[reminders/run] automatic take-down failed", e))
+    );
+  }
   const run = await runReminders();
   const works = await worksSweep().catch((e) => ({ doneRequests: 0, failed: publicError(e, "failed") }));
-  return NextResponse.json({ ...run, works, diary: await diaryWarm }, { status: run.ok ? 200 : 503 });
+  return NextResponse.json({ ...run, works, diary: await diaryWarm, autoTakeDown: autoOn ? "asked" : "off" }, { status: run.ok ? 200 : 503 });
 }
