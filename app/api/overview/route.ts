@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
     settle(Promise.all([get(worksGET, "/api/works-orders?open=1"), mine]).then(([j, homes]) => {
       const s = (j.summary ?? {}) as Json;
       const ours = (id: string | null) => !homes || (!!id && homes.has(id));
-      const carried = ((Array.isArray(j.carried) ? j.carried : []) as { propertyId: string | null; followUpOn: string | null; overdue: boolean; title: string; propertyName: string; dueOn: string | null }[]).filter((c) => ours(c.propertyId));
+      const carried = ((Array.isArray(j.carried) ? j.carried : []) as { propertyId: string | null; kind?: string | null; followUpOn: string | null; overdue: boolean; title: string; propertyName: string; dueOn: string | null }[]).filter((c) => ours(c.propertyId));
       const orders = ((Array.isArray(j.orders) ? j.orders : []) as { propertyId: string | null; kind?: string | null; dueAt: string | null; urgency: string | null; rehearsal?: boolean }[]).filter((o) => !o.rehearsal && ours(o.propertyId));
       return {
         open: homes ? orders.length + carried.length : Number(s.open ?? 0),
@@ -130,6 +130,14 @@ export async function GET(req: NextRequest) {
         followUp: carried.filter((c) => c.followUpOn && c.followUpOn <= today).length,
         late: carried.filter((c) => c.overdue).slice(0, 3).map((c) => ({ title: c.title, where: c.propertyName, dueOn: c.dueOn })),
         partial: typeof j.carriedError === "string" ? j.carriedError : null,
+        /* Repairs and planned jobs apart, for My Business > Property Management
+           (Susan Liles, 3 Nov 2026), from the same rows as `open`. */
+        repairs: homes
+          ? orders.filter((o) => o.kind !== "planned").length + carried.filter((c) => c.kind !== "planned").length
+          : Number((s.byKind as Json | undefined)?.repair ?? 0),
+        planned: homes
+          ? orders.filter((o) => o.kind === "planned").length + carried.filter((c) => c.kind === "planned").length
+          : Number((s.byKind as Json | undefined)?.planned ?? 0),
       };
     })),
 
@@ -156,6 +164,7 @@ export async function GET(req: NextRequest) {
       const open = (Array.isArray(j.open) ? j.open : []) as { propertyName: string; moveOutOn: string | null; daysAway: number | null }[];
       return {
         open: Number(s.open ?? 0), overdue: Number(s.overdue ?? 0), next30: Number(s.next30 ?? 0), followUp: Number(s.followUp ?? 0),
+        noDate: Number(s.noDate ?? 0), doneThisMonth: Number(s.doneThisMonth ?? 0),
         next: open.filter((m) => m.daysAway !== null && m.daysAway >= 0).slice(0, 3).map((m) => ({ where: m.propertyName, on: m.moveOutOn })),
       };
     })),

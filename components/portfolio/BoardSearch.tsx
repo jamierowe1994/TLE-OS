@@ -61,12 +61,16 @@ export function useReportInner(open: boolean, onInnerOpen?: (open: boolean) => v
  */
 export function overviewQuery(): string {
   let agent = "";
+  /* Opened from My Business > Property Management (Susan Liles, 3 Nov 2026):
+     the whole business, as that tab's figures were read (lib/overview-access). */
+  let business = "";
   try {
     agent = new URLSearchParams(window.location.search).get("agent") ?? "";
+    if (window.location.pathname.startsWith("/company-figures/")) business = "&business=1";
   } catch {
     /* fine - the whole book */
   }
-  return /^\d{1,12}$/.test(agent) ? `overview=1&agent=${agent}` : "overview=1";
+  return /^\d{1,12}$/.test(agent) ? `overview=1&agent=${agent}${business}` : `overview=1${business}`;
 }
 
 /** Props every Portfolio board takes (21 Oct 2026). */

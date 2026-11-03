@@ -19,6 +19,10 @@ export const BUSINESS_TABS = [
   { key: "forecast", label: "Forecast", icon: "trend-up", blurb: "The plan, the partners' own forecasts, and what the book is worth." },
   { key: "agents", label: "Agents", icon: "user", blurb: "Each partner's month: commission, book, appraisals, listings and pipeline." },
   { key: "portfolio", label: "Portfolio", icon: "pack/building", blurb: "The book: managed, let only and rent collection, England & Wales and Scotland." },
+  /* Susan Liles, 3 Nov 2026: "the Property management overview that we had
+     before ... every property management function and overview". Every
+     figure opens the list it counts. */
+  { key: "property-management", label: "Property Management", icon: "checklist", blurb: "Every part of managing the homes, across the whole business: works orders, rent reviews and notices, visits, move-outs, renewals, arrears and compliance." },
   { key: "arrears", label: "Arrears", icon: "wallet", blurb: "Who is behind, by how much and for how long. Contains tenant personal data." },
   { key: "compliance", label: "Compliance", icon: "shield", blurb: "Certificates on the homes we manage, by type." },
   { key: "assistant", label: "Assistant", icon: "message", blurb: "Ask about the figures." },
@@ -38,11 +42,11 @@ export const BUSINESS_RAIL: RailGroup[] = [
   {
     title: "The book",
     rule: true,
-    items: BUSINESS_TABS.slice(7, 10).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
+    items: BUSINESS_TABS.slice(7, 11).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
   },
   {
     title: null,
     rule: true,
-    items: BUSINESS_TABS.slice(10).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
+    items: BUSINESS_TABS.slice(11).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
   },
 ];

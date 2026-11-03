@@ -71,8 +71,15 @@ export default function Sections() {
   useEffect(() => {
     fetchMe().then((m) => setMe(m?.actor?.name || m?.user?.name || ""));
     /* ?open=<id> from the bell. */
-    const want = new URLSearchParams(window.location.search).get("open");
+    const sp = new URLSearchParams(window.location.search);
+    const want = sp.get("open");
     if (want) setOpenId(want);
+    /* ?kind=s8&bucket=serve from a figure on My Business > Property Management
+       (Susan Liles, 3 Nov 2026): lands on the list that figure counted. */
+    const k = sp.get("kind");
+    if (k === "s13" || k === "s8") setKind(k);
+    const b = sp.get("bucket");
+    if (b && b in BUCKET_LABEL && !(b === "legal" && k !== "s8")) setBucket(b as Bucket);
   }, []);
   useEffect(() => {
     if (!openId || !list) return;

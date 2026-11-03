@@ -10,6 +10,7 @@ import Pnl from "./tabs/pnl";
 import Forecast from "./tabs/forecast";
 import Agents from "./tabs/agents";
 import Portfolio from "./tabs/portfolio";
+import PropertyManagement from "./tabs/property-management";
 import Arrears from "./tabs/arrears";
 import Compliance from "./tabs/compliance";
 import AssistantTab from "./tabs/assistant";
@@ -26,6 +27,7 @@ export const TAB_COMPONENTS: Record<BusinessTabKey, TabComponent> = {
   forecast: Forecast,
   agents: Agents,
   portfolio: Portfolio,
+  "property-management": PropertyManagement,
   arrears: Arrears,
   compliance: Compliance,
   assistant: AssistantTab,

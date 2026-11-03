@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import type { Who } from "@/lib/admin";
 import { grantAgentBook, grantWholeBusiness } from "@/lib/scope";
+import { can } from "@/lib/roles";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
@@ -52,7 +53,15 @@ export async function wholeOverviewFor(req: NextRequest, who: Who): Promise<bool
   if (!actor) return false;
   if (viewingAs) return !!subject && (await seesWholeOverview(subject));
   const viewAsCookie = actor.role === "owner" && !!readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
-  return !viewAsCookie && (await seesWholeOverview(actor));
+  if (viewAsCookie) return false;
+  /* My Business > Property Management (Susan Liles, 3 Nov 2026: "oversight of
+     all other PM tasks too"). Her figures are the whole business, and she is
+     not on the list above, so her own Overview would read only her own homes.
+     ?business=1 asks for the whole business, and is honoured only for
+     somebody who already holds every business figure (see:business) and is
+     not viewing as anyone. Her /overview is left as it is. */
+  if (req.nextUrl.searchParams.get("business") === "1" && can(actor.role, "see:business")) return true;
+  return seesWholeOverview(actor);
 }
 
 /**
