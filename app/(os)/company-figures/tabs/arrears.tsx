@@ -9,35 +9,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
 import SourceNote from "@/components/business/SourceNote";
-import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
+import DataTable from "@/components/business/DataTable";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
-import { formatDate, formatGBP, formatNum, monthLabel } from "@/lib/business/format";
+import { formatDate, formatNum, monthLabel } from "@/lib/business/format";
 import { liveMonth } from "@/lib/business/roster";
-
-/* Every tenant behind, from the same reading as the boxes above. This table was
-   the 6 July 2026 PayProp capture (21 records), still on the page two months
-   on under the same heading as today's live list. */
-const COLUMNS: DataTableColumn<Record<string, unknown>>[] = [
-  { key: "tenant", label: "Tenant" },
-  { key: "property", label: "Property" },
-  {
-    key: "account",
-    label: "Country",
-    render: (r) => (/scot|glasgow/i.test(String(r.account ?? "")) ? "Scotland" : "England & Wales"),
-  },
-  {
-    key: "tenancyStart",
-    label: "Tenancy start",
-    align: "right",
-    render: (r) => (r.tenancyStart ? formatDate(String(r.tenancyStart)) : "—"),
-  },
-  {
-    key: "owed",
-    label: "Owed",
-    align: "right",
-    render: (r) => <span className="font-semibold text-accent">{formatGBP(Number(r.owed), true)}</span>,
-  },
-];
 
 interface LiveArrears {
   tenants: Array<{ tenant: string; property: string; owed: number; lastInvoice: string | null; account?: string | null; tenancyStart?: string | null; lastPayment?: string | null }>;
@@ -513,55 +488,10 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
         </section>
       ) : null}
 
-      {/* Who's behind, and for how long - the question PayProp alone can't answer */}
-      {panel ? (
-        <section className="card p-5">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <h2 className="text-sm font-semibold">Who&rsquo;s behind</h2>
-            <span className="text-[11px] text-muted">
-              {log && !log.thin
-                ? `“Behind since” is the first of ${log.snapshots.length} readings in an unbroken run - a tenant who cleared and fell behind again starts afresh.`
-                : "“Behind since” fills in once there are two readings - today is the first."}
-            </span>
-          </div>
-          <div className="mt-3 space-y-1.5">
-            {panel.people.slice(0, 15).map((t, i) => {
-              const spell = sinceOf.get(`${t.tenant}|${t.property}`);
-              const days = spell ? daysBetween(spell.since, panel.asAt) : 0;
-              return (
-                <div
-                  key={`${t.tenant}-${i}`}
-                  className="flex items-center gap-3 rounded-xl border border-line px-3.5 py-2.5"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] text-ink">{t.tenant}</span>
-                    <span className="block truncate text-[11px] text-muted">{t.property}</span>
-                  </span>
-                  {spell && days > 0 ? (
-                    <span
-                      className="shrink-0 text-[11px] text-muted"
-                      title={`First seen in arrears on ${formatDate(spell.since)}, owing ${gbp(spell.owedThen)} then.`}
-                    >
-                      {days >= 60 ? `${Math.round(days / 30)} months` : `${days} days`}
-                      {spell.owed > spell.owedThen ? " ↑" : spell.owed < spell.owedThen ? " ↓" : ""}
-                    </span>
-                  ) : null}
-                  <span className="shrink-0 text-[13px] font-semibold text-ink tnum">
-                    £{t.owed.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          {panel.people.length > 15 ? (
-            <p className="mt-2 text-[11px] text-muted">+{panel.people.length - 15} more</p>
-          ) : null}
-        </section>
-      ) : null}
-
-      <ArrearsImport snapshots={log?.snapshots ?? []} onSaved={loadLog} />
-
       {/* ── Arrears by country and age ──────────────────────────────────────
+          Susan Liles, 3 Nov 2026: moved up the page to sit above Who's
+          Behind, so the summary reads before the names.
+
           Two books, not one. PayProp keeps England & Wales in one agency and
           Scotland in another, and they are chased by different people under
           different rules - a pooled total hides which book is actually behind.
@@ -577,7 +507,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
       {panel ? (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">
-            Arrears by country and age - as at {formatDate(panel.asAt)}
+            Arrears by Country and Age - as at {formatDate(panel.asAt)}
             <SourceNote tone="live">
               PayProp report/tenant/balances, both agencies, counting only negative
               balances. Country is PayProp&rsquo;s own agency - England and Wales share
@@ -690,19 +620,74 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
         </section>
       ) : null}
 
-      {/* Tenant table */}
+
+      {/* Who's behind, and for how long - the question PayProp alone can't answer.
+          Susan Liles, 3 Nov 2026: "The list of arrears seem to be duplicated
+          below?" It was: the first 15 here, then every tenant again in a
+          table at the foot of the page, from the same reading. One list now,
+          everybody on it, with what the table added (country, tenancy start). */}
       {panel ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">
-            Every Tenant in Arrears - {panel.people.length} as at {formatDate(panel.asAt)}
-          </h2>
-          <DataTable
-            columns={COLUMNS}
-            rows={panel.people as unknown as Record<string, unknown>[]}
-            compact
-          />
+        <section className="card p-5">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h2 className="text-sm font-semibold">
+              Who&rsquo;s Behind - {panel.people.length} as at {formatDate(panel.asAt)}
+            </h2>
+            <span className="text-[11px] text-muted">
+              {log && !log.thin
+                ? `“Behind since” is the first of ${log.snapshots.length} readings in an unbroken run - a tenant who cleared and fell behind again starts afresh.`
+                : "“Behind since” fills in once there are two readings - today is the first."}
+            </span>
+          </div>
+          <div className="mt-3 space-y-1.5">
+            {panel.people.map((t, i) => {
+              const spell = sinceOf.get(`${t.tenant}|${t.property}`);
+              const days = spell ? daysBetween(spell.since, panel.asAt) : 0;
+              const country = COUNTRY_GROUPS.find((g) => g.match(t.account))?.label;
+              const pending = notMovedIn(t, panel.asAt);
+              return (
+                <div
+                  key={`${t.tenant}-${t.property}-${i}`}
+                  className="flex items-center gap-3 rounded-xl border border-line px-3.5 py-2.5"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] text-ink">{t.tenant}</span>
+                    <span className="block truncate text-[11px] text-muted">
+                      {[
+                        t.property,
+                        country,
+                        t.tenancyStart
+                          ? `${pending ? "moves in" : "tenancy from"} ${formatDate(t.tenancyStart)}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                  {pending ? (
+                    <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[10.5px] text-muted">
+                      Not moved in yet
+                    </span>
+                  ) : null}
+                  {spell && days > 0 ? (
+                    <span
+                      className="shrink-0 text-[11px] text-muted"
+                      title={`First seen in arrears on ${formatDate(spell.since)}, owing ${gbp(spell.owedThen)} then.`}
+                    >
+                      {days >= 60 ? `${Math.round(days / 30)} months` : `${days} days`}
+                      {spell.owed > spell.owedThen ? " ↑" : spell.owed < spell.owedThen ? " ↓" : ""}
+                    </span>
+                  ) : null}
+                  <span className="shrink-0 text-[13px] font-semibold text-ink tnum">
+                    £{t.owed.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </section>
       ) : null}
+
+      <ArrearsImport snapshots={log?.snapshots ?? []} onSaved={loadLog} />
     </div>
   );
 }

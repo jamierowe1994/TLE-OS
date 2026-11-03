@@ -3,6 +3,7 @@ import { publicError } from "@/lib/public-error";
 import { requireAnyCapability } from "@/lib/admin";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { complianceBreakdown } from "@/lib/compliance-breakdown";
+import { buildTracker } from "@/lib/compliance-tracker";
 import { rexConfigured } from "@/lib/rex";
 
 /**
@@ -32,11 +33,27 @@ export async function GET(req: NextRequest) {
   }
   try {
     const { book, ageMs, stale } = await getComplianceBook();
+    /* Susan Liles, 3 Nov 2026: "Is there an option to see the actual expired
+       ones on here and who is the agent?" Taken from Michael's own tracker
+       (his Outstanding list, expired rows) rather than worked out again here,
+       so every home on this list is one he has on his. */
+    const expired = buildTracker(book.properties)
+      .outstanding.filter((r) => r.status === "expired")
+      .map((r) => ({
+        propertyId: r.propertyId,
+        property: r.property,
+        locality: r.locality,
+        cert: r.cert,
+        certLabel: r.certLabel,
+        daysLeft: r.daysLeft,
+        agent: r.agent,
+      }));
     return NextResponse.json({
       ok: true,
       asAt: new Date(Date.now() - ageMs).toISOString(),
       stale,
       ...complianceBreakdown(book.properties),
+      expired,
     });
   } catch (e) {
     return NextResponse.json(

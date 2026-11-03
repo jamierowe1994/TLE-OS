@@ -32,6 +32,18 @@ interface CertRow {
   portfolioPct: number;
 }
 
+/** One expired certificate, from Michael's Outstanding list (the route takes
+ *  it from lib/compliance-tracker, so it is his row, not a recount). */
+interface ExpiredRow {
+  propertyId: string;
+  property: string;
+  locality: string;
+  cert: string;
+  certLabel: string;
+  daysLeft: number | null;
+  agent: string | null;
+}
+
 interface Breakdown {
   ok: true;
   asAt: string;
@@ -46,7 +58,21 @@ interface Breakdown {
   withNoRecord: number;
   withDueSoon: number;
   certificates: CertRow[];
+  expired?: ExpiredRow[];
 }
+
+/* Susan Liles, 3 Nov 2026: "Can the summary boxes link to a list in Michael's
+   view?" Every figure below opens his Property Compliance list at the same
+   rows. The counts here and there come from the same book under the same
+   rules (isOurs, requiredCerts, and what his tracker holds off Outstanding),
+   so the number on the box is the number of rows the link opens. */
+const DESK = "/compliance-desk/properties";
+const deskHref = (q: Record<string, string | undefined>) => {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) if (v) sp.set(k, v);
+  const qs = sp.toString();
+  return qs ? `${DESK}?${qs}` : DESK;
+};
 
 const LONG_LABEL: Record<string, string> = {
   gas: "Gas Safety",
@@ -60,6 +86,15 @@ const LONG_LABEL: Record<string, string> = {
 };
 
 const n = (v: number) => v.toLocaleString("en-GB");
+/** "12 days ago", "5 months ago", "2 years ago" - an old record reads in years. */
+const agoLabel = (days: number) =>
+  days < 1
+    ? "today"
+    : days < 60
+      ? `${days} ${days === 1 ? "day" : "days"} ago`
+      : days < 730
+        ? `${Math.round(days / 30)} months ago`
+        : `${Math.round(days / 365)} years ago`;
 const stamp = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -75,13 +110,43 @@ function Bar({ pct }: { pct: number | null }) {
   );
 }
 
-function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="card p-5">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+function Tile({ label, value, sub, href }: { label: string; value: string; sub?: string; href?: string }) {
+  const body = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+        {href ? <Arrow /> : null}
+      </div>
       <div className="stat-value stat-value--big mt-2">{value}</div>
       {sub ? <div className="mt-1.5 text-xs text-muted">{sub}</div> : null}
-    </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="card block p-5 transition-colors hover:border-ink/30" title="Open this list in Michael's view">
+      {body}
+    </Link>
+  ) : (
+    <div className="card p-5">{body}</div>
+  );
+}
+
+/** A small line arrow - the box opens a list. Icon, never an emoji. */
+function Arrow() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <path d="M4 12 12 4M6 4h6v6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** A count that opens Michael's list at those rows; plain text at nought. */
+function Count({ value, href, className }: { value: number; href: string; className: string }) {
+  return value > 0 ? (
+    <Link href={href} className={`${className} underline decoration-dotted underline-offset-2 hover:decoration-solid`} title="Open these in Michael's view">
+      {n(value)}
+    </Link>
+  ) : (
+    <span className={className}>{n(value)}</span>
   );
 }
 
@@ -108,15 +173,21 @@ function CertCard({ row, homes }: { row: CertRow; homes: number }) {
         </div>
         <div className="flex justify-between gap-2">
           <dt className="text-muted">Due in 30 days</dt>
-          <dd className="tnum font-semibold text-amber-700">{n(row.dueSoon)}</dd>
+          <dd>
+            <Count value={row.dueSoon} href={deskHref({ tab: "upcoming", cert: row.key })} className="tnum font-semibold text-amber-700" />
+          </dd>
         </div>
         <div className="flex justify-between gap-2">
           <dt className="text-muted">Expired</dt>
-          <dd className="tnum font-semibold text-red-700">{n(row.expired)}</dd>
+          <dd>
+            <Count value={row.expired} href={deskHref({ status: "expired", cert: row.key })} className="tnum font-semibold text-red-700" />
+          </dd>
         </div>
         <div className="flex justify-between gap-2">
           <dt className="text-muted">No record</dt>
-          <dd className="tnum font-semibold text-red-700">{n(row.noRecord)}</dd>
+          <dd>
+            <Count value={row.noRecord} href={deskHref({ status: "missing", cert: row.key })} className="tnum font-semibold text-red-700" />
+          </dd>
         </div>
       </dl>
       {row.key === "gas" && row.required < homes ? (
@@ -168,6 +239,11 @@ export default function ComplianceTab({ month, openHref = "/compliance" }: { mon
 
   const main = data.certificates.filter((c) => ["gas", "eicr", "epc"].includes(c.key));
   const needAttention = data.homes - data.fullyCompliant;
+  /* Michael's list is one row per certificate, the boxes count homes; both are
+     said, so a home with two expired certificates doesn't read as a mismatch. */
+  const sum = (k: "expired" | "noRecord" | "dueSoon") => data.certificates.reduce((t, c) => t + c[k], 0);
+  const certs = (v: number) => `${n(v)} ${v === 1 ? "certificate" : "certificates"}`;
+  const expiredRows = data.expired ?? [];
 
   return (
     <div className="space-y-6">
@@ -187,28 +263,104 @@ export default function ComplianceTab({ month, openHref = "/compliance" }: { mon
             {data.stale ? " · refreshing" : ""}
           </span>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Tile
             label="Homes we manage"
             value={n(data.homes)}
             sub={`${n(data.hmos)} HMOs · let only excluded`}
+            href={DESK}
           />
           <Tile
             label="Fully compliant"
             value={data.fullyCompliantPct == null ? "—" : `${data.fullyCompliantPct}%`}
-            sub={`${n(data.fullyCompliant)} homes hold every certificate they need`}
+            sub={`${n(data.fullyCompliant)} homes hold every certificate they need · ${n(needAttention)} on Michael's list`}
+            href={DESK}
           />
           <Tile
             label="Expired certificate"
             value={n(data.withExpired)}
-            sub="homes with at least one"
+            sub={`homes with at least one · ${certs(sum("expired"))}`}
+            href={deskHref({ status: "expired" })}
           />
           <Tile
             label="Missing certificate"
             value={n(data.withNoRecord)}
-            sub={`homes with no record for at least one · ${n(data.withDueSoon)} due in 30 days`}
+            sub={`homes with no record for at least one · ${certs(sum("noRecord"))}`}
+            href={deskHref({ status: "missing" })}
+          />
+          <Tile
+            label="Due in 30 days"
+            value={n(data.withDueSoon)}
+            sub={`homes with one running out · ${certs(sum("dueSoon"))}`}
+            href={deskHref({ tab: "upcoming" })}
           />
         </div>
+      </section>
+
+      {/* ------------------------- the expired ones -------------------------
+          Susan Liles, 3 Nov 2026: "Is there an option to see the actual
+          expired ones on here and who is the agent?" Michael's own rows. */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <h2 className="text-sm font-semibold">Expired Certificates - {n(expiredRows.length)}</h2>
+          {expiredRows.length ? (
+            <Link href={deskHref({ status: "expired" })} className="text-[12px] font-semibold text-ink underline underline-offset-2">
+              Open in Michael&rsquo;s view
+            </Link>
+          ) : null}
+        </div>
+        {data.expired == null ? (
+          <p className="text-[12px] text-red-700">The list of expired certificates couldn&rsquo;t be read just now. Refresh in a minute.</p>
+        ) : expiredRows.length === 0 ? (
+          <div className="card p-5 text-[13px] text-muted">Nothing has expired on the homes we manage.</div>
+        ) : (
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full text-[12.5px] sm:min-w-[560px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                  <th className="px-4 py-3 font-semibold">Property</th>
+                  <th className="hidden px-3 py-3 font-semibold sm:table-cell">Certificate</th>
+                  <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">Expired</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Agent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expiredRows.map((r) => (
+                  <tr key={`${r.propertyId}-${r.cert}`} className="border-t border-line">
+                    <td className="px-4 py-2.5">
+                      <span className="block text-ink">{r.property}</span>
+                      {r.locality ? <span className="block text-[11px] text-muted">{r.locality}</span> : null}
+                      {/* On a phone the other three columns fold in here, so
+                          the agent is never off the side of the screen. */}
+                      <span className="mt-1 block text-[11.5px] sm:hidden">
+                        <span className="text-ink">{LONG_LABEL[r.cert] ?? r.certLabel}</span>
+                        {r.daysLeft == null ? null : <span className="text-red-700"> · {agoLabel(-r.daysLeft)}</span>}
+                        <span className="text-muted"> · {r.agent ?? "No agent on record"}</span>
+                      </span>
+                    </td>
+                    <td className="hidden px-3 py-2.5 text-ink sm:table-cell">{LONG_LABEL[r.cert] ?? r.certLabel}</td>
+                    <td className="hidden whitespace-nowrap px-3 py-2.5 text-right tnum text-red-700 sm:table-cell">
+                      {r.daysLeft == null ? "-" : agoLabel(-r.daysLeft)}
+                    </td>
+                    <td className="hidden px-4 py-2.5 sm:table-cell">
+                      {r.agent ? (
+                        <Link
+                          href={deskHref({ status: "expired", agent: r.agent })}
+                          className="text-ink underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                          title={`${r.agent}'s expired certificates in Michael's view`}
+                        >
+                          {r.agent}
+                        </Link>
+                      ) : (
+                        <span className="text-red-700">No agent on record</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {/* ---------------------------- the big three ---------------------------- */}
@@ -250,9 +402,15 @@ export default function ComplianceTab({ month, openHref = "/compliance" }: { mon
                   <td className="px-3 py-2.5 text-right tnum">{n(row.required)}</td>
                   <td className="px-3 py-2.5 text-right tnum">{row.portfolioPct}%</td>
                   <td className="px-3 py-2.5 text-right tnum">{n(row.inDate)}</td>
-                  <td className="px-3 py-2.5 text-right tnum">{n(row.dueSoon)}</td>
-                  <td className="px-3 py-2.5 text-right tnum">{n(row.expired)}</td>
-                  <td className="px-3 py-2.5 text-right tnum">{n(row.noRecord)}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <Count value={row.dueSoon} href={deskHref({ tab: "upcoming", cert: row.key })} className="tnum" />
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <Count value={row.expired} href={deskHref({ status: "expired", cert: row.key })} className="tnum" />
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <Count value={row.noRecord} href={deskHref({ status: "missing", cert: row.key })} className="tnum" />
+                  </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-2">
                       <div className="w-20">
@@ -271,7 +429,10 @@ export default function ComplianceTab({ month, openHref = "/compliance" }: { mon
         <p className="text-[11px] leading-relaxed text-muted">
           Compliant = in date, including those due in the next 30 days. Gas, EICR and EPC are
           required on every home (gas only where there is gas); the rest only on HMOs. Homes let
-          only are the landlord&rsquo;s duty and are left out.
+          only are the landlord&rsquo;s duty and are left out. Anything Michael&rsquo;s list holds off
+          Outstanding - a licence renewal with the council, a Scottish EPC or legionella held to the
+          next tenancy, a certificate with the compliance team or on file waiting for its date - is
+          not counted expired or missing here either.
           {data.gasUnanswered > 0
             ? ` ${n(data.gasUnanswered)} ${data.gasUnanswered === 1 ? "home has" : "homes have"} no answer yet on whether there is gas.`
             : ""}{" "}

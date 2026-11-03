@@ -85,7 +85,11 @@ export function complianceBreakdown(properties: CompProperty[]): ComplianceBreak
       /* The Compliance page's own grading (Rig run 4, P-083): a certificate
          being handled - with the compliance team, renewal held, or held to the
          next tenancy - is "watch" there, and was counted expired here. */
-      const st = shownStatus(p.certs[key]);
+      /* Susan Liles, 3 Nov 2026: each figure now opens Michael's list, so it
+         has to be his number. A certificate on file with no expiry recorded
+         sits on his "On file, no date" tab, not Outstanding, and was counted
+         "no record" here - one more missing than his screen showed. */
+      const st = p.certs[key]?.undated ? "watch" : shownStatus(p.certs[key]);
       if (st === "expired") {
         row.expired++;
         anyExpired = true;

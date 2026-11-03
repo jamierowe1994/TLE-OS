@@ -563,6 +563,21 @@ function Rows({
 
 const NO_AGENT = "\u0000none";
 
+/* The certificate filter (Susan Liles, 3 Nov 2026): every figure on her
+   Compliance tab opens this list at the matching rows, e.g.
+   ?status=expired&cert=gas. Same names as her tab. */
+const CERT_NAMES: Record<string, string> = {
+  gas: "Gas Safety",
+  eicr: "EICR",
+  epc: "EPC",
+  licence: "HMO Licence",
+  fire: "Fire Risk Assessment",
+  pat: "PAT Testing",
+  alarms: "Smoke & CO Alarms",
+  legionella: "Legionella",
+};
+type StatusFilter = "" | "expired" | "missing";
+
 function agentsOn(d: Payload): { value: string; label: string; overdue: number }[] {
   const all = [...d.outstanding, ...d.upcoming, ...(d.undated ?? []), ...(d.renewals ?? []), ...(d.nextTenancy ?? []), ...(d.notNeeded ?? [])];
   const overdue = new Map<string, number>();
@@ -597,6 +612,33 @@ export default function ComplianceTracker() {
      overdue ... if he's on the phone to them, you need to sort out these
      ones". "" is everybody; NO_AGENT is the homes with nobody to chase through. */
   const [agent, setAgent] = useState("");
+  /* Susan Liles, 3 Nov 2026: "Can the summary boxes link to a list in
+     Michael's view?" Her tiles open this page with ?status=, ?cert=, ?tab=
+     and ?agent=, read once on arrival. Status narrows Outstanding only
+     (expired or no record); the certificate narrows every tab. */
+  const [cert, setCert] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("");
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const s = sp.get("status");
+    if (s === "expired" || s === "missing") setStatus(s);
+    const c = sp.get("cert");
+    if (c && c in CERT_NAMES) setCert(c);
+    const t = sp.get("tab");
+    if (t === "upcoming" || t === "outstanding") setTab(t);
+    const a = sp.get("agent");
+    if (a) setAgent(a);
+  }, []);
+  /* Kept in the address, so a refresh or a shared link opens the same list. */
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    for (const [k, v] of [["status", status], ["cert", cert], ["agent", agent === NO_AGENT ? "" : agent]] as const) {
+      if (v) sp.set(k, v);
+      else sp.delete(k);
+    }
+    const qs = sp.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, [status, cert, agent]);
 
   /* Off the list the moment it is filed, so the number goes down while the
      book rebuilds behind it (a minute or two). A date already past stays:
@@ -663,7 +705,10 @@ export default function ComplianceTracker() {
   }
 
   const ofAgent = (rows: ChaseRow[]) =>
-    !agent ? rows : rows.filter((r) => (agent === NO_AGENT ? !r.agent : r.agent === agent));
+    (!agent ? rows : rows.filter((r) => (agent === NO_AGENT ? !r.agent : r.agent === agent))).filter(
+      (r) => !cert || r.cert === cert
+    );
+  const ofStatus = (rows: ChaseRow[]) => (!status ? rows : rows.filter((r) => r.status === status));
   const match = (rows: ChaseRow[]) => {
     const t = find.trim();
     const mine = ofAgent(rows);
@@ -690,7 +735,7 @@ export default function ComplianceTracker() {
   const agents = d ? agentsOn(d) : [];
   /* The tiles follow the agent: the same sums lib/compliance-tracker does for
      the whole book, over that agent's rows. */
-  const counts = d && agent ? countsFor(d.counts, ofAgent(d.outstanding), ofAgent(d.upcoming)) : d?.counts;
+  const counts = d && (agent || cert) ? countsFor(d.counts, ofAgent(d.outstanding), ofAgent(d.upcoming)) : d?.counts;
 
   const sent: Sent | null = d?.chases ? new Map(d.chases.map((c) => [c.key, { to: c.to, at: c.at }])) : null;
 
@@ -755,7 +800,7 @@ export default function ComplianceTracker() {
             <div className="mb-3 flex flex-wrap gap-2">
               {(
                 [
-                  ["outstanding", `Outstanding (${ofAgent(d.outstanding).length})`],
+                  ["outstanding", `Outstanding (${ofStatus(ofAgent(d.outstanding)).length})`],
                   ...((d.undated?.length ?? 0) > 0 ? [["undated", `On file, no date (${ofAgent(d.undated).length})`] as const] : []),
                   ...((d.renewals?.length ?? 0) > 0 ? [["renewals", `Renewal applied for (${ofAgent(d.renewals).length})`] as const] : []),
                   ...((d.nextTenancy?.length ?? 0) > 0 ? [["nextTenancy", `Next tenancy (${ofAgent(d.nextTenancy).length})`] as const] : []),
@@ -792,16 +837,41 @@ export default function ComplianceTracker() {
                     </option>
                   ))}
                 </select>
+                <select
+                  value={cert}
+                  onChange={(e) => setCert(e.target.value)}
+                  aria-label="Certificate"
+                  className="w-full rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12.5px] sm:w-auto sm:max-w-[220px]"
+                >
+                  <option value="">Every certificate</option>
+                  {Object.entries(CERT_NAMES).map(([k, label]) => (
+                    <option key={k} value={k}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                {tab === "outstanding" && (
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as StatusFilter)}
+                    aria-label="State"
+                    className="w-full rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12.5px] sm:w-auto sm:max-w-[220px]"
+                  >
+                    <option value="">Expired and no record</option>
+                    <option value="expired">Expired only</option>
+                    <option value="missing">No record only</option>
+                  </select>
+                )}
                 <input
                   value={find}
                   onChange={(e) => setFind(e.target.value)}
                   placeholder="Find a property, postcode or landlord"
                   className="w-full rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12.5px] sm:max-w-[300px]"
                 />
-                {(agent || find) && (
+                {(agent || find || cert || status) && (
                   <button
                     type="button"
-                    onClick={() => { setAgent(""); setFind(""); }}
+                    onClick={() => { setAgent(""); setFind(""); setCert(""); setStatus(""); }}
                     className="text-[12px] text-muted underline-offset-2 hover:text-ink hover:underline"
                   >
                     Clear
@@ -816,8 +886,8 @@ export default function ComplianceTracker() {
             )}
             {tab === "outstanding" && (
               <Rows
-                rows={match(d.outstanding)}
-                empty={find || agent ? "Nothing outstanding matches that." : "Nothing expired and nothing missing. That would be a first."}
+                rows={ofStatus(match(d.outstanding))}
+                empty={find || agent || cert || status ? "Nothing outstanding matches that." : "Nothing expired and nothing missing. That would be a first."}
                 onFiled={onFiled}
                 onNotNeeded={onNotNeeded}
                 onRenewal={() => void reload()}
