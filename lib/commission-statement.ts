@@ -4,7 +4,7 @@ import { whoIs } from "@/lib/admin";
 import { q } from "@/lib/db";
 import { can } from "@/lib/roles";
 import { findUserById } from "@/lib/users";
-import { getAgentStatement, type AgentStatement } from "@/lib/business/payprop-income";
+import { getAgentStatement, warmStatementPeriod, type AgentStatement } from "@/lib/business/payprop-income";
 import { isPeriodKind, resolvePeriod, type Period } from "@/lib/statement-period";
 
 /**
@@ -42,8 +42,14 @@ export type StatementAnswer =
  * took about two and a half minutes on production on 22 Oct 2026. So the
  * request answers well inside that, the read carries on in this process
  * (paymentsForRange shares the walk in flight), and the screen asks again.
+ *
+ * Susan Liles, 3 Nov 2026: 20 seconds, not 45. Every screen's own calls are
+ * timed by components/Watchdog, which puts up "This is taking longer than it
+ * should" at 25 seconds, so a 45-second wait set that off on every first
+ * read, and Susan reported it as a screen that would not finish. Answering
+ * inside the Watchdog's 25 lets the spinner carry on without the alarm.
  */
-const WAIT_MS = 45_000;
+const WAIT_MS = 20_000;
 
 function withinWait(read: Promise<AgentStatement>): Promise<AgentStatement> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -93,6 +99,9 @@ export async function statementFor(req: NextRequest, opts: { read: boolean }): P
   const statement = person && opts.read
     ? await withinWait(getAgentStatement(person.email, person.name, resolved.period.from, resolved.period.to))
     : null;
+  /* Nobody picked yet: start the period's PayProp walk now, so the agent
+     chosen next lands on it already under way (Susan Liles, 3 Nov 2026). */
+  if (!person && canPick && opts.read) void warmStatementPeriod(resolved.period.from, resolved.period.to).catch(() => {});
 
   return {
     ok: true,

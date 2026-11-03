@@ -46,6 +46,11 @@ export default function CommissionStatement() {
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /* True once the server has said "still reading": the first read of a
+     period, which takes a minute or two whatever the period. */
+  const [reading, setReading] = useState(false);
+  /* Bumped by Try again, to ask afresh for the same period and agent. */
+  const [attempt, setAttempt] = useState(0);
 
   /* The period chosen last time, a per-person convenience only. */
   useEffect(() => {
@@ -64,19 +69,23 @@ export default function CommissionStatement() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     setLoading(true);
     setError(null);
+    setReading(false);
     /* A first read of a period can outlast one request (the server answers
-       "reading" after 45 seconds, and the front door gives up at 100), so
-       the screen asks again until the figures are in - about ten minutes,
-       then it says so. */
-    const ask = (tries: number) => {
+       "reading" after 20 seconds, and the front door gives up at 100), so
+       the screen asks again until the figures are in - for ten minutes,
+       then it says so and offers Try again. Susan Liles, 3 Nov 2026: by the
+       clock rather than a count of asks, now that each ask is shorter. */
+    const started = Date.now();
+    const ask = () => {
       fetch(`/api/finances/statement?${qs}`, { cache: "no-store" })
         .then(async (r) => {
           const j = (await r.json().catch(() => null)) as Answer | null;
           if (!live) return;
           const reading = j?.statement && !j.statement.ok && j.statement.kind === "reading";
           const gateway = !j && r.status >= 502 && r.status <= 524;
-          if ((reading || gateway) && tries < 40) {
-            timer = setTimeout(() => ask(tries + 1), 5_000);
+          if ((reading || gateway) && Date.now() - started < 10 * 60_000) {
+            setReading(true);
+            timer = setTimeout(ask, 5_000);
             return;
           }
           if (!j?.ok) setError(j?.error ?? "The statement would not load.");
@@ -89,12 +98,12 @@ export default function CommissionStatement() {
           setLoading(false);
         });
     };
-    ask(0);
+    ask();
     return () => {
       live = false;
       if (timer) clearTimeout(timer);
     };
-  }, [qs, customReady]);
+  }, [qs, customReady, attempt]);
 
   /* Fetched rather than linked, so a refusal reads as a sentence on the
      page and never as raw text in a new tab. */
@@ -213,17 +222,26 @@ export default function CommissionStatement() {
         ) : loading ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-line/70 bg-card px-5 py-14 text-center">
             <span className="h-7 w-7 animate-spin rounded-full border-2 border-line border-t-accent-dark" aria-hidden />
-            <p className="text-[14px] text-ink">Reading your payments from PayProp</p>
-            {slow && <p className="max-w-sm text-[12px] text-muted">A long period can take a minute or two the first time.</p>}
+            <p className="text-[14px] text-ink">
+              {answer?.canPick && agentId ? "Reading the payments from PayProp" : "Reading your payments from PayProp"}
+            </p>
+            {(slow || reading) && (
+              <p className="max-w-sm text-[12px] text-muted">
+                The first read of a period can take a minute or two. It carries on while you wait, and after that it is quick.
+              </p>
+            )}
           </div>
         ) : error ? (
-          <Problem text={error} />
+          <Problem text={error} onRetry={() => setAttempt((n) => n + 1)} />
         ) : answer && !answer.agent ? (
           <p className="rounded-2xl border border-dashed border-line px-5 py-8 text-center text-[13px] text-muted">
             Choose an agent to see their statement.
           </p>
         ) : answer && s && !s.ok ? (
-          <Problem text={s.problem} />
+          <Problem
+            text={s.problem}
+            onRetry={s.kind === "reading" || s.kind === "unreachable" ? () => setAttempt((n) => n + 1) : undefined}
+          />
         ) : answer && ok ? (
           <>
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -290,13 +308,22 @@ export default function CommissionStatement() {
   );
 }
 
-function Problem({ text }: { text: string }) {
+function Problem({ text, onRetry }: { text: string; onRetry?: () => void }) {
   return (
     <div className="flex items-start gap-3 rounded-2xl border border-accent/50 bg-accent-soft/60 px-5 py-4 text-[13px] text-ink">
       <DoodleIcon name="info" size={16} className="mt-0.5" />
       <div>
         <p>{text}</p>
         <p className="mt-1 text-[12px] text-muted">Nothing to download until every figure is in.</p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-3 rounded-full border border-line/80 bg-page px-4 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-ink"
+          >
+            Try again
+          </button>
+        )}
       </div>
     </div>
   );

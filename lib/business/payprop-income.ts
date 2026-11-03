@@ -1852,6 +1852,40 @@ export type AgentStatement =
 const ACCOUNT_WORDS: Record<string, string> = { uk: "England and Wales", scotland: "Glasgow" };
 
 /**
+ * Which walk a statement between two days reads: a single month reads the
+ * month's walk, anything inside this year reads the year-to-date walk the
+ * admin home keeps, and only a range across years walks on its own. Worked
+ * out from today, so it rolls over by itself.
+ */
+function statementWalk(from: string, to: string): { from: string; to: string } {
+  const now = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
+  if (from.slice(0, 7) === to.slice(0, 7)) return monthRange(from.slice(0, 7));
+  if (from.slice(0, 4) === now.slice(0, 4) && to.slice(0, 4) === now.slice(0, 4)) {
+    return { from: `${now.slice(0, 4)}-01-01`, to: monthRange(now).to };
+  }
+  return { from: monthRange(from.slice(0, 7)).from, to: monthRange(to.slice(0, 7)).to };
+}
+
+/**
+ * Start reading a statement period from PayProp without waiting for it
+ * (Susan Liles, 3 Nov 2026). The payments walk is the same whichever agent
+ * is chosen, so it starts the moment an owner opens the statement, and the
+ * agent they then pick lands on a walk already under way, or already done.
+ *
+ * Only when every agency can be asked: a walk with one agency missing would
+ * be kept for the hour and read as money not earned.
+ */
+export async function warmStatementPeriod(from: string, to: string): Promise<void> {
+  const accounts = payPropAccounts();
+  if (!accounts.length) return;
+  const reach = await Promise.all(accounts.map((a) => payPropCanAuth(a).catch(() => false)));
+  if (reach.some((ok) => !ok)) return;
+  const walk = statementWalk(from, to);
+  void paymentsSettledInRange(walk.from, walk.to).catch(() => {});
+  void beneficiaryIndex(true).catch(() => {});
+}
+
+/**
  * One partner's commission between two days, line by line, for the statement
  * on Finances (agents' call, 19 Oct 2026).
  *
@@ -1889,12 +1923,14 @@ export async function getAgentStatement(
     };
   }
 
-  const now = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
-  let walk: { from: string; to: string };
-  if (from.slice(0, 7) === to.slice(0, 7)) walk = monthRange(from.slice(0, 7));
-  else if (from.slice(0, 4) === now.slice(0, 4) && to.slice(0, 4) === now.slice(0, 4)) {
-    walk = { from: `${now.slice(0, 4)}-01-01`, to: monthRange(now).to };
-  } else walk = { from: monthRange(from.slice(0, 7)).from, to: monthRange(to.slice(0, 7)).to };
+  const walk = statementWalk(from, to);
+
+  /* Susan Liles, 3 Nov 2026: the payee directory and the portfolio book are
+     asked for alongside the payments walk, not after it. When the directory
+     was past its hour it was read only once a cold walk had finished, which
+     added the best part of a minute to a read that already took two. */
+  const idsRead = agentBeneficiaryIds(email, displayName).catch(() => ({ ids: [] as string[], matchedBy: null }));
+  const bookRead = getPortfolioBook().catch(() => null);
 
   let rows: Payment[];
   try {
@@ -1909,8 +1945,7 @@ export async function getAgentStatement(
      the earnings figures do; when the directory itself cannot be read, the
      payee names on the payments are the same people, so they stand in rather
      than the statement failing. */
-  let { ids, matchedBy }: { ids: string[]; matchedBy: "email" | "name" | "payments" | null } =
-    await agentBeneficiaryIds(email, displayName).catch(() => ({ ids: [] as string[], matchedBy: null }));
+  let { ids, matchedBy }: { ids: string[]; matchedBy: "email" | "name" | "payments" | null } = await idsRead;
   if (!ids.length && displayName) {
     const want = normaliseAgentName(displayName);
     const found = new Set<string>();
@@ -1934,7 +1969,7 @@ export async function getAgentStatement(
   /* Addresses from the portfolio book, which already walks the properties
      hourly. Only where an agent's names and ids line up one to one: the book
      skips a nameless home in one list and not the other. */
-  const book = await getPortfolioBook().catch(() => null);
+  const book = await bookRead;
   const names = new Map<string, string>();
   for (const agent of Object.values(book?.byAgent ?? {})) {
     if (agent.propertyIds.length !== agent.propertyNames.length) continue;
