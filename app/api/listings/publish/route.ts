@@ -118,7 +118,12 @@ function whereFrom(result: unknown, feeds?: unknown): Where {
 async function queueUpload(id: number, action: "off" | "on", token: string | null) {
   const res = await rexCall("ListingPortalUploads", "queue", { listing_id: id, ...(action === "off" ? { portal_listing_status: "withdrawn" } : {}) }, token);
   const r = (res.result ?? {}) as { queued?: unknown; detail?: unknown };
-  return { ok: res.ok && r.queued === true, res, detail: res.ok ? String(r.detail ?? "") : String(res.error ?? `HTTP ${res.status}`) };
+  const detail = res.ok ? String(r.detail ?? "") : String(res.error ?? `HTTP ${res.status}`);
+  /* "Already queued" on the way back on is a send already waiting to go,
+     not a refusal (Sean, 2 Nov 2026: 285 Leith Walk was feeding all three
+     portals while the screen told him it had failed). */
+  const waiting = action === "on" && /already queued/i.test(detail);
+  return { ok: (res.ok && r.queued === true) || waiting, res, detail };
 }
 
 /** getErrorsPreventingUpload answers a list, or messages keyed by portal. */

@@ -37,7 +37,7 @@ export interface TakenState {
   at: string | null;
 }
 
-type L = { id: string; name: string; locality: string; publishedAt: string | null; createdAt: string | null; letAgreed: boolean; publicationStatus: string | null };
+type L = { id: string; name: string; locality: string; publishedAt: string | null; createdAt: string | null; letAgreed: boolean; publicationStatus: string | null; availableFrom?: string | null };
 
 const PAST_FEE = new Set(["references", "tenancy_generation", "signing_and_move_in_monies"]);
 const DAY = 86_400_000;
@@ -114,6 +114,12 @@ export function decideTaken(
     const relistedAt = relisted.get(String(l.id)) ?? null;
     const since = [listedOn, day(relistedAt)].filter(Boolean).sort().pop() ?? null;
     const after = (at: string | null, slack = 0) => !since || (at != null && at.slice(0, 10) >= (slack ? minus(since, slack) : since));
+    /* A re-let on the same REX record keeps the first round's publish date
+       (285 Leith Walk, 2 Nov 2026: up since June, re-advertised from 7 Oct,
+       available 6 Nov), so the last tenant's move-in reads as this let. A
+       tenancy that started more than a fortnight before the home is
+       advertised as available is the one before. */
+    const priorTenancy = (start: string | null | undefined) => Boolean(l.availableFrom && start && start.slice(0, 10) < minus(l.availableFrom, 14));
     const found: TakenState[] = [];
 
     /* An offer accepted on this listing. Its own listing id, so it is this
@@ -133,7 +139,7 @@ export function decideTaken(
        slack - an offer agreed just before the advert went up still took it). */
     for (const d of deals ?? []) {
       if (!sameHome(address, [d.app.propertyName, d.app.locality].filter(Boolean).join(", "))) continue;
-      if (!after(d.app.dateReceived, 14)) continue;
+      if (!after(d.app.dateReceived, 14) || priorTenancy(d.app.startDate)) continue;
       const paid = d.app.propoly?.holdingPaid?.status === "paid";
       if (d.statusKey === "cancelled") {
         /* Only a deal that had got as far as taking it: fee paid, or referencing begun. */
@@ -150,7 +156,7 @@ export function decideTaken(
     /* Moved in through Propoly since it went up. A house letting room after
        room on one advert shows move-ins weeks apart and stays live; one let,
        or a houseful moving in together, takes it. */
-    const ins = (completes ?? []).filter((c) => c.address && c.date && after(c.date) && sameHome(address, c.address)).map((c) => c.date!).sort();
+    const ins = (completes ?? []).filter((c) => c.address && c.date && after(c.date) && !priorTenancy(c.date) && sameHome(address, c.address)).map((c) => c.date!).sort();
     if (ins.length && Date.parse(ins[ins.length - 1]) - Date.parse(ins[0]) <= 10 * DAY) {
       found.push({ why: `Moved in through Propoly on ${words(ins[0])}`, at: ins[0] });
     }
