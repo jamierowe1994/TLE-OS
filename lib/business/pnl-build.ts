@@ -6,7 +6,8 @@ import { PLAN_LINES } from "@/lib/business/plan-import";
  *
  * WHO ANSWERS WHICH LINE.
  *   · Commission income, for every month that has happened: PayProp, worked
- *     out by the OS. Never Susan's figure.
+ *     out by the OS, until the accountant's P&L for that month is uploaded -
+ *     then the accounts (Susan Liles, 3 Nov 2026). Never Susan's own sheet.
  *   · Every cost (agent commission, PLC checks, the RLP premium, advertising,
  *     Group admin, joining and licence fees): Susan's uploaded sheet. Our
  *     systems cannot see them all - they are in the accounts.
@@ -143,10 +144,31 @@ export function buildPnl(
         const t = sheet("totalIncome", c.month);
         return t == null ? { value: null, source: null } : { value: round(t - (received(c.month) ?? 0)), source: fromPlan(c.month) };
       }
+      /* Susan Liles, 3 Nov 2026: with October out, the year to date still sat
+         £1,680 off the accountant's £137,424. The OS's PayProp reading runs
+         £120-£410 a month under Paula's Summary of Fees, which the accounts
+         are built from, because a few payments are filed under different
+         categories. Once a month's accounts are uploaded they answer for it;
+         PayProp answers until then, and is shown beneath as a comparison. */
+      if (plan?.accountsMonths?.includes(c.month)) {
+        const t = sheet("totalIncome", c.month);
+        if (t != null) return { value: round(t - (received(c.month) ?? 0)), source: "accounts" };
+      }
       const mm = money[c.month];
       return { value: mm ? round(mm.combinedNet) : null, source: mm ? "payprop" : null };
     }),
   });
+  if (columns.some((c) => fees.cells[c.month].source === "accounts")) {
+    row({
+      key: "feesPayprop",
+      label: "Fees read from PayProp",
+      group: "compare",
+      cells: byMonth((c) => {
+        const mm = fees.cells[c.month].source === "accounts" ? money[c.month] : undefined;
+        return { value: mm ? round(mm.combinedNet) : null, source: mm ? "payprop" : null };
+      }),
+    });
+  }
   for (const [key, label] of OUTSIDE) {
     if (!columns.some((c) => sheet(key, c.month) != null)) continue;
     row({
