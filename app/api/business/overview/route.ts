@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { SEED, PERIOD_KPIS } from "@/lib/business/seed-data";
 import { getGciSeries } from "@/lib/business/gci-history";
+import { getPlan } from "@/lib/business/plan-store";
 import { getOverrides } from "@/lib/business/actuals-store";
 import { resolveStat } from "@/lib/business/stats";
 import { liveMonth } from "@/lib/business/roster";
@@ -80,13 +81,27 @@ export async function GET(req: NextRequest) {
   const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const series = await getGciSeries(month).catch(() => null);
   const live = series?.months ?? [];
+  /* Susan Liles, 3 Nov 2026: "the monthly GCI vs budget breakdown ... doesn't
+     match the report from Paula". PayProp read by the OS runs £120-£410 a
+     month under Paula's Summary of Fees, which the accounts are built from.
+     A month whose accounts are uploaded shows the accounts' fee income - the
+     same rule as the P&L (lib/business/pnl-build), so the two tabs agree -
+     and PayProp's own reading stays in the breakdown beneath it. */
+  const plan = await getPlan(Number(month.slice(0, 4))).catch(() => null);
+  const fromAccounts = (m: string): number | null => {
+    if (!plan?.accountsMonths?.includes(m)) return null;
+    const total = plan.lines.totalIncome?.[m];
+    if (total == null) return null;
+    const outside = (plan.lines.commissionReceived?.[m] ?? 0) + (plan.lines.referralIncome?.[m] ?? 0);
+    return total - outside;
+  };
   const gciByMonth = live.length
     ? {
         labels: live.map((m) => SHORT[Number(m.month.slice(5, 7)) - 1]),
         // NET of VAT - PayProp's amounts are VAT-inclusive and the accounts
         // sheet is not. Charting the gross figure would overstate every bar
         // by 20%.
-        actual: live.map((m) => Math.round(m.combinedGciNet)),
+        actual: live.map((m) => Math.round(fromAccounts(m.month) ?? m.combinedGciNet)),
         // What each bar is MADE OF. A total invites "made up of what?", and
         // until now the only way to find out was to ask someone.
         detail: live.map((m) => {
@@ -97,8 +112,11 @@ export async function GET(req: NextRequest) {
              Fees splits the two net of VAT, so this does too: VAT is one rate
              across the month, so each agency takes the month's own net share. */
           const exVat = m.combinedGciGross > 0 ? m.combinedGciNet / m.combinedGciGross : 0;
+          const accounts = fromAccounts(m.month);
           return [
-            ["Combined GCI", gbp(m.combinedGciNet)] as [string, string],
+            ...(accounts != null
+              ? [["Combined GCI (the accounts)", gbp(accounts)] as [string, string], ["PayProp read", gbp(m.combinedGciNet)] as [string, string]]
+              : [["Combined GCI", gbp(m.combinedGciNet)] as [string, string]]),
             ...m.byAccount.map(
               (a) => [a.label, gbp(a.combinedGci * exVat)] as [string, string]
             ),
@@ -119,7 +137,11 @@ export async function GET(req: NextRequest) {
                   ? `${series.unreachable.join(", ")} unreachable, so these bars are SHORT by a whole agency.`
                   : ""
               }`.trim()
-            : "Live from PayProp, net of VAT. No budget series exists in the source data - actual GCI only.",
+            : `Net of VAT. ${
+                live.some((m) => fromAccounts(m.month) != null)
+                  ? "A month with its accounts uploaded shows the accounts' figure; the rest are live from PayProp."
+                  : "Live from PayProp."
+              } No budget figures have been given to the system yet - actual GCI only.`,
         live: true,
         ytdNet: series?.ytdNet ?? null,
         ytdGross: series?.ytdGross ?? null,
