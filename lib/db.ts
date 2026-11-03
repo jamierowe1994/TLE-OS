@@ -5021,6 +5021,17 @@ CREATE TABLE IF NOT EXISTS os_home_override_log (
 );
 CREATE INDEX IF NOT EXISTS os_home_override_log_home ON os_home_override_log (home_key, at DESC);
 
+-- The PayProp book, one line a London day (lib/business/book-record, Susan
+-- Liles, 3 Nov 2026): every home's PayProp id with its region and listed-from
+-- day. PayProp dates a home joining but never one leaving, so a home that
+-- drops off the book between two lines is how a loss is counted. The latest
+-- walk of the day overwrites that day's line.
+CREATE TABLE IF NOT EXISTS os_portfolio_book_daily (
+  day           DATE PRIMARY KEY,
+  homes         JSONB NOT NULL,
+  taken_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

@@ -124,7 +124,8 @@ export async function GET(req: NextRequest) {
     ytd: netted(ytd),
     arrears,
     moveIns,
-    portfolio,
+    /* Every home's id and region is for the daily record, not the page. */
+    portfolio: portfolio ? { ...portfolio, homes: undefined } : portfolio,
     /** Margo's portfolio, this month and last (lib/business/margo-portfolio). */
     margo,
     prevMargo,

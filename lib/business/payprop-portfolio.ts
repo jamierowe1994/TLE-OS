@@ -3,6 +3,7 @@ import { payPropAccounts, payPropGetAll, type PayPropAccountId } from "@/lib/bus
 import { readCache, writeCache } from "@/lib/business/integration-cache";
 import { parseAddress } from "@/lib/address-parse";
 import { payPropInvoices, rentByProperty } from "@/lib/business/payprop-rent-invoices";
+import { bookRegionOf, type BookRegionOrUnknown } from "@/lib/business/book-regions";
 
 // The managed book out of PayProp, attributable to the partner who runs each
 // property. PayProp names them in `responsible_agent` — a free-text name, not
@@ -27,7 +28,9 @@ export interface PropertyRow {
    *  tenancy, not a count (2 Oct 2026); older replies may carry a number. */
   active_tenancies?: number | unknown[];
   account_balance?: number;
-  address?: { first_line?: string; city?: string; postal_code?: string };
+  address?: { first_line?: string; second_line?: string; city?: string; postal_code?: string; zip_code?: string };
+  /** The day the home went onto PayProp, "YYYY-MM-DD". */
+  listed_from?: string | null;
 }
 
 /**
@@ -136,6 +139,14 @@ export interface AccountSlice {
   serviceLevels?: Record<string, number>;
 }
 
+/** One region's share of the book (Susan Liles, 3 Nov 2026; lib/business/book-regions). */
+export interface RegionSlice {
+  properties: number;
+  rentRoll: number;
+  avgRent: number;
+  serviceLevels: Record<string, number>;
+}
+
 export interface PortfolioBook {
   /** Every managed property, business-wide. */
   totalProperties: number;
@@ -186,6 +197,16 @@ export interface PortfolioBook {
   agentById?: Record<string, { account: PayPropAccountId; agent: string }>;
   /** Properties on buckets that aren't a person (TLE, Admin Property, blank). */
   unattributed: number;
+  /** England / Wales / Scotland - Core / Margo's portfolio by the home's own
+   *  address, plus "unknown" where it can't be told (3 Nov 2026). The five
+   *  add up to totalProperties. Absent on books cached before. */
+  byRegion?: Record<BookRegionOrUnknown, RegionSlice>;
+  /** The homes in "unknown", so someone can put their postcode right. */
+  regionUnknown?: Array<{ id: string; account: PayPropAccountId; name: string; agent: string }>;
+  /** Every home's region and PayProp listed-from day, by PayProp id - what
+   *  the daily book record keeps for growth and loss (lib/business/book-record).
+   *  Server-side only: payprop-live leaves it out of its reply. */
+  homes?: Record<string, [BookRegionOrUnknown, string | null]>;
   accounts: PayPropAccountId[];
 }
 
@@ -269,7 +290,9 @@ export async function getPortfolioBook(
     const stored = await readCache<PortfolioBook>("payprop:portfolio:v5").catch(() => null);
     if (stored) cache = { at: stored.at, data: stored.data };
   }
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.data;
+  /* A book cached before regions (3 Nov 2026) is served while a fresh one is
+     walked behind it, rather than held for the rest of its hour. */
+  if (cache && cache.data.byRegion && Date.now() - cache.at < TTL_MS) return cache.data;
 
   if (!inFlight && Date.now() - failedAt > FAILURE_COOLDOWN_MS) {
     inFlight = (async () => {
@@ -281,6 +304,11 @@ export async function getPortfolioBook(
         await writeCache("payprop:portfolio:v5", data).catch(() => {
           /* the durable copy is an optimisation, never a dependency */
         });
+        /* Today's line in the daily book record, for growth and loss by
+           region (3 Nov 2026). Never holds the book up. */
+        void import("@/lib/business/book-record")
+          .then((m) => m.recordBook(data))
+          .catch(() => {});
         return data;
       }
       lastError = "PayProp returned no properties.";
@@ -303,7 +331,9 @@ export async function getPortfolioBook(
   return cache?.data ?? null;
 }
 
-async function computePortfolioBook(): Promise<PortfolioBook | null> {
+/** The walk itself, uncached. Exported for checking a figure against PayProp
+ *  without touching the stored book; screens use getPortfolioBook. */
+export async function computePortfolioBook(): Promise<PortfolioBook | null> {
   const accounts = payPropAccounts();
   if (accounts.length === 0) return null;
 
@@ -342,6 +372,16 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
   const levelsByKey = new Map<string, Set<string>>();
   const rentsByKey = new Map<string, Set<number>>();
   const slices: AccountSlice[] = [];
+  const blankRegion = (): RegionSlice => ({ properties: 0, rentRoll: 0, avgRent: 0, serviceLevels: {} });
+  const byRegion: Record<BookRegionOrUnknown, RegionSlice> = {
+    england: blankRegion(),
+    wales: blankRegion(),
+    scotland_core: blankRegion(),
+    margo: blankRegion(),
+    unknown: blankRegion(),
+  };
+  const regionUnknown: NonNullable<PortfolioBook["regionUnknown"]> = [];
+  const homes: NonNullable<PortfolioBook["homes"]> = {};
 
   for (const { account, rows, invoiced } of perAccount) {
     let accProperties = 0;
@@ -401,6 +441,27 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
 
       const raw = text(r.responsible_agent);
       if (text(r.id)) agentById[text(r.id)] = { account, agent: raw };
+
+      /* Region by the home's own address, not its agency (Susan Liles, 3 Nov
+         2026): Sean McMahon's Scottish homes are on the E&W agency. */
+      const region = bookRegionOf(
+        account,
+        raw,
+        text(r.address?.postal_code) || text(r.address?.zip_code),
+        text(r.property_name),
+        text(r.address?.first_line),
+        text(r.address?.second_line),
+        text(r.address?.city)
+      );
+      const rs = byRegion[region];
+      rs.properties++;
+      rs.rentRoll += rent;
+      rs.serviceLevels[level] = (rs.serviceLevels[level] ?? 0) + 1;
+      if (region === "unknown") {
+        regionUnknown.push({ id: text(r.id), account, name: text(r.property_name) || text(r.address?.first_line), agent: raw });
+      }
+      const listedFrom = text(r.listed_from);
+      if (text(r.id)) homes[text(r.id)] = [region, /^\d{4}-\d{2}-\d{2}/.test(listedFrom) ? listedFrom.slice(0, 10) : null];
       const key = normaliseAgentName(raw);
       if (!key || NON_AGENT.has(key)) {
         unattributed++;
@@ -464,6 +525,11 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
     byAgent,
     agentById,
     unattributed,
+    byRegion: Object.fromEntries(
+      Object.entries(byRegion).map(([k, v]) => [k, { ...v, avgRent: v.properties ? v.rentRoll / v.properties : 0 }])
+    ) as Record<BookRegionOrUnknown, RegionSlice>,
+    regionUnknown,
+    homes,
     accounts,
   };
 }

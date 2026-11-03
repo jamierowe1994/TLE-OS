@@ -18,7 +18,7 @@ export const BUSINESS_TABS = [
   { key: "pnl", label: "P&L", icon: "bank", blurb: "Income from PayProp, costs from the accounts, and the plan for the months ahead." },
   { key: "forecast", label: "Forecast", icon: "trend-up", blurb: "The plan, the partners' own forecasts, and what the book is worth." },
   { key: "agents", label: "Agents", icon: "user", blurb: "Each partner's month: commission, book, appraisals, listings and pipeline." },
-  { key: "portfolio", label: "Portfolio", icon: "pack/building", blurb: "The book: managed, let only and rent collection, England & Wales and Scotland." },
+  { key: "portfolio", label: "Portfolio", icon: "pack/building", blurb: "The book: managed, let only and rent collection, England, Wales and Scotland, with Margo's Glasgow portfolio apart." },
   /* Susan Liles, 3 Nov 2026: "the Property management overview that we had
      before ... every property management function and overview". Every
      figure opens the list it counts. */

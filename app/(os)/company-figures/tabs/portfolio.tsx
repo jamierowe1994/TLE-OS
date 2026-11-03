@@ -9,6 +9,13 @@
 // ("No protection 69") was Scotland alone under a business-wide heading. The
 // summary now answers her question in one row: how big is the book, how much
 // of it is managed, and how much of the managed book is on RLP.
+//
+// Susan Liles, 3 Nov 2026: the split is now England / Wales / Scotland - Core /
+// Scotland - Margo's Glasgow portfolio, by each home's own postcode rather than
+// its PayProp agency (Sean McMahon's Edinburgh and Glasgow homes are on the E&W
+// agency, so they were counted as England & Wales). Margo's homes stay apart
+// until Sean completes the purchase. Growth and loss by region sits under it.
+// RLP stays by PayProp agency: that is the only way PayProp gives it to us.
 
 import { useEffect, useState } from "react";
 import StatCard from "@/components/business/StatCard";
@@ -17,6 +24,8 @@ import DataTable from "@/components/business/DataTable";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { formatGBP, monthLabel } from "@/lib/business/format";
 import { liveMonth } from "@/lib/business/roster";
+import { BOOK_REGIONS, type BookRegion, type BookRegionOrUnknown } from "@/lib/business/book-regions";
+import type { PortfolioGrowth } from "@/lib/business/book-record"; // type-only - erased at build
 
 const LIVE_PARTNER_COLUMNS = [
   { key: "partner", label: "Partner" },
@@ -62,6 +71,12 @@ interface LiveBook {
     serviceLevels?: Record<string, number>;
   }>;
   unattributed: number;
+  /** By the home's own address (3 Nov 2026). Absent on a book cached before. */
+  byRegion?: Record<
+    BookRegionOrUnknown,
+    { properties: number; rentRoll: number; avgRent: number; serviceLevels: Record<string, number> }
+  >;
+  regionUnknown?: Array<{ id: string; account: string; name: string; agent: string }>;
   accounts: string[];
   byAgent: Record<
     string,
@@ -88,24 +103,24 @@ const LEVELS = {
   rentCollect: /rent\s*collect/i,
 } as const;
 
-const COUNTRY: Record<Account, string> = { uk: "England & Wales", scotland: "Scotland" };
+/* RLP only: PayProp gives it per agency, and the E&W agency holds Sean
+   McMahon's Scottish homes too, so these are named for the agency. */
+const AGENCY: Record<Account, string> = { uk: "E&W PayProp", scotland: "Scotland PayProp" };
 
 const gbp = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
 
-/** A figure for the whole business, with England & Wales and Scotland beneath it. */
+/** A figure for the whole business, with its parts beneath it, two to a row. */
 function SplitTile({
   label,
   total,
-  uk,
-  scotland,
+  parts,
   note,
   loading = false,
   error,
 }: {
   label: string;
   total: string | null;
-  uk: string | null;
-  scotland: string | null;
+  parts: Array<{ label: string; value: string | null }>;
   note?: string;
   loading?: boolean;
   error?: string | null;
@@ -125,15 +140,15 @@ function SplitTile({
       ) : (
         <>
           <div className="stat-value stat-value--big mt-2">{total ?? "—"}</div>
-          <div className="mt-auto grid grid-cols-2 gap-2 border-t border-line pt-3">
-            <div className="min-w-0">
-              <div className="truncate text-[10px] uppercase tracking-wide text-muted">{COUNTRY.uk}</div>
-              <div className="tnum text-[15px] font-semibold text-ink">{uk ?? "—"}</div>
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-[10px] uppercase tracking-wide text-muted">{COUNTRY.scotland}</div>
-              <div className="tnum text-[15px] font-semibold text-ink">{scotland ?? "—"}</div>
-            </div>
+          <div className="mt-auto grid grid-cols-2 gap-x-2 gap-y-2.5 border-t border-line pt-3">
+            {parts.map((p) => (
+              /* A label that wraps (Scotland - Margo) keeps its figure on the
+                 same line as its neighbour's. */
+              <div key={p.label} className="flex min-w-0 flex-col">
+                <div className="text-[10px] uppercase leading-tight tracking-wide text-muted">{p.label}</div>
+                <div className="tnum mt-auto text-[15px] font-semibold text-ink">{p.value ?? "-"}</div>
+              </div>
+            ))}
           </div>
         </>
       )}
@@ -148,6 +163,37 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
   const [protFailed, setProtFailed] = useState(false);
   const [arrearsCount, setArrearsCount] = useState<number | null>(null);
   const [renewals, setRenewals] = useState<number | null>(null);
+  const [regionsFailed, setRegionsFailed] = useState(false);
+  const [growth, setGrowth] = useState<PortfolioGrowth | null>(null);
+  const [growthError, setGrowthError] = useState<string | null>(null);
+
+  // Growth and loss by region for the month on the picker (3 Nov 2026). Waits
+  // on the same PayProp walk as the book, so it asks again until that lands.
+  useEffect(() => {
+    let cancelled = false;
+    let tries = 0;
+    setGrowth(null);
+    setGrowthError(null);
+    const ask = () => {
+      fetch(`/api/business/portfolio-growth?month=${encodeURIComponent(month)}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d: { growth?: PortfolioGrowth | null; pending?: boolean; error?: string | null }) => {
+          if (cancelled) return;
+          if (d.growth) setGrowth(d.growth);
+          else if (d.pending && tries++ < 40) setTimeout(ask, 5000);
+          else setGrowthError(d.error || "PayProp hasn't answered for the book.");
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (tries++ < 40) setTimeout(ask, 5000);
+          else setGrowthError("We couldn't reach the server for growth and loss. Refresh to try again.");
+        });
+    };
+    ask();
+    return () => {
+      cancelled = true;
+    };
+  }, [month]);
 
   // Protection: tags for Scotland, premium payments for E&W. The payments are a
   // month's walk, so poll until they land.
@@ -218,8 +264,11 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
               setLiveError(d.problem || d.portfolioError || null);
             }
             if (d.arrears) setArrearsCount(d.arrears.tenants.length);
-            if ((!d.portfolio || !d.arrears) && tries++ < 40) setTimeout(ask, 5000);
+            /* A book cached before the region split is walked again behind
+               it; keep asking until the regions are in (3 Nov 2026). */
+            if ((!d.portfolio?.byRegion || !d.arrears) && tries++ < 40) setTimeout(ask, 5000);
             else if (!d.portfolio) setLiveError(d.problem || d.portfolioError || "PayProp has not answered.");
+            else if (!d.portfolio.byRegion) setRegionsFailed(true);
           }
         )
         /* A failed request used to end the polling in silence, leaving the
@@ -255,6 +304,25 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
   const fmt = (n: number | null) => (n == null ? null : n.toLocaleString("en-GB"));
   const notSet = live?.byServiceLevel.find((l) => l.level === "Not set")?.properties ?? 0;
 
+  /* ------------------------------ by region ------------------------------ */
+
+  const regions = live?.byRegion ?? null;
+  const regionsLoading = !regions && !liveError && !regionsFailed;
+  const regionsError = liveError || (regionsFailed && !regions ? "PayProp hasn't finished the region split. Refresh to try again." : null);
+  /** Homes in a region, at a service level when one is given. */
+  const regionCount = (key: BookRegionOrUnknown, re?: RegExp): number | null => {
+    const r = regions?.[key];
+    if (!r) return null;
+    if (!re) return r.properties;
+    return Object.entries(r.serviceLevels)
+      .filter(([k]) => re.test(k))
+      .reduce((n, [, v]) => n + v, 0);
+  };
+  /** The four regions beneath a tile, each formatted by `show`. */
+  const regionParts = (show: (key: BookRegion) => string | null) =>
+    BOOK_REGIONS.map((r) => ({ label: r.short, value: show(r.key) }));
+  const unknownHomes = live?.regionUnknown ?? [];
+
   /* RLP per agency. The tag is the proper record and wins where PayProp lets
      us read it (Scotland today); otherwise the month's premium payments (E&W,
      whose consent refuses the tags call). */
@@ -280,7 +348,6 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
     ? `England & Wales: ${rlpUk!.count} of ${managedUk} managed (${rlpUk!.basis}). Scotland: ${rlpSc!.count} of ${managedSc} managed (${rlpSc!.basis}).`
     : undefined;
 
-  const bookLoading = !live && !liveError;
   const rlpLoading = !rlpReady && !protFailed && !liveError;
   const rlpError = !rlpReady && (protFailed || liveError) ? "PayProp could not answer for RLP." : null;
 
@@ -316,24 +383,74 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
       }
     : null;
 
-  const accountAvg = (a: Account) => {
-    const x = acc(a);
-    if (!x || !x.properties) return { value: null, source: "unavailable" as const, note: "Not in the PayProp book yet." };
-    return {
-      value: Math.round(x.avgRent),
-      display: gbp(x.avgRent),
-      source: "live-payprop" as const,
-      note: `${gbp(x.rentRoll)} across ${x.properties} properties.`,
-    };
-  };
+  /* --------------------------- growth and loss --------------------------- */
+
+  const dayLabel = (day: string) =>
+    new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const signed = (n: number) => (n > 0 ? `+${n.toLocaleString("en-GB")}` : n.toLocaleString("en-GB"));
+  type GrowthRow = { region: string; short: string; now: number; joined: number; left: number | null; total?: boolean };
+  const growthRows: GrowthRow[] = growth
+    ? [
+        ...BOOK_REGIONS.map((r) => {
+          const g = growth.regions.find((x) => x.key === r.key)!;
+          return { region: r.label, short: r.short, now: g.now, joined: g.joined, left: g.left };
+        }),
+        /* Homes with no postcode to place them: shown only when there are any. */
+        ...growth.regions
+          .filter((g) => g.key === "unknown" && (g.now || g.joined || g.left))
+          .map((g) => ({ region: "Region not known", short: "Not known", now: g.now, joined: g.joined, left: g.left })),
+        { region: "Total", short: "Total", now: growth.total.now, joined: growth.total.joined, left: growth.total.left, total: true },
+      ]
+    : [];
+  const GROWTH_COLUMNS = [
+    {
+      key: "region",
+      label: "Region",
+      /* The short name on a phone, so the table fits without scrolling. */
+      render: (r: GrowthRow) => (
+        <span className={r.total ? "font-semibold" : undefined}>
+          <span className="hidden sm:inline">{r.region}</span>
+          <span className="sm:hidden">{r.short}</span>
+        </span>
+      ),
+    },
+    {
+      key: "now",
+      label: "Homes",
+      align: "right" as const,
+      render: (r: GrowthRow) => <span className={r.total ? "font-semibold" : undefined}>{r.now.toLocaleString("en-GB")}</span>,
+    },
+    { key: "joined", label: "Joined", align: "right" as const, render: (r: GrowthRow) => r.joined.toLocaleString("en-GB") },
+    {
+      key: "left",
+      label: "Left",
+      align: "right" as const,
+      render: (r: GrowthRow) => (r.left == null ? <span className="text-muted">Not recorded</span> : r.left.toLocaleString("en-GB")),
+    },
+    {
+      key: "net",
+      label: "Change",
+      align: "right" as const,
+      render: (r: GrowthRow) =>
+        r.left == null ? (
+          <span className="text-muted">-</span>
+        ) : (
+          <span
+            className={`font-semibold ${r.joined - r.left > 0 ? "text-emerald-700" : r.joined - r.left < 0 ? "text-red-700" : ""}`}
+          >
+            {signed(r.joined - r.left)}
+          </span>
+        ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
       {/* Stock, not flow: PayProp keeps no history of the book. */}
       {month !== liveMonth() ? (
         <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
-          Everything on this tab is <strong>as at today</strong>, not {monthLabel(month)}. PayProp
-          keeps no history of the book, so a past month can&apos;t be rebuilt.
+          Everything on this tab is <strong>as at today</strong>, not {monthLabel(month)}, apart from
+          Growth and Loss. PayProp keeps no history of the book, so a past month can&apos;t be rebuilt.
         </div>
       ) : null}
 
@@ -349,52 +466,70 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
           Portfolio
           <SourceNote tone={live ? "live" : "unavailable"}>
             PayProp&rsquo;s active properties across both agencies, by PayProp&rsquo;s own service
-            level. England &amp; Wales is one PayProp agency and Scotland the other.
+            level. Each home is placed by its own postcode, so Sean McMahon&rsquo;s Edinburgh and
+            Glasgow homes on the E&amp;W agency count in Scotland. Margo&rsquo;s Glasgow portfolio is
+            the Scotland agency&rsquo;s homes under Margaret Wilson or Sean McMahon (Glasgow), kept
+            apart until the purchase completes.
           </SourceNote>
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SplitTile
             label="Total portfolio"
-            loading={bookLoading}
-            error={liveError}
+            loading={regionsLoading}
+            error={regionsError}
             total={fmt(live?.totalProperties ?? null)}
-            uk={fmt(acc("uk")?.properties ?? null)}
-            scotland={fmt(acc("scotland")?.properties ?? null)}
+            parts={regionParts((k) => fmt(regionCount(k)))}
             note={notSet ? `${notSet} with no service level set in PayProp.` : undefined}
           />
           <SplitTile
             label="Total managed"
-            loading={bookLoading}
-            error={liveError}
+            loading={regionsLoading}
+            error={regionsError}
             total={fmt(levelCount(LEVELS.managed))}
-            uk={fmt(managedUk)}
-            scotland={fmt(managedSc)}
+            parts={regionParts((k) => fmt(regionCount(k, LEVELS.managed)))}
           />
           <SplitTile
             label="Let only"
-            loading={bookLoading}
-            error={liveError}
+            loading={regionsLoading}
+            error={regionsError}
             total={fmt(levelCount(LEVELS.letOnly))}
-            uk={fmt(levelCount(LEVELS.letOnly, "uk"))}
-            scotland={fmt(levelCount(LEVELS.letOnly, "scotland"))}
+            parts={regionParts((k) => fmt(regionCount(k, LEVELS.letOnly)))}
           />
           <SplitTile
             label="Rent collection"
-            loading={bookLoading}
-            error={liveError}
+            loading={regionsLoading}
+            error={regionsError}
             total={fmt(levelCount(LEVELS.rentCollect))}
-            uk={fmt(levelCount(LEVELS.rentCollect, "uk"))}
-            scotland={fmt(levelCount(LEVELS.rentCollect, "scotland"))}
+            parts={regionParts((k) => fmt(regionCount(k, LEVELS.rentCollect)))}
           />
         </div>
+        {regions && unknownHomes.length ? (
+          <details className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+            <summary className="cursor-pointer">
+              {unknownHomes.length === 1 ? "1 home" : `${unknownHomes.length} homes`} in the total{" "}
+              {unknownHomes.length === 1 ? "has" : "have"} no postcode in PayProp, so{" "}
+              {unknownHomes.length === 1 ? "it isn't" : "they aren't"} in any region. Show{" "}
+              {unknownHomes.length === 1 ? "it" : "them"}.
+            </summary>
+            <ul className="mt-2 space-y-0.5 text-[12px]">
+              {unknownHomes.map((h) => (
+                <li key={h.id}>
+                  {h.name || "No name"} - {h.agent || "no agent"} ({AGENCY[h.account as Account] ?? h.account})
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <SplitTile
             label="Managed on RLP"
             loading={rlpLoading}
             error={rlpError}
             total={fmt(rlpTotal)}
-            uk={fmt(rlpUk?.count ?? null)}
-            scotland={fmt(rlpSc?.count ?? null)}
+            parts={[
+              { label: AGENCY.uk, value: fmt(rlpUk?.count ?? null) },
+              { label: AGENCY.scotland, value: fmt(rlpSc?.count ?? null) },
+            ]}
             note={rlpNote}
           />
           <SplitTile
@@ -402,34 +537,89 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
             loading={rlpLoading}
             error={rlpError}
             total={pct(rlpTotal, managedTotal)}
-            uk={pct(rlpUk?.count, managedUk)}
-            scotland={pct(rlpSc?.count, managedSc)}
+            parts={[
+              { label: AGENCY.uk, value: pct(rlpUk?.count, managedUk) },
+              { label: AGENCY.scotland, value: pct(rlpSc?.count, managedSc) },
+            ]}
             note={rlpNote ? `Of the managed book. ${rlpNote}` : undefined}
           />
           <SplitTile
             label="Monthly rent roll"
-            loading={bookLoading}
-            error={liveError}
+            loading={regionsLoading}
+            error={regionsError}
             total={live ? gbp(live.totalRentRoll) : null}
-            uk={acc("uk") ? gbp(acc("uk")!.rentRoll) : null}
-            scotland={acc("scotland") ? gbp(acc("scotland")!.rentRoll) : null}
+            parts={regionParts((k) => (regions?.[k] ? gbp(regions[k].rentRoll) : null))}
           />
         </div>
-        {rlpReady && rlpUk && !/tag/.test(rlpUk.basis) ? (
+        {rlpReady ? (
           <p className="text-[11px] text-muted">
-            RLP for England &amp; Wales is counted from the premiums paid in{" "}
-            {prot?.rlpPayments ? monthLabel(prot.rlpPayments.month) : "the last month"}; Scotland
-            from its PayProp tags. Hover a box for the working.
+            RLP is split by PayProp agency, not region: PayProp only gives it per agency, and the E&amp;W
+            agency holds Sean McMahon&rsquo;s Scottish homes too.
+            {rlpUk && !/tag/.test(rlpUk.basis)
+              ? ` E&W is counted from the premiums paid in ${prot?.rlpPayments ? monthLabel(prot.rlpPayments.month) : "the last month"}; Scotland from its PayProp tags.`
+              : ""}{" "}
+            Hover a box for the working.
           </p>
         ) : null}
+      </section>
+
+      {/* ------------------------- growth and loss ------------------------- */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold">
+          Growth and Loss - {monthLabel(month)}
+          <SourceNote tone={growth ? "live" : "unavailable"}>
+            Joined is each home&rsquo;s own listed-from date in PayProp. PayProp doesn&rsquo;t date a
+            home leaving, so Left is a home that has dropped off the book, from the OS&rsquo;s daily
+            record of it. Homes is the book today, by the same regions as above; Change is joined
+            less left.
+          </SourceNote>
+        </h2>
+        {growth ? (
+          <>
+            <DataTable columns={GROWTH_COLUMNS} rows={growthRows} compact />
+            {growth.leftFrom ? (
+              <p className="text-[11px] text-muted">
+                Left is counted from {dayLabel(growth.leftFrom)}, when the OS started keeping a daily
+                record of the book. Joined covers the whole month.
+              </p>
+            ) : growth.total.left == null ? (
+              <p className="text-[11px] text-muted">
+                Homes that left in {monthLabel(month)} aren&rsquo;t known:{" "}
+                {growth.recordStarted
+                  ? `the OS's daily record of the book starts on ${dayLabel(growth.recordStarted)}.`
+                  : "the OS's daily record of the book hasn't started yet."}
+              </p>
+            ) : null}
+            {growth.moved ? (
+              <p className="text-[11px] text-muted">
+                {growth.moved === 1 ? "1 home" : `${growth.moved} homes`} changed region in{" "}
+                {monthLabel(month)} (a postcode put right, or Margo&rsquo;s homes moving to Sean) and{" "}
+                {growth.moved === 1 ? "isn't" : "aren't"} counted as joined or left.
+              </p>
+            ) : null}
+          </>
+        ) : growthError ? (
+          <div className="text-xs text-red-700">{growthError}</div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-muted" aria-busy="true">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+            Waiting on PayProp for growth and loss.
+          </div>
+        )}
       </section>
 
       {/* ------------------------- rents & health ------------------------- */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Rents &amp; Portfolio Health</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Avg rent - England & Wales" stat={accountAvg("uk")} loading={bookLoading} />
-          <StatCard label="Avg rent - Scotland" stat={accountAvg("scotland")} loading={bookLoading} />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <SplitTile
+            label="Average rent"
+            loading={regionsLoading}
+            error={regionsError}
+            total={live ? gbp(live.avgRent) : null}
+            parts={regionParts((k) => (regions?.[k]?.properties ? gbp(regions[k].avgRent) : null))}
+            note="Monthly rent roll over homes, for each region."
+          />
           <StatCard
             label="Renewals due"
             loading={renewals == null}
