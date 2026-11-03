@@ -6,6 +6,7 @@ import { accessFor } from "@/lib/area-access";
 import { AREA_DEFS, canAct, levelOf, lockedSentence } from "@/lib/area-map";
 import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
+import { forgetMovedIn } from "@/lib/listings-moved-in";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
 import { stillOnPortalFeeds } from "@/lib/advert-offline";
@@ -433,6 +434,8 @@ export async function POST(req: NextRequest) {
 
     await invalidateListingBook();
     forgetListing(id);
+    /* Off the owners' moved-in list at once (lib/listings-moved-in, 3 Nov 2026). */
+    if (action === "off") forgetMovedIn(String(id));
     await record({
       kind: "listing_publication",
       actorId: actor.id,

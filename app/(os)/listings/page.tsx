@@ -15,6 +15,7 @@ import CornerSwell from "@/components/CornerSwell";
 import { searchMatches } from "@/lib/search-match";
 import { rememberListingOrder } from "@/lib/listing-order";
 import NewListingWizard from "@/components/listing/NewListingWizard";
+import MovedInStillAdvertised from "@/components/listing/MovedInStillAdvertised";
 import OffersInList, { offerHref, type HomeOnBoard } from "@/components/listing/OffersInList";
 import type { OpenOfferRow } from "@/app/api/offers/open/route";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -959,6 +960,9 @@ export default function Listings() {
           {here && !q.trim() && <p className="nl-meta mt-3">{here.blurb}</p>}
         </div>
 
+        {/* Moved in and still on the portals, for the owners (Susan Liles, 3 Nov 2026). */}
+        <MovedInStillAdvertised className="mt-6" />
+
         <div className="mt-7">
           {stage === "offers" && (
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -1232,6 +1236,9 @@ export default function Listings() {
           </div>
         </div>
       </div>
+
+      {/* Moved in and still on the portals, for the owners (Susan Liles, 3 Nov 2026). */}
+      <MovedInStillAdvertised className="mt-4" />
 
       {/* ── The board, in the same panel the other two boards use. ── */}
       {/* White with a hairline. A blush wash with doodles was tried here on
