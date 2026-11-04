@@ -31,7 +31,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 
-const isId = (v: string) => /^(\d+|pm-(test-)?[0-9a-f-]+)$/i.test(v);
+/* Take-on homes (mt-) hold keys too (Kirstie Mulholland, 4 Nov 2026). */
+const isId = (v: string) => /^(\d+|pm-(test-)?[0-9a-f-]+|mt-[a-z0-9]+)$/i.test(v);
 
 async function allowed(req: NextRequest, propertyId: string, listingId?: string | null) {
   const who = await whoIs(req);

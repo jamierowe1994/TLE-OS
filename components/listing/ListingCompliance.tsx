@@ -845,7 +845,7 @@ function NewLookCompliance({
       return;
     }
     settle({ ok: true });
-    if (eic && target && /^(\d+|pm-[0-9a-f-]+)$/i.test(target)) {
+    if (eic && target && /^(\d+|pm-[0-9a-f-]+|mt-[a-z0-9]+)$/i.test(target)) {
       await fetch("/api/home-facts", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ home: target, electrical: "eic", eicReason: filing.eicReason }) }).catch(() => null);
     }
     setFiling(null);
