@@ -30,6 +30,8 @@ const verdict = (b: Bug) => {
   return b.botState === "with_claude" ? "With Claude"
     : b.botState === "looking" ? "Bot is looking"
     : b.botState === "to_fix" ? `${who}: cause found, to fix`
+    : b.botState === "fix_ready" && b.state === "fixed" && b.context?.pushedAt ? `${who}: fixed, and live`
+    : b.botState === "fix_ready" && b.context?.pushedAt ? `${who}: fix pushed, going live`
     : b.botState === "fix_ready" ? `${who}: fix ready for you to push`
     : b.botState === "needs_you" ? `${who}: needs you`
     : b.botState === "not_a_bug" ? `${who}: not a fault`
@@ -47,18 +49,20 @@ export default function Tickets() {
   const [bugs, setBugs] = useState<Bug[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   /* Send to Claude (lib/claude-tickets): shown only to the person whose plan
-     it runs on, live once the routine is wired up on Railway. */
-  const [claude, setClaude] = useState<{ canSend: boolean; ready: boolean }>({ canSend: false, ready: false });
+     it runs on, live once the routine is wired up on Railway. canPush: Push
+     It Live can merge Claude's fix itself, once GitHub's key is there too. */
+  const [claude, setClaude] = useState<{ canSend: boolean; ready: boolean; canPush: boolean }>({ canSend: false, ready: false, canPush: false });
   const [claudeSaid, setClaudeSaid] = useState<Record<string, string>>({});
+  const [pushSaid, setPushSaid] = useState<Record<string, string>>({});
   const [show, setShow] = useState<"open" | "all">("open");
   const [letter, setLetter] = useState<"A" | "B" | "C" | "none" | "all">("all");
 
   const load = () =>
     fetch("/api/bugs", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j: { bugs: Bug[]; claude?: { canSend: boolean; ready: boolean } }) => {
+      .then((j: { bugs: Bug[]; claude?: { canSend: boolean; ready: boolean; canPush?: boolean } }) => {
         setBugs(j.bugs);
-        if (j.claude) setClaude(j.claude);
+        if (j.claude) setClaude({ canSend: j.claude.canSend, ready: j.claude.ready, canPush: Boolean(j.claude.canPush) });
       })
       .catch(() => setErr("Couldn't load the tickets."));
   useEffect(() => { void load(); }, []);
@@ -68,7 +72,7 @@ export default function Tickets() {
      fetched when asked for: a screenshot each would make the list heavy, and
      recording links last five minutes (lib/bug-media). */
   const [shots, setShots] = useState<Record<string, string | null>>({});
-  const [media, setMedia] = useState<Record<string, Array<{ id: string; mime: string; url: string }> | null>>({});
+  const [media, setMedia] = useState<Record<string, Array<{ id: string; mime: string; url: string; source?: "reporter" | "claude" }> | null>>({});
   async function loadShot(id: string) {
     if (id in shots) return;
     /* "" while it loads, null when there is none, else the picture. */
@@ -103,6 +107,17 @@ export default function Tickets() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bugs, openId]);
 
+  /* Claude's own pictures of a fix show with its report, without a press:
+     the report is the overview James reads instead of opening the session
+     (4 Nov 2026). Their links last five minutes, so they load with the page. */
+  useEffect(() => {
+    if (!bugs) return;
+    for (const b of bugs) {
+      if ((b.claudeShots ?? 0) > 0 && b.claudeUrl && (b.state === "open" || b.state === "ack") && !(b.id in media)) void loadMedia(b.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bugs]);
+
   async function patch(id: string, body: Record<string, unknown>) {
     await fetch("/api/bugs", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...body }) });
     await load();
@@ -117,6 +132,17 @@ export default function Tickets() {
       .then((r) => r.json().catch(() => ({ ok: false })))
       .catch(() => ({ ok: false })) as { ok?: boolean; error?: string };
     setClaudeSaid((m) => ({ ...m, [id]: j.ok ? "" : j.error || "Couldn't send it to Claude." }));
+    await load();
+  }
+
+  /* Push It Live: Claude's pull request merged from here (lib/github-pr), so
+     the fix deploys and the ticket closes itself when it boots. */
+  async function pushClaude(id: string) {
+    setPushSaid((m) => ({ ...m, [id]: "Pushing…" }));
+    const j = await fetch("/api/bugs/claude/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) })
+      .then((r) => r.json().catch(() => ({ ok: false })))
+      .catch(() => ({ ok: false })) as { ok?: boolean; error?: string };
+    setPushSaid((m) => ({ ...m, [id]: j.ok ? "" : j.error || "Couldn't push it." }));
     await load();
   }
 
@@ -144,7 +170,7 @@ export default function Tickets() {
   if (look) {
     return (
       <TicketsNew
-        state={{ people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude }}
+        state={{ people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude }}
       />
     );
   }

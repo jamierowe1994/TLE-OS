@@ -371,6 +371,17 @@
 /* Claude's answer for the person who asked (Send to Claude, 4 Nov 2026). */
 [data-look="new"] .nl-adm-claude { margin: 10px 0 0; padding: 10px 14px; border-left: 2px solid var(--line-strong); background: var(--panel); }
 [data-look="new"] .nl-adm-claude > .nl-meta { margin: 0; }
+/* Claude's report on a ticket (4 Nov 2026): its answer, its parts under their
+   own headings, its pictures, then Push It Live or Open in Claude. */
+[data-look="new"] .nl-adm-report { display: flex; flex-direction: column; gap: 10px; }
+[data-look="new"] .nl-adm-report-lead { margin: 0; color: var(--ink); font-size: 15px; line-height: 1.45; }
+[data-look="new"] .nl-adm-report-parts { margin: 0; display: grid; gap: 10px; }
+[data-look="new"] .nl-adm-report-parts dt { font-size: 12px; color: var(--muted); letter-spacing: 0; }
+[data-look="new"] .nl-adm-report-parts dd { margin: 2px 0 0; color: var(--ink); white-space: pre-line; line-height: 1.5; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-report-rest { margin: 0; color: var(--ink); white-space: pre-line; line-height: 1.5; overflow-wrap: anywhere; }
+[data-look="new"] .nl-adm-report-pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(46%, 240px), 1fr)); gap: 10px; }
+[data-look="new"] .nl-adm-report-pics img { display: block; width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+[data-look="new"] .nl-adm-report > .nl-adm-row-acts { margin-top: 2px; }
 [data-look="new"] .nl-adm-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; min-width: 0; }
 [data-look="new"] .nl-adm-gapb { margin-top: 0; margin-bottom: 20px; }
 [data-look="new"] .nl-adm-blockmeta { display: block; margin-top: 3px; }

@@ -376,6 +376,9 @@ CREATE TABLE IF NOT EXISTS os_bug_media (
 );
 CREATE INDEX IF NOT EXISTS os_bug_media_bug ON os_bug_media (bug_id);
 CREATE INDEX IF NOT EXISTS os_bug_media_at ON os_bug_media (created_at);
+-- Claude's own pictures of a fix, apart from what the person who reported it
+-- added (Send to Claude, 5 Nov 2026): 'reporter' or 'claude'.
+ALTER TABLE os_bug_media ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'reporter';
 
 -- EMAIL FOOTERS - the signature each person's own Outlook puts under a mail,
 -- kept here so the mail the OS sends from their mailbox ends the same way

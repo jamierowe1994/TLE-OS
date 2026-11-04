@@ -5,11 +5,14 @@
  * token never sits on a command line or in a file.
  *
  *   node scripts/claude-ticket.mjs read                 → ticket.json + shot.jpg (if any)
- *   node scripts/claude-ticket.mjs report <state> <note-file> [pr-url] [branch] [reply-file]
+ *   node scripts/claude-ticket.mjs report <state> <note-file> [pr-url] [branch] [reply-file] [--shot picture]...
  *
- * state is fix_ready, needs_you or not_a_bug. Node 20+ (global fetch).
+ * state is fix_ready, needs_you or not_a_bug. Each --shot (PNG, JPEG or WebP,
+ * up to four) is put on the ticket first, so James sees them with the report.
+ * Node 20+ (global fetch, FormData and Blob).
  */
 import { readFileSync, writeFileSync } from "node:fs";
+import { basename } from "node:path";
 
 const { OS, ID, TOKEN } = process.env;
 if (!OS || !ID || !TOKEN) {
@@ -33,10 +36,27 @@ if (cmd === "read") {
   writeFileSync("ticket.json", JSON.stringify(ticket, null, 2));
   console.log(`ticket.json written${ticket.shot ? ", screen saved as shot.jpg" : ", no screenshot"}; ${ticket.media.length} attachment(s).`);
 } else if (cmd === "report") {
-  const [state, noteFile, pr = "", branch = "", replyFile = ""] = args;
+  const shots = [];
+  const plain = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--shot") shots.push(args[++i]);
+    else plain.push(args[i]);
+  }
+  const [state, noteFile, pr = "", branch = "", replyFile = ""] = plain;
   if (!["fix_ready", "needs_you", "not_a_bug"].includes(state ?? "") || !noteFile) {
-    console.error("report <fix_ready|needs_you|not_a_bug> <note-file> [pr-url] [branch] [reply-file]");
+    console.error("report <fix_ready|needs_you|not_a_bug> <note-file> [pr-url] [branch] [reply-file] [--shot picture]...");
     process.exit(2);
+  }
+  for (const file of shots.filter(Boolean)) {
+    const ext = file.toLowerCase().split(".").pop();
+    const type = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+    const form = new FormData();
+    form.set("id", ID);
+    form.set("t", TOKEN);
+    form.set("file", new Blob([readFileSync(file)], { type }), basename(file));
+    const res = await fetch(`${OS}/api/bugs/claude/shot`, { method: "POST", body: form });
+    const j = await res.json().catch(() => ({}));
+    console.log(res.ok && j.ok ? `Picture ${file} added.` : `Picture ${file} not added: ${j.error ?? res.status}`);
   }
   const body = {
     id: ID,

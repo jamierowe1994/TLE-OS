@@ -6,6 +6,7 @@ import { logBug, bugs, setBugState, attachShot, myReports, setBugPriority } from
 import { tellReporter } from "@/lib/bug-bot";
 import { publicOrigin } from "@/lib/origin";
 import { claudeConfigured, maySendToClaude, sendClaudeReply } from "@/lib/claude-tickets";
+import { githubConfigured } from "@/lib/github-pr";
 
 /**
  * Reporting something broken, and reading what's been reported.
@@ -102,8 +103,12 @@ export async function GET(req: NextRequest) {
   const owner = await requireOwner(req);
   if (!owner) return new NextResponse(null, { status: 404 });
   /* Whether Send to Claude shows (lib/claude-tickets): only to the person
-     whose plan it runs on, and only once the routine is wired up. */
-  return NextResponse.json({ bugs: await bugs(200), claude: { canSend: maySendToClaude(owner.email), ready: claudeConfigured() } });
+     whose plan it runs on, and only once the routine is wired up. canPush:
+     whether Push It Live can merge Claude's fix itself (lib/github-pr). */
+  return NextResponse.json({
+    bugs: await bugs(200),
+    claude: { canSend: maySendToClaude(owner.email), ready: claudeConfigured(), canPush: maySendToClaude(owner.email) && githubConfigured() },
+  });
 }
 
 export async function PATCH(req: NextRequest) {
