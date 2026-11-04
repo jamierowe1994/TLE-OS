@@ -10,7 +10,7 @@ import { listAppraisals } from "@/lib/appraisal-store";
 import { presentationsFor, readPresentation, type PresentationRow } from "@/lib/present-store";
 import { signedFor } from "@/lib/signed-documents";
 import { effectiveStage, SERVICE_LEVELS, type MarketAppraisal, type MaStage } from "@/lib/market-appraisal";
-import type { ManagedProperty } from "@/lib/portfolio-types";
+import type { ManagedProperty, Party } from "@/lib/portfolio-types";
 import { certificatesFromBook } from "@/lib/compliance-cache";
 import { getApplications, type Application } from "@/lib/applications";
 import type { ViewOffer, ViewProgress } from "@/lib/landlord-view";
@@ -89,14 +89,20 @@ const shape = (r: Row): LandlordAccount => ({
   activatedAt: r.activated_at ? new Date(r.activated_at).toISOString() : null,
 });
 
+/**
+ * The landlord on a home in the book who is this person, by the contact ids
+ * their account holds, else by email. Any landlord on it, not only the first
+ * (4 Nov 2026, lib/book-lets): the listing's second owner and a joint
+ * landlord kept on the home could not see a home they own.
+ */
+function theirsOn(p: ManagedProperty, email: string, ids: Set<string> = new Set()): Party | null {
+  return [p.landlord, ...(p.otherLandlords ?? [])].find((l): l is Party => Boolean(l && (ids.has(l.contactId) || (l.email && normaliseEmail(l.email) === email)))) ?? null;
+}
+
 async function managedFor(email: string, contactIds: string[] = []): Promise<ManagedProperty[]> {
   const { book } = await managedBookFor(null);
   const ids = new Set(contactIds);
-  return book.properties.filter(
-    (p) =>
-      p.landlord &&
-      (ids.has(p.landlord.contactId) || (p.landlord.email && normaliseEmail(p.landlord.email) === email))
-  );
+  return book.properties.filter((p) => theirsOn(p, email, ids));
 }
 
 async function appraisalsFor(email: string): Promise<MarketAppraisal[]> {
@@ -110,8 +116,9 @@ export async function landlordByEmail(rawEmail: string): Promise<LandlordMatch |
   if (!email.includes("@")) return null;
   const [properties, appraisals] = await Promise.all([managedFor(email), appraisalsFor(email)]);
   if (!properties.length && !appraisals.length) return null;
-  const contactIds = [...new Set(properties.map((p) => p.landlord!.contactId))];
-  const name = properties[0]?.landlord?.name || appraisals[0]?.landlord || email;
+  /* Theirs on each home: a joint landlord is not the home's first landlord. */
+  const contactIds = [...new Set(properties.map((p) => theirsOn(p, email)?.contactId).filter((id): id is string => Boolean(id)))];
+  const name = (properties[0] && theirsOn(properties[0], email)?.name) || appraisals[0]?.landlord || email;
   return { email, name, contactIds, properties, appraisals };
 }
 
@@ -560,7 +567,9 @@ export async function landlordProgress(email: string, propertyNames: string[]): 
   );
   const mine = all.filter((d) => {
     if (d.statusKey === "cancelled" || d.statusKey === "complete") return false;
-    if (d.app.propoly?.landlord?.email && normaliseEmail(d.app.propoly.landlord.email) === email) return true;
+    /* Any landlord on the deal, not only its lead (4 Nov 2026). */
+    const onDeal = d.app.propoly?.landlords?.length ? d.app.propoly.landlords : d.app.propoly?.landlord ? [d.app.propoly.landlord] : [];
+    if (onDeal.some((l) => l.email && normaliseEmail(l.email) === email)) return true;
     if (mineAt.size === 0) return false;
     const key = propertyKey(d.app.propertyName);
     const pc = postcodeKey(`${d.app.propertyName} ${d.app.locality ?? ""}`);
