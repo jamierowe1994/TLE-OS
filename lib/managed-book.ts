@@ -305,6 +305,9 @@ function toProperty(r: Row): ManagedProperty {
   const agentRow = (r.listing_agent_1 ?? null) as Row | null;
   const agentId = str(agentRow?.id);
   const agentName = str(agentRow?.name);
+  /* Every owner, not the first (4 Nov 2026): a second owner on the listing is
+     on the let and goes to Propoly, and was missing here alone. */
+  const owners = partiesOf(r, "owner");
 
   return {
     listingId: String(r.id ?? ""),
@@ -324,7 +327,8 @@ function toProperty(r: Row): ManagedProperty {
     letSince: isoDay(r.state_change_timestamp),
     onBooksSince: isoDay(r.system_ctime),
     agent: agentId && agentName ? { id: agentId, name: agentName } : null,
-    landlord: partiesOf(r, "owner")[0] ?? null,
+    landlord: owners[0] ?? null,
+    ...(owners.length > 1 ? { otherLandlords: owners.slice(1) } : {}),
     tenants: partiesOf(r, "purchtenant"),
     image,
     images,
@@ -834,6 +838,16 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       const c = known.get(nameKey(t.name));
       return c ? { ...t, email: t.email || c.email, phone: t.phone || c.phone } : t;
     });
+  }
+  /* THE LET'S OWN PAGE (4 Nov 2026, lib/book-lets): each let keeps the ids of
+     the accepted applications on its listing, newest first, so a tenant put
+     right or added on the let reaches the home here too. */
+  if (applied) {
+    for (const p of properties) {
+      if (!p.propertyId || p.test) continue;
+      const refs = (applied.get(p.propertyId) ?? []).filter((a) => a.listingId === String(p.listingId)).map((a) => a.id).reverse();
+      if (refs.length) p.letRefs = refs;
+    }
   }
   /* THE RENT (rewritten 22 Oct 2026, Lianna Denholm's missing rents).
      PayProp's rent invoice billed today is the rent: what the tenant is

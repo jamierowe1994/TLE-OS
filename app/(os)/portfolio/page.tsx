@@ -327,7 +327,7 @@ export default function Portfolio() {
       if (lookOnly && !attention.has(p.listingId)) return false;
       if (notOnRexOnly && p.onRex !== false && p.rexLet !== false) return false;
       if (reletOnly && !p.notice) return false;
-      if (needle && !searchMatches(needle, p.address, p.name, p.locality, p.landlord?.name, p.landlord?.email, p.agent?.name, ...p.tenants.map((t) => t.name))) return false;
+      if (needle && !searchMatches(needle, p.address, p.name, p.locality, p.landlord?.name, p.landlord?.email, ...(p.otherLandlords ?? []).flatMap((l) => [l.name, l.email]), p.agent?.name, ...p.tenants.map((t) => t.name))) return false;
       return true;
     });
     /* Most recently let first by default. "Needs a look first" is offered,

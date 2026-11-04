@@ -62,7 +62,7 @@ const MAX = 1000;
  */
 const TTL_MS = 30 * 60 * 1000;
 /** One accepted application, reduced to what a book needs to vouch for a name. */
-export interface AcceptedLet { listingId: string | null; startDate: string | null; names: string[] }
+export interface AcceptedLet { id: string; listingId: string | null; startDate: string | null; names: string[] }
 type Walked = { map: Map<string, SittingTenants>; byProperty: Map<string, AcceptedLet[]> };
 let held: { at: number; walked: Walked } | null = null;
 let inflight: Promise<Walked> | null = null;
@@ -127,7 +127,7 @@ async function walk(): Promise<Walked> {
      every walk, so she appears on her start date without anyone touching it. */
   for (const a of accepted) {
     const k = a.propertyId as string;
-    const one: AcceptedLet = { listingId: a.listingId != null ? String(a.listingId) : null, startDate: a.startDate, names: a.applicants.map((t) => t.name).filter(Boolean) };
+    const one: AcceptedLet = { id: String(a.id), listingId: a.listingId != null ? String(a.listingId) : null, startDate: a.startDate, names: a.applicants.map((t) => t.name).filter(Boolean) };
     byProperty.set(k, [...(byProperty.get(k) ?? []), one]);
   }
 

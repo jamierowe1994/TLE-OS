@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { heldListingsOn, heldPropertyIds } from "@/lib/rex-landlord";
-import { peopleOnKeys, type PropertyPerson } from "@/lib/property-people";
+import { everyPerson, oncePerPerson, peopleOnKeys, peopleVersion, type PropertyPerson } from "@/lib/property-people";
 
 /**
  * EVERY KEY ONE HOME IS FILED UNDER (Lianna Denholm, 4 Nov 2026: eighteen
@@ -91,4 +91,49 @@ export async function homeKeysFor(...known: Array<string | null | undefined>): P
 /** Everyone on the home under any of its keys, the same person once (lib/property-people peopleOnKeys). */
 export async function peopleOnHome(...known: Array<string | null | undefined>): Promise<PropertyPerson[]> {
   return peopleOnKeys(await homeKeysFor(...known));
+}
+
+/*
+ * EVERYONE ON MANY HOMES AT ONCE (4 Nov 2026), for a screen that reads the
+ * whole book: Portfolio's managed book (lib/book-lets), which named REX's
+ * first owner and nobody else. The same people peopleOnHome gives one home:
+ * each key a person was added under is read through homeKeysFor, as a let
+ * reads its own home, and a home has everyone whose keys take in one of its
+ * own. One homeKeysFor per key a person is kept under, not per home, so the
+ * whole book is a few dozen small reads. Held for half a minute, and read
+ * again at once when anybody is added, changed or removed (peopleVersion).
+ */
+const PEOPLE_FRESH_MS = 30_000;
+let held: { at: number; version: number; people: Array<{ person: PropertyPerson; keys: Set<string> }> } | null = null;
+
+async function everyoneWithKeys(): Promise<Array<{ person: PropertyPerson; keys: Set<string> }>> {
+  const version = peopleVersion();
+  if (held && held.version === version && Date.now() - held.at < PEOPLE_FRESH_MS) return held.people;
+  const everyone = await everyPerson();
+  const queue = [...new Set(everyone.map((p) => p.propertyId))];
+  const aliases = new Map<string, Set<string>>();
+  /* A few at a time: the pool is small and the book waits on this. */
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    for (let k = queue.shift(); k !== undefined; k = queue.shift()) {
+      const key = k;
+      aliases.set(key, new Set(await homeKeysFor(key).catch(() => [key])));
+    }
+  }));
+  const people = everyone.map((person) => ({ person, keys: aliases.get(person.propertyId) ?? new Set([person.propertyId]) }));
+  held = { at: Date.now(), version, people };
+  return people;
+}
+
+/** Everyone on each home, by the id given with it; a home with nobody is left out. */
+export async function peopleOnHomes(homes: Array<{ id: string; keys: Array<string | null | undefined> }>): Promise<Map<string, PropertyPerson[]>> {
+  const out = new Map<string, PropertyPerson[]>();
+  if (!hasDb() || !homes.length) return out;
+  const everyone = await everyoneWithKeys();
+  if (!everyone.length) return out;
+  for (const h of homes) {
+    const mine = h.keys.map(pick).filter(Boolean);
+    const on = everyone.filter((e) => mine.some((k) => e.keys.has(k))).map((e) => e.person);
+    if (on.length) out.set(h.id, oncePerPerson(on));
+  }
+  return out;
 }

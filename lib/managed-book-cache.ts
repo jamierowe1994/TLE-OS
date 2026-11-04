@@ -11,6 +11,7 @@ import { withTakeOns } from "./take-ons";
 import { withAgentMoves } from "./agent-moves";
 import { withoutArchived } from "./archived-homes";
 import { withHomeOverrides } from "./home-overrides";
+import { withLetsOnBook } from "./book-lets";
 import type { ComplianceBook } from "./rex-compliance";
 import { certificatesFromBook, refreshComplianceBook } from "./compliance-cache";
 import type { ManagedBook } from "./portfolio-types";
@@ -181,10 +182,12 @@ export async function managedBookFor(rexUserId: string | null): Promise<{
   const book = await withTakeOns(await withChangedLandlords(await withRecordService(await withRecordLandlords(await withNotice(moved, rexUserId)))), rexUserId);
   /* A home's details put right with Edit on its page (lib/home-overrides,
      2 Nov 2026): the service, let type, tenancy start and tenants the agent
-     saved beat everything above. Homes archived in the OS (lib/archived-homes,
-     27 Oct 2026) come off last, over everything, with the landlords and
-     counts taken again. */
-  return { ...raw, book: await withoutArchived(await withHomeOverrides(book)) };
+     saved beat everything above. Then the home as its let has it
+     (lib/book-lets, 4 Nov 2026): every landlord, not REX's first, and the
+     tenants as put right on the let. Homes archived in the OS
+     (lib/archived-homes, 27 Oct 2026) come off last, over everything, with
+     the landlords and counts taken again. */
+  return { ...raw, book: await withoutArchived(await withLetsOnBook(await withHomeOverrides(book))) };
 }
 
 async function rawBookFor(rexUserId: string | null): Promise<{

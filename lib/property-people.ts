@@ -94,17 +94,38 @@ export async function peopleOnKeys(keys: string[]): Promise<PropertyPerson[]> {
       ORDER BY (kind = 'joint_landlord') DESC, added_at`,
     [ids]
   );
+  return oncePerPerson(rows.map(shape));
+}
+
+/** peopleOnKeys' rule on a list already read: the same person under two keys once, the copy with an email kept. */
+export function oncePerPerson(people: PropertyPerson[]): PropertyPerson[] {
   const low = (s: string | null) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   const same = (a: PropertyPerson, b: PropertyPerson) =>
     a.kind === b.kind && a.propertyId !== b.propertyId && (low(a.email) && low(b.email) ? low(a.email) === low(b.email) : low(a.name) === low(b.name));
   const out: PropertyPerson[] = [];
-  for (const p of rows.map(shape)) {
+  for (const p of people) {
     const i = out.findIndex((x) => same(x, p));
     if (i < 0) out.push(p);
     else if (!low(out[i].email) && low(p.email)) out[i] = p;
   }
   return out;
 }
+
+/** Everyone on every home, in peopleOn's order, for a screen that reads the whole book (lib/home-aliases peopleOnHomes). */
+export async function everyPerson(): Promise<PropertyPerson[]> {
+  if (!hasDb()) return [];
+  const rows = await q<Row>(
+    `SELECT id, property_id, kind, name, email, phone, relation, added_by, added_at FROM os_property_people
+      WHERE removed_at IS NULL
+      ORDER BY (kind = 'joint_landlord') DESC, added_at`
+  );
+  return rows.map(shape);
+}
+
+/* Bumped on every add, change and removal, so a held read of everyone
+   (lib/home-aliases peopleOnHomes) is read again at once, not half a minute on. */
+let version = 0;
+export const peopleVersion = () => version;
 
 export async function personById(id: string): Promise<PropertyPerson | null> {
   if (!hasDb() || !id) return null;
@@ -124,6 +145,7 @@ export async function addPerson(propertyId: string, p: PersonInput, by: string):
      RETURNING id, property_id, kind, name, email, phone, relation, added_by, added_at`,
     [randomUUID(), propertyId, p.kind, p.name, p.email, p.phone, p.relation, by]
   );
+  version++;
   return shape(rows[0]);
 }
 
@@ -134,11 +156,13 @@ export async function updatePerson(id: string, p: Omit<PersonInput, "kind">): Pr
       RETURNING id, property_id, kind, name, email, phone, relation, added_by, added_at`,
     [id, p.name, p.email, p.phone, p.relation]
   );
+  version++;
   return rows[0] ? shape(rows[0]) : null;
 }
 
 export async function removePerson(id: string): Promise<boolean> {
   const rows = await q<{ id: string }>(`UPDATE os_property_people SET removed_at = NOW() WHERE id = $1 AND removed_at IS NULL RETURNING id`, [id]);
+  version++;
   return rows.length > 0;
 }
 

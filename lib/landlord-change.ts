@@ -205,7 +205,10 @@ export async function withChangedLandlords(book: ManagedBook): Promise<ManagedBo
     const c = a && b ? (a.changedAt > b.changedAt ? a : b) : a ?? b;
     if (!c) return p;
     changed++;
-    return { ...p, landlord: asParty(c) };
+    /* The change stands in for REX's owners, every one (lib/deal-handoff
+       sends it alone): REX's other owners go with the first. */
+    const others = p.otherLandlords?.filter((l) => !/^\d+$/.test(l.contactId));
+    return { ...p, landlord: asParty(c), otherLandlords: others?.length ? others : undefined };
   });
   if (!changed) return book;
   const landlords = landlordsOf(currentLets(properties));

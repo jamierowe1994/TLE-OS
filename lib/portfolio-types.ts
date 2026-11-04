@@ -59,7 +59,22 @@ export interface ManagedProperty {
   /** The agent the home was moved from in the OS (lib/agent-moves); REX still names them. */
   agentMovedFrom?: string | null;
   landlord: Party | null;
+  /**
+   * Every landlord after `landlord` (4 Nov 2026, lib/book-lets), in the order
+   * the Propoly push sends them (lib/deal-handoff landlordsForListing): REX's
+   * other owners on the listing (a REX contact id), then the joint landlords
+   * kept on the home in the OS ("person:<id>"). A landlord changed in the OS
+   * stands in for REX's owners, so REX's other owners drop out then.
+   */
+  otherLandlords?: Party[];
   tenants: Party[];
+  /**
+   * The lets behind this row in the OS (4 Nov 2026, lib/book-lets): the ids of
+   * the accepted applications on its listing, newest first. Each is a let's
+   * own page, where an agent's corrections to the tenants are kept. Read with
+   * the book from REX; the corrections are laid over on every read.
+   */
+  letRefs?: string[];
   image: string | null;
   images: string[];
   epcExpiry: string | null;

@@ -613,7 +613,12 @@ export default function PropertyPage() {
   const houseView = Boolean(house) && !roomP;
   const title = house ? house.name : p.name;
   const shots = p.images.length ? p.images : p.image ? [p.image] : [];
-  const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
+  const landlordRow = house ? (house.house?.landlord ? house.house : house.rooms.find((r) => r.landlord) ?? null) : p;
+  const landlord = landlordRow?.landlord ?? null;
+  /* The listing's other owners (4 Nov 2026, lib/book-lets): on the let and
+     sent to Propoly, and now here. The home's joint landlords are read by the
+     landlords section itself. */
+  const coOwners = (landlordRow?.otherLandlords ?? []).filter((l) => /^\d+$/.test(l.contactId));
   const tenants: Party[] = house ? (roomP || lets ? tenantsInOrder(house, roomP ?? house.rooms[0], R) : []) : p.tenants;
   const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0) : [];
   const roomRent = house ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : 0;
@@ -1261,7 +1266,7 @@ export default function PropertyPage() {
                 listingId={String(p.listingId)}
                 propertyId={propertyId}
                 propertyAddress={p.address || [title, p.locality, p.postcode].filter(Boolean).join(", ")}
-                landlords={everyLandlord(landlord ? [{ name: landlord.name, email: landlord.email, phone: landlord.phone }] : [], jointLandlords)}
+                landlords={everyLandlord([landlord, ...coOwners].filter((l): l is Party => Boolean(l)).map((l) => ({ name: l.name, email: l.email, phone: l.phone })), jointLandlords)}
                 serviceOnRecord={resign.service}
               />
             )}
@@ -1450,15 +1455,19 @@ export default function PropertyPage() {
                       readOnly={p.test ? "A test home keeps its own people." : null}
                       main={
                         landlord && !changed
-                          ? [{
-                              key: landlord.contactId,
-                              name: landlord.name,
-                              email: landlord.email,
-                              phone: landlord.phone,
-                              personRef: /^\d+$/.test(landlord.contactId) ? `rex:${landlord.contactId}` : isRecord && propertyId ? `home:${propertyId}` : null,
-                              note: isRecord ? "From the home's own record in the OS - the main record names no owner." : null,
-                              after: jobEmails,
-                            }]
+                          ? [
+                              /* A joint landlord standing in for nobody else is in the section's own list. */
+                              ...(landlord.contactId.startsWith("person:") ? [] : [{
+                                key: landlord.contactId,
+                                name: landlord.name,
+                                email: landlord.email,
+                                phone: landlord.phone,
+                                personRef: /^\d+$/.test(landlord.contactId) ? `rex:${landlord.contactId}` : isRecord && propertyId ? `home:${propertyId}` : null,
+                                note: isRecord ? "From the home's own record in the OS - the main record names no owner." : null,
+                                after: jobEmails,
+                              }]),
+                              ...coOwners.map((o) => ({ key: o.contactId, name: o.name, email: o.email, phone: o.phone, personRef: `rex:${o.contactId}` })),
+                            ]
                           : []
                       }
                       mainSlot={
