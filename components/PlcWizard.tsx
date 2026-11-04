@@ -402,6 +402,10 @@ export default function PlcWizard({
           address: prefill.address,
           moveInDate: moveIn || null,
           letType,
+          /* The date the screen opened on, now the deal's (Lianna Denholm, 3
+             Nov 2026): REX's application is only written when the agent
+             changes it here herself, never just because Propoly's date
+             differs from REX's (James: no REX writes nobody asked for). */
           rexStartDate: prefill.moveInDate,
         }),
       });

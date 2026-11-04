@@ -27,6 +27,13 @@ export interface LetDeal {
   propertyUuid: string | null;
   tenants: Array<{ name: string; email: string | null; phone: string | null }>;
   landlords: Array<{ uuid: string | null; name: string | null; email: string | null; phone: string | null }>;
+  /**
+   * The deal's move-in day, with a move-in put right in the OS already laid
+   * over Propoly's (lib/let-edits). Once a let is in Propoly this is the day
+   * the agreement is drawn on, so the PLC check opens on it (Lianna Denholm,
+   * 3 Nov 2026, lib/plc-prefill).
+   */
+  moveIn: string | null;
   /** How the deal was found, in words for the let page. */
   how: string;
 }
@@ -75,6 +82,7 @@ function shape(d: BusinessDeal, how: string): LetDeal {
     propertyUuid: p?.propertyUuid ?? null,
     tenants: d.app.tenants.map((t) => ({ name: t.name, email: t.email, phone: t.phone })),
     landlords,
+    moveIn: d.app.startDate ? d.app.startDate.slice(0, 10) : null,
     how,
   };
 }

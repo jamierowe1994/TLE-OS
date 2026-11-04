@@ -5,6 +5,7 @@ import { isTestId, testApplication } from "@/lib/test-overlay";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { findPropolyDeal, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { sameHome } from "@/lib/address-parse";
+import { dealForLet } from "@/lib/let-deal";
 
 /**
  * Everything the handover already knows before anybody types.
@@ -30,8 +31,14 @@ import { sameHome } from "@/lib/address-parse";
  * application ON that listing first, which is what byListing does.
  *
  * `startDate` is REX's own field for the tenancy start, so it IS the move-in
- * date. Where it is missing the wizard asks, rather than guessing from the
- * date the offer was accepted.
+ * date - until the let is in Propoly. From then the deal's move-in is the day
+ * the agreement is drawn on, and the let page already shows it (Lianna
+ * Denholm, 30 Oct 2026), so the pack opens on it too (Lianna, 3 Nov 2026, 12
+ * South Chesters Lane: the let read 9 November, Propoly's, and the PLC check
+ * opened on REX's 1 November, the tenant's first offer). The deal's date
+ * already carries a move-in put right in the OS (lib/let-edits), so the
+ * newest figure reaches the pack. Where neither has one the wizard asks,
+ * rather than guessing from the date the offer was accepted.
  *
  * ── What it does NOT invent ────────────────────────────────────────────────
  *
@@ -51,6 +58,12 @@ export interface Prefill {
   locality: string;
   tenants: { name: string; email: string | null; isPrimary: boolean }[];
   moveInDate: string | null;
+  /**
+   * The application's own move-in, where it differs from the deal's above.
+   * The wizard sends it as what REX holds, so a pack date that differs from
+   * REX's still goes back onto the REX application (lib/plc-move-in-rex).
+   */
+  applicationMoveIn?: string | null;
   agentName: string | null;
   rentPcm: number | null;
   /** Things the agent should look at, in the words they would use. */
@@ -76,9 +89,10 @@ function asYmd(v: string | null): string | null {
 
 const ROOM = /\b(room|bedroom)\s*\d/i;
 
-function shape(a: Application, facts?: { hmo: boolean; landlordName: string | null } | null): Prefill {
+function shape(a: Application, facts?: { hmo: boolean; landlordName: string | null } | null, dealMoveIn?: string | null): Prefill {
   const warnings: string[] = [];
-  const moveInDate = asYmd(a.startDate);
+  const applicationMoveIn = asYmd(a.startDate);
+  const moveInDate = asYmd(dealMoveIn ?? null) ?? applicationMoveIn;
 
   if (!moveInDate) {
     warnings.push("No tenancy start date on the application, so you will need to add the move-in date.");
@@ -109,6 +123,7 @@ function shape(a: Application, facts?: { hmo: boolean; landlordName: string | nu
       isPrimary: p.isPrimary,
     })),
     moveInDate,
+    applicationMoveIn,
     agentName: a.agent,
     rentPcm: a.offerAmount,
     warnings,
@@ -183,10 +198,15 @@ export async function prefillFor(opts: {
     factsByRexId().catch(() => new Map<string, { hmo: boolean; landlordName: string | null }>()),
   ]);
   const factsOf = (a: Application) => (a.propertyId ? facts.get(String(a.propertyId)) ?? null : null);
+  /* The let's Propoly deal, found the way the let page finds it, for its move-in (see the top). */
+  const dealMoveIn = (a: Application) =>
+    dealForLet({ ref: String(a.id), app: a, propertyName: a.property, locality: a.locality, listingId: a.listingId != null ? String(a.listingId) : null })
+      .then((d) => d?.moveIn ?? null)
+      .catch(() => null);
 
   if (opts.applicationId) {
     const found = book.find((a) => String(a.id) === String(opts.applicationId));
-    if (found) return shape(found, factsOf(found));
+    if (found) return shape(found, factsOf(found), await dealMoveIn(found));
     if (!DEAL_ID.test(opts.applicationId)) return null;
     const deal = await findPropolyDeal(opts.applicationId);
     return deal ? shapeDeal(deal) : null;
@@ -198,7 +218,7 @@ export async function prefillFor(opts: {
     /* Newest first. A property that has been let before carries old
        applications, and the one being handed over is always the latest. */
     const latest = [...on].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
-    const shaped = shape(latest, factsOf(latest));
+    const shaped = shape(latest, factsOf(latest), await dealMoveIn(latest));
     if (on.length > 1) {
       shaped.warnings.push(
         `There are ${on.length} applications on this listing. This is the most recent one, so check it is the right one.`
