@@ -3,7 +3,9 @@ import { hasDb, q } from "@/lib/db";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { peopleForProperty, type Person } from "@/lib/rex-property-people";
 import { addrOf, houseKeyOf, isRoomAddress, norm, parseAddress } from "@/lib/address-parse";
+import { currentLets } from "@/lib/current-lets";
 import { roomLabel } from "@/lib/houses";
+import { sittingLets } from "@/lib/tenant-logins";
 
 /**
  * Who is on a home: the landlord, every sitting tenant (every room of a
@@ -15,6 +17,8 @@ import { roomLabel } from "@/lib/houses";
 export type HomePeople = {
   homeId: string;
   landlord: Person | null;
+  /** The landlords after the first, as the book has them (lib/book-lets). */
+  otherLandlords: Person[];
   tenants: (Person & { room?: string })[];
   lat: number | null;
   lng: number | null;
@@ -24,6 +28,7 @@ export type HomePeople = {
 
 export async function homePeople(id: string): Promise<HomePeople> {
   let landlord: Person | null = null;
+  let otherLandlords: Person[] = [];
   let tenants: (Person & { room?: string })[] = [];
   let lat: number | null = null;
   let lng: number | null = null;
@@ -32,11 +37,15 @@ export async function homePeople(id: string): Promise<HomePeople> {
 
   try {
     const { book } = await managedBookFor(null);
-    const p = book.properties.find((x) => x.propertyId === id || x.listingId === id);
+    /* The listing asked for, else the property's current let: REX keeps a
+       leased listing for every let, and the first one found could be a let
+       that ended years ago. */
+    const atHome = book.properties.filter((x) => x.propertyId === id || x.listingId === id);
+    const p = atHome.find((x) => x.listingId === id) ?? currentLets(atHome)[0];
     if (p) {
       if (p.propertyId) homeId = p.propertyId;
       landlord = p.landlord ? { contactId: p.landlord.contactId, name: p.landlord.name, email: p.landlord.email ?? "", phone: p.landlord.phone ?? "" } : null;
-      tenants = p.tenants.map((t) => ({ contactId: t.contactId, name: t.name, email: t.email ?? "", phone: t.phone ?? "" }));
+      otherLandlords = (p.otherLandlords ?? []).map((l) => ({ contactId: l.contactId, name: l.name, email: l.email ?? "", phone: l.phone ?? "" }));
       /* A shared house (James, 8 Oct 2026): "especially if it's an HMO, we
          need to pull through every tenant under that property". REX lets each
          room as its own listing, so the house's other rooms - and the
@@ -53,21 +62,23 @@ export async function homePeople(id: string): Promise<HomePeople> {
         if (!key || houseKeyOf(there) !== key) return false;
         return isRoomAddress(there) || (hereIsRoom && parseAddress(there).unit == null);
       });
-      if (siblings.length) {
-        const label = (x: { name: string; locality: string }) => (isRoomAddress(addrOf(x)) ? roomLabel(x) : undefined);
-        tenants = tenants.map((t) => ({ ...t, room: label(p) }));
-        for (const x of siblings) {
-          for (const t of x.tenants) tenants.push({ contactId: t.contactId, name: t.name, email: t.email ?? "", phone: t.phone ?? "", room: label(x) });
-        }
-        /* The same person on two listings is one tenant. */
-        const seen = new Set<string>();
-        tenants = tenants.filter((t) => {
-          const k = (t.email || t.contactId || t.name).toLowerCase();
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-      }
+      /* THE LETS WHOSE TENANTS LIVE THERE NOW (4 Nov 2026), each room's and
+         the house's, as the home's page and Email Docs read them
+         (lib/tenant-logins sittingLets). REX keeps a leased listing for every
+         let, and each of them used to give its tenants here, so the same
+         address let again and again had a contractor's email naming people
+         who had long moved out. */
+      const lets = sittingLets([p, ...siblings]);
+      const label = (x: { name: string; locality: string }) => (lets.length > 1 && isRoomAddress(addrOf(x)) ? roomLabel(x) : undefined);
+      tenants = lets.flatMap((x) => x.tenants.map((t) => ({ contactId: t.contactId, name: t.name, email: t.email ?? "", phone: t.phone ?? "", ...(label(x) ? { room: label(x) } : {}) })));
+      /* The same person on two listings is one tenant. */
+      const seen = new Set<string>();
+      tenants = tenants.filter((t) => {
+        const k = (t.email || t.contactId || t.name).toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
       lat = p.lat ?? null;
       lng = p.lng ?? null;
       if (landlord || tenants.length) source = "the managed book";
@@ -98,5 +109,5 @@ export async function homePeople(id: string): Promise<HomePeople> {
     }
   }
 
-  return { homeId, landlord, tenants, lat, lng, access, source };
+  return { homeId, landlord, otherLandlords, tenants, lat, lng, access, source };
 }

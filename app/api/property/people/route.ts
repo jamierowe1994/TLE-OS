@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { type Person } from "@/lib/rex-property-people";
 import { homePeople } from "@/lib/home-people";
-import { KIND_LABEL, peopleOn } from "@/lib/property-people";
+import { KIND_LABEL } from "@/lib/property-people";
+import { peopleOnHome } from "@/lib/home-aliases";
 
 /**
  * Who is on a home: the landlord, every sitting tenant, where it is, and
@@ -40,11 +41,27 @@ export async function GET(req: NextRequest) {
   const id = (req.nextUrl.searchParams.get("id") ?? "").trim();
   if (!id) return NextResponse.json({ ok: false, error: "Which property?" }, { status: 400 });
 
-  const { homeId, landlord, tenants, lat, lng, access, source } = await homePeople(id);
+  const { homeId, landlord, otherLandlords, tenants, lat, lng, access, source } = await homePeople(id);
 
   /* The joint landlords and points of contact kept on the home (lib/property-people,
-     16 Oct 2026), so whatever fills a landlord from here can offer them too. */
-  const others = (await peopleOn(homeId).catch(() => [])).map((x) => ({ kind: x.kind, label: KIND_LABEL[x.kind], name: x.name, email: x.email ?? "", phone: x.phone ?? "", relation: x.relation }));
+     16 Oct 2026), so whatever fills a landlord from here can offer them too.
+     Under every key the home is filed under, not the one (lib/home-aliases,
+     4 Nov 2026), with the listing's other owners first, as the Propoly push
+     orders them; each person once, and never the landlord again. */
+  const key = (v: string | null | undefined) => (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const seen = new Set([landlord && key(landlord.email) && `e:${key(landlord.email)}`, landlord && key(landlord.name) && `n:${key(landlord.name)}`].filter((k): k is string => Boolean(k)));
+  const others = [
+    ...otherLandlords.filter((l) => /^\d+$/.test(l.contactId)).map((l) => ({ kind: "joint_landlord" as const, name: l.name, email: l.email, phone: l.phone, relation: "" })),
+    ...(await peopleOnHome(homeId).catch(() => [])).map((x) => ({ kind: x.kind, name: x.name, email: x.email ?? "", phone: x.phone ?? "", relation: x.relation })),
+  ]
+    .filter((x) => {
+      /* The same email or the same name is the same person, as the push reads them. */
+      const ids = [key(x.email) && `e:${key(x.email)}`, key(x.name) && `n:${key(x.name)}`].filter((k): k is string => Boolean(k));
+      if (ids.some((k) => seen.has(k))) return false;
+      ids.forEach((k) => seen.add(k));
+      return true;
+    })
+    .map((x) => ({ ...x, label: KIND_LABEL[x.kind] }));
 
   return NextResponse.json({
     ok: true,
