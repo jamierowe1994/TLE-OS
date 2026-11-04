@@ -4,6 +4,8 @@ import { uid } from "@/lib/auth";
 import { followUpFor } from "@/lib/id-checks";
 import { isScottish } from "@/lib/property-flags";
 import { letPeople, type LetPeople } from "@/lib/let-people";
+import { managedBookFor } from "@/lib/managed-book-cache";
+import { sameHome } from "@/lib/address-parse";
 import type { OsUser } from "@/lib/users";
 
 /**
@@ -87,6 +89,89 @@ export async function rtrFor(applicationId: string): Promise<RtrRecord[]> {
   return rows.map(shape);
 }
 
+/**
+ * The newest record for each tenant on a let, wherever it was made (Kirstie
+ * Mulholland, 3 Nov 2026, ticket 494b1e2e: "somewhere to add Right to rent
+ * expiry on the pre tenancy bit so I can add before the let goes in"). The
+ * pre-tenancy board opens a let as its Propoly deal and the let's page as its
+ * application, so a date put in on one is read on the other: the let's own
+ * ref, its Propoly deal, and the home it is on, kept to the people on the let.
+ */
+export async function rtrForLet(l: LetPeople): Promise<RtrRecord[]> {
+  if (!hasDb()) return [];
+  const refs = [...new Set([l.ref, l.dealId, l.deal?.id].filter((x): x is string => Boolean(x)))];
+  const listingId = await letListingId(l);
+  const rows = await q<Row>(
+    `SELECT DISTINCT ON (lower(tenant_name)) ${COLS}
+       FROM os_application_rtr
+      WHERE application_id = ANY($1::text[]) OR ($2::text IS NOT NULL AND (listing_id = $2 OR application_id = 'home:' || $2))
+      ORDER BY lower(tenant_name), recorded_at DESC`,
+    [refs, listingId]
+  );
+  return rows.map(shape).filter((r) => l.tenants.some((t) => same(t.name, r.tenant) || (t.email && r.tenantEmail && same(t.email, r.tenantEmail))));
+}
+
+/**
+ * The home a let is on, by its listing (ticket 494b1e2e). A deal keyed in
+ * Propoly often carries no listing number, so a date put in on the board
+ * would never reach the home once the let goes in: the managed book's home
+ * at the same address stands in, as lib/let-people's homeKeyFor finds it.
+ */
+async function letListingId(l: LetPeople): Promise<string | null> {
+  if (l.listingId) return l.listingId;
+  const book = await managedBookFor(null).then((b) => b.book.properties).catch(() => []);
+  const here = `${l.property}, ${l.locality}`;
+  const hit = book.find((p) => !p.test && sameHome(here, [p.name, p.locality].filter(Boolean).join(", ")));
+  return hit?.listingId != null ? String(hit.listingId) : null;
+}
+
+/** What the PLC pack's reader saw on a tenant's right to rent document: offered, never saved for them. */
+export type RtrFromPack = { tenant: string; until: string | null; noTimeLimit: boolean; what: string };
+
+/* A reader's name against a tenant's: the same, or the same first and last name. */
+const words = (s: string) => s.toLowerCase().replace(/[^a-z\s'-]/g, " ").split(/\s+/).filter(Boolean);
+const samePerson = (a: string, b: string) => {
+  const x = words(a), y = words(b);
+  if (!x.length || !y.length) return false;
+  return x.join(" ") === y.join(" ") || (x[0] === y[0] && x[x.length - 1] === y[y.length - 1]);
+};
+
+/**
+ * A date already read off the let's PLC pack (ticket 494b1e2e), to fill the
+ * field in. Only a Home Office result or a permission document gives a date:
+ * a foreign passport's expiry is not when the right to rent runs out. A UK or
+ * Irish passport is no time limit. Never a date already passed.
+ */
+export async function rtrFromPack(l: LetPeople): Promise<RtrFromPack[]> {
+  if (!hasDb()) return [];
+  const refs = [...new Set([l.ref, l.dealId, l.deal?.id].filter((x): x is string => Boolean(x)))];
+  type Doc = { checkId?: string; addedAt?: string; read?: { checkId?: string | null; what?: string; expiryDate?: string | null; names?: string[]; alsoCovers?: string[] } | null };
+  const rows = await q<{ documents: Doc[] }>(`SELECT documents FROM os_plc_cases WHERE application_ref = ANY($1::text[])`, [refs]);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const docs = rows
+    .flatMap((r) => (Array.isArray(r.documents) ? r.documents : []))
+    .filter((d) => d.read && (d.checkId === "right-to-rent" || d.read.checkId === "right-to-rent" || d.read.alsoCovers?.includes("right-to-rent")))
+    .sort((a, b) => String(b.addedAt ?? "").localeCompare(String(a.addedAt ?? "")));
+  const out: RtrFromPack[] = [];
+  for (const t of l.tenants) {
+    for (const d of docs) {
+      const read = d.read!;
+      if (!(read.names ?? []).some((n) => samePerson(n, t.name))) continue;
+      const what = (read.what ?? "").trim();
+      if (/\b(uk|british|irish)\b[^.]*passport|passport[^.]*\b(uk|british|irish)\b/i.test(what)) {
+        out.push({ tenant: t.name, until: null, noTimeLimit: true, what });
+        break;
+      }
+      const until = read.expiryDate && /^\d{4}-\d{2}-\d{2}$/.test(read.expiryDate) ? read.expiryDate : null;
+      if (until && until > today && /right to rent|share code|home office|visa|\bbrp\b|residence|permit|settle|evisa/i.test(what)) {
+        out.push({ tenant: t.name, until, noTimeLimit: false, what });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 /** The let, if this person may record on it, and whether right to rent applies. */
 export async function rtrLet(ref: string, me: OsUser): Promise<{ ok: true; let: LetPeople; scottish: boolean } | { ok: false; error: string }> {
   const r = await letPeople(ref, me);
@@ -120,7 +205,7 @@ export async function recordRtr(
   if (!tenant) return { ok: false, error: `${tenantName || "That person"} isn't a tenant on this let.` };
   return insertRtr({
     applicationId: ref,
-    listingId: got.let.listingId,
+    listingId: await letListingId(got.let),
     property: `${got.let.property}${got.let.locality ? `, ${got.let.locality}` : ""}`,
     agentName: got.let.agentName ?? "",
     tenant: { name: tenant.name, email: tenant.email ?? "" },

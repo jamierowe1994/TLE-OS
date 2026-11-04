@@ -17,7 +17,7 @@ import { Pill } from "@/components/Wire";
 import { type SpineStop } from "@/components/StageSpine";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import ContactBlock from "@/components/ContactBlock";
-import RightToRentField, { type RtrShown } from "@/components/RightToRentField";
+import RightToRentField, { suggestedFor, type RtrShown, type RtrSuggested } from "@/components/RightToRentField";
 import Guarantors from "@/components/Guarantors";
 import { GuarantorsToPropoly } from "@/components/LetPropoly";
 import LetTenants from "@/components/LetTenants";
@@ -833,12 +833,14 @@ export default function ApplicationDrawer({
   const [rtr, setRtr] = useState<RtrShown[]>([]);
   /* Pre-tenancy checks each date (Kirstie, ticket 066bb29e, 16 Oct 2026). */
   const [rtrCanVerify, setRtrCanVerify] = useState(false);
+  /* A date the PLC pack already read, to fill the field in (Kirstie, ticket 494b1e2e). */
+  const [rtrPack, setRtrPack] = useState<RtrSuggested[]>([]);
   useEffect(() => {
     if (!letId) return;
     let live = true;
     fetch(`/api/applications/${encodeURIComponent(letId)}/right-to-rent`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => { if (live && j?.ok && Array.isArray(j.records)) { setRtr(j.records); setRtrCanVerify(Boolean(j.canVerify)); } })
+      .then((j) => { if (live && j?.ok && Array.isArray(j.records)) { setRtr(j.records); setRtrCanVerify(Boolean(j.canVerify)); setRtrPack(Array.isArray(j.fromPack) ? j.fromPack : []); } })
       .catch(() => { /* the yes/no still shows; the date just isn't added */ });
     return () => { live = false; };
   }, [letId]);
@@ -1416,6 +1418,7 @@ export default function ApplicationDrawer({
                         <RightToRentField
                           key={`${tenantShown.name}-${rtrOf(tenantShown)?.id ?? "none"}`}
                           record={rtrOf(tenantShown)}
+                          suggested={suggestedFor(rtrPack, tenantShown.name)}
                           save={(until, noTimeLimit) => saveRtr(tenantShown.name, until, noTimeLimit)}
                           canVerify={rtrCanVerify}
                           onVerified={rtrKeep}
@@ -2265,6 +2268,21 @@ export default function ApplicationDrawer({
                               person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
                               personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
                             />
+                          )}
+                          {/* Their right to rent expiry on the card, not only behind
+                              their name (Kirstie Mulholland, 3 Nov 2026, ticket 494b1e2e). */}
+                          {!scottishLet && letId && (
+                            <div className="mt-3 border-t border-line/60 pt-2.5" data-steve="application.rtr-expiry-card">
+                              <p className="nl-meta mb-1">Right to rent expiry</p>
+                              <RightToRentField
+                                key={`${p.name}-${rtrOf(p)?.id ?? "none"}`}
+                                record={rtrOf(p)}
+                                suggested={suggestedFor(rtrPack, p.name)}
+                                save={(until, noTimeLimit) => saveRtr(p.name, until, noTimeLimit)}
+                                canVerify={rtrCanVerify}
+                                onVerified={rtrKeep}
+                              />
+                            </div>
                           )}
                         </section>
                       );

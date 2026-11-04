@@ -52,6 +52,7 @@ import FileDocuments from "@/components/FileDocuments";
 import { fetchMe } from "@/lib/me";
 import { searchMatches } from "@/lib/search-match";
 import { useNoteVisit } from "@/lib/recent-visits";
+import { LetRightToRent } from "@/components/RightToRentField";
 
 /* ------------------------------- data shapes ------------------------------- */
 
@@ -1956,6 +1957,15 @@ function DealWorkspace({
                   ))
                 ) : (
                   <p className="text-[13px] text-muted">No tenant details recorded yet.</p>
+                )}
+                {/* Each tenant's right to rent expiry, put in before the let
+                    goes in (Kirstie Mulholland, 3 Nov 2026, ticket 494b1e2e). */}
+                {!cancelled && deal.app.tenants.length > 0 && (
+                  <LetRightToRent
+                    letRef={deal.app.id}
+                    tenants={deal.app.tenants.map((t) => ({ name: t.name, email: t.email ?? null }))}
+                    className="mt-3 border-t border-line/60 pt-2.5"
+                  />
                 )}
               </PersonCard>
               <PersonCard label="Landlord" icon="user">

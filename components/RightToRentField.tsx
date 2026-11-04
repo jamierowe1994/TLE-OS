@@ -31,6 +31,12 @@ const niceDay = (ymd: string) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 const daysTo = (ymd: string) => Math.round((new Date(`${ymd}T12:00:00Z`).getTime() - new Date(`${today()}T12:00:00Z`).getTime()) / 86_400_000);
 
+/** A date the let's PLC pack already read (lib/application-rtr rtrFromPack, ticket 494b1e2e). */
+export type RtrSuggested = { tenant: string; until: string | null; noTimeLimit: boolean; what: string };
+
+/** The pack's reading for one tenant, by name. */
+export const suggestedFor = (all: RtrSuggested[], name: string) => all.find((x) => x.tenant.trim().toLowerCase() === name.trim().toLowerCase()) ?? null;
+
 export function rtrSoon(r: RtrShown): "gone" | "soon" | null {
   if (!r.rightUntil) return null;
   const d = daysTo(r.rightUntil);
@@ -42,6 +48,7 @@ export default function RightToRentField({
   save,
   canVerify,
   onVerified,
+  suggested = null,
   className = "",
 }: {
   record: RtrShown | null;
@@ -49,6 +56,8 @@ export default function RightToRentField({
   save: (until: string | null, noTimeLimit: boolean) => Promise<string | null>;
   canVerify: boolean;
   onVerified: (r: RtrShown) => void;
+  /** Read off the PLC pack: fills the form in, never saved until Save (Kirstie, ticket 494b1e2e). */
+  suggested?: RtrSuggested | null;
   className?: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -82,9 +91,17 @@ export default function RightToRentField({
     if (!editing) {
       return (
         <div className={`text-[12px] ${className}`}>
-          <p className="text-muted">No expiry recorded. Overseas tenants with a time limit need one, so the renewal is chased.</p>
-          <button type="button" onClick={() => { setEditing(true); setUntil(""); setNoLimit(false); }} className="mt-1.5 font-semibold text-accent-dark hover:underline">
-            Add the expiry
+          <p className="text-muted">
+            {suggested
+              ? `No expiry recorded. The PLC pack reads ${suggested.noTimeLimit ? "no time limit" : `until ${niceDay(suggested.until ?? "")}`} off their ${suggested.what || "right to rent document"}.`
+              : "No expiry recorded. Overseas tenants with a time limit need one, so the renewal is chased."}
+          </p>
+          <button
+            type="button"
+            onClick={() => { setEditing(true); setUntil(suggested?.until ?? ""); setNoLimit(suggested?.noTimeLimit ?? false); }}
+            className="mt-1.5 font-semibold text-accent-dark hover:underline"
+          >
+            {suggested ? "Check and add it" : "Add the expiry"}
           </button>
         </div>
       );
@@ -106,7 +123,11 @@ export default function RightToRentField({
           <input type="checkbox" checked={noLimit} onChange={(e) => { setNoLimit(e.target.checked); setErr(null); }} className="h-4 w-4 accent-[var(--brown)]" />
           No time limit (settled status, a British or Irish passport)
         </label>
-        <p className="text-[11px] text-muted">From the share code result or their document. Pre-tenancy checks it once it&apos;s saved.</p>
+        <p className="text-[11px] text-muted">
+          {suggested && !record
+            ? `Filled in from the PLC pack (${suggested.what || "their document"}). Check it against the document before you save.`
+            : "From the share code result or their document. Pre-tenancy checks it once it's saved."}
+        </p>
         {err && <p className="text-[11.5px] text-accent-dark">{err}</p>}
         <div className="flex items-center gap-3">
           <PressButton onClick={() => void submit()} disabled={busy} className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">
@@ -208,6 +229,78 @@ export function HomeRightToRent({ listingId, tenants, className = "" }: { listin
       </ul>
       {!open && shown.length > 0 && shown.length < tenants.length && (
         <button type="button" onClick={() => setOpen(true)} className="mt-2 text-[11.5px] text-muted underline hover:text-ink">Add another tenant&apos;s</button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Each tenant's right to rent expiry on a let, for the pre-tenancy board's
+ * deal (Kirstie Mulholland, 3 Nov 2026, ticket 494b1e2e: "somewhere to add
+ * Right to rent expiry on the pre tenancy bit so I can add before the let goes
+ * in"). The same record as the let's own page (/api/applications/<ref>/
+ * right-to-rent takes a Propoly deal's id too), so a date put in here is on
+ * the let, on the home once it is let, and on the renewals list. A date the
+ * PLC pack already read is filled in for her to check. Nothing on a Scottish let.
+ */
+export function LetRightToRent({ letRef, tenants, className = "" }: { letRef: string; tenants: { name: string; email: string | null }[]; className?: string }) {
+  const [state, setState] = useState<{ records: RtrShown[]; fromPack: RtrSuggested[]; canVerify: boolean; scottish: boolean } | null | { failed: string }>(null);
+  useEffect(() => {
+    let live = true;
+    setState(null);
+    fetch(`/api/applications/${encodeURIComponent(letRef)}/right-to-rent`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!live) return;
+        setState(j?.ok
+          ? { records: j.records ?? [], fromPack: j.fromPack ?? [], canVerify: Boolean(j.canVerify), scottish: Boolean(j.scottish) }
+          : { failed: j?.error ?? "The right to rent dates couldn't be read just now." });
+      })
+      .catch(() => { if (live) setState({ failed: "The right to rent dates couldn't be read just now." }); });
+    return () => { live = false; };
+  }, [letRef]);
+  if (state && "scottish" in state && state.scottish) return null;
+  if (!tenants.length) return null;
+  const of = (t: { name: string; email: string | null }) =>
+    state && "records" in state
+      ? state.records.find((r) => (t.email && r.tenantEmail && r.tenantEmail.toLowerCase() === t.email.toLowerCase()) || r.tenant.trim().toLowerCase() === t.name.trim().toLowerCase()) ?? null
+      : null;
+  const keep = (r: RtrShown) => setState((s) => (s && "records" in s ? { ...s, records: [...s.records.filter((x) => x.tenant.trim().toLowerCase() !== r.tenant.trim().toLowerCase()), r] } : s));
+  return (
+    <div className={className} data-steve="pretenancy.rtr-expiry">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[11.5px] text-muted">Right to rent expiry</p>
+        <a href="/pre-tenancy/right-to-rent" className="text-[11px] text-muted underline hover:text-ink">Renewals list</a>
+      </div>
+      {state === null ? (
+        <p className="mt-1 text-[12px] text-muted">Reading the right to rent dates…</p>
+      ) : "failed" in state ? (
+        <p className="mt-1 text-[12px] text-accent-dark">{state.failed}</p>
+      ) : (
+        <ul className="mt-1.5 space-y-2.5">
+          {tenants.map((t, i) => (
+            <li key={`${t.name}-${i}`}>
+              {tenants.length > 1 && <p className="text-[12.5px] font-semibold">{t.name}</p>}
+              <RightToRentField
+                key={of(t)?.id ?? "none"}
+                record={of(t)}
+                suggested={suggestedFor(state.fromPack, t.name)}
+                canVerify={state.canVerify}
+                onVerified={keep}
+                save={async (until, noTimeLimit) => {
+                  const j = await fetch(`/api/applications/${encodeURIComponent(letRef)}/right-to-rent`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ tenant: t.name, until, noTimeLimit }),
+                  }).then((r) => r.json()).catch(() => null);
+                  if (!j?.ok) return j?.error ?? "That couldn't be saved just now. Try again in a minute.";
+                  keep(j.record as RtrShown);
+                  return null;
+                }}
+              />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
