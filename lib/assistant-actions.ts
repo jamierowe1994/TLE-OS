@@ -2,8 +2,7 @@ import { noDashes } from "@/lib/no-dashes";
 import "server-only";
 import type { Scope } from "@/lib/scope";
 import { bookFor, invalidateListingBook } from "@/lib/listings-cache";
-import { onTheirBook } from "@/lib/assistant-book";
-import { getListingContacts } from "@/lib/business/rex-stats";
+import { homeContacts, onTheirBook } from "@/lib/assistant-book";
 import { isExpiredToken, rexCall, RexWriteBlocked } from "@/lib/rex";
 import { previewMerge } from "@/lib/rex-mailmerge";
 import { MailboxNotConnected, msSendMail } from "@/lib/microsoft";
@@ -192,25 +191,27 @@ async function listingInScope(
  * Who the landlord actually is, asked at the moment of sending.
  *
  * This is the load-bearing half of guard 2. The proposal says "landlord of
- * 828057"; this resolves that to a person and an address now, from REX, and
- * whatever the model believed is discarded.
+ * 828057"; this resolves that to a person and an address now, from the
+ * record, and whatever the model believed is discarded. The record as the
+ * screens have it (lib/assistant-book homeContacts, 4 Nov 2026): a landlord
+ * changed in the OS, not REX's old owner.
  */
 async function resolveRecipient(
   listingId: string,
-  role: "landlord" | "tenant"
+  role: "landlord" | "tenant",
+  rexUserId: string | null
 ): Promise<{ name: string; email: string; contactId: string } | { error: string }> {
-  const people = await getListingContacts(listingId);
+  const { home, propertyId } = await onTheirBook(rexUserId, listingId);
+  const people = await homeContacts(listingId, { home, propertyId });
   if (!people.length) {
-    return { error: "REX didn't return any contacts for that property, so I can't tell who to send it to. Worth checking the record directly." };
+    return { error: "No contacts could be read for that property, so I can't tell who to send it to. Worth checking the record directly." };
   }
-  /* REX's own words, which are not ours: a landlord is "Listing Owner" and a
-     tenant is "Purchaser / Tenant" (reln_type ids `owner` and `purchtenant`).
-     Matching on "Landlord" alone would find nobody, ever. */
-  const want = role === "landlord" ? /owner|landlord|vendor/i : /tenant|purchtenant/i;
-  const match = people.find((c) => c.role && want.test(c.role) && c.email);
+  /* By the relationship's kind, not REX's words for it: a landlord is "Listing
+     Owner" there and a tenant "Purchaser / Tenant" (lib/rex-reln). */
+  const match = people.find((c) => c.kind === role && c.email);
   if (!match) {
-    const roles = people.map((c) => `${c.name} (${c.role ?? "no role"})`).join(", ");
-    return { error: `Nobody on that property is recorded as a ${role} with an email address. REX has: ${roles}.` };
+    const roles = people.map((c) => `${c.name} (${c.role})`).join(", ");
+    return { error: `Nobody on that property is recorded as a ${role} with an email address. The record has: ${roles}.` };
   }
   return { name: match.name, email: match.email as string, contactId: match.id };
 }
@@ -339,7 +340,8 @@ async function doWriteUp(
  * Graph sends from the mailbox itself. The BCC to their REX dropbox keeps the
  * timeline, so nothing is given up by the move.
  *
- * The recipient is still resolved from REX at the moment of sending, and the
+ * The recipient is still resolved at the moment of sending (from the record
+ * as the screens have it since 4 Nov 2026, resolveRecipient), and the
  * message is still rendered by REX first so a merge tag that came out blank is
  * caught before a landlord reads "Dear ,". Both of those are worth keeping
  * even though the send itself has moved.
@@ -369,7 +371,7 @@ async function doEmail(
     };
   }
 
-  const who = await resolveRecipient(p.listingId, p.to);
+  const who = await resolveRecipient(p.listingId, p.to, rexUserId);
   if ("error" in who) return { ok: false, message: who.error };
 
   /* And the customer switch, now that we know who it is for (18 Sep 2026): the

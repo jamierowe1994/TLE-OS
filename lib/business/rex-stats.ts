@@ -4,6 +4,7 @@ import type { FunnelStats } from "./types";
 import { rexCall, rexRows, rexConfigured, rexLettingsAgents } from "./rex";
 import { readCache, writeCache } from "./integration-cache";
 import { withoutRemoved } from "@/lib/certificate-remove";
+import { relnKind } from "@/lib/rex-reln";
 
 // Per-agent funnel stats from REX — live pulls confirmed against the live
 // account (3517, "The Property Experts" — Property + Lettings share it) via the
@@ -2899,6 +2900,8 @@ export interface ListingContact {
   name: string;
   /** REX's relationship label — "Landlord", "Tenant", "Listing Owner"… */
   role: string | null;
+  /** The relationship's kind, a sub-type read as its parent (lib/rex-reln): "owner", "purchtenant"… */
+  kind: string;
   email: string | null;
   phone: string | null;
 }
@@ -2954,6 +2957,7 @@ export async function getListingContacts(listingId: string): Promise<ListingCont
         str((r.reln_type as Record<string, unknown> | undefined)?.text) ??
         str(r.reln_type) ??
         null,
+      kind: relnKind(r),
       email:
         str(contact.email_address) ??
         str(emails[0]?.email_address) ??

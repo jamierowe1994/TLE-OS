@@ -5,14 +5,14 @@ import type { OpenSurface } from "@/lib/open-record";
 import type { Scope } from "@/lib/scope";
 import { bookFor } from "@/lib/listings-cache";
 import { getComplianceBook } from "@/lib/compliance-cache";
-import { getListingContacts, getListingDetail } from "@/lib/business/rex-stats";
+import { getListingDetail } from "@/lib/business/rex-stats";
 import { portalLinksFor } from "@/lib/rex-portal-links";
 import { rexCall, rexConfigured } from "@/lib/rex";
 import { requiredCerts, statusOf, type CompProperty } from "@/lib/compliance";
 import type { ActionProposal } from "@/lib/assistant-actions";
 import { GUIDE_TARGETS, guideTarget } from "@/lib/steve-guide";
 import { managedBookFor } from "@/lib/managed-book-cache";
-import { onTheirBook } from "@/lib/assistant-book";
+import { homeContacts, onTheirBook } from "@/lib/assistant-book";
 import { listAppraisals } from "@/lib/appraisal-store";
 import { MORE_TOOLS } from "@/lib/assistant-steve-more";
 import { PA_TOOLS } from "@/lib/assistant-steve-pa";
@@ -363,27 +363,22 @@ const propertyContacts: AssistantTool = {
     const listingId = str(input.listingId);
     if (!listingId) return { error: "I need a listingId — use find_property first." };
 
-    const { listing, home } = await onTheirBook(ctx.scope.rexUserId, listingId);
+    const { listing, home, propertyId } = await onTheirBook(ctx.scope.rexUserId, listingId);
     if (!listing && !home && !ctx.scope.everything) {
       return { error: "That property isn't on your book, so I can't show you its contacts." };
     }
 
-    let people = await getListingContacts(listingId);
-    /* REX names nobody on the listing, but the home in Portfolio has its
-       landlord and tenants: those are the people. */
-    if (!people.length && home && (home.landlord || home.tenants.length)) {
-      people = [
-        ...(home.landlord ? [{ id: home.landlord.contactId, name: home.landlord.name, role: "Landlord", email: home.landlord.email, phone: home.landlord.phone }] : []),
-        ...home.tenants.map((t) => ({ id: t.contactId, name: t.name, role: "Tenant", email: t.email, phone: t.phone })),
-      ];
-    }
+    /* The people the screens show, not REX's list alone (lib/assistant-book
+       homeContacts, 4 Nov 2026): a landlord changed in the OS, every joint
+       landlord, the points of contact and the tenants as put right. */
+    const people = await homeContacts(listingId, { home, propertyId });
     if (!people.length) {
       return { listingId, contacts: [], note: "REX returned nothing for this property. That means the lookup failed or nobody is attached — it does NOT mean the property has no landlord. Worth checking in REX directly." };
     }
     /* The tenants' guarantors, kept in the OS (lib/guarantors, 15 Oct 2026:
        Steve had told Lorna there was no guarantor field anywhere). */
     const { guarantorsFor } = await import("@/lib/guarantors");
-    const guarantors = await guarantorsFor({ emails: people.filter((c) => /tenant/i.test(c.role ?? "")).map((c) => c.email) }).catch(() => null);
+    const guarantors = await guarantorsFor({ emails: people.filter((c) => c.kind === "tenant").map((c) => c.email) }).catch(() => null);
     return {
       listingId,
       contacts: people.map((c) => ({ name: c.name, role: orMissing(c.role), email: orMissing(c.email), phone: orMissing(c.phone) })),
@@ -570,11 +565,11 @@ async function scopedListing(listingId: string, ctx: ToolContext) {
   const refusal = refuseUnscoped(ctx.scope);
   if (refusal) return refusal;
   if (!listingId) return { error: "I need a listingId — use find_property first." };
-  const { listing, home, address } = await onTheirBook(ctx.scope.rexUserId, listingId);
+  const { listing, home, propertyId, address } = await onTheirBook(ctx.scope.rexUserId, listingId);
   if (!listing && !home && !ctx.scope.everything) {
     return { error: "That property isn't on your book, so I can't act on it." };
   }
-  return { listing, address: address ?? `listing ${listingId}` };
+  return { listing, home, propertyId, address: address ?? `listing ${listingId}` };
 }
 
 const proposeNote: AssistantTool = {
@@ -694,15 +689,15 @@ const proposeEmail: AssistantTool = {
     const body = str(input.body);
     if (!subject || !body) return { error: "An email needs a subject and a body." };
 
-    /* The address is resolved HERE, from REX, not taken from the model — and
-       resolved again at execution. Whatever it thinks it is writing to, the
-       card shows the person actually on the record. */
-    const people = await getListingContacts(str(input.listingId));
-    const want = to === "landlord" ? /landlord|owner|vendor/i : /tenant/i;
-    const match = people.find((c) => c.role && want.test(c.role) && c.email);
+    /* The address is resolved HERE, from the record, not taken from the model
+       — and resolved again at execution. Whatever it thinks it is writing to,
+       the card shows the person actually on the record: the landlord as the
+       screens have it, a change made in the OS first (lib/assistant-book). */
+    const people = await homeContacts(str(input.listingId), { home: got.home, propertyId: got.propertyId });
+    const match = people.find((c) => c.kind === to && c.email);
     if (!match) {
-      const roles = people.length ? people.map((c) => c.role ?? "no role").join(", ") : "nothing at all";
-      return { error: `I can't find a ${to} with an email on that property. REX returned ${roles}.` };
+      const roles = people.length ? people.map((c) => c.role).join(", ") : "nothing at all";
+      return { error: `I can't find a ${to} with an email on that property. The record has ${roles}.` };
     }
     return proposed(
       {
