@@ -124,7 +124,13 @@ export default function HomeLandlords({
   }, [homeKey, also]);
   useEffect(() => { setPeople(homeKey ? null : []); load(); }, [load, homeKey]);
 
-  const joint = (people ?? []).filter((p) => p.kind === "joint_landlord");
+  /* Each person once (4 Nov 2026): a landlord the record already holds - the
+     listing's second owner, say - who was also added here by hand is shown as
+     the record has them, not again. By email, else by name, as everything
+     that reads a home's landlords counts them (lib/book-lets, the push). */
+  const low = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const held = new Set((main ?? []).flatMap((m) => [low(m.email) && `e:${low(m.email)}`, low(m.name) && `n:${low(m.name)}`]).filter(Boolean));
+  const joint = (people ?? []).filter((p) => p.kind === "joint_landlord" && !held.has(`e:${low(p.email)}`) && !held.has(`n:${low(p.name)}`));
   const contacts = (people ?? []).filter((p) => p.kind === "contact");
   const landlordCount = (main?.length ?? 0) + joint.length + (mainSlot ? 1 : 0);
 

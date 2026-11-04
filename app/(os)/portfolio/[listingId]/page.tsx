@@ -1960,15 +1960,18 @@ export default function PropertyPage() {
                       readOnly={p.test ? "A test home keeps its own people." : null}
                       main={
                         landlord && !changed
-                          ? [{
-                              key: landlord.contactId,
-                              name: landlord.name,
-                              email: landlord.email,
-                              phone: landlord.phone,
-                              personRef: /^\d+$/.test(landlord.contactId) ? `rex:${landlord.contactId}` : isRecord && propertyId ? `home:${propertyId}` : null,
-                              note: isRecord ? "From the home's record in the OS - REX names no owner." : null,
-                              after: jobEmails,
-                            }]
+                          ? [
+                              ...(landlord.contactId.startsWith("person:") ? [] : [{
+                                key: landlord.contactId,
+                                name: landlord.name,
+                                email: landlord.email,
+                                phone: landlord.phone,
+                                personRef: /^\d+$/.test(landlord.contactId) ? `rex:${landlord.contactId}` : isRecord && propertyId ? `home:${propertyId}` : null,
+                                note: isRecord ? "From the home's record in the OS - REX names no owner." : null,
+                                after: jobEmails,
+                              }]),
+                              ...coOwners.map((o) => ({ key: o.contactId, name: o.name, email: o.email, phone: o.phone, personRef: `rex:${o.contactId}` })),
+                            ]
                           : []
                       }
                       mainSlot={
