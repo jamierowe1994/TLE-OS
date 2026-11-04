@@ -88,7 +88,11 @@ export function systemMap(): string {
   const note = (on: boolean, name: string, what: string) =>
     (on ? connected : off).push(`   · ${name} — ${what}`);
 
-  note(rexConfigured(), "REX", "the CRM. Listings, appraisals, leads, viewings, compliance certificates, and the agent roster. Read-only from here.");
+  /* "Read-only from here", and "Nothing in the OS writes back to REX" below,
+     stood until 4 Nov 2026, long after listings, notes and contacts began
+     saving back, and Steve sent a how-do-I about taking a home off the market
+     to REX (see the Listings entry in lib/screens). */
+  note(rexConfigured(), "REX", "the CRM. Listings, appraisals, leads, viewings, compliance certificates, and the agent roster. The OS reads all of it and saves some of it back: each screen's entry above says what.");
   note(propolyConfigured(), "Propoly", "where a deal lives once terms are agreed. It generates the contracts, so it is the source of truth for the pipeline.");
   note(payPropConfigured(), "PayProp", "rent, fees and arrears. Two agencies: Scotland and England & Wales.");
   note(tegHubConfigured(), "TEG Team Hub", "the group's register of people — partner package, bio, headshot.");
@@ -165,7 +169,9 @@ ${off.length ? `Not connected at the moment, so do not send anyone down these ro
      set payment amount.
    · The referral fee is £150, which is 25% of the setup fee.
    · Prefer the last rental price over the last sale price.
-   · Nothing in the OS writes back to REX. It is read-only.
+   · Plenty of the OS saves back to REX, and each screen's entry above says
+     what. Never say the OS cannot do something, or send anybody to REX to do
+     it, without checking that screen's entry first.
 
 ## What you cannot do
 

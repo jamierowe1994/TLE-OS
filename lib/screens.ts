@@ -203,17 +203,25 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Filter by stage on the tabs: All listings, Available, Let agreed, Draft, Missing photos, Needs compliance, Archived.",
       "Open Filters for the sort (Most recent, or rent low to high and high to low), the rent band, the location and the date listed.",
       "Search the board, and switch it between List and Tiles.",
-      "Click a card for the file: Applications & viewings, Property, Marketing, Photos and Documents.",
-      "In Marketing, edit the portal write-up and press Save. That goes straight to REX and out to Rightmove, Zoopla and OnTheMarket — live on the portals in about five to ten minutes. There is nothing else to press afterwards.",
+      /* Until 4 Nov 2026 this entry said New listing opened REX, that The
+         Details could only be changed in REX and that the write-up was the
+         only thing a listing saved back, so Steve answered "how do I take
+         this listing off the market?" with "the OS doesn't have a way yet,
+         withdraw it in REX". Each line below is the button as it is now. */
+      "New listing, top right of the board: five short screens - The Home, The Landlord, The Let (rent, deposit, service and fees), Check, then Terms, drawn up for the agent to sign their half and send. The listing is made at Check, with nothing to do anywhere else.",
+      "Click a card for the listing's page: Overview, Enquiries, Viewings, Offers, Compliance, Notes and Activity.",
+      "Edit on The Details, on the Overview, changes the rent, deposit, available date, bedrooms, bathrooms, council tax band, type of home, furnishing, type of let and the service. It saves straight to the listing.",
+      "Edit the advert, at the top of the page, opens Marketing: edit the portal write-up and press Save. That goes straight out to Rightmove, Zoopla and OnTheMarket - live on the portals in about five to ten minutes. There is nothing else to press afterwards.",
+      "Take off the market, at the top of a live listing's page (and in its More options menu): it asks first, then the advert comes off Rightmove, Zoopla and OnTheMarket within the hour. Enquiries, viewings and offers stay on the listing, and Put back on the market, in the same place, puts the advert back up. It is the agent's own press: Steve says where it is and never presses it.",
+      "A draft can go Live without Portals from its More options menu: it moves on to viewings and offers without being advertised.",
+      "Once a let is in progress, The Advert box on the listing and on the let says whether it is still online. Take Off the Portals takes it down now, in a few short screens that also offer to let the other applicants go and call off booked viewings, or they pick when to be asked: When the holding fee is in, When referencing is done, or I'll decide myself. Nothing comes down by itself.",
       "Open the live advert on Rightmove, Zoopla or OnTheMarket from the Live advert links at the top of the file.",
       "Make an offer, and hand a let property over to Kirstie for pre-tenancy.",
     ],
     wiring: "partial",
     caveats: [
-      "+ Add new listing opens REX in a new tab. Properties are still created in REX, and appear here once they are.",
       "Archived is not a REX state and nothing is deleted: a draft goes there once it has sat two months without being published, along with every listing REX holds that came off the market without a tenant. Bring back to drafts returns one for another two months.",
       "Pills like No photos and EPC not filed are telling you what REX is missing, not what this screen failed to load.",
-      "Every other field on the file is read-only — the Marketing write-up is the only thing here that saves back to REX. Rent, availability, beds and the rest have to be changed in REX itself.",
       "A home's address: ask Steve. He changes it in the OS after showing the old and new and a yes - on the managed-home record, or as the OS's own address for a listing - and it shows under the address on the listing and Portfolio pages as Address in the OS. The home's property record in REX is not changed: Steve tells them to change it there too, without naming REX. The push to Propoly uses the OS address for a town or postcode the REX record has blank (never over one REX holds), and says so on the handover run.",
       "Terms of business are not sent from a listing: the Send terms button under Compliance is not switched on. They go from the landlord's appraisal file, Prepare and send (see Market Appraisals). A listing with no appraisal file behind it (most homes that were on the market before the OS) has no Prepare and send: if its terms already went out and are unsigned, chase them from the Terms to sign tile on the Dashboard - Send reminder emails the landlord from your own mailbox (Customise adds the tile if it is not there). If they hold signed terms, Upload them under Compliance. Otherwise it goes to James.",
       "Live advert links only appear for a property that is actually feeding a portal. No links means the feed is not running, not that the screen failed.",
