@@ -1,3 +1,4 @@
+import { isOsPropertyId } from "@/lib/os-properties";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAnyCapability, whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
@@ -140,7 +141,7 @@ async function post(req: NextRequest) {
      this one takes the place of. It comes off once this one is kept. */
   const replacesKey = String(form.get("replaces") ?? "").trim();
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
-  if (!/^(\d+|pending-[a-z0-9-]+|pm-[0-9a-f-]+)$/i.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, an OS property id, or give an address." }, { status: 400 });
+  if (!/^(\d+|pending-[a-z0-9-]+)$/i.test(propertyId) && !isOsPropertyId(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, an OS property id, or give an address." }, { status: 400 });
   if (!CERT_TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...CERT_TYPES].join(", ")}.` }, { status: 400 });
   /* A PAT or fire safety certificate carries no expiry, only the day it was
      tested (Lianna Denholm, 1 Nov 2026): the issue date is enough, and it runs

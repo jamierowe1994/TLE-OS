@@ -1,3 +1,4 @@
+import { isOsPropertyId } from "@/lib/os-properties";
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const property = (req.nextUrl.searchParams.get("property") ?? "").trim();
   /* A REX property id, or "pending-<address>" for files waiting on one. */
-  if (!/^(\d+|pending-[a-z0-9-]+|pm-[0-9a-f-]+)$/i.test(property)) return NextResponse.json({ ok: false, error: "Which property?" }, { status: 400 });
+  if (!/^(\d+|pending-[a-z0-9-]+)$/i.test(property) && !isOsPropertyId(property)) return NextResponse.json({ ok: false, error: "Which property?" }, { status: 400 });
   if (!r2Configured) return NextResponse.json({ ok: true, configured: false, files: [] });
 
   try {

@@ -1,4 +1,5 @@
 import "server-only";
+import { isOsPropertyId } from "@/lib/os-properties";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -157,7 +158,7 @@ export async function writeCertificateRow(r: CertRow, provenance: string, wantRe
   }
   /* A home REX CRM does not hold (6 Sep: the OS carries every REX PM home,
      linked or not): the OS is its record, and there is nothing in REX to write. */
-  if (/^pm-/i.test(r.property_id)) {
+  if (/^pm-/i.test(r.property_id) || isOsPropertyId(r.property_id)) {
     const rows = await q<CertRow>(`UPDATE os_certificates SET rex_note = $2, rex_at = NOW() WHERE id = $1 RETURNING *`, [r.id, "Not on REX: this home has no REX property, so the OS holds the certificate."]);
     return rows[0];
   }
