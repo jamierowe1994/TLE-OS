@@ -38,7 +38,8 @@ type View = {
   agentSigned: boolean;
   completedAt: string | null;
   hasCopy: boolean;
-  me: { key: string; name: string; details: Partial<LandlordDetails>; signedAt: string | null };
+  /** fromFile: details put in from the home's file (their registration), shown in a box to check. */
+  me: { key: string; name: string; details: Partial<LandlordDetails>; signedAt: string | null; fromFile?: Array<keyof LandlordDetails> };
   people: Array<{ key: string; name: string; signed: boolean; you: boolean }>;
   preview: boolean;
 };
@@ -340,8 +341,13 @@ export default function SignPage() {
   /* ── read and sign ── */
   const fields = doc.details;
   const details: Partial<LandlordDetails> = { ...view.me.details, ...edits };
-  /* Asked for from what is saved, so a box stays put while it's typed into. */
-  const missing = fields.filter((f) => !okFor(f, String(view.me.details[f.key] ?? "")));
+  /* Asked for from what is saved, so a box stays put while it's typed into. Their
+     registration as the home's file has it comes in a box too, already filled,
+     to check and change (Lianna Denholm, 4 Nov 2026: they were typing it blind). */
+  const fromFile = new Set(view.me.fromFile ?? []);
+  const missing = fields
+    .filter((f) => !okFor(f, String(view.me.details[f.key] ?? "")) || fromFile.has(f.key))
+    .map((f) => (fromFile.has(f.key) ? { ...f, hint: "We have this on file. Change it if it isn't right." } : f));
   const stillBad = missing.filter((f) => !okFor(f, String(details[f.key] ?? "")));
   const printed = doc.sections.flatMap((s) => s.blocks.flatMap((b) => (b.kind === "landlords" ? b.fields : [])));
   const youSection = doc.sections.find((s) => s.blocks.some((b) => b.kind === "landlords"))?.title ?? "the agreement";

@@ -5,6 +5,7 @@ import TermsPanelClassic from "@/components/terms/TermsPanelClassic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import TermsSendScreen, { type Editions, type StaffParty, type StaffTerms } from "@/components/terms/TermsSendScreen";
 import { Badge, Ico } from "@/components/new-look/Parts";
+import type { HomeReg } from "@/lib/reg-numbers";
 
 /**
  * TERMS OF BUSINESS ON A HOME (James, 23 Oct 2026).
@@ -89,6 +90,8 @@ function OnPagePanel({
   const [all, setAll] = useState<StaffTerms[] | null>(null);
   const [preview, setPreview] = useState(false);
   const [editions, setEditions] = useState<Editions>({ scotland: null, england: null });
+  /* The home's landlord registration on file (4 Nov 2026): the send screen draws each landlord's on the contract. */
+  const [registration, setRegistration] = useState<HomeReg | null>(null);
   /* The send screen, open: a fresh send, Adjust contract (James, 23 Oct 2026: filled in from the
      set out now), or Sign your part on one made and waiting for the agent. */
   const [screen, setScreen] = useState<{ mode: "new" } | { mode: "adjust"; from: StaffTerms } | { mode: "sign"; terms: StaffTerms } | null>(null);
@@ -109,6 +112,7 @@ function OnPagePanel({
       setAll(j.terms);
       setPreview(Boolean(j.preview));
       if (j.editions) setEditions(j.editions);
+      setRegistration(j.registration ?? null);
     } else setAll([]);
   }, [listingId, propertyId, appraisalId]);
   useEffect(() => {
@@ -334,6 +338,7 @@ function OnPagePanel({
           feesOnRecord={feesOnRecord}
           scottish={scottish}
           editions={editions}
+          registration={registration}
           preview={preview}
           onClose={(changed) => {
             setScreen(null);

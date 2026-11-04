@@ -36,7 +36,8 @@ import { readCache, writeCache } from "@/lib/business/integration-cache";
  * function and is never written anywhere.
  */
 
-export type HomeSource = "agent" | "same-as-property" | "payprop" | "rex" | "new-listing";
+/* "landlord": typed by the landlord themselves on their terms (Lianna Denholm, 4 Nov 2026, lib/terms/registration). */
+export type HomeSource = "agent" | "same-as-property" | "payprop" | "rex" | "new-listing" | "landlord";
 
 export interface HomeAddress {
   address: string;

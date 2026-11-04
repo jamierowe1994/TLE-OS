@@ -7,12 +7,14 @@ import { createTerms, inPreview, TermsRefused } from "@/lib/terms/flow";
 import { termsForHome } from "@/lib/terms/store";
 import { forStaff } from "@/lib/terms/staff";
 import { editionFor } from "@/lib/terms/catalogue";
+import { homeRegistration } from "@/lib/terms/registration";
 import type { Country } from "@/lib/terms/types";
 
 /**
  * Terms of Business sent from the OS (lib/terms).
  *
- *   GET  ?listingId=&propertyId=&appraisalId=  -> this home's terms, newest first
+ *   GET  ?listingId=&propertyId=&appraisalId=  -> this home's terms, newest first,
+ *                                                 and its landlord registration on file
  *   POST { country, listingId?, propertyId?, appraisalId?, propertyAddress,
  *          agentLarn?, serviceLevel, setUpFee, managementFee, additionalFees?,
  *          people: [{ name, email, phone? }] }      -> made; the agent signs next
@@ -25,10 +27,22 @@ export async function GET(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const sp = req.nextUrl.searchParams;
-  const rows = await termsForHome({ listingId: sp.get("listingId"), propertyId: sp.get("propertyId"), appraisalId: sp.get("appraisalId") }).catch(() => []);
+  const home = { listingId: sp.get("listingId"), propertyId: sp.get("propertyId"), appraisalId: sp.get("appraisalId") };
+  const [rows, reg] = await Promise.all([
+    termsForHome(home).catch(() => []),
+    /* The home's landlord registration (Lianna Denholm, 4 Nov 2026), so the send
+       screen draws each landlord's number on the contract as it will go. */
+    homeRegistration(home).catch(() => null),
+  ]);
   const origin = publicOrigin(req);
   return NextResponse.json(
-    { ok: true, preview: inPreview(), editions: { scotland: editionFor("scotland")?.edition ?? null, england: editionFor("england")?.edition ?? null }, terms: rows.map((t) => forStaff(t, origin)) },
+    {
+      ok: true,
+      preview: inPreview(),
+      editions: { scotland: editionFor("scotland")?.edition ?? null, england: editionFor("england")?.edition ?? null },
+      terms: rows.map((t) => forStaff(t, origin)),
+      registration: reg ? { numbers: reg.numbers, expiry: reg.expiry, owners: reg.owners } : null,
+    },
     { headers: { "cache-control": "private, no-store" } }
   );
 }

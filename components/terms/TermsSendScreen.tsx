@@ -8,6 +8,7 @@ import { signatureFromPhoto } from "@/lib/terms/signature-photo";
 import { edition, editionFor } from "@/lib/terms/catalogue";
 import { guessService, servicesFor } from "@/lib/terms/services";
 import type { Country, LandlordDetails, TermsValues } from "@/lib/terms/types";
+import { regForLandlords, type HomeReg } from "@/lib/reg-numbers";
 
 /**
  * SEND THE TERMS, ON ONE PAGE (James, 24 Oct 2026).
@@ -148,6 +149,11 @@ const PHOTO_TYPES = "image/png,image/jpeg,image/heic,image/heif,image/webp";
 const firstOf = (name: string) => name.trim().split(/\s+/)[0] || "";
 const listOf = (xs: string[]) => (xs.length < 2 ? xs[0] ?? "" : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
+/** A date detail ("2027-03-12") as the contract prints it: "12 March 2027". */
+const longDay = (ymd: string) => {
+  const t = new Date(`${ymd}T12:00:00Z`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(ymd) && Number.isFinite(t.getTime()) ? t.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : ymd;
+};
 /** "24 October 2026", London's day: what the contract is dated, as lib/terms/flow dates it. */
 const london = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
 const londonTime = () => new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
@@ -214,6 +220,7 @@ export default function TermsSendScreen({
   feesOnRecord,
   scottish,
   editions,
+  registration = null,
   preview,
   onClose,
   onSent,
@@ -236,6 +243,8 @@ export default function TermsSendScreen({
   feesOnRecord?: { setUpFee?: string | null; managementFee?: string | null } | null;
   scottish: boolean | null;
   editions: Editions;
+  /** The home's landlord registration on file (lib/terms/registration): each landlord's goes on their part of the contract. */
+  registration?: HomeReg | null;
   preview: boolean;
   /** Closed before sending. changed: a contract was made on the way, so the banner should look again. */
   onClose: (changed: boolean) => void;
@@ -615,10 +624,19 @@ export default function TermsSendScreen({
         additionalFees: additional.trim() || "None",
         dateIssued: today,
       };
+  /* Each landlord's registration from the home's file, as createTerms puts it on (Lianna Denholm,
+     4 Nov 2026): drawn here so the contract shows what goes. The landlord checks it when they sign. */
+  const regs = regForLandlords(registration, people.map((p) => p.name.trim()));
   const paperPeople: PaperPerson[] = people.map((p, i) => ({
     key: `l${i + 1}`,
     name: p.name.trim() || (people.length > 1 ? `Landlord ${i + 1}` : "The landlord"),
-    details: { name: p.name.trim(), email: p.email.trim(), phone: p.phone.trim(), address: p.homeIs === "set" ? p.home : "" },
+    details: {
+      name: p.name.trim(),
+      email: p.email.trim(),
+      phone: p.phone.trim(),
+      address: p.homeIs === "set" ? p.home : "",
+      ...(regs[i] ? { registrationNumber: regs[i]!.number, registrationExpiry: regs[i]!.expiry } : {}),
+    },
   }));
   const feesAt = doc ? doc.sections.findIndex((s) => s.blocks.some((b) => b.kind === "fees")) : -1;
   const [jumped, setJumped] = useState("ts-you");
@@ -627,7 +645,7 @@ export default function TermsSendScreen({
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const drawDetail = (p: PaperPerson, k: keyof LandlordDetails, v: string): React.ReactNode => {
-    if (k !== "address") return v ? (k === "accountNumber" ? `•••• ${v.slice(-4)}` : v) : <Blank>They add this when they sign</Blank>;
+    if (k !== "address") return v ? (k === "accountNumber" ? `•••• ${v.slice(-4)}` : k === "registrationExpiry" ? longDay(v) : v) : <Blank>They add this when they sign</Blank>;
     const i = Number(p.key.slice(1)) - 1;
     const who = people[i];
     const id = `ts-home-${p.key}`;

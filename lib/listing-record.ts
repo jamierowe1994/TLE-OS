@@ -55,12 +55,22 @@ export function forgetRecord(rexPropertyId: string | null | undefined): void {
   if (rexPropertyId) held.delete(rexPropertyId);
 }
 
-export async function recordForProperty(rexPropertyId: string | null, place: { postcode?: string | null; town?: string | null; address?: string | null }): Promise<ListingRecord> {
+/**
+ * `fresh` reads past the copy held for two minutes, and `strict` throws where a
+ * read fails instead of answering blank: what a write is about to be laid over
+ * has to be what is there now (the terms' registration, Lianna Denholm, 4 Nov
+ * 2026). Every screen reads it as before.
+ */
+export async function recordForProperty(
+  rexPropertyId: string | null,
+  place: { postcode?: string | null; town?: string | null; address?: string | null },
+  opts: { fresh?: boolean; strict?: boolean } = {}
+): Promise<ListingRecord> {
   const scotland = isScottish(place.postcode, place.address, place.town);
   const empty: ListingRecord = { osPropertyId: null, factsKey: rexPropertyId, landlordName: null, landlordEmail: null, landlordPhone: null, landlordRegistration: null, landlordRegistrationExpiry: {}, landlordRegistrationOwner: {}, epc: null, scotland };
   if (!rexPropertyId || !hasDb()) return empty;
   const hit = held.get(rexPropertyId);
-  if (hit && Date.now() - hit.at < TTL_MS) return { ...hit.record, scotland };
+  if (!opts.fresh && hit && Date.now() - hit.at < TTL_MS) return { ...hit.record, scotland };
 
   try {
     /* With the email and mobile typed on the home's record beside the name
@@ -100,7 +110,8 @@ export async function recordForProperty(rexPropertyId: string | null, place: { p
     };
     held.set(rexPropertyId, { at: Date.now(), record });
     return record;
-  } catch {
+  } catch (e) {
+    if (opts.strict) throw e;
     /* A record that will not read is a blank, never a wrong answer. */
     return empty;
   }

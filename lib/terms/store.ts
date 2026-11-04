@@ -24,6 +24,12 @@ export interface Party {
   /** Their own link: /sign/<token>. Never guessable, never reused. */
   token: string;
   details: Partial<LandlordDetails>;
+  /**
+   * Details put in from the home's file rather than by them - their landlord
+   * registration (lib/terms/registration, 4 Nov 2026) - which their signing
+   * page shows in a box to check and change. Cleared once they save theirs.
+   */
+  fromFile?: Array<keyof LandlordDetails>;
   submitterId: number | null;
   embedSrc: string | null;
   status: PartyStatus;

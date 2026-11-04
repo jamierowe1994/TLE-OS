@@ -147,3 +147,74 @@ export function regByLandlord(
   const covered = new Set(rows.map((r) => (r.owner ? key(r.owner) : "")));
   return { rows, missing: landlords.filter((l) => !covered.has(key(l))) };
 }
+
+/* ── Into the terms, and back from them ───────────────────────────────────
+   Lianna Denholm, 4 Nov 2026, 12 South Chesters Lane: the Scottish terms ask
+   each landlord for their registration number and its expiry, and they always
+   opened blank - John Hood typed 47456/25251 over the 474561/290/25251 the
+   listing held. Each landlord now starts from the number on file that is
+   theirs (regByLandlord: named, else the next landlord without one, the main
+   landlord first), and what they give when they sign goes back on file. */
+
+export type HomeReg = { numbers: string[]; expiry: Record<string, string>; owners: Record<string, string> };
+
+/** Each landlord's own number and its expiry ("" when none), in the order given; null for a landlord with none on file. */
+export function regForLandlords(reg: HomeReg | null | undefined, landlords: string[]): Array<{ number: string; expiry: string } | null> {
+  if (!reg?.numbers.length) return landlords.map(() => null);
+  const key = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const { rows } = regByLandlord(reg.numbers, reg.owners ?? {}, landlords.filter((l) => l.trim()));
+  return landlords.map((l) => {
+    const row = l.trim() ? rows.find((r) => r.owner && key(r.owner) === key(l)) : undefined;
+    return row ? { number: row.n, expiry: isRealDay(reg.expiry?.[row.n]) ? reg.expiry[row.n] : "" } : null;
+  });
+}
+
+/**
+ * One landlord's registration as they gave it when they signed, laid over what
+ * the home holds. It only fills what is blank or changes that landlord's own
+ * entry: a number on file already named as another landlord's is never
+ * touched, a number nobody is named against becomes theirs, and a new number
+ * replaces the one named as theirs, else is added. Null when nothing changes.
+ */
+export function withLandlordReg(held: HomeReg, landlord: string, number: string, day: string | null): HomeReg | null {
+  const key = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const flat = (s: string) => s.replace(/\s+/g, "").toUpperCase();
+  const me = key(landlord);
+  const n = number.replace(/\s+/g, " ").trim();
+  const d = isRealDay(day) ? (day as string) : null;
+  if (!me || !n) return null;
+  const numbers = [...held.numbers];
+  const expiry = { ...held.expiry };
+  const owners = { ...held.owners };
+  const at = numbers.findIndex((x) => flat(x) === flat(n));
+  if (at >= 0) {
+    const x = numbers[at];
+    const owner = owners[x];
+    if (owner && key(owner) !== me) return null;
+    let changed = false;
+    if (!owner) {
+      owners[x] = regOwnerName(landlord);
+      changed = true;
+    }
+    /* Their own entry's date is theirs to change; on one nobody was named against, only a blank is filled. */
+    if (d && expiry[x] !== d && (owner || !expiry[x])) {
+      expiry[x] = d;
+      changed = true;
+    }
+    return changed ? { numbers, expiry, owners } : null;
+  }
+  const mine = numbers.findIndex((x) => owners[x] && key(owners[x]) === me);
+  if (mine >= 0) {
+    const old = numbers[mine];
+    numbers[mine] = n;
+    delete expiry[old];
+    delete owners[old];
+  } else if (numbers.length >= MAX_REG_NUMBERS) {
+    return null;
+  } else {
+    numbers.push(n);
+  }
+  owners[n] = regOwnerName(landlord);
+  if (d) expiry[n] = d;
+  return { numbers, expiry, owners };
+}

@@ -22,6 +22,8 @@ import { agentPhone } from "@/lib/agent-phone";
 import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
 import { cleanSignature, keepAgentSignature, saveSignature, signaturesFor } from "@/lib/terms/signatures";
 import { contractFooter, contractHtml, detailField, roleOf } from "@/lib/terms/render-html";
+import { homeRegistration, keepFromSigning } from "@/lib/terms/registration";
+import { regForLandlords } from "@/lib/reg-numbers";
 import type { Country, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
 import {
   byToken,
@@ -124,13 +126,29 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
     dateIssued: london(),
   };
   const id = newTermsId();
+  /* Each landlord's registration from the home's file, theirs to check when
+     they sign (Lianna Denholm, 4 Nov 2026, 12 South Chesters Lane: the boxes
+     always opened blank). Only where this edition asks for it; a file that
+     won't read sends the terms without it, as before. */
+  const regs = doc.details.some((f) => f.key === "registrationNumber")
+    ? await homeRegistration({ propertyId: n.propertyId, listingId: n.listingId, appraisalId: n.appraisalId })
+        .then((r) => regForLandlords(r, people.map((p) => p.name)))
+        .catch(() => people.map(() => null))
+    : people.map(() => null);
   const parties: Party[] = people.map((p, i) => ({
     key: `l${i + 1}`,
     name: p.name,
     email: p.email,
     phone: p.phone,
     token: newToken(),
-    details: { name: p.name, email: p.email, phone: p.phone, ...(p.address ? { address: p.address } : {}) },
+    details: {
+      name: p.name,
+      email: p.email,
+      phone: p.phone,
+      ...(p.address ? { address: p.address } : {}),
+      ...(regs[i] ? { registrationNumber: regs[i]!.number, ...(regs[i]!.expiry ? { registrationExpiry: regs[i]!.expiry } : {}) } : {}),
+    },
+    ...(regs[i] ? { fromFile: ["registrationNumber" as const, ...(regs[i]!.expiry ? ["registrationExpiry" as const] : [])] } : {}),
     submitterId: null,
     embedSrc: null,
     status: "waiting",
@@ -289,7 +307,8 @@ export async function landlordView(token: string) {
     agentSigned: Boolean(terms.agentSignedAt),
     completedAt: terms.completedAt,
     hasCopy: Boolean(terms.signedR2Key),
-    me: { key: party.key, name: party.name, details: party.details, signedAt: party.signedAt },
+    /* fromFile: their registration as the home's file had it, shown in a box for them to check (4 Nov 2026). */
+    me: { key: party.key, name: party.name, details: party.details, signedAt: party.signedAt, fromFile: party.signedAt ? [] : party.fromFile ?? [] },
     people: terms.parties.map((p) => ({ key: p.key, name: p.name, signed: Boolean(p.signedAt), you: p.token === token })),
     preview: inPreview(),
   };
@@ -313,8 +332,12 @@ export async function saveDetails(token: string, details: Partial<LandlordDetail
   if (clean.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) throw new TermsRefused("That email address doesn't look right.");
   const i = terms.parties.findIndex((p) => p.token === token);
   if (party.submitterId && docusealConfigured()) await setSubmitterValues(party.submitterId, detailValues(doc, i, clean));
-  const parties = terms.parties.map((p) => (p.token === token ? { ...p, details: { ...p.details, ...clean }, name: clean.name || p.name, phone: clean.phone || p.phone } : p));
+  const parties = terms.parties.map((p) => (p.token === token ? { ...p, details: { ...p.details, ...clean }, name: clean.name || p.name, phone: clean.phone || p.phone, fromFile: [] } : p));
   await saveParties(terms.id, parties);
+  /* What they gave goes back on file too, not only on this contract (Lianna
+     Denholm, 4 Nov 2026): their registration on the home, their home address
+     on their own record. Only blanks or their own entry; never REX. */
+  await keepFromSigning(terms, party, clean);
   return { embedSrc: party.embedSrc ?? `preview:${terms.id}:${party.key}` };
 }
 
