@@ -3,6 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { addPerson, cleanPerson, isKind, KIND_LABEL, peopleOn, personById, removePerson, updatePerson } from "@/lib/property-people";
+import { peopleOnHome } from "@/lib/home-aliases";
 import { record } from "@/lib/audit";
 import { publicError } from "@/lib/public-error";
 
@@ -10,7 +11,9 @@ import { publicError } from "@/lib/public-error";
  * The joint landlords and points of contact on a home (agent call, 16 Oct
  * 2026; lib/property-people).
  *
- *   GET    ?property=<id>                            everyone on the home
+ *   GET    ?property=<id>[&also=<key>]               everyone on the home, under
+ *                                                    every key it is filed under
+ *                                                    (lib/home-aliases, 4 Nov 2026)
  *   POST   { propertyId, kind, name, email?, phone?, relation? }
  *   PATCH  { id, name, email?, phone?, relation? }
  *   DELETE ?id=<id>
@@ -51,8 +54,13 @@ export async function GET(req: NextRequest) {
   if (!who) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const propertyId = (req.nextUrl.searchParams.get("property") ?? "").trim();
   if (!propertyId) return NextResponse.json({ ok: false, error: "Which home?" }, { status: 400 });
+  /* Every key the home is filed under, not only this screen's (Lianna Denholm,
+     4 Nov 2026, 12 South Chesters Lane: John Hood, added on one screen, was
+     missing from the next). A let adds its own "let:<ref>", which nothing else
+     knows. Adding still goes under the screen's own key. */
+  const also = req.nextUrl.searchParams.getAll("also").map((k) => k.trim()).filter((k) => k && k.length <= 120).slice(0, 6);
   try {
-    return NextResponse.json({ ok: true, people: await peopleOn(propertyId) });
+    return NextResponse.json({ ok: true, people: await peopleOnHome(propertyId, ...also) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "The people on this home couldn't be read just now.") }, { status: 500 });
   }

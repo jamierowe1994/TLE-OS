@@ -17,6 +17,10 @@ import { useEffect, useState } from "react";
  * `homeKey` is the same key HomeLandlords is given on that screen (the REX
  * property id, else "listing:<id>" or "appraisal:<id>"). null while reading;
  * a failed read is an empty list, so a screen is never held up by it.
+ *
+ * The server reads every key the home is filed under, not only this one
+ * (lib/home-aliases; Lianna Denholm, 4 Nov 2026): John Hood, added on another
+ * screen of 12 South Chesters Lane, now starts the terms with Maureen.
  */
 
 export type HomeLandlord = { name?: string | null; email?: string | null; phone?: string | null };

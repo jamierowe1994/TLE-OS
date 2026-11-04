@@ -103,6 +103,33 @@ export async function forgetLandlord(listingId: string): Promise<void> {
   await q("DELETE FROM os_cache WHERE key = $1", [cacheKey(listingId)]).catch(() => undefined);
 }
 
+/* Which listings are on which home, from the held reads alone (Lianna Denholm,
+   4 Nov 2026, lib/home-aliases). Every landlord read keeps the listing's REX
+   property beside it, so os_cache already says which listings stand on a
+   property without asking REX. A listing never moves property, so a held read
+   of any age - and under any version of the key - still says it. */
+const HELD = /^landlord:v\d+:(.+)$/;
+
+/** The REX property behind each of these listings, where a landlord read is held. No call to REX. */
+export async function heldPropertyIds(listingIds: string[]): Promise<string[]> {
+  const ids = [...new Set(listingIds.map((x) => String(x).trim()).filter(Boolean))];
+  if (!hasDb() || !ids.length) return [];
+  const rows = await q<{ pid: string | null }>(
+    `SELECT DISTINCT payload->>'propertyId' AS pid FROM os_cache
+      WHERE key LIKE 'landlord:v%' AND split_part(key, ':', 3) = ANY($1) AND payload->>'propertyId' IS NOT NULL`,
+    [ids]
+  );
+  return rows.map((r) => (r.pid ?? "").trim()).filter(Boolean);
+}
+
+/** The listings held as standing on these REX properties. No call to REX. */
+export async function heldListingsOn(propertyIds: string[]): Promise<string[]> {
+  const ids = [...new Set(propertyIds.map((x) => String(x).trim()).filter(Boolean))];
+  if (!hasDb() || !ids.length) return [];
+  const rows = await q<{ key: string }>(`SELECT key FROM os_cache WHERE key LIKE 'landlord:v%' AND payload->>'propertyId' = ANY($1)`, [ids]);
+  return [...new Set(rows.map((r) => HELD.exec(r.key)?.[1] ?? "").filter(Boolean))];
+}
+
 /**
  * The REX property behind a listing - the key every screen keeps a home's
  * extra landlords and points of contact under (lib/property-people, 20 Oct

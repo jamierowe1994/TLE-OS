@@ -21,6 +21,12 @@ import { hasDb, q } from "@/lib/db";
  * Wherever the landlord's details are picked up to send something - Report a
  * repair, Plan a certificate - these come through /api/property/people beside
  * the landlord, and the agent picks who it goes to.
+ *
+ * Each screen adds under its own key (the REX property id, else "listing:",
+ * "appraisal:" or "let:"), and keeps doing so. Since 4 Nov 2026 the landlord
+ * card, the terms, the let, the PLC and the Propoly push read every key the
+ * home is filed under (lib/home-aliases, peopleOnKeys), so one added on any of
+ * them is on all of them.
  */
 
 export type PersonKind = "joint_landlord" | "contact";
@@ -68,15 +74,36 @@ export async function peopleOn(propertyId: string): Promise<PropertyPerson[]> {
   return rows.map(shape);
 }
 
-/** The joint landlords' names on any of these keys for one home (a REX id, the OS record's id, a let's key). */
-export async function jointLandlordNames(keys: string[]): Promise<string[]> {
-  const ids = [...new Set(keys.filter(Boolean))];
+/**
+ * Everyone on one home read under every key it is filed under (lib/home-aliases
+ * gives the keys; Lianna Denholm, 4 Nov 2026, 12 South Chesters Lane: John
+ * Hood was added under one key and every other screen read another).
+ * Landlords first, oldest first within each, as peopleOn.
+ *
+ * The same person added on two screens - so under two keys - shows once: by
+ * email where both have one, else by name, and the copy with an email is the
+ * one kept (the terms and Propoly go to it). Two under the same key are left
+ * as they were.
+ */
+export async function peopleOnKeys(keys: string[]): Promise<PropertyPerson[]> {
+  const ids = [...new Set(keys.map((k) => k.trim()).filter(Boolean))];
   if (!hasDb() || !ids.length) return [];
-  const rows = await q<{ name: string }>(
-    `SELECT name FROM os_property_people WHERE property_id = ANY($1) AND kind = 'joint_landlord' AND removed_at IS NULL ORDER BY added_at`,
+  const rows = await q<Row>(
+    `SELECT id, property_id, kind, name, email, phone, relation, added_by, added_at FROM os_property_people
+      WHERE property_id = ANY($1) AND removed_at IS NULL
+      ORDER BY (kind = 'joint_landlord') DESC, added_at`,
     [ids]
   );
-  return [...new Set(rows.map((r) => r.name.trim()).filter(Boolean))];
+  const low = (s: string | null) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const same = (a: PropertyPerson, b: PropertyPerson) =>
+    a.kind === b.kind && a.propertyId !== b.propertyId && (low(a.email) && low(b.email) ? low(a.email) === low(b.email) : low(a.name) === low(b.name));
+  const out: PropertyPerson[] = [];
+  for (const p of rows.map(shape)) {
+    const i = out.findIndex((x) => same(x, p));
+    if (i < 0) out.push(p);
+    else if (!low(out[i].email) && low(p.email)) out[i] = p;
+  }
+  return out;
 }
 
 export async function personById(id: string): Promise<PropertyPerson | null> {

@@ -69,8 +69,16 @@ export default function HomeLandlords({
   onChanged,
   className = "",
   heading,
+  alsoKnownAs,
 }: {
   homeKey: string | null;
+  /**
+   * Other keys this screen knows the home by, read as well as homeKey (Lianna
+   * Denholm, 4 Nov 2026): the let's own "let:<ref>", which nothing else knows.
+   * Every other key the home is filed under is found on the server
+   * (lib/home-aliases). Adding still goes under homeKey.
+   */
+  alsoKnownAs?: string[];
   /** The home's address, for "Same as the let property" and emails. */
   address: string;
   /** null while the landlord is being looked up. */
@@ -99,9 +107,13 @@ export default function HomeLandlords({
   const [adding, setAdding] = useState<Kind | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
+  /* As one string, so a fresh array each render doesn't read the people again. */
+  const also = (alsoKnownAs ?? []).filter(Boolean).join("\n");
   const load = useCallback(() => {
     if (!homeKey) { setPeople([]); return; }
-    fetch(`/api/portfolio/people?property=${encodeURIComponent(homeKey)}`, { cache: "no-store" })
+    const qs = new URLSearchParams({ property: homeKey });
+    for (const k of also ? also.split("\n") : []) qs.append("also", k);
+    fetch(`/api/portfolio/people?${qs}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (!j?.ok) { setFailed(j?.error ?? "The other people on this home couldn't be read."); setPeople([]); return; }
@@ -109,7 +121,7 @@ export default function HomeLandlords({
         setPeople(j.people ?? []);
       })
       .catch(() => { setFailed("The other people on this home couldn't be read."); setPeople([]); });
-  }, [homeKey]);
+  }, [homeKey, also]);
   useEffect(() => { setPeople(homeKey ? null : []); load(); }, [load, homeKey]);
 
   const joint = (people ?? []).filter((p) => p.kind === "joint_landlord");

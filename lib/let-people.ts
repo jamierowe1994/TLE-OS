@@ -9,7 +9,7 @@ import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 import { recordLandlordFor } from "@/lib/record-landlords";
 import { listingRead } from "@/lib/listing-details";
 import { personEdits, type PersonEdit } from "@/lib/let-landlords";
-import { peopleOn } from "@/lib/property-people";
+import { peopleOnHome } from "@/lib/home-aliases";
 import { propertyIdForListing } from "@/lib/rex-landlord";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { sameHome } from "@/lib/address-parse";
@@ -290,7 +290,10 @@ async function otherOwners(listingId: string, firstId: string | null): Promise<L
 async function withPeople(base: Omit<LetPeople, "people" | "deal">, held: LetParty[], deal: LetDeal | null): Promise<LetPeople> {
   const [edits, onHome, addedTenants] = await Promise.all([
     personEdits(base.ref).catch(() => new Map<string, PersonEdit>()),
-    peopleOn(base.homeKey).catch(() => []),
+    /* Under every key the home is filed under, not only the let's own (Lianna
+       Denholm, 4 Nov 2026, 12 South Chesters Lane: John Hood was added under
+       another screen's key and never reached the let). lib/home-aliases. */
+    peopleOnHome(base.homeKey, base.listingId && !isTestId(base.listingId) ? `listing:${base.listingId}` : null, `let:${base.ref}`).catch(() => []),
     letTenants(base.ref).catch(() => []),
   ]);
   /* A home's joint landlords are the let's landlords too, wherever they were

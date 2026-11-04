@@ -13,7 +13,7 @@ import { readDroppedFile } from "@/lib/plc-read-file";
 import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { isTestCase } from "@/lib/test-guard";
 import { letTenantFiles } from "@/lib/let-tenant-files";
-import { jointLandlordNames } from "@/lib/property-people";
+import { peopleOnHome } from "@/lib/home-aliases";
 
 /**
  * ONE UPLOAD, BOTH PLACES (Kirstie, 8 Oct 2026).
@@ -177,8 +177,13 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
   const home = await homeRecords(start.address, ctx.propertyId);
   const landlord = (ctx.landlord ?? home.landlord ?? "").trim() || null;
   /* A second owner kept on the home in the OS (lib/property-people): their ID
-     and AML belong on the pack as much as the record landlord's do. */
-  const joint = await jointLandlordNames([...home.ids, `let:${start.applicationRef}`]).catch(() => [] as string[]);
+     and AML belong on the pack as much as the record landlord's do. Under
+     every key the home is filed under (Lianna Denholm, 4 Nov 2026, 12 South
+     Chesters Lane: one added on the listing or the appraisal was never asked
+     for here). lib/home-aliases. */
+  const joint = await peopleOnHome(...home.ids, `let:${start.applicationRef}`)
+    .then((ps) => [...new Set(ps.filter((p) => p.kind === "joint_landlord").map((p) => p.name.trim()).filter(Boolean))])
+    .catch(() => [] as string[]);
   const landlords = [...(landlord ? [landlord] : []), ...joint.filter((n) => n.toLowerCase() !== landlord?.toLowerCase())];
   if (hasDb()) {
     await q(`UPDATE os_plc_cases SET rex_property_id = COALESCE($2, rex_property_id), landlord_name = COALESCE($3, landlord_name) WHERE id = $1`, [

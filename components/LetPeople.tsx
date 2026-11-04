@@ -180,6 +180,7 @@ export function LandlordsBox({
     <div className="mt-5" data-steve="application.landlords">
       <HomeLandlords
         homeKey={homeKey}
+        alsoKnownAs={[`let:${letId}`]}
         address={propertyAddress}
         main={main}
         mainProblem={problem}

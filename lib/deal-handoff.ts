@@ -5,7 +5,7 @@ import { getApplications, type Application } from "@/lib/applications";
 import { isOwnerReln } from "@/lib/rex-reln";
 import { recordLandlordFor } from "@/lib/record-landlords";
 import { changedLandlordFor } from "@/lib/landlord-change";
-import { peopleOn } from "@/lib/property-people";
+import { peopleOnHome } from "@/lib/home-aliases";
 
 /**
  * Offer accepted → the deal, and everything it needs to carry.
@@ -317,8 +317,10 @@ export async function landlordsForListing(listing: Row, opts: { listingId: numbe
   if (opts.swap) return main;
   const listingId = idOf(opts.listingId);
   const propertyId = idOf((listing.property as Row | null)?.id) ?? idOf(listing.property_id);
-  const homeKey = propertyId ?? (listingId ? `listing:${listingId}` : null);
-  const joint = homeKey ? (await peopleOn(homeKey).catch(() => [])).filter((p) => p.kind === "joint_landlord") : [];
+  /* Every key the home is filed under, not only the REX property's (Lianna
+     Denholm, 4 Nov 2026, 12 South Chesters Lane: a joint landlord added on the
+     appraisal or the listing never went). lib/home-aliases. */
+  const joint = propertyId || listingId ? (await peopleOnHome(propertyId, listingId ? `listing:${listingId}` : null).catch(() => [])).filter((p) => p.kind === "joint_landlord") : [];
   const key = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   const emails = new Set(main.owners.map((c) => key(c.email_address)).filter(Boolean));
   const names = new Set(main.owners.map((c) => key(c.name)).filter(Boolean));
