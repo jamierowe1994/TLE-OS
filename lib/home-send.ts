@@ -14,7 +14,7 @@ import { addrOf, isRoomAddress, parseAddress, sameHome } from "@/lib/address-par
 import { houseByListing, housesIn, MANAGED_READERS, roomLabel } from "@/lib/houses";
 import { sittingLets } from "@/lib/tenant-logins";
 import { DOC_TYPES, docTypeLabel, OTHER } from "@/lib/doc-types";
-import { peopleOn } from "@/lib/property-people";
+import { peopleOnHome } from "@/lib/home-aliases";
 import { standingForHome } from "@/lib/standing-documents";
 import { FIELDS } from "@/lib/property-facts";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
@@ -413,8 +413,9 @@ export function tenantsOf(ctx: HomeContext): Recipient[] {
  * The landlord side of the home, as its page shows them (HomeLandlords): the
  * landlord the book holds (the house's own record first on a shared house, a
  * changed landlord or the OS record's landlord already folded in by
- * lib/managed-book-cache), then the additional landlords and points of
- * contact kept against the home (lib/property-people).
+ * lib/managed-book-cache), the listing's other owners, then the additional
+ * landlords and points of contact kept against the home under any key it is
+ * filed under (lib/home-aliases). Each person once, by email or by name.
  */
 export async function landlordsOf(ctx: HomeContext): Promise<Recipient[]> {
   const out: Recipient[] = [];
@@ -423,14 +424,19 @@ export async function landlordsOf(ctx: HomeContext): Promise<Recipient[]> {
   const add = (name: string, rawEmail: string | null, where: string) => {
     const email = rawEmail && EMAIL.test(rawEmail.trim()) ? normaliseEmail(rawEmail) : null;
     const key = `landlord|${email ?? `name:${name.toLowerCase()}`}`;
-    if (!name.trim() || seen.has(key)) return;
+    const said = `landlord|name:${name.trim().toLowerCase()}`;
+    if (!name.trim() || seen.has(key) || seen.has(said)) return;
     seen.add(key);
+    seen.add(said);
     out.push({ key, name: name.trim(), email, listingId, where, role: "landlord" });
   };
   const main = ctx.all.find((p) => p.landlord)?.landlord ?? ctx.home.landlord;
   if (main) add(main.name, main.email, "Landlord");
-  const pids = [...new Set([ctx.home.propertyId, ...ctx.all.map((p) => p.propertyId)].map((x) => String(x ?? "")).filter(Boolean))];
-  const people = (await Promise.all(pids.map((pid) => peopleOn(pid).catch(() => [])))).flat();
+  /* By the REX property id alone (4 Nov 2026), a landlord added on the let,
+     the listing or the appraisal, or on a home REX PM files under its own
+     id, never got the email, and nor did the listing's other owners. */
+  for (const o of ctx.all.flatMap((p) => p.otherLandlords ?? [])) add(o.name, o.email, "Additional landlord");
+  const people = await peopleOnHome(...[ctx.home, ...ctx.all].flatMap((p) => [p.propertyId, `listing:${p.listingId}`])).catch(() => []);
   for (const x of people.filter((x) => x.kind === "joint_landlord")) add(x.name, x.email, "Additional landlord");
   for (const x of people.filter((x) => x.kind === "contact")) add(x.name, x.email, x.relation ? `Point of contact · ${x.relation}` : "Point of contact");
   return out;
