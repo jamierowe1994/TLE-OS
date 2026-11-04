@@ -47,7 +47,14 @@ export interface BugMedia {
   mime: string;
   bytes: number;
   url: string;
+  /** Who added it: the person who reported it, or Claude showing its fix. */
+  source: "reporter" | "claude";
 }
+
+/** Pictures a Send to Claude session may put on a ticket, and how big. */
+export const CLAUDE_SHOT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export const CLAUDE_SHOT_MAX_BYTES = 5 * 1024 * 1024;
+export const CLAUDE_SHOTS_MAX = 4;
 
 const EXT: Record<string, string> = {
   "video/webm": "webm", "video/mp4": "mp4", "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp",
@@ -62,7 +69,7 @@ export async function addBugMedia(p: {
     `select id from os_bugs where id = $1 and reporter_id = $2`, [p.bugId, p.reporterId]
   );
   if (!own.length) return "not-yours";
-  const have = await q<{ n: string }>(`select count(*)::text as n from os_bug_media where bug_id = $1`, [p.bugId]);
+  const have = await q<{ n: string }>(`select count(*)::text as n from os_bug_media where bug_id = $1 and source = 'reporter'`, [p.bugId]);
   if (Number(have[0]?.n ?? 0) >= MEDIA_MAX_PER_BUG) return "full";
 
   const id = uid();
@@ -84,18 +91,47 @@ export async function addBugMedia(p: {
   return "ok";
 }
 
+/**
+ * Claude's own pictures of what it changed (Send to Claude, James 4 Nov 2026:
+ * "an overview of what they fixed, how they fixed it, and any screenshots
+ * that they attach"). The route checks the ticket's token; no person's
+ * account is behind it, so it has its own small cap and never touches the
+ * reporter's.
+ */
+export async function addClaudeShot(p: { bugId: string; mime: string; body: Uint8Array }): Promise<"ok" | "no-ticket" | "full" | "no-storage" | "failed"> {
+  if (!hasDb() || !r2Configured) return "no-storage";
+  const own = await q<{ id: string }>(`select id from os_bugs where id = $1`, [p.bugId]);
+  if (!own.length) return "no-ticket";
+  const have = await q<{ n: string }>(`select count(*)::text as n from os_bug_media where bug_id = $1 and source = 'claude'`, [p.bugId]);
+  if (Number(have[0]?.n ?? 0) >= CLAUDE_SHOTS_MAX) return "full";
+
+  const id = uid();
+  const key = `${PREFIX}/${p.bugId}/claude-${id}.${EXT[p.mime] ?? "bin"}`;
+  try {
+    await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: p.body, ContentType: p.mime })));
+    await q(`insert into os_bug_media (id, bug_id, r2_key, mime, bytes, source) values ($1,$2,$3,$4,$5,'claude')`, [id, p.bugId, key, p.mime, p.body.byteLength]);
+  } catch (e) {
+    const err = e as { name?: string; message?: string };
+    console.error("claude shot failed to store", err.name, err.message);
+    return "failed";
+  }
+  void sweep();
+  return "ok";
+}
+
 /** Everything added to one report, each with a link that works for five minutes. */
-export async function mediaFor(bugId: string): Promise<BugMedia[]> {
+export async function mediaFor(bugId: string, source?: BugMedia["source"]): Promise<BugMedia[]> {
   if (!hasDb() || !r2Configured) return [];
-  const rows = await q<{ id: string; r2_key: string; mime: string; bytes: number }>(
-    `select id, r2_key, mime, bytes from os_bug_media where bug_id = $1 order by created_at`, [bugId]
+  const rows = await q<{ id: string; r2_key: string; mime: string; bytes: number; source: string }>(
+    `select id, r2_key, mime, bytes, source from os_bug_media where bug_id = $1 and ($2::text is null or source = $2) order by created_at`,
+    [bugId, source ?? null]
   );
   const out: BugMedia[] = [];
   for (const r of rows) {
     const url = await withR2((client) =>
       getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: r.r2_key }), { expiresIn: 300 })
     ).catch(() => "");
-    if (url) out.push({ id: r.id, mime: r.mime, bytes: r.bytes, url });
+    if (url) out.push({ id: r.id, mime: r.mime, bytes: r.bytes, url, source: r.source === "claude" ? "claude" : "reporter" });
   }
   return out;
 }

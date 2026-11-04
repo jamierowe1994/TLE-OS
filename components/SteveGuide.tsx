@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import AssistantCharacter from "@/components/AssistantCharacter";
-import { GUIDE_EVENT, GUIDE_KEY, guideTarget, type DoneWhen, type GuideStep } from "@/lib/steve-guide";
+import { GUIDE_EVENT, GUIDE_KEY, POINT_PREFIX, guideTarget, type DoneWhen, type GuideStep } from "@/lib/steve-guide";
 
 /**
  * Steve pointing at things (lib/steve-guide for the routes and the rule).
@@ -116,6 +116,23 @@ export default function SteveGuide() {
       if (held?.id && guideTarget(held.id) && Date.now() - (held.startedAt ?? 0) < 30 * 60 * 1000) {
         stayOn.current = held.stayOn ?? null;
         setTargetId(held.id);
+      }
+    } catch {}
+    /* A link that lands on one button (Do It on Tickets, 4 Nov 2026):
+       ?steve=<guide> starts it here, and the address is left clean. The
+       clean-up waits a tick: the router writes the address it loaded with
+       once this has run, and would put the ?steve back. */
+    try {
+      const url = new URL(window.location.href);
+      const asked = url.searchParams.get("steve");
+      if (asked && guideTarget(asked)) {
+        start(new CustomEvent(GUIDE_EVENT, { detail: asked }));
+        window.setTimeout(() => {
+          const now = new URL(window.location.href);
+          if (now.searchParams.get("steve") !== asked) return;
+          now.searchParams.delete("steve");
+          window.history.replaceState(window.history.state, "", `${now.pathname}${now.search}${now.hash}`);
+        }, 0);
       }
     } catch {}
     return () => window.removeEventListener(GUIDE_EVENT, start);
@@ -236,7 +253,10 @@ export default function SteveGuide() {
               {finished
                 ? "You've found it. Ask me whenever you want showing something else."
                 : lost
-                  ? `I can't see that on this screen just now. ${step.say}`
+                  ? /* A Do It link may land before the screen has loaded, or after the job was done. */
+                    targetId?.startsWith(POINT_PREFIX)
+                    ? "Give the page a moment and I'll point at it. If it never shows, it may already have been done."
+                    : `I can't see that on this screen just now. ${step.say}`
                   : step.say}
             </p>
           </div>

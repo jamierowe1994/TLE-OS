@@ -1,3 +1,4 @@
+import { isOsPropertyId } from "@/lib/os-properties";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAnyCapability, whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
@@ -30,7 +31,7 @@ async function read(req: NextRequest): Promise<Body | string> {
   const b = (await req.json().catch(() => null)) as { propertyId?: string; cert?: string; reason?: string; kind?: string; appliedOn?: string; ref?: string } | null;
   const propertyId = String(b?.propertyId ?? "").trim();
   const cert = String(b?.cert ?? "").trim() as CertKey;
-  if (!/^(\d+|pm-[0-9a-z-]+)$/i.test(propertyId)) return "Which home? propertyId is missing.";
+  if (!/^(\d+|pm-[0-9a-z-]+)$/i.test(propertyId) && !isOsPropertyId(propertyId)) return "Which home? propertyId is missing.";
   if (!CERT_META[cert]) return "Which certificate? cert is not one we track.";
   const kind: MarkKind = b?.kind === "renewal_applied" ? "renewal_applied" : "not_needed";
   let appliedOn: string | null = null;

@@ -96,6 +96,7 @@ function PushPanel(p: {
         <div className="mt-3 space-y-2">
           <button
             type="button"
+            data-steve={`take-on.send.${p.system}`}
             disabled={p.busy}
             onClick={() => p.onPush(false)}
             className={`btn-press flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-[12.5px] font-semibold ${p.live ? "bg-ink text-page" : "border border-line bg-white text-ink hover:border-ink"} ${p.busy ? "opacity-60" : ""}`}

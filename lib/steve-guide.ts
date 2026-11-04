@@ -245,13 +245,16 @@ export const GUIDE_TARGETS: GuideTarget[] = [
     ],
   },
   {
+    /* The comment box became the let's Notes tab, and this pointed at two
+       handles that had gone with it (4 Nov 2026). */
     id: "application.comment",
-    about: "Add a comment to an application (chased the tenant, waiting on a reference)",
+    about: "Add a note to a let for the whole team, such as chased the tenant or waiting on a reference (Notes, on the let's page)",
     steps: [
       nav("/applications", "Applications"),
-      openRow("application.drawer", "Click the application."),
-      { point: ['[data-steve="application.comment"]'], say: "Write it here.", done: { clicked: true } },
-      press("application.post", "Then Post comment."),
+      openRow("application.drawer", "Open the let."),
+      { point: ['[data-steve="application.tab.notes"]'], say: "Notes - kept on the let for everyone who opens it.", done: { present: '[data-steve="application.add-comment"]' } },
+      { point: ['[data-steve="application.add-comment"]'], say: "Write it here.", done: { clicked: true } },
+      press("application.save-note", "Then the arrow to save it."),
     ],
   },
   { id: "application.open", about: "Open an application", steps: [nav("/applications", "Applications"), openRow("application.drawer", "Click the application you want.")] },
@@ -379,7 +382,21 @@ export const GUIDE_TARGETS: GuideTarget[] = [
   },
 ];
 
-export const guideTarget = (id: string) => GUIDE_TARGETS.find((t) => t.id === id) ?? null;
+export const guideTarget = (id: string) => GUIDE_TARGETS.find((t) => t.id === id) ?? pointTarget(id);
+
+/**
+ * A one-step guide to any control that carries a data-steve handle, for a
+ * link that should land somebody on one button (Do It on Tickets, James
+ * 4 Nov 2026: Claude's answer was "press Take Offline", and that should be
+ * one press away). It points; the person presses, as with every guide.
+ */
+export const POINT_PREFIX = "point:";
+export function pointTarget(id: string): GuideTarget | null {
+  if (!id.startsWith(POINT_PREFIX)) return null;
+  const handle = id.slice(POINT_PREFIX.length);
+  if (!/^[a-z0-9][a-z0-9.-]{0,79}$/i.test(handle)) return null;
+  return { id, about: "", steps: [{ point: [`[data-steve="${handle}"]`], say: "Here's the one to press.", done: { clicked: true } }] };
+}
 
 /**
  * Whether a route's last step can be reached from this screen: what it points

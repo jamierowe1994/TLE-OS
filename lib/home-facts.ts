@@ -45,7 +45,8 @@ const rowTo = (r: Row): HomeFacts => ({
   setBy: r.set_by ?? {},
 });
 
-export const isHomeKey = (v: unknown): v is string => typeof v === "string" && /^(\d+|pm-(test-)?[0-9a-f-]+)$/i.test(v);
+/* A home taken on from another agent (mt-, lib/take-ons) keeps its facts too (Kirstie Mulholland, 4 Nov 2026). */
+export const isHomeKey = (v: unknown): v is string => typeof v === "string" && /^(\d+|pm-(test-)?[0-9a-f-]+|mt-[a-z0-9]+)$/i.test(v);
 
 export async function homeFactsFor(key: string): Promise<HomeFacts> {
   if (!hasDb() || !isHomeKey(key)) return NO_FACTS;

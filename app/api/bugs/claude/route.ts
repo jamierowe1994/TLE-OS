@@ -4,17 +4,19 @@ import { publicOrigin } from "@/lib/origin";
 import { publicError } from "@/lib/public-error";
 import { BotRefused, record } from "@/lib/bug-bot";
 import { q } from "@/lib/db";
-import { ClaudeRefused, maySendToClaude, sendToClaude, ticketForClaude, ticketTokenOk } from "@/lib/claude-tickets";
+import { ClaudeRefused, claudeDoFrom, maySendToClaude, sendToClaude, ticketForClaude, ticketTokenOk } from "@/lib/claude-tickets";
 
 /**
  * Send to Claude (lib/claude-tickets, 4 Nov 2026).
  *
  * POST { id }                     James presses Send to Claude on Tickets
  * GET  ?id=&t=<ticket token>      the routine's session reads the ticket
- * PUT  { id, t, state, note, pr, branch, reply }
+ * PUT  { id, t, state, note, pr, branch, reply, do }
  *                                 the session says how it went: fix_ready
  *                                 (with the pull request), needs_you, or
- *                                 not_a_bug (with the reply for the person)
+ *                                 not_a_bug (with the reply for the person);
+ *                                 do { path, point, label } names the button
+ *                                 its answer is about (Do It on Tickets)
  *
  * GET and PUT take the token minted for that one ticket, never a session or
  * the cron key: the routine runs on claude.ai and holds nothing else of ours.
@@ -48,7 +50,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as {
-    id?: unknown; t?: unknown; state?: unknown; note?: unknown; pr?: unknown; branch?: unknown; reply?: unknown;
+    id?: unknown; t?: unknown; state?: unknown; note?: unknown; pr?: unknown; branch?: unknown; reply?: unknown; do?: unknown;
   };
   const id = typeof b.id === "string" ? b.id : "";
   if (!ticketTokenOk(id, typeof b.t === "string" ? b.t : "")) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
@@ -68,6 +70,12 @@ export async function PUT(req: NextRequest) {
        person is staff, but the words are Claude's until James has read them. */
     const reply = text(b.reply, 4000);
     if (reply) await q(`UPDATE os_bugs SET context = coalesce(context, '{}'::jsonb) || jsonb_build_object('claudeReply', $2::text) WHERE id = $1`, [id, reply]);
+    /* The button the answer is about, or none: a later report never keeps an earlier one's. */
+    const doIt = claudeDoFrom(b.do);
+    await q(
+      `UPDATE os_bugs SET context = CASE WHEN $2::jsonb IS NULL THEN coalesce(context, '{}'::jsonb) - 'claudeDo' ELSE coalesce(context, '{}'::jsonb) || jsonb_build_object('claudeDo', $2::jsonb) END WHERE id = $1`,
+      [id, doIt ? JSON.stringify(doIt) : null]
+    );
     return NextResponse.json({ ok: true, ...out });
   } catch (e) {
     const status = e instanceof BotRefused ? 400 : 500;

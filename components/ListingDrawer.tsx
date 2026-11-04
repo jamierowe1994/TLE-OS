@@ -2852,7 +2852,7 @@ function ListingDrawerBody({
                 </span>
               )}
               {isLive && pub && !publishHidden && (
-                <button type="button" data-steve-never className="nl-market-btn" aria-expanded={portalConfirm} onClick={() => (publishCanPress ? setPortalConfirm((o) => !o) : setPortalNote(lockedSentence(publishArea, publishLevel)))}>
+                <button type="button" data-steve-never data-steve="listing.market" className="nl-market-btn" aria-expanded={portalConfirm} onClick={() => (publishCanPress ? setPortalConfirm((o) => !o) : setPortalNote(lockedSentence(publishArea, publishLevel)))}>
                   {pub.onPortals ? "Take off the market" : "Put back on the market"}
                 </button>
               )}

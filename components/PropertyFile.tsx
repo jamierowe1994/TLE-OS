@@ -318,7 +318,7 @@ export default function PropertyFile({
     settle({ ok: true });
     /* The home remembers its electrics are an EIC, so its row and the
        compliance tiles say so from now on (lib/home-facts). */
-    if (eic && effectiveId && /^(\d+|pm-[0-9a-f-]+)$/i.test(effectiveId)) {
+    if (eic && effectiveId && /^(\d+|pm-[0-9a-f-]+|mt-[a-z0-9]+)$/i.test(effectiveId)) {
       await fetch("/api/home-facts", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ home: effectiveId, electrical: "eic", eicReason: pending.eicReason }) }).catch(() => null);
     }
     setPending(null);

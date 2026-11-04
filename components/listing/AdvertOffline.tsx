@@ -228,7 +228,7 @@ export default function AdvertOffline({
                 {letAgreed ? "Back to Available" : "Mark as Let Agreed"}
               </button>
             )}
-            <button type="button" onClick={() => setOpen(true)} className={primary}>
+            <button type="button" data-steve="listing.take-offline" onClick={() => setOpen(true)} className={primary}>
               <DoodleIcon name="lock" size={13} /> Take Offline
             </button>
           </span>

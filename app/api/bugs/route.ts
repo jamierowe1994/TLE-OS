@@ -6,6 +6,7 @@ import { logBug, bugs, setBugState, attachShot, myReports, setBugPriority } from
 import { tellReporter } from "@/lib/bug-bot";
 import { publicOrigin } from "@/lib/origin";
 import { claudeConfigured, maySendToClaude, sendClaudeReply } from "@/lib/claude-tickets";
+import { githubConfigured } from "@/lib/github-pr";
 
 /**
  * Reporting something broken, and reading what's been reported.
@@ -102,8 +103,12 @@ export async function GET(req: NextRequest) {
   const owner = await requireOwner(req);
   if (!owner) return new NextResponse(null, { status: 404 });
   /* Whether Send to Claude shows (lib/claude-tickets): only to the person
-     whose plan it runs on, and only once the routine is wired up. */
-  return NextResponse.json({ bugs: await bugs(200), claude: { canSend: maySendToClaude(owner.email), ready: claudeConfigured() } });
+     whose plan it runs on, and only once the routine is wired up. canPush:
+     whether Push It Live can merge Claude's fix itself (lib/github-pr). */
+  return NextResponse.json({
+    bugs: await bugs(200),
+    claude: { canSend: maySendToClaude(owner.email), ready: claudeConfigured(), canPush: maySendToClaude(owner.email) && githubConfigured() },
+  });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -113,7 +118,7 @@ export async function PATCH(req: NextRequest) {
   /* Send Claude's Answer: the reply Claude wrote for somebody who asked how
      to do something goes to them, and the ticket closes. */
   if (sendReply === true) {
-    const sent = await sendClaudeReply(id).catch(() => false);
+    const sent = await sendClaudeReply(id, publicOrigin(req)).catch(() => false);
     return NextResponse.json({ ok: sent, ...(sent ? {} : { error: "That answer couldn't be sent." }) }, { status: sent ? 200 : 409 });
   }
   /* The letter alone, from Tickets: A broken, B everything else, C a recommendation. */
