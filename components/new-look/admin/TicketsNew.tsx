@@ -276,7 +276,8 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
       </Section>
 
       {working.length > 0 && (
-        <details className="nl-adm-more nl-adm-after">
+        /* Opened for a link to one of them (?open=), so the row it lands on shows. */
+        <details className="nl-adm-more nl-adm-after" {...(working.some((b) => b.id === openId) ? { open: true } : {})}>
           <summary>
             With Claude ({working.length}). Each comes back to the top when Claude has a fix, a question or an answer.
           </summary>
