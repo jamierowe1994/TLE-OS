@@ -49,6 +49,8 @@ where it was typed. Find both readers before changing either; fix the reader, ne
   nobody is told.
 - Commit message like the rest of the history: outcome first, in plain English, then who reported it and the
   ticket id, e.g. `Terms fill each landlord's registration number from the file (Lianna Denholm, ticket 10541d50)`.
+- The repository is public on GitHub. Never put a landlord's or tenant's name, email, phone number or a home's
+  address in a commit, a pull request, the shipped file or any file you add. Staff names and ticket ids are fine.
 - Push the branch, then open a pull request into `main` with the REST API (`gh pr create` is refused here):
   `gh api repos/jamierowe1994/TLE-OS/pulls -f title="<commit's first line>" -f head="<branch>" -f base=main -f body="<what was wrong, what changed, what James should look at once it is live, what you could not check>"`.
   If that is refused too, the pull request link to report is

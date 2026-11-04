@@ -22,6 +22,7 @@ import type { OsListing } from "@/lib/rex-listings";
 import { recentTenantSends } from "@/lib/tenant-documents";
 import { termsForAgent } from "@/lib/terms/store";
 import { sameAgent } from "@/lib/agent-name";
+import { maySendToClaude } from "@/lib/claude-tickets";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -441,6 +442,52 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       href: p.actor_id ? `/admin/people/${p.actor_id}` : "/admin/activity",
       tone: "warn",
     });
+  }
+  /* A new ticket, to the person who works them (James, 4 Nov 2026: "It comes
+     through for me to then be able to click it"). What people raised in the
+     last three days and nobody has handled, each opening on its own ticket,
+     where Send to Claude is one press. Gone from the bell once it is with
+     Claude, answered or closed. */
+  if (me.role === "owner" && maySendToClaude(me.email)) {
+    const raised = await q<{ id: string; reporter_email: string; body: string; kind: string; created_at: Date }>(
+      `SELECT id, reporter_email, body, kind, created_at FROM os_bugs
+        WHERE kind <> 'auto' AND state = 'open' AND bot_state = '' AND created_at > NOW() - INTERVAL '3 days'
+        ORDER BY created_at DESC LIMIT 15`
+    ).catch(() => []);
+    for (const t of raised) {
+      const who = (t.reporter_email.split("@")[0] ?? "").split(".").filter(Boolean).map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" ") || "Somebody";
+      out.push({
+        id: `ticket:${t.id}`,
+        kind: "steve",
+        at: new Date(t.created_at).toISOString(),
+        title: t.kind === "idea" ? `${who} has an idea` : `${who} raised a ticket`,
+        body: t.body.replace(/\s+/g, " ").slice(0, 180),
+        href: `/admin/tickets?open=${encodeURIComponent(t.id)}`,
+        tone: t.kind === "idea" ? "none" : "warn",
+        cta: "Open",
+      });
+    }
+    /* And back from Claude: a fix to push, a question, or an answer to send.
+       One line each until the ticket closes. */
+    const back = await q<{ id: string; bot_state: string; bot_note: string; bot_at: Date | null; body: string }>(
+      `SELECT id, bot_state, bot_note, bot_at, body FROM os_bugs
+        WHERE state IN ('open','ack') AND claude_url <> '' AND bot_state IN ('fix_ready','needs_you','not_a_bug')
+          AND bot_at > NOW() - INTERVAL '7 days'
+        ORDER BY bot_at DESC LIMIT 15`
+    ).catch(() => []);
+    for (const b of back) {
+      const what = b.bot_state === "fix_ready" ? "Claude has a fix ready to push" : b.bot_state === "needs_you" ? "Claude needs you" : "Claude has an answer to send";
+      out.push({
+        id: `claude:${b.id}:${b.bot_state}`,
+        kind: "steve",
+        at: new Date(b.bot_at ?? Date.now()).toISOString(),
+        title: `${what}: ${b.body.replace(/\s+/g, " ").slice(0, 60)}`,
+        body: (b.bot_note.split("\n")[0] ?? "").slice(0, 180),
+        href: `/admin/tickets?open=${encodeURIComponent(b.id)}`,
+        tone: b.bot_state === "fix_ready" ? "ok" : "warn",
+        cta: "Open",
+      });
+    }
   }
   /* Claude refused for credit or the key (lib/ai-outage, 22 Oct 2026):
      owners, one line per outage however many files it stopped, for three
