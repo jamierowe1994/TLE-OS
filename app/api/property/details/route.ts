@@ -136,11 +136,11 @@ export async function PATCH(req: NextRequest) {
     }
     if (b.tenancyStart !== undefined) {
       if (b.tenancyStart !== null && !isDay(b.tenancyStart)) return bad("The tenancy start needs to be a date.");
-      if (b.tenancyStart !== (held.tenancyStart?.value ?? null)) changes.push({ field: "tenancyStart", value: b.tenancyStart, from: sayValue("tenancyStart", home.letSince?.slice(0, 10)) ?? "Not set" });
+      if (b.tenancyStart !== (held.tenancyStart?.value ?? null)) changes.push({ field: "tenancyStart", value: b.tenancyStart, from: sayValue("tenancyStart", (home.moveIn ?? home.letSince)?.slice(0, 10)) ?? "Not set" });
     }
     if (b.tenancyEnd !== undefined) {
       if (b.tenancyEnd !== null && b.tenancyEnd !== "rolling" && !isDay(b.tenancyEnd)) return bad("The tenancy end needs to be a date, or rolling.");
-      const start = typeof b.tenancyStart === "string" ? b.tenancyStart : held.tenancyStart?.value ?? home.letSince?.slice(0, 10) ?? null;
+      const start = typeof b.tenancyStart === "string" ? b.tenancyStart : held.tenancyStart?.value ?? (home.moveIn ?? home.letSince)?.slice(0, 10) ?? null;
       if (isDay(b.tenancyEnd) && typeof start === "string" && b.tenancyEnd <= start) return bad("The tenancy can't end before it starts.");
       if (b.tenancyEnd !== (held.tenancyEnd?.value ?? null)) changes.push({ field: "tenancyEnd", value: b.tenancyEnd, from: sayValue("tenancyEnd", held.tenancyEnd?.value) ?? "As PayProp has it" });
     }

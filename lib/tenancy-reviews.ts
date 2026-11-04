@@ -278,7 +278,8 @@ export function dueFromCadence(
   const out: DueReview[] = [];
   for (const p of currentLets(book)) {
     const key = p.propertyId ?? p.listingId;
-    const from = last.get(key) ?? p.letSince?.slice(0, 10) ?? null;
+    /* The move-in as the let has it, before the day REX marked the listing let (lib/book-lets). */
+    const from = last.get(key) ?? (p.moveIn ?? p.letSince)?.slice(0, 10) ?? null;
     if (!from) continue;
     const dueOn = addMonths(from, rules.everyMonths);
     const dueAt = endOfDay(dueOn);

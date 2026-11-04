@@ -7,7 +7,7 @@ import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
 import { attach, homeTenancies, payPropPeople, payPropTenantRows, personKey } from "@/lib/business/payprop-tenant-contacts";
 import { londonToday } from "@/lib/london-clock";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
-import { acceptedLetsByProperty, sittingTenantsByProperty } from "@/lib/rex-tenants";
+import { acceptedLetsByProperty, sittingTenantsByProperty, type AcceptedLet } from "@/lib/rex-tenants";
 import { addrOf, parseAddress, postcodeOf, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
 import { q } from "@/lib/db";
 import { introOnlyIds } from "@/lib/intro-only";
@@ -839,16 +839,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       return c ? { ...t, email: t.email || c.email, phone: t.phone || c.phone } : t;
     });
   }
-  /* THE LET'S OWN PAGE (4 Nov 2026, lib/book-lets): each let keeps the ids of
-     the accepted applications on its listing, newest first, so a tenant put
-     right or added on the let reaches the home here too. */
-  if (applied) {
-    for (const p of properties) {
-      if (!p.propertyId || p.test) continue;
-      const refs = (applied.get(p.propertyId) ?? []).filter((a) => a.listingId === String(p.listingId)).map((a) => a.id).reverse();
-      if (refs.length) p.letRefs = refs;
-    }
-  }
+  if (applied) withLetPages(properties, applied);
   /* THE RENT (rewritten 22 Oct 2026, Lianna Denholm's missing rents).
      PayProp's rent invoice billed today is the rent: what the tenant is
      charged now. REX's figure is the rent agreed when the home was let, and
@@ -912,6 +903,24 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     counts,
     pulledAt: new Date().toISOString(),
   };
+}
+
+/**
+ * THE LET'S OWN PAGE (4 Nov 2026, lib/book-lets): each let keeps the ids of
+ * the accepted applications on its listing, newest first, and the move-in the
+ * newest gives, so what an agent puts right on the let - a tenant, the
+ * move-in - reaches the home here too. `applied` is lib/rex-tenants
+ * acceptedLetsByProperty, oldest first.
+ */
+export function withLetPages(properties: ManagedProperty[], applied: Map<string, AcceptedLet[]>): void {
+  for (const p of properties) {
+    if (!p.propertyId || p.test) continue;
+    const mine = (applied.get(p.propertyId) ?? []).filter((a) => a.listingId === String(p.listingId)).reverse();
+    if (!mine.length) continue;
+    p.letRefs = mine.map((a) => a.id);
+    const start = mine.find((a) => a.startDate)?.startDate;
+    if (start) p.letStart = start.slice(0, 10);
+  }
 }
 
 /**

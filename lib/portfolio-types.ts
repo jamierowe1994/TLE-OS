@@ -75,6 +75,17 @@ export interface ManagedProperty {
    * the book from REX; the corrections are laid over on every read.
    */
   letRefs?: string[];
+  /** The move-in the newest of those applications gives, as read with the book (lib/book-lets reads it into moveIn). */
+  letStart?: string;
+  /**
+   * The day the tenancy on this let began, as the let has it (4 Nov 2026,
+   * lib/book-lets): a move-in put right in the OS - on the let, or Tenancy
+   * start with Edit on the home's page, the newer of the two - else the
+   * Propoly deal's the let was pushed into, else the application's. Unset
+   * where the OS has no let for the row, and `letSince`, the day REX marked
+   * the listing let, stands. Inspections, reviews and notices count from it.
+   */
+  moveIn?: string;
   image: string | null;
   images: string[];
   epcExpiry: string | null;

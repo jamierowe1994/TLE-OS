@@ -866,7 +866,10 @@ export function dueList(
     const key = keyOf(p);
     if (!key || inHand.has(key) || !inspectable(p)) continue;
     const hmo = Boolean(p.propertyId && hmoIds.has(p.propertyId));
-    const next = nextDueFor({ letSince: p.letSince, hmo }, lastVisit.get(key) ?? null, rules);
+    /* From the move-in as the let has it, not the day REX marked the listing
+       let (4 Nov 2026, lib/book-lets): a week or more apart on a third of lets. */
+    const started = p.moveIn ?? p.letSince;
+    const next = nextDueFor({ letSince: started, hmo }, lastVisit.get(key) ?? null, rules);
     if (!next) continue;
     const dueMs = new Date(next.dueAt).getTime();
     if (dueMs > horizon) continue;
@@ -883,7 +886,7 @@ export function dueList(
       tenant: tenant?.name ?? "",
       tenantEmail: tenant?.email ?? "",
       tenantPhone: tenant?.phone ?? "",
-      tenancyStart: p.letSince,
+      tenancyStart: started,
       dueAt: next.dueAt,
       daysAway: Math.round((dueMs - now.getTime()) / (24 * 60 * 60 * 1000)),
       since: next.since,
@@ -1001,7 +1004,7 @@ export function dueFromTasks(
       tenant: tenant?.name ?? t.tenancy,
       tenantEmail: tenant?.email ?? "",
       tenantPhone: tenant?.phone ?? "",
-      tenancyStart: p?.letSince ?? null,
+      tenancyStart: p?.moveIn ?? p?.letSince ?? null,
       dueAt,
       daysAway: londonDayOffset(dueAt, now),
       since: null,

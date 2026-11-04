@@ -3,6 +3,8 @@ import { hasDb, q } from "@/lib/db";
 import { currentLets } from "@/lib/current-lets";
 import { recountBook } from "@/lib/agent-moves";
 import { peopleOnHomes } from "@/lib/home-aliases";
+import { stillNewest } from "@/lib/let-edit-fields";
+import type { LetEditsNow } from "@/lib/let-edits";
 import type { PropertyPerson } from "@/lib/property-people";
 import type { ManagedBook, ManagedProperty, Party } from "@/lib/portfolio-types";
 
@@ -33,6 +35,9 @@ import type { ManagedBook, ManagedProperty, Party } from "@/lib/portfolio-types"
  *              of a shared house (lib/tenant-logins sittingLets). Not on a
  *              home whose tenants were set with Edit on its own page: that
  *              names the household.
+ *   moveIn     the day the tenancy began, as the let page has it, on the same
+ *              lets (moveInsFor below). REX's let date was the day the
+ *              listing was marked let, often a week or more off.
  *
  * Read only: nothing here is written to REX, REX PM, PayProp or Propoly.
  */
@@ -43,17 +48,20 @@ export async function withLetsOnBook(book: ManagedBook): Promise<ManagedBook> {
   if (!current.length) return book;
   const { sittingLets } = await import("@/lib/tenant-logins");
   const sitting = sittingLets(live);
-  const [onHomes, corrected] = await Promise.all([
+  const [onHomes, corrected, moveIns] = await Promise.all([
     peopleOnHomes(current.map((p) => ({ id: String(p.listingId), keys: [p.propertyId, `listing:${p.listingId}`] }))).catch(() => new Map<string, PropertyPerson[]>()),
     correctedLets(sitting.flatMap((p) => p.letRefs ?? [])),
+    moveInsFor(sitting).catch(() => new Map<ManagedProperty, string>()),
   ]);
-  if (!onHomes.size && !corrected.size) return book;
+  if (!onHomes.size && !corrected.size && !moveIns.size) return book;
 
   const next = new Map<ManagedProperty, ManagedProperty>();
   let recount = false;
+  for (const [p, moveIn] of moveIns) if (moveIn !== p.moveIn) next.set(p, { ...p, moveIn });
   for (const p of current) {
-    const row = withJointLandlords(p, (onHomes.get(String(p.listingId)) ?? []).filter((x) => x.kind === "joint_landlord"));
-    if (row === p) continue;
+    const was = next.get(p) ?? p;
+    const row = withJointLandlords(was, (onHomes.get(String(p.listingId)) ?? []).filter((x) => x.kind === "joint_landlord"));
+    if (row === was) continue;
     if (!p.landlord) recount = true;
     next.set(p, row);
   }
@@ -78,6 +86,59 @@ export async function withLetsOnBook(book: ManagedBook): Promise<ManagedBook> {
   if (!next.size) return book;
   const properties = book.properties.map((p) => next.get(p) ?? p);
   return recount ? recountBook(book, properties) : { ...book, properties };
+}
+
+/**
+ * THE MOVE-IN, AS THE LET PAGE HAS IT (4 Nov 2026). Inspections, tenancy
+ * reviews and notices counted from REX's let date - the day the listing was
+ * marked let, a week or more off the move-in on a third of the lets we could
+ * check - so a first visit or a review fell due on the wrong day, and a
+ * Section 13 was drawn up on the wrong tenancy start. The let's own reading
+ * (lib/let-deal dealForLet, the let page): the Propoly deal the let was
+ * pushed into, with any move-in put right on the let laid over it; else the
+ * application's start, with the same. Then the newest change made in the OS
+ * wins: a move-in put right on the let, or Tenancy start with Edit on the
+ * home's page (lib/home-overrides, already on the row as letSince).
+ */
+async function moveInsFor(rows: ManagedProperty[]): Promise<Map<ManagedProperty, string>> {
+  const out = new Map<ManagedProperty, string>();
+  const lets = rows.filter((p) => p.letRefs?.length || p.letStart || p.overridden?.tenancyStart);
+  if (!lets.length) return out;
+  const refs = lets.map((p) => p.letRefs?.[0]).filter((r): r is string => Boolean(r));
+  const { letEditsFor, withOwnLetEdits } = await import("@/lib/let-edits");
+  const { pushedDeals } = await import("@/lib/let-deal");
+  const [own, pushed] = await Promise.all([
+    letEditsFor(refs).catch(() => new Map<string, LetEditsNow>()),
+    pushedDeals(refs).catch(() => new Map<string, string>()),
+  ]);
+  const deals = pushed.size ? await (await import("@/lib/business/propoly-deals")).getAllPropolyDeals().catch(() => null) : null;
+  const day = (v: string | null | undefined) => (v && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+  for (const p of lets) {
+    const ref = p.letRefs?.[0];
+    const mine = ref ? own.get(ref) : undefined;
+    const dealId = ref ? pushed.get(ref) : undefined;
+    const deal = dealId ? deals?.find((d) => d.app.id === dealId && d.statusKey !== "cancelled") : undefined;
+    let value: string | null = null;
+    /* When the OS's own change behind the figure was made, if it is one. */
+    let changedAt: string | null = null;
+    const d = deal ? withOwnLetEdits(deal, mine) : null;
+    if (d && day(d.app.startDate)) {
+      value = day(d.app.startDate);
+      changedAt = d.letEdits?.moveIn?.at ?? null;
+    } else {
+      const e = mine?.moveIn;
+      /* The application's start, read with the book, already carries a
+         change made before that read; one made since is laid on here. */
+      if (e?.value && (e.value === p.letStart || stillNewest("moveIn", e, "app", p.letStart ?? null))) {
+        value = day(e.value);
+        changedAt = e.at;
+      } else value = p.letStart ?? null;
+    }
+    const home = p.overridden?.tenancyStart;
+    if (home && day(p.letSince) && (!changedAt || home.at >= changedAt)) value = day(p.letSince);
+    if (value) out.set(p, value);
+  }
+  return out;
 }
 
 /** Of these lets, the ones with a tenant put right or added on them. */

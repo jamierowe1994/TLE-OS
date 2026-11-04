@@ -869,7 +869,8 @@ export default function PropertyPage() {
     tenants: tenants.map((t) => t.name),
     agent: p.agent?.name ?? null,
     rentMonthly: p.rentMonthly,
-    letSince: p.letSince,
+    /* The move-in as the let has it (lib/book-lets): a notice is drawn on the tenancy start. */
+    letSince: p.moveIn ?? p.letSince,
   };
   const roomsOnly = houseView && Boolean(house) && !lets;
 
@@ -1323,7 +1324,7 @@ export default function PropertyPage() {
                 current={{
                   service: p.service,
                   letType: p.letType,
-                  letSince: tenancy.state === "ready" && tenancy.data.tenancy?.startDate ? tenancy.data.tenancy.startDate : p.letSince,
+                  letSince: tenancy.state === "ready" && tenancy.data.tenancy?.startDate ? tenancy.data.tenancy.startDate : p.moveIn ?? p.letSince,
                   tenancyEnd: tenancy.state === "ready" && tenancy.data.tenancy && tenancy.data.tenancy.endKnown !== false ? tenancy.data.tenancy.endDate : undefined,
                   tenants,
                 }}
@@ -1341,8 +1342,8 @@ export default function PropertyPage() {
                   {
                     key: "start",
                     label: "Tenancy start",
-                    text: tenancy.state === "ready" && tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.letSince ? day(p.letSince) : "Not set",
-                    quiet: !(tenancy.state === "ready" && tenancy.data.tenancy?.startDate) && !p.letSince,
+                    text: tenancy.state === "ready" && tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.moveIn ?? p.letSince ? day(p.moveIn ?? p.letSince) : "Not set",
+                    quiet: !(tenancy.state === "ready" && tenancy.data.tenancy?.startDate) && !(p.moveIn ?? p.letSince),
                     field: "tenancyStart",
                   },
                   { key: "end", label: "Tenancy end", text: tenancyRow, quiet: tenancyRow === "Not on record" || tenancyRow === "Not read" || tenancyRow === "Reading…", field: "tenancyEnd" },
@@ -1548,7 +1549,7 @@ export default function PropertyPage() {
                       <dl className="nl-prop-dl">
                         <NlFact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? "None yet, a let is on its way in" : "None on record"} />
                         <NlFact label="Rent" value={rentLine ?? noRent} />
-                        <NlFact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.letSince ? day(p.letSince) : "-"} />
+                        <NlFact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.moveIn ?? p.letSince ? day(p.moveIn ?? p.letSince) : "-"} />
                         <NlFact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : tenancy.data.tenancy.endKnown === false ? "-" : "Rolling, no end date") : "-"} />
                         <NlFact label="Deposit" value={tenancy.data.tenancy?.depositId ? `Registered · ${tenancy.data.tenancy.depositId}` : "-"} />
                         <NlFact label="Rent and legal protection" value={tenancy.data.protection === "protected" ? "On" : tenancy.data.protection === "without" ? "Not taken" : "-"} />
@@ -2092,7 +2093,7 @@ export default function PropertyPage() {
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px]">
                       <Fact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"} />
                       <Fact label="Rent" value={rentLine ?? noRent} />
-                      <Fact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : day(p.letSince)} />
+                      <Fact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : day(p.moveIn ?? p.letSince)} />
                       <Fact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : "Rolling, no end date") : "—"} />
                       <Fact label="Deposit" value={tenancy.data.tenancy?.depositId ? `Registered · ${tenancy.data.tenancy.depositId}` : "—"} />
                       <Fact label="Rent and legal protection" value={tenancy.data.protection === "protected" ? "On" : tenancy.data.protection === "without" ? "Not taken" : "—"} />
