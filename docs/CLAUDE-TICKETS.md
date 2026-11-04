@@ -26,10 +26,10 @@ names the home. Keep both out of the repository.
 | It is | Do |
 | --- | --- |
 | Broken code, or details that don't pull through from one screen to the next | Fix it (step 3) |
-| "How do I…" / a question the product already answers | Report `not_a_bug` with the answer, written to them |
+| "How do I…" / a question the product already answers | Report `not_a_bug` with the answer, written to them, and name the button with `--do` |
 | A new feature, a process choice, money, anything to do with what customers are sent | Report `needs_you` with the one decision James must make, and your recommendation |
 | Something only live data can settle (which home, what REX or Propoly holds) | Report `needs_you` saying exactly what to look up; a session on James's Mac can read the live database |
-| Asking James to press something for them (push to Propoly, take an advert down) | Report `needs_you`, naming the button they could press themselves if one exists |
+| Asking James to press something for them (push to Propoly, take an advert down) | Report `needs_you`, naming the button with `--do` so James or they can press it in one go |
 
 Most "details don't pull through" tickets are one screen reading a fact from a different place than the screen
 where it was typed. Find both readers before changing either; fix the reader, never the person's data.
@@ -89,6 +89,13 @@ node scripts/claude-ticket.mjs report not_a_bug /tmp/note.txt '' '' /tmp/reply.t
 - If you can show the change, a picture of the screen you changed (before and after, say), add up to four with
   `--shot <file>` on the report line (PNG, JPEG or WebP, 5MB each). They go to the OS, not the repository.
 - Don't send a push notification of your own: the OS tells James when you report.
+- When your answer is a button to press, name it: `--do <the screen's path> --point <the button's handle> --label
+  "<the button's words>"`, e.g. `--do /listings/854418 --point listing.take-offline --label "Take Offline"`. The
+  ticket's Do It opens that screen with Steve's guide on the button, and Send Claude's Answer gives the person the
+  same link. The handle is the button's `data-steve="…"` (`grep -rn 'data-steve="' components app`); a button
+  without one gets `--do` and `--label` only, and the screen opens without the pointer. Use the record's own page
+  (`/listings/<id>`, `/applications/<id>`, `/portfolio/<id>`, `/portfolio/take-on/<id>`), from the ticket's path or
+  what the screenshot shows.
 - `reply.txt` (with `not_a_bug`) is the answer for the person who asked, written to them. James reads it and
   sends it with one press.
 

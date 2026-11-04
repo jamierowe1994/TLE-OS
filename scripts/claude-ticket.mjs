@@ -5,10 +5,13 @@
  * token never sits on a command line or in a file.
  *
  *   node scripts/claude-ticket.mjs read                 → ticket.json + shot.jpg (if any)
- *   node scripts/claude-ticket.mjs report <state> <note-file> [pr-url] [branch] [reply-file] [--shot picture]...
+ *   node scripts/claude-ticket.mjs report <state> <note-file> [pr-url] [branch] [reply-file]
+ *        [--shot picture]... [--do /screen/path --point data-steve-handle --label "Button Words"]
  *
  * state is fix_ready, needs_you or not_a_bug. Each --shot (PNG, JPEG or WebP,
  * up to four) is put on the ticket first, so James sees them with the report.
+ * --do names the screen (and --point the button) the answer is about: the
+ * ticket's Do It opens it with Steve's guide on that button.
  * Node 20+ (global fetch, FormData and Blob).
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -38,8 +41,12 @@ if (cmd === "read") {
 } else if (cmd === "report") {
   const shots = [];
   const plain = [];
+  const doIt = { path: "", point: "", label: "" };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--shot") shots.push(args[++i]);
+    else if (args[i] === "--do") doIt.path = args[++i] ?? "";
+    else if (args[i] === "--point") doIt.point = args[++i] ?? "";
+    else if (args[i] === "--label") doIt.label = args[++i] ?? "";
     else plain.push(args[i]);
   }
   const [state, noteFile, pr = "", branch = "", replyFile = ""] = plain;
@@ -66,6 +73,7 @@ if (cmd === "read") {
     pr,
     branch,
     reply: replyFile ? readFileSync(replyFile, "utf8") : "",
+    do: doIt.path ? doIt : null,
   };
   const res = await fetch(`${OS}/api/bugs/claude`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const j = await res.json().catch(() => ({}));

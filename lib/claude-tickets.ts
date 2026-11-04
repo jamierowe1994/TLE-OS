@@ -167,6 +167,35 @@ export function briefFor(t: { id: string; body: string; path: string; reporter: 
   ].join("\n");
 }
 
+/* ── Do It: the button Claude's answer is about ─────────────────────────── */
+
+/**
+ * When Claude's answer is a button to press, not code (James, 4 Nov 2026:
+ * three of the first four tickets were "press Take Offline", "press Send to
+ * Propoly", a decision), it names the screen and the button. The ticket's
+ * Do It opens that screen with Steve's guide on the button (lib/steve-guide
+ * pointTarget), and Send Claude's Answer gives the person the same link.
+ * It only ever points: the press is the person's own.
+ */
+export type ClaudeDo = { path: string; point: string; label: string };
+
+export function claudeDoFrom(v: unknown): ClaudeDo | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const path = typeof o.path === "string" ? o.path.trim() : "";
+  const point = typeof o.point === "string" ? o.point.trim() : "";
+  const label = typeof o.label === "string" ? o.label.replace(/\s+/g, " ").trim().slice(0, 60) : "";
+  /* A path in this OS and nothing else: no host, no scheme, no "//". */
+  if (!/^\/(?!\/)[A-Za-z0-9\-._~/?=&%:+]{0,300}$/.test(path)) return null;
+  if (point && !/^[a-z0-9][a-z0-9.-]{0,79}$/i.test(point)) return null;
+  return { path, point, label };
+}
+
+/** Where Do It goes: the screen, with the guide on the button when Claude named one. */
+export function claudeDoHref(d: ClaudeDo): string {
+  return d.point ? `${d.path}${d.path.includes("?") ? "&" : "?"}steve=point:${d.point}` : d.path;
+}
+
 /* ── Pressing it ───────────────────────────────────────────────────────── */
 
 export class ClaudeRefused extends Error {}
@@ -236,7 +265,7 @@ export async function sendToClaude(id: string, by: string, origin: string): Prom
  * presses Send Claude's Answer on Tickets: from the OS, to the person who
  * asked, once, and the ticket is closed. Staff only (lib/email-policy).
  */
-export async function sendClaudeReply(id: string): Promise<boolean> {
+export async function sendClaudeReply(id: string, origin = ""): Promise<boolean> {
   if (!hasDb()) return false;
   const rows = await q<{ reporter_email: string; body: string; path: string; kind: string; context: Record<string, unknown> | null }>(
     `SELECT reporter_email, body, path, kind, context FROM os_bugs WHERE id = $1`,
@@ -251,7 +280,10 @@ export async function sendClaudeReply(id: string): Promise<boolean> {
   const { renderPlain } = await import("@/lib/campaign-mail");
   const said = b.body.length > 400 ? `${b.body.slice(0, 400)}…` : b.body;
   const subject = "About what you reported in TLE OS";
-  const text = [reply, "", "You said:", said, "", "Still not right? Tell Steve in the bottom-right corner and it comes straight back."].join("\n");
+  /* The button Claude's answer is about, one tap away: the screen opens with Steve's guide on it. */
+  const doIt = claudeDoFrom(b.context?.claudeDo);
+  const showMe = doIt && origin ? ["", `Show me where: ${origin}${claudeDoHref(doIt)}`] : [];
+  const text = [reply, ...showMe, "", "You said:", said, "", "Still not right? Tell Steve in the bottom-right corner and it comes straight back."].join("\n");
   await sendEmail({ to: b.reporter_email, subject, html: renderPlain(subject, text).html, text });
   await q(
     `UPDATE os_bugs SET state = 'wontfix', context = coalesce(context, '{}'::jsonb) || jsonb_build_object('replySentAt', NOW()) WHERE id = $1`,

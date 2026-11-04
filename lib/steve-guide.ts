@@ -379,7 +379,21 @@ export const GUIDE_TARGETS: GuideTarget[] = [
   },
 ];
 
-export const guideTarget = (id: string) => GUIDE_TARGETS.find((t) => t.id === id) ?? null;
+export const guideTarget = (id: string) => GUIDE_TARGETS.find((t) => t.id === id) ?? pointTarget(id);
+
+/**
+ * A one-step guide to any control that carries a data-steve handle, for a
+ * link that should land somebody on one button (Do It on Tickets, James
+ * 4 Nov 2026: Claude's answer was "press Take Offline", and that should be
+ * one press away). It points; the person presses, as with every guide.
+ */
+export const POINT_PREFIX = "point:";
+export function pointTarget(id: string): GuideTarget | null {
+  if (!id.startsWith(POINT_PREFIX)) return null;
+  const handle = id.slice(POINT_PREFIX.length);
+  if (!/^[a-z0-9][a-z0-9.-]{0,79}$/i.test(handle)) return null;
+  return { id, about: "", steps: [{ point: [`[data-steve="${handle}"]`], say: "Here's the one to press.", done: { clicked: true } }] };
+}
 
 /**
  * Whether a route's last step can be reached from this screen: what it points

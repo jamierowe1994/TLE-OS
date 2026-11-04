@@ -118,7 +118,7 @@ export async function PATCH(req: NextRequest) {
   /* Send Claude's Answer: the reply Claude wrote for somebody who asked how
      to do something goes to them, and the ticket closes. */
   if (sendReply === true) {
-    const sent = await sendClaudeReply(id).catch(() => false);
+    const sent = await sendClaudeReply(id, publicOrigin(req)).catch(() => false);
     return NextResponse.json({ ok: sent, ...(sent ? {} : { error: "That answer couldn't be sent." }) }, { status: sent ? 200 : 409 });
   }
   /* The letter alone, from Tickets: A broken, B everything else, C a recommendation. */

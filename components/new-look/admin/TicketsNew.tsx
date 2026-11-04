@@ -104,6 +104,16 @@ function reportParts(note: string): { lead: string; parts: Array<{ label: string
   };
 }
 
+/* The button Claude's answer is about (lib/claude-tickets ClaudeDo, checked on
+   the way in): Do It opens that screen with Steve's guide on it. */
+type ClaudeDo = { path: string; point: string; label: string };
+const claudeDo = (b: Bug): ClaudeDo | null => {
+  const d = b.context?.claudeDo as { path?: unknown; point?: unknown; label?: unknown } | undefined;
+  if (!d || typeof d.path !== "string" || !d.path.startsWith("/") || d.path.startsWith("//")) return null;
+  return { path: d.path, point: typeof d.point === "string" ? d.point : "", label: typeof d.label === "string" ? d.label : "" };
+};
+const doHref = (d: ClaudeDo) => (d.point ? `${d.path}${d.path.includes("?") ? "&" : "?"}steve=point:${d.point}` : d.path);
+
 /** "kirstie.mulholland@…" to "Kirstie", for "Kirstie is told when it does". */
 const firstName = (email: string) => {
   const w = (email.split("@")[0] ?? "").split(/[._-]/)[0] ?? "";
@@ -160,6 +170,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
     const pushedBy = typeof b.context?.pushedBy === "string" ? (b.context.pushedBy as string) : "";
     const late = Boolean(pushedAt) && Date.now() - new Date(pushedAt).getTime() > 30 * 60_000;
     const canOfferPush = b.botState === "fix_ready" && !pushedAt && claude.canSend;
+    const doIt = claudeDo(b);
     return (
       <div className="nl-adm-claude nl-adm-report">
         <p className="nl-meta">
@@ -204,6 +215,15 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
           <p className="nl-meta nl-strong">Push it live? It goes live in about four minutes, and {who} is told when it does.</p>
         )}
         <div className="nl-adm-row-acts">
+          {doIt && (
+            <a
+              href={doHref(doIt)}
+              title={doIt.point ? "Opens the screen with Steve pointing at the button" : "Opens the screen Claude's answer is about"}
+              className={`nl-btn nl-btn--sm ${b.botState === "fix_ready" ? "nl-btn--secondary" : "nl-btn--primary"}`}
+            >
+              {doIt.label ? `Do It: ${doIt.label}` : "Open the Screen"}
+            </a>
+          )}
           {canOfferPush &&
             (confirming === b.id ? (
               <>
@@ -226,7 +246,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
               </button>
             ))}
           {b.claudeUrl && (
-            <a href={b.claudeUrl} target="_blank" rel="noreferrer" className={`nl-btn nl-btn--sm ${b.botState === "needs_you" ? "nl-btn--primary" : "nl-btn--secondary"}`}>
+            <a href={b.claudeUrl} target="_blank" rel="noreferrer" className={`nl-btn nl-btn--sm ${b.botState === "needs_you" && !doIt ? "nl-btn--primary" : "nl-btn--secondary"}`}>
               Open in Claude
             </a>
           )}
