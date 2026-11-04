@@ -206,9 +206,11 @@ export default function Overview() {
             <>
               <Big value={d.due} label="visits due" />
               {/* Each figure opens the board on just those visits (Rhiannon
-                  Dodge, 1 Nov 2026); Overdue is on the Due list it opens anyway. */}
+                  Dodge, 1 Nov 2026). Overdue too (Michael Healy, 4 Nov 2026):
+                  it counts visits raised but not made as well as homes still
+                  on Due, so the Due list alone didn't hold them all. */}
               <Stats items={[
-                ["Overdue", String(d.overdue), d.overdue > 0],
+                ["Overdue", String(d.overdue), d.overdue > 0, () => open("inspections", "overdue")],
                 ["Booked in", String(d.booked), false, () => open("inspections", "booked")],
                 ["Waiting on tenant", String(d.awaitingTenant), false, () => open("inspections", "awaiting")],
               ]} />
@@ -503,6 +505,10 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
         <PmTile label="Inspections due" {...state(data?.inspections)} value={ind?.due ?? null}
           badge={ind && ind.overdue > 0 ? { text: `${ind.overdue} overdue`, tone: "warn" } : null}
           links={ind ? [
+            /* Michael Healy, 4 Nov 2026: the badge said 25 overdue and the Due
+               list it opened showed 4 - the rest were visits raised and not
+               made yet. This opens the board on all of them. */
+            ...(ind.overdue > 0 ? [{ text: `${ind.overdue} overdue`, onOpen: () => open("inspections", "overdue") }] : []),
             { text: `${ind.booked} booked`, onOpen: () => open("inspections", "booked") },
             { text: `${ind.awaitingTenant} waiting on the tenant`, onOpen: () => open("inspections", "awaiting") },
           ] : null}

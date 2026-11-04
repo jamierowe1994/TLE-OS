@@ -139,10 +139,17 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
   /* One of the figures pressed: In hand shows only those visits (Rhiannon
      Dodge, 1 Nov 2026). Pressing it again, or choosing a tab, shows them all. */
   const [focus, setFocus] = useState<InHandFocus | null>(null);
+  /* Every visit that is late, wherever it sits (Michael Healy, 4 Nov 2026:
+     "says 25 overdue, when you click in you cant see them?"). The Overdue
+     figure counts the late homes still on Due AND the visits raised from them
+     but not made yet (lib/inspections summarise), so the Due list alone showed
+     4 of his 25. This view lists both, by that same rule. */
+  const [late, setLate] = useState(false);
   /* On a phone the list is under the four tiles, so a press brings it up
      rather than changing something off the screen. */
   const tabsRow = useRef<HTMLDivElement>(null);
   const press = (f: InHandFocus) => {
+    setLate(false);
     setTab("hand");
     setFocus((was) => (was === f ? null : f));
     const row = tabsRow.current;
@@ -153,6 +160,7 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
   const chooseTab = (t: "due" | "hand" | "done") => {
     setTab(t);
     setFocus(null);
+    setLate(false);
   };
 
   const load = useCallback(() => {
@@ -170,7 +178,8 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
       if (open) { setOpenId(open); setTab("hand"); }
       /* ?focus= from a figure on the Overview's Inspections card. */
       const f = sp.get("focus");
-      if (!open && isFocus(f)) { setFocus(f); setTab("hand"); }
+      if (!open && f === "overdue") { setLate(true); setTab("due"); }
+      else if (!open && isFocus(f)) { setFocus(f); setTab("hand"); }
     } catch { /* fine */ }
   }, []);
 
@@ -184,6 +193,10 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
   const done = useMemo(() => all.filter((i) => ["closed", "cancelled"].includes(i.status) && match(i.propertyName, i.locality, i.tenant, i.landlord, String(i.ref))), [all, needle]);
   const due = useMemo(() => (data?.due ?? []).filter((d) => match(d.propertyName, d.locality, d.tenant, d.landlord)), [data, needle]);
   const s = data?.summary ?? null;
+  /* Late once the due day is over on the UK calendar, and not visited - the
+     rule summarise counts Overdue by, so the view and the figure agree. */
+  const lateDue = useMemo(() => due.filter((d) => pastDueDay(d.dueAt)), [due]);
+  const lateInHand = useMemo(() => inHand.filter((i) => pastDueDay(i.dueAt) && !i.visitedAt), [inHand]);
 
   /* `newDue` (6 Oct 2026): the due date changed from the Due list. The visit
      is raised on the date it came with, then moved through the same edit as
@@ -352,6 +365,39 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
           <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
           Reading the book…
         </p>
+      ) : tab === "due" && late ? (
+        <>
+          <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+            <span>
+              Showing <b className="font-semibold text-ink">Overdue</b>: {lateDue.length + lateInHand.length} visit{lateDue.length + lateInHand.length === 1 ? "" : "s"} past the due day - {lateDue.length} still to book, {lateInHand.length} raised and not made yet.
+            </span>
+            <button type="button" onClick={() => setLate(false)} className="text-[12px] underline underline-offset-2 hover:text-ink">
+              Show everything due
+            </button>
+          </p>
+          {lateDue.length + lateInHand.length === 0 ? (
+            <Empty title={needle ? "Nothing overdue matches that." : "Nothing overdue."} blurb="Every visit is inside its due day, or already made." />
+          ) : (
+            <>
+              {lateDue.length > 0 && (
+                <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+                  <h3 className="mb-1 text-[13px] text-muted">Still to Book ({lateDue.length})</h3>
+                  <ul className="divide-y divide-line/50">
+                    {lateDue.map((d) => (
+                      <DueRow key={d.key} d={d} onBook={() => void raise(d)} onMoveDue={(day, note) => raise(d, { day, note })} onDone={(day) => raise(d, undefined, day)} onTakeOff={(reason, note) => takeOff(d, reason, note)} />
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {lateInHand.length > 0 && (
+                <>
+                  <h3 className="mt-6 text-[13px] text-muted">Raised, Not Made Yet ({lateInHand.length})</h3>
+                  <List rows={lateInHand} onOpen={setOpenId} empty="Nothing in hand is late." />
+                </>
+              )}
+            </>
+          )}
+        </>
       ) : tab === "due" ? (
         <>
           {due.length === 0 ? (

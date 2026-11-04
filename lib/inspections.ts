@@ -1020,7 +1020,9 @@ export function summarise(list: Inspection[], due: DueVisit[], now: Date = new D
   return {
     due: due.length,
     /* Overdue once the due DAY is over, on the UK calendar (P-042/P-076): a
-       visit due today, or one just booked "for today", is not late at 08:00. */
+       visit due today, or one just booked "for today", is not late at 08:00.
+       Homes still on Due and visits raised but not made yet, both - the
+       board's Overdue view (?focus=overdue) lists exactly these. */
     overdue: due.filter((d) => londonDay(d.dueAt) < londonDay(now.toISOString())).length
       + list.filter((i) => OPEN_STATUSES.includes(i.status) && i.dueAt && londonDay(i.dueAt) < londonDay(now.toISOString()) && !i.visitedAt).length,
     /* By the same rule as the In hand list each tile opens (lib/inspection-
