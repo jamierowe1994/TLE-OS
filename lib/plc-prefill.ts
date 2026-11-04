@@ -1,5 +1,5 @@
 import "server-only";
-import { getApplications, type Application } from "@/lib/applications";
+import { getApplicationById, getApplications, type Application } from "@/lib/applications";
 import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 import { isTestId, testApplication } from "@/lib/test-overlay";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
@@ -195,10 +195,12 @@ async function shapeDeal(deal: BusinessDeal): Promise<Prefill> {
 /**
  * Find the application to hand over.
  *
- * `getApplications` reads the live book from REX; there is no fetch-one
- * endpoint on it, so this pulls a page and picks. That is fine at 300 rows and
- * would not be at 3,000 - if this ever gets slow, the fix is a by-id read in
- * lib/applications rather than a bigger limit here.
+ * By its id, the way the let page reads it (lib/applications
+ * getApplicationById: the held book, else REX asked for that one, else the
+ * newest 300). Until 4 Nov 2026 this picked from the newest 300 alone, so a
+ * let the page could open had no PLC check once 300 newer applications
+ * stood in front of it. From a listing, `getApplications` still pulls the
+ * book and picks.
  */
 export async function prefillFor(opts: {
   applicationId?: string;
@@ -212,8 +214,11 @@ export async function prefillFor(opts: {
     const app = applyLead(t.app, await leadOverrides().catch(() => new Map<string, string>()));
     return shape(app, undefined, undefined, await onLet(String(app.id), app.applicants));
   }
-  const [book, facts] = await Promise.all([
-    getApplications(300),
+  /* A Propoly deal's id is never an application's (DEAL_ID above): nothing to look up. */
+  const appId = opts.applicationId && !DEAL_ID.test(opts.applicationId) ? String(opts.applicationId) : null;
+  const [book, byId, facts] = await Promise.all([
+    opts.applicationId ? Promise.resolve([] as Application[]) : getApplications(300),
+    appId ? getApplicationById(appId) : Promise.resolve(null),
     factsByRexId().catch(() => new Map<string, { hmo: boolean; landlordName: string | null }>()),
   ]);
   const factsOf = (a: Application) => (a.propertyId ? facts.get(String(a.propertyId)) ?? null : null);
@@ -229,8 +234,7 @@ export async function prefillFor(opts: {
   };
 
   if (opts.applicationId) {
-    const found = book.find((a) => String(a.id) === String(opts.applicationId));
-    if (found) return full(found);
+    if (byId) return full(byId);
     if (!DEAL_ID.test(opts.applicationId)) return null;
     const deal = await findPropolyDeal(opts.applicationId);
     return deal ? shapeDeal(deal) : null;
