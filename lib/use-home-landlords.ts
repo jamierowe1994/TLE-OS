@@ -19,8 +19,8 @@ import { useEffect, useState } from "react";
  * a failed read is an empty list, so a screen is never held up by it.
  *
  * The server reads every key the home is filed under, not only this one
- * (lib/home-aliases; Lianna Denholm, 4 Nov 2026): John Hood, added on another
- * screen of 12 South Chesters Lane, now starts the terms with Maureen.
+ * (lib/home-aliases; Lianna Denholm, 4 Nov 2026): a second landlord added on
+ * another screen of the same home now starts the terms with the first.
  */
 
 export type HomeLandlord = { name?: string | null; email?: string | null; phone?: string | null };

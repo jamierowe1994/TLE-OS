@@ -13,13 +13,13 @@ import type { Party, TermsRow } from "@/lib/terms/store";
 
 /**
  * THE LANDLORD REGISTRATION ON THE TERMS, BOTH WAYS (Lianna Denholm, 4 Nov
- * 2026, 12 South Chesters Lane).
+ * 2026).
  *
  * The Scottish terms ask each landlord for their council registration number
  * and when it runs out. The home already held them (the listing's Landlord
  * section, os_property_facts: landlord_registration, _expiry, _owner), but
  * nothing carried them across, so every landlord met two blank boxes and
- * typed them - John Hood put 47456/25251 for the 474561/290/25251 on file -
+ * typed them - one put a shortened number for the one on file -
  * and what they typed stayed on the contract and nowhere else.
  *
  *   in:   createTerms starts each landlord from their own number on file

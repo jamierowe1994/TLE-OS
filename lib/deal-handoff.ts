@@ -320,7 +320,7 @@ export async function landlordsForListing(listing: Row, opts: { listingId: numbe
   const listingId = idOf(opts.listingId);
   const propertyId = idOf((listing.property as Row | null)?.id) ?? idOf(listing.property_id);
   /* Every key the home is filed under, not only the REX property's (Lianna
-     Denholm, 4 Nov 2026, 12 South Chesters Lane: a joint landlord added on the
+     Denholm, 4 Nov 2026: a joint landlord added on the
      appraisal or the listing never went). lib/home-aliases. */
   const joint = propertyId || listingId ? (await peopleOnHome(propertyId, listingId ? `listing:${listingId}` : null).catch(() => [])).filter((p) => p.kind === "joint_landlord") : [];
   const key = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -479,7 +479,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
   const joining = new Set([...(application.swap?.joining ?? []), ...(application.swap?.rereference ?? [])]);
   /* Each tenant's name, email and mobile as put right on the let, over the
      application's (Rhiannon and Lianna Denholm, 4 Nov 2026, lib/let-people
-     tenantsAsOnLet): Ben Turner's corrected email was on the let but the
+     tenantsAsOnLet): a tenant's corrected email was on the let but the
      push sent REX's. Who is referenced and who pays what is still worked out
      from the names on the swap itself, before. */
   const tenants = await tenantsAsOnLet(String(application.id), application.applicants.map((a) => ({

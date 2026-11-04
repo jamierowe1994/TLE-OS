@@ -76,8 +76,8 @@ export async function peopleOn(propertyId: string): Promise<PropertyPerson[]> {
 
 /**
  * Everyone on one home read under every key it is filed under (lib/home-aliases
- * gives the keys; Lianna Denholm, 4 Nov 2026, 12 South Chesters Lane: John
- * Hood was added under one key and every other screen read another).
+ * gives the keys; Lianna Denholm, 4 Nov 2026: a second landlord was added
+ * under one key and every other screen read another).
  * Landlords first, oldest first within each, as peopleOn.
  *
  * The same person added on two screens - so under two keys - shows once: by

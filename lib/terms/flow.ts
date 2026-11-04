@@ -127,8 +127,7 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
   };
   const id = newTermsId();
   /* Each landlord's registration from the home's file, theirs to check when
-     they sign (Lianna Denholm, 4 Nov 2026, 12 South Chesters Lane: the boxes
-     always opened blank). Only where this edition asks for it; a file that
+     they sign (Lianna Denholm, 4 Nov 2026: the boxes always opened blank). Only where this edition asks for it; a file that
      won't read sends the terms without it, as before. */
   const regs = doc.details.some((f) => f.key === "registrationNumber")
     ? await homeRegistration({ propertyId: n.propertyId, listingId: n.listingId, appraisalId: n.appraisalId })

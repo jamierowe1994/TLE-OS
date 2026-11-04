@@ -4,9 +4,9 @@ import { heldListingsOn, heldPropertyIds } from "@/lib/rex-landlord";
 import { peopleOnKeys, type PropertyPerson } from "@/lib/property-people";
 
 /**
- * EVERY KEY ONE HOME IS FILED UNDER (Lianna Denholm, 4 Nov 2026, 12 South
- * Chesters Lane: eighteen tickets on one let, John Hood added as the second
- * landlord and missing from the terms, the let and the PLC).
+ * EVERY KEY ONE HOME IS FILED UNDER (Lianna Denholm, 4 Nov 2026: eighteen
+ * tickets on one let, its second landlord added on one screen and missing
+ * from the terms, the let and the PLC).
  *
  * A joint landlord or a point of contact is kept against the key of the screen
  * it was added on (lib/property-people): the REX property id where that screen

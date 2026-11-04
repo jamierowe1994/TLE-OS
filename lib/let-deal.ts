@@ -65,12 +65,11 @@ export async function dealForLet(f: Find): Promise<LetDeal | null> {
 }
 
 /*
- * Lianna Denholm, 4 Nov 2026 (12 South Chesters Lane, application 40658):
- * she put the move-in at 10 November and the deposit at £1,542 on the let,
- * and the let showed them, but they were saved against the application alone
- * (no deal was found for the let at that moment), and the deal only reads
- * figures saved against it. So the PLC check, which opens on the deal's
- * move-in, still opened on Propoly's 9 November: "not saving". The deal
+ * Lianna Denholm, 4 Nov 2026 ("I have amended move in date and deposit but
+ * its not saving"): a figure put right on the let while no deal was found for
+ * it is saved against the application alone, and the deal only read figures
+ * saved against it. So the PLC check, which opens on the deal's move-in,
+ * still opened on Propoly's date while the let page showed the new one. The deal
  * found here now carries the let's own figures too, newest winning field by
  * field, as the let page reads them (lib/let-edits withOwnLetEdits). A deal
  * the OS pushed for the let has them in the book already; one found by

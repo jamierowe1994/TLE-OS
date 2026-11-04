@@ -178,9 +178,8 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
   const landlord = (ctx.landlord ?? home.landlord ?? "").trim() || null;
   /* A second owner kept on the home in the OS (lib/property-people): their ID
      and AML belong on the pack as much as the record landlord's do. Under
-     every key the home is filed under (Lianna Denholm, 4 Nov 2026, 12 South
-     Chesters Lane: one added on the listing or the appraisal was never asked
-     for here). lib/home-aliases. */
+     every key the home is filed under (Lianna Denholm, 4 Nov 2026: one added
+     on the listing or the appraisal was never asked for here). lib/home-aliases. */
   const joint = await peopleOnHome(...home.ids, `let:${start.applicationRef}`)
     .then((ps) => [...new Set(ps.filter((p) => p.kind === "joint_landlord").map((p) => p.name.trim()).filter(Boolean))])
     .catch(() => [] as string[]);

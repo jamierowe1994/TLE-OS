@@ -269,9 +269,9 @@ export type EditedPart = "name" | "email" | "phone";
  * A let's tenants with their details as put right on the let, for what reads
  * the application's own copy of them (Rhiannon and Lianna Denholm, 4 Nov
  * 2026): the Push to Propoly (lib/deal-handoff) and the PLC check
- * (lib/plc-prefill). Ben Turner's email was fixed on the let and the let
+ * (lib/plc-prefill). A tenant's email was fixed on the let and the let
  * showed it, yet the push and the PLC check still read the application's, so
- * his deal would have gone to the old address. Read by the same keys as the
+ * the deal would have gone to the old address. Read by the same keys as the
  * let page (withPeople), from the same list in the same order.
  *
  * A box only emptied on the let leaves the application's value here: there
@@ -345,8 +345,8 @@ async function withPeople(base: Omit<LetPeople, "people" | "deal">, held: LetPar
   const [edits, onHome, addedTenants] = await Promise.all([
     personEdits(base.ref).catch(() => new Map<string, PersonEdit>()),
     /* Under every key the home is filed under, not only the let's own (Lianna
-       Denholm, 4 Nov 2026, 12 South Chesters Lane: John Hood was added under
-       another screen's key and never reached the let). lib/home-aliases. */
+       Denholm, 4 Nov 2026: a second landlord was added under another screen's
+       key and never reached the let). lib/home-aliases. */
     peopleOnHome(base.homeKey, base.listingId && !isTestId(base.listingId) ? `listing:${base.listingId}` : null, `let:${base.ref}`).catch(() => []),
     letTenants(base.ref).catch(() => []),
   ]);

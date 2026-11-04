@@ -149,10 +149,9 @@ export function regByLandlord(
 }
 
 /* ── Into the terms, and back from them ───────────────────────────────────
-   Lianna Denholm, 4 Nov 2026, 12 South Chesters Lane: the Scottish terms ask
-   each landlord for their registration number and its expiry, and they always
-   opened blank - John Hood typed 47456/25251 over the 474561/290/25251 the
-   listing held. Each landlord now starts from the number on file that is
+   Lianna Denholm, 4 Nov 2026: the Scottish terms ask each landlord for their
+   registration number and its expiry, and they always opened blank - a
+   second landlord typed a shortened number over the one the listing held. Each landlord now starts from the number on file that is
    theirs (regByLandlord: named, else the next landlord without one, the main
    landlord first), and what they give when they sign goes back on file. */
 

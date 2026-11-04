@@ -135,7 +135,7 @@ async function allDealEdits(): Promise<Map<string, LetEditsNow>> {
 }
 
 /*
- * Lianna Denholm, 4 Nov 2026 (12 South Chesters Lane, application 40658): a
+ * Lianna Denholm, 4 Nov 2026 ("amended move in date and deposit but its not saving"): a
  * move-in or deposit put right on a let before the let was matched to its
  * Propoly deal is kept under the application alone (deal_id empty), so the
  * deal, keyed by its own id, never read it - while the let page did. A deal
