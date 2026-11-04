@@ -2332,7 +2332,7 @@ export default function ApplicationDrawer({
                   }}
                 >
                   <textarea rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a note - chased the tenant, spoke to the landlord…" aria-label="Add a note" data-steve="application.add-comment" />
-                  <button type="submit" className="nl-send" disabled={!draft.trim() || noteBusy} aria-label="Save the note">
+                  <button type="submit" className="nl-send" disabled={!draft.trim() || noteBusy} aria-label="Save the note" data-steve="application.save-note">
                     <Ico name="arrow" size={16} />
                   </button>
                 </form>
