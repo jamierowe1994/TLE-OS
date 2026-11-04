@@ -337,6 +337,10 @@ ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS told_at    TIMESTAMPTZ;
 -- everything else. Set from the bot's verdict and the kind, changed by hand
 -- on Admin, System, Tickets.
 ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS priority   TEXT;
+-- Send to Claude (4 Nov 2026, lib/claude-tickets): the claude.ai session a
+-- ticket was handed to, so Tickets can link to it while Claude works.
+-- bot_state is 'with_claude' while it does.
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS claude_url TEXT NOT NULL DEFAULT '';
 
 -- The screen as it looked when they reported it.
 --

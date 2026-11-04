@@ -16,4 +16,19 @@ export async function warmAtBoot(): Promise<void> {
   startRevokedSync();
   /* Every Railway timer watched from in here, so none has to run for a stopped one to be seen. */
   startCronWatch();
+  /* Tickets this deploy fixes are marked Fixed and their reporters told, a
+     minute after boot so the new instance is already serving the fix they
+     will go and try (lib/ticket-sweep). The five-minute timer repeats it. */
+  const origin = (process.env.OS_ORIGIN ?? process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").trim().replace(/\/+$/, "");
+  if (origin) {
+    const t = setTimeout(() => {
+      void import("@/lib/ticket-sweep")
+        .then(({ sweepTickets }) => sweepTickets(origin))
+        .then((r) => {
+          if (r.outagesClosed || r.shipped.length) console.log(`[boot] tickets: ${r.shipped.length} fixed by this deploy, ${r.outagesClosed} cleared outages closed`);
+        })
+        .catch(() => {});
+    }, 60_000);
+    t.unref?.();
+  }
 }

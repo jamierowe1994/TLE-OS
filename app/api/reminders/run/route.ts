@@ -7,6 +7,8 @@ import { AUTO_TAKEDOWN_SWITCH, runAutoTakeDown } from "@/lib/listings-auto-taked
 import { runReminders } from "@/lib/reminders";
 import { switchOn } from "@/lib/switches";
 import { worksSweep } from "@/lib/works-sweep";
+import { sweepTickets } from "@/lib/ticket-sweep";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * The reminders run.
@@ -60,5 +62,9 @@ export async function POST(req: NextRequest) {
   }
   const run = await runReminders();
   const works = await worksSweep().catch((e) => ({ doneRequests: 0, failed: publicError(e, "failed") }));
-  return NextResponse.json({ ...run, works, diary: await diaryWarm, autoTakeDown: autoOn ? "asked" : "off" }, { status: run.ok ? 200 : 503 });
+  /* Tickets that close themselves (lib/ticket-sweep, 4 Nov 2026): an outage
+     on REX's or Propoly's side once it has gone quiet, and anything a live
+     fix carries a marker for. Never throws. */
+  const tickets = await sweepTickets(publicOrigin(req));
+  return NextResponse.json({ ...run, works, tickets, diary: await diaryWarm, autoTakeDown: autoOn ? "asked" : "off" }, { status: run.ok ? 200 : 503 });
 }

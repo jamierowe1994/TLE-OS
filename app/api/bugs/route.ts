@@ -5,6 +5,7 @@ import { requireOwner } from "@/lib/admin";
 import { logBug, bugs, setBugState, attachShot, myReports, setBugPriority } from "@/lib/pilot";
 import { tellReporter } from "@/lib/bug-bot";
 import { publicOrigin } from "@/lib/origin";
+import { claudeConfigured, maySendToClaude, sendClaudeReply } from "@/lib/claude-tickets";
 
 /**
  * Reporting something broken, and reading what's been reported.
@@ -98,14 +99,23 @@ export async function GET(req: NextRequest) {
     if (!actor) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
     return NextResponse.json({ ok: true, reports: await myReports(actor.id) });
   }
-  if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
-  return NextResponse.json({ bugs: await bugs(200) });
+  const owner = await requireOwner(req);
+  if (!owner) return new NextResponse(null, { status: 404 });
+  /* Whether Send to Claude shows (lib/claude-tickets): only to the person
+     whose plan it runs on, and only once the routine is wired up. */
+  return NextResponse.json({ bugs: await bugs(200), claude: { canSend: maySendToClaude(owner.email), ready: claudeConfigured() } });
 }
 
 export async function PATCH(req: NextRequest) {
   if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
-  const { id, state, priority } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null };
+  const { id, state, priority, sendReply } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null; sendReply?: boolean };
   if (!id) return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
+  /* Send Claude's Answer: the reply Claude wrote for somebody who asked how
+     to do something goes to them, and the ticket closes. */
+  if (sendReply === true) {
+    const sent = await sendClaudeReply(id).catch(() => false);
+    return NextResponse.json({ ok: sent, ...(sent ? {} : { error: "That answer couldn't be sent." }) }, { status: sent ? 200 : 409 });
+  }
   /* The letter alone, from Tickets: A broken, B everything else, C a recommendation. */
   if (priority !== undefined && !state) {
     if (priority !== null && !["A", "B", "C"].includes(priority)) return NextResponse.json({ ok: false, error: "A, B or C." }, { status: 400 });

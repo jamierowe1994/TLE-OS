@@ -368,6 +368,9 @@
 [data-look="new"] .nl-adm-after { margin: 14px 0 0; }
 [data-look="new"] .nl-adm-mt { margin-top: 4px; }
 [data-look="new"] .nl-adm-warn { color: var(--warning); }
+/* Claude's answer for the person who asked (Send to Claude, 4 Nov 2026). */
+[data-look="new"] .nl-adm-claude { margin: 10px 0 0; padding: 10px 14px; border-left: 2px solid var(--line-strong); background: var(--panel); }
+[data-look="new"] .nl-adm-claude > .nl-meta { margin: 0; }
 [data-look="new"] .nl-adm-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; min-width: 0; }
 [data-look="new"] .nl-adm-gapb { margin-top: 0; margin-bottom: 20px; }
 [data-look="new"] .nl-adm-blockmeta { display: block; margin-top: 3px; }

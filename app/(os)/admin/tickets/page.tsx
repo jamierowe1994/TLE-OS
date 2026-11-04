@@ -23,13 +23,18 @@ import TicketsNew, { LETTERS, type Bug } from "@/components/new-look/admin/Ticke
 const when = (iso: string | null | undefined) =>
   !iso ? "—" : new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-const verdict = (b: Bug) =>
-  b.botState === "looking" ? "Bot is looking"
-  : b.botState === "to_fix" ? "Bot: cause found, to fix"
-  : b.botState === "fix_ready" ? "Bot: fix ready"
-  : b.botState === "needs_you" ? "Bot: needs you"
-  : b.botState === "not_a_bug" ? "Bot: not a fault"
-  : "";
+/* "Claude" for a ticket sent with Send to Claude (lib/claude-tickets, 4 Nov
+   2026), "Bot" for what the old hourly bug bot left on older ones. */
+const verdict = (b: Bug) => {
+  const who = b.claudeUrl || b.botState === "with_claude" ? "Claude" : "Bot";
+  return b.botState === "with_claude" ? "With Claude"
+    : b.botState === "looking" ? "Bot is looking"
+    : b.botState === "to_fix" ? `${who}: cause found, to fix`
+    : b.botState === "fix_ready" ? `${who}: fix ready for you to push`
+    : b.botState === "needs_you" ? `${who}: needs you`
+    : b.botState === "not_a_bug" ? `${who}: not a fault`
+    : "";
+};
 
 
 /* A first, then anything not sorted yet, then B and C (James, 15 Oct 2026:
@@ -41,13 +46,20 @@ const TICKET_RANK: Record<string, number> = { A: 0, none: 1, B: 2, C: 3 };
 export default function Tickets() {
   const [bugs, setBugs] = useState<Bug[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  /* Send to Claude (lib/claude-tickets): shown only to the person whose plan
+     it runs on, live once the routine is wired up on Railway. */
+  const [claude, setClaude] = useState<{ canSend: boolean; ready: boolean }>({ canSend: false, ready: false });
+  const [claudeSaid, setClaudeSaid] = useState<Record<string, string>>({});
   const [show, setShow] = useState<"open" | "all">("open");
   const [letter, setLetter] = useState<"A" | "B" | "C" | "none" | "all">("all");
 
   const load = () =>
     fetch("/api/bugs", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j: { bugs: Bug[] }) => setBugs(j.bugs))
+      .then((j: { bugs: Bug[]; claude?: { canSend: boolean; ready: boolean } }) => {
+        setBugs(j.bugs);
+        if (j.claude) setClaude(j.claude);
+      })
       .catch(() => setErr("Couldn't load the tickets."));
   useEffect(() => { void load(); }, []);
 
@@ -96,6 +108,18 @@ export default function Tickets() {
     await load();
   }
 
+  /* One press: the ticket goes to a Claude Code session on James's own plan
+     and leaves the open list until Claude has something for him. What went
+     wrong, if anything, is said on the ticket itself. */
+  async function sendToClaude(id: string) {
+    setClaudeSaid((m) => ({ ...m, [id]: "Sending…" }));
+    const j = await fetch("/api/bugs/claude", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) })
+      .then((r) => r.json().catch(() => ({ ok: false })))
+      .catch(() => ({ ok: false })) as { ok?: boolean; error?: string };
+    setClaudeSaid((m) => ({ ...m, [id]: j.ok ? "" : j.error || "Couldn't send it to Claude." }));
+    await load();
+  }
+
   /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
   const look = useNewLook("admin");
   if (look === null) return <p className="mt-6 text-[12.5px] text-muted">Loading the tickets…</p>;
@@ -120,7 +144,7 @@ export default function Tickets() {
   if (look) {
     return (
       <TicketsNew
-        state={{ people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict }}
+        state={{ people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude }}
       />
     );
   }

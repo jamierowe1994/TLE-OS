@@ -476,6 +476,10 @@ const MACHINE_ROUTES = [
   "/api/marketing/leads-webhook",     // the new-lead ping: status, test, send (owner or cron key)
   "/api/push/scan",                   // the bell to the iPhone app, every five minutes (cron key)
   "/api/bugs/bot",                    // the bug bot: takes bugs, records its fixes (cron key)
+  /* Send to Claude (lib/claude-tickets): the claude.ai session reads its one
+     ticket and reports back with a token signed for that ticket alone (403
+     without it); James's press is a POST the route checks for an owner. */
+  "/api/bugs/claude",
   "/api/landlord/property-answers/chase", // signed but questions unfinished: 2, 5, 9 days
   "/api/viewings/sweep",              // the viewings ledger, nightly
   "/api/rex/snapshot",                // REX down: take the copy before it goes (cron key)

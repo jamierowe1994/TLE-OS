@@ -24,6 +24,13 @@ compliance → portfolio → finance.
 - The **pre-presentation** and the **PLC check** both need James's input. Don't design them solo —
   he flagged these two specifically as needing his intervention.
 
+## Tickets
+
+- A commit that fixes a ticket adds `tickets/shipped/<ticket id>.json` (see `tickets/README.md`). The ticket
+  closes itself and the reporter is emailed when that deploy is live. No hand-ticking after a push.
+- Send to Claude (Admin > Tickets) hands a ticket to a claude.ai routine on James's plan; the routine follows
+  `docs/CLAUDE-TICKETS.md`.
+
 ## Verification
 
 No tests in this repo. `tsc` and `npm run build` are not verification.

@@ -259,6 +259,7 @@ type Proposal = {
 const REPORT_STATUS: Record<string, string> = {
   logged: "Logged",
   looking: "Being looked at",
+  "with-claude": "Being worked on",
   "on-the-list": "Cause found, on the list to fix",
   "with-james": "With James",
   "not-a-fault": "Checked, working as intended",

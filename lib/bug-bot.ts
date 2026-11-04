@@ -39,8 +39,10 @@ import { isInternalAddress } from "@/lib/email-policy";
  * tickets recorded before today still read correctly.
  */
 
-export type BotState = "" | "looking" | "to_fix" | "fix_ready" | "needs_you" | "not_a_bug";
-export const BOT_STATES: BotState[] = ["", "looking", "to_fix", "fix_ready", "needs_you", "not_a_bug"];
+/* with_claude (4 Nov 2026): handed to a Claude Code session by Send to Claude
+   (lib/claude-tickets); it reports back as fix_ready, needs_you or not_a_bug. */
+export type BotState = "" | "looking" | "to_fix" | "fix_ready" | "needs_you" | "not_a_bug" | "with_claude";
+export const BOT_STATES: BotState[] = ["", "looking", "to_fix", "fix_ready", "needs_you", "not_a_bug", "with_claude"];
 
 /** A run that died mid-bug leaves it "looking"; after this long it goes back on the queue. */
 const STALE_HOURS = 3;
@@ -235,8 +237,8 @@ export async function record(
       p.state === "fix_ready" ? `Fix ready for you to approve: ${reported.slice(0, 60)}` : `A bug needs you: ${reported.slice(0, 60)}`;
     const text = [
       p.state === "fix_ready"
-        ? "The bug bot has prepared a fix. Nothing is live until you approve it."
-        : "The bug bot looked at this and could not fix it on its own.",
+        ? "Claude has prepared a fix. Nothing is live until you merge it."
+        : "Claude looked at this and needs you before it can go further.",
       "",
       `What was reported${rows[0].path ? ` on ${rows[0].path}` : ""}:`,
       reported,
@@ -246,8 +248,8 @@ export async function record(
       "",
       ...(p.state === "fix_ready"
         ? [
-            `To put it live, open ${pr} and press Merge pull request, or tell Claude Code "push the bug bot fix".`,
-            "Not happy with it? Close the pull request and say why on Tickets.",
+            `To put it live, open ${pr} and press Merge pull request. The ticket closes itself and the person who reported it is told when the deploy is live.`,
+            "Not happy with it? Close the pull request and press Send to Claude Again on the ticket.",
           ]
         : []),
       "",

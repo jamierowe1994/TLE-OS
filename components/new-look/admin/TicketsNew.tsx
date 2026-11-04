@@ -25,6 +25,10 @@ export type Bug = {
   botAt?: string | null;
   media?: number;
   priority: "A" | "B" | "C" | null;
+  botPr?: string;
+  context?: Record<string, unknown> | null;
+  /** The claude.ai session it was sent to (lib/claude-tickets). */
+  claudeUrl?: string;
 };
 
 export const LETTERS: Array<{ id: "A" | "B" | "C"; label: string; sub: string }> = [
@@ -52,6 +56,11 @@ type Ready = {
   openId: string | null;
   patch: (id: string, body: Record<string, unknown>) => Promise<void>;
   verdict: (b: Bug) => string;
+  /** Send to Claude (lib/claude-tickets): who may press it, and whether it is wired up. */
+  claude: { canSend: boolean; ready: boolean };
+  /** What went wrong on a press, by ticket; "Sending…" while it goes. */
+  claudeSaid: Record<string, string>;
+  sendToClaude: (id: string) => Promise<void>;
 };
 
 const STATE_WORD: Record<string, { word: string; tone: Tone }> = {
@@ -78,7 +87,15 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
       </Tab>
     );
   }
-  const { people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict } = state;
+  const { people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude } = state;
+  const open = (b: Bug) => b.state === "open" || b.state === "ack";
+  const withClaude = (b: Bug) => open(b) && b.botState === "with_claude";
+  /* Back from Claude with something for James: a fix to push, a question, or
+     an answer to send. Only tickets that went to Claude; the old bot's verdicts
+     stay on their rows. */
+  const backFromClaude = (b: Bug) => open(b) && Boolean(b.claudeUrl) && ["fix_ready", "needs_you", "not_a_bug"].includes(b.botState ?? "");
+  const claudeReply = (b: Bug) =>
+    typeof b.context?.claudeReply === "string" && !b.context?.replySentAt ? (b.context.claudeReply as string) : "";
 
   const row = (b: Bug) => {
     const st = STATE_WORD[b.state] ?? { word: b.state, tone: "neutral" as Tone };
@@ -108,7 +125,39 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
               {b.botNote ? `. ${nd(b.botNote.split("\n")[0])}` : ""}
             </p>
           )}
+          {claudeReply(b) && (
+            <div className="nl-adm-claude">
+              <p className="nl-meta"><span className="nl-strong">Claude&apos;s answer for {b.reporterEmail || "them"}</span></p>
+              <p className="nl-adm-quote">{nd(claudeReply(b))}</p>
+            </div>
+          )}
           <div className="nl-adm-row-acts">
+            {claude.canSend && open(b) && b.botState !== "with_claude" && (
+              <button
+                type="button"
+                disabled={!claude.ready || claudeSaid[b.id] === "Sending…"}
+                title={claude.ready ? "A Claude Code session on your plan works this ticket and comes back with a fix to push, a question or an answer" : "Not connected yet: the routine's address and key go on Railway"}
+                onClick={() => void sendToClaude(b.id)}
+                className={`nl-btn nl-btn--sm ${b.claudeUrl ? "nl-btn--quiet" : "nl-btn--primary"}`}
+              >
+                {claudeSaid[b.id] === "Sending…" ? "Sending…" : b.claudeUrl ? "Send to Claude Again" : "Send to Claude"}
+              </button>
+            )}
+            {b.botState === "with_claude" && b.claudeUrl && (
+              <a href={b.claudeUrl} target="_blank" rel="noreferrer" className="nl-btn nl-btn--secondary nl-btn--sm">
+                Watch Claude
+              </a>
+            )}
+            {b.botState === "fix_ready" && b.botPr && (
+              <a href={b.botPr} target="_blank" rel="noreferrer" className="nl-btn nl-btn--secondary nl-btn--sm">
+                See the Change
+              </a>
+            )}
+            {claudeReply(b) && (
+              <button type="button" onClick={() => void patch(b.id, { sendReply: true })} className="nl-btn nl-btn--primary nl-btn--sm">
+                Send Claude&apos;s Answer
+              </button>
+            )}
             <div role="group" aria-label="Priority" className="nl-toggle nl-adm-seg">
               {LETTERS.map((l) => (
                 <button key={l.id} type="button" title={l.sub} aria-pressed={b.priority === l.id} onClick={() => void patch(b.id, { priority: b.priority === l.id ? null : l.id })} className={b.priority === l.id ? "is-on" : undefined}>
@@ -134,6 +183,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
               </button>
             )}
           </div>
+          {claudeSaid[b.id] && claudeSaid[b.id] !== "Sending…" && <p className="nl-meta nl-adm-warn">{claudeSaid[b.id]}</p>}
           {b.id in shots &&
             (shots[b.id] ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -166,8 +216,15 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
     );
   };
 
-  const mine = pick(people);
-  const os = pick(auto);
+  /* Sent to Claude: out of the way until Claude has something (James, 4 Nov
+     2026: "automatically get rid of that ticket for me"). Back from Claude:
+     above everything, because each one is a single press for James. */
+  const everyOpen = [...people, ...auto];
+  const ready = show === "open" ? everyOpen.filter(backFromClaude) : [];
+  const working = show === "open" ? everyOpen.filter(withClaude) : [];
+  const parked = new Set([...ready, ...working].map((b) => b.id));
+  const mine = pick(people).filter((b) => !parked.has(b.id));
+  const os = pick(auto).filter((b) => !parked.has(b.id));
 
   return (
     <Tab>
@@ -200,6 +257,16 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
         )}
       </div>
 
+      {claude.canSend && !claude.ready && (
+        <p className="nl-meta nl-adm-warn">Send to Claude is built but not connected yet: the routine&apos;s address and key go on Railway.</p>
+      )}
+
+      {ready.length > 0 && (
+        <Section title={<>Back From Claude <span className="nl-count">{ready.length}</span></>}>
+          <ul className="nl-adm-rows">{ready.map(row)}</ul>
+        </Section>
+      )}
+
       <Section title={<>Raised by People <span className="nl-count">{mine.length}</span></>}>
         {mine.length === 0 ? <p className="nl-empty">Nothing here. Steve sits in the bottom right of every screen; what people report through him lands here.</p> : <ul className="nl-adm-rows">{mine.map(row)}</ul>}
       </Section>
@@ -207,6 +274,15 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
       <Section title={<>Logged by the OS Itself <span className="nl-count">{os.length}</span></>}>
         {os.length === 0 ? <p className="nl-empty">Nothing open.</p> : <ul className="nl-adm-rows">{os.map(row)}</ul>}
       </Section>
+
+      {working.length > 0 && (
+        <details className="nl-adm-more nl-adm-after">
+          <summary>
+            With Claude ({working.length}). Each comes back to the top when Claude has a fix, a question or an answer.
+          </summary>
+          <ul className="nl-adm-rows">{working.map(row)}</ul>
+        </details>
+      )}
     </Tab>
   );
 }
