@@ -14,6 +14,7 @@ import { queueVideoChase, queuedVideoChase, VIDEO_CHASE_KIND } from "@/lib/video
 import { presentationsFor, updatePresentation } from "@/lib/present-store";
 import { addTouch } from "@/lib/lead-touches";
 import { isTestFile } from "@/lib/test-guard";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * CANCEL AND REARRANGE A MARKET APPRAISAL (James, 15 Oct 2026).
@@ -92,7 +93,7 @@ export async function mayChangeAppraisal(me: OsUser, ma: MarketAppraisal, booker
   const agent = await agentUserFor(ma).catch(() => null);
   if (agent) return agent.id === me.id;
   const named = (ma.agent ?? "").trim().toLowerCase();
-  if (named) return named === (me.name ?? "").trim().toLowerCase() || named === (me.email ?? "").toLowerCase();
+  if (named) return sameAgent(named, me.name) || named === (me.email ?? "").toLowerCase();
   return bookerId === me.id;
 }
 

@@ -9,6 +9,7 @@ import { feeOf, otherOpenOffers, releaseOthers } from "@/lib/offer-hold";
 import { isIntroOnly } from "@/lib/intro-only";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { advertFor } from "@/lib/advert-offline";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * GET  /api/offers/release-others?application=<id>
@@ -40,7 +41,7 @@ async function load(req: NextRequest, applicationId: string) {
   const app = await getApplicationById(applicationId).catch(() => null);
   if (!app || !app.listingId) return { error: NextResponse.json({ ok: false, error: "That application isn't there." }, { status: 404 }) };
   /* An agent acts on their own applications, as the journey route decides. */
-  if (!can(me.role, "staff:internal") && app.agent && app.agent.trim().toLowerCase() !== (me.name ?? "").trim().toLowerCase()) {
+  if (!can(me.role, "staff:internal") && app.agent && !sameAgent(app.agent, me.name)) {
     return { error: NextResponse.json({ ok: false, error: `That application is ${app.agent.split(/\s+/)[0]}'s.` }, { status: 403 }) };
   }
   const accepted =

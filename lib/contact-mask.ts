@@ -1,3 +1,4 @@
+import { sameAgent } from "@/lib/agent-name";
 import { can, type Role } from "@/lib/roles";
 
 /**
@@ -65,6 +66,5 @@ export function maskContactFields<T>(o: T): T {
 
 /** Is this record's agent (a name, as appraisals keep it) this person? */
 export function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
-  const n = (x: string | null | undefined) => (x ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  return Boolean(n(a)) && n(a) === n(b);
+  return sameAgent(a, b);
 }

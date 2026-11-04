@@ -17,6 +17,7 @@ import { letTenants } from "@/lib/let-tenants";
 import { dealForLet, type LetDeal } from "@/lib/let-deal";
 import { isOwnerReln } from "@/lib/rex-reln";
 import { can } from "@/lib/roles";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * Who is on a let, read on the server from the let itself - never from the
@@ -90,7 +91,7 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
 
   if (app) {
     /* An agent reads their own lets, as the journey route does. */
-    if (me.role === "agent" && app.agent && !sameName(app.agent, me.name)) {
+    if (me.role === "agent" && app.agent && !sameAgent(app.agent, me.name)) {
       return { ok: false, status: 403, error: `That let is ${app.agent.split(/\s+/)[0]}'s.` };
     }
     const listingId = app.listingId != null ? String(app.listingId) : null;
@@ -145,7 +146,7 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
   const deals = await getAllPropolyDeals().catch(() => null);
   const d = deals?.find((x) => x.app.id === ref) ?? null;
   if (!d) return { ok: false, status: 404, error: "That let isn't here any more." };
-  if (me.role === "agent" && d.managerName && !sameName(d.managerName.split(/\s+/)[0], (me.name ?? "").split(/\s+/)[0])) {
+  if (me.role === "agent" && d.managerName && !sameName(d.managerName.split(/\s+/)[0], (me.name ?? "").split(/\s+/)[0]) && !sameAgent(d.managerName, me.name)) {
     return { ok: false, status: 403, error: `That let is ${d.managerName.split(/\s+/)[0]}'s.` };
   }
   const listingId = d.app.listingId ?? null;
@@ -206,7 +207,7 @@ export async function letAccess(ref: string, me: OsUser): Promise<{ ok: true; ap
   if (isTestId(ref)) app = (await testApplication(ref).catch(() => null))?.app ?? null;
   else if (!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(ref)) app = await getApplicationById(ref).catch(() => null);
   if (app) {
-    if (me.role === "agent" && app.agent && !sameName(app.agent, me.name)) return { ok: false, status: 403, error: `That let is ${app.agent.split(/\s+/)[0]}'s.` };
+    if (me.role === "agent" && app.agent && !sameAgent(app.agent, me.name)) return { ok: false, status: 403, error: `That let is ${app.agent.split(/\s+/)[0]}'s.` };
     const listingId = app.listingId != null ? String(app.listingId) : null;
     const deal = await dealForLet({ ref, app, propertyName: app.property, locality: app.locality, listingId }).catch(() => null);
     return { ok: true, app, dealId: deal?.id ?? null, canEdit: me.role === "agent" || office };
@@ -214,7 +215,7 @@ export async function letAccess(ref: string, me: OsUser): Promise<{ ok: true; ap
   const deals = await getAllPropolyDeals().catch(() => null);
   const d = deals?.find((x) => x.app.id === ref) ?? null;
   if (!d) return { ok: false, status: 404, error: "That let isn't here any more." };
-  if (me.role === "agent" && d.managerName && !sameName(d.managerName.split(/\s+/)[0], (me.name ?? "").split(/\s+/)[0])) {
+  if (me.role === "agent" && d.managerName && !sameName(d.managerName.split(/\s+/)[0], (me.name ?? "").split(/\s+/)[0]) && !sameAgent(d.managerName, me.name)) {
     return { ok: false, status: 403, error: `That let is ${d.managerName.split(/\s+/)[0]}'s.` };
   }
   return { ok: true, app: null, dealId: d.app.id, canEdit: me.role === "agent" || office };

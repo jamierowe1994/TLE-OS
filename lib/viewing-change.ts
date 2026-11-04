@@ -9,6 +9,7 @@ import { heldDiary } from "@/lib/diary-cache";
 import { recordViewingCancelled, viewingCancelledAlready } from "@/lib/viewing-cancelled";
 import { escapeHtml, renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * CANCELLING OR MOVING A VIEWING, IN-HOUSE (15 Sep 2026).
@@ -147,7 +148,7 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
     if (!a) return null;
     const owner = (a.agentEmail ?? "").toLowerCase();
     if (owner) return owner === (me.email ?? "").toLowerCase() || owner === myRexEmail;
-    return Boolean(me.name) && (a.agent ?? "").trim().toLowerCase() === (me.name ?? "").trim().toLowerCase();
+    return sameAgent(a.agent, me.name);
   };
 
   /* REX: the diary id is rex-<event id> for anything REX holds. */
@@ -177,7 +178,7 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
       const who = ev.organiser_user ?? ev.calendar?.owner_user ?? null;
       const mine = await ensureRexLink(me).catch(() => null);
       const byId = who?.id != null && mine ? String(who.id) === String(mine) : null;
-      const byName = (who?.name ?? "").trim().toLowerCase() === (me.name ?? "").trim().toLowerCase() && Boolean(me.name);
+      const byName = sameAgent(who?.name, me.name);
       if (!(byId === true || (byId === null && byName))) {
         const first = (who?.name ?? "").trim().split(/\s+/)[0];
         return { ok: false, said: first ? `That viewing is ${first}'s. Only they can cancel or move it.` : "That viewing is another agent's. Only they can cancel or move it.", steps: { rex: "Not changed." } };

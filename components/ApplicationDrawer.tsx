@@ -413,7 +413,11 @@ const REMINDERS: Template[] = [
 
 type LetPerson = { name: string; email: string | null; phone: string | null; contactId: string | null; isPrimary: boolean };
 type LetLandlord = { name: string; email: string | null; phone: string | null; contactId: string | null; from?: "rex" | "record" };
-type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string };
+/* `failed` (4 Nov 2026): who is on the let couldn't be read at all. Not the
+   same as "no landlord": 12 South Chesters Lane's page and Steve both said
+   there was none, and asked Lianna to add one, when the read had been
+   refused - her landlord was on the listing all along. */
+type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string; failed?: string };
 type Cancellation = { reason: string; note: string; by: string; at: string };
 type LetDetails = { canEdit: boolean; dealId: string | null; edits: Partial<Record<LetField, LetEditNow>>; history: LetEditEvent[] };
 
@@ -788,21 +792,22 @@ export default function ApplicationDrawer({
       .then(takePeople)
       .catch(() => { /* the cards keep what they show */ });
   }, [letId, takePeople]);
+  const [peopleTry, setPeopleTry] = useState(0);
   useEffect(() => {
     if (!letId) return;
     let live = true;
     fetch(`/api/applications/${encodeURIComponent(letId)}/people`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; let?: LetInfo; cancelled?: Cancellation | null; propoly?: Picture | null }) => {
+      .then((j: { ok?: boolean; error?: string; let?: LetInfo; cancelled?: Cancellation | null; propoly?: Picture | null }) => {
         if (!live) return;
         if (j.ok && j.let) setInfo(j.let);
-        else setInfo({ tenants: [], landlord: null, landlordProblem: "Who is on this let couldn't be read just now.", listingId: null });
+        else setInfo({ tenants: [], landlord: null, landlordProblem: null, listingId: null, failed: j.error ?? "Who is on this let couldn't be read just now." });
         setPicture(j.propoly ?? null);
         setCancelled(j.cancelled ?? null);
       })
-      .catch(() => live && setInfo({ tenants: [], landlord: null, landlordProblem: "Who is on this let couldn't be read just now.", listingId: null }));
+      .catch(() => live && setInfo({ tenants: [], landlord: null, landlordProblem: null, listingId: null, failed: "Who is on this let couldn't be read just now." }));
     return () => { live = false; };
-  }, [letId]);
+  }, [letId, peopleTry]);
 
   /* The let's figures as put right in the OS, and every change made on it
      (lib/let-edits, 1 Nov 2026): the new look's Edit on The Deal. */
@@ -1456,6 +1461,11 @@ export default function ApplicationDrawer({
                         </Link>
                       )}
                     </>
+                  ) : info.failed ? (
+                    <div className="rounded-xl bg-[#f6f1ea] px-4 py-3 text-[12.5px] text-muted">
+                      <p><b className="font-semibold text-ink">The landlord couldn&rsquo;t be read just now.</b> {info.failed} Nothing is missing from the file.</p>
+                      <button type="button" onClick={() => setPeopleTry((n) => n + 1)} className="mt-2.5 rounded-full border border-line px-3.5 py-1.5 text-[12px] font-semibold text-ink">Try again</button>
+                    </div>
                   ) : (
                     <div className="rounded-xl bg-[#fdefec] px-4 py-3 text-[12.5px] text-[#9d4340]">
                       <p><b className="font-semibold">No landlord on this let.</b> Every let needs one. {info.landlordProblem ?? ""}</p>
@@ -1550,7 +1560,7 @@ export default function ApplicationDrawer({
     const landlordFirst = landlordsAll[0] ?? null;
     const landlordName = landlordFirst?.name ?? info?.landlord?.name ?? null;
     const landlordPhone = landlordFirst?.phone ?? info?.landlord?.phone ?? null;
-    const noLandlord = info !== null && !landlordsAll.length && !info.landlord;
+    const noLandlord = info !== null && !info.failed && !landlordsAll.length && !info.landlord;
     const plcHref = plcStartHref;
     const plcCan = Boolean(plcHref) && !intro && !cancelled && plcReady && !plcDone;
     const plcLabel = plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check";
@@ -2174,6 +2184,11 @@ export default function ApplicationDrawer({
                         {!cancelled && <button type="button" className="nl-link" onClick={() => setBuilder({ mode: "update", start: { kind: "general", to: "landlord" } })}>Send update</button>}
                         <button type="button" className="nl-link" onClick={() => setAddLandlordOpen(true)}>Add landlord</button>
                       </div>
+                    </>
+                  ) : info.failed ? (
+                    <>
+                      <p className="nl-meta"><b className="font-semibold text-ink">The landlord couldn&rsquo;t be read just now.</b> {info.failed} Nothing is missing from the file.</p>
+                      <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" onClick={() => setPeopleTry((n) => n + 1)}>Try again</button>
                     </>
                   ) : (
                     <>

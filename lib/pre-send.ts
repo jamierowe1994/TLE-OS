@@ -14,6 +14,7 @@ import { mintRecordLink } from "@/lib/record-link";
 import { skyListShell } from "@/lib/email/shell-sky";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 import { PRE_SEND_HOLD_MS, PRE_SEND_SOON_MS, londonClock, preSendWhen, type PreOnBooking } from "@/lib/pre-send-time";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * Sending the pre-presentation: at booking, and on the agent's Send.
@@ -60,7 +61,7 @@ export async function agentUserFor(ma: MarketAppraisal): Promise<OsUser | null> 
 export function bookedBySelf(me: OsUser, agent: OsUser | null, ma: MarketAppraisal): boolean {
   if (agent) return agent.id === me.id;
   const named = (ma.agent ?? "").trim().toLowerCase();
-  return !named || named === me.name.trim().toLowerCase() || named === me.email.toLowerCase();
+  return !named || sameAgent(named, me.name) || named === me.email.toLowerCase();
 }
 
 const whenPrettyOf = (iso: string | null) =>

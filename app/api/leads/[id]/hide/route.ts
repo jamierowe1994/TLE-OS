@@ -5,6 +5,7 @@ import { hideLead, unhideLead } from "@/lib/hidden-leads";
 import { q } from "@/lib/db";
 import { ensureRexLink } from "@/lib/users";
 import { heldBy, ownerOf } from "@/lib/lead-owner";
+import { sameAgent } from "@/lib/agent-name";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ async function act(req: NextRequest, ctx: { params: Promise<{ id: string }> }, h
     if (lead) {
       const mine = await ensureRexLink(actor).catch(() => null);
       const byId = lead.assignee_id && mine ? String(lead.assignee_id) === String(mine) : null;
-      const byName = (lead.agent ?? "").trim().toLowerCase() === (actor.name ?? "").trim().toLowerCase() && Boolean(actor.name);
+      const byName = sameAgent(lead.agent, actor.name);
       if (!(byId === true || (byId === null && byName))) {
         return NextResponse.json({ ok: false, error: `That lead is ${(lead.agent ?? "another agent").split(/\s+/)[0]}'s. Only they can take it off the board.` }, { status: 403 });
       }

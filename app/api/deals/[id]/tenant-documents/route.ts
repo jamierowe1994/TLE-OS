@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { letTenantEmails, letTenantFiles } from "@/lib/let-tenant-files";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * What the tenants on one let have sent in, for the agent's side of the file.
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
   const who = await letTenantEmails(id);
-  if (actor.role === "agent" && who.agent && firstName(who.agent) !== firstName(actor.name)) {
+  if (actor.role === "agent" && who.agent && firstName(who.agent) !== firstName(actor.name) && !sameAgent(who.agent, actor.name)) {
     return NextResponse.json({ ok: false, error: `That let is ${who.agent.split(/\s+/)[0]}'s.` }, { status: 403 });
   }
   return NextResponse.json({ ok: true, documents: await letTenantFiles(id, who) }, { headers: { "cache-control": "private, no-store" } });

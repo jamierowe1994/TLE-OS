@@ -15,6 +15,7 @@ import { decisionsFor } from "@/lib/offer-decisions";
 import { can } from "@/lib/roles";
 import type { OsUser } from "@/lib/users";
 import { isTestId, pushTestDeal, testApplication, testDealPushed, type TestDeal } from "@/lib/test-overlay";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * GET  /api/handoff?application=37709 → the packet, what's missing, the mode,
@@ -55,7 +56,7 @@ function isOffice(me: OsUser) {
 }
 function notTheirs(me: OsUser, agent: string | null | undefined): string | null {
   if (isOffice(me) || !agent) return null;
-  return agent.trim().toLowerCase() === (me.name ?? "").trim().toLowerCase() ? null : `That application is ${agent.split(/\s+/)[0]}'s.`;
+  return sameAgent(agent, me.name) ? null : `That application is ${agent.split(/\s+/)[0]}'s.`;
 }
 
 /**

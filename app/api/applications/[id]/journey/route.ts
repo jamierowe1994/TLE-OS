@@ -9,6 +9,7 @@ import { isIntroOnly } from "@/lib/intro-only";
 import { isTestId, testApplication, testJourney } from "@/lib/test-overlay";
 import { getCase } from "@/lib/plc-store";
 import { caseIdFor } from "@/lib/plc";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * GET /api/applications/{id}/journey → the spine, the agent's actions, and
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   if (!app) return NextResponse.json({ ok: false, error: `No application ${id}.` }, { status: 404 });
   /* An agent reads their own applications (18 Sep sweep, item 4). The
      application names its agent; owners and the office are not gated. */
-  if (me.role === "agent" && app.agent && app.agent.trim().toLowerCase() !== (me.name ?? "").trim().toLowerCase()) {
+  if (me.role === "agent" && app.agent && !sameAgent(app.agent, me.name)) {
     return NextResponse.json({ ok: false, error: `That application is ${app.agent.split(/\s+/)[0]}'s.` }, { status: 403 });
   }
 

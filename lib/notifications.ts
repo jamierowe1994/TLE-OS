@@ -21,6 +21,7 @@ import { bookFor } from "@/lib/listings-cache";
 import type { OsListing } from "@/lib/rex-listings";
 import { recentTenantSends } from "@/lib/tenant-documents";
 import { termsForAgent } from "@/lib/terms/store";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -292,7 +293,7 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   }
   for (const b of booked) {
     const when = new Date(b.startsAt).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-    const mine = b.agent.toLowerCase() === (me.name ?? "").toLowerCase();
+    const mine = sameAgent(b.agent, me.name);
     out.push({
       id: `booked:${b.id}`,
       kind: "lead",

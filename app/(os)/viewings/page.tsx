@@ -29,6 +29,7 @@ import { useNewLook } from "@/lib/use-new-look";
 import { Mast, Menu, Tabs, Ico } from "@/components/new-look/Parts";
 import { DiaryRows, MonthGrid, Spinner, dayLabel } from "@/components/new-look/diary/DiaryParts";
 import { openGuide } from "@/lib/guide-sheet";
+import { sameAgent } from "@/lib/agent-name";
 
 /**
  * Viewings: one screen, one person's diary.
@@ -132,7 +133,7 @@ export default function Viewings() {
     if (fAgent !== undefined || loading || !me) return;
     if (!everything) return setFAgent(null);
     const mine = DIARY.find(
-      (a) => (me.email && (a.agentEmail ?? "").toLowerCase() === me.email) || (me.name && a.agent === me.name)
+      (a) => (me.email && (a.agentEmail ?? "").toLowerCase() === me.email) || (me.name && sameAgent(a.agent, me.name))
     );
     setFAgent(mine ? mine.agent : null);
   }, [fAgent, loading, me, everything, DIARY]);
