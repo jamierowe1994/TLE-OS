@@ -228,7 +228,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
 
   return (
     <Tab>
-      <p className="nl-meta nl-adm-lede">What people raise. A is broken, C is a recommendation, B is everything else. The bot sorts a fault when it has looked; an idea is a C the moment it lands. Change a letter by pressing it.</p>
+      <p className="nl-meta nl-adm-lede">What people raise. A is broken, C is a recommendation, B is everything else; an idea is a C the moment it lands. Change a letter by pressing it. Send to Claude hands a ticket to Claude, and it comes back here with a fix to push, a question or an answer.</p>
 
       <ul className="nl-adm-figs" aria-label="Open tickets by letter">
         {(["A", "B", "C", "none"] as const).map((k) => (
