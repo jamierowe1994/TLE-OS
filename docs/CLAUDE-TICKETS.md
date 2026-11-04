@@ -21,6 +21,14 @@ other reports this week (`sameReporterRecent`: a repeat of an earlier one is one
 `/tmp/shot.jpg` is the screen as it looked when they reported it: look at it before anything else, it usually
 names the home. Keep both out of the repository.
 
+**What you can't see.** You have the code and this one ticket. You cannot see the live database: which homes,
+lets, take-ons, Propoly deals or REX records exist, what they hold, or how the Admin switches are set. Anything
+you say about a particular home, person, deal or switch is a guess unless the ticket shows it (their words, the
+page they were on, their screenshot). Never tell anyone a button, tile, record or deal is there for them unless
+the ticket shows it. When the answer depends on what exists, report `needs_you` with what to check and what to do
+in each case. (4 Nov 2026: a run told an agent to press a button on a take-on page for a home that had never been
+taken on, and James had to find that out.)
+
 ## 2. Decide what it is
 
 | It is | Do |
@@ -28,8 +36,8 @@ names the home. Keep both out of the repository.
 | Broken code, or details that don't pull through from one screen to the next | Fix it (step 3) |
 | "How do I…" / a question the product already answers | Report `not_a_bug` with the answer, written to them, and name the button with `--do` |
 | A new feature, a process choice, money, anything to do with what customers are sent | Report `needs_you` with the one decision James must make, and your recommendation |
-| Something only live data can settle (which home, what REX or Propoly holds) | Report `needs_you` saying exactly what to look up; a session on James's Mac can read the live database |
-| Asking James to press something for them (push to Propoly, take an advert down) | Report `needs_you`, naming the button with `--do` so James or they can press it in one go |
+| Something only live data can settle (which home, what REX or Propoly holds, whether a take-on or deal exists, how a switch is set) | Report `needs_you` saying exactly what to look up and what each answer means; a session on James's Mac can read the live database |
+| Asking James to press something for them (push to Propoly, take an advert down) | Report `needs_you`, naming the button with `--do` so James or they can press it in one go, only when the ticket shows that screen exists for that record (they raised it there, or the screenshot shows it); otherwise say where to look |
 
 Most "details don't pull through" tickets are one screen reading a fact from a different place than the screen
 where it was typed. Find both readers before changing either; fix the reader, never the person's data.
@@ -89,7 +97,7 @@ node scripts/claude-ticket.mjs report not_a_bug /tmp/note.txt '' '' /tmp/reply.t
 - If you can show the change, a picture of the screen you changed (before and after, say), add up to four with
   `--shot <file>` on the report line (PNG, JPEG or WebP, 5MB each). They go to the OS, not the repository.
 - Don't send a push notification of your own: the OS tells James when you report.
-- When your answer is a button to press, name it: `--do <the screen's path> --point <the button's handle> --label
+- When your answer is a button to press, and the ticket shows that screen exists for that record, name it: `--do <the screen's path> --point <the button's handle> --label
   "<the button's words>"`, e.g. `--do /listings/854418 --point listing.take-offline --label "Take Offline"`. The
   ticket's Do It opens that screen with Steve's guide on the button, and Send Claude's Answer gives the person the
   same link. The handle is the button's `data-steve="…"` (`grep -rn 'data-steve="' components app`); a button
