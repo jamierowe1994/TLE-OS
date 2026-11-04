@@ -311,26 +311,26 @@ export type EditedPart = "name" | "email" | "phone";
  * is nothing to send in its place, and an empty one would stop the tenant
  * going to Propoly at all. `editedOnLet` names what was put right, so the
  * push takes it over the REX contact's own copy (lib/handover
- * tenantAttributes). With `added`, the people added to the let
- * (lib/let-tenants) follow, once each - the PLC check's, not the push's,
- * which has its own switch for them.
+ * tenantAttributes), and `editedAt` when. With `added`, the people added to
+ * the let (lib/let-tenants) follow, once each - the PLC check's and the
+ * Flatfair draft's, not the push's, which has its own switch for them.
  */
 export async function tenantsAsOnLet<T extends { name: string; email: string | null; phone: string | null; contactId: string | null }>(
   ref: string,
   tenants: T[],
   o: { source?: "rex" | "propoly"; added?: (t: LetTenant) => T } = {}
-): Promise<Array<T & { editedOnLet?: EditedPart[] }>> {
+): Promise<Array<T & { editedOnLet?: EditedPart[]; editedAt?: string }>> {
   const [edits, added] = await Promise.all([
     personEdits(ref).catch(() => new Map<string, PersonEdit>()),
     o.added ? letTenants(ref).catch(() => [] as LetTenant[]) : Promise.resolve([] as LetTenant[]),
   ]);
-  const out: Array<T & { editedOnLet?: EditedPart[] }> = tenants.map((t, i) => {
+  const out: Array<T & { editedOnLet?: EditedPart[]; editedAt?: string }> = tenants.map((t, i) => {
     const e = edits.get(tenantKey(t, i, o.source ?? "rex"));
     const name = e?.name?.trim() || null;
     const email = e?.email?.trim() || null;
     const phone = e?.phone?.trim() || null;
     const parts = (["name", "email", "phone"] as const).filter((p) => ({ name, email, phone })[p]);
-    return parts.length ? { ...t, ...(name ? { name } : {}), ...(email ? { email } : {}), ...(phone ? { phone } : {}), editedOnLet: [...parts] } : t;
+    return parts.length && e ? { ...t, ...(name ? { name } : {}), ...(email ? { email } : {}), ...(phone ? { phone } : {}), editedOnLet: [...parts], editedAt: e.at } : t;
   });
   if (o.added) {
     const held = new Set(out.map((t) => (t.email ?? t.name).trim().toLowerCase()));

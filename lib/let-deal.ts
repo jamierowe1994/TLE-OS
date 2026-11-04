@@ -3,7 +3,8 @@ import { hasDb, q } from "@/lib/db";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { propolyDealUrl } from "@/lib/business/propoly-stages";
 import { sameHome } from "@/lib/address-parse";
-import type { Application } from "@/lib/applications";
+import { getApplications, type Application } from "@/lib/applications";
+import { isLet } from "@/lib/application-record";
 import { letEditsFor, withOwnLetEdits } from "@/lib/let-edits";
 
 /**
@@ -62,6 +63,39 @@ export async function dealForLet(f: Find): Promise<LetDeal | null> {
   const start = f.app?.startDate ? Date.parse(f.app.startDate) : NaN;
   const best = sameAddress.sort((a, b) => gap(a, start) - gap(b, start))[0];
   return best ? shape(await withLetsFigures(best, f), "On the same home.") : null;
+}
+
+type Named = { name: string | null; email: string | null };
+const low = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+/** One person, as the let page matches the deal's people with its own (lib/let-propoly-sync): the email, else the name. */
+export const samePerson = (a: Named, b: Named) => Boolean((low(a.email) && low(a.email) === low(b.email)) || (low(a.name) && low(a.name) === low(b.name)));
+
+/**
+ * THE LET A DEAL BELONGS TO, dealForLet the other way round (4 Nov 2026), for
+ * what starts from the deal - the Flatfair draft - and reads the people as
+ * the let has them, kept under the let's own id. The application the OS
+ * pushed into this deal; else the let whose page finds this deal on its
+ * listing or its home AND names one of its tenants, an accepted one first,
+ * the newest first - a listing carries every application ever made on it,
+ * and on 4 Nov the newest of those named other people altogether on three
+ * open deals in twenty-one; else the deal itself, a let opened as its deal.
+ */
+export async function letForDeal(deal: BusinessDeal): Promise<{ ref: string; app: Application | null }> {
+  const id = deal.app.id;
+  const apps = await getApplications(300).catch(() => [] as Application[]);
+  const pushed = apps.find((a) => a.propolyDealId === id);
+  if (pushed) return { ref: String(pushed.id), app: pushed };
+  const listing = deal.app.listingId != null ? String(deal.app.listingId) : null;
+  const here = `${deal.app.propertyName}, ${deal.app.locality}`;
+  const near = apps
+    .filter((a) => !a.swap && ((listing && a.listingId != null && String(a.listingId) === listing) || sameHome(here, `${a.property}, ${a.locality}`)))
+    .filter((a) => a.applicants.some((p) => deal.app.tenants.some((t) => samePerson(p, t))))
+    .sort((a, b) => Number(isLet(b)) - Number(isLet(a)));
+  for (const a of near.slice(0, 6)) {
+    const found = await dealForLet({ ref: String(a.id), app: a, propertyName: a.property, locality: a.locality, listingId: a.listingId != null ? String(a.listingId) : null }).catch(() => null);
+    if (found?.id === id) return { ref: String(a.id), app: a };
+  }
+  return { ref: id, app: null };
 }
 
 /*
