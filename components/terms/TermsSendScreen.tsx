@@ -85,7 +85,17 @@ type Known = { name?: string | null; email?: string | null; phone?: string | nul
 
 /** Their home address: not decided yet, put on the contract, or left for them to add when they sign. */
 type Home = "unset" | "set" | "skip";
-type Person = { name: string; email: string; phone: string; home: string; homeIs: Home };
+/** Where an address already on file came from (lib/landlord-home), and the address as it came. */
+type Found = { source: string; saved: boolean; address: string };
+type Person = { name: string; email: string; phone: string; home: string; homeIs: Home; found?: Found | null };
+
+const FOUND_FROM: Record<string, string> = {
+  agent: "their record",
+  "same-as-property": "their record",
+  "new-listing": "their record",
+  payprop: "PayProp",
+  rex: "their contact",
+};
 
 /**
  * A home address typed in rather than picked (James, 24 Oct 2026: "if they can't find the
@@ -93,13 +103,22 @@ type Person = { name: string; email: string; phone: string; home: string; homeIs
  * postcode"). Null when it will do; otherwise what it still needs.
  */
 const POSTCODE = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/i;
+/* The last part naming the UK means it is a UK home after all, so it needs its postcode. */
+const UK_LAST = /^(uk|u\.k\.?|united kingdom|great britain|gb|england|scotland|wales|northern ireland)\.?$/i;
 function typedHomeProblem(text: string): string | null {
   const t = text.trim();
   if (!t) return null;
-  if (!POSTCODE.test(t)) return "Add the postcode to their home address.";
+  const uk = POSTCODE.test(t);
   const parts = t.replace(POSTCODE, "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
   const first = parts[0] ?? "";
   if (!/\d/.test(first) && first.split(/\s+/).length < 2) return "Start their home address with the house number or name.";
+  /* A home abroad (Sean McMahon, 4 Nov 2026: a landlord in Trieste, refused
+     for having no UK postcode). It has no postcode we can check, so it is
+     taken typed in full: the street, the town and the country last. */
+  if (!uk) {
+    if (parts.length < 3 || UK_LAST.test(parts[parts.length - 1])) return "Add the postcode, or for a home outside the UK, end with the town and the country.";
+    return null;
+  }
   if (parts.length < 2) return "Add the town to their home address, after a comma.";
   return null;
 }
@@ -251,6 +270,56 @@ export default function TermsSendScreen({
     const known = landlords.filter((l) => l.name || l.email).map((l) => ({ name: l.name ?? "", email: l.email ?? "", phone: l.phone ?? "", home: "", homeIs: "unset" as Home }));
     return known.length ? known : [{ name: "", email: "", phone: "", home: "", homeIs: "unset" }];
   });
+
+  /* THE ADDRESS WE ALREADY HAVE (Sean McMahon, 4 Nov 2026: "TOB asking for
+     landlord's home address, when it is already on the system"). Each
+     landlord whose box is still open is looked up once by email: what an
+     agent saved on their record, else PayProp's owner address, else their
+     contact (lib/landlord-home). Put in the box for the agent to check, with
+     where it came from; Change still opens it. */
+  const looked = useRef(false);
+  useEffect(() => {
+    if (signing || looked.current) return;
+    looked.current = true;
+    let live = true;
+    people.forEach((p, i) => {
+      const email = p.email.trim();
+      if (p.homeIs !== "unset" || p.home.trim() || !EMAIL.test(email)) return;
+      const u = new URLSearchParams({ email, name: p.name, property: address });
+      fetch(`/api/people/home-address?${u}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j) => {
+          const h = j?.home;
+          if (!live || !h || typeof h.address !== "string" || !h.address.trim()) return;
+          const found: Found = { source: String(h.source ?? ""), saved: Boolean(h.saved), address: h.address.trim() };
+          /* Only into a box nobody has touched since it opened. */
+          setPeople((ps) => ps.map((x, j2) => (j2 === i && x.homeIs === "unset" && !x.home.trim() && x.email.trim() === email ? { ...x, home: found.address, homeIs: "set", found } : x)));
+        })
+        .catch(() => {});
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* What the agent settles on goes back on the landlord's record, so the
+     next contract, the lead and the PLC pack start from it. Not when it is
+     the saved address unchanged, and never to REX or PayProp. */
+  function keepHomes(ps: Person[]) {
+    for (const p of ps) {
+      const email = p.email.trim().toLowerCase();
+      const home = p.home.trim();
+      if (p.homeIs !== "set" || !home || !EMAIL.test(email)) continue;
+      if (p.found?.saved && p.found.address === home) continue;
+      const kept = p.found && p.found.address === home && (p.found.source === "payprop" || p.found.source === "rex") ? p.found.source : undefined;
+      void fetch("/api/people/home-address", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, name: p.name.trim(), address: home, sameAsProperty: home === address.trim(), source: kept }),
+      }).catch(() => {});
+    }
+  }
 
   const base = signing ?? from;
   /* Opened from a change of service on the home's page (2 Nov 2026): that service is chosen,
@@ -512,7 +581,11 @@ export default function TermsSendScreen({
   function detailsRight() {
     if (detailsProblem && !fixed) return;
     /* A home address still open: typed in full goes on the contract; blank, they add it when they sign. */
-    if (!fixed) setPeople((ps) => ps.map((x) => (x.homeIs !== "unset" ? x : x.home.trim() ? { ...x, home: x.home.trim(), homeIs: "set" } : { ...x, homeIs: "skip" })));
+    if (!fixed) {
+      const settled = people.map((x): Person => (x.homeIs !== "unset" ? x : x.home.trim() ? { ...x, home: x.home.trim(), homeIs: "set" } : { ...x, homeIs: "skip" }));
+      setPeople(settled);
+      keepHomes(settled);
+    }
     setEditing(null);
     setOkDetails(true);
     setStep(sig ? 2 : 1);
@@ -844,14 +917,17 @@ export default function TermsSendScreen({
           {p.homeIs !== "unset" ? (
             <div className="addr-set">
               {p.homeIs === "set" ? <Ic k="check" w={2.4} /> : null}
-              <span>{p.homeIs === "set" ? p.home : "Not given. They add it before they sign."}</span>
+              <span>
+                {p.homeIs === "set" ? p.home : "Not given. They add it before they sign."}
+                {p.homeIs === "set" && p.found && p.found.address === p.home ? <small className="addr-from"> From {FOUND_FROM[p.found.source] ?? "their record"}: check it is still right.</small> : null}
+              </span>
               {!locked && (
                 <button type="button" className="chg" onClick={() => setPerson(i, { homeIs: "unset" })}>Change</button>
               )}
             </div>
           ) : (
             <>
-              <p>It goes on the contract. Pick it from the list, or type it in full: number or house name, street, town and postcode. Not required: left blank, they add it before they sign.</p>
+              <p>It goes on the contract. Pick it from the list, or type it in full: number or house name, street, town and postcode, or the town and country for a home abroad. Not required: left blank, they add it before they sign.</p>
               <HomeSearch
                 id={`tsa-home-${i}`}
                 start={p.home}
@@ -1307,7 +1383,7 @@ function HomeSearch({ id, start, onSet, onType }: { id: string; start: string; o
               </li>
             ))
           ) : (
-            <li style={{ color: "var(--faint)", cursor: "default" }}>No match. Type it in full (number or house name, street, town, postcode) and carry on.</li>
+            <li style={{ color: "var(--faint)", cursor: "default" }}>No match. Type it in full (number or house name, street, town, postcode, or the country if they live abroad) and carry on.</li>
           )}
         </ul>
       )}
