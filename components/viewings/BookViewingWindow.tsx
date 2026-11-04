@@ -274,7 +274,9 @@ export default function BookViewingWindow(props: ViewingBookerProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, home?.id]);
-  const tenant = people?.tenant ?? null;
+  /* Office keys means nobody lives there (Sean McMahon, 4 Nov 2026): no
+     tenant is shown or sent notice, whatever a listing still has on it. */
+  const tenant = access === "vacant" ? null : people?.tenant ?? null;
 
   /* ── the diary: the booking agent's own day, as the old booker reads it ── */
   const { appts: allAppts, everything, loading: diaryLoading, outlook } = useDiary();

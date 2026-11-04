@@ -93,7 +93,12 @@ export async function peopleForProperty(propertyId: string): Promise<PropertyPeo
   const out: PropertyPeople = { ...empty };
   for (const r of ordered) {
     if (!out.landlord) out.landlord = partiesOf(r, "owner")[0] ?? null;
-    if (out.tenants.length === 0) out.tenants = partiesOf(r, "purchtenant");
+    /* Tenants only from a let listing (Sean McMahon, 4 Nov 2026, ticket
+       7a042b50). On a listing still on the market, `purchtenant` is whoever
+       was accepted onto it, not who lives there: Nicolas Gregg was accepted
+       on 59 Fairley Street, failed referencing, stayed on the listing, and
+       was sent notice of every viewing at the empty flat. */
+    if (out.tenants.length === 0 && leased.includes(r)) out.tenants = partiesOf(r, "purchtenant");
     if (out.lat == null) {
       const prop = (r.property ?? {}) as Row;
       out.lat = num(prop.adr_latitude ?? r.adr_latitude);

@@ -8,6 +8,7 @@ import { can } from "@/lib/roles";
 import { createOrder, listOrders, listContractors, worksSummary, logEvent, moveOrder, KINDS, type Kind, type NewOrder, type MoveOut } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 import { alreadyTakenOn, carriedJobs, markTakenOn, withCarried } from "@/lib/works-carried";
+import { homePeople } from "@/lib/home-people";
 import { landlordKey, landlordPrefsFor, ringsForApproval } from "@/lib/landlord-prefs";
 import { mineFor, summariseOrders, type MineAnswer } from "@/lib/works-mine";
 
@@ -130,8 +131,25 @@ export async function POST(req: NextRequest) {
     if (taskId && (await alreadyTakenOn(taskId))) {
       return NextResponse.json({ ok: false, error: "Someone has already taken this job on." }, { status: 409 });
     }
+    /* The tenants living there now, not the name the old system held on 2 Oct
+       (Sean McMahon, 4 Nov 2026, ticket 28cd7593: contractors rang tenants who
+       had moved out). The old name stays only where the home names nobody. */
+    let oldName = "";
+    if (taskId && b.propertyId) {
+      const now = (await homePeople(b.propertyId).catch(() => null))?.tenants ?? [];
+      if (now.length) {
+        oldName = (b.tenant ?? "").trim();
+        b.tenants = now.map((t) => ({ name: t.name, phone: t.phone ?? "", email: (t.email ?? "").toLowerCase(), ...(t.room ? { room: t.room } : {}) }));
+        b.tenant = now[0].name;
+        b.tenantPhone = now[0].phone ?? "";
+        b.tenantEmail = (now[0].email ?? "").toLowerCase();
+      }
+    }
     const order = await createOrder({ ...b, kind: b.kind ?? "repair", propertyName: b.propertyName, title: b.title, category: b.category }, by);
     if (taskId) {
+      if (oldName && !b.tenants?.some((t) => t.name.toLowerCase() === oldName.toLowerCase())) {
+        await logEvent(order.id, by, "note", `The old system named ${oldName} as the tenant. The tenants on the home now are on the job instead.`);
+      }
       await markTakenOn(order.id, { taskId, reportedOn: b.rexpmReportedOn ?? null, dueOn: b.rexpmDueOn ?? null });
       await logEvent(order.id, by, "note", "Taken on from the old system, where it was already in progress. Nobody was emailed.");
       return NextResponse.json({ ok: true, order, emails: [] });

@@ -18,6 +18,7 @@ import { propertyAgentFor } from "@/lib/works-property-agent";
 import { invoiceSettings } from "@/lib/invoices";
 import { withR2, R2_BUCKET, r2Configured } from "@/lib/r2";
 import { homePeople } from "@/lib/home-people";
+import { payPropPeople, personKey } from "@/lib/business/payprop-tenant-contacts";
 import { keyNumbersFor, rexIdOf } from "@/lib/home-keys";
 import { accessLineFor } from "@/lib/viewing-brief";
 import type { JobTenant } from "@/lib/works-orders";
@@ -116,9 +117,26 @@ const when = (iso: string | null) =>
  * read, and the key numbers we hold and a lockbox are always added. Never
  * throws: an email with less in it beats no email.
  */
-async function homeAccessFor(o: WorksOrder): Promise<{ tenants: JobTenant[]; access: string }> {
+/**
+ * THE JOB'S TENANTS WHO STILL LIVE THERE (Sean McMahon, 4 Nov 2026, ticket
+ * 28cd7593: "the contractors are contacting old tenants"). A job taken on
+ * from the old system keeps the tenant the old system named on 2 Oct: 16
+ * Mary Rae Road's went to LG Services naming Christopher Murray, whose
+ * tenancy PayProp ended on 22 Oct. Anyone PayProp holds only as a past
+ * tenant is left off; with nobody left, the home's own tenants are read.
+ * PayProp unread leaves the job as it is.
+ */
+async function jobTenants(o: WorksOrder): Promise<JobTenant[]> {
+  const own = tenantsOf(o);
+  if (!own.length) return own;
+  const past = await payPropPeople().then((p) => p.pastOnly).catch(() => new Set<string>());
+  const clean = (n: string) => n.replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "");
+  return own.filter((t) => !t.name || !past.has(personKey(clean(t.name))));
+}
+
+async function homeAccessFor(o: WorksOrder, own: JobTenant[]): Promise<{ tenants: JobTenant[]; access: string }> {
   if (!o.propertyId) return { tenants: [], access: "" };
-  const needPeople = !tenantsOf(o).length || !o.access;
+  const needPeople = !own.length || !o.access;
   const [people, rexId, keys] = await Promise.all([
     needPeople ? homePeople(o.propertyId).catch(() => null) : Promise.resolve(null),
     rexIdOf(o.propertyId).catch(() => null),
@@ -137,8 +155,11 @@ async function homeAccessFor(o: WorksOrder): Promise<{ tenants: JobTenant[]; acc
 async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string>> {
   const c = await contractorOf(o.contractorId);
   const phone = await agentPhone(me.id);
-  const home = await homeAccessFor(o).catch(() => ({ tenants: [] as JobTenant[], access: "" }));
-  const tenants = tenantsOf(o).length ? tenantsOf(o) : home.tenants;
+  const own = await jobTenants(o);
+  const home = await homeAccessFor(o, own).catch(() => ({ tenants: [] as JobTenant[], access: "" }));
+  const tenants = own.length ? own : home.tenants;
+  /* The job's own name and number only while it still names somebody living there. */
+  const ownLead = own.length === tenantsOf(o).length;
   return {
     ref: String(o.ref),
     title: o.title,
@@ -156,8 +177,8 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     contractorPhone: c?.phone ?? "",
     /* The name and the number are their own fields now. The old rows kept
        both in `tenant`, so those still get picked apart. */
-    tenantName: first((o.tenant || tenants[0]?.name || "").replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "")),
-    tenantPhone: o.tenantPhone || (o.tenant.match(/\+?\d[\d\s]{6,}\d/) ?? [""])[0].trim() || tenants[0]?.phone || "",
+    tenantName: first(((ownLead ? o.tenant : "") || tenants[0]?.name || "").replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "")),
+    tenantPhone: (ownLead ? o.tenantPhone || (o.tenant.match(/\+?\d[\d\s]{6,}\d/) ?? [""])[0].trim() : "") || tenants[0]?.phone || "",
     landlordName: first(o.landlord),
     access: [o.access, home.access].map((x) => (x ?? "").trim()).filter(Boolean).join(" ") || "none recorded - ring us and we'll arrange it",
     description: o.description || "",
@@ -440,12 +461,19 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   /* A discreet repair (Let the tenants know unticked, Lianna 9 Oct 2026):
      nothing automatic goes to any tenant on it. */
   const quiet = !planned && o.quietTenants;
-  const tenantBooked = async () => { if (o.scheduledAt && !planned && !quiet) out.push(await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant")); };
+  const tenantBooked = async () => {
+    if (!o.scheduledAt || planned || quiet) return;
+    /* Not to somebody who has moved out (jobTenants). */
+    const live = await jobTenants(o);
+    const to = o.tenantEmail.trim().toLowerCase();
+    if (to && tenantsOf(o).some((t) => t.email.toLowerCase() === to && !live.some((l) => l.name === t.name && l.email === t.email))) return;
+    out.push(await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant"));
+  };
   /* Every tenant on a repair hears that a contractor will ring them - never
      the works order, which can carry notes for the contractor only. */
   const tenantNotice = async () => {
     if (planned || quiet || !contractor) return;
-    for (const t of tenantsOf(o).filter((x) => x.email.includes("@"))) {
+    for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {
       out.push(await send(o, "works-tenant-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
     }
   };
@@ -454,7 +482,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
      a date - once booked, the booking itself is the agent's button. */
   const accessNotice = async () => {
     if (!planned || !o.accessNotice || !contractor || o.scheduledAt) return;
-    for (const t of tenantsOf(o).filter((x) => x.email.includes("@"))) {
+    for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {
       out.push(await send(o, "works-tenant-planned-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
     }
   };
@@ -502,7 +530,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       break;
     case "tell_tenants_booked":
       /* Every tenant on the job with an address, each greeted by name. */
-      for (const t of tenantsOf(o).filter((x) => x.email.includes("@"))) {
+      for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {
         out.push(await send(o, "works-tenant-booked", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
       }
       break;

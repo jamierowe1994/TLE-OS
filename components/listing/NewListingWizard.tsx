@@ -216,7 +216,12 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
     const words = name.trim().split(/\s+/).filter(Boolean);
     if (words.length < 2) n[1].name = "Their full name, first and last";
     if (!EMAIL.test(email.trim())) n[1].email = "An email - the terms of business go to it";
-    if (mobile.replace(/\D/g, "").length < 10) n[1].mobile = "A mobile number";
+    /* Optional (Sean McMahon, 4 Nov 2026: "Listings insisting on a mobile
+       number for landlords"). The email carries the terms; Propoly asks for a
+       mobile at the let, where Push to Propoly says so. A number typed in
+       still has to be a whole one. */
+    const digits = mobile.replace(/\D/g, "").length;
+    if (digits > 0 && digits < 10) n[1].mobile = "A whole phone number, or leave it blank";
     if (!source) n[1].source = "Where they came from";
     if (!landlordAddress.trim()) n[1].landlordAddress = "Their own address, for the contract";
     if (office && officeAnswer === null) n[1].office = "Say whether this is the same person";
@@ -530,7 +535,7 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
-                  <Label>Mobile</Label>
+                  <Label opt>Mobile</Label>
                   <input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="07…" inputMode="tel" autoComplete="off" className={`mt-1.5 ${field} ${bad("mobile")}`} />
                   <Err k="mobile" />
                 </label>
@@ -649,7 +654,7 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">The landlord</p>
                 <Row k="Name" v={name.trim()} />
                 <Row k="Email" v={email.trim()} />
-                <Row k="Mobile" v={mobile.trim()} />
+                <Row k="Mobile" v={mobile.trim() || "Not given"} />
                 <Row k="Their address" v={landlordAddress.trim()} />
                 {office && officeAnswer === "yes" && <Row k="Office records" v={`Carries on ${office.name}'s record`} />}
                 {scottish && <Row k="Registration" v={larn.trim() || "Not given yet"} />}
