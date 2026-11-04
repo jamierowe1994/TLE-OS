@@ -18,6 +18,8 @@ import { dealForLet, type LetDeal } from "@/lib/let-deal";
 import { isOwnerReln } from "@/lib/rex-reln";
 import { can } from "@/lib/roles";
 import { sameAgent } from "@/lib/agent-name";
+import { overridesFor } from "@/lib/home-overrides";
+import { cleanTenants } from "@/lib/home-overrides-shared";
 
 /**
  * Who is on a let, read on the server from the let itself - never from the
@@ -72,12 +74,20 @@ export type LetPeople = {
   /** The let's Propoly deal, from the saved copy of the book (no call of its own). */
   deal: LetDeal | null;
   /**
+   * The tenants set with Edit on the home's page, who set them and when, where
+   * the Edit names anybody (householdFor). Shown on the let as they are on the
+   * home's page; `tenants` and `people` stay the let's own.
+   */
+  household: Household | null;
+  /**
    * The home this let is on, as every screen keys a home's extra landlords and
    * points of contact (lib/property-people): the REX property id, a REX PM
    * home's id, or "listing:<id>" / "let:<ref>" where there is no home to name.
    */
   homeKey: string;
 };
+
+export type Household = { tenants: LetPerson[]; by: string; at: string };
 
 export type LetAnswer = { ok: true; let: LetPeople; app: Application | null } | { ok: false; status: number; error: string };
 
@@ -115,7 +125,7 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
     const coOwners = listingId && !isTestId(listingId) && landlord?.from !== "os" ? await otherOwners(listingId, landlord?.contactId ?? null) : [];
     const deal = await dealForLet({ ref, app, propertyName: app.property, locality: app.locality, listingId }).catch(() => null);
     const homeKey = await homeKeyFor({ ref, listingId, rexPropertyId: app.swap?.rexPropertyId ?? null, property: app.property, locality: app.locality });
-    const base: Omit<LetPeople, "people" | "deal"> = {
+    const base: Omit<LetPeople, "people" | "deal" | "household"> = {
       ref,
       homeKey,
       kind: "application",
@@ -144,7 +154,7 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
       ...(landlord ? [landlordParty(landlord)] : []),
       ...coOwners,
     ];
-    return { ok: true, app, let: await withPeople(base, held, deal) };
+    return { ok: true, app, let: await withPeople(base, held, deal, await householdFor(listingId)) };
   }
 
   const deals = await getAllPropolyDeals().catch(() => null);
@@ -164,7 +174,7 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
   const landlord: Landlord | null = listed ?? (fromDeal[0] ? { contactId: null, name: fromDeal[0].name ?? "", email: fromDeal[0].email, phone: fromDeal[0].phone } : null);
   const deal = await dealForLet({ ref, app: null, propertyName: d.app.propertyName, locality: d.app.locality, listingId }).catch(() => null);
   const homeKey = await homeKeyFor({ ref, listingId, rexPropertyId: null, property: d.app.propertyName, locality: d.app.locality });
-  const base: Omit<LetPeople, "people" | "deal"> = {
+  const base: Omit<LetPeople, "people" | "deal" | "household"> = {
     ref,
     homeKey,
     kind: "deal",
@@ -195,7 +205,26 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
           address: null,
         }))),
   ];
-  return { ok: true, app: null, let: await withPeople(base, held, deal) };
+  return { ok: true, app: null, let: await withPeople(base, held, deal, await householdFor(listingId)) };
+}
+
+/**
+ * THE TENANTS THE HOME'S PAGE NAMES (4 Nov 2026). Edit on the home's page
+ * sets who lives there when the record names the wrong people, kept against
+ * the listing (lib/home-overrides), and Portfolio, the home's page, a
+ * contractor's email and Steve read that list over the let's own
+ * (lib/book-lets) - while the let page showed only the application's people,
+ * as if nobody had said. The let shows it as set, to be changed there. Its own
+ * people stay as they are: references, right to rent, guarantors, the
+ * customer update and the Propoly deal are the application's. "Nobody" is
+ * not shown: the home is empty now, the let wasn't wrongly named.
+ */
+async function householdFor(listingId: string | null): Promise<Household | null> {
+  if (!listingId || isTestId(listingId)) return null;
+  const set = (await overridesFor({ propertyId: null, listingId }).catch(() => null))?.tenants;
+  const list = set ? cleanTenants(set.value) : null;
+  if (!set || !list?.length) return null;
+  return { tenants: list.map((t, i) => ({ name: t.name, email: t.email, phone: t.phone, contactId: null, isPrimary: i === 0 })), by: set.by, at: set.at };
 }
 
 /**
@@ -345,7 +374,7 @@ async function otherOwners(listingId: string, firstId: string | null): Promise<L
 }
 
 /** Adds the people kept on the let in the OS, and the OS's edits over Propoly's copy. */
-async function withPeople(base: Omit<LetPeople, "people" | "deal">, held: LetParty[], deal: LetDeal | null): Promise<LetPeople> {
+async function withPeople(base: Omit<LetPeople, "people" | "deal" | "household">, held: LetParty[], deal: LetDeal | null, household: Household | null): Promise<LetPeople> {
   const [edits, onHome, addedTenants] = await Promise.all([
     personEdits(base.ref).catch(() => new Map<string, PersonEdit>()),
     /* Under every key the home is filed under, not only the let's own (Lianna
@@ -387,5 +416,6 @@ async function withPeople(base: Omit<LetPeople, "people" | "deal">, held: LetPar
     landlordProblem: landlord ? null : base.landlordProblem,
     people,
     deal,
+    household,
   };
 }

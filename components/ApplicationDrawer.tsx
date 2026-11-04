@@ -39,6 +39,7 @@ import { AMBER_PILL, GREEN_PILL, RED_PILL } from "@/components/applications/Lets
 import { applicantKey } from "@/lib/lead-tenant-key";
 import FieldDate from "@/components/FieldDate";
 import LetTenantCard from "@/components/new-look/LetTenantCard";
+import HouseholdOnHome, { type Household } from "@/components/HouseholdOnHome";
 import { isLetField, LET_FIELD_KIND, LET_FIELD_LABEL, sameLetValue, sayLetValue, type LetEditEvent, type LetEditNow, type LetField } from "@/lib/let-edit-fields";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
@@ -417,7 +418,7 @@ type LetLandlord = { name: string; email: string | null; phone: string | null; c
    same as "no landlord": 12 South Chesters Lane's page and Steve both said
    there was none, and asked Lianna to add one, when the read had been
    refused - her landlord was on the listing all along. */
-type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string; failed?: string };
+type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string; household?: Household | null; failed?: string };
 type Cancellation = { reason: string; note: string; by: string; at: string };
 type LetDetails = { canEdit: boolean; dealId: string | null; edits: Partial<Record<LetField, LetEditNow>>; history: LetEditEvent[] };
 
@@ -2126,6 +2127,8 @@ export default function ApplicationDrawer({
                     <h3 className="nl-block-title">{people.length > 1 ? "The Applicants" : "The Applicant"}</h3>
                     {people.length > 0 && <button type="button" className="nl-link" onClick={() => setPerson({ role: "tenant", index: 0 })}>Open</button>}
                   </div>
+                  {/* The tenants set with Edit on the home's page, where they were (4 Nov 2026). */}
+                  {info?.household && <p className="nl-meta">Living there now, as set on the home&apos;s page: {info.household.tenants.map((t) => t.name).join(", ")}.</p>}
                   {leadShown ? (
                     <>
                       <div className="nl-person">
@@ -2224,6 +2227,7 @@ export default function ApplicationDrawer({
             {nlTab === "people" && (
               <div className="nl-holder">
                 {picture?.deal && <PropolySummary picture={picture} people={info?.people ?? []} />}
+                {info?.household && <HouseholdOnHome household={info.household} listingId={info.listingId} newLook />}
                 <div className="nl-listbar">
                   <h3 className="nl-block-title">{people.length === 1 ? "The Applicant" : `The Applicants`}</h3>
                   {people.length > 1 && <span className="nl-count">{people.length}</span>}
@@ -2624,6 +2628,8 @@ export default function ApplicationDrawer({
             )}
             {/* The let's Propoly deal, and who on it differs (20 Oct 2026). */}
             {picture?.deal && <div className="mt-5"><PropolySummary picture={picture} people={info?.people ?? []} /></div>}
+            {/* The tenants set with Edit on the home's page, where they were (4 Nov 2026). */}
+            {info?.household && <HouseholdOnHome household={info.household} listingId={info.listingId} className="mt-5" />}
             <p className={`${eyebrow} mb-3 mt-5`}>{people.length === 1 ? "The applicant" : `The applicants · ${people.length}`}</p>
             {people.length ? (
               <ul className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
