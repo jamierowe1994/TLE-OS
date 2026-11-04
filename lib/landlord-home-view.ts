@@ -576,6 +576,9 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
       ? `All in date  •  ${dated.length} on record`
       : comp.headline
     : "Being read from your file";
+  /* The day the tenants moved in, as their let has it (lib/book-lets, 4 Nov
+     2026), not the day the listing was marked let; that stays on "Let agreed". */
+  const since = p.moveIn ?? p.letSince;
   return {
     greeting: `Hello, ${first}`,
     intro: "Your property is let and looked after. Here's how it's doing.",
@@ -601,18 +604,18 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
       compliance: { id: "compliance", label: "Certificates", sub: certsSub, href: comp ? "/landlord/documents" : null, icon: "shield" },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "Your listing", sub: "Let", href: null, icon: "home" },
-      viewings: { id: "viewings", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: "#tenancy", icon: "key" },
+      viewings: { id: "viewings", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(since) ?? "—"}` : "Let", href: "#tenancy", icon: "key" },
       /* The management profile's three: what needs doing, when the tenancy turns, what is due. */
       maintenance: { id: "maintenance", label: "Maintenance", sub: maintenance.headline, href: "/landlord/maintenance", icon: "setting", done: maintenance.open === 0 },
       renewal: { id: "renewal", label: "Tenancy renewal", sub: "We'll be in touch before the tenancy turns", href: "#tenancy", icon: "calendar" },
       certificates: { id: "certificates", label: "Certificates", sub: certsSub, href: "/landlord/documents", icon: "shield", done: Boolean(comp?.allInDate) },
-      tenancy: { id: "tenancy", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: "#tenancy", icon: "key" },
+      tenancy: { id: "tenancy", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(since) ?? "—"}` : "Let", href: "#tenancy", icon: "key" },
     }),
     documents: certDocs,
     ...(unread ? { documentsUnavailable: `${CERTS_UNAVAILABLE}. Try again in a few minutes.` } : {}),
     tenancy: {
       tenant: tenant?.name ?? "Your tenant",
-      started: day(p.letSince),
+      started: day(since),
       /* REX holds the let date, not the end: the renewal is a conversation
          your agent starts, and the line says so rather than guessing. */
       ends: null,
@@ -635,11 +638,11 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
         ["Service", p.service ?? "Not set"],
         ["Let type", p.letType ?? "—"],
         ["Tenant", tenant?.name ?? "Not on record"],
-        ["Let since", day(p.letSince) ?? "—"],
+        ["Let since", day(since) ?? "—"],
         ["Certificates", certsSub],
       ],
     },
-    activity: p.letSince ? [{ title: "Let", sub: tenant ? `${tenant.name} moved in` : "Tenancy started", date: day(p.letSince) ?? "", icon: "key" }] : [],
+    activity: since ? [{ title: "Let", sub: tenant ? `${tenant.name} moved in` : "Tenancy started", date: day(since) ?? "", icon: "key" }] : [],
     agent: p.agent ? { name: p.agent.name } : null,
   };
 }
