@@ -6,6 +6,7 @@ import { getContact, markRex, updateContact, type OsContact } from "@/lib/contac
 import { pushContactUpdateToRex } from "@/lib/rex-contacts";
 import { record } from "@/lib/audit";
 import { recordLandlordFor, recordRowsFor, saveRecordLandlord } from "@/lib/record-landlords";
+import { forgetRecord } from "@/lib/listing-record";
 import { publicError } from "@/lib/public-error";
 import { nameKey, saveTenantContact, tenantContacts } from "@/lib/tenant-contacts";
 import { forgetBooks } from "@/lib/managed-book-cache";
@@ -81,8 +82,12 @@ export async function PATCH(req: NextRequest) {
       if (!was || !rows.length) return NextResponse.json({ ok: false, error: "That home's record has no landlord to change. Use Add additional landlord." }, { status: 404 });
       const next = { name: name ?? was.name, email: email !== undefined ? email || null : was.email, phone: phone !== undefined ? phone || null : was.phone };
       await saveRecordLandlord(rows.map((r) => r.id), next);
-      /* Every listing's held landlord for this home is read again. */
-      await q(`DELETE FROM os_cache WHERE key LIKE 'landlord:v2:%' AND payload->>'propertyId' = $1`, [key]).catch(() => undefined);
+      /* Every listing's held landlord for this home is read again, and the
+         record with it: a listing reads the email and mobile from the record
+         now (Lianna Denholm, 4 Nov 2026), and a copy of the record held from a
+         moment ago would put the old ones back for twelve hours. */
+      await q(`DELETE FROM os_cache WHERE key LIKE 'landlord:v3:%' AND payload->>'propertyId' = $1`, [key]).catch(() => undefined);
+      forgetRecord(key);
       await record({
         kind: "record_landlord_saved",
         actorId: actor.id,
@@ -163,7 +168,7 @@ export async function PATCH(req: NextRequest) {
         /* Any listing holding them as its landlord reads them again (20 Oct
            2026): the held copy lasts twelve hours, and a card redrawn from it
            would show the old number straight after the change. */
-        await q(`DELETE FROM os_cache WHERE key LIKE 'landlord:v2:%' AND payload->'landlord'->>'contactId' = $1`, [rexId]).catch(() => undefined);
+        await q(`DELETE FROM os_cache WHERE key LIKE 'landlord:v3:%' AND payload->'landlord'->>'contactId' = $1`, [rexId]).catch(() => undefined);
         /* The Portfolio book holds tenants and landlords for hours; read it again. */
         await forgetBooks().catch(() => undefined);
       }

@@ -26,6 +26,9 @@ export interface ListingRecord {
   /** Where facts for this home are kept: the OS id, else the REX property id. */
   factsKey: string | null;
   landlordName: string | null;
+  /** The landlord's email and mobile typed on the home's own record (os_properties.landlord_*), where REX names nobody. */
+  landlordEmail?: string | null;
+  landlordPhone?: string | null;
   landlordRegistration: string | null;
   /** When each of those numbers runs out, YYYY-MM-DD, where known (lib/reg-numbers). */
   landlordRegistrationExpiry: Record<string, string>;
@@ -54,14 +57,17 @@ export function forgetRecord(rexPropertyId: string | null | undefined): void {
 
 export async function recordForProperty(rexPropertyId: string | null, place: { postcode?: string | null; town?: string | null; address?: string | null }): Promise<ListingRecord> {
   const scotland = isScottish(place.postcode, place.address, place.town);
-  const empty: ListingRecord = { osPropertyId: null, factsKey: rexPropertyId, landlordName: null, landlordRegistration: null, landlordRegistrationExpiry: {}, landlordRegistrationOwner: {}, epc: null, scotland };
+  const empty: ListingRecord = { osPropertyId: null, factsKey: rexPropertyId, landlordName: null, landlordEmail: null, landlordPhone: null, landlordRegistration: null, landlordRegistrationExpiry: {}, landlordRegistrationOwner: {}, epc: null, scotland };
   if (!rexPropertyId || !hasDb()) return empty;
   const hit = held.get(rexPropertyId);
   if (hit && Date.now() - hit.at < TTL_MS) return { ...hit.record, scotland };
 
   try {
-    const homes = await q<{ id: string; landlord_name: string | null }>(
-      `SELECT id, landlord_name FROM os_properties WHERE rex_property_id = $1 ORDER BY active DESC, updated_at DESC LIMIT 1`,
+    /* With the email and mobile typed on the home's record beside the name
+       (Lianna Denholm, 4 Nov 2026): the listing showed the name and dropped
+       them, so the landlord card read no email over one the record held. */
+    const homes = await q<{ id: string; landlord_name: string | null; landlord_email: string | null; landlord_phone: string | null }>(
+      `SELECT id, landlord_name, landlord_email, landlord_phone FROM os_properties WHERE rex_property_id = $1 ORDER BY active DESC, updated_at DESC LIMIT 1`,
       [rexPropertyId]
     );
     const osId = homes[0]?.id ?? null;
@@ -83,6 +89,8 @@ export async function recordForProperty(rexPropertyId: string | null, place: { p
       osPropertyId: osId,
       factsKey: osId ?? rexPropertyId,
       landlordName: homes[0]?.landlord_name?.trim() || null,
+      landlordEmail: homes[0]?.landlord_email?.trim() || null,
+      landlordPhone: homes[0]?.landlord_phone?.trim() || null,
       /* "Registered (Valid)" is REX PM saying there is one, not the number. */
       landlordRegistration: larnValue,
       landlordRegistrationExpiry: regExpiries(pick("landlord_registration_expiry")?.value, regNumbers(larnValue)),

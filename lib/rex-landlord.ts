@@ -63,7 +63,10 @@ const str = (v: unknown): string | null => {
    Twelve hours keeps a busy morning to one call per property while still
    picking up a correction the same day. */
 const CACHE_MS = 12 * 60 * 60 * 1000;
-const cacheKey = (listingId: string) => `landlord:v2:${listingId}`;
+/* v3 (Lianna Denholm, 4 Nov 2026): a landlord from the home's own record now
+   carries the email and mobile typed there. A v2 copy held them as null for up
+   to twelve hours, so those are read again rather than served. */
+const cacheKey = (listingId: string) => `landlord:v3:${listingId}`;
 
 async function cached(listingId: string): Promise<{ landlord: Landlord | null; propertyId?: string | null } | null> {
   if (!hasDb()) return null;
@@ -227,7 +230,10 @@ export async function landlordForListing(listingId: string): Promise<LandlordAns
     if (propertyId) {
       const { recordForProperty } = await import("@/lib/listing-record");
       const rec = await recordForProperty(propertyId, {}).catch(() => null);
-      if (rec?.landlordName) usable = { contactId: null, name: rec.landlordName, email: null, phone: null, from: "record" };
+      /* With the email and mobile typed on the record (Lianna Denholm, 4 Nov
+         2026: they were saved there and dropped here, so the listing read no
+         email for a landlord the home's page had one for). */
+      if (rec?.landlordName) usable = { contactId: null, name: rec.landlordName, email: rec.landlordEmail ?? null, phone: rec.landlordPhone ?? null, from: "record" };
     }
   }
   await keep(listingId, usable, propertyId);
