@@ -124,7 +124,11 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
       listingId,
       dealId: null,
       agentName: app.agent,
-      moveIn: app.startDate,
+      /* The day the let page shows (4 Nov 2026): the deal's once the let is in
+         Propoly - the day the agreement is drawn on, with a move-in put right
+         in the OS laid over it (lib/let-deal) - else the application's. The
+         customer update said the application's first date whatever the page said. */
+      moveIn: deal?.moveIn ?? app.startDate,
       tenants: app.applicants.map((p) => ({ name: p.name, email: p.email, phone: p.phone, contactId: p.contactId, isPrimary: p.isPrimary })),
       landlord,
       landlordProblem: swapLandlord
