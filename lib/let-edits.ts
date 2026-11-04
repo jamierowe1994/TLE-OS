@@ -17,7 +17,9 @@ import { LET_FIELDS, letNumber, stillNewest, type LetEditEvent, type LetEditNow,
  *   let_ref   the let's page id: the application's, or the deal's for a home
  *             let through Propoly alone
  *   deal_id   the let's Propoly deal when it had one at the time, so the deal
- *             reads the change too (the board's card, Kirstie's board)
+ *             reads the change too (the board's card, Kirstie's board). Empty
+ *             when the let had none yet: the deal the OS later pushes the let
+ *             into reads it all the same (withPushedLets, 4 Nov 2026)
  *   field     lib/let-edit-fields LET_FIELDS; also "tenant:<key>:<part>" for
  *             a tenant's details changed on the let (kept by lib/let-landlords,
  *             logged here so the let has one history)
@@ -127,8 +129,37 @@ async function allDealEdits(): Promise<Map<string, LetEditsNow>> {
     for (const f of LET_FIELDS) if (e[f] && (!other[f] || other[f]!.at <= e[f]!.at)) out[f] = e[f];
     map.set(k, out);
   }
+  await withPushedLets(map, rows).catch(() => undefined);
   dealCache = { at: Date.now(), map };
   return map;
+}
+
+/*
+ * Lianna Denholm, 4 Nov 2026 (12 South Chesters Lane, application 40658): a
+ * move-in or deposit put right on a let before the let was matched to its
+ * Propoly deal is kept under the application alone (deal_id empty), so the
+ * deal, keyed by its own id, never read it - while the let page did. A deal
+ * the OS pushed for a let (os_handovers, lib/let-deal pushedDeals) now reads
+ * the let's own figures too, as the let page does: field by field, the newer
+ * of the let's and the deal's own wins, and Propoly's still wins where
+ * Propoly changed it after (withLetEdits). Only a deal the OS's own push put
+ * the let into: one found by address or listing alone is never given a let's
+ * figures in the book, which every screen reads; dealForLet gives it them
+ * for that let's own reading (its page, its PLC check).
+ */
+async function withPushedLets(map: Map<string, LetEditsNow>, rows: Row[]): Promise<void> {
+  const refs = [...new Set(rows.map((r) => r.let_ref))];
+  if (!refs.length) return;
+  const { pushedDeals } = await import("@/lib/let-deal");
+  const pushed = await pushedDeals(refs);
+  if (!pushed.size) return;
+  for (const [ref, e] of latest(rows.filter((r) => pushed.has(r.let_ref)), (r) => r.let_ref)) {
+    const deal = pushed.get(ref)!;
+    const held = map.get(deal) ?? {};
+    const out: LetEditsNow = { ...held };
+    for (const f of LET_FIELDS) if (e[f] && (!held[f] || held[f]!.at < e[f]!.at)) out[f] = e[f];
+    map.set(deal, out);
+  }
 }
 
 /**
@@ -267,13 +298,42 @@ export function withLetEdits<T extends DealLike>(d: T, e: LetEditsNow | undefine
     /* Propoly changed it after the OS did: Propoly's is the newer figure. */
     if (!stillNewest(f, x, "propoly", dealValue(d.app, f))) continue;
     marks[f] = { ...x, propoly: dealValue(d.app, f) };
-    const n = letNumber(x.value);
-    if (f === "moveIn") app.startDate = x.value;
-    if (f === "rent") app.offer = n;
-    if (f === "termMonths") app.agreementMonths = n;
-    if (f === "deposit" && app.propoly) app.propoly.deposit = n;
-    if (f === "holdingFee" && app.propoly) app.propoly.holdingFee = n;
+    put(app, f, x.value);
   }
   if (!Object.keys(marks).length) return { deal: d, marks: null };
   return { deal: { ...d, app }, marks };
+}
+
+/** One figure onto a deal's copy, as dealValue reads it back. */
+function put(app: AgentApplication, f: LetField, v: string | null): void {
+  const n = letNumber(v);
+  if (f === "moveIn") app.startDate = v;
+  if (f === "rent") app.offer = n;
+  if (f === "termMonths") app.agreementMonths = n;
+  if (f === "deposit" && app.propoly) app.propoly.deposit = n;
+  if (f === "holdingFee" && app.propoly) app.propoly.holdingFee = n;
+}
+
+/**
+ * A deal from the book with one let's own figures over it as well (4 Nov
+ * 2026, lib/let-deal dealForLet): the same rule the let page reads them by
+ * (letEditsNow) - for each field the newer of the let's own and what the deal
+ * already carries, and Propoly's own where Propoly changed it after. A copy:
+ * the book's deal is put back to Propoly's figures and everything laid over
+ * it again. Untouched when the let has nothing newer.
+ */
+export function withOwnLetEdits<T extends DealLike & { letEdits?: Partial<Record<LetField, DealEditMark>> | null }>(d: T, own: LetEditsNow | undefined): T {
+  const held = d.letEdits ?? {};
+  if (!own || !LET_FIELDS.some((f) => own[f] && (!held[f] || held[f]!.at < own[f]!.at))) return d;
+  const app: AgentApplication = { ...d.app, propoly: d.app.propoly ? { ...d.app.propoly } : d.app.propoly };
+  const all: LetEditsNow = {};
+  for (const f of LET_FIELDS) {
+    const y = held[f];
+    if (y) put(app, f, y.propoly);
+    const x = own[f];
+    if (x && (!y || y.at < x.at)) all[f] = x;
+    else if (y) all[f] = { value: y.value, by: y.by, at: y.at, ...(y.seen ? { seen: y.seen } : {}) };
+  }
+  const { deal, marks } = withLetEdits({ ...d, app }, all);
+  return { ...deal, letEdits: marks };
 }
