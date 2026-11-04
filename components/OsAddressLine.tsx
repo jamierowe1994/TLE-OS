@@ -108,6 +108,7 @@ export default function OsAddressLine({
       ) : (
         <button
           type="button"
+          data-steve="home.change-address"
           onClick={() => { setDraft(held && !same ? held.address : shown); setEditing(true); setMsg(null); }}
           className="underline underline-offset-2 hover:text-ink"
         >

@@ -73,6 +73,8 @@ export const LOOK_SCREENS = [
      the point"). The installed app and the iPhone app both open /agent, so one switch covers both. */
   { id: "app", label: "Phone app", what: "The agents' phone app, home screen and iPhone: white, the orange action, type-only headings with no paintings, line icons, text tabs and fewer words. Off, the pastel app as it is." },
   { id: "booking", label: "Book a viewing (tenants)", what: "The new five-step booking window: home, time, access, messages, book. On, every place a tenant viewing is booked opens it - the lead, the listing, Viewings and Enquiries - and the landlord's email, the tenant's notice and the access record go out from it when the agent presses Book." },
+  /* Not a reskin (James, 4 Nov 2026): nearly half the reports were things agents could fix themselves (lib/report-deflect). Needs Steve's new look. */
+  { id: "fixit", label: "Report: put it right yourself", what: "A report from a listing, a let or a home that something is wrong, missing or can't be changed gets Steve's offer first: Edit on the record, and he shows where it is. A how-do-I gets his answer first. Send it to James anyway is always there. Off, every report goes straight to James." },
 ] as const;
 
 export type LookScreen = (typeof LOOK_SCREENS)[number]["id"];

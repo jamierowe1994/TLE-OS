@@ -1381,7 +1381,7 @@ export default function PropertyPage() {
             </div>
 
             <div id="sections" className="scroll-mt-6">
-              <Tabs label="This home" className="nl-ltabs" value={tab} onChange={pickTab} items={nlTabs} />
+              <Tabs label="This home" className="nl-ltabs" value={tab} onChange={pickTab} items={nlTabs} steve="home.tab" />
             </div>
 
             <div key={tab} className="nl-pane">

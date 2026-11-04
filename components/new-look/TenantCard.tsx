@@ -112,7 +112,7 @@ export default function TenantCard({ contactId, person, about }: { contactId: st
 
   if (editing) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3" data-steve="home.tenant-form">
         <div className="nl-cell-head">
           <p className="nl-strong">Edit {shown.name}</p>
         </div>
@@ -142,7 +142,7 @@ export default function TenantCard({ contactId, person, about }: { contactId: st
       <div className="flex items-start gap-3">
         <ContactBlock className="min-w-0 flex-1" fixed role="tenant" person={shown} personRef={null} about={about} />
         {canEdit && (
-          <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm shrink-0" aria-label={`Edit ${shown.name}`} onClick={startEdit}>
+          <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm shrink-0" aria-label={`Edit ${shown.name}`} onClick={startEdit} data-steve="home.edit-tenant">
             <Ico name="pen" size={14} /> Edit
           </button>
         )}

@@ -322,7 +322,7 @@ export default function HomeDetails({
         {editing ? (
           <span className="nl-facts-flag"><i /> Editing</span>
         ) : canEdit ? (
-          <button type="button" className="nl-link" onClick={begin} disabled={!start}>
+          <button type="button" className="nl-link" onClick={begin} disabled={!start} data-steve="home.edit-details">
             <Ico name="pen" size={13} /> Edit
           </button>
         ) : !data && !loadErr && !test ? (

@@ -2017,7 +2017,7 @@ export default function ApplicationDrawer({
             </p>
           )}
 
-          <Tabs label="This let" className="nl-ltabs" value={nlTab} onChange={setNlTab} items={nlTabs} />
+          <Tabs label="This let" className="nl-ltabs" value={nlTab} onChange={setNlTab} items={nlTabs} steve="application.tab" />
 
           <div key={nlTab} className="nl-pane">
             {nlTab === "overview" && (

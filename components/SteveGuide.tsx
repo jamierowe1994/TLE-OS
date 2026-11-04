@@ -68,6 +68,15 @@ export default function SteveGuide() {
   const el = useRef<Element | null>(null);
   const since = useRef(0);
   const lastAt = useRef(-1);
+  /* The first step they were shown, so the count starts where they joined
+     the route: sent straight to an Edit from the report form (lib/report-
+     deflect), "Step 4 of 4" read as three steps missed. */
+  const firstAt = useRef(-1);
+  const liftedAt = useRef(-1);
+  /* The page a guide belongs to, when it was started for one record (the
+     report form's "Show me where"): leaving that page ends it quietly,
+     rather than it following them round saying it can't see the Edit. */
+  const stayOn = useRef<string | null>(null);
 
   const stop = useCallback(() => {
     setTargetId(null);
@@ -83,23 +92,31 @@ export default function SteveGuide() {
   /* Start: from Steve's answer (an event), or a guide already under way. */
   useEffect(() => {
     const start = (e: Event) => {
-      const id = (e as CustomEvent<string>).detail;
-      if (!guideTarget(id)) return;
+      /* A target id, or { id, stayOn } for a guide that belongs to one page. */
+      const d = (e as CustomEvent<string | { id: string; stayOn?: string }>).detail;
+      const id = typeof d === "string" ? d : d?.id;
+      if (!id || !guideTarget(id)) return;
       clicked.current = new Set();
       lastAt.current = -1;
+      firstAt.current = -1;
+      liftedAt.current = -1;
+      stayOn.current = typeof d === "object" && d.stayOn ? d.stayOn : null;
       setFinished(false);
       setTargetId(id);
       try {
-        sessionStorage.setItem(GUIDE_KEY, JSON.stringify({ id, startedAt: Date.now() }));
+        sessionStorage.setItem(GUIDE_KEY, JSON.stringify({ id, startedAt: Date.now(), stayOn: stayOn.current }));
       } catch {}
       /* Out of the way: the dock sits bottom right, often over the thing. */
       window.dispatchEvent(new CustomEvent("os-help-dock", { detail: { open: false } }));
     };
     window.addEventListener(GUIDE_EVENT, start);
     try {
-      const held = JSON.parse(sessionStorage.getItem(GUIDE_KEY) ?? "null") as { id?: string; startedAt?: number } | null;
+      const held = JSON.parse(sessionStorage.getItem(GUIDE_KEY) ?? "null") as { id?: string; startedAt?: number; stayOn?: string | null } | null;
       /* A guide left for half an hour is not one they are still following. */
-      if (held?.id && guideTarget(held.id) && Date.now() - (held.startedAt ?? 0) < 30 * 60 * 1000) setTargetId(held.id);
+      if (held?.id && guideTarget(held.id) && Date.now() - (held.startedAt ?? 0) < 30 * 60 * 1000) {
+        stayOn.current = held.stayOn ?? null;
+        setTargetId(held.id);
+      }
     } catch {}
     return () => window.removeEventListener(GUIDE_EVENT, start);
   }, []);
@@ -110,6 +127,7 @@ export default function SteveGuide() {
     const target = guideTarget(targetId);
     if (!target) return;
     const tick = () => {
+      if (stayOn.current && window.location.pathname !== stayOn.current) return stop();
       const steps = target.steps;
       let i = steps.findIndex((s, n) => !isDone(s, clicked.current.has(n)));
       if (i === -1) {
@@ -125,6 +143,7 @@ export default function SteveGuide() {
         since.current = Date.now();
         setLost(false);
       }
+      if (firstAt.current === -1 || i < firstAt.current) firstAt.current = i;
       setAt(i);
       const found = visibleEl(onScreen(steps[i]).point);
       el.current = found;
@@ -135,7 +154,12 @@ export default function SteveGuide() {
       }
       setLost(false);
       const r = found.getBoundingClientRect();
-      if (r.bottom < 0 || r.top > window.innerHeight) {
+      /* Off the screen - or, once per step, low enough that Steve in the
+         corner sits on it (a phone, with the Edit below the photo). Once,
+         so somebody scrolling to read is not pulled back. */
+      const low = r.bottom > window.innerHeight - 110 && liftedAt.current !== i;
+      if (low) liftedAt.current = i;
+      if (r.bottom < 0 || r.top > window.innerHeight || low) {
         found.scrollIntoView({ block: "center", behavior: "smooth" });
       }
       setBox({ top: r.top - PAD, left: r.left - PAD, width: r.width + PAD * 2, height: r.height + PAD * 2 });
@@ -165,7 +189,8 @@ export default function SteveGuide() {
   const target = guideTarget(targetId);
   if (!target) return null;
   const step = typeof window !== "undefined" ? onScreen(target.steps[at]) : target.steps[at];
-  const total = target.steps.length;
+  const from = Math.max(0, Math.min(firstAt.current, at));
+  const total = target.steps.length - from;
 
   /* The card: beside the ring where there is room, else centred. */
   const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
@@ -205,7 +230,7 @@ export default function SteveGuide() {
           <AssistantCharacter mood={finished ? "happy" : lost ? "confused" : "idle"} size={40} track={false} />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-              {finished ? "That's the one" : `Step ${at + 1} of ${total}`}
+              {finished ? "That's the one" : total > 1 ? `Step ${at - from + 1} of ${total}` : "Here it is"}
             </p>
             <p className="mt-1 text-[13.5px] leading-snug">
               {finished

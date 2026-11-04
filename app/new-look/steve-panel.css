@@ -240,6 +240,30 @@
 .sv-rp-done p { margin: 0; font-size: 15px; color: var(--ink); }
 .sv-rp-tick { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--accent-dark); }
 
+/* ── Put it right yourself (lib/report-deflect, 4 Nov 2026) ───────────────
+   Steve's offer above the send in both report forms (the orb's and the
+   new-look card's): a pale coral note in his voice, the coral button says
+   what a press now does, and "Send it to James anyway" sits quietly under
+   it. Comes in gently, as he speaks up when they stop typing. */
+.sv-fix {
+  flex: none; display: flex; align-items: flex-start; gap: 12px; margin-top: 2px; padding: 12px 14px; border-radius: 16px;
+  background: color-mix(in srgb, var(--primary) 9%, var(--card)); border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line-strong));
+  animation: sv-fix-in 0.32s cubic-bezier(0.3, 1.1, 0.4, 1) both;
+}
+.sv-fix > :first-child { flex: none; margin-top: 1px; }
+.sv-fix-h { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 15px; line-height: 20px; letter-spacing: 0; color: var(--ink); }
+.sv-fix-p { margin: 3px 0 0; font-size: 13px; line-height: 19px; color: var(--muted); }
+.sv-fix-anyway {
+  flex: none; align-self: center; margin-top: -4px; padding: 4px 8px; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px;
+}
+.sv-fix-anyway:hover { color: var(--ink); }
+/* The new-look card's form is spaced by margins, not a gap. */
+.nl-st-report .sv-fix { margin-top: 10px; }
+.nl-st-report .sv-fix-anyway { display: block; margin: 6px auto 0; }
+@keyframes sv-fix-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sv-fix { animation: none; } }
+
 /* ── Messages on the wash: white head, conversations as cards ─────────── */
 .sv-bar.is-on-wash { color: #fff; border-bottom-color: transparent; }
 .sv-bar.is-on-wash h2 { color: #fff; }

@@ -181,7 +181,7 @@ export default function LandlordRegistration({
       <div className="flex items-baseline justify-between gap-2">
         <p className={meta}>Landlord registration</p>
         {canEdit && (
-          <button type="button" className={link} onClick={edit}>
+          <button type="button" className={link} onClick={edit} data-steve="listing.edit-registration">
             {numbers.length ? "Edit" : "Add"}
           </button>
         )}

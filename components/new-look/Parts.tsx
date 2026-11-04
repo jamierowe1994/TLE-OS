@@ -39,12 +39,15 @@ export function Tabs<T extends string>({
   onChange,
   label,
   className = "",
+  steve,
 }: {
   items: { id: T; label: string; count?: number | null; dot?: boolean }[];
   value: T;
   onChange: (id: T) => void;
   label: string;
   className?: string;
+  /** Steve's handle for each tab, `<steve>.<id>` (lib/steve-guide points at it). */
+  steve?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [ind, setInd] = useState<{ x: number; w: number; ready: boolean } | null>(null);
@@ -64,7 +67,7 @@ export function Tabs<T extends string>({
     <div ref={ref} role="tablist" aria-label={label} className={`nl-tabs ${className}`}>
       {ind && <span aria-hidden className={`nl-tab-ind${ind.ready ? " is-ready" : ""}`} style={{ transform: `translateX(${ind.x}px)`, width: ind.w }} />}
       {items.map((t) => (
-        <button key={t.id} type="button" role="tab" aria-selected={t.id === value} className={`nl-tab${t.id === value ? " is-on" : ""}`} onClick={() => { if (t.id !== value) holdPlace(ref.current); onChange(t.id); }}>
+        <button key={t.id} type="button" role="tab" aria-selected={t.id === value} data-steve={steve ? `${steve}.${t.id}` : undefined} className={`nl-tab${t.id === value ? " is-on" : ""}`} onClick={() => { if (t.id !== value) holdPlace(ref.current); onChange(t.id); }}>
           {t.label}
           {t.count != null && <span className="nl-tab-n">{t.count}</span>}
           {t.dot && <span className="nl-tab-dot" aria-label="Needs attention" />}

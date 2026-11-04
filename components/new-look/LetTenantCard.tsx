@@ -111,7 +111,7 @@ export default function LetTenantCard({
 
   if (editing) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3" data-steve="application.tenant-form">
         <div className="nl-appr-fields">
           {input("Full name", draft.name, (v) => setDraft({ ...draft, name: v }), "text", "Name the tenant")}
           {input("Mobile", draft.phone, (v) => setDraft({ ...draft, phone: v }), "tel", "07...")}

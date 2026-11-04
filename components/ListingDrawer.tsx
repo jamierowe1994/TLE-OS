@@ -3010,7 +3010,7 @@ function ListingDrawerBody({
               {factsEdit ? (
                 <span className="nl-facts-flag"><i /> Editing</span>
               ) : editCanPress && live && !testListing ? (
-                <button type="button" onClick={startFacts} className="nl-link">
+                <button type="button" onClick={startFacts} className="nl-link" data-steve="listing.edit-details">
                   <Ico name="pen" size={13} /> Edit
                 </button>
               ) : null}
@@ -3086,7 +3086,7 @@ function ListingDrawerBody({
           ))}
         </div>
 
-        <Tabs label="This listing" className="nl-ltabs" value={tabIs} onChange={(t) => pickNl(t)} items={nlTabs} />
+        <Tabs label="This listing" className="nl-ltabs" value={tabIs} onChange={(t) => pickNl(t)} items={nlTabs} steve="listing.tab" />
 
         <div key={tabIs} className="nl-pane">
           {tabIs === "overview" && (
@@ -3096,7 +3096,7 @@ function ListingDrawerBody({
                 <div className="nl-cell-head">
                   <h3 className="nl-block-title">Description</h3>
                   {!descEdit && editCanPress && live && !testListing && (
-                    <button type="button" className="nl-link" onClick={() => { setDescDraft(live.body ?? ""); setDescEdit(true); setDescSave("idle"); }}>Edit</button>
+                    <button type="button" className="nl-link" data-steve="listing.edit-description" onClick={() => { setDescDraft(live.body ?? ""); setDescEdit(true); setDescSave("idle"); }}>Edit</button>
                   )}
                 </div>
                 {descEdit ? (
@@ -3161,7 +3161,7 @@ function ListingDrawerBody({
               <section className="nl-cell">
                 <div className="nl-cell-head">
                   <h3 className="nl-block-title">Landlord</h3>
-                  {!testListing && <button type="button" className="nl-link" onClick={() => setLandlordOpen(true)}>Edit</button>}
+                  {!testListing && <button type="button" className="nl-link" data-steve="listing.edit-landlord" onClick={() => setLandlordOpen(true)}>Edit</button>}
                 </div>
                 {landlord.status === "loading" || landlord.status === "idle" ? (
                   <p className="nl-meta">Reading…</p>
@@ -3186,7 +3186,7 @@ function ListingDrawerBody({
                 ) : (
                   <>
                     <p className="nl-meta">{landlord.status === "problem" ? landlord.says : "No landlord on this listing yet."}</p>
-                    {!testListing && <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" onClick={() => setLandlordOpen(true)}>Add the landlord</button>}
+                    {!testListing && <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" data-steve="listing.edit-landlord" onClick={() => setLandlordOpen(true)}>Add the landlord</button>}
                   </>
                 )}
                 <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} look="new" onSaved={setLive} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />

@@ -1,6 +1,7 @@
 "use client";
 
-import { GUIDE_EVENT } from "@/lib/steve-guide";
+import { GUIDE_EVENT, guideReachable } from "@/lib/steve-guide";
+import { deflectionFor, EDIT_SAYS, type Deflection } from "@/lib/report-deflect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
@@ -235,6 +236,9 @@ type Line = {
   settled?: string;
   /** Files that went up with this message. Only ever on an agent's line. */
   files?: Attached[];
+  /** Under his answer to a question that was on its way to James as a report
+   *  (lib/report-deflect): the press that sends the report after all. */
+  sendReport?: boolean;
 };
 
 /** Mirrors ActionProposal server-side, narrowed to what the card draws. */
@@ -521,6 +525,32 @@ function Dock() {
   const [voice, setVoice] = useState(false);
   const [sending, setSending] = useState("");
   const [lost, setLost] = useState("");
+  /* Put it right yourself (lib/report-deflect, James 4 Nov 2026), its own
+     switch and the new look only. When the words stop for half a second the
+     form reads them, and a detail Edit on this record changes, or a question
+     Steve can answer, gets his offer in place of Send it. `asked` is the
+     question he was given first, so the same words are not offered him again. */
+  const fixitOn = useNewLook("fixit") === true;
+  const fixit = lookNew && fixitOn;
+  const [offer, setOffer] = useState<Deflection>(null);
+  const asked = useRef("");
+  const reporting = open && (orb ? orbView === "report" : tab === "feedback");
+  const offerFor = useCallback(
+    (words: string): Deflection => {
+      if (!fixit) return null;
+      const d = deflectionFor(words, path, (guide) => guideReachable(guide, document));
+      /* He answers only when he can, and never mid-introduction, where the
+         question would be taken as their name. */
+      if (d?.kind === "ask" && (!live || stage !== "ask" || words.trim() === asked.current)) return null;
+      return d;
+    },
+    [fixit, path, live, stage]
+  );
+  useEffect(() => {
+    if (!reporting) return;
+    const t = window.setTimeout(() => setOffer(offerFor(fb)), 500);
+    return () => window.clearTimeout(t);
+  }, [reporting, fb, offerFor]);
   /* What this person has reported before, and where each has got to - see
      myReports in lib/pilot. Null until read; read each time the tab opens, so
      a report just sent is in it and a state the bot has changed is current. */
@@ -1421,7 +1451,10 @@ function Dock() {
     setTimeout(() => setCleared(false), 1600);
   }
 
-  async function sendFeedback() {
+  /** `past`: what the form offered instead, when it was sent anyway - a
+   *  route to an Edit, or "ask" with whether Steve answered first. Kept on
+   *  the report, so the reports that still came show what was turned down. */
+  async function sendFeedback(past?: { offered: string; answered?: boolean }) {
     setBusy(true);
     setMood("thinking");
     /* A picture of what they were looking at, taken before the report goes.
@@ -1450,6 +1483,7 @@ function Dock() {
           viewport: `${window.innerWidth}x${window.innerHeight}`,
           ua: navigator.userAgent.slice(0, 160),
           ...(extras.length ? { attached: extras.length } : {}),
+          ...(past ? { deflect: past } : {}),
         },
       }),
     })
@@ -1486,6 +1520,8 @@ function Dock() {
     setBusy(false);
     setSent(true);
     setFb("");
+    setOffer(null);
+    asked.current = "";
     setPics([]);
     setPicNote("");
     rec.clear();
@@ -1498,6 +1534,65 @@ function Dock() {
       setMood("idle");
       rest();
     }, dropped ? 6000 : 2400);
+  }
+
+  /**
+   * The report form's main button (lib/report-deflect). With an offer on
+   * screen it does what the offer says; with none it sends. Pressed inside
+   * the half second before the form has read new words, it only brings up
+   * what those words get - the offer, a different one, or plain Send it -
+   * so a quick press never acts on the words before. "Send it to James
+   * anyway" under it always sends.
+   */
+  function pressSend() {
+    const now = offerFor(fb);
+    const same = (now?.kind ?? null) === (offer?.kind ?? null) && (now?.kind !== "edit" || offer?.kind !== "edit" || now.guide === offer.guide);
+    if (!same) setOffer(now);
+    else if (offer?.kind === "edit") showEdit(offer.guide);
+    else if (offer?.kind === "ask") void askFirst();
+    else void sendFeedback();
+  }
+
+  /** What "Send it to James anyway" records the form offered. */
+  const turnedDown = offer ? { offered: offer.kind === "edit" ? offer.guide : "ask" } : undefined;
+
+  /** Show me where: Steve's guide rings the Edit (components/SteveGuide) and
+   *  closes this card itself. It belongs to this record, so leaving the page
+   *  ends it. The report stays written in the form, in case the Edit doesn't
+   *  put it right. */
+  function showEdit(guide: string) {
+    react("happy", 1200);
+    window.dispatchEvent(new CustomEvent(GUIDE_EVENT, { detail: { id: guide, stayOn: path } }));
+  }
+
+  /** Ask Steve: the question goes to his chat as theirs, in a conversation
+   *  of its own, and he answers it there. The report waits in the form, and
+   *  his answer ends with the press that sends it after all. */
+  async function askFirst() {
+    const q = fb.trim();
+    if (!q || busy) return;
+    asked.current = q;
+    setOffer(null);
+    if (orb) {
+      thread.current = `c${Date.now()}`;
+      setMark(linesRef.current.length);
+      setGreeting(false);
+      setOrbView("chat");
+    } else {
+      setTab("help");
+    }
+    await say(q);
+    setLines((l) => [
+      ...l,
+      { role: "assistant", text: "If that hasn't sorted it, your report is still written. I'll send it to James just as it is.", sendReport: true },
+    ]);
+  }
+
+  /** The report after all, from his chat: back to the form, so they see it go. */
+  function sendAfterAll() {
+    if (orb) setOrbView("report");
+    else setTab("feedback");
+    void sendFeedback({ offered: "ask", answered: true });
   }
 
   /** Pictures somebody chose, pasted or dragged in. Images only, four at most,
@@ -1713,6 +1808,18 @@ function Dock() {
             Yes, open it
           </button>
         )}
+        {/* The report he answered first, still waiting in the form
+            (lib/report-deflect). Gone once it has gone. */}
+        {l.sendReport && fb.trim() && !sent && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={sendAfterAll}
+            className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            Send it to James
+          </button>
+        )}
         {/* THE CARD. Everything that is about to happen, in
             full, before it happens — the recipient, the whole
             text, and what pressing it will cause. A summary
@@ -1849,6 +1956,24 @@ function Dock() {
       </div>
     )
   ;
+
+  /* Put it right yourself (lib/report-deflect): his word above the send, in
+     both report forms, and the button saying what a press now does. Styles
+     in app/new-look/steve-panel.css (sv-fix). */
+  const fixCard = offer && !busy ? (
+    <div className="sv-fix" role="status">
+      <SteveFace size={30} mood="happy" />
+      <div className="min-w-0">
+        <p className="sv-fix-h">{offer.kind === "edit" ? "You Can Put This Right Yourself" : "I Can Answer That Now"}</p>
+        <p className="sv-fix-p">
+          {offer.kind === "edit"
+            ? `${EDIT_SAYS[offer.guide] ?? "Edit on this record changes it."} It saves straight away, no need to wait for James.`
+            : "It reads like a question, so I'll answer it first. If I can't help, it still goes to James."}
+        </p>
+      </div>
+    </div>
+  ) : null;
+  const sendLabel = busy ? sending || "Sending…" : offer?.kind === "edit" ? "Show me where" : offer?.kind === "ask" ? `Ask ${aName}` : "Send it";
 
   const reportView =
     sent ? (
@@ -2016,14 +2141,20 @@ function Dock() {
         </ul>
       )}
 
+      {fixCard}
       <button
         type="button"
         disabled={busy || !(fb.trim() || rec.clip || pics.length)}
-        onClick={sendFeedback}
+        onClick={pressSend}
         className="mt-2 w-full rounded-full bg-accent-dark py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
       >
-        {busy ? sending || "Sending…" : "Send it"}
+        {sendLabel}
       </button>
+      {offer && !busy && (
+        <button type="button" onClick={() => void sendFeedback(turnedDown)} className="sv-fix-anyway">
+          Send it to James anyway
+        </button>
+      )}
 
       {/* Where the earlier ones have got to. Closed by default:
           the form is what somebody came for, and a tester with
@@ -2193,9 +2324,15 @@ function Dock() {
         </ul>
       )}
 
-      <button type="button" disabled={busy || !(fb.trim() || rec.clip || pics.length)} onClick={sendFeedback} className="sv-rp-send">
-        {busy ? sending || "Sending…" : "Send it"}
+      {fixCard}
+      <button type="button" disabled={busy || !(fb.trim() || rec.clip || pics.length)} onClick={pressSend} className="sv-rp-send">
+        {sendLabel}
       </button>
+      {offer && !busy && (
+        <button type="button" onClick={() => void sendFeedback(turnedDown)} className="sv-fix-anyway">
+          Send it to James anyway
+        </button>
+      )}
     </div>
   );
 
