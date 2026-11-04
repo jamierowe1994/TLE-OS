@@ -340,7 +340,11 @@ export async function landlordsForListing(listing: Row, opts: { listingId: numbe
   return { ...main, owners: [...main.owners, ...extra] };
 }
 
-/** The landlord the record holds, from the first place that has one (see above). */
+/**
+ * The landlord the record holds, from the first place that has one (see
+ * above), except that a landlord changed in the OS now comes before the
+ * listing's own owners (4 Nov 2026, below).
+ */
 async function mainLandlords(listing: Row, opts: { listingId: number | string | null; swap?: boolean }): Promise<LandlordsFound> {
   const found = (owners: Row[], from: LandlordFrom): LandlordsFound => ({ owners, from, note: FROM_NOTE[from] });
   const related = (listing.related ?? {}) as Row;
@@ -349,22 +353,33 @@ async function mainLandlords(listing: Row, opts: { listingId: number | string | 
     .filter((r) => isOwnerReln(r))
     .map((r) => (r.contact ?? null) as Row | null)
     .filter((c): c is Row => Boolean(c));
-  if (onListing.length) return found(onListing, "listing");
-  if (opts.swap) return { owners: [], from: null, note: null };
+  /* A swap keeps the listing's owners, as before: its landlord is already in Propoly. */
+  if (opts.swap) return onListing.length ? found(onListing, "listing") : { owners: [], from: null, note: null };
 
   const listingId = idOf(opts.listingId);
   const propertyId = idOf((listing.property as Row | null)?.id) ?? idOf(listing.property_id);
 
+  /* THE NEWEST LANDLORD WINS (James, 1 Nov 2026: the newest figure wins
+     everywhere, new Propoly deals included). A landlord changed in the OS
+     with Change landlord (lib/landlord-change) is the one the listing, the
+     Terms and the let already show over REX's owner (lib/rex-landlord
+     landlordForListing), yet the push took the listing's owners first and
+     read the change only when REX had nobody, so a new Propoly deal got the
+     old owner. A current change for the listing or the home now comes first. */
   const changed = await changedLandlordFor({ listingId, propertyId }).catch(() => null);
   if (changed) {
-    return found([{
+    const owners: Row[] = [{
       id: `changed:${changed.id}`,
       name: changed.name,
       email_address: changed.email,
       phone_number: changed.phone,
       ...(changed.kind === "company" ? { company_name: changed.name } : asCompany(changed.name)),
-    }], "changed");
+    }];
+    return onListing.length
+      ? { owners, from: "changed", note: "Changed in the OS with Change landlord, in place of the owner on the listing." }
+      : found(owners, "changed");
   }
+  if (onListing.length) return found(onListing, "listing");
 
   if (propertyId) {
     const res = await rexCall("Properties", "read", { id: propertyId, extra_fields: ["contacts"] }).catch(() => null);
