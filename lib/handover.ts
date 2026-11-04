@@ -1021,13 +1021,16 @@ export function ukMobile(raw: string | null): string {
 }
 
 /** A tenant for POST /api/v1/tenants, from the REX contact where it has the parts. */
-export function tenantAttributes(cc: Row, t: Pick<Handoff["tenants"][number], "name" | "email" | "phone">) {
+export function tenantAttributes(cc: Row, t: Pick<Handoff["tenants"][number], "name" | "email" | "phone" | "editedOnLet">) {
   const rel = (cc.related ?? {}) as Row;
   const n = (((rel.contact_names ?? []) as Row[])[0] ?? {}) as Row;
   const ph = (((rel.contact_phones ?? []) as Row[])[0] ?? {}) as Row;
+  /* A name or mobile put right on the let goes over the REX contact's, which
+     still has what was wrong (4 Nov 2026, lib/let-people tenantsAsOnLet). */
+  const onLet = new Set(t.editedOnLet ?? []);
   const whole = t.name.trim().split(/\s+/);
-  const first = str(n.name_first) ?? str(cc.first_name) ?? (whole.length > 1 ? whole.slice(0, -1).join(" ") : whole[0] ?? "");
-  const last = str(n.name_last) ?? str(cc.last_name) ?? (whole.length > 1 ? whole[whole.length - 1] : "");
+  const first = (onLet.has("name") ? null : str(n.name_first) ?? str(cc.first_name)) ?? (whole.length > 1 ? whole.slice(0, -1).join(" ") : whole[0] ?? "");
+  const last = (onLet.has("name") ? null : str(n.name_last) ?? str(cc.last_name)) ?? (whole.length > 1 ? whole[whole.length - 1] : "");
   const gender = norm(cc.marketing_gender);
   const title = str(n.name_title) ?? str(cc.title) ?? (gender === "female" ? "Ms" : gender === "male" ? "Mr" : "Mx");
   return {
@@ -1035,7 +1038,7 @@ export function tenantAttributes(cc: Row, t: Pick<Handoff["tenants"][number], "n
     title: title.replace(/\.$/, ""),
     first_name: first,
     last_name: last,
-    mobileno: ukMobile(str(ph.phone_number) ?? str(ph.system_e164_phone_number) ?? str(t.phone)),
+    mobileno: ukMobile((onLet.has("phone") ? str(t.phone) : null) ?? str(ph.phone_number) ?? str(ph.system_e164_phone_number) ?? str(t.phone)),
   };
 }
 

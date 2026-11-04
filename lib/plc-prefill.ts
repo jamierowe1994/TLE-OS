@@ -6,6 +6,7 @@ import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { findPropolyDeal, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { sameHome } from "@/lib/address-parse";
 import { dealForLet } from "@/lib/let-deal";
+import { tenantsAsOnLet } from "@/lib/let-people";
 
 /**
  * Everything the handover already knows before anybody types.
@@ -89,7 +90,22 @@ function asYmd(v: string | null): string | null {
 
 const ROOM = /\b(room|bedroom)\s*\d/i;
 
-function shape(a: Application, facts?: { hmo: boolean; landlordName: string | null } | null, dealMoveIn?: string | null): Prefill {
+type Person = { name: string; email: string | null; phone: string | null; contactId: string | null; isPrimary: boolean };
+
+/*
+ * The tenants as the let shows them (Rhiannon and Lianna Denholm, 4 Nov
+ * 2026): a name or email put right on the let over the application's or the
+ * deal's copy, then anyone added to the let, so the pack names the people
+ * the let does (lib/let-people tenantsAsOnLet). Unread, the copy as it was.
+ */
+function onLet(ref: string, people: Person[], source: "rex" | "propoly" = "rex"): Promise<Person[]> {
+  return tenantsAsOnLet(ref, people, {
+    source,
+    added: (t) => ({ name: t.name, email: t.email, phone: t.phone, contactId: null, isPrimary: false }),
+  }).catch(() => people);
+}
+
+function shape(a: Application, facts?: { hmo: boolean; landlordName: string | null } | null, dealMoveIn?: string | null, people: Person[] = a.applicants): Prefill {
   const warnings: string[] = [];
   const applicationMoveIn = asYmd(a.startDate);
   const moveInDate = asYmd(dealMoveIn ?? null) ?? applicationMoveIn;
@@ -97,7 +113,7 @@ function shape(a: Application, facts?: { hmo: boolean; landlordName: string | nu
   if (!moveInDate) {
     warnings.push("No tenancy start date on the application, so you will need to add the move-in date.");
   }
-  if (!a.applicants.length) {
+  if (!people.length) {
     warnings.push("No applicants are recorded on this application.");
   }
   /* Already computed by lib/applications against every adult applicant, not
@@ -117,7 +133,7 @@ function shape(a: Application, facts?: { hmo: boolean; landlordName: string | nu
     listingId: a.listingId,
     address: a.property,
     locality: a.locality,
-    tenants: a.applicants.map((p) => ({
+    tenants: people.map((p) => ({
       name: p.name,
       email: p.email,
       isPrimary: p.isPrimary,
@@ -155,16 +171,17 @@ async function shapeDeal(deal: BusinessDeal): Promise<Prefill> {
   const fact = home?.rexPropertyId ? facts.get(home.rexPropertyId) ?? null : null;
   const landlords = (d.propoly?.landlords ?? []).map((l) => (l.name ?? "").trim()).filter(Boolean);
   const moveInDate = asYmd(d.startDate);
+  const people = await onLet(d.id, d.tenants.map((t) => ({ name: t.name, email: t.email ?? null, phone: t.phone ?? null, contactId: null, isPrimary: Boolean(t.isPrimary) })), "propoly");
   const warnings: string[] = [];
   if (!moveInDate) warnings.push("No move-in date on the Propoly deal, so you will need to add it.");
-  if (!d.tenants.length) warnings.push("No tenants are on the Propoly deal yet.");
+  if (!people.length) warnings.push("No tenants are on the Propoly deal yet.");
   return {
     applicationRef: d.id,
     applicationId: d.id,
     listingId: d.listingId != null ? Number(d.listingId) : null,
     address: d.propertyName,
     locality: d.locality ?? "",
-    tenants: d.tenants.map((t) => ({ name: t.name, email: t.email ?? null, isPrimary: Boolean(t.isPrimary) })),
+    tenants: people.map((t) => ({ name: t.name, email: t.email, isPrimary: t.isPrimary })),
     moveInDate,
     agentName: deal.managerName,
     rentPcm: d.offer == null ? null : d.offerPeriod === "week" ? Math.round((d.offer * 52) / 12) : d.offer,
@@ -191,7 +208,9 @@ export async function prefillFor(opts: {
      is read from the overlay - the PLC check is walked on it like any other. */
   if (opts.applicationId && isTestId(opts.applicationId)) {
     const t = await testApplication(opts.applicationId);
-    return t ? shape(applyLead(t.app, await leadOverrides().catch(() => new Map<string, string>()))) : null;
+    if (!t) return null;
+    const app = applyLead(t.app, await leadOverrides().catch(() => new Map<string, string>()));
+    return shape(app, undefined, undefined, await onLet(String(app.id), app.applicants));
   }
   const [book, facts] = await Promise.all([
     getApplications(300),
@@ -203,10 +222,15 @@ export async function prefillFor(opts: {
     dealForLet({ ref: String(a.id), app: a, propertyName: a.property, locality: a.locality, listingId: a.listingId != null ? String(a.listingId) : null })
       .then((d) => d?.moveIn ?? null)
       .catch(() => null);
+  /* The deal's move-in and the let's own people, side by side. */
+  const full = async (a: Application) => {
+    const [moveIn, people] = await Promise.all([dealMoveIn(a), onLet(String(a.id), a.applicants)]);
+    return shape(a, factsOf(a), moveIn, people);
+  };
 
   if (opts.applicationId) {
     const found = book.find((a) => String(a.id) === String(opts.applicationId));
-    if (found) return shape(found, factsOf(found), await dealMoveIn(found));
+    if (found) return full(found);
     if (!DEAL_ID.test(opts.applicationId)) return null;
     const deal = await findPropolyDeal(opts.applicationId);
     return deal ? shapeDeal(deal) : null;
@@ -218,7 +242,7 @@ export async function prefillFor(opts: {
     /* Newest first. A property that has been let before carries old
        applications, and the one being handed over is always the latest. */
     const latest = [...on].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
-    const shaped = shape(latest, factsOf(latest), await dealMoveIn(latest));
+    const shaped = await full(latest);
     if (on.length > 1) {
       shaped.warnings.push(
         `There are ${on.length} applications on this listing. This is the most recent one, so check it is the right one.`

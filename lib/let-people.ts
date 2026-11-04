@@ -13,7 +13,7 @@ import { peopleOnHome } from "@/lib/home-aliases";
 import { propertyIdForListing } from "@/lib/rex-landlord";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { sameHome } from "@/lib/address-parse";
-import { letTenants } from "@/lib/let-tenants";
+import { letTenants, type LetTenant } from "@/lib/let-tenants";
 import { dealForLet, type LetDeal } from "@/lib/let-deal";
 import { isOwnerReln } from "@/lib/rex-reln";
 import { can } from "@/lib/roles";
@@ -248,13 +248,67 @@ function dealLandlords(p: { landlords?: DealLandlord[]; landlord?: { name: strin
   return p?.landlord ? [{ uuid: p.landlordUuids?.[0] ?? null, ...p.landlord }] : [];
 }
 
-function tenantParty(t: LetPerson, i: number, source: "rex" | "propoly"): LetParty {
-  const key = source === "rex" && t.contactId && /^\d+$/.test(t.contactId)
+/** The key a tenant is kept under on the let (os_let_person_edits), from the copy they were read from. */
+function tenantKey(t: { name: string; email: string | null; contactId: string | null }, i: number, source: "rex" | "propoly"): string {
+  return source === "rex" && t.contactId && /^\d+$/.test(t.contactId)
     ? `rex:${t.contactId}`
     : `${source === "rex" ? "app" : "propoly"}:tenant:${(t.email ?? t.name ?? String(i)).trim().toLowerCase()}`;
+}
+
+function tenantParty(t: LetPerson, i: number, source: "rex" | "propoly"): LetParty {
+  const key = tenantKey(t, i, source);
   /* An applicant without a REX contact (an OS offer, a swap) can't be written
      to REX, so it is changed in the OS the way somebody only Propoly holds is. */
   return { ...t, key, role: "tenant", source: key.startsWith("rex:") ? "rex" : "propoly", address: null };
+}
+
+/** A part of a tenant's details put right on the let. */
+export type EditedPart = "name" | "email" | "phone";
+
+/**
+ * A let's tenants with their details as put right on the let, for what reads
+ * the application's own copy of them (Rhiannon and Lianna Denholm, 4 Nov
+ * 2026): the Push to Propoly (lib/deal-handoff) and the PLC check
+ * (lib/plc-prefill). Ben Turner's email was fixed on the let and the let
+ * showed it, yet the push and the PLC check still read the application's, so
+ * his deal would have gone to the old address. Read by the same keys as the
+ * let page (withPeople), from the same list in the same order.
+ *
+ * A box only emptied on the let leaves the application's value here: there
+ * is nothing to send in its place, and an empty one would stop the tenant
+ * going to Propoly at all. `editedOnLet` names what was put right, so the
+ * push takes it over the REX contact's own copy (lib/handover
+ * tenantAttributes). With `added`, the people added to the let
+ * (lib/let-tenants) follow, once each - the PLC check's, not the push's,
+ * which has its own switch for them.
+ */
+export async function tenantsAsOnLet<T extends { name: string; email: string | null; phone: string | null; contactId: string | null }>(
+  ref: string,
+  tenants: T[],
+  o: { source?: "rex" | "propoly"; added?: (t: LetTenant) => T } = {}
+): Promise<Array<T & { editedOnLet?: EditedPart[] }>> {
+  const [edits, added] = await Promise.all([
+    personEdits(ref).catch(() => new Map<string, PersonEdit>()),
+    o.added ? letTenants(ref).catch(() => [] as LetTenant[]) : Promise.resolve([] as LetTenant[]),
+  ]);
+  const out: Array<T & { editedOnLet?: EditedPart[] }> = tenants.map((t, i) => {
+    const e = edits.get(tenantKey(t, i, o.source ?? "rex"));
+    const name = e?.name?.trim() || null;
+    const email = e?.email?.trim() || null;
+    const phone = e?.phone?.trim() || null;
+    const parts = (["name", "email", "phone"] as const).filter((p) => ({ name, email, phone })[p]);
+    return parts.length ? { ...t, ...(name ? { name } : {}), ...(email ? { email } : {}), ...(phone ? { phone } : {}), editedOnLet: [...parts] } : t;
+  });
+  if (o.added) {
+    const held = new Set(out.map((t) => (t.email ?? t.name).trim().toLowerCase()));
+    for (const t of added) {
+      const k = (t.email ?? t.name).trim().toLowerCase();
+      if (held.has(k)) continue;
+      held.add(k);
+      out.push(o.added(t));
+    }
+  }
+  return out;
 }
 
 function landlordParty(l: Landlord): LetParty {

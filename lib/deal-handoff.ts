@@ -6,6 +6,7 @@ import { isOwnerReln } from "@/lib/rex-reln";
 import { recordLandlordFor } from "@/lib/record-landlords";
 import { changedLandlordFor } from "@/lib/landlord-change";
 import { peopleOnHome } from "@/lib/home-aliases";
+import { tenantsAsOnLet, type EditedPart } from "@/lib/let-people";
 
 /**
  * Offer accepted → the deal, and everything it needs to carry.
@@ -213,8 +214,9 @@ export interface Handoff {
    * never holds up the rest (Propoly refuses a landlord without one).
    */
   otherLandlords?: OtherLandlord[];
-  /** `reference: false` - already a tenant, on the deal but not referenced (a tenant swap). */
-  tenants: (HandoffParty & { isPrimary: boolean; reference?: boolean; rentSharePcm?: number | null })[];
+  /** `reference: false` - already a tenant, on the deal but not referenced (a tenant swap).
+   *  `editedOnLet` - details put right on the let, over the application's (lib/let-people). */
+  tenants: (HandoffParty & { isPrimary: boolean; reference?: boolean; rentSharePcm?: number | null; editedOnLet?: EditedPart[] })[];
   /** A tenant swap (lib/tenant-swaps): the push starts a NEW deal rather than
    *  joining the one the home already has, on a home Propoly already holds
    *  with its landlord. */
@@ -460,7 +462,12 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
   /* Referenced: whoever joins, and anyone staying who is referenced again
      (Add someone / Re-reference, 19 Oct 2026). */
   const joining = new Set([...(application.swap?.joining ?? []), ...(application.swap?.rereference ?? [])]);
-  const tenants = application.applicants.map((a) => ({
+  /* Each tenant's name, email and mobile as put right on the let, over the
+     application's (Rhiannon and Lianna Denholm, 4 Nov 2026, lib/let-people
+     tenantsAsOnLet): Ben Turner's corrected email was on the let but the
+     push sent REX's. Who is referenced and who pays what is still worked out
+     from the names on the swap itself, before. */
+  const tenants = await tenantsAsOnLet(String(application.id), application.applicants.map((a) => ({
     contactId: a.contactId,
     name: a.name,
     email: a.email,
@@ -470,7 +477,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
     /* The newcomer's rent portion goes onto them in Propoly as their rent
        share (rent_share_pcm_pence, proven on the test home 13 Oct 2026). */
     ...(application.swap && (application.swap.joining ?? []).includes(a.name) && application.swap.rentPortion ? { rentSharePcm: application.swap.rentPortion } : {}),
-  }));
+  })));
 
   const blockers: string[] = [];
   /* A swap is on a home Propoly already has, landlord and all; a REX PM home
