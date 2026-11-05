@@ -10,7 +10,7 @@ import { MAX_FEATURES_AI, OPTIONS } from "@/lib/listing-requirements";
 import { matchIsTrustworthy } from "@/lib/ma-research";
 import type { MatInfoRaw } from "@/lib/matinfo";
 import { getMarketPicture } from "@/lib/market-picture";
-import { answersForProperties } from "@/lib/property-answers-store";
+import { readHome } from "@/lib/home-answers";
 import { rexCall } from "@/lib/rex";
 
 /**
@@ -107,7 +107,12 @@ export async function autofillListing(d: ListingDetails, options: { writeCopy: b
   };
 
   const [answers, previous, material, appraisal, market] = await Promise.all([
-    d.propertyId ? answersForProperties([d.propertyId]).then((a) => a[0] ?? null).catch(() => null) : Promise.resolve(null),
+    /* Every answer kept for the home, whichever contract or portal it came through (lib/home-answers, 5 Nov 2026). */
+    d.propertyId
+      ? readHome({ propertyId: d.propertyId })
+          .then((h) => (Object.keys(h.answers).length ? { answers: h.answers } : null))
+          .catch(() => null)
+      : Promise.resolve(null),
     previousListing(d).catch(() => null),
     homesearch(d).catch(() => null),
     listAppraisals()
@@ -137,6 +142,8 @@ export async function autofillListing(d: ListingDetails, options: { writeCopy: b
     put("pets", PETS_FROM_ANSWER[one("pets") ?? ""], "landlord");
     put("councilTaxBand", band(one("council-tax-band")), "landlord");
     if (one("garden") === "none") put("outsideSpace", "None", "landlord");
+    /* No gas, in the landlord's own declaration: the heating is electric. */
+    if (one("gas-supply") === "no") put("heating", "Electric heating", "landlord");
     if (one("electric-supplier")) put("electricity", "Mains Supply", "landlord");
     if (one("water-supplier")) {
       put("water", "Mains Supply", "landlord");

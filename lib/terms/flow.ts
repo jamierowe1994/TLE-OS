@@ -22,6 +22,7 @@ import { agentPhone } from "@/lib/agent-phone";
 import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
 import { cleanSignature, keepAgentSignature, saveSignature, signaturesFor } from "@/lib/terms/signatures";
 import { contractFooter, contractHtml, detailField, roleOf } from "@/lib/terms/render-html";
+import { fileAnswersRecord } from "@/lib/terms/answers-record";
 import { homeRegistration, keepFromSigning } from "@/lib/terms/registration";
 import { regForLandlords } from "@/lib/reg-numbers";
 import { askedOf, detailText, printedFor } from "@/lib/terms/detail-text";
@@ -599,10 +600,12 @@ export async function completeIfAll(id: string, origin: string): Promise<boolean
   if (!t.agentSignedAt || t.parties.some((p) => !p.signedAt)) return false;
   let key: string | null = null;
   let filed: { submitterId: number; size: number } | null = null;
+  let contractBytes: Uint8Array | null = null;
   if (t.submissionId && docusealConfigured()) {
     const url = await signedDocumentUrl(t.submissionId);
     if (!url) throw new TermsRefused("DocuSeal hasn't finished the signed copy yet.");
     const bytes = await fetchSigned(url);
+    contractBytes = bytes;
     const doc = edition(t.version);
     const last = t.parties[t.parties.length - 1];
     const stored = await store({
@@ -623,6 +626,8 @@ export async function completeIfAll(id: string, origin: string): Promise<boolean
   /* What the DocuSeal webhook always did with a signed copy (Dover Close, 24 Oct
      2026: signed on our page, and the copy never reached the home's Documents). */
   if (key && filed) await afterSigned(t, key, filed).catch(() => null);
+  /* What they answered, when, their signatures and the contract, as one document on the home's file (James, 5 Nov 2026). */
+  await fileAnswersRecord((await getTerms(id).catch(() => null)) ?? t, contractBytes);
   if (first) {
     const agent = await findUserById(t.agentId);
     if (agent) {

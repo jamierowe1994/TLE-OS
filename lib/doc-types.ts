@@ -40,6 +40,8 @@ export const DOC_TYPES: DocType[] = [
      documents) and it is on every Scottish let by itself. */
   { key: "easy_read_notes", label: "Easy Read Notes", side: "tenant", standing: true },
   { key: "terms_of_business", label: "Terms of Business", side: "landlord" },
+  /* What the landlord answered before signing, their declarations, the times and signatures, and the contract (5 Nov 2026). */
+  { key: "landlord_answers", label: "Landlord answers and declarations", side: "landlord" },
   { key: "landlord_id", label: "Landlord ID", side: "landlord" },
   { key: "landlord_proof_of_ownership", label: "Landlord Proof of Ownership", side: "landlord" },
   { key: "landlord_aml", label: "Landlord AML Check", side: "landlord" },
