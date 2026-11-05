@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { asText, jsonObject } from "@/lib/json-body";
 import { currentLandlord, landlordOwnsAppraisal } from "@/lib/landlord-account";
-import { readAnswers, saveAnswers } from "@/lib/property-answers-store";
-import { PROPERTY_QUESTIONS, type Answers } from "@/lib/property-questions";
+import { getAppraisal } from "@/lib/appraisal-store";
+import { cleanPatch, forForm, readHome, saveHome } from "@/lib/home-answers";
 
 /**
  * The landlord's answers about their own property.
@@ -27,7 +27,9 @@ import { PROPERTY_QUESTIONS, type Answers } from "@/lib/property-questions";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const KNOWN = new Set(PROPERTY_QUESTIONS.flatMap((s) => s.questions.map((question) => question.id)));
+/* The home behind the appraisal, so answers given on terms sent from the listing count here too
+   (lib/home-answers, 5 Nov 2026). Codes are sealed on the way in and never sent back. */
+const homeOf = async (appraisalId: string) => ({ appraisalId, propertyId: (await getAppraisal(appraisalId).catch(() => null))?.rexPropertyId ?? null });
 
 export async function GET(req: NextRequest) {
   const me = await currentLandlord();
@@ -37,28 +39,25 @@ export async function GET(req: NextRequest) {
   if (!id || !(await landlordOwnsAppraisal(me, id))) {
     return NextResponse.json({ ok: false, error: "That property isn't on your file." }, { status: 403 });
   }
-  return NextResponse.json({ ok: true, answers: await readAnswers(id) });
+  return NextResponse.json({ ok: true, answers: forForm((await readHome(await homeOf(id))).answers) });
 }
 
 export async function POST(req: NextRequest) {
   const me = await currentLandlord();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
-  const body = (await jsonObject(req)) as { appraisalId?: string; answers?: Answers };
+  const body = (await jsonObject(req)) as { appraisalId?: string; answers?: unknown };
   const id = asText(body.appraisalId).trim();
   if (!id || !(await landlordOwnsAppraisal(me, id))) {
     return NextResponse.json({ ok: false, error: "That property isn't on your file." }, { status: 403 });
   }
 
-  const patch: Answers = {};
-  for (const [k, v] of Object.entries(body.answers ?? {})) {
-    if (!KNOWN.has(k)) continue;
-    if (typeof v === "string") patch[k] = v.slice(0, 2000);
-    else if (Array.isArray(v)) patch[k] = v.filter((x): x is string => typeof x === "string").slice(0, 20);
-  }
+  const patch = cleanPatch(body.answers, "landlord");
+  const home = await homeOf(id);
   if (!Object.keys(patch).length) {
-    return NextResponse.json({ ok: true, answers: await readAnswers(id) });
+    return NextResponse.json({ ok: true, answers: forForm((await readHome(home)).answers) });
   }
-
-  return NextResponse.json({ ok: true, answers: await saveAnswers(id, patch, `landlord:${me.email}`) });
+  /* Written against the appraisal, as it always was: the most specific key the home has. */
+  await saveHome({ appraisalId: id }, patch, `landlord:${me.email}`);
+  return NextResponse.json({ ok: true, answers: forForm((await readHome(home)).answers) });
 }

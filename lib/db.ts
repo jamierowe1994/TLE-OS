@@ -3231,6 +3231,21 @@ CREATE TABLE IF NOT EXISTS os_landlord_addresses (
 );
 CREATE INDEX IF NOT EXISTS os_landlord_addresses_email ON os_landlord_addresses (email);
 CREATE INDEX IF NOT EXISTS os_landlord_addresses_ref ON os_landlord_addresses (person_ref);
+-- The account a landlord's rent goes to, as they gave it on their Terms of
+-- Business (5 Nov 2026, lib/landlord-bank). One row a landlord, by email. The
+-- account number is sealed (lib/bank-vault) and never sent to a browser; the
+-- last four are kept beside it for screens. The next contract offers it back.
+CREATE TABLE IF NOT EXISTS os_landlord_bank (
+  email           TEXT PRIMARY KEY,
+  name            TEXT NOT NULL DEFAULT '',
+  bank_name       TEXT NOT NULL DEFAULT '',
+  account_name    TEXT NOT NULL DEFAULT '',
+  sort_code       TEXT NOT NULL DEFAULT '',
+  account_number  TEXT NOT NULL DEFAULT '',
+  account_last4   TEXT NOT NULL DEFAULT '',
+  terms_id        TEXT NOT NULL DEFAULT '',
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 -- A landlord who opted out of Flatfair's zero deposit (21 Oct 2026, the "PLC
 -- Checks and OS Updates" call). Every landlord is opted in under the terms of
 -- business and the tenant chooses; the few who say no are recorded here by the

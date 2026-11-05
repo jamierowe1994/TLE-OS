@@ -1,6 +1,7 @@
 "use client";
 
 import type { Block, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
+import { detailText } from "@/lib/terms/detail-text";
 
 /**
  * THE TERMS OF BUSINESS AS A PAGE, in James's design (Claude Design, 24 Oct
@@ -95,7 +96,9 @@ export default function TermsPaper({
   const showDetail = (p: PaperPerson, k: keyof LandlordDetails) => {
     const v = (p.details?.[k] ?? "").toString().trim();
     if (detail) return detail(p, k, v);
-    return v ? (k === "accountNumber" ? `•••• ${v.slice(-4)}` : v) : <Blank>{you === "agent" ? "They add this when they sign" : "Add this before you sign"}</Blank>;
+    const f = doc.details.find((d) => d.key === k);
+    const shown = detailText(f, v, { mask: true });
+    return shown || <Blank>{f && !f.required ? "Not given" : you === "agent" ? "They add this when they sign" : "Add this before you sign"}</Blank>;
   };
 
   const block = (b: Block, i: number) => {
@@ -114,12 +117,14 @@ export default function TermsPaper({
         );
       case "landlords":
         return (
-          <div key={i} id="ts-you">
-            {people.map((p, n) => (
+          /* The jump to "your details" lands on the block with their name in it. */
+          <div key={i} id={b.fields.includes("name") ? "ts-you" : undefined}>
+            {/* A first-only block (the bank account, the home's declarations) is the home's: printed once, from the first landlord. */}
+            {(b.first ? people.slice(0, 1) : people).map((p, n) => (
               <dl key={p.key} className="t-tbl">
-                {people.length > 1 && <Row dt={`Landlord ${n + 1}`}>{p.you ? "You" : p.name}</Row>}
+                {people.length > 1 && !b.first && <Row dt={`Landlord ${n + 1}`}>{p.you ? "You" : p.name}</Row>}
                 {/* Only the reader's own details in full; anybody else signing is named, never their address. */}
-                {p.you || you === "agent"
+                {p.you || you === "agent" || b.first
                   ? b.fields.map((k) => <Row key={k} dt={label(k)}>{showDetail(p, k)}</Row>)
                   : <Row dt="Name">{p.name}</Row>}
               </dl>

@@ -9,6 +9,7 @@ import { forStaff } from "@/lib/terms/staff";
 import { editionFor } from "@/lib/terms/catalogue";
 import { homeRegistration } from "@/lib/terms/registration";
 import type { Country } from "@/lib/terms/types";
+import { lookFor } from "@/lib/new-look-store";
 
 /**
  * Terms of Business sent from the OS (lib/terms).
@@ -40,6 +41,8 @@ export async function GET(req: NextRequest) {
       ok: true,
       preview: inPreview(),
       editions: { scotland: editionFor("scotland")?.edition ?? null, england: editionFor("england")?.edition ?? null },
+      /* What goes out with the "Questions before signing" switch on. */
+      nextEditions: { scotland: editionFor("scotland", true)?.edition ?? null, england: editionFor("england", true)?.edition ?? null },
       terms: rows.map((t) => forStaff(t, origin)),
       registration: reg ? { numbers: reg.numbers, expiry: reg.expiry, owners: reg.owners } : null,
     },
@@ -58,6 +61,9 @@ export async function POST(req: NextRequest) {
     const notTheirs = await listingIsTheirs(actor, Number(listingId));
     if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
   }
+  /* The November terms with the questions first, for whoever has that switch on (James, 5 Nov 2026). */
+  const next = b.next === true && Boolean((await lookFor(actor).catch(() => null))?.termsqs);
+  const pre = (b.prefill && typeof b.prefill === "object" ? b.prefill : {}) as Record<string, unknown>;
   try {
     const made = await createTerms({
       me: actor,
@@ -73,6 +79,13 @@ export async function POST(req: NextRequest) {
       additionalFees: str("additionalFees") || null,
       people: Array.isArray(b.people) ? (b.people as Array<{ name: string; email: string; phone?: string; address?: string }>) : [],
       replaces: str("replaces") || null,
+      next,
+      prefill: next
+        ? {
+            licensing: typeof pre.licensing === "string" ? pre.licensing : undefined,
+            rentalPropertyNumber: typeof pre.rentalPropertyNumber === "string" ? pre.rentalPropertyNumber : undefined,
+          }
+        : undefined,
     });
     return NextResponse.json({ ok: true, terms: forStaff(made.terms, publicOrigin(req)), agentEmbedSrc: made.agentEmbedSrc });
   } catch (e) {

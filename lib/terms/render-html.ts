@@ -1,4 +1,5 @@
 import type { Block, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
+import { printsFor } from "@/lib/terms/detail-text";
 
 /**
  * The contract as the HTML DocuSeal turns into the signed document.
@@ -49,11 +50,15 @@ function block(b: Block, doc: TermsDoc, v: TermsValues, people: number): string 
       return `<table class="facts">${b.rows.map((r) => `<tr><th>${esc(r.label)}</th><td>${fillText(r.value, v)}</td></tr>`).join("")}</table>`;
     case "landlords": {
       const label = (k: keyof LandlordDetails) => doc.details.find((d) => d.key === k)?.label ?? k;
-      return Array.from({ length: people }, (_, i) =>
-        `<table class="facts person">${people > 1 ? `<tr><th colspan="2" class="who">Landlord ${i + 1}</th></tr>` : ""}${b.fields
-          .map((k) => `<tr><th>${esc(label(k))}</th><td>${box(detailField(i, k), roleOf(i))}</td></tr>`)
+      /* A first-only block (the bank account, the home's declarations) prints once, as Landlord 1's boxes. */
+      return Array.from({ length: people }, (_, i) => i)
+        .filter((i) => printsFor(b, i))
+        .map((i) =>
+        `<table class="facts person">${people > 1 && !b.first ? `<tr><th colspan="2" class="who">Landlord ${i + 1}</th></tr>` : ""}${b.fields
+          .map((k) => `<tr><th>${esc(label(k))}</th><td>${box(detailField(i, k), roleOf(i), 300)}</td></tr>`)
           .join("")}</table>`
-      ).join("");
+        )
+        .join("");
     }
     case "fees":
       return `<table class="facts"><tr><th>Service level</th><td>${esc(v.serviceLevel)}</td></tr><tr><th>Set-up / tenant find fee</th><td>${esc(v.setUpFee)}</td></tr><tr><th>Management / rent collection fee</th><td>${esc(v.managementFee)}</td></tr><tr><th>Additional fees agreed</th><td>${esc(v.additionalFees || "None")}</td></tr></table>`;

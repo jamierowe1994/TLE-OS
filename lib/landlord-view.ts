@@ -353,10 +353,12 @@ export function stepsForStage(
    */
   const order: Record<Stage, ViewStep["id"][]> = {
     valuation: ["presentation", "message", "compliance", "sign"],
+    /* THE QUESTIONS BEFORE THE CONTRACT (James, 5 Nov 2026: "rather than there
+       being a questionnaire after the portal, it will be before"). */
     instruction:
       opts.presentationOpened === false
-        ? ["presentation", "sign", "questions", "compliance", "message"]
-        : ["sign", "presentation", "questions", "compliance", "message"],
+        ? ["presentation", "questions", "sign", "compliance", "message"]
+        : ["questions", "sign", "presentation", "compliance", "message"],
     /* THE QUESTIONS COME FIRST once the contract is signed. James, 15 Sep
        2026: "once they've signed this, we'll say, Brilliant, signed. Now we
        just need you to answer some questions about your property." They are
@@ -395,10 +397,10 @@ export function stepsForStage(
         !s.done &&
         !(holdSign && s.id === "sign") &&
         !(signed && s.id === "presentation") &&
-        /* Asked only of somebody who has actually instructed us. Before that
-           it is a stranger's form about a house they have not agreed to let
-           through us. */
-        !(!signed && s.id === "questions")
+        /* Asked from the instruction on - before the contract now (5 Nov 2026) -
+           never at the valuation, when it is a stranger's form about a house
+           they have not agreed to let through us. */
+        !(stage === "valuation" && s.id === "questions")
     )
     .slice(0, 4);
 }

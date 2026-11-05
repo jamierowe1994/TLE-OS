@@ -108,7 +108,7 @@ export default function PropertyAnswers({
           <DoodleIcon name="key" size={14} className="text-accent-dark" />
           {title}
         </h3>
-        <p className="text-[11px] text-muted">In their own words, from the questions after signing.</p>
+        <p className="text-[11px] text-muted">In their own words, from the questions before signing.</p>
       </div>
 
       <div className="mt-4 space-y-6">
@@ -133,7 +133,12 @@ export default function PropertyAnswers({
               <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 {PROPERTY_QUESTIONS.map((step) => {
                   const said = step.questions
-                    .map((q) => [q.label, labelFor(q.id, row.answers[q.id])] as const)
+                    .map((q) => {
+                      const said = labelFor(q.id, row.answers[q.id]);
+                      /* A meter says whether it takes a card (Susan, 4 Nov 2026). */
+                      const card = q.card && said ? row.answers[`${q.id}-card`] : null;
+                      return [q.label, said && card ? `${said} (${card === "yes" ? "card or key meter" : "not a card meter"})` : said] as const;
+                    })
                     .filter((pair): pair is readonly [string, string] => Boolean(pair[1]));
                   if (!said.length) return null;
                   return (

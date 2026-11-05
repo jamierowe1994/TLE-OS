@@ -64,6 +64,9 @@ export const LOOK_SCREENS = [
   { id: "fade", label: "Page transitions", what: "Moving between screens: a slow fade out and a slow fade in, in place of the page folding and dropping away." },
   /* The entrance (James, 26 Oct 2026): the painting no longer fits the new look. */
   { id: "entrance", label: "Entrance", what: "The first screen of a visit: a coral line comes in from the left, writes TLE, runs flat, writes OS and leaves to the right, then fades into the page as it pops in. Once a visit, never on a refresh. Off, the painting and the logo." },
+  /* Not a reskin (James, 5 Nov 2026): the November 2026 terms, with the questions about the home asked before the
+     contract, a check for the agent before sending, and the landlord's bank details on the contract. */
+  { id: "termsqs", label: "Questions before signing", what: "Terms go out on the November 2026 wording: bank details and the landlord declarations on page 2. Sending, the agent sees what the landlord will be asked about the home and answers what they know (never gas or bank details); the landlord answers the rest a few questions at a time before the contract opens. Off, the October terms and no questions first." },
   { id: "terms", label: "Send the terms (signed on our page)", what: "The new Send the Terms screen: the contract on the left, check, sign and send down the right, signed on our page and sealed by DocuSeal. Off, agents send from the drawer and sign in DocuSeal's own box. Landlords sign on our page either way." },
   { id: "builder", label: "Build the presentation", what: "The four-step builder: the home, comparables with the radius map, the figure with the local market cards, then the real deck live. Off, the five-step builder as before." },
   /* The tenant passport as a book (James's design, 24 Oct 2026). A customer screen: anonymous tenants only ever see it at Everyone (app/tenant/(public)/passport). */

@@ -90,6 +90,9 @@ function OnPagePanel({
   const [all, setAll] = useState<StaffTerms[] | null>(null);
   const [preview, setPreview] = useState(false);
   const [editions, setEditions] = useState<Editions>({ scotland: null, england: null });
+  /* The November terms with the questions before the contract (James, 5 Nov 2026), for whoever has that switch on. */
+  const asks = useNewLook("termsqs") === true;
+  const [nextEditions, setNextEditions] = useState<Editions>({ scotland: null, england: null });
   /* The home's landlord registration on file (4 Nov 2026): the send screen draws each landlord's on the contract. */
   const [registration, setRegistration] = useState<HomeReg | null>(null);
   /* The send screen, open: a fresh send, Adjust contract (James, 23 Oct 2026: filled in from the
@@ -112,6 +115,7 @@ function OnPagePanel({
       setAll(j.terms);
       setPreview(Boolean(j.preview));
       if (j.editions) setEditions(j.editions);
+      if (j.nextEditions) setNextEditions(j.nextEditions);
       setRegistration(j.registration ?? null);
     } else setAll([]);
   }, [listingId, propertyId, appraisalId]);
@@ -337,7 +341,8 @@ function OnPagePanel({
           serviceWanted={wanted}
           feesOnRecord={feesOnRecord}
           scottish={scottish}
-          editions={editions}
+          editions={asks && !(screen.mode === "sign") ? nextEditions : editions}
+          asks={asks}
           registration={registration}
           preview={preview}
           onClose={(changed) => {

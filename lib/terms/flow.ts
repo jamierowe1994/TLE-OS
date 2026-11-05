@@ -24,6 +24,11 @@ import { cleanSignature, keepAgentSignature, saveSignature, signaturesFor } from
 import { contractFooter, contractHtml, detailField, roleOf } from "@/lib/terms/render-html";
 import { homeRegistration, keepFromSigning } from "@/lib/terms/registration";
 import { regForLandlords } from "@/lib/reg-numbers";
+import { askedOf, detailText, printedFor } from "@/lib/terms/detail-text";
+import { openAccount, sealAccount } from "@/lib/bank-vault";
+import { accountNumberOnFile, bankOnFile, keepBank } from "@/lib/landlord-bank";
+import { cleanPatch, forForm, readHome, saveHome, type HomeIds } from "@/lib/home-answers";
+import { PROPERTY_QUESTIONS, stepDone, type Answers } from "@/lib/property-questions";
 import type { Country, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
 import {
   byToken,
@@ -90,11 +95,42 @@ export interface NewTerms {
   people: Array<{ name: string; email: string; phone?: string | null; address?: string | null }>;
   /** Adjust contract: the set out now, which this one replaces once the agent signs it. */
   replaces?: string | null;
+  /**
+   * The November 2026 wording, with the questions before the contract
+   * (James, 5 Nov 2026), for whoever has the "Questions before signing" switch
+   * on; checked by the route, never taken from the browser alone.
+   */
+  next?: boolean;
+  /**
+   * What the agent answered on their screen for the first landlord's part of
+   * the contract (licensing, the PRS rental property number). Put in for the
+   * landlord to check, as their registration is. Never anything only the
+   * landlord may give (bank details, no gas, their own residence).
+   */
+  prefill?: Partial<Pick<LandlordDetails, "licensing" | "rentalPropertyNumber">>;
+}
+
+/** The home a contract is about, as lib/home-answers keys it. */
+const homeOf = (t: { appraisalId?: string | null; propertyId?: string | null; listingId?: string | null }): HomeIds => ({
+  appraisalId: t.appraisalId ?? null,
+  propertyId: t.propertyId ?? null,
+  listingId: t.listingId ?? null,
+});
+
+/** The details a contract takes from the answers about the home: no gas at the property, from the landlord's Gas screen. */
+function fromAnswers(doc: TermsDoc, answers: Answers): Partial<LandlordDetails> {
+  const out: Partial<LandlordDetails> = {};
+  for (const f of doc.details) {
+    if (!f.fromAnswer) continue;
+    const v = answers[f.fromAnswer.id];
+    if (typeof v === "string" && v.trim()) out[f.key] = f.fromAnswer.yes.includes(v) ? "yes" : "no";
+  }
+  return out;
 }
 
 /** Make the contract and the agent's signing link. Nobody is emailed yet. */
 export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agentEmbedSrc: string }> {
-  const doc = editionFor(n.country);
+  const doc = editionFor(n.country, Boolean(n.next));
   if (!doc) throw new TermsRefused("There are no terms for that country yet.");
   const people = n.people
     .map((p) => ({ name: p.name.trim(), email: p.email.trim(), phone: (p.phone ?? "").trim(), address: (p.address ?? "").trim() }))
@@ -134,6 +170,22 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
         .then((r) => regForLandlords(r, people.map((p) => p.name)))
         .catch(() => people.map(() => null))
     : people.map(() => null);
+  /* The first landlord's part that is already known: what the agent answered (licensing, the
+     PRS rental property number) and, from the landlord's own Gas screen if they have been through
+     it before, no gas at the property. Theirs to check when they sign. */
+  const known: Partial<LandlordDetails> = {};
+  const knownKeys: Array<keyof LandlordDetails> = [];
+  if (doc.asksFirst) {
+    for (const k of ["licensing", "rentalPropertyNumber"] as const) {
+      const v = String(n.prefill?.[k] ?? "").trim().slice(0, 60);
+      if (!v || !doc.details.some((f) => f.key === k)) continue;
+      if (k === "licensing" && v !== "yes" && v !== "no") continue;
+      known[k] = v;
+      knownKeys.push(k);
+    }
+    const home = await readHome(homeOf(n)).catch(() => null);
+    Object.assign(known, home ? fromAnswers(doc, home.answers) : {});
+  }
   const parties: Party[] = people.map((p, i) => ({
     key: `l${i + 1}`,
     name: p.name,
@@ -146,8 +198,11 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
       phone: p.phone,
       ...(p.address ? { address: p.address } : {}),
       ...(regs[i] ? { registrationNumber: regs[i]!.number, ...(regs[i]!.expiry ? { registrationExpiry: regs[i]!.expiry } : {}) } : {}),
+      ...(i === 0 ? known : {}),
     },
-    ...(regs[i] ? { fromFile: ["registrationNumber" as const, ...(regs[i]!.expiry ? ["registrationExpiry" as const] : [])] } : {}),
+    ...(regs[i] || (i === 0 && knownKeys.length)
+      ? { fromFile: [...(regs[i] ? ["registrationNumber" as const, ...(regs[i]!.expiry ? ["registrationExpiry" as const] : [])] : []), ...(i === 0 ? knownKeys : [])] }
+      : {}),
     submitterId: null,
     embedSrc: null,
     status: "waiting",
@@ -208,13 +263,17 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
 /** The values DocuSeal puts in one landlord's read-only boxes. */
 function detailValues(doc: TermsDoc, i: number, d: Partial<LandlordDetails>): Record<string, string> {
   const out: Record<string, string> = {};
-  /* Only what the contract prints: an edition may ask for more than it carries,
-     and DocuSeal has no field to put the rest in. */
-  const printed = new Set(doc.sections.flatMap((s) => s.blocks.flatMap((b) => (b.kind === "landlords" ? b.fields : []))));
+  /* Only what the contract prints for this landlord: an edition may ask for more than it
+     carries, a first-only box (the bank account, the declarations) is Landlord 1's alone, and
+     DocuSeal has no field to put the rest in. The account number is opened here, for the
+     contract, and nowhere else. */
+  const printed = new Set(printedFor(doc, i));
   for (const f of doc.details) {
     if (!printed.has(f.key)) continue;
-    const v = (d[f.key] ?? "").toString().trim();
-    if (v) out[detailField(i, f.key)] = f.kind === "date" ? ukDate(v) : v;
+    const raw = (d[f.key] ?? "").toString().trim();
+    const v = f.key === "accountNumber" ? openAccount(raw) : raw;
+    const shown = f.kind === "date" ? ukDate(v) : detailText(f, v);
+    if (shown) out[detailField(i, f.key)] = shown;
   }
   if (d.name) out[detailField(i, "name")] = d.name;
   /* The date beside their signature: set again each time their details are
@@ -296,6 +355,11 @@ export async function landlordView(token: string) {
     await saveParties(terms.id, parties).catch(() => null);
   }
   const [phone, sigs] = await Promise.all([agentPhone(terms.agentId).catch(() => ""), signaturesFor(terms.id)]);
+  const i = terms.parties.findIndex((p) => p.token === token);
+  /* The questions about the home, asked before the contract (November 2026 on). */
+  const asks = Boolean(doc.asksFirst);
+  const home = asks ? await readHome(homeOf(terms)).catch(() => ({ answers: {} as Answers, who: {} })) : null;
+  const bank = asks && i === 0 ? await bankOnFile(party.email).catch(() => null) : null;
   return {
     doc,
     termsId: terms.id,
@@ -307,14 +371,21 @@ export async function landlordView(token: string) {
     completedAt: terms.completedAt,
     hasCopy: Boolean(terms.signedR2Key),
     /* fromFile: their registration as the home's file had it, shown in a box for them to check (4 Nov 2026). */
-    me: { key: party.key, name: party.name, details: party.details, signedAt: party.signedAt, fromFile: party.signedAt ? [] : party.fromFile ?? [] },
+    me: { key: party.key, name: party.name, details: masked(party.details), signedAt: party.signedAt, fromFile: party.signedAt ? [] : party.fromFile ?? [] },
+    /* The first landlord's part of the home (the bank account, the declarations), as the others see it on the contract. */
+    firstDetails: i > 0 ? masked(firstOnly(doc, terms.parties[0]?.details ?? {})) : null,
+    first: i === 0,
+    asks,
+    answers: home ? forForm(home.answers) : null,
+    answeredBy: home ? whoSaid(home.who, terms.agentEmail) : null,
+    bankOnFile: bank ? { bankName: bank.bankName, accountName: bank.accountName, sortCode: bank.sortCode, last4: bank.last4 } : null,
     people: terms.parties.map((p) => ({ key: p.key, name: p.name, signed: Boolean(p.signedAt), you: p.token === token })),
     preview: inPreview(),
   };
 }
 
 /** Their details, saved and put into their boxes. Returns where they sign. */
-export async function saveDetails(token: string, details: Partial<LandlordDetails>): Promise<{ embedSrc: string }> {
+export async function saveDetails(token: string, details: Partial<LandlordDetails>, opts: { partial?: boolean } = {}): Promise<{ embedSrc: string; details: Partial<LandlordDetails> }> {
   const hit = await byToken(token);
   if (!hit) throw new TermsRefused("This link isn't recognised.");
   const { terms, party } = hit;
@@ -322,22 +393,117 @@ export async function saveDetails(token: string, details: Partial<LandlordDetail
   if (party.signedAt) throw new TermsRefused("You've already signed these.");
   if (!terms.agentSignedAt) throw new TermsRefused("Your agent hasn't finished their part yet.");
   const doc = edition(terms.version)!;
+  const i = terms.parties.findIndex((p) => p.token === token);
+  /* Only what this landlord is asked: the first landlord gives the home's part (the bank
+     account, the declarations), and no gas follows their Gas screen, never a box. A screen of
+     the questions before the contract saves only its own boxes (partial); the check before
+     signing (the rail) saves them all. */
+  const asked = askedOf(doc, i).filter((f) => !opts.partial || f.key in details);
   const clean: Partial<LandlordDetails> = {};
-  for (const f of doc.details) {
-    const v = String(details[f.key] ?? "").trim().slice(0, 300);
+  for (const f of asked) {
+    let v = String(details[f.key] ?? "").trim().slice(0, 300);
+    if (f.key === "accountNumber") {
+      if (v === "on-file") {
+        v = await accountNumberOnFile(party.email).catch(() => "");
+        if (!v) throw new TermsRefused("We couldn't find that account. Type the details in instead.");
+      } else if (v.startsWith("••••") || v === "") {
+        /* Shown as its last four: left as it is. */
+        v = openAccount(String(party.details.accountNumber ?? ""));
+      }
+      v = v.replace(/\s/g, "");
+      if (v && !/^\d{6,10}$/.test(v)) throw new TermsRefused("That account number doesn't look right. It's usually eight numbers.");
+    }
+    if (f.kind === "sortcode" && v) {
+      const d = v.replace(/\D/g, "");
+      if (d.length !== 6) throw new TermsRefused("A sort code is six numbers, like 12-34-56.");
+      v = `${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4)}`;
+    }
+    if (f.kind === "yesno" && v && v !== "yes" && v !== "no") v = "";
+    if (f.required && !v && f.step !== "you") throw new TermsRefused(`${f.ask ?? f.label} is needed before you sign.`);
     if (f.required && !v) throw new TermsRefused(`${f.label} is needed before you sign.`);
-    clean[f.key] = v;
+    clean[f.key] = f.key === "accountNumber" ? (v ? sealAccount(v) : "") : v;
   }
   if (clean.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) throw new TermsRefused("That email address doesn't look right.");
-  const i = terms.parties.findIndex((p) => p.token === token);
-  if (party.submitterId && docusealConfigured()) await setSubmitterValues(party.submitterId, detailValues(doc, i, clean));
-  const parties = terms.parties.map((p) => (p.token === token ? { ...p, details: { ...p.details, ...clean }, name: clean.name || p.name, phone: clean.phone || p.phone, fromFile: [] } : p));
+  const merged = { ...party.details, ...clean };
+  if (party.submitterId && docusealConfigured()) await setSubmitterValues(party.submitterId, detailValues(doc, i, merged));
+  const keptFromFile = (party.fromFile ?? []).filter((k) => !(k in clean));
+  const parties = terms.parties.map((p) => (p.token === token ? { ...p, details: merged, name: clean.name || p.name, phone: clean.phone || p.phone, fromFile: opts.partial ? keptFromFile : [] } : p));
   await saveParties(terms.id, parties);
   /* What they gave goes back on file too, not only on this contract (Lianna
      Denholm, 4 Nov 2026): their registration on the home, their home address
      on their own record. Only blanks or their own entry; never REX. */
   await keepFromSigning(terms, party, clean);
-  return { embedSrc: party.embedSrc ?? `preview:${terms.id}:${party.key}` };
+  /* Their bank account, kept for their next contract (James, 5 Nov 2026). Sealed. */
+  if (i === 0 && merged.accountNumber && merged.sortCode && "accountNumber" in clean) {
+    await keepBank({
+      email: party.email,
+      name: merged.name || party.name,
+      bankName: String(merged.bankName ?? ""),
+      accountName: String(merged.bankAccountName ?? ""),
+      sortCode: String(merged.sortCode ?? ""),
+      accountNumber: openAccount(String(merged.accountNumber)),
+      termsId: terms.id,
+    }).catch(() => null);
+  }
+  return { embedSrc: party.embedSrc ?? `preview:${terms.id}:${party.key}`, details: masked(merged) };
+}
+
+/**
+ * Answers about the home from a landlord's own link, before the contract
+ * (James, 5 Nov 2026). Kept against the home (lib/home-answers), so the next
+ * contract and the agent's screens have them too. Their Gas screen answer is
+ * also the first landlord's "no gas at the property" on the contract, put in
+ * the box straight away unless the first landlord has already signed.
+ */
+export async function saveAnswersByToken(token: string, raw: unknown): Promise<{ answers: Answers; answeredBy: Record<string, string> }> {
+  const hit = await byToken(token);
+  if (!hit) throw new TermsRefused("This link isn't recognised.");
+  const { terms, party } = hit;
+  if (terms.status === "cancelled") throw new TermsRefused("These terms were withdrawn. Your agent will send new ones.");
+  const doc = edition(terms.version);
+  if (!doc?.asksFirst) throw new TermsRefused("There's nothing to answer on these terms.");
+  const patch = cleanPatch(raw, "landlord");
+  const saved = await saveHome(homeOf(terms), patch, `landlord:${party.email}`);
+  const derived = fromAnswers(doc, saved.answers);
+  const lead = terms.parties[0];
+  if (lead && !lead.signedAt && Object.keys(derived).some((k) => lead.details[k as keyof LandlordDetails] !== derived[k as keyof LandlordDetails])) {
+    const fresh = (await getTerms(terms.id)) ?? terms;
+    const first = fresh.parties[0];
+    const details = { ...first.details, ...derived };
+    if (first.submitterId && docusealConfigured()) await setSubmitterValues(first.submitterId, detailValues(doc, 0, details)).catch(() => null);
+    await saveParties(fresh.id, fresh.parties.map((p, k) => (k === 0 ? { ...p, details } : p)));
+  }
+  return { answers: forForm(saved.answers), answeredBy: whoSaid(saved.who, terms.agentEmail) };
+}
+
+/** What a landlord still has to answer before they can sign: the screens of questions, and their own details. */
+export function stillToAnswer(doc: TermsDoc, i: number, details: Partial<LandlordDetails>, answers: Answers): { screens: string[]; details: Array<keyof LandlordDetails> } {
+  if (!doc.asksFirst) return { screens: [], details: [] };
+  const screens = PROPERTY_QUESTIONS.filter((st) => !stepDone(st, answers)).map((st) => st.id);
+  const own = askedOf(doc, i).filter((f) => f.required && !String(details[f.key] ?? "").trim()).map((f) => f.key);
+  const derived = i === 0 ? doc.details.filter((f) => f.fromAnswer && f.required && !String(details[f.key] ?? "").trim()).map((f) => f.key) : [];
+  return { screens, details: [...own, ...derived] };
+}
+
+/** The account number as a browser may see it: the last four. */
+function masked(d: Partial<LandlordDetails>): Partial<LandlordDetails> {
+  const raw = String(d.accountNumber ?? "");
+  if (!raw) return d;
+  const plain = openAccount(raw);
+  return { ...d, accountNumber: plain ? `•••• ${plain.slice(-4)}` : "" };
+}
+
+/** Only the first landlord's part of the home: what the others see of it on the contract. */
+function firstOnly(doc: TermsDoc, d: Partial<LandlordDetails>): Partial<LandlordDetails> {
+  const keys = new Set(doc.details.filter((f) => f.firstOnly).map((f) => f.key));
+  return Object.fromEntries(Object.entries(d).filter(([k]) => keys.has(k as keyof LandlordDetails))) as Partial<LandlordDetails>;
+}
+
+/** Who gave each answer, as a landlord's page says it: "agent", "landlord" or "" (not said). */
+function whoSaid(who: Record<string, { by: string }>, agentEmail: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, w] of Object.entries(who)) out[k] = w.by.startsWith("landlord:") ? "landlord" : w.by.toLowerCase() === agentEmail.toLowerCase() || w.by.startsWith("agent:") ? "agent" : "";
+  return out;
 }
 
 /** A landlord has signed. When they are the last, the contract completes. */
@@ -510,8 +676,16 @@ export async function landlordSign(token: string, image: unknown, startNow: bool
   if (!sig) throw new TermsRefused("Sign in the box first.");
   const doc = edition(terms.version);
   if (!doc) throw new TermsRefused("These terms can't be signed just now.");
-  for (const f of doc.details) {
-    if (f.required && !String(party.details[f.key] ?? "").trim()) throw new TermsRefused(`${f.label} is needed before you sign.`);
+  const i0 = terms.parties.findIndex((p) => p.token === token);
+  if (doc.asksFirst) {
+    /* The questions come first (James, 5 Nov 2026): nobody signs past one still to answer. */
+    const home = await readHome(homeOf(terms));
+    const left = stillToAnswer(doc, i0, party.details, home.answers);
+    if (left.screens.length || left.details.length) throw new TermsRefused("A few details are still needed before you sign.");
+  } else {
+    for (const f of askedOf(doc, i0)) {
+      if (f.required && !String(party.details[f.key] ?? "").trim()) throw new TermsRefused(`${f.label} is needed before you sign.`);
+    }
   }
   const hasWaiver = doc.sections.some((s) => s.blocks.some((b) => b.kind === "waiver"));
   if (hasWaiver && startNow == null) throw new TermsRefused("Choose when we start before you sign.");

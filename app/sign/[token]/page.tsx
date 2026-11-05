@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import TermsPaper, { Blank, type PaperPerson } from "@/components/terms/TermsPaper";
+import BeforeYouSign from "@/components/terms/BeforeYouSign";
+import { askedOf, detailText } from "@/lib/terms/detail-text";
+import { PROPERTY_QUESTIONS, stepDone, type Answers } from "@/lib/property-questions";
 import type { DetailField, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
 
 /**
@@ -42,7 +45,24 @@ type View = {
   me: { key: string; name: string; details: Partial<LandlordDetails>; signedAt: string | null; fromFile?: Array<keyof LandlordDetails> };
   people: Array<{ key: string; name: string; signed: boolean; you: boolean }>;
   preview: boolean;
+  /** November 2026 on: the questions about the home come before the contract (James, 5 Nov 2026). */
+  asks?: boolean;
+  first?: boolean;
+  /** The first landlord's part of the home (bank, declarations), masked, as the others see it on the contract. */
+  firstDetails?: Partial<LandlordDetails> | null;
+  answers?: Answers | null;
+  answeredBy?: Record<string, string> | null;
+  bankOnFile?: { bankName: string; accountName: string; sortCode: string; last4: string } | null;
 };
+
+/** Anything this landlord still has to answer before the contract opens. */
+function stillToAnswer(v: View): boolean {
+  if (!v.asks || v.me.signedAt) return false;
+  const i = Math.max(0, v.people.findIndex((p) => p.you));
+  const own = askedOf(v.doc, i).some((f) => f.required && !String(v.me.details[f.key] ?? "").trim());
+  const home = PROPERTY_QUESTIONS.some((st) => !stepDone(st, v.answers ?? {}));
+  return own || home;
+}
 
 type Posted = { ok?: boolean; error?: string; done?: boolean } | null;
 
@@ -100,7 +120,9 @@ const okFor = (f: DetailField, v: string) => {
   if (!t) return !f.required;
   if (f.kind === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
   if (f.kind === "sortcode") return /^\d{2}-?\d{2}-?\d{2}$/.test(t.replace(/\s/g, ""));
-  if (f.kind === "account") return /^\d{6,10}$/.test(t.replace(/\s/g, ""));
+  /* Saved already: the server only ever sends it back as its last four. */
+  if (f.kind === "account") return t.startsWith("••••") || /^\d{6,10}$/.test(t.replace(/\s/g, ""));
+  if (f.kind === "yesno") return t === "yes" || t === "no";
   return true;
 };
 
@@ -146,6 +168,9 @@ export default function SignPage() {
   /* The sealing moment: which tick is spinning, or what went wrong. */
   const [seal, setSeal] = useState<{ stage: number; error: string | null; done: boolean | null } | null>(null);
   const [reread, setReread] = useState(false);
+  /* The questions before the contract: open while anything is left, or when they ask to look over their answers. */
+  const [asking, setAsking] = useState<null | "left" | "review">(null);
+  const [askedOnce, setAskedOnce] = useState(false);
 
   const fetchView = useCallback(async (): Promise<View | { text: string; gone: boolean }> => {
     const r = await fetch(`/api/sign/${encodeURIComponent(token)}`, { cache: "no-store" }).catch(() => null);
@@ -160,6 +185,7 @@ export default function SignPage() {
     if ("ok" in v) {
       setView(v);
       setProblem(null);
+      setAsking((a) => a ?? (stillToAnswer(v) ? "left" : null));
     } else setProblem(v);
   }, [fetchView]);
 
@@ -338,8 +364,54 @@ export default function SignPage() {
     );
   }
 
+  /* ── the questions about the home, before the contract (James, 5 Nov 2026) ── */
+  const myIndex = Math.max(0, view.people.findIndex((p) => p.you));
+  if (asking && view.asks && !view.me.signedAt) {
+    const call = (body: object) =>
+      fetch(`/api/sign/${encodeURIComponent(token)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+        .then((r) => r.json())
+        .catch(() => null);
+    return (
+      <div className="tsl">
+        <Top street={street} ask={ask} />
+        <BeforeYouSign
+          doc={doc}
+          index={myIndex}
+          firstName={first}
+          agentFirst={agentFirst}
+          street={street}
+          answers={view.answers ?? {}}
+          answeredBy={view.answeredBy ?? {}}
+          details={view.me.details}
+          fromFile={view.me.fromFile ?? []}
+          bankOnFile={view.first ? view.bankOnFile ?? null : null}
+          review={asking === "review"}
+          saveAnswers={async (patch) => {
+            const j = await call({ action: "answers", answers: patch });
+            if (j?.ok) setView((v) => (v ? { ...v, answers: j.answers, answeredBy: j.answeredBy } : v));
+            return { ok: Boolean(j?.ok), error: j?.error ? forLandlord(j.error) : undefined, answers: j?.answers };
+          }}
+          saveDetails={async (d) => {
+            const j = await call({ action: "details", details: d, partial: true });
+            if (j?.ok && j.details) setView((v) => (v ? { ...v, me: { ...v.me, details: j.details, fromFile: (v.me.fromFile ?? []).filter((k) => !(k in d)) } } : v));
+            return { ok: Boolean(j?.ok), error: j?.error ? forLandlord(j.error) : undefined, details: j?.details };
+          }}
+          onDone={(details, answers) => {
+            setView((v) => (v ? { ...v, answers, me: { ...v.me, details } } : v));
+            setAsking(null);
+            setAskedOnce(true);
+            window.scrollTo(0, 0);
+            /* Fresh from the server: what the first landlord's part now says (no gas follows the Gas screen). */
+            void load();
+          }}
+        />
+      </div>
+    );
+  }
+
   /* ── read and sign ── */
-  const fields = doc.details;
+  /* Only what this landlord is asked: the first landlord also gives the home's part (the bank account, the declarations). */
+  const fields = askedOf(doc, myIndex);
   const details: Partial<LandlordDetails> = { ...view.me.details, ...edits };
   /* Asked for from what is saved, so a box stays put while it's typed into. Their
      registration as the home's file has it comes in a box too, already filled,
@@ -349,7 +421,11 @@ export default function SignPage() {
     .filter((f) => !okFor(f, String(view.me.details[f.key] ?? "")) || fromFile.has(f.key))
     .map((f) => (fromFile.has(f.key) ? { ...f, hint: "We have this on file. Change it if it isn't right." } : f));
   const stillBad = missing.filter((f) => !okFor(f, String(details[f.key] ?? "")));
-  const printed = doc.sections.flatMap((s) => s.blocks.flatMap((b) => (b.kind === "landlords" ? b.fields : [])));
+  /* What they are asked to check: on the November terms the questions before the contract already
+     went through the rest, so it is the block with their name in it. */
+  const printed = view.asks
+    ? (doc.sections.flatMap((s) => s.blocks).find((b) => b.kind === "landlords" && b.fields.includes("name")) as { fields: Array<keyof LandlordDetails> } | undefined)?.fields ?? []
+    : doc.sections.flatMap((s) => s.blocks.flatMap((b) => (b.kind === "landlords" ? b.fields : [])));
   const youSection = doc.sections.find((s) => s.blocks.some((b) => b.kind === "landlords"))?.title ?? "the agreement";
   const checkList = joinAnd(printed.map((k) => fields.find((f) => f.key === k)?.label.toLowerCase() ?? k));
   const hasReg = fields.some((f) => f.step === "registration");
@@ -439,10 +515,12 @@ export default function SignPage() {
     window.scrollTo(0, 0);
   }
 
-  const detail = (_p: PaperPerson, key: keyof LandlordDetails, value: string) => {
-    const f = fields.find((x) => x.key === key);
+  const detail = (p: PaperPerson, key: keyof LandlordDetails, value: string) => {
+    const f = doc.details.find((x) => x.key === key);
+    /* The first landlord's part of the home, as another landlord reads it. */
+    if (!p.you) return value ? detailText(f, value, { mask: true }) : <Blank>{`${p.name} adds this`}</Blank>;
     if (!value || (f && !okFor(f, value))) return <Blank>{f && !f.required ? "Not given" : "Add this before you sign"}</Blank>;
-    const shown = key === "accountNumber" ? `•••• ${value.slice(-4)}` : f?.kind === "date" ? ukDay(value) : value;
+    const shown = f?.kind === "date" ? ukDay(value) : detailText(f, value, { mask: true });
     return (
       <span className={`fld${detailsOk ? "" : " check"}`}>
         {shown}
@@ -473,10 +551,10 @@ export default function SignPage() {
     </div>
   ) : undefined;
 
-  const people: PaperPerson[] = view.people.map((p) =>
+  const people: PaperPerson[] = view.people.map((p, n) =>
     p.you
       ? { key: p.key, name: view.me.name, details, you: true, signature: sig, signedOn: sig ? today : null }
-      : { key: p.key, name: p.name, signedOn: p.signed ? "Signed" : null }
+      : { key: p.key, name: p.name, signedOn: p.signed ? "Signed" : null, ...(n === 0 && view.firstDetails ? { details: view.firstDetails } : {}) }
   );
 
   const signBtn = (
@@ -505,7 +583,17 @@ export default function SignPage() {
               <span className="av">{initials(agentName)}</span>
               <span>
                 <b>{agentFirst} has signed. Your turn, {first}.</b>
-                <span>Read it through, then {words.toLowerCase()} quick things. About 3 minutes.</span>
+                <span>
+                  Read it through, then {words.toLowerCase()} quick things. About 3 minutes.
+                  {view.asks ? (
+                    <>
+                      {" "}
+                      <button type="button" className="answers-link" onClick={() => setAsking("review")}>
+                        {askedOnce ? "Change your answers" : "Your answers about the home"}
+                      </button>
+                    </>
+                  ) : null}
+                </span>
                 {others.length > 0 && (
                   <span className="also">
                     {others.map((p) => (
@@ -737,6 +825,21 @@ function DetailInputs({ fields, values, onChange }: { fields: DetailField[]; val
       {fields.map((f) => {
         const v = String(values[f.key] ?? "");
         const bad = v.trim() !== "" && !okFor(f, v);
+        if (f.kind === "yesno") {
+          return (
+            <div key={f.key} className="inp">
+              <span>{f.ask ?? f.label}</span>
+              <div className="tq-opts sm" role="radiogroup" aria-label={f.ask ?? f.label}>
+                {(["yes", "no"] as const).map((x) => (
+                  <button key={x} type="button" role="radio" aria-checked={v === x} className={v === x ? "on" : ""} onClick={() => onChange(f.key, x)}>
+                    {x === "yes" ? "Yes" : "No"}
+                  </button>
+                ))}
+              </div>
+              {f.hint ? <small>{f.hint}</small> : null}
+            </div>
+          );
+        }
         return (
           <label key={f.key} className="inp">
             <span>{f.label}{f.required ? "" : " (optional)"}</span>
