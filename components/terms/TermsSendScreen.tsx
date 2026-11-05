@@ -639,6 +639,12 @@ export default function TermsSendScreen({
   const [preSaving, setPreSaving] = useState(false);
   const [preProblem, setPreProblem] = useState<string | null>(null);
   const [licensing, setLicensing] = useState<"" | "yes" | "no">("");
+  /* PULLED THROUGH (James, 5 Nov 2026): what the OS already knows about the home, each subject for the agent to
+     confirm ("Yes, still correct"), change, or send to the landlord to check anyway. Nothing goes unchecked. */
+  type Pulled = { answers: Answers; from: Record<string, string>; relist: boolean; relistWhy: string | null; licensing: { value: "yes" | "no"; from: string } | null };
+  const [pulled, setPulled] = useState<Pulled | null>(null);
+  const [pulledSteps, setPulledSteps] = useState<Set<string>>(new Set());
+  const [choice, setChoice] = useState<Record<string, "ok" | "change" | "ask">>({});
   const [rentalNo, setRentalNo] = useState("");
   const leadEmail = people[0]?.email.trim() ?? "";
   useEffect(() => {
@@ -649,6 +655,7 @@ export default function TermsSendScreen({
     if (propertyId) u.set("propertyId", propertyId);
     if (appraisalId) u.set("appraisalId", appraisalId);
     if (EMAIL.test(leadEmail)) u.set("email", leadEmail);
+    if (address.trim()) u.set("address", address.trim());
     if (![...u.keys()].some((k) => k !== "email")) {
       setPreLoaded(true);
       return;
@@ -660,6 +667,11 @@ export default function TermsSendScreen({
         setPreAnswers(j.answers ?? {});
         setPreWho(j.who ?? {});
         setPreBank(j.bankOnFile ?? null);
+        const pl: Pulled | null = j.pulled ?? null;
+        setPulled(pl);
+        /* A subject is pulled through when anything on it is already known: kept before, or found on the file. */
+        const known = { ...(pl?.answers ?? {}), ...(j.answers ?? {}) };
+        setPulledSteps(new Set(PROPERTY_QUESTIONS.filter((st) => st.id !== "gas" && st.questions.some((q) => String(known[q.id] ?? "").trim())).map((st) => st.id)));
       })
       .catch(() => {})
       .finally(() => live && setPreLoaded(true));
@@ -672,15 +684,38 @@ export default function TermsSendScreen({
     setPreProblem(null);
     setPreAnswers((a) => ({ ...a, [id]: v }));
     setPreTouched((t) => ({ ...t, [id]: v }));
+    /* Changing a pulled-through answer is the agent saying what it is now. */
+    const st = PROPERTY_QUESTIONS.find((s) => s.questions.some((q) => q.id === id || `${q.id}-card` === id));
+    if (st && pulledSteps.has(st.id)) setChoice((c) => ({ ...c, [st.id]: c[st.id] === "ask" ? "ask" : "change" }));
   };
+  /* What each question shows: kept answers first, then what the file says. */
+  const shown: Answers = { ...(pulled?.answers ?? {}), ...preAnswers };
+  const askSteps = ["gas", ...Object.entries(choice).filter(([, c]) => c === "ask").map(([k]) => k)];
   async function preRight() {
     if (preSaving) return;
-    if (Object.keys(preTouched).length) {
+    /* Every subject pulled through has been looked at (James, 5 Nov 2026: "make sure they are covering it all off"). */
+    const unchecked = PROPERTY_QUESTIONS.filter((st) => pulledSteps.has(st.id) && !choice[st.id]);
+    if (unchecked.length || (pulled?.licensing && !choice.decl)) {
+      setPreOpen(unchecked[0]?.id ?? "decl");
+      return setPreProblem(`Check each subject we pulled through: Still correct, No, change it, or Ask ${firstOf(people[0]?.name ?? "") || "them"} anyway.`);
+    }
+    /* Confirmed or changed: what the agent saw on those subjects is kept as theirs. Sent to check: nothing kept. */
+    const save: Answers = { ...preTouched };
+    for (const st of PROPERTY_QUESTIONS) {
+      const c = choice[st.id];
+      if (c !== "ok" && c !== "change") continue;
+      for (const q of st.questions) {
+        if (q.who === "landlord" || q.secret) continue;
+        for (const k of [q.id, `${q.id}-card`]) if (pulled?.answers[k] != null && preAnswers[k] == null) save[k] = shown[k];
+      }
+    }
+    for (const st of PROPERTY_QUESTIONS) if (choice[st.id] === "ask") for (const q of st.questions) { delete save[q.id]; delete save[`${q.id}-card`]; }
+    if (Object.keys(save).length) {
       setPreSaving(true);
       const r = await fetch("/api/terms/answers", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ listingId, propertyId, appraisalId, answers: preTouched }),
+        body: JSON.stringify({ listingId, propertyId, appraisalId, answers: save }),
       })
         .then((x) => x.json())
         .catch(() => null);
@@ -794,6 +829,18 @@ export default function TermsSendScreen({
         replaces: from?.id ?? null,
         next: asks,
         prefill: pre ? { licensing: licensing || undefined, rentalPropertyNumber: rentalNo.trim() || undefined } : undefined,
+        /* Gas always, and every subject sent to check anyway, filled in with what the file says. */
+        askAgain: pre
+          ? {
+              steps: askSteps,
+              answers: Object.fromEntries(
+                PROPERTY_QUESTIONS.filter((st) => askSteps.includes(st.id))
+                  .flatMap((st) => st.questions.flatMap((q) => [q.id, `${q.id}-card`]))
+                  .filter((k) => !PROPERTY_QUESTIONS.some((st) => st.questions.some((q) => q.id === k && q.secret)) && String(shown[k] ?? "").trim())
+                  .map((k) => [k, shown[k]])
+              ),
+            }
+          : undefined,
       });
       if (!j?.ok || !j.terms) {
         tick(0, "warn");
@@ -1218,7 +1265,7 @@ export default function TermsSendScreen({
   /* As the landlord's own screens are planned (components/terms/BeforeYouSign): a subject with something still to
      answer, or a subject of optional questions nobody has touched, asked once. */
   const untouched = (st: QuestionStep) => st.questions.every((q) => q.optional) && st.questions.every((q) => !String(preAnswers[q.id] ?? "").trim());
-  const homeLeft = PROPERTY_QUESTIONS.filter((st) => !stepDone(st, preAnswers) || untouched(st));
+  const homeLeft = PROPERTY_QUESTIONS.filter((st) => !stepDone(st, preAnswers) || untouched(st) || askSteps.includes(st.id));
   const ownFields = doc ? doc.details.filter((f) => !f.fromAnswer && (f.step === "declarations" || f.step === "registration" || f.step === "bank")) : [];
   const theirScreens =
     homeLeft.length +
@@ -1235,16 +1282,39 @@ export default function TermsSendScreen({
         <p className="pre-wait"><i className="up-spin" aria-hidden /> Looking up what we already know…</p>
       ) : (
         <>
+          {pulled?.relist && (
+            <p className="pre-relist">
+              <b>A re-list.</b> {pulled.relistWhy} We&apos;ve pulled through what we already know: check each one before it goes.
+            </p>
+          )}
           <p className="pre-count">
             <b>{theirScreens} short {theirScreens === 1 ? "screen" : "screens"}</b> for {people.length > 1 ? "them" : firstName0}, about {Math.max(2, Math.round(theirScreens * 0.6))} minutes
           </p>
           <ul className="pre-groups">
             {PROPERTY_QUESTIONS.map((st) => {
               const theirs = landlordOnlyStep(st);
-              const done2 = stepDone(st, preAnswers);
+              const isPulled = pulledSteps.has(st.id);
+              const c = choice[st.id];
+              const gasKnown = theirs && st.questions.some((q) => String(shown[q.id] ?? "").trim());
+              const done2 = isPulled ? c === "ok" || c === "change" : stepDone(st, preAnswers);
               const left = st.questions.filter((q) => wants(q, preAnswers) && q.who !== "landlord").length;
               const open = preOpen === st.id;
-              const status = untouched(st)
+              const pulledSay = (() => {
+                const v = shown[st.questions[0].id];
+                const lab = st.questions[0].options?.find((o) => o.id === v)?.label ?? (typeof v === "string" ? v : "");
+                return lab ? `: ${lab}` : "";
+              })();
+              const status = gasKnown
+                ? `Pulled through${pulledSay}. ${firstName0} confirms it`
+                : isPulled
+                  ? c === "ok"
+                    ? "Pulled through, still correct"
+                    : c === "change"
+                      ? "Pulled through, changed by you"
+                      : c === "ask"
+                        ? `Pulled through, ${firstName0} checks it`
+                        : "Pulled through: check it"
+                  : untouched(st)
                 ? `Optional, ${firstName0} can fill these in`
                 : done2
                   ? byWhom(st)
@@ -1254,25 +1324,41 @@ export default function TermsSendScreen({
                       ? `${left} to answer, or leave for ${firstName0}`
                       : "Left for the landlord";
               return (
-                <li key={st.id} className={`${done2 && !untouched(st) ? "ok" : ""}${theirs ? " theirs" : ""}${open ? " open" : ""}`}>
-                  <button type="button" className="pre-row" aria-expanded={open} disabled={theirs && !done2} onClick={() => setPreOpen(open ? null : st.id)}>
-                    <i aria-hidden>{done2 && !untouched(st) ? <Ic k="check" w={2.6} /> : theirs ? <Ic k="lock" w={1.8} /> : null}</i>
+                <li key={st.id} className={`${done2 && !untouched(st) ? "ok" : ""}${theirs ? " theirs" : ""}${open ? " open" : ""}${isPulled && !c ? " pull" : ""}${c === "ask" ? " ask" : ""}`}>
+                  <button type="button" className="pre-row" aria-expanded={open} disabled={theirs && !gasKnown} onClick={() => setPreOpen(open ? null : st.id)}>
+                    <i aria-hidden>{done2 && !untouched(st) ? <Ic k="check" w={2.6} /> : theirs ? <Ic k="lock" w={1.8} /> : isPulled ? <Ic k="link" w={1.8} /> : null}</i>
                     <span>
                       <b>{st.title}</b>
                       <span>{status}</span>
                     </span>
-                    {!(theirs && !done2) && <em>{open ? "Close" : done2 && !untouched(st) ? "View" : "Answer now"}</em>}
+                    {!(theirs && !gasKnown) && <em>{open ? "Close" : isPulled && !c ? "Check" : gasKnown || (done2 && !untouched(st)) || c === "ask" ? "View" : "Answer now"}</em>}
                   </button>
                   {open && (
                     <div className="tq pre-q">
+                      {isPulled && (
+                        <div className="pre-choice" role="radiogroup" aria-label={`${st.title}: pulled through`}>
+                          <span>We pulled these through. Are they still right?</span>
+                          <div className="tq-opts sm">
+                            <button type="button" role="radio" aria-checked={c === "ok"} className={c === "ok" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, [st.id]: "ok" })); setPreOpen(null); }}>Yes, still correct</button>
+                            <button type="button" role="radio" aria-checked={c === "change"} className={c === "change" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, [st.id]: "change" })); }}>No, change it</button>
+                            <button type="button" role="radio" aria-checked={c === "ask"} className={c === "ask" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, [st.id]: "ask" })); setPreOpen(null); }}>Ask {firstName0} anyway</button>
+                          </div>
+                        </div>
+                      )}
                       {st.questions.map((q) => (
                         <QuestionField
                           key={q.id}
                           q={q}
-                          answers={preAnswers}
+                          answers={shown}
                           onChange={preAnswer}
-                          locked={q.who === "landlord" ? `${firstName0} answers this one. You can't fill it in for them.` : null}
-                          by={preWho[q.id]?.by === "landlord" ? `From ${leadFirst}` : null}
+                          locked={q.who === "landlord" ? (String(shown[q.id] ?? "").trim() ? `Pulled through: ${q.options?.find((o) => o.id === shown[q.id])?.label ?? shown[q.id]}. ${firstName0} confirms it.` : `${firstName0} answers this one. You can't fill it in for them.`) : null}
+                          by={
+                            pulled?.from[q.id] && preAnswers[q.id] == null
+                              ? `From ${pulled.from[q.id]}`
+                              : preWho[q.id]
+                                ? `From ${preWho[q.id].by === "landlord" ? "the landlord" : "an agent"}, ${new Date(preWho[q.id].at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
+                                : null
+                          }
                         />
                       ))}
                     </div>
@@ -1281,17 +1367,35 @@ export default function TermsSendScreen({
               );
             })}
             {ownFields.some((f) => f.step === "declarations") && (
-              <li className={`${licensing ? "ok" : ""}${preOpen === "decl" ? " open" : ""}`}>
+              <li className={`${licensing ? "ok" : ""}${preOpen === "decl" ? " open" : ""}${pulled?.licensing && !choice.decl ? " pull" : ""}`}>
                 <button type="button" className="pre-row" aria-expanded={preOpen === "decl"} onClick={() => setPreOpen(preOpen === "decl" ? null : "decl")}>
-                  <i aria-hidden>{licensing ? <Ic k="check" w={2.6} /> : null}</i>
+                  <i aria-hidden>{licensing ? <Ic k="check" w={2.6} /> : pulled?.licensing ? <Ic k="link" w={1.8} /> : null}</i>
                   <span>
                     <b>Their Declarations</b>
-                    <span>{licensing ? `Licensing: ${licensing === "yes" ? "Yes" : "No"}. The rest is theirs` : "Licensing you can answer; no gas and where they live are theirs"}</span>
+                    <span>
+                      {pulled?.licensing && !choice.decl
+                        ? `Pulled through: licensing ${pulled.licensing.value === "yes" ? "Yes" : "No"}: check it`
+                        : choice.decl === "ask"
+                          ? `Licensing: ${firstName0} answers it. The rest is theirs`
+                          : licensing
+                            ? `Licensing: ${licensing === "yes" ? "Yes" : "No"}. The rest is theirs`
+                            : "Licensing you can answer; no gas and where they live are theirs"}
+                    </span>
                   </span>
-                  <em>{preOpen === "decl" ? "Close" : "Answer now"}</em>
+                  <em>{preOpen === "decl" ? "Close" : pulled?.licensing && !choice.decl ? "Check" : "Answer now"}</em>
                 </button>
                 {preOpen === "decl" && (
                   <div className="tq pre-q">
+                    {pulled?.licensing && (
+                      <div className="pre-choice" role="radiogroup" aria-label="Licensing: pulled through">
+                        <span>Licensing pulled through as {pulled.licensing.value === "yes" ? "Yes" : "No"}, from {pulled.licensing.from}. Still right?</span>
+                        <div className="tq-opts sm">
+                          <button type="button" role="radio" aria-checked={choice.decl === "ok"} className={choice.decl === "ok" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, decl: "ok" })); setLicensing(pulled.licensing!.value); setPreOpen(null); }}>Yes, still correct</button>
+                          <button type="button" role="radio" aria-checked={choice.decl === "change"} className={choice.decl === "change" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, decl: "change" })); }}>No, change it</button>
+                          <button type="button" role="radio" aria-checked={choice.decl === "ask"} className={choice.decl === "ask" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, decl: "ask" })); setLicensing(""); setPreOpen(null); }}>Ask {firstName0} anyway</button>
+                        </div>
+                      </div>
+                    )}
                     {ownFields
                       .filter((f) => f.step === "declarations")
                       .map((f) =>

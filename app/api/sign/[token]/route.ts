@@ -26,10 +26,13 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ token: str
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
-  const b = (await req.json().catch(() => ({}))) as { action?: string; details?: Record<string, string>; partial?: boolean; answers?: unknown; name?: string; signature?: unknown; startNow?: boolean | null };
+  const b = (await req.json().catch(() => ({}))) as { action?: string; details?: Record<string, string>; partial?: boolean; answers?: unknown; checked?: unknown; name?: string; signature?: unknown; startNow?: boolean | null };
   try {
     if (b.action === "details") return NextResponse.json({ ok: true, ...(await saveDetails(token, b.details ?? {}, { partial: b.partial === true })) });
-    if (b.action === "answers") return NextResponse.json({ ok: true, ...(await saveAnswersByToken(token, b.answers)) });
+    if (b.action === "answers") {
+      const checked = Array.isArray(b.checked) ? b.checked.filter((x): x is string => typeof x === "string").slice(0, 20) : [];
+      return NextResponse.json({ ok: true, ...(await saveAnswersByToken(token, b.answers, checked)) });
+    }
     if (b.action === "sign") {
       const meta = { ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null, userAgent: req.headers.get("user-agent") };
       return NextResponse.json({ ok: true, ...(await landlordSign(token, b.signature, typeof b.startNow === "boolean" ? b.startNow : null, publicOrigin(req), meta)) });

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import QuestionField from "@/components/terms/QuestionField";
-import { PROPERTY_QUESTIONS, asked, cardAsked, cardKey, filled, stepDone, wants, type Answers, type QuestionStep } from "@/lib/property-questions";
+import { KEPT, PROPERTY_QUESTIONS, asked, cardAsked, cardKey, filled, stepDone, wants, type Answers, type QuestionStep } from "@/lib/property-questions";
 import { askedOf, detailText } from "@/lib/terms/detail-text";
 import type { DetailField, LandlordDetails, TermsDoc } from "@/lib/terms/types";
 
@@ -58,7 +58,13 @@ export type BeforeProps = {
   details: Partial<LandlordDetails>;
   fromFile: Array<keyof LandlordDetails>;
   bankOnFile: { bankName: string; accountName: string; sortCode: string; last4: string } | null;
-  saveAnswers: (patch: Answers) => Promise<Saved<{ answers?: Answers }>>;
+  saveAnswers: (patch: Answers, checked?: string[]) => Promise<Saved<{ answers?: Answers }>>;
+  /**
+   * Subjects the agent sent them to check anyway, and what the OS already had for them
+   * (James, 5 Nov 2026: "pulled through ... confirm the details again"). Shown filled in.
+   */
+  askAgain?: string[];
+  pulled?: Answers;
   saveDetails: (d: Partial<LandlordDetails>) => Promise<Saved<{ details?: Partial<LandlordDetails> }>>;
   onDone: (details: Partial<LandlordDetails>, answers: Answers) => void;
   /** Came back to look over their answers: straight to the check screen. */
@@ -88,7 +94,7 @@ function plan(p: BeforeProps): Screen[] {
   for (const st of PROPERTY_QUESTIONS) {
     /* Still something to answer; or a screen of optional questions nobody has touched, asked once. */
     const untouched = st.questions.every((q) => q.optional) && st.questions.every((q) => !filled(p.answers[q.id]));
-    if (!stepDone(st, p.answers) || untouched) out.push({ kind: "home", step: st });
+    if (!stepDone(st, p.answers) || untouched || (p.askAgain ?? []).includes(st.id)) out.push({ kind: "home", step: st });
   }
   const want = (fs: DetailField[]) => fs.some((f) => !detailOk(f, String(p.details[f.key] ?? "")) || fromFile.has(f.key) || (!f.required && blank(p.details[f.key])));
   if (want(of("declarations"))) out.push({ kind: "declarations" });
@@ -108,7 +114,9 @@ export default function BeforeYouSign(p: BeforeProps) {
   const [screens] = useState<Screen[]>(() => plan(p));
   const [at, setAt] = useState(0);
   const [dir, setDir] = useState(1);
-  const [answers, setAnswers] = useState<Answers>(p.answers);
+  /* What the file already had for the subjects sent to check, shown filled in; anything kept since wins. */
+  const [answers, setAnswers] = useState<Answers>(() => ({ ...(p.pulled ?? {}), ...p.answers }));
+  const [fromFileAns] = useState(() => new Set(Object.keys(p.pulled ?? {}).filter((k) => !String(p.answers[k] ?? "").trim())));
   const [details, setDetails] = useState<Partial<LandlordDetails>>(p.details);
   const [fromFile, setFromFile] = useState(new Set(p.fromFile));
   const [useFile, setUseFile] = useState<boolean>(Boolean(p.bankOnFile));
@@ -126,13 +134,13 @@ export default function BeforeYouSign(p: BeforeProps) {
   const pending = useRef<Answers>({});
   const timer = useRef<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const flush = useCallback(async () => {
+  const flush = useCallback(async (checked: string[] = []) => {
     if (timer.current) window.clearTimeout(timer.current);
     const patch = pending.current;
     pending.current = {};
-    if (!Object.keys(patch).length) return true;
+    if (!Object.keys(patch).length && !checked.length) return true;
     setSaving(true);
-    const r = await p.saveAnswers(patch).catch(() => null);
+    const r = await p.saveAnswers(patch, checked).catch(() => null);
     setSaving(false);
     if (!r?.ok) {
       pending.current = { ...patch, ...pending.current };
@@ -198,7 +206,16 @@ export default function BeforeYouSign(p: BeforeProps) {
         setErr(open.length === 1 ? `"${open[0].label}" still needs an answer. "Not sure" is fine.` : `${open.length} questions here still need an answer. "Not sure" is fine.`);
         return;
       }
-      if (!(await flush())) return;
+      /* A subject sent to them to check: what they saw is now theirs, saved as they confirmed it. */
+      const again = (p.askAgain ?? []).includes(screen.step.id);
+      if (again) {
+        for (const q of screen.step.questions) {
+          if (!asked(q, answers)) continue;
+          if (filled(answers[q.id]) && answers[q.id] !== KEPT) pending.current[q.id] = answers[q.id];
+          if (cardAsked(q, answers) && filled(answers[cardKey(q.id)])) pending.current[cardKey(q.id)] = answers[cardKey(q.id)];
+        }
+      }
+      if (!(await flush(again ? [screen.step.id] : []))) return;
     }
     if (screen.kind === "you" || screen.kind === "declarations" || screen.kind === "registration" || screen.kind === "bank") {
       if (!(await saveOwn(screen.kind))) return;
@@ -338,6 +355,9 @@ export default function BeforeYouSign(p: BeforeProps) {
         return (
           <>
             <Head title={screen.step.title} blurb={screen.step.blurb} />
+            {(p.askAgain ?? []).includes(screen.step.id) && screen.step.questions.some((q) => fromFileAns.has(q.id) || filled(p.answers[q.id])) ? (
+              <p className="bys-file">We&apos;ve filled in what we already had. Check it&apos;s still right, and change anything that isn&apos;t.</p>
+            ) : null}
             <div className="tq">
               {screen.step.questions.map((q) => (
                 <QuestionField
@@ -345,7 +365,13 @@ export default function BeforeYouSign(p: BeforeProps) {
                   q={q}
                   answers={answers}
                   onChange={answer}
-                  by={p.answeredBy[q.id] === "agent" && filled(answers[q.id]) ? `${p.agentFirst} filled this in. Change it if it isn't right.` : null}
+                  by={
+                    fromFileAns.has(q.id) && filled(answers[q.id])
+                      ? "From your file. Change it if it isn't right."
+                      : p.answeredBy[q.id] === "agent" && filled(answers[q.id])
+                        ? `${p.agentFirst} filled this in. Change it if it isn't right.`
+                        : null
+                  }
                 />
               ))}
             </div>

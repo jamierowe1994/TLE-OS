@@ -53,6 +53,9 @@ type View = {
   answers?: Answers | null;
   answeredBy?: Record<string, string> | null;
   bankOnFile?: { bankName: string; accountName: string; sortCode: string; last4: string } | null;
+  /** Subjects the agent sent to check anyway, and what the file already had for them. */
+  askAgain?: string[];
+  pulled?: Answers | null;
 };
 
 /** Anything this landlord still has to answer before the contract opens. */
@@ -61,7 +64,7 @@ function stillToAnswer(v: View): boolean {
   const i = Math.max(0, v.people.findIndex((p) => p.you));
   const own = askedOf(v.doc, i).some((f) => f.required && !String(v.me.details[f.key] ?? "").trim());
   const home = PROPERTY_QUESTIONS.some((st) => !stepDone(st, v.answers ?? {}));
-  return own || home;
+  return own || home || (v.askAgain ?? []).length > 0;
 }
 
 type Posted = { ok?: boolean; error?: string; done?: boolean } | null;
@@ -386,8 +389,10 @@ export default function SignPage() {
           fromFile={view.me.fromFile ?? []}
           bankOnFile={view.first ? view.bankOnFile ?? null : null}
           review={asking === "review"}
-          saveAnswers={async (patch) => {
-            const j = await call({ action: "answers", answers: patch });
+          askAgain={asking === "review" ? [] : view.askAgain ?? []}
+          pulled={view.pulled ?? {}}
+          saveAnswers={async (patch, checked) => {
+            const j = await call({ action: "answers", answers: patch, checked: checked ?? [] });
             if (j?.ok) setView((v) => (v ? { ...v, answers: j.answers, answeredBy: j.answeredBy } : v));
             return { ok: Boolean(j?.ok), error: j?.error ? forLandlord(j.error) : undefined, answers: j?.answers };
           }}

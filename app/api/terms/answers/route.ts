@@ -3,6 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { listingIsTheirs } from "@/lib/listing-gate";
 import { cleanPatch, forForm, readHome, saveHome } from "@/lib/home-answers";
 import { bankOnFile } from "@/lib/landlord-bank";
+import { pullThrough } from "@/lib/terms/pull-through";
 
 /**
  * The questions about a home, from the agent's side (James, 5 Nov 2026: "when
@@ -37,9 +38,14 @@ export async function GET(req: NextRequest) {
   const home = ids(Object.fromEntries(sp.entries()));
   if (!home.listingId && !home.propertyId && !home.appraisalId) return NextResponse.json({ ok: false, error: "Which home?" }, { status: 400 });
   const email = (sp.get("email") ?? "").trim();
-  const [got, bank] = await Promise.all([readHome(home), email ? bankOnFile(email).catch(() => null) : Promise.resolve(null)]);
+  const [got, bank, pulled] = await Promise.all([
+    readHome(home),
+    email ? bankOnFile(email).catch(() => null) : Promise.resolve(null),
+    /* What the OS already knows, for the agent to confirm (James, 5 Nov 2026). */
+    pullThrough({ ...home, address: sp.get("address") }).catch(() => null),
+  ]);
   return NextResponse.json(
-    { ok: true, answers: forForm(got.answers), who: whoFor(got.who), bankOnFile: bank ? { last4: bank.last4, at: bank.updatedAt } : null },
+    { ok: true, answers: forForm(got.answers), who: whoFor(got.who), bankOnFile: bank ? { last4: bank.last4, at: bank.updatedAt } : null, pulled },
     { headers: { "cache-control": "private, no-store" } }
   );
 }

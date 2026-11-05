@@ -28,7 +28,7 @@ import { askedOf, detailText, printedFor } from "@/lib/terms/detail-text";
 import { openAccount, sealAccount } from "@/lib/bank-vault";
 import { accountNumberOnFile, bankOnFile, keepBank } from "@/lib/landlord-bank";
 import { cleanPatch, forForm, readHome, saveHome, type HomeIds } from "@/lib/home-answers";
-import { PROPERTY_QUESTIONS, stepDone, type Answers } from "@/lib/property-questions";
+import { PROPERTY_QUESTIONS, SECRET_KEYS as SECRETS, stepDone, type Answers } from "@/lib/property-questions";
 import type { Country, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
 import {
   byToken,
@@ -108,6 +108,34 @@ export interface NewTerms {
    * landlord may give (bank details, no gas, their own residence).
    */
   prefill?: Partial<Pick<LandlordDetails, "licensing" | "rentalPropertyNumber">>;
+  /**
+   * Subjects the agent sent to the landlord to check anyway (James, 5 Nov 2026: "send with
+   * question anyway"), with what the OS pulled through for them, shown filled in for the
+   * landlord to confirm or change. The Gas screen always goes this way.
+   */
+  askAgain?: { steps: string[]; answers: Answers } | null;
+}
+
+const ASK_AGAIN = "terms-ask-again";
+const STEP_IDS = new Set(PROPERTY_QUESTIONS.map((s) => s.id));
+
+/** What a contract asks the landlord to check again, as the agent sent it. */
+async function askAgainFor(termsId: string): Promise<{ steps: string[]; answers: Answers }> {
+  const r = await q<{ payload: { steps?: string[]; answers?: Answers; done?: string[] } | null }>(`SELECT payload FROM os_case_state WHERE kind = $1 AND record_id = $2`, [ASK_AGAIN, termsId]).catch(() => []);
+  /* A subject a landlord on this contract has been through is not asked again. */
+  const done = new Set(r[0]?.payload?.done ?? []);
+  return { steps: (r[0]?.payload?.steps ?? []).filter((s) => !done.has(s)), answers: r[0]?.payload?.answers ?? {} };
+}
+
+/** A landlord has been through subjects they were sent to check: off the list for everyone on the contract. */
+async function markChecked(termsId: string, steps: string[]): Promise<void> {
+  const ok = steps.filter((s) => STEP_IDS.has(s));
+  if (!ok.length) return;
+  await q(
+    `UPDATE os_case_state SET payload = jsonb_set(payload, '{done}', COALESCE(payload->'done', '[]'::jsonb) || $3::jsonb), updated_at = NOW()
+      WHERE kind = $1 AND record_id = $2`,
+    [ASK_AGAIN, termsId, JSON.stringify(ok)]
+  ).catch(() => null);
 }
 
 /** The home a contract is about, as lib/home-answers keys it. */
@@ -257,6 +285,19 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
     status: "agent",
     replaces: n.replaces ?? null,
   });
+  /* The subjects to check again, kept beside the contract: codes are never among them (they are not pulled through). */
+  if (doc.asksFirst && n.askAgain) {
+    const steps = n.askAgain.steps.filter((s) => STEP_IDS.has(s));
+    const answers = cleanPatch(n.askAgain.answers, "landlord");
+    for (const k of Object.keys(answers)) if (SECRETS.has(k)) delete answers[k];
+    if (steps.length || Object.keys(answers).length) {
+      await q(
+        `INSERT INTO os_case_state (kind, record_id, payload, updated_at, updated_by) VALUES ($1, $2, $3::jsonb, NOW(), $4)
+         ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
+        [ASK_AGAIN, id, JSON.stringify({ steps, answers }), n.me.email]
+      ).catch(() => null);
+    }
+  }
   return { terms: (await getTerms(id))!, agentEmbedSrc };
 }
 
@@ -360,6 +401,7 @@ export async function landlordView(token: string) {
   const asks = Boolean(doc.asksFirst);
   const home = asks ? await readHome(homeOf(terms)).catch(() => ({ answers: {} as Answers, who: {} })) : null;
   const bank = asks && i === 0 ? await bankOnFile(party.email).catch(() => null) : null;
+  const again = asks ? await askAgainFor(terms.id) : { steps: [], answers: {} };
   return {
     doc,
     termsId: terms.id,
@@ -379,6 +421,9 @@ export async function landlordView(token: string) {
     answers: home ? forForm(home.answers) : null,
     answeredBy: home ? whoSaid(home.who, terms.agentEmail) : null,
     bankOnFile: bank ? { bankName: bank.bankName, accountName: bank.accountName, sortCode: bank.sortCode, last4: bank.last4 } : null,
+    /* Subjects the agent sent them to check, and what the file says for each (James, 5 Nov 2026). */
+    askAgain: again.steps,
+    pulled: forForm(again.answers),
     people: terms.parties.map((p) => ({ key: p.key, name: p.name, signed: Boolean(p.signedAt), you: p.token === token })),
     preview: inPreview(),
   };
@@ -455,7 +500,7 @@ export async function saveDetails(token: string, details: Partial<LandlordDetail
  * also the first landlord's "no gas at the property" on the contract, put in
  * the box straight away unless the first landlord has already signed.
  */
-export async function saveAnswersByToken(token: string, raw: unknown): Promise<{ answers: Answers; answeredBy: Record<string, string> }> {
+export async function saveAnswersByToken(token: string, raw: unknown, checked: string[] = []): Promise<{ answers: Answers; answeredBy: Record<string, string> }> {
   const hit = await byToken(token);
   if (!hit) throw new TermsRefused("This link isn't recognised.");
   const { terms, party } = hit;
@@ -464,6 +509,7 @@ export async function saveAnswersByToken(token: string, raw: unknown): Promise<{
   if (!doc?.asksFirst) throw new TermsRefused("There's nothing to answer on these terms.");
   const patch = cleanPatch(raw, "landlord");
   const saved = await saveHome(homeOf(terms), patch, `landlord:${party.email}`);
+  if (checked.length) await markChecked(terms.id, checked);
   const derived = fromAnswers(doc, saved.answers);
   const lead = terms.parties[0];
   if (lead && !lead.signedAt && Object.keys(derived).some((k) => lead.details[k as keyof LandlordDetails] !== derived[k as keyof LandlordDetails])) {
