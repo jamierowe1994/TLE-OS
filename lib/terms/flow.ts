@@ -107,24 +107,33 @@ export interface NewTerms {
    * landlord to check, as their registration is. Never anything only the
    * landlord may give (bank details, no gas, their own residence).
    */
-  prefill?: Partial<Pick<LandlordDetails, "licensing" | "rentalPropertyNumber">>;
+  prefill?: Partial<Pick<LandlordDetails, "rentalPropertyNumber">>;
   /**
    * Subjects the agent sent to the landlord to check anyway (James, 5 Nov 2026: "send with
    * question anyway"), with what the OS pulled through for them, shown filled in for the
    * landlord to confirm or change. The Gas screen always goes this way.
    */
-  askAgain?: { steps: string[]; answers: Answers } | null;
+  askAgain?: { steps: string[]; answers: Answers; hints?: Record<string, string> } | null;
 }
 
 const ASK_AGAIN = "terms-ask-again";
+/* The answers that are a landlord's declaration on the contract: never filled in for them by anyone. */
+const DECLARED = new Set(["gas-supply"]);
+/* What the file may hint at, beside the question, for them to answer themselves. */
+const HINTABLE = new Set(["gas-supply", "licensing"]);
 const STEP_IDS = new Set(PROPERTY_QUESTIONS.map((s) => s.id));
 
 /** What a contract asks the landlord to check again, as the agent sent it. */
-async function askAgainFor(termsId: string): Promise<{ steps: string[]; answers: Answers }> {
-  const r = await q<{ payload: { steps?: string[]; answers?: Answers; done?: string[] } | null }>(`SELECT payload FROM os_case_state WHERE kind = $1 AND record_id = $2`, [ASK_AGAIN, termsId]).catch(() => []);
+async function askAgainFor(termsId: string): Promise<{ steps: string[]; answers: Answers; hints: Record<string, string>; gasAnswered: boolean }> {
+  const r = await q<{ payload: { steps?: string[]; answers?: Answers; hints?: Record<string, string>; done?: string[] } | null }>(`SELECT payload FROM os_case_state WHERE kind = $1 AND record_id = $2`, [ASK_AGAIN, termsId]).catch(() => []);
   /* A subject a landlord on this contract has been through is not asked again. */
   const done = new Set(r[0]?.payload?.done ?? []);
-  return { steps: (r[0]?.payload?.steps ?? []).filter((s) => !done.has(s)), answers: r[0]?.payload?.answers ?? {} };
+  return {
+    steps: (r[0]?.payload?.steps ?? []).filter((s) => !done.has(s)),
+    answers: r[0]?.payload?.answers ?? {},
+    hints: r[0]?.payload?.hints ?? {},
+    gasAnswered: done.has("gas"),
+  };
 }
 
 /** A landlord has been through subjects they were sent to check: off the list for everyone on the contract. */
@@ -204,15 +213,14 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
   const known: Partial<LandlordDetails> = {};
   const knownKeys: Array<keyof LandlordDetails> = [];
   if (doc.asksFirst) {
-    for (const k of ["licensing", "rentalPropertyNumber"] as const) {
+    /* Never the declarations (no gas, non-UK resident, licensing): those are the landlord's own,
+       answered on this contract (James, 5 Nov 2026), so nothing from the file or the agent goes in. */
+    for (const k of ["rentalPropertyNumber"] as const) {
       const v = String(n.prefill?.[k] ?? "").trim().slice(0, 60);
-      if (!v || !doc.details.some((f) => f.key === k)) continue;
-      if (k === "licensing" && v !== "yes" && v !== "no") continue;
+      if (!v || !doc.details.some((f) => f.key === k && !f.landlordOnly)) continue;
       known[k] = v;
       knownKeys.push(k);
     }
-    const home = await readHome(homeOf(n)).catch(() => null);
-    Object.assign(known, home ? fromAnswers(doc, home.answers) : {});
   }
   const parties: Party[] = people.map((p, i) => ({
     key: `l${i + 1}`,
@@ -289,12 +297,18 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
   if (doc.asksFirst && n.askAgain) {
     const steps = n.askAgain.steps.filter((s) => STEP_IDS.has(s));
     const answers = cleanPatch(n.askAgain.answers, "landlord");
-    for (const k of Object.keys(answers)) if (SECRETS.has(k)) delete answers[k];
-    if (steps.length || Object.keys(answers).length) {
+    /* Codes are never sent back, and a declaration is never filled in for them: only hinted at. */
+    for (const k of Object.keys(answers)) if (SECRETS.has(k) || DECLARED.has(k)) delete answers[k];
+    const hints = Object.fromEntries(
+      Object.entries(n.askAgain.hints ?? {})
+        .filter(([k, v]) => HINTABLE.has(k) && typeof v === "string" && v.trim())
+        .map(([k, v]) => [k, v.trim().slice(0, 200)])
+    );
+    if (steps.length || Object.keys(answers).length || Object.keys(hints).length) {
       await q(
         `INSERT INTO os_case_state (kind, record_id, payload, updated_at, updated_by) VALUES ($1, $2, $3::jsonb, NOW(), $4)
          ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
-        [ASK_AGAIN, id, JSON.stringify({ steps, answers }), n.me.email]
+        [ASK_AGAIN, id, JSON.stringify({ steps, answers, hints }), n.me.email]
       ).catch(() => null);
     }
   }
@@ -401,7 +415,11 @@ export async function landlordView(token: string) {
   const asks = Boolean(doc.asksFirst);
   const home = asks ? await readHome(homeOf(terms)).catch(() => ({ answers: {} as Answers, who: {} })) : null;
   const bank = asks && i === 0 ? await bankOnFile(party.email).catch(() => null) : null;
-  const again = asks ? await askAgainFor(terms.id) : { steps: [], answers: {} };
+  const again = asks ? await askAgainFor(terms.id) : { steps: [] as string[], answers: {} as Answers, hints: {} as Record<string, string>, gasAnswered: false };
+  /* Gas is a declaration on this contract: an answer kept from before (another landlord, another
+     let) is never shown as if they had given it. Theirs once a landlord on this contract has. */
+  const formAnswers = home ? forForm(home.answers) : null;
+  if (formAnswers && asks && !again.gasAnswered && !terms.parties.some((p) => p.details?.noGas)) delete formAnswers["gas-supply"];
   return {
     doc,
     termsId: terms.id,
@@ -418,12 +436,14 @@ export async function landlordView(token: string) {
     firstDetails: i > 0 ? masked(firstOnly(doc, terms.parties[0]?.details ?? {})) : null,
     first: i === 0,
     asks,
-    answers: home ? forForm(home.answers) : null,
+    answers: formAnswers,
     answeredBy: home ? whoSaid(home.who, terms.agentEmail) : null,
     bankOnFile: bank ? { bankName: bank.bankName, accountName: bank.accountName, sortCode: bank.sortCode, last4: bank.last4 } : null,
     /* Subjects the agent sent them to check, and what the file says for each (James, 5 Nov 2026). */
     askAgain: again.steps,
     pulled: forForm(again.answers),
+    /* What the file shows for a declaration, said beside the question; never ticked for them. */
+    hints: again.hints,
     people: terms.parties.map((p) => ({ key: p.key, name: p.name, signed: Boolean(p.signedAt), you: p.token === token })),
     preview: inPreview(),
   };
@@ -510,7 +530,8 @@ export async function saveAnswersByToken(token: string, raw: unknown, checked: s
   const patch = cleanPatch(raw, "landlord");
   const saved = await saveHome(homeOf(terms), patch, `landlord:${party.email}`);
   if (checked.length) await markChecked(terms.id, checked);
-  const derived = fromAnswers(doc, saved.answers);
+  /* Only what they answered just now: an answer kept from before is never their declaration. */
+  const derived = fromAnswers(doc, patch);
   const lead = terms.parties[0];
   if (lead && !lead.signedAt && Object.keys(derived).some((k) => lead.details[k as keyof LandlordDetails] !== derived[k as keyof LandlordDetails])) {
     const fresh = (await getTerms(terms.id)) ?? terms;

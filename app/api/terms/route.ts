@@ -84,11 +84,11 @@ export async function POST(req: NextRequest) {
         ? {
             steps: Array.isArray((b.askAgain as { steps?: unknown }).steps) ? ((b.askAgain as { steps: unknown[] }).steps.filter((x) => typeof x === "string") as string[]) : [],
             answers: ((b.askAgain as { answers?: Record<string, string> }).answers ?? {}) as Record<string, string>,
+            hints: ((b.askAgain as { hints?: Record<string, string> }).hints ?? {}) as Record<string, string>,
           }
         : null,
       prefill: next
         ? {
-            licensing: typeof pre.licensing === "string" ? pre.licensing : undefined,
             rentalPropertyNumber: typeof pre.rentalPropertyNumber === "string" ? pre.rentalPropertyNumber : undefined,
           }
         : undefined,

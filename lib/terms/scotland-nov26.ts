@@ -56,6 +56,8 @@ export const SCOTLAND_NOV26: TermsDoc = {
       required: true,
       step: "declarations",
       firstOnly: true,
+      /* The landlord's own declaration, never the agent's (James, 5 Nov 2026). */
+      landlordOnly: true,
       printYes: "Yes - see clause 18",
       printNo: "No",
     },

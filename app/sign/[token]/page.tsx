@@ -56,6 +56,7 @@ type View = {
   /** Subjects the agent sent to check anyway, and what the file already had for them. */
   askAgain?: string[];
   pulled?: Answers | null;
+  hints?: Record<string, string>;
 };
 
 /** Anything this landlord still has to answer before the contract opens. */
@@ -391,6 +392,7 @@ export default function SignPage() {
           review={asking === "review"}
           askAgain={asking === "review" ? [] : view.askAgain ?? []}
           pulled={view.pulled ?? {}}
+          hints={view.hints ?? {}}
           saveAnswers={async (patch, checked) => {
             const j = await call({ action: "answers", answers: patch, checked: checked ?? [] });
             if (j?.ok) setView((v) => (v ? { ...v, answers: j.answers, answeredBy: j.answeredBy } : v));

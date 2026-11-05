@@ -638,7 +638,6 @@ export default function TermsSendScreen({
   const [preBank, setPreBank] = useState<{ last4: string } | null>(null);
   const [preSaving, setPreSaving] = useState(false);
   const [preProblem, setPreProblem] = useState<string | null>(null);
-  const [licensing, setLicensing] = useState<"" | "yes" | "no">("");
   /* PULLED THROUGH (James, 5 Nov 2026): what the OS already knows about the home, each subject for the agent to
      confirm ("Yes, still correct"), change, or send to the landlord to check anyway. Nothing goes unchecked. */
   type Pulled = { answers: Answers; from: Record<string, string>; relist: boolean; relistWhy: string | null; licensing: { value: "yes" | "no"; from: string } | null };
@@ -695,8 +694,8 @@ export default function TermsSendScreen({
     if (preSaving) return;
     /* Every subject pulled through has been looked at (James, 5 Nov 2026: "make sure they are covering it all off"). */
     const unchecked = PROPERTY_QUESTIONS.filter((st) => pulledSteps.has(st.id) && !choice[st.id]);
-    if (unchecked.length || (pulled?.licensing && !choice.decl)) {
-      setPreOpen(unchecked[0]?.id ?? "decl");
+    if (unchecked.length) {
+      setPreOpen(unchecked[0].id);
       return setPreProblem(`Check each subject we pulled through: Still correct, No, change it, or Ask ${firstOf(people[0]?.name ?? "") || "them"} anyway.`);
     }
     /* Confirmed or changed: what the agent saw on those subjects is kept as theirs. Sent to check: nothing kept. */
@@ -758,7 +757,7 @@ export default function TermsSendScreen({
       address: p.homeIs === "set" ? p.home : "",
       ...(regs[i] ? { registrationNumber: regs[i]!.number, registrationExpiry: regs[i]!.expiry } : {}),
       /* What the agent answered for the first landlord's part goes on as it will go. */
-      ...(i === 0 && pre ? { ...(licensing ? { licensing } : {}), ...(rentalNo.trim() ? { rentalPropertyNumber: rentalNo.trim() } : {}) } : {}),
+      ...(i === 0 && pre && rentalNo.trim() ? { rentalPropertyNumber: rentalNo.trim() } : {}),
     },
   }));
   const feesAt = doc ? doc.sections.findIndex((s) => s.blocks.some((b) => b.kind === "fees")) : -1;
@@ -828,7 +827,7 @@ export default function TermsSendScreen({
         people: people.map((p) => ({ name: p.name, email: p.email, phone: p.phone, address: p.homeIs === "set" ? p.home : "" })),
         replaces: from?.id ?? null,
         next: asks,
-        prefill: pre ? { licensing: licensing || undefined, rentalPropertyNumber: rentalNo.trim() || undefined } : undefined,
+        prefill: pre ? { rentalPropertyNumber: rentalNo.trim() || undefined } : undefined,
         /* Gas always, and every subject sent to check anyway, filled in with what the file says. */
         askAgain: pre
           ? {
@@ -836,9 +835,16 @@ export default function TermsSendScreen({
               answers: Object.fromEntries(
                 PROPERTY_QUESTIONS.filter((st) => askSteps.includes(st.id))
                   .flatMap((st) => st.questions.flatMap((q) => [q.id, `${q.id}-card`]))
-                  .filter((k) => !PROPERTY_QUESTIONS.some((st) => st.questions.some((q) => q.id === k && q.secret)) && String(shown[k] ?? "").trim())
+                  .filter((k) => k !== "gas-supply" && !PROPERTY_QUESTIONS.some((st) => st.questions.some((q) => q.id === k && q.secret)) && String(shown[k] ?? "").trim())
                   .map((k) => [k, shown[k]])
               ),
+              /* Their declarations are never filled in for them: what the file shows is only said beside the question. */
+              hints: {
+                ...(String(shown["gas-supply"] ?? "").trim()
+                  ? { "gas-supply": `${shown["gas-supply"] === "no" ? "no gas" : "a gas supply"} (from ${pulled?.from["gas-supply"] ?? "the home's file"})` }
+                  : {}),
+                ...(pulled?.licensing ? { licensing: `${pulled.licensing.value === "yes" ? "Yes" : "No"} (from ${pulled.licensing.from})` } : {}),
+              },
             }
           : undefined,
       });
@@ -1367,60 +1373,19 @@ export default function TermsSendScreen({
               );
             })}
             {ownFields.some((f) => f.step === "declarations") && (
-              <li className={`${licensing ? "ok" : ""}${preOpen === "decl" ? " open" : ""}${pulled?.licensing && !choice.decl ? " pull" : ""}`}>
-                <button type="button" className="pre-row" aria-expanded={preOpen === "decl"} onClick={() => setPreOpen(preOpen === "decl" ? null : "decl")}>
-                  <i aria-hidden>{licensing ? <Ic k="check" w={2.6} /> : pulled?.licensing ? <Ic k="link" w={1.8} /> : null}</i>
+              /* The declarations are the landlord's own, signed as part of the contract (James, 5 Nov 2026):
+                 never filled in by the agent. What the file shows goes beside the question for them. */
+              <li className="theirs">
+                <div className="pre-row static">
+                  <i aria-hidden><Ic k="lock" w={1.8} /></i>
                   <span>
                     <b>Their Declarations</b>
                     <span>
-                      {pulled?.licensing && !choice.decl
-                        ? `Pulled through: licensing ${pulled.licensing.value === "yes" ? "Yes" : "No"}: check it`
-                        : choice.decl === "ask"
-                          ? `Licensing: ${firstName0} answers it. The rest is theirs`
-                          : licensing
-                            ? `Licensing: ${licensing === "yes" ? "Yes" : "No"}. The rest is theirs`
-                            : "Licensing you can answer; no gas and where they live are theirs"}
+                      Always {people.length > 1 ? "the landlords'" : `${firstName0}'s`}: no gas, living outside the UK, and licensing or HMO. Signed as part of the contract.
+                      {pulled?.licensing ? ` Our file shows licensing: ${pulled.licensing.value === "yes" ? "Yes" : "No"}, and they're told so.` : ""}
                     </span>
                   </span>
-                  <em>{preOpen === "decl" ? "Close" : pulled?.licensing && !choice.decl ? "Check" : "Answer now"}</em>
-                </button>
-                {preOpen === "decl" && (
-                  <div className="tq pre-q">
-                    {pulled?.licensing && (
-                      <div className="pre-choice" role="radiogroup" aria-label="Licensing: pulled through">
-                        <span>Licensing pulled through as {pulled.licensing.value === "yes" ? "Yes" : "No"}, from {pulled.licensing.from}. Still right?</span>
-                        <div className="tq-opts sm">
-                          <button type="button" role="radio" aria-checked={choice.decl === "ok"} className={choice.decl === "ok" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, decl: "ok" })); setLicensing(pulled.licensing!.value); setPreOpen(null); }}>Yes, still correct</button>
-                          <button type="button" role="radio" aria-checked={choice.decl === "change"} className={choice.decl === "change" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, decl: "change" })); }}>No, change it</button>
-                          <button type="button" role="radio" aria-checked={choice.decl === "ask"} className={choice.decl === "ask" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, decl: "ask" })); setLicensing(""); setPreOpen(null); }}>Ask {firstName0} anyway</button>
-                        </div>
-                      </div>
-                    )}
-                    {ownFields
-                      .filter((f) => f.step === "declarations")
-                      .map((f) =>
-                        f.key === "licensing" ? (
-                          <div key={f.key} className="tq-q">
-                            <span className="tq-l">{f.ask}</span>
-                            {f.hint ? <p className="tq-help">{f.hint}</p> : null}
-                            <div className="tq-opts" role="radiogroup" aria-label={f.ask}>
-                              {(["yes", "no"] as const).map((x) => (
-                                <button key={x} type="button" role="radio" aria-checked={licensing === x} className={licensing === x ? "on" : ""} onClick={() => setLicensing(licensing === x ? "" : x)}>
-                                  {x === "yes" ? "Yes" : "No"}
-                                </button>
-                              ))}
-                            </div>
-                            <p className="tq-by">{firstName0} sees your answer and confirms it when they sign.</p>
-                          </div>
-                        ) : (
-                          <div key={f.key} className="tq-q">
-                            <span className="tq-l">{f.ask ?? f.label}</span>
-                            <p className="tq-locked"><Ic k="lock" w={1.8} />{f.fromAnswer ? `From ${firstName0}'s answer on the Gas screen.` : `${people.length > 1 ? "Each landlord answers" : `${firstName0} answers`} this about themselves.`}</p>
-                          </div>
-                        )
-                      )}
-                  </div>
-                )}
+                </div>
               </li>
             )}
             {ownFields.some((f) => f.step === "registration") && (

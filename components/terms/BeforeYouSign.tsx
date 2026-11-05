@@ -65,6 +65,11 @@ export type BeforeProps = {
    */
   askAgain?: string[];
   pulled?: Answers;
+  /**
+   * What the file shows for a declaration (gas, licensing), said beside the question. Never
+   * ticked for them: a declaration on the contract is theirs to give (James, 5 Nov 2026).
+   */
+  hints?: Record<string, string>;
   saveDetails: (d: Partial<LandlordDetails>) => Promise<Saved<{ details?: Partial<LandlordDetails> }>>;
   onDone: (details: Partial<LandlordDetails>, answers: Answers) => void;
   /** Came back to look over their answers: straight to the check screen. */
@@ -272,7 +277,7 @@ export default function BeforeYouSign(p: BeforeProps) {
                 </button>
               ))}
             </div>
-            {fromFile.has(f.key) ? <p className="tq-by">{p.agentFirst} filled this in. Change it if it isn&apos;t right.</p> : null}
+            {p.hints?.[f.key] && !v ? <p className="tq-by">Our file shows {p.hints[f.key]}. Choose the answer yourself: it goes on your contract.</p> : null}
           </div>
         );
       }
@@ -355,7 +360,7 @@ export default function BeforeYouSign(p: BeforeProps) {
         return (
           <>
             <Head title={screen.step.title} blurb={screen.step.blurb} />
-            {(p.askAgain ?? []).includes(screen.step.id) && screen.step.questions.some((q) => fromFileAns.has(q.id) || filled(p.answers[q.id])) ? (
+            {(p.askAgain ?? []).includes(screen.step.id) && screen.step.questions.some((q) => asked(q, answers) && (fromFileAns.has(q.id) || filled(p.answers[q.id]))) ? (
               <p className="bys-file">We&apos;ve filled in what we already had. Check it&apos;s still right, and change anything that isn&apos;t.</p>
             ) : null}
             <div className="tq">
@@ -366,7 +371,9 @@ export default function BeforeYouSign(p: BeforeProps) {
                   answers={answers}
                   onChange={answer}
                   by={
-                    fromFileAns.has(q.id) && filled(answers[q.id])
+                    p.hints?.[q.id] && !filled(answers[q.id])
+                      ? `Our file shows ${p.hints[q.id]}. Choose the answer yourself: it goes on your contract.`
+                      : fromFileAns.has(q.id) && filled(answers[q.id])
                       ? "From your file. Change it if it isn't right."
                       : p.answeredBy[q.id] === "agent" && filled(answers[q.id])
                         ? `${p.agentFirst} filled this in. Change it if it isn't right.`
