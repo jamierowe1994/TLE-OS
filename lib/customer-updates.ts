@@ -218,6 +218,29 @@ export async function settleRecipient(
   return rows[0] ? fromRow(rows[0]) : null;
 }
 
+/**
+ * Closes every open update whose key starts with `prefix`, except `keep`,
+ * with nobody told and `note` as the reason. For news that has been
+ * overtaken: 68 Main Street's "the PLC check needs more" was still open, and
+ * still reminding Sean, the day after the check passed (5 Nov 2026).
+ */
+export async function closeOvertaken(prefix: string, keep: string, note: string): Promise<number> {
+  if (!hasDb()) return 0;
+  const rows = await q<{ id: string }>(
+    `UPDATE os_customer_updates
+        SET state = 'done', done_at = NOW(),
+            recipients = (
+              SELECT COALESCE(jsonb_agg(CASE WHEN r->>'state' = 'open'
+                       THEN r || jsonb_build_object('state', 'skipped', 'doneAt', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'doneBy', 'TLE OS', 'note', $3::text)
+                       ELSE r END), '[]'::jsonb)
+                FROM jsonb_array_elements(recipients) r)
+      WHERE state = 'open' AND LEFT(key, LENGTH($1)) = $1 AND key <> $2
+      RETURNING id`,
+    [prefix, keep, note]
+  );
+  return rows.length;
+}
+
 /* ───────────────────────────── the agent hears ─────────────────────────── */
 
 export function updateLink(id: number): string {
