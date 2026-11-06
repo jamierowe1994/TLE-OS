@@ -54,14 +54,26 @@ export function plcSummary(c: PlcCase): { why: string; landlordNeeds: string[] }
   return { why, landlordNeeds };
 }
 
+/**
+ * The agent fixed it and sent the pack back to the check: whatever it said
+ * was wrong is no longer news for the landlord (6 Nov 2026).
+ */
+export async function clearPlcProblems(caseId: string) {
+  return closeOvertaken({
+    prefix: `plc:${caseId}:`,
+    kinds: ["plc_deferred", "plc_declined"],
+    note: "Fixed and sent back to the PLC check, so this was no longer needed.",
+  }).catch(() => 0);
+}
+
 export async function putPlcWithAgent(c: PlcCase, decision: "approved" | "deferred" | "declined") {
   const kind: UpdateKind = decision === "approved" ? "plc_approved" : decision === "deferred" ? "plc_deferred" : "plc_declined";
   const key = `plc:${c.id}:${decision}:${c.decidedAt ?? ""}`;
-  await closeOvertaken(
-    `plc:${c.id}:`,
-    key,
-    decision === "approved" ? "The PLC check passed afterwards, so this was no longer needed." : "The PLC check was decided again, and the newer update replaces this one."
-  ).catch(() => 0);
+  await closeOvertaken({
+    prefix: `plc:${c.id}:`,
+    keep: key,
+    note: decision === "approved" ? "The PLC check passed afterwards, so this was no longer needed." : "The PLC check was decided again, and the newer update replaces this one.",
+  }).catch(() => 0);
   const packet = c.applicationRef ? await handoffFor(c.applicationRef).catch(() => null) : null;
   const landlord = packet?.landlord ?? null;
   if (!landlord) return null;

@@ -4,7 +4,7 @@ import type { BusinessDeal } from "@/lib/business/propoly-deals";
 import type { DealEvent, DealEventKind } from "@/lib/business/deal-events";
 import { referenceState } from "@/lib/business/stage-evidence";
 import { findDuplicates } from "@/lib/business/deal-dupes";
-import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
+import { closeOvertaken, createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { AUDIENCE, HEADLINE, updateVars, type UpdateKind } from "@/lib/customer-update-copy";
 import { isScottish } from "@/lib/property-flags";
 
@@ -15,6 +15,9 @@ import { isScottish } from "@/lib/property-flags";
  * update where the agent emails them, rings, or marks it not needed. Nothing
  * goes to a landlord or tenant from here.
  */
+
+/** Moves that mean a failed reference or a guarantor ask is behind the let. */
+const PAST_PROBLEMS = new Set<UpdateKind>(["references_back", "agreement_out", "complete", "move_in_ready", "cancelled"]);
 
 const FROM_EVENT: Partial<Record<DealEventKind, UpdateKind>> = {
   referencing_started: "referencing_started",
@@ -75,6 +78,15 @@ export async function updatesFromEvents(events: DealEvent[], deals: BusinessDeal
     /* References back, but one of them only with a guarantor: that is the
        news the tenant needs, not "all fine". */
     if (kind === "references_back" && referenceState(deal.app.propoly)?.needGuarantor.length) kind = "guarantor_needed";
+    /* The let moved past a failed reference or a guarantor ask: that problem
+       is over, so it stops waiting on the agent (6 Nov 2026). */
+    if (PAST_PROBLEMS.has(kind)) {
+      await closeOvertaken({
+        prefix: `deal:${e.dealId}:`,
+        kinds: ["reference_failed", "guarantor_needed"],
+        note: kind === "cancelled" ? "The deal was cancelled, so this was no longer needed." : "The let has moved on since, so this was no longer needed.",
+      }).catch(() => 0);
+    }
     const recipients = dealRecipients(deal, kind, kind === "reference_failed" && e.toStatus ? { onlyTenant: e.toStatus } : {});
     if (!recipients.length) continue;
     try {

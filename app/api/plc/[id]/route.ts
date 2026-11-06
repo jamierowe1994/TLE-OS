@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
-import { putPlcWithAgent } from "@/lib/plc-updates";
+import { clearPlcProblems, putPlcWithAgent } from "@/lib/plc-updates";
 import {
   checkCase,
   decideCase,
@@ -250,6 +250,8 @@ async function finishSend(
     from: current.decidedAt ? "deferred" : null,
     to: "submitted",
   });
+  /* Fixed and sent again: the "needs more" stops waiting on the agent. */
+  if (!testCase) await clearPlcProblems(id);
   if (anyway && wentPast.length && submitted.submittedAt) {
     await recordSentAnyway(id, { by: anyway.by, byEmail: anyway.email, reason: anyway.reason, at: submitted.submittedAt, warnings: wentPast });
   }
