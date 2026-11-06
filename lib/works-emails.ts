@@ -120,9 +120,9 @@ const when = (iso: string | null) =>
 /**
  * THE JOB'S TENANTS WHO STILL LIVE THERE (Sean McMahon, 4 Nov 2026, ticket
  * 28cd7593: "the contractors are contacting old tenants"). A job taken on
- * from the old system keeps the tenant the old system named on 2 Oct: 16
- * Mary Rae Road's went to LG Services naming Christopher Murray, whose
- * tenancy PayProp ended on 22 Oct. Anyone PayProp holds only as a past
+ * from the old system keeps the tenant the old system named on 2 Oct: one
+ * went to its contractor naming a tenant whose tenancy PayProp had ended on
+ * 22 Oct. Anyone PayProp holds only as a past
  * tenant is left off; with nobody left, the home's own tenants are read.
  * PayProp unread leaves the job as it is.
  */
