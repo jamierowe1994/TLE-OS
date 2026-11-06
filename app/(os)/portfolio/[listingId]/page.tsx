@@ -50,6 +50,7 @@ import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
 import PastTenancies from "@/components/portfolio/PastTenancies";
 import PastTenantPeople from "@/components/portfolio/PastTenantPeople";
 import SendToTenants from "@/components/portfolio/SendToTenants";
+import TeamEmail from "@/components/TeamEmail";
 import SendRecord from "@/components/portfolio/SendRecord";
 import { oneLine, ThreadView, type Thread } from "@/components/MailThreads";
 import { PropolyMailView, type PropolyMail } from "@/components/MoveInPack";
@@ -451,6 +452,8 @@ export default function PropertyPage() {
      each message logged is a line in the latest activity, opening its thread. */
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadOpen, setThreadOpen] = useState<Thread | null>(null);
+  /* Email the Team about this home (James, 6 Nov 2026): from your Outlook, the thread saved here. */
+  const [teamOpen, setTeamOpen] = useState(false);
   useEffect(() => {
     if (!p || p.test) return;
     let live = true;
@@ -816,6 +819,9 @@ export default function PropertyPage() {
   }
   for (const t of threads) {
     for (const m of t.messages) {
+      /* The OS's own first email is already a line of its own (Email Docs, a
+         works order); a team email has no other record, so it shows. */
+      if (m.origin && t.startedWhat !== "Team email") continue;
       activity.push({
         key: `mail-${m.id}`, at: m.at, icon: "mail",
         title: m.ours ? `Email from ${m.fromName || m.fromEmail}` : `Reply from ${m.fromName || m.fromEmail}`,
@@ -958,6 +964,7 @@ export default function PropertyPage() {
       )}
       {recordOpen && <SendRecord id={recordOpen} onClose={() => setRecordOpen(null)} />}
       {threadOpen && <ThreadView thread={threadOpen} onClose={() => setThreadOpen(null)} />}
+      {teamOpen && <TeamEmail listing={String(p.listingId)} listings={sendListings} onClose={() => setTeamOpen(false)} />}
       {mailOpen && <PropolyMailView mail={mailOpen} onClose={() => setMailOpen(null)} />}
       {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
       {action?.kind === "tenant-notice" && propertyId && (
@@ -1027,6 +1034,7 @@ export default function PropertyPage() {
       "rule",
       { label: "Send out logins", sub: "Tenant account, to report repairs", disabled: p.test || !loginListings.length, onClick: () => setShowLogins(true) },
       { label: "Email Docs", sub: "To the tenants, the landlord or both, kept on the record", disabled: p.test, onClick: () => setSendOpen({ start: null, heading: "Email Docs" }) },
+      { label: "Email the Team", sub: "The agent, compliance or anyone here, the thread kept on the record", disabled: p.test, onClick: () => setTeamOpen(true) },
       { label: "Add a certificate", sub: "Read and filed on the home", disabled: !propertyId, onClick: () => goTab("compliance") },
       { label: "Add a document", sub: "An inventory, an agreement, anything else", disabled: p.test, onClick: () => goTab("documents") },
       { label: "Add a note", sub: "A call, an email, a query", disabled: !propertyId, onClick: () => goTab("notes", () => document.getElementById("home-note")?.focus({ preventScroll: true })) },
@@ -1123,6 +1131,7 @@ export default function PropertyPage() {
         acts: (
           <>
             {btn("Email Docs", "mail", () => setSendOpen({ start: null, heading: "Email Docs" }), { disabled: p.test, title: "To the tenants, the landlord or both, from you, kept on the record" })}
+            {btn("Email the Team", "mail", () => setTeamOpen(true), { disabled: p.test, title: "The agent, compliance or anyone here, the thread kept on the record" })}
             {btn("Add a certificate", "upload", certButton, { disabled: !propertyId, title: "Read and filed on the home" })}
             {btn("Plan a certificate", "calendar", () => act({ kind: "planned" }), { primary: true, disabled: !canAct, title: "A gas safety, EICR or service, by a date" })}
           </>

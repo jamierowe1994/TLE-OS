@@ -135,6 +135,7 @@ export type AuditKind =
      (Josel, 20 Oct 2026, lib/home-send): who, which files, to whom. */
   | "tenant_documents_sent"
   | "home_email_sent"
+  | "team_email_sent"
   /* REX down (21 Oct 2026, lib/rex-outage): the switch moved in Admin, a
      copy taken, and the kept changes sent on (or stopped) once it was back. */
   | "rex_status_changed"

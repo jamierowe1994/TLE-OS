@@ -1,4 +1,5 @@
 import "server-only";
+import { savedMessage, savedMessagesWith } from "@/lib/mail-threads";
 import { hasDb, q } from "@/lib/db";
 import { conversationWith } from "@/lib/mailbox-read";
 import { msAccessTokenFor } from "@/lib/microsoft";
@@ -35,7 +36,7 @@ import { matchHome, type HomeMatch, type HomeRefs } from "@/lib/home-refs";
 export type Channel = "email" | "text" | "portal" | "call" | "whatsapp" | "visit";
 
 export interface ConvItem {
-  /** "ms:<graph id>", "os:<os_sent_emails id>", "sms:<key>", "smsin:<sid>", "portal:<id>", "touch:<id>". */
+  /** "ms:<graph id>", "os:<os_sent_emails id>", "mt:<saved thread message id>", "sms:<key>", "smsin:<sid>", "portal:<id>", "touch:<id>". */
   id: string;
   channel: Channel;
   /** in = they wrote to us; out = we wrote to them; event = something that happened. */
@@ -130,6 +131,30 @@ export async function conversationFor(p: {
   }
 
   if (hasDb()) {
+    /* The replies to the OS's emails, saved off whoever's Outlook they came
+       into (lib/mail-threads, James 6 Nov 2026), so a colleague opening this
+       record sees them too, not only the person whose mailbox it is. */
+    if (emails.length) {
+      jobs.push(
+        savedMessagesWith(emails)
+          .then((rows) => {
+            for (const m of rows) {
+              if (p.home) full.set(`mt:${m.id}`, `${m.subject}\n${m.text}`);
+              items.push({
+                id: `mt:${m.id}`,
+                channel: "email",
+                direction: m.direction,
+                at: m.at,
+                subject: m.subject || "(no subject)",
+                text: m.preview,
+                by: m.fromName || m.fromEmail,
+                openable: true,
+              });
+            }
+          })
+          .catch(() => undefined)
+      );
+    }
     /* The OS's own sender. */
     if (emails.length) {
       jobs.push(
@@ -237,7 +262,9 @@ export async function conversationFor(p: {
   /* The OS's own email can also sit in the agent's Sent Items when it went
      out as them: one bubble, the Outlook one, which has the thread. */
   const seen = new Set(items.filter((i) => i.id.startsWith("ms:")).map((i) => `${i.subject.toLowerCase()}|${i.at.slice(0, 16)}`));
-  let merged = items.filter((i) => !(i.id.startsWith("os:") && seen.has(`${i.subject.toLowerCase()}|${i.at.slice(0, 16)}`)));
+  /* A saved reply is also in the viewer's own Outlook when it is their
+     mailbox: the Outlook bubble stays, as it opens with its thread. */
+  let merged = items.filter((i) => !((i.id.startsWith("os:") || i.id.startsWith("mt:")) && seen.has(`${i.subject.toLowerCase()}|${i.at.slice(0, 16)}`)));
 
   /* On a home: by reference first, the email address only as the fall-back. */
   const home = p.home ?? null;
@@ -287,6 +314,21 @@ export async function openEmail(userId: string, viewingAs: boolean, id: string, 
     const r = rows[0];
     if (!r || !allow.includes(r.to_email.trim().toLowerCase())) return { error: "That email isn't on this record." };
     return { subject: r.subject, from: "The Letting Experts", to: r.to_email, at: new Date(r.sent_at).toISOString(), html: r.html, link: null, thread: [] };
+  }
+  if (id.startsWith("mt:")) {
+    const m = await savedMessage(id.slice(3)).catch(() => null);
+    const people = m ? [m.fromEmail, ...m.to.map((x) => x.email), ...m.cc.map((x) => x.email)].map((x) => x.toLowerCase()) : [];
+    if (!m || !people.some((x) => allow.includes(x))) return { error: "That email isn't on this record." };
+    const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    return {
+      subject: m.subject || "(no subject)",
+      from: m.fromName || m.fromEmail,
+      to: m.to.map((x) => x.name || x.email).join(", "),
+      at: m.at,
+      html: `<pre style="white-space:pre-wrap;font-family:inherit">${esc(m.text || m.preview)}</pre>`,
+      link: null,
+      thread: m.thread.length > 1 ? m.thread.map((x) => ({ id: `mt:${x.id}`, from: x.fromName || x.fromEmail, at: x.at, preview: x.preview.slice(0, 160), current: x.id === m.id })) : [],
+    };
   }
   if (!id.startsWith("ms:")) return { error: "That isn't an email." };
   if (viewingAs) return { error: "Emails are private to the person whose mailbox they are in." };
