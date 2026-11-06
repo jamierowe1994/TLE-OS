@@ -34,6 +34,8 @@ export async function homePeople(id: string): Promise<HomePeople> {
   let lng: number | null = null;
   let source = "nothing on file";
   let homeId = id;
+  /* Nobody lives there now (lib/managed-book markEmptyHomes). */
+  let vacant = false;
 
   try {
     const { book } = await managedBookFor(null);
@@ -44,6 +46,7 @@ export async function homePeople(id: string): Promise<HomePeople> {
     const p = atHome.find((x) => x.listingId === id) ?? currentLets(atHome)[0];
     if (p) {
       if (p.propertyId) homeId = p.propertyId;
+      vacant = Boolean(p.vacantSince);
       landlord = p.landlord ? { contactId: p.landlord.contactId, name: p.landlord.name, email: p.landlord.email ?? "", phone: p.landlord.phone ?? "" } : null;
       otherLandlords = (p.otherLandlords ?? []).map((l) => ({ contactId: l.contactId, name: l.name, email: l.email ?? "", phone: l.phone ?? "" }));
       /* A shared house (James, 8 Oct 2026): "especially if it's an HMO, we
@@ -92,7 +95,8 @@ export async function homePeople(id: string): Promise<HomePeople> {
     const direct = await peopleForProperty(id).catch(() => null);
     if (direct) {
       landlord = direct.landlord;
-      tenants = direct.tenants;
+      /* REX's let still names the tenants of a home nobody lives in now. */
+      tenants = vacant ? [] : direct.tenants;
       lat = lat ?? direct.lat;
       lng = lng ?? direct.lng;
       if (landlord || tenants.length) source = "REX";

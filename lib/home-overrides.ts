@@ -135,6 +135,9 @@ export function applyToProperty(p: ManagedProperty, f: Fields): ManagedProperty 
     const list = tenantsOf(f.tenants.value);
     mark("tenants", f.tenants, p.tenants.map((t) => t.name).join(", ") || null);
     out.tenants = list.map((t, i) => ({ contactId: osTenantId(String(p.listingId), i), name: t.name, email: t.email, phone: t.phone }));
+    /* The household an agent names is who lives there, whatever PayProp's
+       ended tenancy said (lib/managed-book markEmptyHomes). */
+    if (list.length) out.vacantSince = undefined;
   }
   out.overridden = { ...(p.overridden ?? {}), ...marks };
   return out;

@@ -68,7 +68,9 @@ export async function withLetsOnBook(book: ManagedBook): Promise<ManagedBook> {
   if (corrected.size) {
     const { tenantsAsOnLet } = await import("@/lib/let-people");
     for (const p of sitting) {
-      if (p.overridden?.tenants) continue;
+      /* Nor on a home nobody lives in now (lib/managed-book markEmptyHomes):
+         somebody added to its last let would be put back in a home they left. */
+      if (p.overridden?.tenants || p.vacantSince) continue;
       /* Oldest let first, so the newest's correction is the one left standing. */
       const refs = (p.letRefs ?? []).filter((r) => corrected.has(r)).reverse();
       if (!refs.length) continue;

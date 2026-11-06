@@ -1359,7 +1359,7 @@ export default function PropertyPage() {
                   {
                     key: "tenants",
                     label: roomsOnly ? "Rooms let" : tenants.length === 1 ? "Tenant" : "Tenants",
-                    text: roomsOnly && house ? `${letRooms.length} of ${house.rooms.length}` : tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? `None yet, ${comingWhen}` : "None on record",
+                    text: roomsOnly && house ? `${letRooms.length} of ${house.rooms.length}` : tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? `None yet, ${comingWhen}` : p.vacantSince ? `Nobody since ${day(p.vacantSince)}` : "None on record",
                     quiet: !(roomsOnly ? letRooms.length : tenants.length),
                     field: roomsOnly ? undefined : "tenants",
                   },
@@ -1437,6 +1437,9 @@ export default function PropertyPage() {
                         None yet. {comingNames} {comingIn.tenants.length === 1 ? "is" : "are"} {comingWhen}, on a let going through Propoly.{" "}
                         <Link href={comingIn.href} className="nl-link">Open their let</Link>
                       </p>
+                    ) : p.vacantSince ? (
+                      /* PayProp's tenancy on this let has ended (lib/managed-book markEmptyHomes). */
+                      <p className="nl-empty">Nobody lives here now: the tenancy ended on {day(p.vacantSince)}, as PayProp has it. If somebody has moved in, add them with Edit.</p>
                     ) : (
                       <p className="nl-empty">No tenant on record. It is empty, or the let has not been recorded.</p>
                     )}
@@ -1556,7 +1559,7 @@ export default function PropertyPage() {
                     <h3 className="nl-block-title">The Tenancy</h3>
                     {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
                       <dl className="nl-prop-dl">
-                        <NlFact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? "None yet, a let is on its way in" : "None on record"} />
+                        <NlFact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : comingIn ? "None yet, a let is on its way in" : p.vacantSince ? `Nobody since ${day(p.vacantSince)}` : "None on record"} />
                         <NlFact label="Rent" value={rentLine ?? noRent} />
                         <NlFact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : p.moveIn ?? p.letSince ? day(p.moveIn ?? p.letSince) : "-"} />
                         <NlFact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : tenancy.data.tenancy.endKnown === false ? "-" : "Rolling, no end date") : "-"} />
@@ -1927,6 +1930,8 @@ export default function PropertyPage() {
                   </ul>
                 ) : tenants.length ? (
                   <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} role="tenant" about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />)}</ul>
+                ) : p.vacantSince ? (
+                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">Nobody lives here now: the tenancy ended on {day(p.vacantSince)}, as PayProp has it. If somebody has moved in, add them with Edit.</p>
                 ) : (
                   <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on record. It is empty, or the let has not been recorded.</p>
                 )}
@@ -2103,7 +2108,7 @@ export default function PropertyPage() {
                   <p className={`${eyebrow} mb-3`}>The tenancy</p>
                   {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px]">
-                      <Fact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"} />
+                      <Fact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : p.vacantSince ? `Nobody since ${day(p.vacantSince)}` : "None on record"} />
                       <Fact label="Rent" value={rentLine ?? noRent} />
                       <Fact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : day(p.moveIn ?? p.letSince)} />
                       <Fact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : "Rolling, no end date") : "—"} />

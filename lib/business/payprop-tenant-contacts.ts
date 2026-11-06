@@ -273,3 +273,33 @@ export function homeTenancies(
   }
   return { theirs, next: people.length ? { startDate: start, people } : null };
 }
+
+/**
+ * THE HOME'S LAST TENANCY, WHEN NOBODY IS IN IT NOW (Sean McMahon, 6 Nov
+ * 2026). From PayProp's tenant records on one home, joined by its address as
+ * homeTenancies is: the start and end of the tenancy that ended last, or null
+ * while any tenancy on the home is current, or when PayProp holds none there
+ * with an end date. A record PayProp holds as Inactive with no end date is
+ * over, but says nothing about when, so it is not the last.
+ */
+export function homeLastTenancy(
+  rows: Array<Record<string, unknown>>,
+  home: { address?: string | null; name: string; postcode?: string | null },
+  today = londonToday()
+): { startDate: string | null; endDate: string } | null {
+  const key = rentKey(home.address || home.name, home.postcode);
+  if (!key) return null;
+  let last: { startDate: string | null; endDate: string } | null = null;
+  for (const t of rows) {
+    for (const pr of (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>) {
+      const addr = pr.address as Record<string, unknown> | undefined;
+      const keys = [rentKey(str(pr.property_name), str(addr?.postal_code)), rentKey(str(addr?.first_line), str(addr?.postal_code))];
+      if (!keys.includes(key)) continue;
+      const tn = (pr.tenant ?? {}) as Record<string, unknown>;
+      if (payPropTenancyCurrent(t.status, tn.end_date, today)) return null;
+      const end = str(tn.end_date).slice(0, 10);
+      if (end && (!last || end > last.endDate)) last = { startDate: str(tn.start_date).slice(0, 10) || null, endDate: end };
+    }
+  }
+  return last;
+}

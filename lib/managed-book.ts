@@ -4,7 +4,7 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
-import { attach, homeTenancies, payPropPeople, payPropTenantRows, personKey } from "@/lib/business/payprop-tenant-contacts";
+import { attach, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, personKey } from "@/lib/business/payprop-tenant-contacts";
 import { londonToday } from "@/lib/london-clock";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty, type AcceptedLet } from "@/lib/rex-tenants";
@@ -886,6 +886,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       return c ? { ...t, email: t.email || c.email, phone: t.phone || c.phone } : t;
     });
   }
+  if (ppRows?.length) markEmptyHomes(properties, ppRows, pmFor, today);
   if (applied) withLetPages(properties, applied);
   /* THE RENT (rewritten 22 Oct 2026, Lianna Denholm's missing rents).
      PayProp's rent invoice billed today is the rent: what the tenant is
@@ -967,6 +968,41 @@ export function withLetPages(properties: ManagedProperty[], applied: Map<string,
     p.letRefs = mine.map((a) => a.id);
     const start = mine.find((a) => a.startDate)?.startDate;
     if (start) p.letStart = start.slice(0, 10);
+  }
+}
+
+/**
+ * NOBODY LIVES THERE NOW (Sean McMahon, 6 Nov 2026). A home's tenancy ended
+ * on 22 Oct and it stood empty with its keys in the office, but REX's let
+ * still named a tenant - one PayProp had never held - so a contractor's
+ * email gave that tenant's mobile, and they were rung and texted about a
+ * home they weren't in. PayProp holds the tenancies: where none on the home
+ * is current and the one that ended last was this let's, nobody lives there
+ * from the day it ended (vacantSince), until the next let or until PayProp
+ * holds a tenancy there again. Every screen and email that reads the book
+ * follows. Edit on the home's page names the household over it
+ * (lib/home-overrides).
+ *
+ * "This let's": it began no more than a month before REX marked the home
+ * let, and ended after. One that began long before is the last let's,
+ * ending in the days after REX marked the new one let - the new tenants may
+ * not be in PayProp yet. Never on a Let Only home: PayProp ends a tenant
+ * find after the first month, so every tenancy there reads as over. PayProp
+ * unread changes nothing.
+ */
+export function markEmptyHomes(properties: ManagedProperty[], ppRows: Array<Record<string, unknown>>, pmFor: Map<string, OsProperty>, today: string): void {
+  for (const p of currentLets(properties)) {
+    if (p.test || !p.letSince) continue;
+    const o = p.propertyId ? pmFor.get(p.propertyId) : undefined;
+    if (p.service === "Let Only" || /tenant find/i.test((o && "pmService" in o && (o as PmHome).pmService) || "")) continue;
+    const last = homeLastTenancy(ppRows, p, today);
+    const letDay = p.letSince.slice(0, 10);
+    if (!last?.startDate || last.endDate < letDay) continue;
+    const from = new Date(`${letDay}T12:00:00Z`);
+    from.setUTCDate(from.getUTCDate() - 31);
+    if (last.startDate < from.toISOString().slice(0, 10)) continue;
+    p.tenants = [];
+    p.vacantSince = last.endDate;
   }
 }
 

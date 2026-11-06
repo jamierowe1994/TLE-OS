@@ -115,6 +115,12 @@ export interface ManagedProperty {
    *  it is kept on the book from the tenancy archive until they do. */
   held?: boolean;
   /**
+   * Nobody lives there now (lib/managed-book markEmptyHomes, 6 Nov 2026):
+   * PayProp's tenancy on this let ended on this day and none on the home is
+   * current, so `tenants` is empty whatever REX's let still names. ISO day.
+   */
+  vacantSince?: string;
+  /**
    * Fields an agent put right in the OS with Edit on the home's page
    * (lib/home-overrides, 2 Nov 2026): who, when, and what REX or the record
    * still says. The row above already carries the OS's answer.
