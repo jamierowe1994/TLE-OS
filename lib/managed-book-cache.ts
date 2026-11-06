@@ -1,7 +1,7 @@
 import "server-only";
 import { staleForWalk } from "@/lib/rex-outage";
 import { hasDb, q } from "./db";
-import { fetchManagedBook } from "./managed-book";
+import { fetchManagedBook, withLandlordList } from "./managed-book";
 import { archiveBook } from "./tenancy-archive";
 import { withNotice } from "./portfolio-notice";
 import { withRecordLandlords } from "./record-landlords";
@@ -186,8 +186,10 @@ export async function managedBookFor(rexUserId: string | null): Promise<{
      (lib/book-lets, 4 Nov 2026): every landlord, not REX's first, and the
      tenants as put right on the let. Homes archived in the OS
      (lib/archived-homes, 27 Oct 2026) come off last, over everything, with
-     the landlords and counts taken again. */
-  return { ...raw, book: await withoutArchived(await withLetsOnBook(await withHomeOverrides(book))) };
+     the landlords and counts taken again. And the Landlords list once more
+     over all of it (lib/managed-book withLandlordList, 6 Nov 2026): every
+     landlord on each home, whichever layer named them. */
+  return { ...raw, book: withLandlordList(await withoutArchived(await withLetsOnBook(await withHomeOverrides(book)))) };
 }
 
 async function rawBookFor(rexUserId: string | null): Promise<{

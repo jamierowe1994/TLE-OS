@@ -452,7 +452,10 @@ export default function Portfolio() {
       const s = summaryOf(p);
       const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0).length : 0;
       const rentPcm = house && house.kind === "rooms" ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
-      const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
+      /* The first landlord, and the others the home has after them (6 Nov 2026). */
+      const lead = house ? (house.house?.landlord ? house.house : house.rooms.find((r) => r.landlord) ?? null) : p;
+      const landlord = lead?.landlord ?? null;
+      const moreLandlords = lead?.otherLandlords ?? [];
       const notice = house ? house.rooms.find((r) => r.notice)?.notice ?? null : p.notice ?? null;
       const where = house ? `${house.locality} · ${house.kind === "lets" ? `${house.rooms.length} lets on record` : `${house.rooms.length} rooms, ${letRooms} let`}` : p.locality;
       const who = house
@@ -485,7 +488,7 @@ export default function Portfolio() {
       const photo = p.image ?? house?.rooms.find((r) => r.image)?.image ?? null;
       /* Who lives there, for the card: "Empty" rather than "No tenant on record". */
       const living = house ? who : p.tenants.length ? p.tenants.map((t) => t.name).join(" & ") : "Empty";
-      return { s, price, tags, cert, photo, where, who, living, landlord, title: house ? house.name : p.name, letSince: house ? null : p.letSince };
+      return { s, price, tags, cert, photo, where, who, living, landlord, moreLandlords, title: house ? house.name : p.name, letSince: house ? null : p.letSince };
     };
 
     return (
@@ -732,7 +735,12 @@ export default function Portfolio() {
                           </span>
                           <span className="nl-row-fact nl-hide-sm min-w-0">
                             <span className="nl-meta">Landlord</span>
-                            <b className="truncate">{f.landlord ? f.landlord.name : "Not on record"}</b>
+                            <b className="flex min-w-0 items-baseline gap-1">
+                              <span className="min-w-0 truncate">{f.landlord ? f.landlord.name : "Not on record"}</span>
+                              {f.landlord && f.moreLandlords.length > 0 && (
+                                <span className="nl-meta shrink-0" title={`Also ${f.moreLandlords.map((l) => l.name).join(", ")}`}>+{f.moreLandlords.length}</span>
+                              )}
+                            </b>
                           </span>
                           <span className="nl-row-fact nl-hide-sm min-w-0">
                             <span className="nl-meta">{row.house ? "Tenants" : byAgent ? "Agent" : "Tenant"}</span>
@@ -1002,7 +1010,9 @@ export default function Portfolio() {
                     const s = summaryOf(p);
                     const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0).length : 0;
                     const rent = house && house.kind === "rooms" ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
-                    const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
+                    const lead = house ? (house.house?.landlord ? house.house : house.rooms.find((r) => r.landlord) ?? null) : p;
+                    const landlord = lead?.landlord ?? null;
+                    const more = lead?.otherLandlords ?? [];
                     const notice = house ? house.rooms.find((r) => r.notice)?.notice ?? null : p.notice ?? null;
                     return (
                       <li key={house ? house.key : p.listingId} className="border-b border-line/40 last:border-0">
@@ -1017,7 +1027,7 @@ export default function Portfolio() {
                             <span className="block truncate text-[11px] text-muted">
                               {house ? `${house.locality} · ${house.kind === "lets" ? `${house.rooms.length} lets on record` : `${house.rooms.length} rooms, ${letRooms} let`}` : p.locality}
                               {notice && <span className="font-semibold text-accent-dark md:hidden"> · Relet{notice.leavingOn ? ` ${shortDay(notice.leavingOn)}` : ""}</span>}
-                              <span className="md:hidden">{landlord ? ` · ${landlord.name}` : ""}</span>
+                              <span className="md:hidden">{landlord ? ` · ${landlord.name}${more.length ? ` +${more.length}` : ""}` : ""}</span>
                             </span>
                           </span>
                           <span className="figures text-[13px] md:text-[13px]">
@@ -1038,8 +1048,11 @@ export default function Portfolio() {
                             {p.onRex !== false && p.rexLet === false && !p.held && <Pill tone="neutral">Not let in REX</Pill>}
                             {notice && <Pill tone="accent">Relet{notice.leavingOn ? ` · ${shortDay(notice.leavingOn)}` : ""}</Pill>}
                           </span>
-                          <span className="hidden min-w-0 truncate text-[12px] md:block">
-                            {landlord ? landlord.name : <span className="text-muted">Not on record</span>}
+                          <span className="hidden min-w-0 items-baseline gap-1 text-[12px] md:flex">
+                            {landlord ? <span className="min-w-0 truncate">{landlord.name}</span> : <span className="text-muted">Not on record</span>}
+                            {landlord && more.length > 0 && (
+                              <span className="shrink-0 text-[11px] text-muted" title={`Also ${more.map((l) => l.name).join(", ")}`}>+{more.length}</span>
+                            )}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] text-muted xl:block">
                             {house ? `${new Set(house.rooms.flatMap((r) => r.tenants.map((t) => t.contactId))).size} tenants` : byAgent ? (p.agent?.name ?? "—") : (p.tenants[0]?.name ?? "—")}

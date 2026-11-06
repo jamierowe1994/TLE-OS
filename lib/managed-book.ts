@@ -337,34 +337,81 @@ function toProperty(r: Row): ManagedProperty {
   };
 }
 
-/** Group the book by owner contact. Biggest landlord first. */
+/**
+ * The book by landlord, every landlord on each home (James, 6 Nov 2026): the
+ * first, then the others the row names (`otherLandlords` - REX's other owners
+ * and the joint landlords kept on the home in the OS). The Landlords tab and
+ * its count read the first alone, so a joint landlord was on the home's page
+ * and the Propoly push but on no list, and wasn't counted.
+ *
+ * One person each. A REX contact is its REX id, as it always was, so two REX
+ * contacts stay two, as REX has them. Anybody else - a joint landlord, the
+ * record's landlord, one changed in the OS - joins the landlord with the same
+ * email, else the same name where one of them has no email: a joint landlord
+ * who is REX's owner of another home is one landlord with both homes, and a
+ * joint landlord on two homes (a row each in the OS) is one too. A home
+ * counts once for each of its landlords, with its whole rent. Biggest first.
+ */
 export function landlordsOf(properties: ManagedProperty[]): ManagedLandlord[] {
-  const by = new Map<string, ManagedLandlord>();
-  for (const p of properties) {
-    if (!p.landlord) continue;
-    const l = p.landlord;
-    const held = by.get(l.contactId) ?? {
-      contactId: l.contactId,
-      name: l.name,
-      email: l.email,
-      phone: l.phone,
-      listingIds: [],
-      rentRoll: 0,
-      services: {},
-    };
-    held.listingIds.push(p.listingId);
-    held.rentRoll += p.rentMonthly ?? 0;
-    const s = p.service ?? "Not set";
-    held.services[s] = (held.services[s] ?? 0) + 1;
+  const out: ManagedLandlord[] = [];
+  const homes = new Map<ManagedLandlord, Set<string>>();
+  const byId = new Map<string, ManagedLandlord>();
+  const byEmail = new Map<string, ManagedLandlord>();
+  const byName = new Map<string, ManagedLandlord>();
+  const key = (v: string | null | undefined) => (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const fromRex = (l: Party) => /^\d+$/.test(l.contactId);
+  const find = (l: Party): ManagedLandlord | undefined => {
+    const held = byId.get(l.contactId);
+    if (held || fromRex(l)) return held;
+    const e = key(l.email);
+    const named = byName.get(key(l.name));
+    return (e ? byEmail.get(e) : undefined) ?? (named && (!e || !named.email) ? named : undefined);
+  };
+  const add = (p: ManagedProperty, l: Party) => {
+    let held = find(l);
+    if (!held) {
+      held = { contactId: l.contactId, name: l.name, email: l.email, phone: l.phone, listingIds: [], rentRoll: 0, services: {} };
+      out.push(held);
+      homes.set(held, new Set());
+    }
     /* A contact can carry an email on one listing and not another; keep the
        first non-empty one seen. */
     held.email = held.email ?? l.email;
     held.phone = held.phone ?? l.phone;
-    by.set(l.contactId, held);
+    for (const [by, k] of [[byId, l.contactId], [byEmail, key(l.email)], [byName, key(l.name)]] as const) {
+      if (k && !by.has(k)) by.set(k, held);
+    }
+    const mine = homes.get(held) as Set<string>;
+    if (mine.has(p.listingId)) return;
+    mine.add(p.listingId);
+    held.listingIds.push(p.listingId);
+    held.rentRoll += p.rentMonthly ?? 0;
+    const s = p.service ?? "Not set";
+    held.services[s] = (held.services[s] ?? 0) + 1;
+  };
+  /* REX's contacts first, so who joins whom doesn't hang on the book's order. */
+  for (const rex of [true, false]) {
+    for (const p of properties) {
+      for (const l of [p.landlord, ...(p.otherLandlords ?? [])]) if (l && fromRex(l) === rex) add(p, l);
+    }
   }
-  return [...by.values()].sort(
+  return out.sort(
     (a, b) => b.listingIds.length - a.listingIds.length || b.rentRoll - a.rentRoll || a.name.localeCompare(b.name, "en-GB")
   );
+}
+
+/**
+ * The Landlords list and its counts taken last, over the book as every layer
+ * left it (lib/managed-book-cache, 6 Nov 2026). Each layer that names a
+ * landlord took the list again when it thought it had to, and not all of
+ * them did: joint landlords alone left it as it was, and management
+ * transfers took it over every let a home ever had. Each home's current let
+ * only, as everywhere else on Portfolio. In memory: nothing else moves.
+ */
+export function withLandlordList(book: ManagedBook): ManagedBook {
+  const homes = currentLets(book.properties);
+  const landlords = landlordsOf(homes);
+  return { ...book, landlords, counts: { ...book.counts, landlords: landlords.length, withoutLandlord: homes.filter((p) => !p.landlord).length } };
 }
 
 /**
