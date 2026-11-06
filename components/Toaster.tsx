@@ -47,7 +47,7 @@ export default function Toaster({ at = "bottom" }: { at?: "bottom" | "top" } = {
       hideTimer.current = window.setTimeout(() => {
         setShown(false);
         clearTimer.current = window.setTimeout(() => setItem(null), 250);
-      }, d.tone === "bad" ? 6000 : 2400);
+      }, d.ms ?? (d.tone === "bad" ? 6000 : 2400));
     };
     window.addEventListener(TOAST_EVENT, onToast);
     return () => {

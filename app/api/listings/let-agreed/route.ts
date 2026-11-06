@@ -11,6 +11,7 @@ import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/r
 import { rexTokenFor } from "@/lib/rex-user";
 import { forAgent, isOwner } from "@/lib/agent-words";
 import { switchOn } from "@/lib/switches";
+import { waitForSend } from "@/lib/portal-send";
 
 /**
  * MARK AS LET AGREED, AND BACK (Lorna, ticket 015e31a5, 22 Oct 2026, on
@@ -50,8 +51,13 @@ import { switchOn } from "@/lib/switches";
  * ── Locks ────────────────────────────────────────────────────────────────
  *
  *   1. The "Mark as Let Agreed on the portals" switch (lib/switches,
- *      listing_let_agreed). Off, agents don't see the button and an owner's
- *      press is a rehearsal: everything checked, nothing written, said so.
+ *      listing_let_agreed). Off, agents don't see Mark as Let Agreed and an
+ *      owner's press is a rehearsal: everything checked, nothing written.
+ *      BACK TO AVAILABLE IS NOT BEHIND IT (James, 6 Nov 2026). A re-let
+ *      reuses the old REX listing, and the tick from the last let stays on:
+ *      one of Sean's homes was being re-advertised from 5 Nov while
+ *      Rightmove had it removed and OnTheMarket showed Let Agreed, and he had
+ *      no button to take the tick off. Clearing it is how a re-let goes up.
  *   2. REX_ALLOW_WRITES must name Listings/update and ListingPortalUploads/queue.
  *   3. Push to the portals (lib/area-map, listing-publish) for agents, failing
  *      closed, and only on their own listing - the same people who may take
@@ -117,7 +123,9 @@ export async function POST(req: NextRequest) {
 
   const armed = await switchOn(SWITCH);
   const owner = isOwner(actor);
-  if (!armed && !owner) {
+  /* Back to available is always real (see the header); only the tick going on is switched. */
+  const switched = action === "let_agreed";
+  if (switched && !armed && !owner) {
     return NextResponse.json({ ok: false, locked: true, error: "Mark as Let Agreed isn't switched on yet." }, { status: 423 });
   }
   /* Fail CLOSED, as Push to the portals does: this changes what the public sees. */
@@ -131,6 +139,8 @@ export async function POST(req: NextRequest) {
   }
 
   const want = action === "let_agreed";
+  /* When they pressed, for the send to the portals that follows (lib/portal-send). */
+  const since = Date.now();
   const words = want ? "let agreed" : "back to available";
   try {
     const was = await readNow(id, true);
@@ -139,7 +149,7 @@ export async function POST(req: NextRequest) {
     if (was.letAgreed === want) return NextResponse.json({ ok: true, id, ...was, unchanged: true });
 
     /* The rehearsal: everything above was real, nothing below is sent. */
-    if (!armed) {
+    if (switched && !armed) {
       await record({
         kind: "listing_let_agreed",
         actorId: actor.id,
@@ -177,7 +187,10 @@ export async function POST(req: NextRequest) {
       actorEmail: actor.email,
       detail: `${id}: ${words} (let_agreed ${was.letAgreed} -> ${now.letAgreed})${told === null ? ", not on the portals channel" : told ? ", portals sent it" : ", portal upload NOT queued"}${token ? "" : " as the office account"}`,
     });
-    return NextResponse.json({ ok: true, id, ...now, portalsTold: told });
+    /* Told the portals: wait briefly, as Go live does, and hand a slow one to the watcher. */
+    const send = told ? await waitForSend(id, since, 6000).catch(() => null) : null;
+    const sending = Boolean(told && (!send || (send.state !== "live" && send.state !== "failed")));
+    return NextResponse.json({ ok: true, id, ...now, portalsTold: told, since, sending, portals: send?.state === "live" ? send.portals : [] });
   } catch (e) {
     if (e instanceof RexWriteBlocked) {
       const method = e.message.match(/Refusing to call (\S+)/)?.[1] ?? "Listings/update";

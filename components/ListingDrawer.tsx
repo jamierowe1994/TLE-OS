@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
 import AdvertOffline from "@/components/listing/AdvertOffline";
 import DoodleIcon from "@/components/DoodleIcon";
+import { isWatched, PORTAL_SENT_EVENT, PORTAL_WATCH_EVENT, portalList, TAKING_A_WHILE, watchPortalSend } from "@/lib/portal-watch";
 import SignInAgain from "@/components/SignInAgain";
 import WithdrawnBox from "@/components/listing/WithdrawnBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -475,6 +476,12 @@ function ListingDrawerBody({
   const [pushError, setPushError] = useState<string | null>(null);
   /* The push was refused only because their sign-in ran out: the card asks for it. */
   const [pushSignIn, setPushSignIn] = useState(false);
+  /* Published, but the portals hadn't got it yet when the card finished
+     (James, 6 Nov 2026): not a failure, so no "it hasn't gone live" - the
+     card says it is taking longer than normal and the watcher takes over. */
+  const [pushSending, setPushSending] = useState(false);
+  /* Published and sent, but a portal turned it down (its own words). */
+  const [pushRefused, setPushRefused] = useState<string | null>(null);
   useEffect(() => {
     if (pushing == null || pushing < 0 || pushing >= 3 || pushError) return;
     if (pushing === 2 && !pushOk) return;
@@ -484,7 +491,7 @@ function ListingDrawerBody({
 
   /* Where it really is, live from REX. The book is cached for minutes, and
      straight after a push it would still say draft. */
-  const [pub, setPub] = useState<{ status: string | null; onPortals: boolean; blockers: string[] } | null>(null);
+  const [pub, setPub] = useState<{ status: string | null; onPortals: boolean; blockers: string[]; sending?: boolean } | null>(null);
   /* Read again after a withdrawn listing is relisted or taken off (WithdrawnBox). */
   const [pubKey, setPubKey] = useState(0);
   const reloadPub = () => setPubKey((k) => k + 1);
@@ -495,14 +502,31 @@ function ListingDrawerBody({
     let live = true;
     fetch(`/api/listings/publish?id=${encodeURIComponent(String(listing.id))}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; status?: string | null; onPortals?: boolean; blockers?: string[] }) => {
-        if (live && j.ok) setPub({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: j.blockers ?? [] });
+      .then((j: { ok?: boolean; status?: string | null; onPortals?: boolean; blockers?: string[]; sending?: boolean }) => {
+        if (live && j.ok) setPub({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: j.blockers ?? [], sending: Boolean(j.sending) });
       })
       .catch(() => {});
     return () => {
       live = false;
     };
   }, [listing?.id, pubKey]);
+  /* Still on its way to the portals, from this browser's watcher (lib/portal-watch). */
+  const [watching, setWatching] = useState(false);
+  useEffect(() => {
+    if (!listing?.id) return;
+    const id = String(listing.id);
+    const read = () => setWatching(isWatched(id));
+    const sent = (e: Event) => {
+      if ((e as CustomEvent<{ id?: string }>).detail?.id === id) setPubKey((k) => k + 1);
+    };
+    read();
+    window.addEventListener(PORTAL_WATCH_EVENT, read);
+    window.addEventListener(PORTAL_SENT_EVENT, sent);
+    return () => {
+      window.removeEventListener(PORTAL_WATCH_EVENT, read);
+      window.removeEventListener(PORTAL_SENT_EVENT, sent);
+    };
+  }, [listing?.id]);
 
   /* The listing as REX holds it now - rooms, type, deposit, dates - read once
      per listing and shared with the Marketing tab. The book never carried
@@ -580,7 +604,7 @@ function ListingDrawerBody({
   const [quietBusy, setQuietBusy] = useState(false);
   const [quietNote, setQuietNote] = useState<{ ok: boolean; text: string } | null>(null);
 
-  async function portalCall(action: "publish" | "quiet" | "off" | "on"): Promise<{ ok: boolean; error?: string; signIn?: boolean }> {
+  async function portalCall(action: "publish" | "quiet" | "off" | "on"): Promise<{ ok: boolean; error?: string; signIn?: boolean; sending?: boolean; portals?: string[]; refused?: string | null }> {
     if (!listing) return { ok: false, error: "No listing open." };
     try {
       const r = await fetch("/api/listings/publish", {
@@ -588,10 +612,13 @@ function ListingDrawerBody({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: listing.id, action }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string | null; onPortals?: boolean; signIn?: boolean };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string | null; onPortals?: boolean; signIn?: boolean; sending?: boolean; since?: number; portals?: string[]; refused?: { portal: string; why: string }[] };
       if (!j.ok) return { ok: false, error: j.error ?? "The portals did not take it.", signIn: j.signIn };
-      setPub((cur) => ({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: cur?.blockers ?? [] }));
-      return { ok: true };
+      setPub((cur) => ({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: cur?.blockers ?? [], sending: Boolean(j.sending) }));
+      /* Not through yet: the watcher on every page follows it and says when it is. */
+      if (j.sending && j.since) watchPortalSend({ id: listing.id, name: listing.name, since: j.since });
+      const first = j.refused?.[0];
+      return { ok: true, sending: Boolean(j.sending), portals: j.portals ?? [], refused: first ? `${first.portal} turned it down: ${first.why}` : null };
     } catch {
       return { ok: false, error: "The connection dropped. Check the listing before trying again." };
     }
@@ -601,9 +628,13 @@ function ListingDrawerBody({
     setPushOk(false);
     setPushError(null);
     setPushSignIn(false);
+    setPushSending(false);
+    setPushRefused(null);
     setPushing(0);
     const res = await portalCall("publish");
     if (res.ok) {
+      setPushSending(Boolean(res.sending));
+      setPushRefused(res.refused ?? null);
       setPushOk(true);
       setActivityKey((k) => k + 1);
     }
@@ -664,7 +695,8 @@ function ListingDrawerBody({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: listing.id, action }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; letAgreed?: boolean; onPortals?: boolean; rehearsed?: boolean; portalsTold?: boolean | null };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; letAgreed?: boolean; onPortals?: boolean; rehearsed?: boolean; portalsTold?: boolean | null; sending?: boolean; since?: number };
+      if (j.ok && j.sending && j.since) watchPortalSend({ id: listing.id, name: listing.name, since: j.since });
       setLetAsk(false);
       if (!j.ok) {
         setLetNote({ ok: false, text: j.error ?? "That did not go through. Try again in a minute." });
@@ -681,7 +713,9 @@ function ListingDrawerBody({
             ? la ? "Marked Let Agreed. It is off the portals, so it shows there if you put it back on the market." : "Back to available. It is off the portals, so nothing changes there until you put it back on the market."
             : j.portalsTold === false
               ? la ? "Marked Let Agreed. The portals pick it up on their next upload, usually within the hour." : "Back to available. The portals pick it up on their next upload, usually within the hour."
-              : la ? "Marked Let Agreed. Rightmove, OnTheMarket and Zoopla show the Let Agreed banner within about 10 minutes." : "Back to available. The Let Agreed banner comes off Rightmove, OnTheMarket and Zoopla within about 10 minutes.",
+              : j.sending
+                ? `${la ? "Marked Let Agreed" : "Back to available"}. ${TAKING_A_WHILE}`
+                : la ? "Marked Let Agreed. Rightmove, OnTheMarket and Zoopla show the Let Agreed banner within a few minutes." : "Back to available. The Let Agreed banner comes off Rightmove, OnTheMarket and Zoopla within a few minutes.",
         });
       }
     } catch {
@@ -703,7 +737,11 @@ function ListingDrawerBody({
       res.ok
         ? action === "off"
           ? "Taken off. It leaves Rightmove, OnTheMarket and Zoopla within about 10 minutes."
-          : "Back on. It shows on Rightmove, OnTheMarket and Zoopla within about 10 minutes."
+          : res.refused
+            ? `Back on the market, but ${res.refused}. Fix that and put it back on again.`
+            : res.sending
+              ? TAKING_A_WHILE
+              : `Back on ${portalList(res.portals)}. It shows on their sites within a few minutes.`
         : res.error ?? "The portals did not take it."
     );
   }
@@ -2375,6 +2413,8 @@ function ListingDrawerBody({
           address={listing.name}
           error={pushError}
           signIn={pushSignIn}
+          sending={pushSending}
+          refused={pushRefused}
           onStart={() => void startPush()}
           onCancel={() => {
             setPushing(null);
@@ -2681,7 +2721,10 @@ function ListingDrawerBody({
     const tone = listing.letAgreed ? "accent" : isLive ? "good" : "neutral";
     const onPortals = isLive && (pub ? pub.onPortals : true);
     /* Mark as Let Agreed / Back to available: its own switch, then the same people as Take off the market. */
-    const letShown = Boolean(isLive && !publishHidden && letTick && (letTick.armed || letTick.rehearse));
+    /* Back to available whenever the tick is on, switch or no switch (James, 6
+       Nov 2026): a re-let keeps the last let's tick, and without this the
+       agent had no way to put it up as available. */
+    const letShown = Boolean(isLive && !publishHidden && letTick && (letTick.armed || letTick.rehearse || letTick.letAgreed));
     const askLet = () => (publishCanPress ? (setLetNote(null), setPortalConfirm(false), setLetAsk(true)) : setPortalNote(lockedSentence(publishArea, publishLevel)));
     const notesN = listingNotes?.length ?? 0;
     const nlTabs: { id: NlTab; label: string; count?: number | null }[] = [
@@ -2846,7 +2889,11 @@ function ListingDrawerBody({
           <div className="nl-rhead-text">
             <div className="nl-rhead-meta">
               <Badge tone={tone}>{status.label}</Badge>
-              {onPortals && (
+              {onPortals && (pub?.sending || watching) ? (
+                <span className="nl-live nl-live-sending" title="It hasn't failed - it's taking longer than normal to reach the portals. You'll be told when it's live.">
+                  <i /> Going onto the portals
+                </span>
+              ) : onPortals && (
                 <span className="nl-live">
                   <i /> {letTick?.letAgreed ? "Showing Let Agreed" : "On the market"}
                 </span>
@@ -2917,7 +2964,7 @@ function ListingDrawerBody({
           <div className="nl-confirm" data-steve-never>
             <p>
               {letTick.letAgreed
-                ? `Put ${listing.name} back to available? The Let Agreed banner comes off Rightmove, OnTheMarket and Zoopla and it shows as available to let again.`
+                ? `Is ${listing.name} back on the market? Rightmove, OnTheMarket and Zoopla show it as Let Agreed. Back to available takes that off and it shows as available to let again.`
                 : letTick.onPortals
                   ? `Show ${listing.name} as Let Agreed? The advert stays on Rightmove, OnTheMarket and Zoopla with their Let Agreed banner, so people can still see it, and you can take it off the market whenever you choose. If the let falls through, Back to available undoes it.`
                   : `Mark ${listing.name} as Let Agreed? It is off the portals just now, so it shows as Let Agreed there if you put it back on the market. Back to available undoes it.`}
@@ -3985,7 +4032,7 @@ const PORTALS = ["Rightmove", "OnTheMarket", "Zoopla"];
  * steps run while it answers, and the last one holds until REX has said
  * yes. If REX says no, the card says why instead of celebrating.
  */
-function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, onDone }: { at: number; address: string; error: string | null; signIn?: boolean; onStart: () => void; onCancel: () => void; onDone: () => void }) {
+function PushCeremony({ at, address, error, signIn = false, sending = false, refused = null, onStart, onCancel, onDone }: { at: number; address: string; error: string | null; signIn?: boolean; sending?: boolean; refused?: string | null; onStart: () => void; onCancel: () => void; onDone: () => void }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -4035,7 +4082,7 @@ function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, o
       ) : (
         <span aria-hidden className={`absolute inset-0 bg-ink/50 transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`} />
       )}
-      {done && (
+      {done && !sending && !refused && (
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
           {pieces.map((p) => (
             <span
@@ -4136,6 +4183,28 @@ function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, o
               <div className="h-full rounded-full transition-[width] duration-1000 ease-out" style={{ width: `${((at + 0.6) / 3) * 100}%`, background: "#56634a" }} />
             </div>
           </>
+        ) : sending || refused ? (
+          <>
+            {/* Published, not yet through (or a portal said no): no confetti,
+                and never "it hasn't gone live" - it has, and it's on its way. */}
+            <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full" style={{ background: refused ? "#fdefec" : "#f1f4ec", animation: "tle-pop 700ms cubic-bezier(0.18, 1.35, 0.32, 1) both" }}>
+              <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke={refused ? "#a85a51" : "#56634a"} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="24" cy="24" r="17" />
+                {refused ? <path d="M24 15 V26 M24 32 V32.5" /> : <path d="M24 14 V24 L31 28" />}
+              </svg>
+            </span>
+            <h2 className="hand mt-5 text-[25px] leading-tight">{refused ? "Live, With One to Fix" : "Nearly There"}</h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+              {refused ? `${address} is live, but ${refused}. Open the Marketing tab, fix it, then put it back on the market.` : `${address} is live. ${TAKING_A_WHILE}`}
+            </p>
+            <button
+              type="button"
+              onClick={onDone}
+              className="mt-7 rounded-full bg-[var(--brown)] px-6 py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              {refused ? "Got It" : "Carry On"}
+            </button>
+          </>
         ) : (
           <>
             <span className="mx-auto flex h-24 w-24 items-center justify-center rounded-full" style={{ background: "#f1f4ec", animation: "tle-pop 700ms cubic-bezier(0.18, 1.35, 0.32, 1) both" }}>
@@ -4145,7 +4214,7 @@ function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, o
             </span>
             <h2 className="hand mt-6 text-[26px] leading-tight">Congratulations</h2>
             <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
-              Your listing will be live within the next 5 to 10 minutes. {address}, on Rightmove, OnTheMarket and Zoopla.
+              {address} is live on Rightmove, OnTheMarket and Zoopla. It shows on their sites within a few minutes.
             </p>
             <button
               type="button"

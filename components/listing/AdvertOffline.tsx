@@ -1,5 +1,7 @@
 "use client";
 
+import { watchPortalSend, TAKING_A_WHILE } from "@/lib/portal-watch";
+import { toast } from "@/lib/toast";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -169,10 +171,15 @@ export default function AdvertOffline({
     try {
       if (pub?.status === "published" && !pub.onPortals) {
         const r = await fetch("/api/listings/publish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: Number(listingId), action: "on" }) });
-        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; sending?: boolean; since?: number };
         if (!j.ok) {
           setErr(j.error ?? "It didn't go back on the portals. Try again.");
           return;
+        }
+        /* Slower than usual to reach the portals: not a failure, followed and announced (lib/portal-watch). */
+        if (j.sending && j.since) {
+          watchPortalSend({ id: listingId, name: address, since: j.since });
+          toast(TAKING_A_WHILE, "ok", 9000);
         }
       }
       const r = await fetch("/api/listings/offline", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ listingId, applicationId, action: "online" }) });

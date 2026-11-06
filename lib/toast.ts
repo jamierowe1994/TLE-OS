@@ -16,13 +16,15 @@ export type ToastTone = "ok" | "bad";
 export interface ToastDetail {
   text: string;
   tone: ToastTone;
+  /** How long it stays up, for news worth reading (a listing now live). */
+  ms?: number;
 }
 
 export const TOAST_EVENT = "os-toast";
 
-export function toast(text: string, tone: ToastTone = "ok"): void {
+export function toast(text: string, tone: ToastTone = "ok", ms?: number): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent<ToastDetail>(TOAST_EVENT, { detail: { text, tone } }));
+  window.dispatchEvent(new CustomEvent<ToastDetail>(TOAST_EVENT, { detail: { text, tone, ms } }));
 }
 
 /**
