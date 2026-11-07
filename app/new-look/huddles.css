@@ -342,3 +342,176 @@
   [data-look="new"] .nl-hud-modal-list { padding: 4px 10px 10px; }
   [data-look="new"] .nl-hud-modal-foot { padding: 12px 18px 16px; }
 }
+
+/* ===========================================================================
+   TEAM ROOM (James, 7 Nov 2026, after the website and the Dashboard).
+   Calmer and squarer: the website's condensed capitals for the title and the
+   labels, chats as hairline rows with a terracotta count, the conversation as
+   one running list (no bubbles), square faces like the site's photographs,
+   and who is in the chat in a column on the right.
+=========================================================================== */
+[data-look="new"].nl-hud {
+  --hud-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --line: rgba(20, 20, 19, 0.12);
+  --line-strong: rgba(20, 20, 19, 0.2);
+}
+:root[data-theme="dark"] [data-look="new"].nl-hud { --line: #3a3936; --line-strong: #4a4844; }
+
+/* the list */
+[data-look="new"] .nl-hud-list { background: var(--nv-bg, #f8f7f4); }
+[data-look="new"] .nl-hud-list-scroll, [data-look="new"] .nl-hud-group, [data-look="new"] .nl-hud-slide { background: transparent; }
+[data-look="new"] .nl-hud-slide { background: var(--nv-bg, #f8f7f4); }
+[data-look="new"] .nl-hud-group { background: var(--nv-bg, #f8f7f4); }
+[data-look="new"] .nl-hud-list-scroll { padding: 4px 0 16px; }
+[data-look="new"] .nl-hud-list-head { padding: 30px 20px 10px; }
+[data-look="new"] .nl-hud-title {
+  font-family: var(--hud-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  font-size: 34px; line-height: 1; letter-spacing: 0.04em;
+}
+[data-look="new"] .nl-hud-title.is-sub { font-size: 24px; letter-spacing: 0.04em; }
+[data-look="new"] .nl-hud-list-head .nl-btn--primary,
+[data-look="new"] .nl-hud-list-head .nl-iconbtn { border-radius: 0; }
+[data-look="new"] .nl-hud-list-head .nl-btn--primary {
+  font-family: var(--hud-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; padding: 8px 12px;
+}
+[data-look="new"] .nl-hud-group,
+[data-look="new"] .nl-hud-side-label,
+[data-look="new"] .nl-hud-day,
+[data-look="new"] .nl-hud-pop-label {
+  font-family: var(--hud-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  font-size: 11px; line-height: 16px; letter-spacing: 0.16em; color: var(--muted);
+}
+[data-look="new"] .nl-hud-group { padding: 22px 20px 8px; }
+[data-look="new"] .nl-hud-group.is-first { padding-top: 14px; }
+[data-look="new"] .nl-hud-nothing { padding: 2px 20px 6px; font-size: 12.5px; color: var(--faint); }
+[data-look="new"] .nl-hud-item { padding: 12px 20px; background: transparent; border-bottom-color: var(--line); }
+[data-look="new"] .nl-hud-item:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+[data-look="new"] .nl-hud-item.is-on { background: var(--page); box-shadow: inset 2px 0 0 var(--accent), inset 0 1px 0 var(--line); }
+[data-look="new"] .nl-hud-item-name { font-size: 13.5px; }
+[data-look="new"] .nl-hud-item-last { font-size: 12.5px; }
+[data-look="new"] .nl-hud-n { border-radius: 0; background: var(--accent); color: #fff; font-family: var(--font-body); font-weight: 600; font-size: 10.5px; }
+[data-look="new"] .nl-hud-foot { padding: 10px 12px 14px; }
+[data-look="new"] .nl-hud-foot-btn { border-radius: 0; }
+[data-look="new"] .nl-hud-foot p { margin: 2px 10px 0; font-size: 11px; }
+
+/* faces: square, as the website's photographs */
+[data-look="new"] .nl-hud-av { border-radius: 2px; }
+[data-look="new"] .nl-hud-av--pink, [data-look="new"] .nl-hud-av--clay { background: var(--accent-soft); color: var(--brown); }
+[data-look="new"] .nl-hud-av--sage { background: var(--sage-soft); color: var(--sage-ink); }
+
+/* the room: the conversation and, on a wide screen, the side column */
+[data-look="new"] .nl-hud-room { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+[data-look="new"] .nl-hud-room.has-side { grid-template-columns: minmax(0, 1fr) 260px; }
+[data-look="new"] .nl-hud-room-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+@media (max-width: 1199px) {
+  [data-look="new"] .nl-hud-room.has-side { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-hud-side { display: none; }
+}
+@media (min-width: 1200px) {
+  /* The side column does what People did. */
+  [data-look="new"] .nl-hud-room.has-side .nl-hud-head .nl-btn--secondary { display: none; }
+  /* Steve sits over the side column's foot, not the box you type in. */
+  [data-look="new"] .nl-hud-room.has-side .nl-hud-compose { padding-right: 40px; }
+}
+
+/* the head */
+[data-look="new"] .nl-hud-head { padding: 22px 40px 18px; }
+[data-look="new"] .nl-hud-head-name {
+  font-family: var(--hud-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  font-size: 24px; line-height: 1.05; letter-spacing: 0.04em;
+}
+[data-look="new"] .nl-hud-head-sub {
+  margin-top: 4px; font-family: var(--hud-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  font-size: 11px; line-height: 16px; letter-spacing: 0.16em;
+}
+[data-look="new"] .nl-hud-head .nl-btn, [data-look="new"] .nl-hud-head .nl-iconbtn,
+[data-look="new"] .nl-hud-pop, [data-look="new"] .nl-hud-pop-btn, [data-look="new"] .nl-hud-pop-take { border-radius: 0; }
+
+/* the messages: one running list */
+[data-look="new"] .nl-hud-msgs { max-width: 860px; padding: 20px 40px 28px; gap: 0; }
+[data-look="new"] .nl-hud-day { margin: 22px 0 10px; }
+[data-look="new"] .nl-hud-msg { align-items: stretch; border-radius: 0; animation: none; }
+[data-look="new"] .nl-hud-msg.is-me { align-items: stretch; }
+[data-look="new"] .nl-hud-msg.is-head { margin-top: 14px; }
+[data-look="new"] .nl-hud-line,
+[data-look="new"] .nl-hud-msg.is-me .nl-hud-line { flex-direction: row; align-items: flex-start; gap: 12px; max-width: none; padding: 3px 8px; margin: 0 -8px; transition: background-color 0.15s; }
+[data-look="new"] .nl-hud-msg:hover .nl-hud-line { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+[data-look="new"] .nl-hud-facegap { width: 34px; }
+[data-look="new"] .nl-hud-body { flex: 1; min-width: 0; }
+[data-look="new"] .nl-hud-from { display: flex; align-items: baseline; gap: 8px; margin: 0 0 1px; font-size: 13.5px; line-height: 20px; color: var(--ink); }
+[data-look="new"] .nl-hud-from b { font-weight: 600; }
+[data-look="new"] .nl-hud-msg.is-me .nl-hud-from b { color: var(--brown); }
+[data-look="new"] .nl-hud-t,
+[data-look="new"] .nl-hud-msg.is-me .nl-hud-t { display: inline-flex; margin: 0; font-size: 11px; line-height: 16px; color: var(--faint); }
+[data-look="new"] .nl-hud-t.is-side { flex: none; align-self: center; opacity: 0; transition: opacity 0.15s; }
+[data-look="new"] .nl-hud-msg:hover .nl-hud-t.is-side { opacity: 1; }
+[data-look="new"] .nl-hud-bubble,
+[data-look="new"] .nl-hud-msg.is-me .nl-hud-bubble {
+  display: block; background: none; border: 0; border-radius: 0; padding: 0;
+  font-family: var(--font-body); font-size: 14.5px; line-height: 22px; color: var(--ink);
+}
+[data-look="new"] button.nl-hud-bubble.is-question {
+  width: 100%; margin: 2px 0; padding: 10px 14px; background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent);
+}
+[data-look="new"] button.nl-hud-bubble.is-question:hover { background: color-mix(in srgb, var(--accent) 12%, var(--page)); }
+[data-look="new"] .nl-hud-q { font-family: var(--hud-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 10.5px; color: var(--accent); }
+[data-look="new"] .nl-hud-quote { border-radius: 0; border-left-color: var(--brown); background: color-mix(in srgb, var(--ink) 4%, transparent); }
+[data-look="new"] .nl-hud-quote b { color: var(--brown); }
+[data-look="new"] .nl-hud-gif img { border-radius: 2px; margin-top: 4px; }
+[data-look="new"] .nl-hud-reply { align-self: center; border-radius: 0; }
+[data-look="new"] .nl-hud-msg.is-typing .nl-hud-line { align-items: center; }
+[data-look="new"] .nl-hud-msg.is-typing > .nl-hud-from { margin: 0 0 4px 46px; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-hud-typing { border-radius: 0; padding: 10px 12px; background: var(--accent-soft); border: 0; }
+[data-look="new"] .nl-hud-empty, [data-look="new"] .nl-hud-empty.is-small { font-family: var(--font-body); font-size: 13.5px; line-height: 20px; color: var(--muted); }
+[data-look="new"] .nl-hud-pick-ico { border-radius: 0; }
+[data-look="new"] .nl-hud-pick-title { font-family: var(--hud-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 22px; }
+[data-look="new"] .nl-hud-pick-sub { font-family: var(--font-body); font-size: 13.5px; line-height: 20px; }
+
+/* the box you type in: square, Inter, a brown send */
+[data-look="new"] .nl-hud-box { border-radius: 0; border-color: var(--line-strong); background: var(--page); max-width: 860px; padding: 6px 6px 6px 10px; }
+[data-look="new"] .nl-hud-box:focus-within { border-color: var(--ink); }
+[data-look="new"] .nl-hud-box textarea { font-family: var(--font-body); font-size: 14.5px; line-height: 22px; }
+[data-look="new"] .nl-hud-tool, [data-look="new"] .nl-hud-send, [data-look="new"] .nl-hud-ask, [data-look="new"] .nl-hud-tray, [data-look="new"] .nl-hud-replying { border-radius: 0; }
+[data-look="new"] .nl-hud-send { background: var(--brown); color: #fff; }
+[data-look="new"] .nl-hud-send:hover:not(:disabled) { background: color-mix(in srgb, var(--brown) 84%, #000); color: #fff; }
+[data-look="new"] .nl-hud-ask { font-family: var(--hud-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; font-size: 10.5px; border-color: var(--line-strong); }
+[data-look="new"] .nl-hud-ask.is-on { background: var(--accent); border-color: var(--accent); }
+[data-look="new"] .nl-hud-replying { border-left-color: var(--brown); }
+[data-look="new"] .nl-hud-replying-text b { color: var(--brown); }
+[data-look="new"] .nl-hud-note, [data-look="new"] .nl-hud-replying { max-width: 860px; }
+
+/* the side column */
+[data-look="new"] .nl-hud-side { min-height: 0; overflow-y: auto; border-left: 1px solid var(--line); padding: 26px 22px 110px; }
+[data-look="new"] .nl-hud-side-label { display: flex; justify-content: space-between; margin: 0 0 12px; }
+[data-look="new"] .nl-hud-side-label > span { color: var(--faint); }
+[data-look="new"] .nl-hud-side-label.is-gap { margin-top: 30px; }
+[data-look="new"] .nl-hud-side-note { margin: 0; font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-hud-side-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+[data-look="new"] .nl-hud-side-people li { display: flex; align-items: center; gap: 10px; font-size: 13px; line-height: 18px; color: var(--ink); min-width: 0; }
+[data-look="new"] .nl-hud-side-people li > span:not(.nl-hud-av) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-hud-side-people em { font-style: normal; font-size: 11px; color: var(--faint); }
+[data-look="new"] .nl-hud-side-more, [data-look="new"] .nl-hud-side-acts button {
+  font: inherit; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  font-size: 12.5px; color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px;
+}
+[data-look="new"] .nl-hud-side-more:hover, [data-look="new"] .nl-hud-side-acts button:hover { text-decoration-color: currentColor; }
+[data-look="new"] .nl-hud-side-acts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-hud-side-acts .is-danger { color: var(--accent); }
+[data-look="new"] .nl-hud-side-qs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-hud-side-qs button {
+  font: inherit; display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 11px 0; border: 0; border-bottom: 1px solid var(--line);
+  background: none; text-align: left; cursor: pointer;
+}
+[data-look="new"] .nl-hud-side-qs button > span { font-size: 13px; line-height: 18px; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+[data-look="new"] .nl-hud-side-qs small { font-size: 11.5px; color: var(--muted); }
+[data-look="new"] .nl-hud-side-qs button:hover > span { color: var(--accent); }
+/* Square faces overlap less than round ones did, so each set of initials reads. */
+[data-look="new"] .nl-hud-stack > span + span, [data-look="new"] .nl-hud-stack > .nl-hud-av--more { margin-left: -5px; }
+[data-look="new"] .nl-hud-stack > span > .nl-hud-av, [data-look="new"] .nl-hud-stack > .nl-hud-av { box-shadow: 0 0 0 2px var(--page); }
+/* With no side column (a question, or a narrow window) the box stops short of Steve. */
+[data-look="new"] .nl-hud-room:not(.has-side) .nl-hud-compose { padding-right: 104px; }
+@media (max-width: 760px) { [data-look="new"] .nl-hud-room:not(.has-side) .nl-hud-compose { padding-right: 74px; } }
+/* Room in the list for three square faces side by side, not overlapping. */
+[data-look="new"] .nl-hud-item .nl-hud-slot { width: 80px !important; }
+[data-look="new"] .nl-hud-item .nl-hud-stack > * + * { margin-left: 2px !important; }
+[data-look="new"] .nl-hud-head .nl-hud-stack > * + * { margin-left: 2px !important; }

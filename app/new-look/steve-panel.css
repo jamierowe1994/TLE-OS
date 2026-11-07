@@ -320,3 +320,73 @@
   .sv-view, .sv-chat .sv-compose, .sv-chat .sv-bar, .sv-chat .sv-bar .sorb, .sv-chat .sv-thread, .sv-tabs button.is-on svg { animation: none; }
   .sv-panel, .sv-card, .sv-start, .sv-news-list button, .sv-float { transition: none; }
 }
+
+/* ===========================================================================
+   ANGULAR (James, 7 Nov 2026): "the rest of the site is fairly angular, and
+   this just feels very soft." Same layout; the softness goes. Square corners
+   everywhere but Steve himself, no frosted glass, no fading wash - a flat
+   brown band - cards on fine lines with no lift or glow, and the website's
+   condensed capitals for the titles, tabs and labels.
+=========================================================================== */
+.sv-panel { --sv-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; --sv-line: rgba(20, 20, 19, 0.14); }
+:root[data-theme="dark"] .sv-panel { --sv-line: #3a3936; }
+.sv-panel *:not(.sorb):not(.sorb *):not(.sv-spin):not(.sv-rp-rec):not([class*="spin"]):not(input[type="checkbox"]) { border-radius: 0 !important; }
+.sv-card, .sv-panel.is-wide .sv-card {
+  border-radius: 0; background: #f8f7f4; border: 1px solid var(--sv-line);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: 0 24px 48px -28px rgba(20, 20, 19, 0.35);
+}
+:root[data-theme="dark"] .sv-card { background: #1f1e1d; }
+
+/* the band: flat brown, no fade */
+.sv-wash { height: 236px; background: #56423e; }
+.sv-wash.is-short { height: 58px; }
+.sv-mark, .sv-hi, .sv-lead, .sv-bar h2, .sv-name, .sv-article-h, .sv-fix-h {
+  font-family: var(--sv-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.sv-mark { font-size: 18px; letter-spacing: 0.14em; font-stretch: 100%; font-weight: 700; }
+.sv-hello { margin-top: 48px; }
+.sv-hi, .sv-lead { font-size: 30px; line-height: 1; }
+.sv-hi { color: rgba(245, 239, 230, 0.7); }
+.sv-lead { margin-top: 4px; color: #fff; }
+.sv-bar h2, .sv-name { font-size: 18px; line-height: 22px; }
+.sv-icon:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+
+/* cards: fine lines, no lift, no glow */
+.sv-start, .sv-news-list button, .sv-body.is-cards .sv-list button, .sv-body.is-cards .sv-empty {
+  border: 1px solid var(--sv-line); box-shadow: none; background: var(--page); transform: none;
+}
+.sv-start:hover, .sv-news-list button:hover, .sv-body.is-cards .sv-list button:hover { transform: none; box-shadow: none; border-color: var(--ink); }
+.sv-cards { margin-top: 30px; }
+.sv-news h3, .sv-news-k {
+  font-family: var(--sv-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.16em; font-size: 11px; line-height: 16px;
+}
+.sv-news h3 { color: var(--muted); margin-bottom: 10px; }
+
+/* the tabs: capitals, the one you are on marked in terracotta */
+.sv-tabs { padding: 0; border-top: 1px solid var(--sv-line); }
+.sv-tabs button {
+  padding: 12px 4px 11px; font-family: var(--sv-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 10.5px;
+  box-shadow: none;
+}
+.sv-tabs button.is-on { box-shadow: inset 0 2px 0 var(--accent); background: var(--page); }
+.sv-tabs button.is-on svg { color: var(--accent); }
+
+/* the conversation: Steve on white with a fine line, you in brown */
+.sv-panel[data-look="new"] .nl-st-says > div:first-child,
+.sv-panel[data-look="new"] .nl-st-thinking, .sv-typing { background: var(--page); border: 1px solid var(--sv-line); }
+.sv-panel[data-look="new"] .nl-st-me > p { background: var(--brown); color: #fff; }
+.sv-note { background: transparent; border-top-color: var(--sv-line); }
+.sv-compose { border-top-color: var(--sv-line); }
+.sv-panel[data-look="new"] .nl-st-ask { background: var(--page); border-color: var(--sv-line); }
+.sv-panel[data-look="new"] .nl-st-ask:focus-within { border-color: var(--ink); box-shadow: none; }
+.sv-panel[data-look="new"] .nl-st-send { background: var(--brown); color: #fff; }
+
+/* buttons: square and brown, labels in the capitals */
+.sv-float, .sv-rp-send, .sv-article-go {
+  background: var(--brown); color: #fff; box-shadow: none;
+  font-family: var(--sv-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 12px;
+}
+.sv-rp-box, .sv-rp-chip { border-color: var(--sv-line); background: var(--page); box-shadow: none; }
+.sv-rp-box:focus { border-color: var(--ink); box-shadow: none; }
+.sv-menu { box-shadow: 0 16px 32px -20px rgba(20, 20, 19, 0.35); }
