@@ -31,7 +31,7 @@ export default function ForecastChart({
   onCommit,
   format = (n) => `£${Math.round(n / 1000)}k`,
   height = 260,
-  accent = "#cfa096",
+  accent = "#c4a092",
 }: ForecastChartProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);

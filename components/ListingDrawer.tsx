@@ -4060,7 +4060,7 @@ function PushCeremony({ at, address, error, signIn = false, sending = false, ref
       delay: Math.random() * 0.45,
       dur: 1.5 + Math.random() * 1.1,
       size: 6 + Math.random() * 8,
-      color: ["#de968f", "#a85a51", "#b3bea5", "#56634a", "#fdefec", "#56423e"][i % 6],
+      color: ["#a85a51", "#c4a092", "#56634a", "#f5efe6", "#56423e", "#f1f4ec"][i % 6],
       round: i % 3 === 0,
       sway: (Math.random() - 0.5) * 120,
     }))

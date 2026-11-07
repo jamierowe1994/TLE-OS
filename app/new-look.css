@@ -51,23 +51,32 @@
   --line: #e9e9e6;
   --line-strong: #d6d6d2;
   --page: #ffffff;
-  --card: #fafaf9;
+  /* THE FINAL PALETTE (James, 7 Nov 2026), so the OS reads as one family
+     with the new website: brown #56423e for buttons, terracotta #a85a51 the
+     accent, dusty clay #c4a092, olive #56634a, linen #f5efe6, warm off-white
+     #f8f7f4, sage wash #f1f4ec. The design's orange #eb8c6d and its peach
+     washes are gone. */
+  --card: #f8f7f4;
   --panel: #f7f7f6;
   --box: #f0f0ee;
-  --primary: #eb8c6d;
-  --on-primary: #141413;
-  --accent: #eb8c6d;
-  --accent-dark: #aa4a2b;
-  --accent-soft: #f5e3c7;
-  --pal-pink: #f5e3c7;
-  --pal-clay: #aa4a2b;
+  --primary: #56423e;
+  --on-primary: #ffffff;
+  --accent: #a85a51;
+  /* What is late or wants attention: terracotta, 5.3:1 on white. */
+  --accent-dark: #a85a51;
+  --accent-soft: #f5efe6;
+  --pal-pink: #f5efe6;
+  --pal-clay: #c4a092;
   --pal-sage: #b9bea6;
-  --pal-brown: #141413;
+  --pal-brown: #56423e;
   --sage: #b9bea6;
-  --brown: #141413;
-  --sage-deep: #66785b;
-  --sage-ink: #55684a;
-  --sage-soft: #e3e3d3;
+  --brown: #56423e;
+  --sage-deep: #56634a;
+  --sage-ink: #56634a;
+  --sage-soft: #f1f4ec;
+  /* A problem, said quietly: a terracotta tint, darker terracotta words. */
+  --bad-soft: #f5ebea;
+  --bad-ink: #8a463f;
   --info: #3d3d3a;
   --info-soft: #e3dacc;
   --warning: #8a531a;
@@ -95,13 +104,15 @@
   --card: #262624;
   --panel: #2a2927;
   --box: #33322f;
-  --primary: #eb8c6d;
+  --primary: #c4a092;
   --on-primary: #141413;
-  --accent: #eb8c6d;
-  --accent-dark: #f0a283;
-  --accent-soft: #3a2c1f;
-  --pal-pink: #3a2c1f;
-  --pal-clay: #c86a4c;
+  --accent: #c28b85;
+  --accent-dark: #d9b3ae;
+  --accent-soft: #33292a;
+  --pal-pink: #33292a;
+  --pal-clay: #c4a092;
+  --bad-soft: #3a2a28;
+  --bad-ink: #d9b3ae;
   --pal-sage: #7e8f73;
   --pal-brown: #faf9f5;
   --sage: #7e8f73;
@@ -156,7 +167,7 @@
 .nl-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .nl-btn--sm { padding: 6px 13px; font-size: 13px; border-radius: 10px; }
 .nl-btn--primary { background: var(--primary); color: var(--on-primary); border-radius: 10px; }
-.nl-btn--primary:hover:not(:disabled) { background: var(--accent-dark); color: #fff; }
+.nl-btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 84%, #000); color: var(--on-primary); }
 .nl-btn--secondary { border-color: var(--faint); }
 .nl-btn--secondary:hover:not(:disabled) { background: var(--sage-deep); border-color: var(--sage-deep); color: #fff; }
 .nl-btn--sage { background: var(--sage-deep); color: #fff; border-radius: 10px; }
@@ -716,15 +727,16 @@
    very light grey, full height, one 1px line down to a white page. No rounded
    window, no split corners. Measured off the prototype.
 =========================================================================== */
-/* Grey, not the website's beige (James, 24 Oct 2026: tried #f8f7f4 both ways
-   round, "change the beige to grey because everything else is grey"). */
+/* Warm off-white #f8f7f4, the website's ground (James, 7 Nov 2026: "keep it
+   warm" - the final palette made the rest warm too). It was grey #f6f6f5 from
+   24 Oct, when he said "change the beige to grey because everything else is grey". */
 [data-nav-look="new"] {
-  --nv-bg: #f6f6f5; --nv-page: #ffffff; --nv-line: #e9e9e6; --nv-ink: #141413; --nv-muted: #63625b; --nv-faint: #87867f;
-  --nv-hover: rgba(20, 20, 19, .04); --nv-on: #ffffff; --nv-count: #aa4a2b; --nv-avatar: #e3dacc;
+  --nv-bg: #f8f7f4; --nv-page: #ffffff; --nv-line: #e9e9e6; --nv-ink: #141413; --nv-muted: #63625b; --nv-faint: #87867f;
+  --nv-hover: rgba(20, 20, 19, .04); --nv-on: #ffffff; --nv-count: #a85a51; --nv-avatar: #f5efe6;
 }
 :root[data-theme="dark"] [data-nav-look="new"] {
   --nv-bg: #1a1918; --nv-page: #1f1e1d; --nv-line: #3a3936; --nv-ink: #faf9f5; --nv-muted: #b0aea5; --nv-faint: #87867f;
-  --nv-hover: rgba(250, 249, 245, .05); --nv-on: #2e2d2b; --nv-count: #f0a283; --nv-avatar: #33302a;
+  --nv-hover: rgba(250, 249, 245, .05); --nv-on: #2e2d2b; --nv-count: #d9b3ae; --nv-avatar: #33302a;
 }
 .nl-nav { background: var(--nv-bg); padding: 16px 12px 12px; font-family: var(--font-inter), system-ui, sans-serif; color: var(--nv-ink); }
 .nl-nav-head { display: flex; align-items: center; gap: 2px; padding: 4px 4px 18px 10px; }
@@ -732,7 +744,7 @@
 .nl-nav-logo { font-family: var(--font-inter), system-ui, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.8px; line-height: 1; color: var(--nv-ink); text-transform: uppercase; white-space: nowrap; }
 .nl-nav-icon { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 999px; background: transparent; color: var(--nv-muted); cursor: pointer; transition: background-color .2s, color .2s; }
 .nl-nav-icon:hover { background: var(--nv-hover); color: var(--nv-ink); }
-.nl-nav-dot { position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #eb8c6d; }
+.nl-nav-dot { position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #a85a51; }
 .nl-nav-search { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; margin-bottom: 10px; border: 0; border-radius: 12px; background: transparent; font: inherit; font-size: 13px; color: var(--nv-muted); cursor: pointer; transition: background-color .2s; }
 .nl-nav-search:hover { background: var(--nv-hover); color: var(--nv-ink); }
 .nl-nav-search.is-tight { justify-content: center; padding: 8px 0; }
@@ -762,6 +774,20 @@
 [data-nav-look="new"] [data-os-profile-menu] { border-color: var(--nv-line); border-radius: 14px; box-shadow: none; background: var(--nv-page); }
 /* One bell: with the sidebar's own, the page headers' copy goes. */
 [data-nav-look="new"] [data-page-bell] { display: none !important; }
+
+/* The website's edge on the sidebar (James, 7 Nov 2026), after the Dashboard:
+   the wordmark tracked out as the site's, section names in the small condensed
+   capitals, square corners, and the page you are on marked in terracotta. */
+[data-nav-look="new"] .nl-nav-logo { font-family: var(--font-bricolage), var(--font-inter), sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.16em; }
+[data-nav-look="new"] .nl-nav-label {
+  font-family: var(--font-bricolage), var(--font-inter), sans-serif; font-stretch: 75%; font-weight: 500;
+  font-size: 11px; line-height: 16px; letter-spacing: 0.16em; text-transform: uppercase; padding: 20px 10px 8px;
+}
+[data-nav-look="new"] .nl-nav-item, [data-nav-look="new"] .nl-nav-sub, [data-nav-look="new"] .nl-nav-search, [data-nav-look="new"] .nl-nav-icon { border-radius: 0; }
+[data-nav-look="new"] .nl-nav-item.is-on, [data-nav-look="new"] .nl-nav-sub.is-on { box-shadow: inset 0 0 0 1px rgba(20, 20, 19, 0.14), inset 2px 0 0 #a85a51; }
+[data-nav-look="new"] .nl-nav-item.is-on svg { color: #a85a51; }
+:root[data-theme="dark"] [data-nav-look="new"] .nl-nav-item.is-on, :root[data-theme="dark"] [data-nav-look="new"] .nl-nav-sub.is-on { box-shadow: inset 0 0 0 1px var(--nv-line), inset 2px 0 0 #c28b85; }
+:root[data-theme="dark"] [data-nav-look="new"] .nl-nav-item.is-on svg { color: #c28b85; }
 
 /* ── Terms of Business: the signing sheet and the send drawer (lib/terms) ── */
 .nl-signsheet { position: fixed; inset: 0; z-index: 420; display: flex; align-items: flex-end; justify-content: center; }
@@ -928,7 +954,7 @@
 .nl-po-verdict { display: flex; gap: 14px; align-items: flex-start; padding: 20px 22px; border-radius: 22px; background: #fff; }
 .nl-po-verdict-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 8px; flex: none; background: var(--faint); }
 .nl-po-verdict.is-good { background: #e9efe1; } .nl-po-verdict.is-good .nl-po-verdict-dot { background: var(--sage-deep); }
-.nl-po-verdict.is-look { background: #fbe6dc; } .nl-po-verdict.is-look .nl-po-verdict-dot { background: var(--primary); }
+.nl-po-verdict.is-look { background: var(--accent-soft); } .nl-po-verdict.is-look .nl-po-verdict-dot { background: var(--primary); }
 .nl-po-verdict-title { font-family: var(--font-heading); font-size: 22px; line-height: 28px; color: var(--ink); }
 .nl-po-verdict-line { margin-top: 2px; font-size: 14px; line-height: 21px; color: var(--muted); }
 
@@ -974,7 +1000,7 @@
 .nl-po-p-me { font-family: var(--font-heading); font-size: 19px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .nl-po-p-avg { font-size: 12.5px; color: var(--muted); }
 .nl-po-p-vs { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--box); color: var(--muted); }
-.nl-po-p-vs.is-up { background: #e9efe1; color: var(--sage-ink); } .nl-po-p-vs.is-down { background: #fbe6dc; color: var(--accent-dark); }
+.nl-po-p-vs.is-up { background: #e9efe1; color: var(--sage-ink); } .nl-po-p-vs.is-down { background: var(--bad-soft); color: var(--bad-ink); }
 
 /* views to date */
 .nl-po-line { display: block; width: 100%; height: 76px; }
@@ -1017,7 +1043,7 @@
 .nl-ls-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
 .nl-ls-note { margin-top: 8px; font-size: 12px; color: var(--muted); }
 .nl-ls-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 16px; }
-.nl-ls-none { padding: 16px 20px; border-radius: 20px; background: #fbe6dc; color: #8a3f2a; font-size: 13.5px; }
+.nl-ls-none { padding: 16px 20px; border-radius: 20px; background: var(--bad-soft); color: var(--bad-ink); font-size: 13.5px; }
 .nl-ls-said { font-size: 13px; color: #fff; padding: 2px 6px; }
 .nl-ls-adds { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 6px; }
 .nl-ls-add { font: inherit; font-size: 13.5px; padding: 10px 18px; border-radius: 999px; border: 1px dashed rgba(255, 255, 255, .55); background: transparent; color: #fff; cursor: pointer; transition: background-color .2s, border-color .2s; }
@@ -1074,7 +1100,7 @@
 .nl-pp-state { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22); font-size: 12.5px; color: #fff; }
 .nl-pp-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
 .nl-pp-state.is-done i { background: #a9bf98; }
-.nl-pp-bad { padding: 16px 20px; border-radius: 20px; background: #fbe6dc; color: #8a3f2a; font-size: 13.5px; }
+.nl-pp-bad { padding: 16px 20px; border-radius: 20px; background: var(--bad-soft); color: var(--bad-ink); font-size: 13.5px; }
 .nl-pp-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
 .nl-pp-left { position: sticky; top: 0; display: flex; flex-direction: column; gap: 18px; }
 

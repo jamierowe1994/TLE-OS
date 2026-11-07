@@ -36,9 +36,11 @@ const manrope = Manrope({
  */
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
-  /* 200 for the OS in the rail's wordmark (2 Oct 2026): TLE heavy at 800,
-     OS skinny, as the type file draws it. */
-  weight: ["200", "600", "700", "800"],
+  /* The whole variable font, every weight from 200 (the rail's skinny OS,
+     2 Oct 2026) to 800, plus the width axis: the website's titles are
+     Bricolage at 75% width (7 Nov 2026), and the Dashboard now matches. */
+  weight: "variable",
+  axes: ["wdth"],
   variable: "--font-bricolage",
   display: "swap",
 });

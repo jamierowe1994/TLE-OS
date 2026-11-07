@@ -103,7 +103,7 @@ export default function AgentSheet({
               <p className="mt-2 flex items-center gap-1" aria-label={`${stars} out of 5`}>
                 {Array.from({ length: 5 }, (_, i) => (
                   <svg key={i} viewBox="0 0 24 24" aria-hidden className="h-[15px] w-[15px]">
-                    <path d={STAR} fill={i < stars ? "#cfa096" : "rgba(0,0,0,0.12)"} />
+                    <path d={STAR} fill={i < stars ? "#c4a092" : "rgba(0,0,0,0.12)"} />
                   </svg>
                 ))}
               </p>
@@ -114,7 +114,7 @@ export default function AgentSheet({
         {/* Every way to reach them, on the screen where they asked for it. */}
         <div className="mt-6 flex gap-2.5">
           {agent.phone && (
-            <a href={`tel:${tel}`} className={action} style={{ background: "#cfa096", color: "#fff" }}>
+            <a href={`tel:${tel}`} className={action} style={{ background: "#c4a092", color: "#fff" }}>
               Call
             </a>
           )}

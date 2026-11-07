@@ -194,7 +194,7 @@ export default function FrontFigures({ range, setRange, front }: { range: RangeD
       badge: leadTotals ? pctBadge(sumRange(leadTotals, n), sumRange(leadTotals, n, 1), n) : null,
       sub: leads ? `${sumRange(leads.fresh, n).toLocaleString("en-GB")} not contacted yet` : null,
       spark: leadTotals ? sparkOf(leadTotals, n) : null,
-      ask: { kind: "leads", days: n, title: "New Leads", range: rangeWords, note: "Every lettings lead received, newest first. A coral dot is one nobody has contacted yet.", board: { href: "/leads", label: "Open the Leads board" } },
+      ask: { kind: "leads", days: n, title: "New Leads", range: rangeWords, note: "Every lettings lead received, newest first. A coloured dot is one nobody has contacted yet.", board: { href: "/leads", label: "Open the Leads board" } },
     },
     {
       label: "Passports done",
@@ -357,7 +357,7 @@ export default function FrontFigures({ range, setRange, front }: { range: RangeD
             </span>
           </div>
           <p className="nl-dash-card-sub">
-            Per day. Today in coral, the dotted line is the average{leads ? ` (${fmtAvg(avg)} a day)` : ""}. Hover a day for the split, click it for the leads.
+            Per day. Today is the highlighted day, the dotted line is the average{leads ? ` (${fmtAvg(avg)} a day)` : ""}. Hover a day for the split, click it for the leads.
           </p>
           {front.leads.loading ? (
             <p className="nl-dash-wait">

@@ -6,7 +6,7 @@
 [data-look="new"].nl-lr .nl-mast { padding-top: 14px; }
 [data-look="new"] .nl-lr-spin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-strong); border-top-color: var(--ink); animation: spin 1s linear infinite; vertical-align: -1px; }
 [data-look="new"] .nl-lr-wait { display: flex; align-items: center; gap: 10px; padding: 24px 0; font-size: 14px; color: var(--muted); }
-[data-look="new"] .nl-lr-bad { padding: 16px 20px; border-radius: 18px; background: #fbe6dc; color: #8a3f2a; font-size: 14px; }
+[data-look="new"] .nl-lr-bad { padding: 16px 20px; border-radius: 18px; background: var(--bad-soft); color: var(--bad-ink); font-size: 14px; }
 [data-look="new"] .nl-lr-none { font-size: 14px; color: var(--muted); padding: 12px 0; }
 [data-look="new"] .nl-lr-open { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 500; text-decoration: none; transition: opacity .2s; }
 [data-look="new"] .nl-lr-open:hover { opacity: .86; }
@@ -195,7 +195,7 @@
 }
 
 /* ── Tools > Marketing Pack (components/new-look/tools/MarketingPack) ──── */
-[data-look="new"] .nl-mp-note { margin-bottom: 24px; padding: 14px 18px; border-radius: 16px; background: #fbe6dc; color: #8a3f2a; font-size: 14px; }
+[data-look="new"] .nl-mp-note { margin-bottom: 24px; padding: 14px 18px; border-radius: 16px; background: var(--bad-soft); color: var(--bad-ink); font-size: 14px; }
 [data-look="new"] .nl-mp-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 26px; font-size: 14px; color: var(--muted); }
 [data-look="new"] .nl-mp-trail button { font: inherit; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-underline-offset: 3px; }
 [data-look="new"] .nl-mp-trail button:hover { color: var(--ink); text-decoration: underline; }

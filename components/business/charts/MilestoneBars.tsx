@@ -41,7 +41,7 @@ function inkBar(w: number, h: number, seed: number): string {
 
 export default function MilestoneBars({
   milestones,
-  accent = "#cfa096",
+  accent = "#c4a092",
 }: {
   milestones: Milestone[];
   accent?: string;

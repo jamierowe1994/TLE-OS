@@ -8,8 +8,10 @@
    numbers, they should turn into coral rather than this weird red"). Clay
    (--accent-dark) is kept for what is late or wants attention, never hover. */
 [data-look="new"].nl-dash, [data-look="new"].nl-dash-drawer, [data-look="new"].nl-dash-pop {
-  --coral: var(--primary);
-  --coral-hover: color-mix(in srgb, var(--primary) 80%, #fff);
+  /* 7 Nov 2026: the hover is terracotta now (the final palette has no
+     coral); buttons are brown and darken on hover. */
+  --coral: var(--accent);
+  --coral-hover: color-mix(in srgb, var(--primary) 84%, #000);
 }
 
 /* ── the hello ──────────────────────────────────────────────────────────── */
@@ -233,13 +235,13 @@
   fill: none; stroke: var(--sage-deep); opacity: 0.55; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
   stroke-dasharray: 1; stroke-dashoffset: 1; animation: nl-dash-draw 1.4s var(--nl-ease) forwards;
 }
-[data-look="new"] .nl-dash-spark-dot { fill: var(--primary); }
+[data-look="new"] .nl-dash-spark-dot { fill: var(--accent); }
 @keyframes nl-dash-draw { to { stroke-dashoffset: 0; } }
 /* Terms out has no history to draw: how many are in time and how many late. */
 [data-look="new"] .nl-dash-strip { display: flex; gap: 2px; height: 6px; margin: 24px 0 12px; border-radius: 999px; overflow: hidden; background: var(--sage-soft); }
 [data-look="new"] .nl-dash-strip i { display: block; height: 100%; flex-basis: 0; }
 [data-look="new"] .nl-dash-strip i.is-ok { background: var(--sage-deep); }
-[data-look="new"] .nl-dash-strip i.is-late { background: var(--primary); }
+[data-look="new"] .nl-dash-strip i.is-late { background: var(--accent); }
 
 /* the cards */
 [data-look="new"] .nl-dash-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; margin-top: 28px; }
@@ -259,7 +261,7 @@
   fill: var(--sage-soft); transform-box: fill-box; transform-origin: bottom;
   animation: nl-dash-grow 0.8s var(--nl-ease) both; transition: fill 0.15s;
 }
-[data-look="new"] .nl-dash-bar.is-now { fill: var(--primary); }
+[data-look="new"] .nl-dash-bar.is-now { fill: var(--accent); }
 [data-look="new"] .nl-dash-col.is-hover .nl-dash-bar { fill: var(--coral); }
 @keyframes nl-dash-grow { from { transform: scaleY(0); } }
 [data-look="new"] .nl-dash-hit { fill: transparent; cursor: pointer; }
@@ -290,7 +292,7 @@
 [data-look="new"] .nl-dash-step-off { font-weight: 400; color: var(--faint); }
 [data-look="new"] .nl-dash-step-tr { grid-column: 1 / -1; height: 4px; border-radius: 999px; background: var(--sage-soft); overflow: hidden; }
 [data-look="new"] .nl-dash-step-tr i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--sage-deep); transition: width 1.1s var(--nl-ease); }
-[data-look="new"] .nl-dash-step:last-child .nl-dash-step-tr i { background: var(--primary); }
+[data-look="new"] .nl-dash-step:last-child .nl-dash-step-tr i { background: var(--accent); }
 
 /* Today, as a timeline */
 [data-look="new"] .nl-dash-tl { list-style: none; margin: 8px 0 0; padding: 0; }
@@ -315,7 +317,7 @@
 [data-look="new"] .nl-dash-ev.is-next .nl-dash-ev-box { background: var(--sage-soft); border-color: transparent; }
 [data-look="new"] .nl-dash-ev.is-next em { color: var(--sage-deep); font-weight: 500; }
 [data-look="new"] .nl-dash-now { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 11.5px; line-height: 16px; font-weight: 500; color: var(--accent-dark); font-variant-numeric: tabular-nums; }
-[data-look="new"] .nl-dash-now::after { content: ""; flex: 1; height: 1.5px; background: var(--primary); opacity: 0.8; }
+[data-look="new"] .nl-dash-now::after { content: ""; flex: 1; height: 1.5px; background: var(--accent); opacity: 0.8; }
 
 /* ── the drawers: a figure's records, a diary entry, a Needs You line ───────
    The new look's side drawer (.nl-drawer in app/new-look.css), sliding out the
@@ -534,7 +536,7 @@
 [data-look="new"] .nl-dash-line.is-me p { margin: 0; padding: 12px 18px; border-radius: 22px 22px 6px 22px; background: var(--box); font-size: 15.5px; line-height: 23px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 [data-look="new"] .nl-dash-line.is-steve { align-self: stretch; }
 [data-look="new"] .nl-dash-line-who { display: flex; width: max-content; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
-[data-look="new"] .nl-dash-line-who i { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f6b39a, var(--primary) 60%, #c9603f); box-shadow: 0 0 10px rgba(235, 140, 109, .45); }
+[data-look="new"] .nl-dash-line-who i { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #6e5650, #56423e 55%, #3e2f2c); box-shadow: 0 0 8px rgba(86, 66, 62, .3); }
 [data-look="new"] .nl-dash-line-text { font-size: 15.5px; line-height: 25px; color: var(--ink); }
 [data-look="new"] .nl-dash-line-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 [data-look="new"] .nl-dash-typing { display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 14px; border-radius: 999px; background: var(--box); }
@@ -565,3 +567,72 @@
 /* His words as text on the page, not in the panel's grey bubble (AssistantSays). */
 [data-look="new"] .nl-dash-line-text > div { margin: 0; padding: 0; background: none; border-radius: 0; }
 [data-look="new"] .nl-dash-line-text p { font-size: 15.5px; line-height: 25px; color: var(--ink); }
+
+/* ── the website's edge (James, 7 Nov 2026) ─────────────────────────────────
+   "Generate the same kind of feel for the CRM so it all feels cohesive" with
+   the new public site (tle-website-production.up.railway.app). Taken from it
+   by measurement: titles in Bricolage at 75% width, weight 500, capitals,
+   tracked 0.04em on a tight line; small labels in the same face at 10.5-11px,
+   capitals, tracked 0.16em; square corners on boxes and buttons; hairlines at
+   14% ink. The Dashboard first; other screens follow one at a time. */
+[data-look="new"].nl-dash {
+  --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --line: rgba(20, 20, 19, 0.14);
+}
+[data-look="new"] .nl-dash-title,
+[data-look="new"] .nl-dash-h2,
+[data-look="new"] .nl-dash-card-h h3 {
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; color: var(--ink);
+}
+[data-look="new"] .nl-dash-title { font-size: 64px; line-height: 0.96; letter-spacing: 0.04em; margin-bottom: 18px; }
+[data-look="new"] .nl-dash-h2 { font-size: 34px; line-height: 1; letter-spacing: 0.04em; }
+[data-look="new"] .nl-dash-card-h h3 { font-size: 20px; line-height: 1.1; letter-spacing: 0.04em; }
+
+/* the small labels: the date, each figure's name, the change beside it */
+[data-look="new"] .nl-dash-date,
+[data-look="new"] .nl-dash-stat-top,
+[data-look="new"] .nl-dash-badge,
+[data-look="new"] .nl-dash-seg button,
+[data-look="new"] .nl-dash-chips button,
+[data-look="new"].nl-dash .nl-link {
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; line-height: 16px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+}
+[data-look="new"] .nl-dash-date { margin-bottom: 20px; }
+[data-look="new"] .nl-dash-stat-top { color: var(--muted); }
+
+/* square edges, as the site's buttons and photographs */
+[data-look="new"] .nl-dash-card,
+[data-look="new"] .nl-dash-today,
+[data-look="new"] .nl-dash-launch,
+[data-look="new"] .nl-dash-launch-bar,
+[data-look="new"] .nl-dash-pill,
+[data-look="new"] .nl-dash-pillbox,
+[data-look="new"] .nl-dash-pillsend,
+[data-look="new"] .nl-dash-seg,
+[data-look="new"] .nl-dash-seg button,
+[data-look="new"] .nl-dash-chips button,
+[data-look="new"] .nl-dash-go { border-radius: 0; }
+[data-look="new"] .nl-dash-pillbox { box-shadow: none; }
+[data-look="new"] .nl-dash-seg { padding: 0; background: transparent; border: 1px solid var(--line); }
+[data-look="new"] .nl-dash-seg button { padding: 7px 12px; }
+[data-look="new"] .nl-dash-seg button.is-on,
+[data-look="new"] .nl-dash-chips button.is-on { background: var(--ink); color: var(--page); }
+[data-look="new"] .nl-dash-pill { font-size: 12.5px; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-dash-title { font-size: 44px; }
+  [data-look="new"] .nl-dash-h2 { font-size: 28px; }
+}
+/* The past days' bars were the sage wash, which the final palette made too
+   pale to read; they take the dusty clay now, today the terracotta. */
+[data-look="new"] .nl-dash-bar { fill: color-mix(in srgb, var(--pal-clay) 55%, var(--page)); }
+[data-look="new"] .nl-dash-bar.is-now { fill: var(--accent); }
+[data-look="new"] .nl-dash-col.is-hover .nl-dash-bar { fill: var(--coral); }
+/* A card's side note ("Last 30 days", "6 things") in the small capitals. */
+[data-look="new"].nl-dash .nl-dash-card-h .nl-meta {
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; line-height: 16px;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+}
+/* Quick links: a solid hairline, as the site's outline buttons. */
+[data-look="new"] .nl-dash-pill, [data-look="new"] .nl-dash-pill.is-ask, [data-look="new"] .nl-dash-pill.is-edit { border-style: solid; border-color: var(--line); }
+[data-look="new"] .nl-dash-pill:hover { border-color: var(--ink); background: transparent; }
