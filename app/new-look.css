@@ -1148,3 +1148,65 @@
   .nl-po.nl-pp { padding: 28px 16px 40px; }
   .nl-pp .tpx .pass { --w: min(320px, 100%); }
 }
+
+/* ===========================================================================
+   THE WEBSITE'S EDGE, ONE CLASS (James, 7 Nov 2026). Each screen brought into
+   line with the public website adds `nl-edge` to its root, beside nl-page:
+   the title in Bricolage at 75% width, capitals, tracked; the blurb in Inter;
+   the main button beside the title; square corners; buttons, tabs, toggles
+   and section titles in the small capitals; the tab you are on marked in
+   terracotta; fine lines. The Dashboard and Leads carry their own copies of
+   this (app/new-look/dashboard.css, leads.css) from before it existed.
+=========================================================================== */
+[data-look="new"].nl-edge {
+  --edge-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --line: rgba(20, 20, 19, 0.12);
+  --line-strong: rgba(20, 20, 19, 0.22);
+}
+:root[data-theme="dark"] [data-look="new"].nl-edge { --line: #3a3936; --line-strong: #4a4844; }
+[data-look="new"].nl-edge *:not([class*="spin"]):not(input[type="checkbox"]):not(input[type="radio"]) { border-radius: 0; }
+[data-look="new"].nl-edge .nl-badge::before { border-radius: 50%; }
+
+/* the title, its blurb, and the main button beside them */
+[data-look="new"].nl-edge > .nl-mast { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; align-items: end; padding-top: 28px; margin-bottom: 30px; }
+[data-look="new"].nl-edge > .nl-mast > * { grid-column: 1; }
+[data-look="new"].nl-edge > .nl-mast > .nl-actions { grid-column: 2; grid-row: 1 / span 3; align-self: end; margin-top: 0; }
+[data-look="new"].nl-edge .nl-title { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; font-size: 64px; line-height: 0.96; letter-spacing: 0.04em; }
+[data-look="new"].nl-edge .nl-blurb { font-family: var(--font-body); font-size: 15px; line-height: 23px; margin-top: 12px; max-width: 620px; }
+@media (max-width: 760px) {
+  [data-look="new"].nl-edge > .nl-mast { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"].nl-edge > .nl-mast > .nl-actions { grid-column: 1; grid-row: auto; margin-top: 18px; }
+  [data-look="new"].nl-edge .nl-title { font-size: 44px; }
+}
+
+/* the small capitals */
+[data-look="new"].nl-edge .nl-btn,
+[data-look="new"].nl-edge .nl-toggle button,
+[data-look="new"].nl-edge .nl-tab,
+[data-look="new"].nl-edge .nl-section-title,
+[data-look="new"].nl-edge .nl-eyebrow {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em;
+}
+[data-look="new"].nl-edge .nl-btn { font-size: 11.5px; }
+[data-look="new"].nl-edge .nl-btn--quiet { font-family: var(--font-body); font-stretch: 100%; text-transform: none; letter-spacing: 0; font-size: 13px; }
+[data-look="new"].nl-edge .nl-tab { font-size: 16px; letter-spacing: 0.06em; }
+[data-look="new"].nl-edge .nl-tab-n { font-family: var(--font-body); font-stretch: 100%; letter-spacing: 0; font-size: 11px; }
+[data-look="new"].nl-edge .nl-tab-ind { background: var(--accent); }
+[data-look="new"].nl-edge .nl-section-title { font-size: 20px; line-height: 1.1; letter-spacing: 0.04em; }
+[data-look="new"].nl-edge .nl-eyebrow { font-size: 11px; letter-spacing: 0.16em; }
+[data-look="new"].nl-edge .nl-toggle { padding: 0; border-color: var(--line-strong); }
+[data-look="new"].nl-edge .nl-toggle button { font-size: 11px; padding: 8px 12px; }
+[data-look="new"].nl-edge .nl-toggle button.is-on { background: var(--ink); color: var(--page); }
+[data-look="new"].nl-edge .nl-fsel, [data-look="new"].nl-edge .nl-fsearch { border-color: var(--line-strong); background: var(--page); }
+[data-look="new"].nl-edge .nl-mono { font-family: var(--font-body); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+[data-look="new"].nl-edge .nl-empty { font-family: var(--font-body); font-size: 14px; }
+/* nl-edge on a record page (one appraisal, 7 Nov 2026): card titles in the
+   capitals, the line under the title in Inter, the record's tabs like the boards'. */
+[data-look="new"].nl-edge .nl-block-title {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; font-size: 18px; line-height: 1.15;
+}
+[data-look="new"].nl-edge .nl-rhead-sub { font-family: var(--font-body); font-size: 15px; line-height: 23px; }
+[data-look="new"].nl-edge .nl-title { overflow-wrap: anywhere; }
+[data-look="new"].nl-edge .nl-ltabs button, [data-look="new"].nl-edge .nl-ltabs a {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; font-size: 16px;
+}

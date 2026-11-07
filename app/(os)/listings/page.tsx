@@ -874,7 +874,7 @@ export default function Listings() {
           : null;
     const photo = (l: SampleListing, cls: string) => <PropertyPhoto src={l.image} seed={l.id} kind={`${l.propertyType ?? ""} ${l.name}`} className={cls} />;
     return (
-      <div data-look="new" className="nl-page nl-rise">
+      <div data-look="new" className="nl-page nl-rise nl-edge">
         <Mast
           title="Listings"
           blurb={

@@ -339,7 +339,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
 
     return (
       <SaveScopeProvider scope={saves}>
-        <div data-look="new" className="nl-page nl-rise nl-appr">
+        <div data-look="new" className="nl-page nl-rise nl-appr nl-edge">
           <div className="nl-crumbs">
             <Link href="/market-appraisals" className="nl-crumb">
               <Ico name="back" size={14} /> Market Appraisals

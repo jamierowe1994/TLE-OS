@@ -88,12 +88,12 @@ export function initialsOf(name: string): string {
 }
 
 /** A name with its circle of initials and one line under it, as the design draws people. */
+/* No face (James, 7 Nov 2026): almost no lead has a photo, so the square of
+   initials was a column of the same placeholder down the board. The name
+   leads the row instead. */
 export function Person({ name, sub }: { name: string; sub?: React.ReactNode }) {
   return (
     <span className="nl-leads-person">
-      <span className="nl-leads-avatar" aria-hidden>
-        {initialsOf(name)}
-      </span>
       <span className="min-w-0">
         <span className="nl-strong block truncate">{name || "No name given"}</span>
         {sub && <span className="nl-meta block truncate">{sub}</span>}

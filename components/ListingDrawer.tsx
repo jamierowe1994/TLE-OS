@@ -2867,7 +2867,7 @@ function ListingDrawerBody({
     };
 
     return (
-      <div data-look="new" data-steve="listing.drawer" className="nl-page nl-rise">
+      <div data-look="new" data-steve="listing.drawer" className="nl-page nl-rise nl-edge">
         {/* Crumb, the save chip, and ‹ › through the board. */}
         <div className="nl-crumbs">
           <Link href={backHref} className="nl-crumb">

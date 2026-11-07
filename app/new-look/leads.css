@@ -187,3 +187,56 @@
 @media (prefers-reduced-motion: reduce) {
   [data-look="new"] .nl-leads-caret, [data-look="new"] .nl-leads-spin { transition: none !important; animation: none !important; }
 }
+
+/* ===========================================================================
+   THE WEBSITE'S EDGE ON LEADS (James, 7 Nov 2026, after the Dashboard):
+   the title in the condensed capitals with Add lead beside it, square
+   filters, tabs and buttons, square faces, the stage as a small capital label,
+   fine lines. Nothing moved and nothing taken away.
+=========================================================================== */
+[data-look="new"].nl-leads {
+  --lx-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --line: rgba(20, 20, 19, 0.12);
+  --line-strong: rgba(20, 20, 19, 0.22);
+}
+:root[data-theme="dark"] [data-look="new"].nl-leads { --line: #3a3936; --line-strong: #4a4844; }
+[data-look="new"].nl-leads *:not([class*="spin"]):not(input[type="checkbox"]) { border-radius: 0; }
+[data-look="new"].nl-leads .nl-badge::before { border-radius: 50%; }
+
+/* the title, with Add lead on the same line */
+[data-look="new"].nl-leads > .nl-mast { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; padding-top: 28px; margin-bottom: 30px; }
+[data-look="new"].nl-leads > .nl-mast .nl-actions { margin-top: 0; }
+[data-look="new"].nl-leads .nl-title { font-family: var(--lx-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; font-size: 64px; line-height: 0.96; letter-spacing: 0.04em; }
+@media (max-width: 760px) { [data-look="new"].nl-leads .nl-title { font-size: 44px; } }
+
+/* the small capitals: buttons, tabs, the toggle, labels */
+[data-look="new"].nl-leads .nl-btn,
+[data-look="new"].nl-leads .nl-toggle button,
+[data-look="new"].nl-leads .nl-tab,
+[data-look="new"].nl-leads .nl-leads-stage .nl-badge,
+[data-look="new"].nl-leads .nl-leads-src {
+  font-family: var(--lx-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em;
+}
+[data-look="new"].nl-leads .nl-btn { font-size: 11.5px; }
+[data-look="new"].nl-leads .nl-btn.nl-leads-flag { font-size: 11.5px; }
+[data-look="new"].nl-leads .nl-btn--quiet { text-transform: none; letter-spacing: 0; font-family: var(--font-body); font-stretch: 100%; font-size: 13px; }
+[data-look="new"].nl-leads .nl-tab { font-size: 16px; letter-spacing: 0.06em; }
+[data-look="new"].nl-leads .nl-tab-n { font-family: var(--font-body); font-stretch: 100%; letter-spacing: 0; font-size: 11px; }
+[data-look="new"].nl-leads .nl-tab-ind { background: var(--accent); }
+[data-look="new"].nl-leads .nl-toggle { padding: 0; border-color: var(--line-strong); }
+[data-look="new"].nl-leads .nl-toggle button { font-size: 11px; padding: 8px 12px; }
+[data-look="new"].nl-leads .nl-toggle button.is-on { background: var(--ink); color: var(--page); }
+[data-look="new"].nl-leads .nl-fsel, [data-look="new"].nl-leads .nl-fsearch { border-color: var(--line-strong); }
+
+/* the rows */
+[data-look="new"].nl-leads .nl-avatar, [data-look="new"].nl-leads .nl-leads-avatar { border-radius: 2px; background: var(--accent-soft); color: var(--brown); }
+[data-look="new"].nl-leads .nl-leads-src { font-size: 11px; color: var(--muted); }
+[data-look="new"].nl-leads .nl-leads-stage .nl-badge { background: transparent; padding-left: 0; padding-right: 0; font-size: 11px; }
+[data-look="new"].nl-leads .nl-leads-row.is-current { box-shadow: inset 2px 0 0 var(--accent); }
+[data-look="new"].nl-leads .nl-leads-when { font-variant-numeric: tabular-nums; }
+[data-look="new"].nl-leads .nl-empty { font-family: var(--font-body); font-size: 14px; }
+
+/* the pages */
+[data-look="new"].nl-leads .nl-leads-pg.is-on { background: var(--ink); color: var(--page); }
+[data-look="new"].nl-leads .nl-leads-warn { border-radius: 0; }
+[data-look="new"].nl-leads .nl-fsearch { background: var(--page); }

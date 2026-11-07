@@ -236,7 +236,7 @@ export default function MarketAppraisals() {
         {booking ? (
           <BookAppraisalWizard onClose={() => setBooking(false)} onFinished={() => setReload((n) => n + 1)} />
         ) : null}
-        <div data-look="new" className="nl-page nl-rise nl-appr">
+        <div data-look="new" className="nl-page nl-rise nl-appr nl-edge">
           <Mast
             title="Market Appraisals"
             blurb={
