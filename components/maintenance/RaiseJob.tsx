@@ -9,7 +9,7 @@ import FieldDate, { sayDate } from "@/components/FieldDate";
 import { ContractorForm } from "@/components/WorksNow";
 import type { Contractor, JobTenant, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
 import { CATEGORY_TRADE, PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES, categoriesOf, joinCategories } from "@/lib/works-catalogue";
-import { CATEGORY_CERT, ContractorPick, REPORTED_BY, type Property } from "@/components/maintenance/works-ui";
+import { CATEGORY_CERT, ContractorPick, REPORTED_BY, homesToSearch, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import DoodleIcon from "@/components/DoodleIcon";
 import FloatSheet, { FloatChoice, FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
@@ -134,21 +134,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
        every job they raised from here carried the address as typed and no
        home (15 Oct 2026). They search their own book instead - Portfolio's,
        scoped to them - and can still type an address that isn't on it. */
-    const fromPortfolio = () =>
-      fetch("/api/portfolio", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((j) => setProps(Array.isArray(j.properties)
-          ? (j.properties as { propertyId: string | null; name: string; locality: string; landlord: { name: string } | null; tenants: { name: string }[] }[])
-              .filter((p, i, all) => p.propertyId && all.findIndex((x) => x.propertyId === p.propertyId && x.name === p.name) === i)
-              .map((p) => ({ id: p.propertyId as string, name: p.name, locality: p.locality, landlord: p.landlord?.name ?? "", tenant: p.tenants?.[0]?.name ?? null }))
-          : []))
-        .catch(() => setProps([]));
-    fetch("/api/compliance/book", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => (j?.ok && Array.isArray(j.properties)
-        ? setProps(j.properties.map((p: Property) => ({ id: p.id, name: p.name, locality: p.locality, landlord: p.landlord, tenant: p.tenant, certs: p.certs })))
-        : fromPortfolio()))
-      .catch(() => fromPortfolio());
+    /* And the office's book with Portfolio's laid behind it, so a home let
+       since the book was read can be found (homesToSearch, Lianna, 6 Nov 2026). */
+    void homesToSearch().then(setProps);
     try {
       const sp = new URLSearchParams(window.location.search);
       const pre = sp.get("property");

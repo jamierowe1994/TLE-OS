@@ -108,6 +108,37 @@ export function PayrunTrack({ o }: { o: Pick<WorksOrder, "status" | "invoicePenc
 
 export type Property = { id: string; name: string; locality: string; landlord?: string; tenant?: string | null; certs?: Record<string, { expires: number | null }> };
 
+/**
+ * The homes a job or a contractor's invoice can be put on: the compliance
+ * book (the office's), and Portfolio's book as this person sees it, together.
+ *
+ * Lianna, 6 Nov 2026 (ticket cbb2e646): a home let in the last few weeks
+ * could not be found to log an invoice against. The compliance book carries
+ * REX's current listings and REX PM's list as read on a day, so a home whose
+ * listing has gone from current to let since that read is on neither, while
+ * Portfolio carries it (lib/managed-book, "a new let since REX PM was read",
+ * and take-ons). Each list fills the other's gaps; the book's entry wins where
+ * both hold a home, as it carries the certificates. An agent is refused the
+ * book and gets their own Portfolio, as before. Both failing is an empty
+ * list, and the address can still be typed in by hand.
+ */
+export async function homesToSearch(): Promise<Property[]> {
+  const json = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+  const [book, folio] = await Promise.all([json("/api/compliance/book"), json("/api/portfolio")]);
+  const out: Property[] = book?.ok && Array.isArray(book.properties)
+    ? (book.properties as Property[]).map((p) => ({ id: String(p.id), name: p.name, locality: p.locality, landlord: p.landlord, tenant: p.tenant, certs: p.certs }))
+    : [];
+  const seen = new Set(out.map((p) => p.id));
+  if (Array.isArray(folio?.properties)) {
+    for (const p of folio.properties as { propertyId: string | null; name: string; locality: string; landlord: { name: string } | null; tenants?: { name: string }[] }[]) {
+      if (!p.propertyId || seen.has(String(p.propertyId))) continue;
+      seen.add(String(p.propertyId));
+      out.push({ id: String(p.propertyId), name: p.name, locality: p.locality, landlord: p.landlord?.name ?? "", tenant: p.tenants?.[0]?.name ?? null });
+    }
+  }
+  return out;
+}
+
 /** Which certificate on the compliance book a planned category is about. */
 export const CATEGORY_CERT: Record<string, string> = {
   "Gas safety (CP12)": "gas",
