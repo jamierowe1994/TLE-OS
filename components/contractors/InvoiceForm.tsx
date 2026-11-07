@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Contractor } from "@/lib/works-orders";
-import { type Property } from "@/components/maintenance/works-ui";
+import { homesToSearch, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import { useSlideOver } from "@/lib/use-slide-over";
 import FieldDate from "@/components/FieldDate";
@@ -77,23 +77,11 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
     setReadSaid(`Read from the invoice: ${line}. Check it before you log it.`);
   }
   /* The office reads the whole compliance book; an agent is refused it and
-     searches their own Portfolio instead, the same as Raise a repair. */
+     searches their own Portfolio instead, the same as Raise a repair. Both
+     together now, so a home let since the book was read is still found
+     (homesToSearch, Lianna, 6 Nov 2026). */
   useEffect(() => {
-    const fromPortfolio = () =>
-      fetch("/api/portfolio", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((j) => setProps(Array.isArray(j.properties)
-          ? (j.properties as { propertyId: string | null; name: string; locality: string; landlord: { name: string } | null }[])
-              .filter((p, i, all) => p.propertyId && all.findIndex((x) => x.propertyId === p.propertyId && x.name === p.name) === i)
-              .map((p) => ({ id: p.propertyId as string, name: p.name, locality: p.locality, landlord: p.landlord?.name ?? "" }))
-          : []))
-        .catch(() => setProps([]));
-    fetch("/api/compliance/book", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => (j?.ok && Array.isArray(j.properties)
-        ? setProps(j.properties.map((p: Property) => ({ id: p.id, name: p.name, locality: p.locality, landlord: p.landlord })))
-        : fromPortfolio()))
-      .catch(() => fromPortfolio());
+    void homesToSearch().then((all) => setProps(all.map((p) => ({ id: p.id, name: p.name, locality: p.locality, landlord: p.landlord }))));
   }, []);
   const hits = useMemo(() => {
     const needle = q.trim();
