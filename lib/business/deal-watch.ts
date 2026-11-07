@@ -12,7 +12,7 @@ import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
 import { dealMovedEmail } from "@/lib/email/agent-emails";
 import { referenceState } from "@/lib/business/stage-evidence";
-import { updatesFromEvents } from "@/lib/business/deal-updates";
+import { closeSignedAgreements, updatesFromEvents } from "@/lib/business/deal-updates";
 import { findDuplicates } from "@/lib/business/deal-dupes";
 import {
   eventSentence,
@@ -289,6 +289,7 @@ export async function watchDeals(opts: { origin: string }): Promise<WatchResult>
      (2 Oct 2026). Their email to the agent comes from the update, so the
      "your deal moved" email is not sent for those as well. */
   const covered = await updatesFromEvents(events, deals).catch(() => new Set<number>());
+  await closeSignedAgreements(deals).catch(() => 0);
   const told = await tellAgents(events.filter((e) => !covered.has(e.id)), opts.origin);
   return { ok: true, deals: deals.length, events, told: told + covered.size };
 }
