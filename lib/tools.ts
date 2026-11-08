@@ -112,9 +112,9 @@ export const TOOLS: Tool[] = [
     key: "invoicing",
     name: "Invoicing",
     blurb:
-      "Raise an invoice against a home and it works the fees out for you, off that home's rent and service. Number it, print it, send it.",
+      "Generate an invoice for a home and it works the fees out for you, off that home's rent and service. Number it, print it, send it.",
     icon: "coin",
-    href: "/maintenance?section=invoices",
+    href: "/tools/invoicing",
     status: "live",
     access: "included",
     group: "money",
@@ -123,9 +123,9 @@ export const TOOLS: Tool[] = [
     key: "forecast",
     name: "Forecast",
     blurb:
-      "What the book earns now, how it has grown, and where the next twelve months land against what you want to hit.",
+      "Where the book lands over the next 12 or 18 months, against what you want to hit. Move the dials and watch it change.",
     icon: "analytics",
-    href: "/finances",
+    href: "/tools/forecast",
     status: "live",
     access: "included",
     group: "money",

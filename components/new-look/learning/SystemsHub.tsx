@@ -32,7 +32,7 @@ function filesIn(side: JourneyId): number {
 
 export default function SystemsHub() {
   return (
-    <div data-look="new" className="nl-page nl-rise nl-lr">
+    <div data-look="new" className="nl-page nl-rise nl-lr nl-edge">
       <Back href="/tools/learning" label="Learning" />
       <Mast title="Systems" blurb="Take the tour. Each journey walks through the system one step at a time: what the other person sees, the emails that go, and what you press to set it off." />
       <div className="nl-lr-journeys">

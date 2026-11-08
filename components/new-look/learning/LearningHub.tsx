@@ -41,7 +41,7 @@ export default function LearningHub() {
   }, []);
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-lr">
+    <div data-look="new" className="nl-page nl-rise nl-lr nl-edge">
       <Back href="/tools" label="Tools" />
       <Mast title="Learning" blurb="The guides worth reading, and the whole system from every side. Dip in whenever you need it." />
       <div className="nl-lr-doors">

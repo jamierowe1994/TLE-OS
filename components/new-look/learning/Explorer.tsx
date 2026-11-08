@@ -532,7 +532,7 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
   }, [file, folder, step, goStep, closeFile, openFolder]);
 
   return (
-    <div data-look="new" className="nl-page nl-sx">
+    <div data-look="new" className="nl-page nl-sx nl-edge">
       <Link href="/tools/learning/systems" className="nl-sx-back">
         <Chev back size={15} /> Systems
       </Link>

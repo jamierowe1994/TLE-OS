@@ -223,3 +223,47 @@
   [data-look="new"] .nl-mp-files { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   [data-look="new"] .nl-mp-folders { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ===========================================================================
+   LEARNING in the website look (James, 8 Nov 2026: "carry over what we've
+   already got, essentially neating it up"): square, the titles and card
+   names in the condensed capitals, the line under a title in the sans,
+   brown for the chosen chip and the go buttons. The pictures stay.
+=========================================================================== */
+[data-look="new"].nl-lr.nl-edge, [data-look="new"].nl-sx.nl-edge { --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; }
+[data-look="new"].nl-lr.nl-edge *:not([class*="spin"]):not(.nl-sx-dot):not(.nl-sx-pill-dot):not(.nl-lr-stop b):not(input[type="checkbox"]):not(input[type="radio"]),
+[data-look="new"].nl-sx.nl-edge *:not([class*="spin"]):not(.nl-sx-dot):not(.nl-sx-pill-dot):not(.nl-sx-device):not(.nl-sx-device *):not(input[type="checkbox"]):not(input[type="radio"]) { border-radius: 0 !important; }
+[data-look="new"].nl-lr.nl-edge .nl-blurb, [data-look="new"].nl-sx.nl-edge .nl-blurb,
+[data-look="new"].nl-lr.nl-edge .nl-mast p, [data-look="new"].nl-sx.nl-edge .nl-sx-head p { font-family: var(--font-body); font-size: 15px; line-height: 22px; color: var(--muted); }
+/* Titles as Home and Tools have them. */
+[data-look="new"].nl-sx.nl-edge .nl-sx-title, [data-look="new"].nl-sx.nl-edge .nl-sx-h {
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .02em; line-height: .98;
+}
+[data-look="new"].nl-sx.nl-edge .nl-sx-title { font-size: 60px; }
+/* Card names and kickers. */
+[data-look="new"].nl-lr.nl-edge :is(.nl-lr-door-name, .nl-lr-journey-name, .nl-lr-book-name, .nl-lr-sec > .nl-section-title, .nl-lr-top-name, .nl-lr-stop-title),
+[data-look="new"].nl-sx.nl-edge :is(.nl-sx-card-title, .nl-sx-fold-name, .nl-sx-tile-name, .nl-sx-beat-title, .nl-sx-empty-title, .nl-sx-you-h) {
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; line-height: 1.02;
+}
+[data-look="new"].nl-lr.nl-edge :is(.nl-lr-door-name, .nl-lr-journey-name) , [data-look="new"].nl-sx.nl-edge :is(.nl-sx-card-title, .nl-sx-fold-name) { font-size: 30px; }
+[data-look="new"].nl-lr.nl-edge :is(.nl-lr-door-kicker, .nl-lr-book-what),
+[data-look="new"].nl-sx.nl-edge :is(.nl-sx-card-kicker, .nl-sx-fold-n, .nl-sx-tile-when, .nl-sx-file-when, .nl-sx-guide-kicker) {
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11.5px; color: var(--accent, #a85a51);
+}
+[data-look="new"].nl-lr.nl-edge :is(.nl-lr-door-go, .nl-lr-open), [data-look="new"].nl-sx.nl-edge :is(.nl-sx-fold-go, .nl-sx-go) {
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 12px;
+}
+[data-look="new"].nl-lr.nl-edge .nl-lr-open { background: var(--primary, #56423e); }
+/* The cards: white on the page, a hairline, the coloured picture on top. */
+[data-look="new"].nl-lr.nl-edge :is(.nl-lr-door, .nl-lr-journey, .nl-lr-book), [data-look="new"].nl-sx.nl-edge :is(.nl-sx-card, .nl-sx-fold, .nl-sx-tile) { background: #fff; border-color: var(--line); }
+[data-look="new"].nl-lr.nl-edge :is(.nl-lr-door, .nl-lr-journey):hover, [data-look="new"].nl-sx.nl-edge :is(.nl-sx-card, .nl-sx-fold, .nl-sx-tile):hover { border-color: var(--line-strong); }
+[data-look="new"].nl-lr.nl-edge .nl-lr-door { min-height: 0; }
+/* Search and filters: square, brown when chosen. */
+[data-look="new"].nl-lr.nl-edge .nl-lr-search { height: 44px; border-color: var(--line-strong); }
+[data-look="new"].nl-lr.nl-edge .nl-lr-chip { font-size: 12.5px; padding: 7px 12px; }
+[data-look="new"].nl-lr.nl-edge .nl-lr-chip[aria-pressed="true"] { background: var(--primary, #56423e); border-color: var(--primary, #56423e); }
+[data-look="new"].nl-lr.nl-edge .nl-lr-journey-art b, [data-look="new"].nl-lr.nl-edge .nl-lr-tags em { font-family: var(--nl-cond); font-stretch: 75%; text-transform: uppercase; letter-spacing: .1em; font-size: 11px; }
+@media (max-width: 640px) {
+  [data-look="new"].nl-sx.nl-edge .nl-sx-title { font-size: 40px; }
+  [data-look="new"].nl-lr.nl-edge :is(.nl-lr-door-name, .nl-lr-journey-name), [data-look="new"].nl-sx.nl-edge :is(.nl-sx-card-title, .nl-sx-fold-name) { font-size: 24px; }
+}

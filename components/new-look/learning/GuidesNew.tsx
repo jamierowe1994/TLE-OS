@@ -63,7 +63,7 @@ export default function GuidesNew() {
   const filtering = who !== "all" || where !== "all" || q.trim() !== "";
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-lr">
+    <div data-look="new" className="nl-page nl-rise nl-lr nl-edge">
       <Back href="/tools/learning" label="Learning" />
       <Mast title="Guides" blurb="Every guide, checklist and playbook we have, in one place. Open one to read it, or save it to send on." />
 
