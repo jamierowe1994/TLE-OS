@@ -3061,7 +3061,7 @@ function LeadDrawerBody({
 
         /* ── Next Up: the step's own next action, as the old card ── */
         const nextUp = (
-          <section ref={nextUpRef} className="nl-cell span2 nl-lead-next">
+          <section ref={nextUpRef} className="nl-cell nl-lead-next">
             <div className="nl-cell-head">
               <h3 className="nl-block-title">Next Up</h3>
               <Badge tone="info">{noDash(here.label)}</Badge>
@@ -3197,6 +3197,46 @@ function LeadDrawerBody({
           </section>
         );
 
+        /* ── Tags: the quick facts about the person (James, 8 Nov 2026: in
+           Their Enquiry, so The Tenant has room) ── */
+        const tagsBlock = (
+          <div className="nl-lead-tags">
+          {tags.map((t) => (
+            <button key={t} type="button" className="nl-lead-tag" onClick={() => changeTags(tags.filter((x) => x !== t))} title="Remove tag">
+              {t}
+              <LIco name="x" size={11} />
+            </button>
+          ))}
+          <div className="nl-menu-wrap">
+            <button type="button" className="nl-lead-tag is-add" aria-expanded={tagging} onClick={() => setTagging((t) => !t)}>
+              <LIco name="plus" size={11} /> Add tag
+            </button>
+            {tagging && (
+              <div className="nl-menu nl-lead-tagmenu" role="menu">
+                <small className="px-3 pb-1 pt-1.5">Sales intent</small>
+                {SALES_TAGS.filter((t) => !tags.includes(t)).map((t) => (
+                  <button key={t} type="button" role="menuitem" onClick={() => { changeTags([...tags, t]); setTagging(false); }}>
+                    {t}
+                  </button>
+                ))}
+                <hr />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTagging(false);
+                    const t = window.prompt("New tag");
+                    if (t?.trim() && !tags.includes(t.trim())) changeTags([...tags, t.trim()]);
+                  }}
+                >
+                  Something else…
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        );
+
         /* ── Who they are ── */
         const contactCell = (
           <section className="nl-cell">
@@ -3290,42 +3330,6 @@ function LeadDrawerBody({
                   />
                 </div>
               )}
-            </div>
-            {/* Tags: the quick facts about the person, at the foot of who they are. */}
-            <div className="nl-lead-tags">
-              {tags.map((t) => (
-                <button key={t} type="button" className="nl-lead-tag" onClick={() => changeTags(tags.filter((x) => x !== t))} title="Remove tag">
-                  {t}
-                  <LIco name="x" size={11} />
-                </button>
-              ))}
-              <div className="nl-menu-wrap">
-                <button type="button" className="nl-lead-tag is-add" aria-expanded={tagging} onClick={() => setTagging((t) => !t)}>
-                  <LIco name="plus" size={11} /> Add tag
-                </button>
-                {tagging && (
-                  <div className="nl-menu nl-lead-tagmenu" role="menu">
-                    <small className="px-3 pb-1 pt-1.5">Sales intent</small>
-                    {SALES_TAGS.filter((t) => !tags.includes(t)).map((t) => (
-                      <button key={t} type="button" role="menuitem" onClick={() => { changeTags([...tags, t]); setTagging(false); }}>
-                        {t}
-                      </button>
-                    ))}
-                    <hr />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setTagging(false);
-                        const t = window.prompt("New tag");
-                        if (t?.trim() && !tags.includes(t.trim())) changeTags([...tags, t.trim()]);
-                      }}
-                    >
-                      Something else…
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           </section>
         );
@@ -3675,6 +3679,7 @@ function LeadDrawerBody({
                         </button>
                       )}
                     </p>
+                    {tagsBlock}
                   </section>
 
                   <section className={`nl-facts${nlFactsEdit ? " is-editing" : ""}`}>
@@ -3798,7 +3803,7 @@ function LeadDrawerBody({
 
                 <div key={tabIs} className="nl-pane">
                   {tabIs === "overview" && (
-                    <div className="nl-bento">
+                    <div className="nl-bento nl-lead-bento">
                       {appraisalTakesOver ? (
                         <section className="nl-cell span3">
                           <AppraisalTrack

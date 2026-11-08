@@ -240,3 +240,13 @@
 [data-look="new"].nl-leads .nl-leads-pg.is-on { background: var(--ink); color: var(--page); }
 [data-look="new"].nl-leads .nl-leads-warn { border-radius: 0; }
 [data-look="new"].nl-leads .nl-fsearch { background: var(--page); }
+
+/* Overview, 8 Nov 2026 (James: "the Next Up is massive for no reason ...
+   the tenant info is getting squished"): Next Up and the person side by side
+   at half each, the rest flowing two to a row under them. */
+[data-look="new"] .nl-bento.nl-lead-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-look="new"] .nl-bento.nl-lead-bento > .span3 { grid-column: 1 / -1; }
+@media (max-width: 900px) { [data-look="new"] .nl-bento.nl-lead-bento { grid-template-columns: 1fr; } }
+/* The tags now sit at the foot of Their Enquiry. */
+[data-look="new"] .nl-lead-enquiry .nl-lead-tags { margin-top: 12px; }
+[data-look="new"] .nl-bento.nl-lead-bento > .nl-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
