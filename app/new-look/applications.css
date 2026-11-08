@@ -208,3 +208,21 @@
 [data-look="new"] .nl-fact .nl-fact-differs a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 /* The move-in date takes the whole row in Edit, so the day is never cut short. */
 [data-look="new"] .nl-facts-grid > .nl-fact--wide { grid-column: 1 / -1; }
+
+/* ── the website's edge (James, 8 Nov 2026) ──────────────────────────────
+   The page itself is on nl-edge (app/new-look.css). These are the pieces
+   only Applications has: the counted stage strip and the progress marks. */
+[data-look="new"].nl-edge .nl-apps-stage-n { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; font-size: 36px; letter-spacing: 0.02em; }
+[data-look="new"].nl-edge .nl-apps-stage-name { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; font-size: 11px; line-height: 14px; letter-spacing: 0.14em; }
+[data-look="new"].nl-edge .nl-apps-stage-ind { background: var(--accent); }
+[data-look="new"].nl-edge .nl-apps-stage:focus-visible { border-radius: 0; }
+[data-look="new"].nl-edge .nl-apps-age { font-family: var(--font-inter), sans-serif; font-variant-numeric: tabular-nums; }
+[data-look="new"].nl-edge .nl-apps-pips i.done { background: var(--primary); }
+[data-look="new"].nl-edge .nl-apps-pips i.now { background: var(--accent); }
+[data-look="new"].nl-edge .nl-apps-more > p:not(.nl-apps-flagline) { font-family: var(--font-inter), sans-serif; font-size: 15px; line-height: 22px; }
+[data-look="new"].nl-edge .nl-apps-journey li { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; font-size: 10.5px; line-height: 14px; letter-spacing: 0.12em; }
+[data-look="new"].nl-edge .nl-apps-journey li.done i, [data-look="new"].nl-edge .nl-apps-journey li.done::after { background: var(--primary); border-color: var(--primary); }
+[data-look="new"].nl-edge .nl-apps-journey li.now i { background: var(--accent); border-color: var(--accent); }
+@media (max-width: 760px) {
+  [data-look="new"].nl-edge .nl-apps-stage-n { font-size: 30px; }
+}

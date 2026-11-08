@@ -375,7 +375,7 @@ export default function Applications() {
     };
     const shortDay = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
     return (
-      <div data-look="new" className="nl-page nl-rise nl-apps">
+      <div data-look="new" className="nl-page nl-rise nl-apps nl-edge">
         <Mast
           title="Applications"
           blurb={

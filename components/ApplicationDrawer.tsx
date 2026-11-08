@@ -1837,7 +1837,7 @@ export default function ApplicationDrawer({
 
     return (
       <SaveScopeProvider scope={saves}>
-        <div data-look="new" data-steve="application.drawer" className="nl-page nl-rise nl-app">
+        <div data-look="new" data-steve="application.drawer" className="nl-page nl-rise nl-app nl-edge">
           <div className="nl-crumbs">
             <Link href={backHref} className="nl-crumb">
               <Ico name="back" size={14} /> Applications

@@ -147,7 +147,7 @@ export default function LetPage() {
   }
   if (!app && !deal && look) {
     return (
-      <div data-look="new" className="nl-page py-16">
+      <div data-look="new" className="nl-page nl-edge py-16">
         <h1 className="nl-section-title">This Let Isn&apos;t on Your Book</h1>
         <p className="nl-meta mt-2">{apps.state === "failed" ? apps.error : "It may belong to another agent, or the link is wrong."}</p>
         <Link href="/applications" className="nl-btn nl-btn--secondary nl-btn--sm mt-5">Back to Applications</Link>
