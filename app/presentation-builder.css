@@ -521,3 +521,18 @@
 /* The tray along the foot. */
 .pbx .tray { background: rgba(255, 255, 255, .97); border-top: 1px solid var(--line-2); }
 .pbx .ph { background: var(--oat); }
+
+/* Clean white (James, 8 Nov 2026: "why are we using beige background on these
+   bits? ... I want it to look super clean"). The page, the head, the tray and
+   every panel are white; the only tint left is the photo's empty frame and the
+   chosen states. */
+.pbx { --grey: #ffffff; --well: #f1eeea; --oat: #f4f1ed; background: #fff; }
+.pbx .head, .pbx .tray { background: rgba(255, 255, 255, .97); }
+.pbx .note, .pbx .found, .pbx .ph { background-color: transparent; }
+.pbx .ph { background: var(--oat); }
+.pbx .body > * , .pbx .pane { background: transparent; }
+.pbx .fig-main, .pbx .stat:not(.on) { border: 1px solid var(--line); }
+.pbx .wl input, .pbx .fchip { border: 1px solid var(--line-2); }
+.pbx .seg { border: 1px solid var(--line-2); }
+.pbx .picks .pc, .pbx .story i { background: var(--well); }
+.pbx .sl:hover, .pbx .sl.cur, .pbx .card:hover, .pbx .card.hl { background: #faf9f7; }
