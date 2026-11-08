@@ -299,3 +299,30 @@
 [data-look="new"] .nl-appt-send { margin-top: 14px; display: grid; gap: 10px; justify-items: start; }
 [data-look="new"] .nl-appt-said { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sage-deep); }
 [data-look="new"] .nl-appt-turnout { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* New appointment, in the pop-out (8 Nov 2026). */
+[data-look="new"] .nl-na-starters { margin-bottom: 2px; }
+[data-look="new"] .nl-na-notes { font-family: var(--font-inter), sans-serif !important; font-size: 14.5px !important; min-height: 96px; }
+[data-look="new"] .nl-na-when { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+[data-look="new"] .nl-na-date { display: flex; height: 44px; width: 100%; padding: 0 12px; font-size: 14.5px; background: #fff; border: 1px solid var(--line-strong); outline: none; }
+[data-look="new"] .nl-na-when select.nl-fs-input { height: 44px; padding: 0 10px; }
+[data-look="new"] .nl-na-lengths { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+[data-look="new"] .nl-na-lengths button { padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer; background: #fff; border: 1px solid var(--line-strong); color: var(--ink); }
+[data-look="new"] .nl-na-lengths button:hover { border-color: var(--ink); }
+[data-look="new"] .nl-na-lengths button.is-on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+@media (max-width: 640px) { [data-look="new"] .nl-na-when { grid-template-columns: 1fr; } }
+/* Book a viewing: who's viewing (8 Nov 2026). */
+[data-look="new"] .nl-bv-who { display: grid; gap: 0; }
+[data-look="new"] .nl-bv-mode { display: inline-flex; justify-self: start; margin-bottom: 16px; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-bv-mode button { padding: 9px 16px; font: inherit; font-size: 13.5px; cursor: pointer; background: #fff; border: 0; color: var(--muted); }
+[data-look="new"] .nl-bv-mode button + button { border-left: 1px solid var(--line-strong); }
+[data-look="new"] .nl-bv-mode button.is-on { background: var(--ink); color: var(--page); font-weight: 600; }
+[data-look="new"] .nl-bv-who > input, [data-look="new"] .nl-bv-who input[placeholder^="Name"] { height: 46px; font-size: 15px; border-color: var(--line-strong); background: #fff; }
+[data-look="new"] .nl-bv-who ul { display: grid; gap: 6px; }
+[data-look="new"] .nl-bv-who ul li + li { margin-top: 0 !important; }
+[data-look="new"] .nl-bv-person { display: flex; width: 100%; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; font: inherit; cursor: pointer; background: #fff; border: 1px solid var(--line-strong); transition: border-color 0.2s, transform 0.2s var(--nl-ease); }
+[data-look="new"] .nl-bv-person:hover:not(:disabled) { border-color: var(--ink); transform: translateX(2px); }
+[data-look="new"] .nl-bv-person:disabled { opacity: 0.6; cursor: wait; }
+[data-look="new"] .nl-bv-person > span:first-child { background: var(--accent-soft) !important; }
+[data-look="new"] .nl-bv-who p.uppercase { font-family: var(--fs-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; letter-spacing: 0.14em; font-size: 11px; }
+[data-look="new"] .nl-bv-who input:not([type="checkbox"]), [data-look="new"] .nl-bv-who select { border-color: var(--line-strong) !important; background: #fff; }

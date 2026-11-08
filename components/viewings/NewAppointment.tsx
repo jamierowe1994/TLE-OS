@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import DoodleIcon from "@/components/DoodleIcon";
-import { PressButton } from "@/components/Bits";
+import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
+import { DateField } from "@/components/offers/OfferParts";
 import { refreshDiary } from "@/lib/diary-store";
 
 /**
@@ -78,6 +77,7 @@ export default function NewAppointment({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [step, setStep] = useState<1 | 2>(1);
 
   const todayIso = useMemo(() => isoDay(new Date()), []);
   /* By value: the page hands a fresh Date every render, and keying on the
@@ -100,9 +100,7 @@ export default function NewAppointment({
     setBusy(false);
     setProblem(null);
     setDone(null);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    setStep(1);
   }, [open, dayKey]);
 
   if (!open) return null;
@@ -137,132 +135,91 @@ export default function NewAppointment({
     setDone(j.note ?? "In your diary.");
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
-      <button aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/45" />
-      <div className="fade-up relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
-          <div className="min-w-0">
-            <h2 className="text-[19px] leading-tight">New appointment</h2>
-            <p className="mt-0.5 text-[12px] text-muted">A meeting, an inspection or something personal. No home or person needed.</p>
+  /* Two screens in the new look (James, 8 Nov 2026): what it is, then when
+     and where. The same save as before. */
+  const firstOk = Boolean(title.trim());
+  const go = (to: 1 | 2) => setStep(to);
+  return (
+    <FloatSheet
+      title="New Appointment"
+      size="lg"
+      step={done ? undefined : step}
+      steps={done ? undefined : 2}
+      onBack={!done && step === 2 ? () => go(1) : undefined}
+      onClose={onClose}
+      dismissible={!busy}
+      screenKey={done ? "done" : step}
+      question={done ? undefined : step === 1 ? "What is it?" : "When and where?"}
+      lede={done ? undefined : step === 1 ? "A meeting, an inspection or something personal. No home or person needed." : title.trim()}
+      foot={
+        <FloatFoot left={problem ? <span className="text-accent-dark">{problem}</span> : undefined}>
+          {done ? (
+            <button type="button" className="nl-btn nl-btn--primary" onClick={onClose}>Done</button>
+          ) : step === 1 ? (
+            <>
+              <button type="button" className="nl-btn nl-btn--quiet" onClick={onClose}>Cancel</button>
+              <button type="button" className="nl-btn nl-btn--primary" disabled={!firstOk} onClick={() => go(2)}>Next</button>
+            </>
+          ) : (
+            <button type="button" className="nl-btn nl-btn--primary" disabled={Boolean(missing) || busy} title={missing ?? undefined} onClick={() => void save()}>
+              {busy ? "Saving…" : "Add to my diary"}
+            </button>
+          )}
+        </FloatFoot>
+      }
+    >
+      {done ? (
+        <FloatDone title={title.trim()}>{done}</FloatDone>
+      ) : step === 1 ? (
+        <>
+          <div className="nl-fs-choices is-row nl-na-starters">
+            {STARTERS.map((st) => (
+              <FloatChoice key={st} title={st} on={title === st} onClick={() => setTitle(st)} />
+            ))}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted transition-colors hover:text-ink"
-          >
-            ✕
-          </button>
-        </div>
-
-        {done ? (
-          <div className="px-6 py-8 text-center">
-            <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-accent-soft/70 text-accent-dark">
-              <DoodleIcon name="calendar" size={20} />
-            </span>
-            <p className="hand mt-3 text-[16px]">{title.trim()}</p>
-            <p className="mt-1 text-[12.5px] text-muted">{done}</p>
-            <PressButton onClick={onClose} className="press-ring mt-5 rounded-full bg-[var(--brown)] px-5 py-2 text-[12.5px] font-semibold text-white">
-              Done
-            </PressButton>
-          </div>
-        ) : (
-          <>
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          <FloatCard>
+            <label className="nl-fs-label" htmlFor="na-title">In your words</label>
+            <input id="na-title" data-autofocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="Team meeting at the Banbury office" className="nl-fs-input mt-1.5" />
+            <label className="nl-fs-label mt-4" htmlFor="na-notes">Agenda or notes <em>(optional)</em></label>
+            <textarea id="na-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={4000} placeholder="What it's about, who's going, anything to bring." className="nl-fs-input nl-na-notes mt-1.5" />
+          </FloatCard>
+        </>
+      ) : (
+        <>
+          <FloatCard>
+            <FloatCardHead title="When" />
+            <div className="nl-na-when">
               <div>
-                <label className={labelCls} htmlFor="na-title">What is it?</label>
-                <input
-                  id="na-title"
-                  autoFocus
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  maxLength={200}
-                  placeholder="Team meeting at the Banbury office"
-                  className={field}
-                />
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {STARTERS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setTitle((t) => (t.trim() ? t : s))}
-                      className="rounded-full border border-line/70 bg-white px-3 py-1 text-[11.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+                <span className="nl-fs-label">Day</span>
+                <DateField value={date} onChange={setDate} min={todayIso} className="nl-na-date mt-1.5" placeholder="Choose the day" />
               </div>
-
-              <div>
-                <label className={labelCls} htmlFor="na-notes">Agenda or notes <span className="font-normal normal-case tracking-normal">(optional)</span></label>
-                <textarea
-                  id="na-notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
-                  maxLength={4000}
-                  placeholder="What it's about, who's going, anything to bring."
-                  className={`${field} resize-y`}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <label className={labelCls} htmlFor="na-date">Day</label>
-                  <input id="na-date" type="date" min={todayIso} value={date} onChange={(e) => setDate(e.target.value)} className={field} />
-                </div>
-                <div>
-                  <label className={labelCls} htmlFor="na-time">Starts</label>
-                  <select id="na-time" value={time} onChange={(e) => setTime(e.target.value)} className={field}>
-                    {TIMES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls} htmlFor="na-mins">How long</label>
-                  <select id="na-mins" value={mins} onChange={(e) => setMins(Number(e.target.value))} className={field}>
-                    {LENGTHS.map((l) => (
-                      <option key={l.mins} value={l.mins}>{l.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className={labelCls} htmlFor="na-where">Where <span className="font-normal normal-case tracking-normal">(optional)</span></label>
-                <input id="na-where" value={where} onChange={(e) => setWhere(e.target.value)} maxLength={200} placeholder="An address, or Teams" className={field} />
-              </div>
-
-              <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px]">
-                <input type="checkbox" checked={outlook} onChange={(e) => setOutlook(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brown)]" />
-                <span>
-                  Put it in my Outlook calendar too
-                  <span className="block text-[11.5px] text-muted">Nobody is invited or emailed.</span>
-                </span>
+              <label>
+                <span className="nl-fs-label">Starts</span>
+                <select value={time} onChange={(e) => setTime(e.target.value)} className="nl-fs-input mt-1.5">
+                  {TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
               </label>
             </div>
-
-            <div className="flex shrink-0 items-center gap-3 border-t border-line/70 px-6 py-4">
-              <p className="min-w-0 flex-1 text-[12px] text-accent-dark">{problem ?? ""}</p>
-              <button type="button" onClick={onClose} className="text-[12.5px] font-semibold text-muted hover:text-ink">
-                Cancel
-              </button>
-              <PressButton
-                onClick={() => void save()}
-                disabled={Boolean(missing) || busy}
-                title={missing ?? undefined}
-                className="press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2 text-[12.5px] font-semibold text-white disabled:opacity-50"
-              >
-                {busy ? "Saving…" : "Add to my diary"}
-              </PressButton>
+            <span className="nl-fs-label mt-4 block">How long</span>
+            <div className="nl-na-lengths">
+              {LENGTHS.map((l) => (
+                <button key={l.mins} type="button" aria-pressed={mins === l.mins} className={mins === l.mins ? "is-on" : ""} onClick={() => setMins(l.mins)}>{l.label}</button>
+              ))}
             </div>
-          </>
-        )}
-      </div>
-    </div>,
-    document.body
+          </FloatCard>
+          <FloatCard>
+            <FloatCardHead title="Where" aside="Optional" />
+            <input value={where} onChange={(e) => setWhere(e.target.value)} maxLength={200} placeholder="An address, or Teams" className="nl-fs-input" />
+            <label className="nl-fs-tick-row mt-4">
+              <input type="checkbox" checked={outlook} onChange={(e) => setOutlook(e.target.checked)} />
+              <span>
+                <b>Put it in my Outlook calendar too</b>
+                <small>Only yours. Nobody is invited or emailed.</small>
+              </span>
+            </label>
+          </FloatCard>
+        </>
+      )}
+    </FloatSheet>
   );
 }

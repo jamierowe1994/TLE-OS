@@ -1374,7 +1374,18 @@ function NewLookCompliance({
                 </div>
               </li>
             )}
-            {list.map((r) => (
+            {/* Two groups, the landlord's papers and the home's certificates
+                (James, 8 Nov 2026: "split the documents ... so it's less all
+                over the place"). */}
+            {([
+              ["The Landlord", paperList],
+              ["The Property", certError ? [] : certList],
+            ] as const).flatMap(([head, rowsIn]) => rowsIn.length ? [
+              <li key={`head-${head}`} className="nl-cmp-group">
+                <span>{head}</span>
+                <small>{rowsIn.filter((r) => r.count === "on").length} of {rowsIn.length} on file</small>
+              </li>,
+              ...rowsIn.map((r) => (
               <li key={r.key}>
                 <div className="nl-cmp-row">
                   <span className={`nl-cmp-ic${r.icon === "ok" ? " is-ok" : r.icon === "warn" ? " is-warn" : ""}`}>
@@ -1394,7 +1405,7 @@ function NewLookCompliance({
                 {r.below}
                 {filerRow?.key === r.key && filer}
               </li>
-            ))}
+            ))] : [])}
           </ul>
         )}
         {filing && !filerRow && filer}

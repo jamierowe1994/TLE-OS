@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
+import FloatSheet from "@/components/new-look/FloatSheet";
 import { PressButton } from "@/components/Bits";
 import ViewingBooker, { type BookedResult } from "@/components/ViewingBooker";
 import { OS_LEAD_PREFIX } from "@/lib/contacts-as-leads";
@@ -241,12 +241,6 @@ export function WhoIsViewing({
   const [people, setPeople] = useState<OnFile[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   /* Who enquired about this home, before anything is typed; then the search,
      half a second after they stop typing. */
   useEffect(() => {
@@ -289,27 +283,18 @@ export function WhoIsViewing({
 
   const needle = find.trim();
 
-  return createPortal(
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
-      <button aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/45" />
-      <div className="fade-up relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
-          <div className="min-w-0">
-            <h2 className="text-[19px] leading-tight">{title}</h2>
-            <p className="mt-0.5 truncate text-[12px] text-muted">{sub ?? (home ? `${home.name}${home.locality ? `, ${home.locality}` : ""}` : "Pick the person, then the home")}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted transition-colors hover:text-ink"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <div className="mb-4 inline-flex rounded-full border border-line/70 bg-white p-1 text-[12px] font-semibold">
+  /* In the new look's pop-out (James, 8 Nov 2026): one solid panel, the
+     question big, the people as rows to press. */
+  return (
+    <FloatSheet
+      title="Book a Viewing"
+      size="lg"
+      onClose={onClose}
+      question={title}
+      lede={sub ?? (home ? `${home.name}${home.locality ? `, ${home.locality}` : ""}` : "Pick the person first, then the home and the time.")}
+    >
+      <div className="nl-bv-who">
+          <div className="nl-bv-mode" role="tablist">
             {(
               [
                 ["file", "Already on file"],
@@ -320,7 +305,9 @@ export function WhoIsViewing({
                 key={id}
                 type="button"
                 onClick={() => setMode(id)}
-                className={`rounded-full px-3.5 py-1.5 transition-colors ${mode === id ? "bg-ink text-page" : "text-muted hover:text-ink"}`}
+                role="tab"
+                aria-selected={mode === id}
+                className={mode === id ? "is-on" : ""}
               >
                 {label}
               </button>
@@ -352,13 +339,13 @@ export function WhoIsViewing({
                       type="button"
                       onClick={() => onPick(p)}
                       disabled={busy}
-                      className="flex w-full items-center gap-3 rounded-xl border border-line/60 bg-white p-3 text-left transition-colors hover:border-ink/40 disabled:cursor-wait disabled:opacity-60"
+                      className="nl-bv-person"
                     >
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60 text-accent-dark">
                         <DoodleIcon name="user" size={14} />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="hand block truncate text-[13.5px]">{p.name}</span>
+                        <span className="block truncate text-[15px] font-semibold">{p.name}</span>
                         <span className="block truncate text-[11px] text-muted">{[p.email, p.phone].filter(Boolean).join(" · ") || "No contact details"}</span>
                       </span>
                       <span className="hidden shrink-0 text-[10.5px] text-muted sm:block">{p.note}</span>
@@ -397,10 +384,8 @@ export function WhoIsViewing({
           ) : (
             <SomeoneNew seed={needle} onPick={onPick} />
           )}
-        </div>
       </div>
-    </div>,
-    document.body
+    </FloatSheet>
   );
 }
 

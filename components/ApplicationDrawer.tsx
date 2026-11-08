@@ -23,6 +23,7 @@ import PeopleDeck from "@/components/new-look/PeopleDeck";
 import PlcOverlay from "@/components/plc/PlcOverlay";
 import PushToPropoly from "@/components/propoly/PushToPropoly";
 import CustomerUpdateSheet from "@/components/updates/CustomerUpdateSheet";
+import ActivityList, { exactWhen } from "@/components/new-look/ActivityList";
 import { GuarantorsToPropoly } from "@/components/LetPropoly";
 import LetTenants from "@/components/LetTenants";
 import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
@@ -2253,32 +2254,50 @@ export default function ApplicationDrawer({
               <div>
                 {app && journey === null ? (
                   <p className="nl-meta flex items-center gap-2 py-6"><span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-ink" />Reading what moved…</p>
-                ) : edits.length + history.length + recordLog.length ? (
-                  <ul className="nl-timeline">
-                    {/* Changed on the let in the OS: who, from what, to what, when. */}
-                    {edits.map((e) => (
-                      <li key={e.id}>
-                        <span className="nl-mono">{whenWords(e.at)}</span>
-                        <span>{editWords(e)} <span className="nl-meta">Kept on the let</span></span>
-                      </li>
-                    ))}
-                    {history.map((e) => (
-                      <li key={e.id}>
-                        <span className="nl-mono">{whenWords(e.at)}</span>
-                        <span>{eventSentence(e)}</span>
-                      </li>
-                    ))}
-                    {recordLog.map((a, i) => (
-                      <li key={`r${i}`}>
-                        <span className="nl-mono">{/^\d{4}-\d{2}-\d{2}/.test(a.when) ? niceDate(a.when.slice(0, 10)) : a.when}</span>
-                        <span>
-                          {a.what} <span className="nl-meta">{a.by}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
                 ) : (
-                  <p className="nl-empty">Nothing has moved on the deal yet.</p>
+                  /* Every line opens with what's behind it (James, 8 Nov 2026). */
+                  <ActivityList
+                    empty="Nothing has moved on the deal yet."
+                    items={[
+                      ...edits.map((e) => ({
+                        key: `e${e.id}`,
+                        at: e.at,
+                        when: whenWords(e.at),
+                        exact: exactWhen(e.at),
+                        text: editWords(e),
+                        by: e.by,
+                        rows: [["Was", e.was ?? "Nothing"], ["Now", e.value ?? "Nothing"], ["Kept", "On the let in the OS"]] as [string, string][],
+                      })),
+                      ...history.map((e) => ({
+                        key: `h${e.id}`,
+                        at: e.at,
+                        when: whenWords(e.at),
+                        exact: exactWhen(e.at),
+                        text: eventSentence(e),
+                        by: e.agentName,
+                        body: e.toldNote,
+                        rows: ([
+                          ["From", e.fromStatus ?? ""],
+                          ["To", e.toStatus ?? ""],
+                          ["Amount", e.amount != null ? `£${e.amount.toLocaleString("en-GB")}` : ""],
+                          ["Told", [e.toldTo, e.toldAt ? whenWords(e.toldAt) : ""].filter(Boolean).join(", ")],
+                        ] as [string, string][]).filter(([, v]) => v),
+                      })),
+                      ...(app?.activity ?? []).map((a, i) => {
+                        const note = (a as { note?: unknown }).note;
+                        return {
+                          key: `r${i}`,
+                          at: /^\d{4}-\d{2}-\d{2}/.test(a.when) ? a.when : "",
+                          when: /^\d{4}-\d{2}-\d{2}/.test(a.when) ? niceDate(a.when.slice(0, 10)) : a.when,
+                          exact: exactWhen(a.when),
+                          text: note ? `${a.by || "Someone"} added a note` : a.what,
+                          by: note ? null : a.by,
+                          body: typeof note === "string" && note.trim() ? note : note ? a.what : null,
+                          go: note ? { label: "Go to Notes", onClick: () => setNlTab("notes") } : null,
+                        };
+                      }),
+                    ].sort((x, y) => (y.at || "").localeCompare(x.at || ""))}
+                  />
                 )}
               </div>
             )}

@@ -1243,3 +1243,55 @@
 [data-nav-look="new"] [data-os-profile-menu] { border-radius: 0; background: var(--nv-bg); border-color: var(--nv-line); box-shadow: 0 16px 32px -16px rgba(20, 20, 19, .35); }
 [data-nav-look="new"] [data-os-profile-menu] > * { border-radius: 0; }
 [data-nav-look="new"] [data-os-profile-menu] > *:hover { background: var(--nv-on); }
+
+/* Activity lines that open (components/new-look/ActivityList, 8 Nov 2026). */
+[data-look="new"] .nl-actlist .nl-act-line { display: block; width: 100%; padding: 0; margin: 0; font: inherit; text-align: left; color: inherit; background: none; border: 0; cursor: pointer; }
+[data-look="new"] .nl-actlist .nl-act-line:hover > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-act-peek { display: block; margin-top: 2px; font-size: 12.5px; line-height: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .nl-act-body { margin: 0; font-size: 15px; line-height: 23px; white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-look="new"] .nl-act-body.is-quiet { color: var(--muted); font-size: 14px; }
+[data-look="new"] .nl-act-rows { margin: 0; display: grid; }
+[data-look="new"] .nl-act-rows > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-act-rows > div:first-child { border-top: 0; padding-top: 0; }
+[data-look="new"] .nl-act-rows dt { font-family: var(--fs-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted); padding-top: 3px; }
+[data-look="new"] .nl-act-rows dd { margin: 0; font-size: 14.5px; overflow-wrap: anywhere; }
+
+/* ===========================================================================
+   THE TENANT PASSPORT VIEW, TIDIED (James, 8 Nov 2026: "this looks better ...
+   clean it up so it's a nicer view"). One solid panel over a lighter dim,
+   in the house's square, condensed-capitals style; the passport itself stays.
+=========================================================================== */
+.nl-po.nl-pp { display: grid; place-items: start center; padding: 4vh 24px; }
+.nl-pp .nl-po-scrim { background: rgba(20, 20, 19, .36); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.nl-pp .nl-po-card.nl-pp-card { pointer-events: auto; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); padding: 0; gap: 0; }
+.nl-pp .nl-po-head { color: var(--ink); padding: 20px 20px 18px 32px; border-bottom: 1px solid var(--line); align-items: center; }
+.nl-pp .nl-po-head .nl-eyebrow { color: var(--accent-dark); font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; }
+.nl-pp .nl-po-title { color: var(--ink); font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 34px; line-height: 1; margin-top: 6px; }
+.nl-pp .nl-po-head .nl-iconbtn { background: transparent; border-color: var(--line-strong); color: var(--ink); border-radius: 0; }
+.nl-pp .nl-po-head .nl-iconbtn:hover { background: var(--ink); color: var(--page); }
+.nl-pp-state { border-radius: 0; background: var(--sage-soft); box-shadow: none; color: var(--sage-deep); font-weight: 500; }
+.nl-pp-state i { border-radius: 0; }
+.nl-pp-state.is-done i { background: var(--sage-deep); }
+.nl-pp .nl-po-wait, .nl-pp .nl-pp-bad { margin: 24px 32px; }
+.nl-pp-grid { padding: 28px 32px 32px; gap: 32px; }
+.nl-pp-left { top: 0; }
+.nl-pp-hint { color: var(--muted); }
+/* What to do next: square, brown for the main one, one family. */
+.nl-pp-act { border-radius: 0; height: 44px; background: #fff; color: var(--ink); box-shadow: none; border: 1px solid var(--line-strong); font-size: 13.5px; }
+.nl-pp-act:hover { transform: none; box-shadow: none; border-color: var(--ink); }
+.nl-pp-act.is-go { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.nl-pp-act.is-go:hover { background: color-mix(in srgb, var(--primary) 84%, #000); }
+.nl-pp-act.is-quiet { background: transparent; color: var(--ink); box-shadow: none; border-color: transparent; text-decoration: underline; text-underline-offset: 3px; justify-content: flex-start; }
+.nl-pp-act.is-quiet:hover { background: transparent; border-color: transparent; color: var(--accent-dark); }
+.nl-pp-said { color: var(--sage-deep); }
+/* The answers: square cards on the page colour, condensed headings. */
+.nl-pp-box { border-radius: 0; background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--line-strong); padding: 16px 20px 8px; }
+.nl-pp-box h3 { font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; letter-spacing: .14em; font-size: 11.5px; color: var(--ink); margin-bottom: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line-strong); }
+.nl-pp-box dt { font-size: 13px; }
+.nl-pp-box dd { font-size: 14px; }
+.nl-pp-open { border-radius: 0; }
+@media (max-width: 760px) {
+  .nl-po.nl-pp { padding: 0; }
+  .nl-pp-grid { padding: 20px 16px 24px; }
+  .nl-pp .nl-po-head { padding: 16px 12px 14px 16px; }
+}

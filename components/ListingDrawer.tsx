@@ -82,6 +82,7 @@ import BookSlot from "@/components/viewings/BookSlot";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
 import ChangeViewing, { apptFromViewing, apptStartIso } from "@/components/viewings/ChangeViewing";
 import HomeSwitch from "@/components/HomeSwitch";
+import ActivityList, { exactWhen } from "@/components/new-look/ActivityList";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -2802,9 +2803,20 @@ function ListingDrawerBody({
     const linkFor = (n: string) => portals.find((p) => p.portal.toLowerCase().replace(/\s/g, "") === n.toLowerCase());
 
     /* ── Activity: what has happened here, newest first ── */
-    const happened: { at: string; text: string; to?: NlTab }[] = [
-      ...latest.map((a) => ({ at: a.at, text: a.title.replace(" · ", ": "), to: a.to as NlTab })),
-      ...(listingNotes ?? []).map((n) => ({ at: n.at ?? "", text: `${n.author ?? "Someone"} added a note`, to: "notes" as NlTab })),
+    /* Every line opens with what's behind it (James, 8 Nov 2026). */
+    const viewingsAll = [...(viewings?.upcoming ?? []), ...(viewings?.past ?? [])];
+    const happened: { at: string; text: string; to?: NlTab; by?: string; body?: string; rows?: [string, string][] }[] = [
+      ...latest.map((a) => {
+        const enq = a.key.startsWith("enq-") ? (enquiries ?? []).find((e) => `enq-${e.id}` === a.key) : null;
+        const vw = a.key.startsWith("view-") ? viewingsAll.find((v) => `view-${v.id}` === a.key) : null;
+        const rows: [string, string][] = enq
+          ? ([["Who", enq.name], ["Came from", enq.source || "The portals"], ["Email", enq.email], ["Mobile", enq.phone]] as [string, string][]).filter(([, v]) => v)
+          : vw
+            ? ([["Who", vw.contacts.map((c) => c.name).join(", ") || vw.title || ""], ["When", a.sub], ["Status", vw.cancelled ? "Cancelled" : vw.status ?? (new Date(vw.startsAt).getTime() < Date.now() ? "Viewed" : "Booked")]] as [string, string][]).filter(([, v]) => v)
+            : [];
+        return { at: a.at, text: a.title.replace(" · ", ": "), to: a.to as NlTab, body: enq?.message || undefined, rows };
+      }),
+      ...(listingNotes ?? []).map((n) => ({ at: n.at ?? "", text: `${n.author ?? "Someone"} added a note`, to: "notes" as NlTab, by: n.author ?? undefined, body: n.text })),
       ...(listing.publishedAt ? [{ at: listing.publishedAt, text: "Went live on Rightmove, Zoopla and OnTheMarket" }] : []),
     ]
       .filter((h) => h.at)
@@ -3449,19 +3461,22 @@ function ListingDrawerBody({
           )}
 
           {tabIs === "activity" && (
-            happened.length ? (
-              <ul className="nl-timeline">
-                {happened.slice(0, 40).map((h, i) => (
-                  <li key={`${h.at}${i}`}>
-                    <span className="nl-mono">{whenOf(h.at)}</span>
-                    {h.to ? <button type="button" onClick={() => pickNl(h.to!)}>{h.text}</button> : <span>{h.text}</span>}
-                  </li>
-                ))}
-              </ul>
-            ) : reading ? (
+            !happened.length && reading ? (
               <p className="nl-meta">Reading what has happened here…</p>
             ) : (
-              <p className="nl-empty">Nothing has happened on this home yet.</p>
+              <ActivityList
+                empty="Nothing has happened on this home yet."
+                items={happened.slice(0, 40).map((h, i) => ({
+                  key: `${h.at}${i}`,
+                  when: whenOf(h.at),
+                  exact: exactWhen(h.at),
+                  text: h.text,
+                  by: null,
+                  body: h.body ?? null,
+                  rows: h.rows,
+                  go: h.to ? { label: `Go to ${nlTabs.find((t) => t.id === h.to)?.label ?? "it"}`, onClick: () => pickNl(h.to!) } : null,
+                }))}
+              />
             )
           )}
         </div>
