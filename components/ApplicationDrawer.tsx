@@ -22,6 +22,7 @@ import Guarantors from "@/components/Guarantors";
 import PeopleDeck from "@/components/new-look/PeopleDeck";
 import PlcOverlay from "@/components/plc/PlcOverlay";
 import PushToPropoly from "@/components/propoly/PushToPropoly";
+import CustomerUpdateSheet from "@/components/updates/CustomerUpdateSheet";
 import { GuarantorsToPropoly } from "@/components/LetPropoly";
 import LetTenants from "@/components/LetTenants";
 import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
@@ -400,23 +401,8 @@ function BottomSheet({ open, title, onClose, children }: { open: boolean; title:
 
 /* ── the email builder: customer updates and reminders ────────────────── */
 
-type Template = { kind: string; label: string; what: string; to: Array<"tenant" | "landlord"> };
-/* The written emails (lib/customer-update-copy), each read and changed before
-   it goes. Failed referencing asks about a guarantor, as James put it. */
-const UPDATES: Template[] = [
-  { kind: "general", label: "A quick update", what: "A short note in your own words", to: ["tenant", "landlord"] },
-  { kind: "reference_failed", label: "References not accepted", what: "Sorry, and do they have a guarantor? If not the let may not go ahead", to: ["tenant", "landlord"] },
-  { kind: "guarantor_needed", label: "A guarantor is needed", what: "References passed, but a guarantor is needed", to: ["tenant"] },
-  { kind: "agreement_out", label: "Agreement on its way", what: "The tenancy agreement is out for signing", to: ["tenant", "landlord"] },
-  { kind: "cancelled", label: "The let won't go ahead", what: "Sorry it isn't going ahead, and what happens next", to: ["tenant", "landlord"] },
-];
-const REMINDERS: Template[] = [
-  { kind: "nudge_holding_fee", label: "Pay the holding deposit", what: "The home stays on the market until it's paid", to: ["tenant"] },
-  { kind: "nudge_referencing", label: "Finish the references", what: "Fill in the referencing form", to: ["tenant"] },
-  { kind: "nudge_sign_agreement", label: "Sign the agreement", what: "The tenancy agreement is waiting for a signature", to: ["tenant", "landlord"] },
-  { kind: "nudge_move_in_money", label: "Send the move-in money", what: "Deposit and first month's rent before the keys", to: ["tenant"] },
-  { kind: "nudge_documents", label: "Documents we still need", what: "Send them over or upload them in the portal", to: ["tenant", "landlord"] },
-];
+/* The customer update and reminder lists live with the pop-out now
+   (components/updates/CustomerUpdateSheet, 8 Nov 2026). */
 
 type LetPerson = { name: string; email: string | null; phone: string | null; contactId: string | null; isPrimary: boolean };
 type LetLandlord = { name: string; email: string | null; phone: string | null; contactId: string | null; from?: "rex" | "record" };
@@ -440,178 +426,6 @@ function dealFigure(d: PreTenancyDeal, f: LetField): string | null {
     case "holdingFee": return s(d.app.propoly?.holdingFee);
     case "termMonths": return s(d.app.agreementMonths);
   }
-}
-
-function EmailBuilder({ letId, mode, people, start, scotland, onClose }: {
-  letId: string;
-  mode: "update" | "reminder";
-  people: LetInfo | null;
-  /** Arriving with a message and a person already picked (after a cancel). */
-  start?: { kind: string; to: string } | null;
-  /** Scotland takes no holding fee, so there's nothing to remind anyone to pay. */
-  scotland?: boolean;
-  onClose: () => void;
-}) {
-  const list = mode === "update" ? UPDATES : scotland ? REMINDERS.filter((t) => t.kind !== "nudge_holding_fee") : REMINDERS;
-  const parties = [
-    ...(people?.tenants ?? []).map((t, i) => ({ key: `tenant:${i}`, role: "tenant" as const, index: i, name: t.name, email: t.email, tag: t.isPrimary ? "Lead tenant" : "Tenant" })),
-    /* Every landlord on the let (20 Oct 2026), each by their place in the list. */
-    ...(() => {
-      const all = (people?.people ?? []).filter((p) => p.role === "landlord");
-      if (!all.length) return people?.landlord ? [{ key: "landlord", role: "landlord" as const, index: 0, name: people.landlord.name, email: people.landlord.email, tag: "Landlord" }] : [];
-      return all.map((l, i) => ({ key: i ? `landlord:${i}` : "landlord", role: "landlord" as const, index: i, name: l.name, email: l.email, tag: "Landlord" }));
-    })(),
-  ];
-  const [to, setTo] = useState<string>(start?.to ?? parties[0]?.key ?? "");
-  const [kind, setKind] = useState<string>(start?.kind ?? list[0].kind);
-  const [portal, setPortal] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<{ id: number; index: number; portal: boolean } | null>(null);
-  const sent = useRef(false);
-  const [done, setDone] = useState<{ to: string; what: string; detail: string }[]>([]);
-  useEffect(() => { if (!to && parties[0]) setTo(parties[0].key); }, [parties, to]);
-
-  const party = parties.find((p) => p.key === to) ?? null;
-  const tpl = list.find((t) => t.kind === kind) ?? list[0];
-  const fits = party ? tpl.to.includes(party.role) : false;
-
-  async function write() {
-    if (!party || busy) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const r = await fetch(`/api/applications/${encodeURIComponent(letId)}/message`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ kind: tpl.kind, role: party.role, index: party.index }),
-      });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; update?: { id: number }; index?: number };
-      if (!j.ok || !j.update) throw new Error(j.error ?? "The email couldn't be written.");
-      sent.current = false;
-      setSheet({ id: j.update.id, index: j.index ?? 0, portal });
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "The email couldn't be written.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /* Closed without sending: the update is settled as not sent, so it never
-     sits open nagging the agent and then Kirstie about an email nobody meant
-     to send. */
-  function sheetClosed() {
-    const s = sheet;
-    setSheet(null);
-    if (s && !sent.current) {
-      void fetch("/api/customer-updates", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: s.id, index: s.index, action: "skip", note: "Written on the let's page and not sent." }),
-      }).catch(() => null);
-    }
-  }
-
-  return (
-    <>
-      <DrawerHead
-        icon={mode === "update" ? "mail" : "clock"}
-        title={mode === "update" ? "Customer update" : "Send a reminder"}
-        sub="Pick who and what. The email is written for you to read and change before it goes, from your own address. Nothing is sent until you press Send."
-        onClose={onClose}
-      />
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
-        <section>
-          <p className={`${eyebrow} mb-2`}>Who to</p>
-          {people === null ? (
-            <p className="text-[12.5px] text-muted">Reading who is on the let…</p>
-          ) : parties.length ? (
-            <div className="flex flex-wrap gap-2">
-              {parties.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => setTo(p.key)}
-                  aria-pressed={to === p.key}
-                  className={`rounded-xl border px-3.5 py-2 text-left text-[12.5px] transition-colors ${to === p.key ? "border-accent-dark bg-accent-soft/60" : "border-line/70 bg-white hover:border-ink/40"}`}
-                >
-                  <span className="block font-semibold">{p.name}</span>
-                  <span className="block text-[11px] text-muted">{p.tag}{p.email ? "" : " · no email"}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[12.5px] text-muted">Nobody with contact details is held on this let.</p>
-          )}
-          {people?.landlordProblem && <p className="mt-2 text-[11.5px] text-muted">{people.landlordProblem}</p>}
-        </section>
-
-        <section>
-          <p className={`${eyebrow} mb-2`}>{mode === "update" ? "What it's about" : "The reminder"}</p>
-          <div className="grid gap-2">
-            {list.map((t) => {
-              const ok = party ? t.to.includes(party.role) : true;
-              return (
-                <button
-                  key={t.kind}
-                  type="button"
-                  disabled={!ok}
-                  onClick={() => setKind(t.kind)}
-                  aria-pressed={kind === t.kind}
-                  className={`rounded-xl border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${kind === t.kind ? "border-accent-dark bg-accent-soft/60" : "border-line/70 bg-white hover:border-ink/40"}`}
-                >
-                  <span className="block text-[13px] font-semibold">{t.label}</span>
-                  <span className="block text-[11.5px] text-muted">{ok ? t.what : `For the ${t.to.join(" or ")} only`}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Send to portal (James, 12 Oct 2026): the copy under Messages in
-            their portal, where they have one. */}
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line/70 bg-white px-4 py-3">
-          <input type="checkbox" checked={portal} onChange={(e) => setPortal(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--accent-dark)]" />
-          <span>
-            <span className="block text-[13px] font-semibold">Also put it in their portal</span>
-            <span className="block text-[11.5px] text-muted">A copy under Messages, if they have a portal account. It is in their email either way.</span>
-          </span>
-        </label>
-
-        {err && <p className="text-[12px] text-accent-dark">{err}</p>}
-        {done.length > 0 && (
-          <ul className="space-y-1.5 rounded-xl bg-[#f1f4ec] px-4 py-3 text-[12px] text-[#56634a]">
-            {done.map((d, i) => (
-              <li key={i}>✓ {d.what} to {d.to}. {d.detail}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-5 py-4 sm:px-6">
-        <p className="text-[11.5px] text-muted">{party && !party.email ? `There's no email for ${party.name}. Ring them instead.` : "You'll see it before it goes."}</p>
-        <button
-          type="button"
-          onClick={() => void write()}
-          disabled={!party || !fits || busy || !party.email}
-          className="press-ring inline-flex shrink-0 items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-40"
-        >
-          <DoodleIcon name="mail" size={13} />
-          {busy ? "Writing it…" : "Write the email"}
-        </button>
-      </div>
-      {sheet && (
-        <ConfirmSheet
-          target={{ kind: "update", id: sheet.id, index: sheet.index, portal: sheet.portal }}
-          title={tpl.label}
-          onSent={(detail) => {
-            sent.current = true;
-            setDone((cur) => [...cur, { to: party?.name ?? "them", what: tpl.label, detail }]);
-          }}
-          onClose={sheetClosed}
-        />
-      )}
-    </>
-  );
 }
 
 /* ── cancel the deal ──────────────────────────────────────────────────── */
@@ -1532,10 +1346,30 @@ export default function ApplicationDrawer({
         </div>
       </BottomSheet>
 
-      {/* Customer update and Send a reminder: the email builder. */}
-      <Drawer open={Boolean(builder)} label={builder?.mode === "reminder" ? "Send a reminder" : "Customer update"} onClose={closeBuilder}>
-        {builder && <EmailBuilder key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`} letId={letId} mode={builder.mode} people={info} start={builder.start} scotland={scottishLet} onClose={closeBuilder} />}
-      </Drawer>
+      {/* Customer update and Send a reminder: a pop-out in steps (James, 8 Nov
+          2026: the drawer from the side ran into Steve). */}
+      {builder && (
+        <CustomerUpdateSheet
+          key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`}
+          letId={letId}
+          mode={builder.mode}
+          loading={info === null}
+          address={[name, locality].filter(Boolean).join(", ")}
+          start={builder.start}
+          scotland={scottishLet}
+          landlordProblem={info?.landlordProblem ?? null}
+          parties={[
+            ...(info?.tenants ?? []).map((t, i) => ({ key: `tenant:${i}`, role: "tenant" as const, index: i, name: t.name, email: t.email, phone: t.phone, tag: t.isPrimary ? "Lead tenant" : "Tenant" })),
+            ...(() => {
+              const all = (info?.people ?? []).filter((p) => p.role === "landlord");
+              if (!all.length) return info?.landlord ? [{ key: "landlord", role: "landlord" as const, index: 0, name: info.landlord.name, email: info.landlord.email, phone: info.landlord.phone, tag: "Landlord" }] : [];
+              return all.map((l, i) => ({ key: i ? `landlord:${i}` : "landlord", role: "landlord" as const, index: i, name: l.name, email: l.email, phone: l.phone, tag: "Landlord" }));
+            })(),
+          ]}
+          onClose={closeBuilder}
+          onLog={addComment}
+        />
+      )}
 
       {!newLook && lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={name} onClose={() => setLightbox(null)} />}
 
