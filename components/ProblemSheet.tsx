@@ -74,7 +74,7 @@ export default function ProblemSheet({ problem, onClose }: { problem: Problem; o
       size="lg"
       onClose={onClose}
       dismissible={state !== "sending"}
-      question={`${problem.action} didn't work`}
+      question={problem.title ?? `${problem.action} didn't work`}
       lede={problem.why}
       foot={
         <FloatFoot left={state === "sent" ? <span>Sent. You don&apos;t need to do anything else.</span> : <span>Nothing is sent until you press Submit.</span>}>

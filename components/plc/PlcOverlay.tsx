@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import PlcWizard, { type PlcStepName } from "@/components/PlcWizard";
 
@@ -48,13 +48,35 @@ export default function PlcOverlay({ applicationId, address, onClose }: { applic
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  /* The panel is the size of what's in it (James, 8 Nov 2026: "it starts
+     small ... stretches as we go into the landlord documents ... nothing
+     ever jumps"). The content is measured and the panel eases to it, up to
+     the window's height; past that its middle scrolls. */
+  const head = useRef<HTMLElement | null>(null);
+  const inner = useRef<HTMLDivElement | null>(null);
+  const [h, setH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = inner.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const fit = () => setH((head.current?.offsetHeight ?? 0) + el.scrollHeight + 2);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, []);
+  const wide = step === "landlord" || step === "tenant" || step === "review";
+
   const at = STEPS.findIndex((s) => s.id === step);
   if (typeof document === "undefined") return null;
   return createPortal(
     <div data-look="new" className={`nl-plc-wrap${shown ? " is-shown" : ""}`} role="dialog" aria-modal="true" aria-label="PLC check">
       <div className="nl-plc-dim" onClick={onClose} aria-hidden />
-      <div className="nl-plc-panel">
-        <header className="nl-plc-head">
+      <div className={`nl-plc-panel${wide ? " is-wide" : ""}`} style={h ? { height: h } : undefined}>
+        <header ref={head} className="nl-plc-head">
           <div className="nl-plc-where">
             <span className="nl-plc-eyebrow">PLC check</span>
             {address && <span className="nl-plc-address" title={address}>{address}</span>}
@@ -73,7 +95,9 @@ export default function PlcOverlay({ applicationId, address, onClose }: { applic
           </button>
         </header>
         <div className="nl-plc-body" data-plc-scroll>
-          <PlcWizard applicationId={applicationId} embedded onStep={setStep} onClose={onClose} />
+          <div ref={inner}>
+            <PlcWizard applicationId={applicationId} embedded onStep={setStep} onClose={onClose} />
+          </div>
         </div>
       </div>
     </div>,

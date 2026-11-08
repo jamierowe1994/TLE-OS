@@ -114,7 +114,7 @@ export default function Toaster({ at = "bottom" }: { at?: "bottom" | "top" } = {
           </svg>
           <span className="min-w-0">
             <span className="block text-[13.5px] font-semibold leading-[19px]">{item.text}</span>
-            <span className="mt-0.5 block text-[12.5px] leading-[18px] opacity-90">Press here to see why, and send it to us in one go.</span>
+            <span className="mt-0.5 block text-[12.5px] leading-[18px] opacity-90">{item.problem.sub ?? "Press here to see why, and send it to us in one go."}</span>
           </span>
         </button>
       )}

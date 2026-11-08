@@ -431,3 +431,18 @@
 /* Profile > Automations: when to take adverts offline. */
 [data-look="new"] .nl-auto-advert { margin-bottom: 32px; padding-bottom: 28px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
 [data-look="new"] .nl-auto-advert .nl-choice-row { margin-top: 8px; }
+/* Several people at once. */
+[data-look="new"] .nl-cu-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+[data-look="new"] .nl-cu-quick button { padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-cu-quick button:hover { border-color: var(--ink); }
+[data-look="new"] .nl-cu-tabs { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: -4px 0 16px; border-bottom: 1px solid var(--line-strong); }
+[data-look="new"] .nl-cu-tabs [role="tab"] { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font: inherit; font-size: 14px; cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); }
+[data-look="new"] .nl-cu-tabs [role="tab"].is-on { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+[data-look="new"] .nl-cu-tabs [role="tab"] i { font-style: normal; font-size: 12px; color: var(--sage-deep); }
+[data-look="new"] .nl-cu-same { margin-left: auto; padding: 0 4px; font: inherit; font-size: 12.5px; color: var(--muted); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-cu-same:hover { color: var(--ink); }
+[data-look="new"] .nl-cu-to { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+/* See all: every card the same size, whatever's on it (8 Nov 2026). */
+[data-look="new"] .nl-pdeck-fan { align-items: stretch; grid-auto-rows: 1fr; }
+[data-look="new"] .nl-pdeck-fan > .nl-pdeck-card { display: flex; }
+[data-look="new"] .nl-pdeck-fan > .nl-pdeck-card > * { flex: 1 1 auto; min-height: 300px; }

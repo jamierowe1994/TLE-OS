@@ -90,7 +90,15 @@ export default function CustomerUpdateSheet({
 }) {
   const list = mode === "update" ? UPDATES : scotland ? REMINDERS.filter((t) => t.kind !== "nudge_holding_fee") : REMINDERS;
   const [step, setStep] = useState<Step>(start?.to ? (start.kind ? "what" : "how") : "who");
-  const [to, setTo] = useState<string>(start?.to ?? "");
+  /* Several at once (James, 8 Nov 2026: "we want to send updates to all
+     tenants at the same time ... and include the landlord"). One picked runs
+     as before; more than one writes a version per audience. */
+  const [picked, setPicked] = useState<string[]>(start?.to ? [start.to] : []);
+  const to = picked[0] ?? "";
+  const group = picked.length > 1;
+  type Aud = "tenant" | "landlord";
+  const [copies, setCopies] = useState<Record<Aud, { subject: string; body: string }>>({ tenant: { subject: "", body: "" }, landlord: { subject: "", body: "" } });
+  const [aud, setAud] = useState<Aud>("tenant");
   const [kind, setKind] = useState<string | null>(start?.kind ?? null);
   const [portal, setPortal] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -158,6 +166,79 @@ export default function CustomerUpdateSheet({
   }
 
   const party = parties.find((p) => p.key === to) ?? null;
+  const chosen = parties.filter((p) => picked.includes(p.key));
+  const auds = (["tenant", "landlord"] as const).filter((r) => chosen.some((p) => p.role === r));
+  const curSubject = group ? copies[aud].subject : subject;
+  const curBody = group ? copies[aud].body : body;
+  const setCurSubject = (v: string) => (group ? setCopies((c) => ({ ...c, [aud]: { ...c[aud], subject: v } })) : setSubject(v));
+  const setCurBody = (v: string) => (group ? setCopies((c) => ({ ...c, [aud]: { ...c[aud], body: v } })) : setBody(v));
+  const groupReady = group && auds.every((a) => copies[a].subject.trim() && copies[a].body.trim());
+  const toggle = (k: string) => setPicked((x) => (x.includes(k) ? x.filter((y) => y !== k) : [...x, k]));
+
+  /* The group's words: one copy per audience, from a written email or blank. */
+  async function startGroup(k: string | null, from?: Saved) {
+    setErr(null);
+    setKind(k);
+    if (!k) {
+      const blank = from ? { subject: from.subject, body: from.body } : { subject: "", body: "Hi {{firstName}},\n\n" };
+      setCopies({ tenant: { ...blank }, landlord: { ...blank } });
+      setFromSaved(from ?? null);
+      setAud(auds[0] ?? "tenant");
+      return setStep("write");
+    }
+    setBusy(true);
+    const got: Record<string, { subject: string; body: string }> = {};
+    for (const r of auds) {
+      const j = (await fetch(`/api/update-copy?kind=${encodeURIComponent(k)}&role=${r}&address=${encodeURIComponent(address)}${scotland ? "&scotland=1" : ""}`, { cache: "no-store" })
+        .then((x) => x.json())
+        .catch(() => null)) as { ok?: boolean; subject?: string; text?: string } | null;
+      got[r] = { subject: j?.subject ?? "", body: j?.text ?? "Hi {{firstName}},\n\n" };
+    }
+    setBusy(false);
+    setCopies((c) => ({ ...c, ...got }));
+    setFromSaved(null);
+    setAud(auds[0] ?? "tenant");
+    setStep("write");
+  }
+
+  /* Each person their own email, their audience's words, their own name. */
+  async function sendGroup() {
+    if (busy || !groupReady) return;
+    setBusy(true);
+    setErr(null);
+    const ok: string[] = [];
+    const bad: string[] = [];
+    for (const p of chosen) {
+      const firstOf = p.name.split(/\s+/)[0] || "there";
+      const words = copies[p.role];
+      const f = (x: string) => x.replace(/\{\{firstName\}\}/g, firstOf).replace(/\{\{property\}\}/g, address);
+      try {
+        if (!p.email) throw new Error("no email");
+        const r = await fetch(`/api/applications/${encodeURIComponent(letId)}/message`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ kind: kind ?? "general", role: p.role, index: p.index }),
+        });
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; update?: { id: number }; index?: number };
+        if (!j.ok || !j.update) throw new Error(j.error ?? "not logged");
+        const s2 = await fetch("/api/confirmations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "send", kind: "update", id: j.update.id, index: j.index ?? 0, ...(portal ? { portal: true } : {}), subject: f(words.subject.trim()), html: asHtml(f(words.body)), ...(attached.length ? { attachments: attached } : {}) }),
+        });
+        const k2 = (await s2.json().catch(() => ({}))) as { sent?: boolean; detail?: string; error?: string };
+        if (!k2.sent) throw new Error(k2.detail ?? k2.error ?? "didn't send");
+        ok.push(p.name);
+      } catch (e) {
+        bad.push(`${p.name} (${e instanceof Error ? e.message.replace(/\.$/, "") : "didn't send"})`);
+      }
+    }
+    setBusy(false);
+    if (!ok.length) return setErr(`Nothing went: ${bad.join(", ")}.`);
+    setDone(`Sent to ${ok.join(", ")}.${bad.length ? ` Not sent: ${bad.join(", ")}.` : ""} Each is on the let's activity.`);
+    setTplState("no");
+    setStep("sent");
+  }
   const first = (party?.name ?? "").split(/\s+/)[0] || "there";
   const fill = (s: string) => s.replace(/\{\{firstName\}\}/g, first).replace(/\{\{property\}\}/g, address);
   const tpl = list.find((t) => t.kind === kind) ?? null;
@@ -252,21 +333,22 @@ export default function CustomerUpdateSheet({
 
   const insert = (token: string) => {
     const el = bodyRef.current;
-    if (!el) return setBody((b) => `${b}${token}`);
-    const a = el.selectionStart ?? body.length;
-    const b = el.selectionEnd ?? body.length;
-    const next = `${body.slice(0, a)}${token}${body.slice(b)}`;
-    setBody(next);
+    if (!el) return setCurBody(`${curBody}${token}`);
+    const a = el.selectionStart ?? curBody.length;
+    const b = el.selectionEnd ?? curBody.length;
+    const next = `${curBody.slice(0, a)}${token}${curBody.slice(b)}`;
+    setCurBody(next);
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(a + token.length, a + token.length);
     });
   };
 
-  const stepsFor: Step[] = mode === "reminder" ? ["who", "what"] : ["who", "how", "what", "write"];
+  const stepsFor: Step[] = group ? ["who", "what", "write"] : mode === "reminder" ? ["who", "what"] : ["who", "how", "what", "write"];
   const n = Math.max(1, stepsFor.indexOf(step === "call" ? "how" : step === "sent" ? stepsFor[stepsFor.length - 1] : step) + 1);
   const question =
     step === "who" ? (mode === "update" ? "Who do you want to update?" : "Who needs reminding?")
+    : step === "write" && group ? "Write it for each of them"
     : step === "how" ? `Email ${first}, or call?`
     : step === "what" ? (mode === "update" ? "What's it about?" : "What are you reminding them about?")
     : step === "write" ? (fromSaved ? fromSaved.label : "Write it your way")
@@ -275,7 +357,7 @@ export default function CustomerUpdateSheet({
   const back = () => {
     setErr(null);
     if (step === "how") setStep("who");
-    else if (step === "what") setStep(mode === "reminder" ? "who" : "how");
+    else if (step === "what") setStep(mode === "reminder" || group ? "who" : "how");
     else if (step === "write") setStep("what");
     else if (step === "call") setStep("how");
   };
@@ -295,13 +377,29 @@ export default function CustomerUpdateSheet({
         screenKey={step}
         question={question}
         lede={
-          step === "who" ? "Nothing goes until you've seen it and pressed Send, from your own address."
+          step === "who" ? "Pick one or more. Nothing goes until you've seen it and pressed Send, from your own address."
+          : step === "write" && group ? `${chosen.length} people, each sent their own copy with their own name. The tenants and the landlord can have different words.`
           : step === "write" ? `To ${party?.name ?? ""}${party?.email ? `, ${party.email}` : ""}. It goes as a plain email from you and is logged on the let.`
           : undefined
         }
         foot={
           <FloatFoot left={err ? <span className="text-accent-dark">{err}</span> : step === "write" ? <span>Fill-ins are swapped for the real thing as it goes.</span> : undefined}>
-            {step === "write" && (
+            {step === "who" && (
+              <button
+                type="button"
+                className="nl-btn nl-btn--primary"
+                disabled={!picked.length}
+                onClick={() => setStep(picked.length > 1 || mode === "reminder" ? "what" : "how")}
+              >
+                {picked.length > 1 ? `Next: ${picked.length} people` : "Next"}
+              </button>
+            )}
+            {step === "write" && group && (
+              <button type="button" className="nl-btn nl-btn--primary" disabled={busy || !groupReady} onClick={() => void sendGroup()}>
+                {busy ? "Sending…" : `Send to ${chosen.length}`}
+              </button>
+            )}
+            {step === "write" && !group && (
               <button type="button" className="nl-btn nl-btn--primary" disabled={busy || !subject.trim() || !body.trim()} onClick={() => void sendCustom()}>
                 {busy ? "Sending…" : "Send"}
               </button>
@@ -323,22 +421,30 @@ export default function CustomerUpdateSheet({
           loading ? (
             <p className="nl-fs-reading"><span aria-hidden className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" /> Reading who is on the let…</p>
           ) : parties.length ? (
-            <div className="nl-fs-choices is-2">
-              {parties.map((p) => (
-                <FloatChoice
-                  key={p.key}
-                  icon={<DoodleIcon name={p.role === "landlord" ? "home" : "user"} size={18} />}
-                  title={p.name}
-                  text={[p.tag, p.email ? null : "no email", p.phone ? null : "no number"].filter(Boolean).join(" · ")}
-                  on={to === p.key}
-                  onClick={() => {
-                    setTo(p.key);
-                    setStep(mode === "reminder" ? "what" : "how");
-                  }}
-                />
-              ))}
-              {landlordProblem && <p className="nl-fs-say">{landlordProblem}</p>}
-            </div>
+            <>
+              {parties.length > 1 && (
+                <div className="nl-cu-quick">
+                  {parties.filter((p) => p.role === "tenant").length > 1 && (
+                    <button type="button" onClick={() => setPicked(parties.filter((p) => p.role === "tenant").map((p) => p.key))}>All the tenants</button>
+                  )}
+                  <button type="button" onClick={() => setPicked(parties.filter((p) => p.email).map((p) => p.key))}>Everyone</button>
+                  {picked.length > 0 && <button type="button" onClick={() => setPicked([])}>Clear</button>}
+                </div>
+              )}
+              <div className="nl-fs-choices is-2">
+                {parties.map((p) => (
+                  <FloatChoice
+                    key={p.key}
+                    icon={<DoodleIcon name={p.role === "landlord" ? "home" : "user"} size={18} />}
+                    title={p.name}
+                    text={[p.tag, p.email ? null : "no email", p.phone ? null : "no number"].filter(Boolean).join(" · ")}
+                    on={picked.includes(p.key)}
+                    onClick={() => toggle(p.key)}
+                  />
+                ))}
+                {landlordProblem && <p className="nl-fs-say">{landlordProblem}</p>}
+              </div>
+            </>
           ) : (
             <FloatCard><p>Nobody with contact details is held on this let.</p></FloatCard>
           )
@@ -368,7 +474,41 @@ export default function CustomerUpdateSheet({
           </>
         )}
 
-        {step === "what" && party && (
+        {step === "what" && party && group && (
+          <>
+            <div className="nl-fs-choices">
+              {list.map((t) => {
+                const fits = auds.every((r) => t.to.includes(r));
+                return (
+                  <FloatChoice
+                    key={t.kind}
+                    title={t.label}
+                    text={fits ? t.what : `For the ${t.to.join(" or ")} only`}
+                    disabled={!fits || busy}
+                    on={kind === t.kind && busy}
+                    aside={kind === t.kind && busy ? "Writing it…" : undefined}
+                    onClick={() => void startGroup(t.kind)}
+                  />
+                );
+              })}
+              {mode === "update" && savedReady && mine.map((s) => (
+                <FloatChoice key={s.id} icon={<DoodleIcon name="star" size={16} />} title={s.label} text="Your template" onClick={() => void startGroup(null, s)} />
+              ))}
+              {mode === "update" && (
+                <FloatChoice icon={<DoodleIcon name="pencil" size={16} />} title="Custom" text="Write it from scratch and send" onClick={() => void startGroup(null)} />
+              )}
+            </div>
+            <label className="nl-cu-portal">
+              <input type="checkbox" checked={portal} onChange={(e) => setPortal(e.target.checked)} />
+              <span>
+                <b>Also put it in their portals</b>
+                <small>A copy under Messages for anyone with a portal account. It goes to their email either way.</small>
+              </span>
+            </label>
+          </>
+        )}
+
+        {step === "what" && party && !group && (
           <>
             <div className="nl-fs-choices">
               {list.map((t) => {
@@ -428,8 +568,26 @@ export default function CustomerUpdateSheet({
 
         {step === "write" && party && (
           <FloatCard>
+            {/* A tab per audience when several are going (8 Nov 2026). */}
+            {group && auds.length > 1 && (
+              <div className="nl-cu-tabs" role="tablist" aria-label="Which version">
+                {auds.map((r) => {
+                  const n = chosen.filter((p) => p.role === r).length;
+                  return (
+                    <button key={r} type="button" role="tab" aria-selected={aud === r} className={aud === r ? "is-on" : ""} onClick={() => setAud(r)}>
+                      {r === "tenant" ? `To the tenant${n > 1 ? `s (${n})` : ""}` : `To the landlord${n > 1 ? `s (${n})` : ""}`}
+                      {copies[r].subject.trim() && copies[r].body.trim() ? <i aria-hidden>✓</i> : null}
+                    </button>
+                  );
+                })}
+                <button type="button" className="nl-cu-same" onClick={() => setCopies((c) => ({ ...c, [aud === "tenant" ? "landlord" : "tenant"]: { ...c[aud] } }))}>
+                  Use these words for the {aud === "tenant" ? "landlord" : "tenants"} too
+                </button>
+              </div>
+            )}
+            {group && <p className="nl-cu-to">To {chosen.filter((p) => p.role === aud).map((p) => p.name).join(", ")}</p>}
             <label className="nl-fs-label" htmlFor="cu-subject">Subject</label>
-            <input id="cu-subject" className="nl-fs-input mt-1.5" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Your move-in on Friday" data-autofocus />
+            <input id="cu-subject" className="nl-fs-input mt-1.5" value={curSubject} onChange={(e) => setCurSubject(e.target.value)} placeholder="e.g. Your move-in on Friday" data-autofocus />
             <div className="nl-cu-bodyhead">
               <label className="nl-fs-label" htmlFor="cu-body">Message</label>
               <span className="nl-cu-fills">
@@ -439,8 +597,8 @@ export default function CustomerUpdateSheet({
                 ))}
               </span>
             </div>
-            <textarea id="cu-body" ref={bodyRef} className="nl-fs-input nl-cu-text" rows={10} value={body} onChange={(e) => setBody(e.target.value)} />
-            <p className="nl-fs-hint">As it goes: &ldquo;{fill(body).split("\n")[0].slice(0, 80)}&rdquo;. Your email signature is added as usual.</p>
+            <textarea id="cu-body" ref={bodyRef} className="nl-fs-input nl-cu-text" rows={10} value={curBody} onChange={(e) => setCurBody(e.target.value)} />
+            <p className="nl-fs-hint">As it goes: &ldquo;{(group ? curBody.replace(/\{\{firstName\}\}/g, (chosen.find((p) => p.role === aud)?.name ?? "").split(/\s+/)[0] || "there") : fill(curBody)).split("\n")[0].slice(0, 80)}&rdquo;. Your email signature is added as usual.</p>
             {/* Attach (8 Nov 2026): from the home's file, or from this computer. */}
             <div className="nl-cu-attach">
               {attached.map((a) => (

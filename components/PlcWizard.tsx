@@ -699,7 +699,7 @@ export default function PlcWizard({
   const backTo = !demo && !embedded ? prefill?.applicationId ?? applicationId ?? null : null;
 
   return (
-    <div className={embedded ? "nl-plc-wizard relative flex min-h-full flex-col px-5 py-8 sm:px-10" : "relative mx-auto flex min-h-[70vh] max-w-3xl flex-col justify-center px-4 py-10 sm:px-6"}>
+    <div className={embedded ? "nl-plc-wizard relative flex flex-col px-5 py-8 sm:px-10" : "relative mx-auto flex min-h-[70vh] max-w-3xl flex-col justify-center px-4 py-10 sm:px-6"}>
       <WizardStyles />
       {backTo && (
         <Link
@@ -727,7 +727,20 @@ export default function PlcWizard({
       )}
 
       <div key={step} className={panel}>
-        {step === "gathering" && (
+        {step === "gathering" && embedded && (
+          /* The opening, in the house style (James, 8 Nov 2026): what's being
+             read, line by line, rather than a magnifying glass. */
+          <div className="nl-plc-gather" role="status">
+            <h1 className="nl-plc-h1">Getting the Let Ready</h1>
+            <ul>
+              <li><i aria-hidden /> Reading the application</li>
+              <li><i aria-hidden /> Checking for a check already started</li>
+              <li><i aria-hidden /> Bringing through the tenants and the move-in date</li>
+            </ul>
+            <p className="nl-plc-gather-note">So you don&apos;t have to type any of it again.</p>
+          </div>
+        )}
+        {step === "gathering" && !embedded && (
           <div className="py-16 text-center">
             <DoodleIcon
               name="search"

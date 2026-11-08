@@ -82,7 +82,7 @@ export default function DoodleIcon({
         fill="none"
         stroke="currentColor"
         /* A touch heavier when small, so a 12px icon still reads. */
-        strokeWidth={size <= 14 ? 2 : 1.7}
+        strokeWidth={size <= 14 ? 1.9 : 1.6}
         strokeLinecap="round"
         strokeLinejoin="round"
         className={`inline-block shrink-0 ${className}`}

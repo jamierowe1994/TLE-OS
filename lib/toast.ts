@@ -28,6 +28,10 @@ export interface ToastDetail {
 export interface Problem {
   /** What they were trying to do: "Submit to portal". */
   action: string;
+  /** The toast's own words, when "<action> didn't work" isn't right (a slow page). */
+  title?: string;
+  /** The line under it on the toast. */
+  sub?: string;
   /** Plain English: why it didn't work. */
   why: string;
   /** What to do about it, if anything. */
@@ -57,6 +61,6 @@ export type ToastLift = "up" | "down";
 export function problemToast(p: Problem): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
-    new CustomEvent<ToastDetail>(TOAST_EVENT, { detail: { text: `${p.action} didn't work`, tone: "bad", ms: 12000, problem: p } })
+    new CustomEvent<ToastDetail>(TOAST_EVENT, { detail: { text: p.title ?? `${p.action} didn't work`, tone: "bad", ms: 14000, problem: p } })
   );
 }

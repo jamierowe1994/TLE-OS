@@ -130,7 +130,15 @@ export default function Watchdog() {
         note("slow", `${short} still going after ${Math.round(STUCK_AFTER / 1000)}s`);
         if (!barred) {
           barred = true;
-          setStuck(short);
+          /* Under Steve, like any toast (James, 8 Nov 2026), not a box of its own. */
+          problemToast({
+            action: "This page",
+            title: "This is taking longer than it should",
+            sub: "Something we asked for hasn't come back. Press here to tell us.",
+            why: "Something this page asked for hasn't come back yet. It may still arrive - if it does, you can carry on as normal.",
+            next: "Give it a minute. If the page still isn't right, refresh it, and send this to us so we can see what held it up.",
+            technical: `${method} ${short} still waiting after ${Math.round(STUCK_AFTER / 1000)}s`,
+          });
         }
       }, STUCK_AFTER);
 
