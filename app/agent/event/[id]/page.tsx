@@ -174,7 +174,7 @@ function Event({ appt, back }: { appt: Appt; back: string }) {
           <img src={KIND_ART[appt.kind] ?? KIND_ART.other} alt="" className="h-[190px] w-auto max-w-[92%] object-contain" />
         </div>
       )}
-      <h1 className={`m-title text-[28px] leading-[1.15] ${fresh ? "mt-4" : "mt-5"}`}>{appt.where || appt.what}</h1>
+      <h1 className={`m-title ${fresh ? "mt-4 text-[34px]" : "mt-5 text-[28px] leading-[1.15]"}`}>{appt.where || appt.what}</h1>
       <p className="mt-1.5 flex items-center gap-1.5 text-[14px] text-muted">
         <AppIcon name="clock" size={15} />
         {KIND_LABEL[appt.kind] ?? "Appointment"} · {appt.start} - {endOf(appt)}

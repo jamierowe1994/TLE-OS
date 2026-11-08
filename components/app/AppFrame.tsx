@@ -138,6 +138,25 @@ export default function AppFrame({
         className="fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)]"
         style={{ borderColor: "var(--m-line)", background: "var(--m-bg)" }}
       >
+        {fresh ? (
+          /* The new look (8 Nov 2026): a phone app's bar - the agent's three,
+             the Diary (or Chats when the Diary is already one of them), More;
+             each with its word, the one you are on in terracotta. The + went:
+             Home's Quick Actions and More hold what it opened. */
+          <ul className="mx-auto grid h-[62px] max-w-[560px] grid-cols-5 items-center px-1">
+            {[...bar, bar.includes("day") ? "chats" : "day"].map((id) => (
+              <Tab key={id} dest={navDest(id as NavId)} on={freshLit(id as NavId, lit, path)} badge={id === "chats" ? chats : 0} />
+            ))}
+            <li className="flex justify-center">
+              <button type="button" onClick={more} aria-label="More" className="m-bar-tab relative flex items-center justify-center">
+                <svg viewBox="0 0 24 24" aria-hidden className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                  {MORE_DOTS}
+                </svg>
+                <span className="m-bar-word">More</span>
+              </button>
+            </li>
+          </ul>
+        ) : (
         <ul className="mx-auto grid h-[62px] max-w-[560px] grid-cols-5 items-center px-2">
           {bar.slice(0, 2).map((id) => (
             <Tab key={id} dest={navDest(id)} on={lit === id} badge={id === "chats" ? chats : 0} />
@@ -173,6 +192,7 @@ export default function AppFrame({
             </button>
           </li>
         </ul>
+        )}
       </nav>
 
       {sheet === "more" && (
@@ -194,6 +214,14 @@ export default function AppFrame({
   );
 }
 
+/** The new look's fourth tab lights on its own pages, and Home steps aside for it. */
+function freshLit(id: NavId, lit: NavId | null, path: string): boolean {
+  const own = navDest(id).owns.some((p) => path === p || path.startsWith(`${p}/`));
+  if (id === "day" || id === "chats") return own;
+  if (id === "home") return path === "/agent" || path.startsWith("/agent/search");
+  return lit === id;
+}
+
 function Tab({ dest, on, badge = 0 }: { dest: NavDest; on: boolean; badge?: number }) {
   /* The new look: no pink pill - the screen you are on is ink with an orange dot under it (app/new-look/app.css). */
   const fresh = useAppLook();
@@ -202,11 +230,12 @@ function Tab({ dest, on, badge = 0 }: { dest: NavDest; on: boolean; badge?: numb
       <Link
         href={dest.href}
         aria-current={on ? "page" : undefined}
-        aria-label={dest.label}
-        className="m-bar-tab relative flex h-[48px] w-[58px] items-center justify-center rounded-[16px] transition-colors"
+        aria-label={fresh ? undefined : dest.label}
+        className={`m-bar-tab relative flex items-center justify-center transition-colors ${fresh ? "" : "h-[48px] w-[58px] rounded-[16px]"}`}
         style={fresh ? undefined : on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-muted)" }}
       >
-        <NavIcon dest={dest} on={on && !fresh} />
+        <NavIcon dest={dest} on={on && !fresh} size={fresh ? 22 : 24} />
+        {fresh && <span className="m-bar-word">{dest.label}</span>}
         {badge > 0 && (
           <span className="absolute right-2 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10.5px] font-bold text-white" style={{ background: "var(--m-coral)" }}>
             {badge > 9 ? "9+" : badge}

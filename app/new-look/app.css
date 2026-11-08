@@ -18,28 +18,28 @@
 =========================================================================== */
 
 html .m-app.m-app[data-applook="new"] {
-  --m-bg: #ffffff;
-  --m-card: #fafaf9;
-  --m-line: #e9e9e6;
-  --m-line-strong: #d6d6d2;
-  --m-fill: #f0f0ee;
+  /* The final palette (7 Nov 2026), redrawn as a phone app 8 Nov: a linen
+     page, white cards on a warm hairline, brown for the one action,
+     terracotta for where you are, olive for go. */
+  --m-bg: #f7f3ee;
+  --m-card: #ffffff;
+  --m-line: #e6ded4;
+  --m-line-strong: #d4c9bd;
+  --m-fill: #efe8df;
   --m-on-card: #ffffff;
-  /* The one action is the desktop's orange, with ink on it as the design has it. */
-  --m-brown: #eb8c6d;
-  --m-brown-ink: #141413;
-  --m-ink: #141413;
-  --m-muted: #63625b;
-  --m-soft: #87867f;
-  --m-coral: #eb8c6d;
-  --m-pink: #eb8c6d;
-  /* The pink and sage washes become the one tonal step - calm, not pastel. */
-  --m-pink-wash: #f7f7f6;
-  --m-green-wash: #f7f7f6;
-  /* The coloured cards (Chats' General, Focus Hour) go to ink. */
-  --m-pink-grad: #141413;
-  --m-green: #66785b;
-  --m-sage-ink: #55684a;
-  --m-sand: #f5e3c7;
+  --m-brown: #56423e;
+  --m-brown-ink: #ffffff;
+  --m-ink: #231d1b;
+  --m-muted: #6b5f5a;
+  --m-soft: #9a8d86;
+  --m-coral: #a85a51;
+  --m-pink: #a85a51;
+  --m-pink-wash: #f6ece8;
+  --m-green-wash: #eef1e8;
+  --m-pink-grad: #56423e;
+  --m-green: #56634a;
+  --m-sage-ink: #56634a;
+  --m-sand: #f1e6d8;
 
   --ink: var(--m-ink);
   --muted: var(--m-muted);
@@ -48,18 +48,18 @@ html .m-app.m-app[data-applook="new"] {
   --line-strong: var(--m-line-strong);
   --page: var(--m-bg);
   --card: var(--m-card);
-  --panel: #f7f7f6;
+  --panel: #f1ebe3;
   --box: var(--m-fill);
-  --primary: #eb8c6d;
-  --on-primary: #141413;
-  --accent: #eb8c6d;
-  --accent-soft: #f5e3c7;
-  --accent-dark: #aa4a2b;
-  --sage-deep: #66785b;
-  --sage-ink: #55684a;
-  --sage-soft: #e3e3d3;
-  --info: #3d3d3a;
-  --info-soft: #e3dacc;
+  --primary: #56423e;
+  --on-primary: #ffffff;
+  --accent: #a85a51;
+  --accent-soft: #f5efe6;
+  --accent-dark: #8e4a42;
+  --sage-deep: #56634a;
+  --sage-ink: #56634a;
+  --sage-soft: #f1f4ec;
+  --info: #3d3533;
+  --info-soft: #ece4da;
   --warning: #8a531a;
   --warning-soft: #f2e6d2;
   --brown: var(--m-ink);
@@ -76,8 +76,10 @@ html .m-app.m-app[data-applook="new"][data-mtheme="dark"] {
   --m-line-strong: #4a4844;
   --m-fill: #33322f;
   --m-on-card: #1f1e1d;
-  --m-brown: #eb8c6d;
-  --m-brown-ink: #141413;
+  --m-brown: #c4a092;
+  --m-brown-ink: #1f1a19;
+  --m-coral: #c28b85;
+  --m-pink: #c28b85;
   --m-ink: #faf9f5;
   --m-muted: #b0aea5;
   --m-soft: #87867f;
@@ -102,7 +104,7 @@ html .m-app.m-app[data-applook="new"][data-mtheme="dark"] {
 /* The page behind the page: Safari and the iPhone tint their bars from it. */
 html:has(.m-app[data-applook="new"]),
 html:has(.m-app[data-applook="new"]) body {
-  background: #ffffff;
+  background: #f7f3ee;
 }
 html:has(.m-app[data-applook="new"][data-mtheme="dark"]),
 html:has(.m-app[data-applook="new"][data-mtheme="dark"]) body {
@@ -116,13 +118,22 @@ html:has(.m-app[data-applook="new"][data-mtheme="dark"]) body {
 }
 
 /* ── type ───────────────────────────────────────────────────────────────── */
+/* Titles as the website has them: condensed Bricolage capitals (8 Nov 2026). */
 .m-app[data-applook="new"] .m-title,
-.m-app[data-applook="new"] h1,
+.m-app[data-applook="new"] h1 {
+  font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  font-stretch: 75%;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
 .m-app[data-applook="new"] h2,
 .m-app[data-applook="new"] h3 {
   font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-stretch: 75%;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 .m-app[data-applook="new"] .m-figure {
   font-family: var(--font-serif4), Charter, Georgia, serif;
@@ -351,3 +362,244 @@ html:has(.m-app[data-applook="new"][data-mtheme="dark"]) body {
 .m-app[data-applook="new"] [style*="background: var(--m-card)"]:not(.m-floatpill):not(.m-floatbox) {
   border: 1px solid var(--m-line);
 }
+
+/* ===========================================================================
+   HOME, 8 Nov 2026 (James's reference: "a premium feeling"). Every part is
+   m-h-*; app/agent/page.tsx FreshHome draws it.
+=========================================================================== */
+.m-app[data-applook="new"] {
+  --m-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+}
+.m-h-top {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 56px; border-bottom: 1px solid var(--m-line);
+}
+.m-h-mark {
+  font-family: var(--m-cond); font-stretch: 75%; font-weight: 600;
+  font-size: 21px; letter-spacing: 0.22em; color: var(--m-ink);
+}
+.m-h-top-r { display: flex; align-items: center; gap: 6px; }
+.m-h-ic {
+  width: 40px; height: 40px; display: grid; place-items: center;
+  border-radius: 50%; color: var(--m-ink);
+}
+.m-h-dot {
+  position: absolute; top: 8px; right: 9px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--m-coral); box-shadow: 0 0 0 2px var(--m-bg);
+}
+.m-h-rule { width: 1px; height: 26px; background: var(--m-line-strong); margin: 0 6px; }
+.m-h-face {
+  width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center; background: var(--m-pink-wash); color: var(--m-coral);
+  font-weight: 500; font-size: 15px; box-shadow: 0 0 0 1px var(--m-line);
+}
+.m-h-face img { width: 100%; height: 100%; object-fit: cover; }
+
+.m-h-hello { padding: 22px 0 22px; }
+.m-h-eyebrow {
+  font-family: var(--m-cond); font-stretch: 75%; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.2em; font-size: 12.5px; color: var(--m-muted);
+}
+.m-app[data-applook="new"] .m-h-title {
+  margin: 8px 0 0; font-size: 44px; line-height: 0.95; letter-spacing: 0.005em; color: var(--m-ink);
+}
+.m-h-lede { margin-top: 10px; font-size: 16px; color: var(--m-muted); }
+
+.m-h-day {
+  background: var(--m-panel, #f0e9e1); border-radius: 18px; padding: 4px 4px 4px;
+}
+.m-h-day-h {
+  display: flex; align-items: center; gap: 12px; padding: 14px 14px 12px;
+}
+.m-h-day-h > i { width: 4px; align-self: stretch; border-radius: 2px; background: var(--m-coral); }
+.m-h-day-h b {
+  display: block; font-family: var(--m-cond); font-stretch: 75%; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.16em; font-size: 17px; color: var(--m-ink);
+}
+.m-h-day-h em { display: block; font-style: normal; font-size: 14px; color: var(--m-muted); margin-top: 2px; }
+.m-h-day-h > span { flex: 1; min-width: 0; }
+.m-h-day-h svg { color: var(--m-soft); }
+
+.m-h-next {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 4px;
+  padding: 13px 14px; border-radius: 14px; background: var(--m-brown); color: #faf6f1;
+}
+.m-h-next-t { font-family: var(--m-cond); font-stretch: 75%; font-weight: 500; font-size: 24px; line-height: 1; }
+.m-h-next b { display: block; font-weight: 500; font-size: 15px; }
+.m-h-next em { display: block; font-style: normal; font-size: 13px; opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-h-next-k {
+  font-family: var(--m-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.16em; font-size: 10.5px; color: #e2bdb4;
+}
+
+.m-h-rows { background: var(--m-card); border-radius: 14px; }
+.m-h-rows li + li { border-top: 1px solid var(--m-line); margin: 0 14px; }
+.m-h-rows li + li a { padding-left: 0; padding-right: 0; }
+.m-h-rows a {
+  display: flex; align-items: center; gap: 16px; padding: 15px 14px; font-size: 15.5px; color: var(--m-ink);
+}
+.m-h-rows a > svg:first-child { color: var(--m-muted); }
+.m-h-rows b { font-weight: 600; }
+.m-h-rows a > svg:last-child { color: var(--m-soft); }
+
+.m-h-spin {
+  display: inline-block; width: 16px; height: 16px; vertical-align: -3px; border-radius: 50%;
+  border: 2px solid var(--m-line); border-top-color: var(--m-coral); animation: m-h-spin 0.8s linear infinite;
+}
+@keyframes m-h-spin { to { transform: rotate(360deg); }
+}
+
+.m-h-steve {
+  display: flex; align-items: center; margin-top: 16px; height: 58px; padding: 0 7px 0 18px;
+  background: var(--m-card); border: 1px solid var(--m-line-strong); border-radius: 16px;
+}
+.m-h-steve-k {
+  font-family: var(--m-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.18em; font-size: 14px; color: var(--m-ink); padding-right: 14px;
+  border-right: 1px solid var(--m-line-strong); white-space: nowrap;
+}
+.m-h-steve input {
+  flex: 1; min-width: 0; height: 100%; padding: 0 12px; background: transparent; border: 0; outline: 0;
+  font-size: 15px; color: var(--m-ink);
+}
+.m-h-steve input::placeholder { color: var(--m-soft); }
+.m-h-steve button {
+  width: 46px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+  background: var(--m-coral); color: #fff;
+}
+
+.m-h-glance { margin-top: 30px; }
+.m-h-glance > header, .m-h-quick > h2 { display: flex; align-items: baseline; gap: 14px; }
+.m-app[data-applook="new"] .m-h-glance h2,
+.m-app[data-applook="new"] .m-h-quick h2 {
+  margin: 0; font-size: 21px; letter-spacing: 0.14em; font-weight: 600; color: var(--m-ink);
+}
+.m-h-glance > header span { font-size: 13.5px; color: var(--m-muted); display: inline-flex; align-items: center; gap: 6px; }
+.m-h-glance > header span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--m-green); }
+.m-h-glance > div {
+  display: grid; grid-template-columns: 1fr 1fr; margin-top: 14px; border-bottom: 1px solid var(--m-line);
+}
+.m-h-glance a { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 18px; }
+.m-h-glance a + a { border-left: 1px solid var(--m-line); padding-left: 20px; }
+.m-h-glance b {
+  font-family: var(--m-cond); font-stretch: 75%; font-weight: 500; font-size: 52px; line-height: 1;
+  color: var(--m-ink); min-height: 52px; display: flex; align-items: center;
+}
+.m-h-glance a > span {
+  font-family: var(--m-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.18em; font-size: 12px; color: var(--m-muted);
+}
+
+.m-h-quick { margin-top: 26px; }
+.m-h-quick ul { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 12px; }
+.m-h-quick li + li { border-left: 1px solid var(--m-line); }
+.m-h-quick a {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 4px;
+  font-size: 13px; color: var(--m-ink); text-align: center;
+}
+.m-h-quick svg { color: var(--m-ink); }
+
+.m-h-photo {
+  position: relative; margin: 20px 0 0; height: 168px; border-radius: 16px; overflow: hidden;
+}
+/* The website's house grade (tle-website globals.css --grade, 8 Nov 2026):
+   warm faded film, saturation down, a touch of sepia, a soft vignette. */
+.m-app[data-applook="new"] .m-h-photo img {
+  width: 100%; height: 100%; object-fit: cover; object-position: 50% 55%;
+  filter: contrast(.95) brightness(.99) saturate(.88) sepia(.12);
+}
+.m-h-photo::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(115% 95% at 50% 50%, transparent 58%, rgba(20, 20, 19, 0.2) 100%),
+    linear-gradient(90deg, rgba(35, 29, 27, 0.58) 0%, rgba(35, 29, 27, 0.16) 62%, rgba(35, 29, 27, 0) 100%);
+}
+.m-h-photo figcaption {
+  position: absolute; left: 20px; bottom: 26px; z-index: 1; color: #fff;
+  font-family: var(--font-serif4), Charter, Georgia, serif; font-style: italic; font-size: 27px; line-height: 1.08;
+}
+.m-h-photo figcaption i {
+  display: block; width: 92px; height: 4px; margin-top: 10px; border-radius: 3px; background: var(--m-coral);
+  transform: rotate(-3deg);
+}
+
+/* ── the bar: icons with their words, the one you are on in terracotta ──── */
+.m-app[data-applook="new"] nav[aria-label="Sections"] {
+  background: rgba(250, 247, 243, 0.94) !important;
+  -webkit-backdrop-filter: saturate(1.4) blur(18px); backdrop-filter: saturate(1.4) blur(18px);
+}
+.m-app[data-applook="new"] .m-bar-tab {
+  flex-direction: column; gap: 3px; width: 68px; height: 56px; border-radius: 0;
+}
+.m-app[data-applook="new"] .m-bar-word { font-size: 11.5px; line-height: 1; }
+.m-app[data-applook="new"] .m-bar-tab[aria-current="page"] { color: var(--m-coral); }
+.m-app[data-applook="new"] .m-bar-tab[aria-current="page"]::after {
+  bottom: -3px; width: 44px; height: 3px; margin-left: -22px; border-radius: 2px;
+}
+
+/* ===========================================================================
+   EVERY SCREEN, 8 Nov 2026: Home's language carried through. The screens
+   keep their own layouts; these are the shared parts they all draw with.
+=========================================================================== */
+.m-h-back { display: inline-flex; align-items: center; gap: 4px; margin-left: -6px; padding: 8px 6px; font-size: 15px; color: var(--m-ink); }
+
+/* A screen's head: the big condensed title as Home has it, the line under it in the sans. */
+.m-app[data-applook="new"] .m-mast { padding: 22px 0 20px; }
+.m-app[data-applook="new"] .m-mast h1 { font-size: 44px; line-height: 0.95; letter-spacing: 0.005em; }
+.m-app[data-applook="new"] h1.m-title { line-height: 0.98; letter-spacing: 0.005em; }
+.m-app[data-applook="new"] .m-mast p.m-blurb,
+.m-app[data-applook="new"] .m-blurb {
+  font-family: var(--font-inter), system-ui, sans-serif; font-size: 16px; line-height: 1.4; margin-top: 10px; color: var(--m-muted);
+}
+.m-app[data-applook="new"] .m-eyebrow {
+  font-family: var(--m-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.2em; font-size: 12.5px; color: var(--m-muted);
+}
+
+/* A name in a list is a name, not a title: the sans, as typed. Sheet heads stay condensed. */
+.m-app[data-applook="new"] span.m-title {
+  font-family: var(--font-inter), system-ui, sans-serif; font-stretch: 100%; text-transform: none;
+  letter-spacing: -0.01em; font-weight: 600; font-size: 16.5px;
+}
+.m-app[data-applook="new"] h2.m-title { letter-spacing: 0.06em; line-height: 1; }
+
+/* Figures in the condensed face, never the serif. */
+.m-app[data-applook="new"] .m-figure,
+.m-app[data-applook="new"] .m-guide-num {
+  font-family: var(--m-cond); font-stretch: 75%; font-weight: 500; letter-spacing: 0;
+}
+.m-app[data-applook="new"] .m-empty {
+  font-family: var(--font-inter), system-ui, sans-serif; font-size: 15px; line-height: 1.5;
+}
+
+/* Cards: white on the linen, a warm hairline, one soft round. */
+.m-app[data-applook="new"] [style*="background: var(--m-card)"]:not(.m-floatpill):not(.m-floatbox) {
+  border: 1px solid var(--m-line); border-radius: 16px;
+}
+.m-app[data-applook="new"] .m-group { border-radius: 16px; background: var(--m-card); }
+.m-app[data-applook="new"] [class*="rounded-[22px]"],
+.m-app[data-applook="new"] [class*="rounded-[20px]"] { border-radius: 16px; }
+.m-app[data-applook="new"] [style*="background: var(--m-pink-wash)"],
+.m-app[data-applook="new"] [style*="background: var(--m-green-wash)"] { border-radius: 16px; }
+
+/* Tabs: words on a hairline, the chosen one in ink with a terracotta line. */
+.m-app[data-applook="new"] .m-seg > button[aria-pressed="true"] {
+  color: var(--m-ink); font-weight: 500; box-shadow: inset 0 -2px 0 var(--m-coral);
+}
+
+/* Search: white, a soft round, the hairline. */
+.m-app[data-applook="new"] .m-floatpill,
+.m-app[data-applook="new"] .m-search {
+  border-radius: 14px; background: var(--m-card) !important; border-color: var(--m-line-strong);
+}
+.m-app[data-applook="new"] .m-sortbtn { border-radius: 14px; background: var(--m-card) !important; }
+
+/* Buttons: brown for the one action, a white outline for the rest. */
+.m-app[data-applook="new"] .m-btn { border-radius: 14px; height: 48px; background: var(--m-card); min-width: 0; padding: 0 10px; gap: 6px; white-space: nowrap; }
+.m-app[data-applook="new"] .m-btn-primary,
+.m-app[data-applook="new"] .m-group .m-btn-primary { background: var(--m-brown); color: #fff; }
+.m-app[data-applook="new"] .m-round { border-radius: 50%; background: var(--m-card); border-color: var(--m-line); }
+
+/* Sheets rise on the linen. */
+.m-app[data-applook="new"] .m-sheet { background: var(--m-bg); border-radius: 24px 24px 0 0; }
+.m-app[data-applook="new"] .m-tile { border-radius: 16px; background: var(--m-card); }
