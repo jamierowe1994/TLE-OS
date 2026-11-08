@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
-import { attachDocument, complianceAttach, moveDocument, PlcRefused, removeDocument, setCovers, setDocumentLabel } from "@/lib/plc-store";
+import { attachDocument, complianceAttach, moveDocument, PlcRefused, removeDocument, setCovers, setDocumentChecked, setDocumentDates, setDocumentLabel } from "@/lib/plc-store";
 import { checkById, COVERABLE, missingDocuments, PLC_CHECKS, type CheckId, type FileRead } from "@/lib/plc";
 import { keyIsOurs, r2Configured } from "@/lib/r2";
 import { actorName, currentUser } from "@/lib/plc-actor";
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { key?: string; checkId?: string; covers?: string[]; label?: string };
+  let body: { key?: string; checkId?: string; covers?: string[]; label?: string; dates?: { issueDate?: string | null; expiryDate?: string | null }; checked?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -155,6 +155,23 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (body.key && Array.isArray(body.covers)) {
     try {
       const updated = await setCovers(id, body.key, body.covers.filter((x): x is CheckId => Boolean(checkById(x as CheckId))));
+      return NextResponse.json({ ok: true, case: updated, missing: missingDocuments(updated).map((m) => m.id) });
+    } catch (e) {
+      return fail(e);
+    }
+  }
+  /* The document viewer (8 Nov 2026): dates put right ({ key, dates }) and the agent's tick ({ key, checked }). */
+  if (body.key && body.dates && typeof body.dates === "object") {
+    try {
+      const updated = await setDocumentDates(id, body.key, body.dates, await actorName(req, "Agent"));
+      return NextResponse.json({ ok: true, case: updated, missing: missingDocuments(updated).map((m) => m.id) });
+    } catch (e) {
+      return fail(e);
+    }
+  }
+  if (body.key && typeof body.checked === "boolean") {
+    try {
+      const updated = await setDocumentChecked(id, body.key, body.checked, await actorName(req, "Agent"));
       return NextResponse.json({ ok: true, case: updated, missing: missingDocuments(updated).map((m) => m.id) });
     } catch (e) {
       return fail(e);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import DocViewer from "@/components/plc/DocViewer";
 import { PROPOLY_MAX_BYTES, PROPOLY_NAME_MAX, propolyExtension, propolyFileName, propolyMb, propolyTooBig, propolyTypeFor } from "@/lib/propoly-names";
 import {
   CHECK_GROUPS,
@@ -156,7 +157,13 @@ export default function PlcDocuments({
   context,
   focus,
   demo,
+  only,
+  showUnsorted = true,
 }: {
+  /** Just these checks: the landlord step in two parts (8 Nov 2026). */
+  only?: CheckId[];
+  /** The "couldn't sort" box: shown on one part only. */
+  showUnsorted?: boolean;
   step: "landlord" | "tenant";
   kase: PlcCase;
   onChanged: (c: PlcCase) => void;
@@ -506,7 +513,10 @@ export default function PlcDocuments({
   const done = rows.filter((r) => r.state === "done");
   const elsewhere = done.filter((r) => r.filedAs && r.filedAs !== "other" && groupOf(r.filedAs) !== step);
   const unsorted = kase.documents.filter((d) => d.checkId === "other");
-  const checks = PLC_CHECKS.filter((c) => group.checks.includes(c.id));
+  const checks = PLC_CHECKS.filter((c) => group.checks.includes(c.id) && (!only || only.includes(c.id)));
+  /* One document open in front of the check (components/plc/DocViewer). */
+  const [viewing, setViewing] = useState<string | null>(null);
+  const viewed = viewing ? kase.documents.find((d) => d.key === viewing) ?? null : null;
   const otherStep = CHECK_GROUPS.find((g) => g.id !== step)!;
 
   const badge = (id: CheckId) => {
@@ -521,22 +531,20 @@ export default function PlcDocuments({
   const docRow = (d: PlcDocument) => {
     const line = readLine(d, kase.moveInDate);
     return (
-      <li key={d.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line px-3 py-2">
-        <Thumb name={d.name} url={d.url} />
-        <div className="min-w-0 flex-1 basis-40">
-          {d.url && d.url !== "#" ? (
-            <a href={d.url} target="_blank" rel="noreferrer" className="block truncate text-sm text-ink hover:underline">
-              {d.name}
-            </a>
-          ) : (
-            <span className="block truncate text-sm">{d.name}</span>
-          )}
-          {line ? (
-            <span className={`block truncate text-xs ${line.warn ? "text-rose-700" : "text-muted"}`}>{line.text}</span>
-          ) : d.placeholder ? (
-            <span className="block text-xs text-amber-700">Recorded by name only</span>
-          ) : null}
-        </div>
+      <li key={d.key} className="nl-plc-doc flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line px-3 py-2">
+        {/* A small look at it, and the name opens it in front of the check (8 Nov 2026). */}
+        <button type="button" className="nl-plc-doc-open" onClick={() => setViewing(d.key)} title="Open it here">
+          <MiniThumb name={d.name} url={d.url} />
+          <span className="min-w-0 flex-1">
+            <span className="nl-plc-doc-name">{d.name}</span>
+            {line ? (
+              <span className={`nl-plc-doc-line${line.warn ? " is-warn" : ""}`}>{line.text}</span>
+            ) : d.placeholder ? (
+              <span className="nl-plc-doc-line is-warn">Recorded by name only</span>
+            ) : null}
+          </span>
+          {d.agentChecked ? <span className="nl-plc-doc-ok" title={`Checked by ${d.agentChecked.by}`}>✓ Checked</span> : <span className="nl-plc-doc-look">Check it</span>}
+        </button>
         {(COVERABLE[d.checkId] ?? []).length > 0 && (
           <div className="order-last flex w-full flex-wrap gap-x-4 gap-y-1 pl-[3.25rem]">
             {(COVERABLE[d.checkId] ?? []).map((other) => {
@@ -716,7 +724,18 @@ export default function PlcDocuments({
         <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</p>
       )}
 
-      {step === "landlord" && unsorted.length > 0 && (
+      {viewed && (
+        <DocViewer
+          kase={kase}
+          doc={viewed}
+          onChanged={onChanged}
+          onMove={(d, to) => move(d, to)}
+          onRemove={(d) => remove(d)}
+          onClose={() => setViewing(null)}
+        />
+      )}
+
+      {step === "landlord" && showUnsorted && unsorted.length > 0 && (
         <div id="check-other" className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-sm text-amber-900">
             {unsorted.length === 1 ? "One file" : `${unsorted.length} files`} we could not sort. Pick where each one goes,
@@ -939,4 +958,18 @@ function OtherLabel({ doc, busy, onSave }: { doc: PlcDocument; busy: boolean; on
 function defaultReason(id: CheckId): string {
   const ex = whyPlaceholder(id).replace(/^Why not needed\?\s*(e\.g\.)?\s*/i, "").trim();
   return ex.length >= 8 ? ex : "Not needed for this let";
+}
+
+/** A small look at the file: the picture itself for a photo, a page mark for anything else. */
+function MiniThumb({ name, url }: { name: string; url?: string }) {
+  const img = url && url !== "#" && isImageName(name);
+  if (img) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt="" loading="lazy" className="nl-plc-mini" />;
+  }
+  return (
+    <span className="nl-plc-mini is-page" aria-hidden>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6" /></svg>
+    </span>
+  );
 }

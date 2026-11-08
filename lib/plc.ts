@@ -509,6 +509,8 @@ export type PlcDocument = {
   read?: FileRead | null;
   /** SHA-256 of the bytes, so the same file is never on a pack twice (7 Oct 2026). */
   hash?: string;
+  /** The agent looked at it and it's right (8 Nov 2026, the document viewer's tick). */
+  agentChecked?: { by: string; at: string } | null;
   /**
    * Bytes, as the upload stored them (1 Nov 2026), so the pack can say while
    * the agent can still swap the file that Propoly will turn it away for its

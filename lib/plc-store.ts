@@ -493,6 +493,48 @@ export async function setDocumentLabel(id: string, key: string, label: string): 
   });
 }
 
+/**
+ * The dates on a document, put right by the agent from the document itself
+ * (James, 8 Nov 2026: "if it's saying that the EPC ends on X, but we clearly
+ * see on the EPC that it is correct, we should be able to edit it"). The
+ * reader's read is kept, with the corrected dates laid over it and a note of
+ * who changed them.
+ */
+export async function setDocumentDates(id: string, key: string, dates: { issueDate?: string | null; expiryDate?: string | null }, by: string): Promise<PlcCase> {
+  const ymd = (v: string | null | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") throw new PlcRefused("This pack is with compliance. Ask them to send it back to change it.");
+    if (!c.documents.some((d) => d.key === key)) throw new PlcRefused("That file isn't on this pack.");
+    return {
+      ...c,
+      documents: c.documents.map((d) => {
+        if (d.key !== key) return d;
+        const base: FileRead = d.read ?? { checkId: d.checkId, what: "", issueDate: null, expiryDate: null, names: [], confidence: "medium", at: new Date().toISOString() };
+        const read: FileRead = {
+          ...base,
+          ...("issueDate" in dates ? { issueDate: ymd(dates.issueDate) } : {}),
+          ...("expiryDate" in dates ? { expiryDate: ymd(dates.expiryDate), expiryDerived: false } : {}),
+          note: `Dates put right by ${by}`,
+          waiting: false,
+        };
+        return { ...d, read };
+      }),
+    };
+  });
+}
+
+/** The agent's tick: they looked at the document and it's right. */
+export async function setDocumentChecked(id: string, key: string, checked: boolean, by: string): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") throw new PlcRefused("This pack is with compliance. Ask them to send it back to change it.");
+    if (!c.documents.some((d) => d.key === key)) throw new PlcRefused("That file isn't on this pack.");
+    return {
+      ...c,
+      documents: c.documents.map((d) => (d.key === key ? { ...d, agentChecked: checked ? { by, at: new Date().toISOString() } : null } : d)),
+    };
+  });
+}
+
 export async function removeDocument(id: string, key: string): Promise<PlcCase> {
   return mutate(id, (c) => {
     if (c.state !== "assembling") {

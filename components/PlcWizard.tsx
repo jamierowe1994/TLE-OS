@@ -78,6 +78,9 @@ import HomeFilesPanel from "@/components/plc/HomeFilesPanel";
 type Step = "gathering" | "resume" | "details" | "landlord" | "tenant" | "review" | "sending" | "done" | "returned";
 export type PlcStepName = Step;
 
+/** The landlord's own papers, the first part of the landlord step (8 Nov 2026). */
+const PERSONAL_CHECKS: CheckId[] = ["landlord-id-aml", "landlord-aml", "proof-of-ownership", "terms-of-business"];
+
 const ORDER: Step[] = ["gathering", "details", "landlord", "tenant", "review", "sending", "done"];
 
 /** How long the opening panel stays up even when REX is quick. */
@@ -237,6 +240,9 @@ export default function PlcWizard({
   /* Start fresh (8 Nov 2026): asked once before the files come off. */
   const [fresh, setFresh] = useState<"ask" | "busy" | null>(null);
   const [showAddress, setShowAddress] = useState(false);
+  /* The landlord's documents in two parts, so the page fits the screen
+     (James, 8 Nov 2026: "people keep missing things by not scrolling"). */
+  const [part, setPart] = useState<"personal" | "property">("personal");
   /* Try again on a failed opening read (22 Oct 2026): bumped to run it again. */
   const [attempt, setAttempt] = useState(0);
   const [leaving, setLeaving] = useState(false);
@@ -247,6 +253,10 @@ export default function PlcWizard({
   const [letType, setLetType] = useState<LetType | null>(null);
   /** A check the review screen sent the agent back to fill. */
   const [focus, setFocus] = useState<CheckId | null>(null);
+  /* Sent back from the last screen to fill a check: open the part it's in. */
+  useEffect(() => {
+    if (focus && groupOf(focus) === "landlord") setPart(PERSONAL_CHECKS.includes(focus) ? "personal" : "property");
+  }, [focus]);
   /** Where Continue on the details goes: back to the review when it was opened from there. */
   const [returnTo, setReturnTo] = useState<Step | null>(null);
   /** What REX said when a changed move-in date was sent back to the application. */
@@ -926,9 +936,26 @@ export default function PlcWizard({
 
         {(step === "landlord" || step === "tenant") && kase && (
           <div>
-            <h1 className={embedded ? "nl-plc-h1" : "text-2xl tracking-normal text-ink"}>
-              {step === "landlord" ? "Landlord Documents" : "Tenant Documents"}
-            </h1>
+            <div className="nl-plc-docs-head">
+              <h1 className={embedded ? "nl-plc-h1" : "text-2xl tracking-normal text-ink"}>
+                {step === "landlord" ? (embedded ? (part === "personal" ? "The Landlord" : "The Property") : "Landlord Documents") : "Tenant Documents"}
+              </h1>
+              {embedded && step === "landlord" && (
+                <div className="nl-plc-parts" role="tablist" aria-label="Landlord documents">
+                  {(["personal", "property"] as const).map((p, i) => {
+                    const ids = p === "personal" ? PERSONAL_CHECKS : PLC_CHECKS.filter((c) => groupOf(c.id) === "landlord" && !PERSONAL_CHECKS.includes(c.id)).map((c) => c.id);
+                    const done = ids.filter((id) => filedFor(id) || waiverFor(kase, id)).length;
+                    return (
+                      <button key={p} type="button" role="tab" aria-selected={part === p} className={part === p ? "is-on" : ""} onClick={() => setPart(p)}>
+                        <i>{i + 1}</i>
+                        <span>{p === "personal" ? "Personal documents" : "Property documents"}</span>
+                        <small>{done} of {ids.length}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             {rexNote && step === "landlord" && (
               <p className={`mb-3 mt-2 text-xs ${rexNote.ok ? "text-emerald-700" : "text-amber-700"}`}>
                 Move-in date {prettyDate(kase.moveInDate)}. {rexNote.note}
@@ -962,7 +989,9 @@ export default function PlcWizard({
             )}
             <div className={embedded && !demo ? "nl-plc-docs-split" : ""}>
               <PlcDocuments
-                key={step}
+                key={`${step}-${embedded && step === "landlord" ? part : ""}`}
+                only={embedded && step === "landlord" ? (part === "personal" ? PERSONAL_CHECKS : PLC_CHECKS.filter((c) => groupOf(c.id) === "landlord" && !PERSONAL_CHECKS.includes(c.id)).map((c) => c.id)) : undefined}
+                showUnsorted={!embedded || part === "property"}
                 step={step}
                 kase={kase}
                 onChanged={setKase}
@@ -979,19 +1008,32 @@ export default function PlcWizard({
                 <HomeFilesPanel kase={kase} step={step} address={prefill?.address ?? kase.address} propertyId={prefill?.propertyId ?? null} onChanged={setKase} />
               )}
             </div>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <button type="button" onClick={() => go(step === "landlord" ? "details" : "landlord")} className={SECONDARY}>
+            <div className={embedded ? "nl-plc-foot is-docs" : "mt-8 flex flex-wrap items-center gap-3"}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (embedded && step === "landlord" && part === "property") return setPart("personal");
+                  if (embedded && step === "tenant") setPart("property");
+                  go(step === "landlord" ? "details" : "landlord");
+                }}
+                className={embedded ? "nl-btn nl-btn--quiet" : SECONDARY}
+              >
                 Back
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setFocus(null);
+                  if (embedded && step === "landlord" && part === "personal") {
+                    setPart("property");
+                    document.querySelector<HTMLElement>("[data-plc-scroll]")?.scrollTo({ top: 0, behavior: "smooth" });
+                    return;
+                  }
                   go(step === "landlord" ? "tenant" : "review");
                 }}
-                className={PRIMARY}
+                className={embedded ? "nl-btn nl-btn--primary" : PRIMARY}
               >
-                Next
+                {embedded && step === "landlord" && part === "personal" ? "Next: property documents" : embedded && step === "landlord" ? "Next: tenant documents" : "Next"}
               </button>
               <span className="text-xs text-muted">
                 Anything missing is shown on the last screen before it goes anywhere.

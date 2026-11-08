@@ -276,3 +276,79 @@
 [data-look="new"] .nl-plc-wizard ul.mt-6.space-y-3 > li { padding: 12px 18px; }
 [data-look="new"] .nl-plc-wizard ul.mt-6.space-y-3 > li p.text-xs { margin-top: 2px; }
 [data-look="new"] .nl-plc-wizard ul.mt-6.space-y-3 > li > div:first-child { align-items: center; }
+
+/* ── 8 Nov 2026, second pass ─────────────────────────────────────────────
+   The panel is the height of the window and its middle scrolls (it grew
+   past the bottom of the screen and nothing would scroll). */
+[data-look="new"] .nl-plc-panel { height: calc(100dvh - 5vh); max-height: calc(100dvh - 5vh); }
+@media (max-width: 760px) { [data-look="new"] .nl-plc-panel { height: 100dvh; max-height: 100dvh; } }
+[data-look="new"] .nl-plc-wizard { padding-top: 24px; padding-bottom: 0; }
+[data-look="new"] .nl-plc-h1 { font-size: 34px; }
+/* The landlord step's two parts, at the head of the page. */
+[data-look="new"] .nl-plc-docs-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+[data-look="new"] .nl-plc-parts { display: flex; gap: 0; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-plc-parts button { display: grid; grid-template-columns: auto auto; column-gap: 8px; align-items: center; padding: 8px 14px; font: inherit; cursor: pointer; background: #fff; border: 0; color: var(--muted); text-align: left; }
+[data-look="new"] .nl-plc-parts button + button { border-left: 1px solid var(--line-strong); }
+[data-look="new"] .nl-plc-parts i { grid-row: span 2; display: grid; place-items: center; width: 22px; height: 22px; font-style: normal; font-size: 11px; font-weight: 600; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-plc-parts span { font-size: 13.5px; font-weight: 600; }
+[data-look="new"] .nl-plc-parts small { font-size: 11.5px; }
+[data-look="new"] .nl-plc-parts button.is-on { background: var(--accent-soft); color: var(--ink); }
+[data-look="new"] .nl-plc-parts button.is-on i { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Next and Back held at the foot while the list scrolls. */
+[data-look="new"] .nl-plc-foot.is-docs { justify-content: space-between; margin-top: 20px; }
+/* The home's files: light green, starting level with the drop zone. */
+[data-look="new"] .nl-plc-files { background: var(--sage-soft); border-color: color-mix(in srgb, var(--sage-deep) 28%, transparent); margin-top: 40px; top: 0; }
+[data-look="new"] .nl-plc-files header, [data-look="new"] .nl-plc-files li { border-color: color-mix(in srgb, var(--sage-deep) 18%, transparent); }
+[data-look="new"] .nl-plc-files-ext { background: rgba(255, 255, 255, 0.7); }
+[data-look="new"] .nl-plc-files ul { max-height: calc(100dvh - 420px); }
+/* A filed document: one thin line, a small look at it, opens in front. */
+[data-look="new"] .nl-plc-wizard li.nl-plc-doc { padding: 4px 6px 4px 4px; gap: 8px; background: #fff; }
+[data-look="new"] .nl-plc-wizard ul.mt-2.space-y-1\.5 { margin-top: 8px; }
+[data-look="new"] .nl-plc-wizard ul.mt-2.space-y-1\.5 > li + li { margin-top: 4px; }
+[data-look="new"] .nl-plc-doc-open { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 3px 6px; font: inherit; text-align: left; cursor: pointer; background: transparent; border: 0; color: var(--ink); }
+[data-look="new"] .nl-plc-doc-open:hover { background: var(--accent-soft); }
+[data-look="new"] .nl-plc-mini { flex: none; width: 28px; height: 34px; object-fit: cover; border: 1px solid var(--line-strong); background: #fff; }
+[data-look="new"] .nl-plc-mini.is-page { display: grid; place-items: center; color: var(--muted); }
+[data-look="new"] .nl-plc-doc-name { display: block; font-size: 13.5px; line-height: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .nl-plc-doc-line { display: block; font-size: 12px; line-height: 16px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .nl-plc-doc-line.is-warn { color: var(--bad-ink); }
+[data-look="new"] .nl-plc-doc-ok { flex: none; font-size: 11.5px; font-weight: 600; color: var(--sage-deep); }
+[data-look="new"] .nl-plc-doc-look { flex: none; font-size: 11.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-plc-wizard li.nl-plc-doc select { height: 30px; font-size: 12px; }
+
+/* The document viewer: the file on the left, what it is on the right. */
+[data-look="new"] .nl-docv { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 900px) { [data-look="new"] .nl-docv { grid-template-columns: 1fr; } }
+[data-look="new"] .nl-docv-file { display: grid; gap: 8px; }
+[data-look="new"] .nl-docv-file iframe, [data-look="new"] .nl-docv-file img { width: 100%; height: min(68vh, 760px); border: 1px solid var(--line-strong); background: #fff; object-fit: contain; }
+[data-look="new"] .nl-docv-none { margin: 0; padding: 40px; text-align: center; color: var(--muted); border: 1px dashed var(--line-strong); }
+[data-look="new"] .nl-docv-open { justify-self: start; font-size: 12.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-docv-side { display: grid; gap: 14px; position: sticky; top: 0; }
+[data-look="new"] .nl-docv-name { margin: 0; font-size: 17px; line-height: 23px; font-weight: 600; overflow-wrap: anywhere; }
+[data-look="new"] .nl-docv-what { margin: -8px 0 0; font-size: 13.5px; color: var(--muted); }
+[data-look="new"] .nl-docv-verdict { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; font-size: 14px; line-height: 20px; }
+[data-look="new"] .nl-docv-verdict p { margin: 0; }
+[data-look="new"] .nl-docv-verdict span { flex: none; display: grid; place-items: center; width: 22px; height: 22px; font-weight: 700; color: #fff; }
+[data-look="new"] .nl-docv-verdict.is-ok { background: var(--sage-soft); color: var(--sage-deep); }
+[data-look="new"] .nl-docv-verdict.is-ok span { background: var(--sage-deep); }
+[data-look="new"] .nl-docv-verdict.is-bad { background: var(--bad-soft); color: var(--bad-ink); }
+[data-look="new"] .nl-docv-verdict.is-bad span { background: var(--accent); }
+[data-look="new"] .nl-docv-checked { margin: -6px 0 0; font-size: 12.5px; color: var(--sage-deep); }
+[data-look="new"] .nl-docv-fields { display: grid; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); justify-items: start; }
+[data-look="new"] .nl-docv-fields label { display: grid; gap: 4px; width: 100%; }
+[data-look="new"] .nl-docv-fields label > span, [data-look="new"] .nl-docv-row > span { font-family: var(--fs-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 10.5px; color: var(--muted); }
+[data-look="new"] .nl-docv-fields input { height: 40px; padding: 0 12px; font: inherit; font-size: 15px; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-docv-fields small { font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-docv-row { display: grid; gap: 4px; }
+[data-look="new"] .nl-docv-row p { margin: 0; font-size: 14px; }
+[data-look="new"] .nl-docv-row select { height: 38px; padding: 0 10px; font: inherit; font-size: 14px; background: #fff; border: 1px solid var(--line-strong); }
+/* Back and Next together on the right; the reminder on the left. */
+[data-look="new"] .nl-plc-foot.is-docs { justify-content: flex-end; align-items: center; }
+[data-look="new"] .nl-plc-foot.is-docs > span { order: -1; margin-right: auto; }
+/* A low drop zone: the words on the left, the buttons on the right. */
+[data-look="new"] .nl-plc-wizard .border-dashed.min-h-\[13rem\] { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px; row-gap: 2px; align-items: center; text-align: left; padding: 16px 20px; }
+[data-look="new"] .nl-plc-wizard .border-dashed.min-h-\[13rem\] > p:first-of-type { grid-column: 1; font-size: 15px; font-weight: 600; }
+[data-look="new"] .nl-plc-wizard .border-dashed.min-h-\[13rem\] > p:nth-of-type(2) { grid-column: 1; margin: 0; font-size: 12.5px; line-height: 18px; max-width: none; }
+[data-look="new"] .nl-plc-wizard .border-dashed.min-h-\[13rem\] > div { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
+[data-look="new"] .nl-plc-wizard li.nl-plc-doc select { width: 160px; height: 32px; }
+[data-look="new"] .nl-plc-files { margin-top: 30px; }
