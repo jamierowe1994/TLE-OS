@@ -19,6 +19,7 @@ import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-ev
 import ContactBlock from "@/components/ContactBlock";
 import RightToRentField, { suggestedFor, type RtrShown, type RtrSuggested } from "@/components/RightToRentField";
 import Guarantors from "@/components/Guarantors";
+import PeopleDeck from "@/components/new-look/PeopleDeck";
 import { GuarantorsToPropoly } from "@/components/LetPropoly";
 import LetTenants from "@/components/LetTenants";
 import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
@@ -2228,88 +2229,96 @@ export default function ApplicationDrawer({
               <div className="nl-holder">
                 {picture?.deal && <PropolySummary picture={picture} people={info?.people ?? []} />}
                 {info?.household && <HouseholdOnHome household={info.household} listingId={info.listingId} newLook />}
-                <div className="nl-listbar">
-                  <h3 className="nl-block-title">{people.length === 1 ? "The Applicant" : `The Applicants`}</h3>
-                  {people.length > 1 && <span className="nl-count">{people.length}</span>}
-                </div>
-                {people.length ? (
-                  <div className="nl-apps-people">
-                    {people.map((p, i) => {
-                      const party = partyFor(p);
-                      const shown = shownPerson(p);
-                      return (
-                        <section key={(p.contactId ?? "") + i} className="nl-cell nl-apps-personcard">
-                          <div className="nl-cell-head">
-                            <button type="button" onClick={() => setPerson({ role: "tenant", index: i })} className="nl-person min-w-0 text-left">
-                              <span className="nl-avatar">{initialsOf(shown.name)}</span>
-                              <span className="min-w-0">
-                                <span className="nl-strong block truncate hover:underline">{shown.name}</span>
-                                <span className="nl-meta block">{p.isPrimary ? "Lead applicant" : "Applicant"}</span>
-                              </span>
-                            </button>
-                            {p.isPrimary ? (
-                              <Badge tone="accent">Lead</Badge>
-                            ) : canChangeLead ? (
-                              <button type="button" onClick={() => makeLead(p)} disabled={Boolean(leadBusy)} data-steve="application.make-lead" className="nl-btn nl-btn--secondary nl-btn--sm">
-                                {leadBusy === applicantKey(p) ? "Saving…" : "Make lead tenant"}
-                              </button>
-                            ) : null}
-                          </div>
-                          {party && letId ? (
-                            /* Fixed until Edit, saved on the let (1 Nov 2026). */
-                            <LetTenantCard
-                              letId={letId}
-                              party={{ ...party, isPrimary: p.isPrimary }}
-                              about={name}
-                              canEdit={Boolean(details?.canEdit)}
-                              onAnswer={(j) => { takePeople(j); setDetailsTick((n) => n + 1); }}
-                              after={<PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />}
-                            />
-                          ) : (
-                            <ContactBlock
-                              showName={false}
-                              role={p.isPrimary ? "lead applicant" : "applicant"}
-                              person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
-                              personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
-                            />
-                          )}
-                          {/* Their right to rent expiry on the card, not only behind
-                              their name (Kirstie Mulholland, 3 Nov 2026, ticket 494b1e2e). */}
-                          {!scottishLet && letId && (
-                            <div className="mt-3 border-t border-line/60 pt-2.5" data-steve="application.rtr-expiry-card">
-                              <p className="nl-meta mb-1">Right to rent expiry</p>
-                              <RightToRentField
-                                key={`${p.name}-${rtrOf(p)?.id ?? "none"}`}
-                                record={rtrOf(p)}
-                                suggested={suggestedFor(rtrPack, p.name)}
-                                save={(until, noTimeLimit) => saveRtr(p.name, until, noTimeLimit)}
-                                canVerify={rtrCanVerify}
-                                onVerified={rtrKeep}
-                              />
+                {/* Three columns, one person each (James, 8 Nov 2026): the lead
+                    applicant, the guarantor and the landlord side by side, and
+                    anyone else stacked behind them, a click away. */}
+                <div className="nl-people3">
+                  <PeopleDeck
+                    title="Applicant"
+                    many="Applicants"
+                    steve="application.applicants"
+                    cards={[...people.map((p, i) => ({ p, i }))]
+                      .sort((a, b) => Number(b.p.isPrimary) - Number(a.p.isPrimary))
+                      .map(({ p, i }) => {
+                        const party = partyFor(p);
+                        const shown = shownPerson(p);
+                        return {
+                          key: `${p.contactId ?? ""}-${i}`,
+                          node: (
+                            <div className="nl-pcard">
+                              <div className="nl-pcard-head">
+                                <button type="button" onClick={() => setPerson({ role: "tenant", index: i })} className="min-w-0 text-left">
+                                  <span className="nl-pcard-name block truncate hover:underline">{shown.name}</span>
+                                  <span className="nl-pcard-role">{p.isPrimary ? "Lead applicant" : "Applicant"}</span>
+                                </button>
+                              </div>
+                              {party && letId ? (
+                                /* Fixed until Edit, saved on the let (1 Nov 2026). */
+                                <LetTenantCard
+                                  letId={letId}
+                                  party={{ ...party, isPrimary: p.isPrimary }}
+                                  about={name}
+                                  canEdit={Boolean(details?.canEdit)}
+                                  onAnswer={(j) => { takePeople(j); setDetailsTick((n) => n + 1); }}
+                                  after={<PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />}
+                                />
+                              ) : (
+                                <ContactBlock
+                                  showName={false}
+                                  role={p.isPrimary ? "lead applicant" : "applicant"}
+                                  person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
+                                  personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
+                                />
+                              )}
+                              {/* Their right to rent expiry on the card, not only behind
+                                  their name (Kirstie Mulholland, 3 Nov 2026, ticket 494b1e2e). */}
+                              {!scottishLet && letId && (
+                                <div className="nl-pcard-rtr" data-steve="application.rtr-expiry-card">
+                                  <p className="nl-pcard-label">Right to rent expiry</p>
+                                  <RightToRentField
+                                    key={`${p.name}-${rtrOf(p)?.id ?? "none"}`}
+                                    record={rtrOf(p)}
+                                    suggested={suggestedFor(rtrPack, p.name)}
+                                    save={(until, noTimeLimit) => saveRtr(p.name, until, noTimeLimit)}
+                                    canVerify={rtrCanVerify}
+                                    onVerified={rtrKeep}
+                                  />
+                                </div>
+                              )}
+                              {!p.isPrimary && canChangeLead && (
+                                <button type="button" onClick={() => makeLead(p)} disabled={Boolean(leadBusy)} data-steve="application.make-lead" className="nl-pdeck-add is-quiet mt-3">
+                                  {leadBusy === applicantKey(p) ? "Saving…" : "Make lead tenant"}
+                                </button>
+                              )}
                             </div>
-                          )}
-                        </section>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="nl-empty">No tenant recorded on this let yet.</p>
-                )}
-                {letId && people.length > 0 && <Guarantors source={{ let: letId }} onChange={setGuarantorSig} />}
-                {letId && <GuarantorsToPropoly letId={letId} tick={`${guarantorSig}:${picture ? "p" : ""}`} />}
-                {letId && <LetTenants letId={letId} onChange={reloadPeople} picture={picture} people={info?.people ?? null} />}
-                {letId && (
-                  <LandlordsBox
-                    letId={letId}
-                    people={info === null ? null : info.people ?? []}
-                    picture={picture}
-                    problem={info?.landlordProblem ?? null}
-                    propertyAddress={[name, locality].filter(Boolean).join(", ")}
-                    onAnswer={takePeople}
-                    homeKey={info?.homeKey ?? null}
-                    reload={reloadPeople}
+                          ),
+                        };
+                      })}
+                    empty="No tenant recorded on this let yet."
+                    actions={letId ? <LetTenants letId={letId} onChange={reloadPeople} picture={picture} people={info?.people ?? null} className="nl-pdeck-tenants" /> : undefined}
                   />
-                )}
+                  <div>
+                    {letId && people.length > 0 ? (
+                      <Guarantors source={{ let: letId }} onChange={setGuarantorSig} deck />
+                    ) : (
+                      <PeopleDeck title="Guarantor" many="Guarantors" cards={[]} empty="Add the applicant first, then their guarantor." />
+                    )}
+                    {letId && <GuarantorsToPropoly letId={letId} tick={`${guarantorSig}:${picture ? "p" : ""}`} className="mt-3" />}
+                  </div>
+                  {letId && (
+                    <LandlordsBox
+                      deck
+                      letId={letId}
+                      people={info === null ? null : info.people ?? []}
+                      picture={picture}
+                      problem={info?.landlordProblem ?? null}
+                      propertyAddress={[name, locality].filter(Boolean).join(", ")}
+                      onAnswer={takePeople}
+                      homeKey={info?.homeKey ?? null}
+                      reload={reloadPeople}
+                    />
+                  )}
+                </div>
               </div>
             )}
 

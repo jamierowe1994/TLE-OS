@@ -20,6 +20,10 @@ import {
   readDarkStep, writeDarkStep,
   type ThemeChoice,
   THEME_LOCKED,
+  NAV_COLOURS,
+  readNav,
+  writeNav,
+  type NavColour,
 } from "@/lib/theme";
 import { fetchMe, invalidateMe } from "@/lib/me";
 import { useNewLook } from "@/lib/use-new-look";
@@ -295,6 +299,8 @@ export default function ProfilePage() {
   /** Geocoding the Hub's address after they accept it. */
   const [placing, setPlacing] = useState(false);
   const [theme, setTheme] = useState<ThemeChoice>("auto");
+  const [nav, setNav] = useState<NavColour>("cream");
+  useEffect(() => setNav(readNav()), []);
   /** Somebody pressed a locked theme: the line underneath answers them. */
   const [soon, setSoon] = useState(false);
   const [darkBg, setDarkBg] = useState(DARK_BG_DEFAULT);
@@ -651,6 +657,30 @@ export default function ProfilePage() {
                 })}
               </div>
               {soon && THEME_LOCKED && <p className="nl-meta mt-3">Dark and Auto are coming soon. For now TLE OS is in Light for everybody.</p>}
+
+              {/* The bar down the left in any of the palette's four secondary
+                  colours (James, 8 Nov 2026). Yours, on this computer. */}
+              <h2 className="nl-block-title" style={{ marginTop: 40 }}>Navigation Bar</h2>
+              <p className="nl-meta mb-4 mt-1">The colour of the bar down the left. Only you see it, on this computer.{theme === "dark" ? " Dark mode keeps its own charcoal bar." : ""}</p>
+              <div className="nl-choice-row nl-navpick" role="radiogroup" aria-label="Navigation bar colour">
+                {NAV_COLOURS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={nav === c.id}
+                    onClick={() => { setNav(c.id); writeNav(c.id); }}
+                    className={`nl-choice${nav === c.id ? " is-on" : ""}`}
+                    data-steve={`profile.nav-colour.${c.id}`}
+                  >
+                    <span className="nl-navpick-swatch" style={{ background: c.hex }} aria-hidden>
+                      <i /><i /><i />
+                    </span>
+                    <span className="font-medium">{c.label}</span>
+                    <small>{c.hex}</small>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

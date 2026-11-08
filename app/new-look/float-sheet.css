@@ -348,3 +348,98 @@
   font-family: var(--fs-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11.5px;
 }
 [data-look="new"].nl-fs-wrap .nl-fs-card { box-shadow: none; border: 1px solid rgba(20, 20, 19, 0.12); }
+
+/* ===========================================================================
+   ONE PANEL (James, 8 Nov 2026): "this whole dark background with see-through
+   elements doesn't really work... make it one continuous thing, like a block
+   that sticks out". The header, the question, the content and the foot now
+   sit on one solid panel over a lighter dim, with fine lines between the
+   parts instead of the page showing through the gaps. Choices and tiles keep
+   an edge of their own so they still read as things to press.
+=========================================================================== */
+[data-look="new"] .nl-fs-scrim { background: rgba(20, 20, 19, 0.34); -webkit-backdrop-filter: none; backdrop-filter: none; }
+[data-look="new"] .nl-fs { padding-top: calc(5vh + env(safe-area-inset-top, 0px)); padding-bottom: calc(5vh + env(safe-area-inset-bottom, 0px)); }
+[data-look="new"] .nl-fs-stack {
+  background: var(--page); color: var(--ink);
+  border: 1px solid rgba(20, 20, 19, 0.14);
+  box-shadow: 0 1px 0 rgba(20, 20, 19, 0.04), 0 40px 80px -32px rgba(20, 20, 19, 0.45), 0 12px 24px -16px rgba(20, 20, 19, 0.2);
+}
+:root[data-theme="dark"] [data-look="new"] .nl-fs-stack { border-color: rgba(255, 255, 255, 0.1); }
+
+/* The parts: no shadows or boxes of their own. */
+[data-look="new"] .nl-fs-head { box-shadow: none; background: transparent; padding: 14px 14px 14px 28px; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-fs-prog { margin: 0; padding: 0; gap: 0; }
+[data-look="new"] .nl-fs-prog i { height: 2px; background: var(--line); }
+[data-look="new"] .nl-fs-prog i.is-past { background: var(--primary); }
+[data-look="new"] .nl-fs-prog i.is-on { background: var(--accent); }
+[data-look="new"] .nl-fs-body { padding: 26px 28px 28px; gap: 0; }
+[data-look="new"] .nl-fs-body > * + * { margin-top: 14px; }
+[data-look="new"] .nl-fs-foot { margin-top: 0; box-shadow: none; background: var(--page); border-top: 1px solid var(--line); padding: 14px 20px 14px 28px; }
+
+/* The question and the words that sat on the dark, now on the panel. */
+[data-look="new"] .nl-fs-q { color: var(--ink); font-family: var(--fs-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; font-size: 34px; line-height: 1.02; }
+[data-look="new"] .nl-fs-lede { color: var(--muted); margin: 8px 0 4px; font-size: 14px; line-height: 21px; }
+[data-look="new"] .nl-fs-lb { color: var(--ink); }
+[data-look="new"] .nl-fs-say { color: var(--muted); }
+[data-look="new"] .nl-fs-say.is-err { color: var(--accent-dark); }
+
+/* A card is a section of the panel: a line above it, not a box. */
+[data-look="new"].nl-fs-wrap .nl-fs-card { background: transparent; border: 0; border-top: 1px solid var(--line); box-shadow: none; padding: 20px 0 4px; }
+[data-look="new"].nl-fs-wrap .nl-fs-body > .nl-fs-card:first-child, [data-look="new"].nl-fs-wrap .nl-fs-lede + .nl-fs-card, [data-look="new"].nl-fs-wrap .nl-fs-q + .nl-fs-card { border-top-color: var(--line-strong); }
+[data-look="new"].nl-fs-wrap .nl-fs-card.is-tight { padding: 12px 0 0; }
+[data-look="new"].nl-fs-wrap .nl-fs-card-head { margin-bottom: 12px; }
+[data-look="new"].nl-fs-wrap .nl-fs-card-head > :first-child { font-size: 13px; letter-spacing: 0.14em; color: var(--ink); }
+[data-look="new"].nl-fs-wrap .nl-fs-done { border-top: 0; padding: 40px 0; }
+[data-look="new"].nl-fs-wrap .nl-fs-card.nl-fs-tick-row.is-on { box-shadow: inset 3px 0 0 var(--accent); padding-left: 14px; }
+
+/* Things to press keep an edge. */
+[data-look="new"] .nl-fs-choice, [data-look="new"] .nl-fs-tile { box-shadow: none; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-fs-choice:hover:not(:disabled), [data-look="new"] .nl-fs-tile:hover { border-color: var(--ink); }
+[data-look="new"] .nl-fs-choice.is-on, [data-look="new"] .nl-fs-tile.is-on { border-color: var(--fill, var(--primary)); box-shadow: none; }
+
+/* The step list down the left of the wide flows, on the panel. */
+[data-look="new"] .nl-rj-rail button { color: var(--muted); }
+[data-look="new"] .nl-rj-rail button:hover:not(:disabled) { background: var(--panel); color: var(--ink); }
+[data-look="new"] .nl-rj-rail button:disabled { color: var(--faint); }
+[data-look="new"] .nl-rj-rail .is-here { background: var(--accent-soft); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
+[data-look="new"] .nl-rj-n { border-color: var(--line-strong); }
+
+/* Scrolling inside the panel. */
+@media (min-width: 761px) {
+  [data-look="new"] .nl-fs-body { scrollbar-color: var(--line-strong) transparent; padding-right: 22px; margin-right: 0; }
+  [data-look="new"] .nl-fs-body::-webkit-scrollbar-thumb { background: var(--line-strong); }
+}
+
+/* It arrives as one block, and its contents settle into it a beat later. */
+[data-look="new"] .nl-fs-stack.is-anim { animation: nl-fs-panel 0.42s var(--nl-ease) backwards; }
+[data-look="new"] .nl-fs-stack.is-anim > * { animation: none; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > *,
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > * { animation-name: nl-fs-settle; animation-duration: 0.45s; }
+@keyframes nl-fs-panel { from { opacity: 0; transform: translateY(18px) scale(0.99); } }
+@keyframes nl-fs-settle { from { opacity: 0; transform: translateY(6px); } }
+
+@media (max-width: 640px) {
+  [data-look="new"] .nl-fs { padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  [data-look="new"] .nl-fs-head { padding-left: 18px; }
+  [data-look="new"] .nl-fs-body { padding: 20px 18px 22px; }
+  [data-look="new"] .nl-fs-foot { padding: 12px 18px; }
+  [data-look="new"] .nl-fs-q { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-fs-stack.is-anim { animation: none; }
+}
+/* The wide sheet's own card padding must not come back over the sections. */
+[data-look="new"].nl-fs-wrap .nl-fs .nl-fs-card { padding: 20px 0 4px; }
+[data-look="new"].nl-fs-wrap .nl-fs .nl-fs-card.is-tight { padding: 12px 0 0; }
+[data-look="new"].nl-fs-wrap .nl-fs .nl-fs-done { padding: 40px 0; }
+
+/* On a phone too, the panel holds still and its middle scrolls, so nothing
+   shows below the buttons; More below sits just over them. */
+@media (max-width: 760px) {
+  [data-look="new"] .nl-fs { overflow: hidden; }
+  [data-look="new"] .nl-fs-stack { flex: 0 1 auto; min-height: 0; max-height: 100%; }
+  [data-look="new"] .nl-fs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  [data-look="new"] .nl-fs-more { position: relative; left: auto; right: auto; bottom: auto; }
+  [data-look="new"] .nl-fs-foot-r > * { flex: 1 1 auto; justify-content: center; text-align: center; }
+  [data-look="new"] .nl-fs-foot-r > .nl-btn--primary { order: 9; flex-basis: 100%; }
+}

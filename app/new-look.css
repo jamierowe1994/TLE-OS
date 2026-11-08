@@ -1214,3 +1214,17 @@
 [data-look="new"].nl-edge .nl-ltabs button, [data-look="new"].nl-edge .nl-ltabs a {
   font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; font-size: 16px;
 }
+
+/* The navigation bar in any of the palette's secondary colours (James,
+   8 Nov 2026, Profile > Appearance; lib/theme NAV_COLOURS). Light only. */
+:root[data-nav="linen"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-bg: #f5efe6; --nv-line: #e6ddd0; --nv-avatar: #ffffff; --nv-hover: rgba(86, 66, 62, .06); }
+:root[data-nav="sage"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-bg: #f1f4ec; --nv-line: #dfe5d6; --nv-avatar: #ffffff; --nv-hover: rgba(86, 99, 74, .07); --nv-count: #56634a; }
+:root[data-nav="clay"]:not([data-theme="dark"]) [data-nav-look="new"] {
+  --nv-bg: #c4a092; --nv-line: rgba(20, 20, 19, .14); --nv-ink: #141413; --nv-muted: #3a2d2a; --nv-faint: #56423e;
+  --nv-hover: rgba(255, 255, 255, .18); --nv-on: #f8f7f4; --nv-count: #56423e; --nv-avatar: #f5efe6;
+}
+/* The swatches on Profile > Appearance: a little bar with three rows. */
+[data-look="new"] .nl-navpick .nl-choice { align-items: flex-start; }
+[data-look="new"] .nl-navpick-swatch { display: grid; gap: 4px; align-content: start; width: 44px; height: 54px; padding: 8px 7px; border: 1px solid rgba(20, 20, 19, .14); margin-bottom: 6px; }
+[data-look="new"] .nl-navpick-swatch i { display: block; height: 4px; background: rgba(20, 20, 19, .28); }
+[data-look="new"] .nl-navpick-swatch i:first-child { background: #a85a51; width: 70%; }

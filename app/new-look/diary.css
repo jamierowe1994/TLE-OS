@@ -247,3 +247,55 @@
 [data-look="new"].nl-edge .nl-wk-block.nl-wk-k-inspection, [data-look="new"].nl-edge .nl-wk-block.nl-wk-k-movein { --k: var(--sage-deep); background: var(--sage-soft) !important; }
 [data-look="new"].nl-edge .nl-wk-block.is-past { opacity: 0.6; }
 [data-look="new"].nl-edge .nl-diary-holder *:not([class*="spin"]) { border-radius: 0; }
+
+/* ── An appointment opened from the Diary: one panel across the screen
+   (James, 8 Nov 2026). Facts along the top, what to know on the left, what
+   to do in a linen column on the right; one column on a phone. */
+[data-look="new"] .nl-appt-sheet { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 0 36px; align-items: start; }
+[data-look="new"] .nl-appt-sheet.is-solo { grid-template-columns: minmax(0, 1fr); }
+[data-look="new"] .nl-appt-main, [data-look="new"] .nl-appt-side { min-width: 0; display: grid; gap: 14px; align-content: start; }
+[data-look="new"] .nl-appt-side { position: sticky; top: 0; background: var(--accent-soft); padding: 4px 22px 18px; }
+[data-look="new"].nl-fs-wrap .nl-appt-side .nl-fs-card { border-top-color: color-mix(in srgb, var(--pal-clay, #c4a092) 45%, transparent); }
+[data-look="new"].nl-fs-wrap .nl-appt-side > .nl-fs-card:first-child { border-top: 0; }
+[data-look="new"] .nl-appt-sheet[data-kind="viewing"] .nl-appt-side { box-shadow: inset 3px 0 0 var(--accent); }
+[data-look="new"] .nl-appt-sheet[data-kind="appraisal"] .nl-appt-side { box-shadow: inset 3px 0 0 var(--primary); }
+/* When, where and whose diary side by side, label over value. */
+@media (min-width: 900px) {
+  [data-look="new"] .nl-appt-facts { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 0.8fr); gap: 0 28px; }
+  [data-look="new"] .nl-appt-facts > div { display: block; padding: 0; border-top: 0; }
+  [data-look="new"] .nl-appt-facts > div + div { border-left: 1px solid var(--line); padding-left: 28px; margin-left: -14px; }
+  [data-look="new"] .nl-appt-facts dt { font-family: var(--edge-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 10.5px; margin-bottom: 6px; }
+  [data-look="new"] .nl-appt-facts dd { font-size: 15px; line-height: 22px; }
+}
+/* The sections settle in one after another. */
+[data-look="new"] .nl-fs-stack.is-anim .nl-appt-sheet .nl-fs-card { animation: nl-fs-settle 0.45s var(--nl-ease) backwards; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-appt-main > :nth-child(1) { animation-delay: 0.08s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-appt-main > :nth-child(2) { animation-delay: 0.13s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-appt-main > :nth-child(3) { animation-delay: 0.18s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-appt-main > :nth-child(n + 4) { animation-delay: 0.22s; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-appt-side { animation: nl-fs-side 0.5s var(--nl-ease) 0.12s backwards; }
+@keyframes nl-fs-side { from { opacity: 0; transform: translateX(12px); } }
+@media (max-width: 900px) {
+  [data-look="new"] .nl-appt-sheet { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  [data-look="new"] .nl-appt-side { position: static; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-fs-stack.is-anim .nl-appt-sheet .nl-fs-card, [data-look="new"] .nl-fs-stack.is-anim .nl-appt-side { animation: none; }
+}
+
+/* Olive for moving things on (James, 8 Nov 2026: "we're probably not using
+   quite enough of the green"): Change time and They came. */
+[data-look="new"] .nl-btn.nl-btn--olive { background: var(--sage-deep); border-color: var(--sage-deep); color: #fff; }
+[data-look="new"] .nl-btn.nl-btn--olive:hover:not(:disabled) { background: color-mix(in srgb, var(--sage-deep) 84%, #000); border-color: color-mix(in srgb, var(--sage-deep) 84%, #000); }
+/* Edit beside When and Where, gone once the viewing has passed. */
+[data-look="new"] .nl-appt-edit {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; cursor: pointer; font: inherit;
+  font-family: var(--fs-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px;
+  color: var(--sage-deep); background: var(--sage-soft); border: 1px solid color-mix(in srgb, var(--sage-deep) 30%, transparent); transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-appt-edit:hover { background: var(--sage-deep); color: #fff; }
+[data-look="new"] .nl-appt-edit:focus-visible { outline: 2px solid var(--sage-deep); outline-offset: 2px; }
+/* Send out confirmation, and the turned-up question. */
+[data-look="new"] .nl-appt-send { margin-top: 14px; display: grid; gap: 10px; justify-items: start; }
+[data-look="new"] .nl-appt-said { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sage-deep); }
+[data-look="new"] .nl-appt-turnout { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }

@@ -134,15 +134,14 @@ export default function LetTenantCard({
   }
 
   return (
-    <div>
-      <div className="flex items-start gap-3">
-        <ContactBlock className="min-w-0 flex-1" fixed showName={false} role={party.isPrimary ? "lead applicant" : "applicant"} person={{ name: party.name, email: party.email, phone: party.phone }} personRef={null} about={about} />
-        {canEdit && changeable && (
-          <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm shrink-0" aria-label={`Edit ${party.name}`} onClick={startEdit} data-steve="application.edit-tenant">
-            <Ico name="pen" size={14} /> Edit
-          </button>
-        )}
-      </div>
+    <div className="nl-ltc">
+      {/* Edit sits up by their name, not beside the phone number (8 Nov 2026). */}
+      {canEdit && changeable && (
+        <button type="button" className="nl-pcard-edit nl-ltc-edit" aria-label={`Edit ${party.name}`} onClick={startEdit} data-steve="application.edit-tenant">
+          <Ico name="pen" size={12} /> Edit
+        </button>
+      )}
+      <ContactBlock className="min-w-0" fixed showName={false} role={party.isPrimary ? "lead applicant" : "applicant"} person={{ name: party.name, email: party.email, phone: party.phone }} personRef={null} about={about} />
       {after}
     </div>
   );

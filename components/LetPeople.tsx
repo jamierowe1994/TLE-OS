@@ -148,7 +148,10 @@ export function LandlordsBox({
   propertyAddress,
   onAnswer,
   reload,
+  deck = false,
 }: {
+  /** One landlord showing, the rest stacked behind (the let's People tab, 8 Nov 2026). */
+  deck?: boolean;
   letId: string;
   /** Where the home's extra landlords and points of contact are kept (lib/let-people homeKey). */
   homeKey: string | null;
@@ -177,8 +180,9 @@ export function LandlordsBox({
             onSaved: () => void changePeople(letId, { action: "changed", key: p.key }).then(onAnswer),
           }));
   return (
-    <div className="mt-5" data-steve="application.landlords">
+    <div className={deck ? "" : "mt-5"} data-steve="application.landlords">
       <HomeLandlords
+        deck={deck}
         homeKey={homeKey}
         alsoKnownAs={[`let:${letId}`]}
         address={propertyAddress}
