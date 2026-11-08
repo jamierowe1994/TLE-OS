@@ -40,3 +40,16 @@ export function bandScoreClash(band: string | null | undefined, score: number | 
   const [lo, hi] = BAND_SCORES[band as EpcBand];
   return `Band ${band} is a score from ${lo} to ${hi}, but the score is ${score} (band ${fromScore}). The portals show the band the score is in, so put in the score off the EPC as well.`;
 }
+
+/** The day an EPC issued on `issued` runs out: ten years on (29 Feb to 28 Feb). */
+export const epcExpiryFor = (issued: string | null | undefined): string | null =>
+  issued && /^\d{4}-\d{2}-\d{2}$/.test(issued) ? `${Number(issued.slice(0, 4)) + 10}${issued.slice(4).replace("-02-29", "-02-28")}` : null;
+
+/** A word under the EPC dates when they look wrong: an issue date in the
+    future is almost always the expiry typed in the wrong box. */
+export function epcDateWarning(issued: string | null, expiry: string | null, today: string): string | null {
+  if (issued && issued > today) return "The issue date is in the future - that looks like the expiry. Put the date the EPC was issued (the start date).";
+  if (issued && expiry && expiry <= issued) return "The expiry date has to be after the issue date.";
+  if (expiry && expiry < today) return "This EPC has run out. The home needs a new one before it can be advertised.";
+  return null;
+}
