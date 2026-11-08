@@ -41,7 +41,37 @@ import PreAppraisalQuestions from "@/components/new-look/PreAppraisalQuestions";
 /** In the doodle set; the pack has none. */
 const LOCK_ICON = "lock";
 
-type TabKey = "info" | "appearance" | "custom" | "preappraisal" | "automations" | "compliance" | "connections" | "ads";
+type TabKey = "info" | "appearance" | "page" | "custom" | "preappraisal" | "automations" | "compliance" | "connections" | "ads";
+
+/* Settings down the left, in three groups (James, 8 Nov 2026: "so much in
+   there ... maybe a second navigation bar"). Each with a line saying what's
+   in it, and the same line heading the section. */
+const SET_GROUPS: { title: string; items: { key: TabKey; label: string; sub: string }[] }[] = [
+  {
+    title: "You",
+    items: [
+      { key: "info", label: "Profile", sub: "Your name, number, photo and how landlords see you" },
+      { key: "appearance", label: "Appearance", sub: "Light or dark, and the colour of your navigation bar" },
+      { key: "page", label: "Your page", sub: "Your own page on the new website, if you want one" },
+    ],
+  },
+  {
+    title: "Your work",
+    items: [
+      { key: "preappraisal", label: "Pre-appraisal", sub: "Your own questions on the pre-appraisal pack" },
+      { key: "custom", label: "Custom fields", sub: "Your own fields, filters and passport questions" },
+      { key: "automations", label: "Automations", sub: "Things the OS does for you, and when" },
+      { key: "ads", label: "Ads", sub: "What your package includes" },
+    ],
+  },
+  {
+    title: "Accounts",
+    items: [
+      { key: "compliance", label: "Personal compliance", sub: "Your own paperwork, kept in date" },
+      { key: "connections", label: "Connections", sub: "Your mailbox, calendars and REX sign-in" },
+    ],
+  },
+];
 
 const TABS: { key: TabKey; label: string; newOnly?: boolean }[] = [
   { key: "info", label: "Profile information" },
@@ -253,7 +283,7 @@ export default function ProfilePage() {
      email links (12 Oct 2026). */
   useEffect(() => {
     const want = new URLSearchParams(window.location.search).get("tab");
-    if (want && TABS.some((t) => t.key === want)) setTab(want as TabKey);
+    if (want && (TABS.some((t) => t.key === want) || want === "page")) setTab(want as TabKey);
   }, []);
   /* Their package, from the TEG Hub via the local copy. null while it loads
      and null if the Hub has none for them — the pill simply doesn't render,
@@ -506,14 +536,59 @@ export default function ProfilePage() {
   }
   if (look) {
     return (
-      <div data-look="new" className="nl-page nl-rise">
+      <div data-look="new" className="nl-page nl-rise nl-edge nl-settings">
         <Mast
-          title="Your Profile"
-          blurb="Who you are on every email and listing, how your OS looks, and the paperwork that keeps you compliant, not just the properties."
+          title="Settings"
+          blurb="Who you are on every email and listing, how your OS looks, and the paperwork that keeps you compliant."
         />
-        <Tabs label="Your profile" value={tab} onChange={setTab} items={TABS.map((t) => ({ id: t.key, label: t.label }))} className="mb-8" />
-
+        <div className="nl-set-layout">
+          <nav className="nl-set-nav" aria-label="Settings">
+            {SET_GROUPS.map((g) => (
+              <div key={g.title} className="nl-set-group">
+                <p className="nl-set-group-t">{g.title}</p>
+                <ul>
+                  {g.items.map((it) => (
+                    <li key={it.key}>
+                      <button type="button" className={tab === it.key ? "is-on" : ""} aria-current={tab === it.key ? "page" : undefined} onClick={() => setTab(it.key)}>
+                        {it.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </nav>
+          <div className="nl-set-body">
+            {(() => {
+              const here = SET_GROUPS.flatMap((g) => g.items).find((it) => it.key === tab);
+              return here ? (
+                <header className="nl-set-head">
+                  <h2>{here.label}</h2>
+                  <p>{here.sub}.</p>
+                </header>
+              ) : null;
+            })()}
         <div key={tab} className="nl-pane pb-16">
+          {/* Your page on the new website (James, 8 Nov 2026): optional, and
+              not hooked up yet - it says what's coming rather than pretending. */}
+          {tab === "page" && (
+            <div className="nl-set-page">
+              <div className="nl-set-page-card">
+                <span className="nl-set-soon">Coming with the new website</span>
+                <h3>Your Own Page</h3>
+                <p>Every agent can have a page of their own on the new Letting Experts website: a little about you, your patch, the homes you&apos;re letting and the reviews landlords have left you.</p>
+                <p>It&apos;s yours to change if you want to, and it&apos;s never required. Leave it alone and it simply shows your name, photo, patch and homes from your profile.</p>
+              </div>
+              <ul className="nl-set-page-list">
+                <li><b>Your photo and introduction</b><span>From your profile, or written just for the page</span></li>
+                <li><b>Your patch</b><span>The areas you cover, shown on a map</span></li>
+                <li><b>Your homes</b><span>Whatever you&apos;re letting right now, kept up to date for you</span></li>
+                <li><b>Reviews</b><span>What your landlords and tenants have said</span></li>
+                <li><b>How it looks</b><span>A choice of layouts and colours from the house palette</span></li>
+              </ul>
+              <p className="nl-meta">Nothing to do yet. When the website goes live, the controls will appear here.</p>
+            </div>
+          )}
           {tab === "info" && (
             <div className="nl-profile-grid">
               <div className="nl-form">
@@ -763,6 +838,8 @@ export default function ProfilePage() {
               <p className="nl-meta mt-4">Pro sits on top of your monthly licence.</p>
             </div>
           )}
+        </div>
+          </div>
         </div>
       </div>
     );
