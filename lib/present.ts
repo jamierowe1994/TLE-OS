@@ -1458,7 +1458,7 @@ export const SAMPLE_DECK: PresentDeck = {
     /* A stand-in for the SAMPLE only, so the property slide can be judged
        with a photograph in it. Real decks carry the property's own image,
        or the drawn street when there is none. */
-    image: "/brand/photo/property-sample.webp",
+    image: "/brand/photo/property-sample-real.webp",
     beds: 2,
     baths: 1,
     sqft: 764,
@@ -1482,7 +1482,7 @@ export const SAMPLE_DECK: PresentDeck = {
     /* A stand-in portrait for the SAMPLE only, so the house look's agent
        slide can be judged with a photograph in it. Real decks carry the
        agent's REX profile photo, or initials when there is none. */
-    photo: "/brand/photo/agent-sample.webp",
+    photo: "/brand/photo/agent-sample-real.webp",
     bio: "",
   },
   createdAt: "2026-08-13T09:00:00.000Z",

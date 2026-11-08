@@ -250,7 +250,7 @@ export default function PlcQueuePage() {
       <PreTenancyHero
         title="PLC queue"
         blurb="Packs handed over by agents, longest wait first. The agent is waiting on every one of these, and behind each one is a move-in date."
-        photo="/brand/photo/close-door.webp"
+        photo="/brand/photo/close-door-real.webp"
         photoPosition="50% 40%"
         line="Compliant homes, confident move-ins"
       >

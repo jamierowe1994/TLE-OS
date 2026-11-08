@@ -63,8 +63,8 @@ const HOME: TenantProperty = {
   locality: "Nottingham NG2",
   rentPcm: 1250,
   beds: 2,
-  photo: "/brand/photo/property.jpg",
-  images: ["/brand/photo/property.jpg", "/brand/living-room.jpg"],
+  photo: "/brand/photo/property-real.jpg",
+  images: ["/brand/photo/property-real.jpg", "/brand/living-room.jpg"],
   /* An invented home, so it opens Find a home rather than a listing. */
   href: "/tenant/homes",
 };

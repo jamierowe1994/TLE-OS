@@ -203,7 +203,7 @@ export default function PreTenancyDashboard() {
       <PreTenancyHero
         title={greeting(data?.firstName ?? "")}
         blurb={`What needs you today, who is moving in, and what moved across pre-tenancy.${data?.lastSeenAt ? ` Propoly last looked at ${whenAgo(data.lastSeenAt)}.` : ""}`}
-        photo="/brand/photo/commitment.webp"
+        photo="/brand/photo/commitment-real.webp"
         line="Great tenancies start with great compliance"
       >
         <p className="flex items-center gap-2 text-[13.5px] text-ink"><DoodleIcon name="calendar" size={15} className="text-accent-dark" />{today}</p>

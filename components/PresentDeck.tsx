@@ -216,7 +216,7 @@ function WelcomeHouse({ deck, show }: { deck: Deck; show: boolean }) {
           {/* THE DOOR. A rounded frame, portrait, at the reference's proportions. */}
           <Rise show={show} i={2} className="absolute right-[64px] top-[112px] z-[2] w-[560px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/photo/welcome-door.webp" alt="" aria-hidden className="w-full rounded-[28px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "560 / 580" }} />
+            <img src="/brand/photo/welcome-door-real.webp" alt="" aria-hidden className="w-full rounded-[28px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "560 / 580" }} />
           </Rise>
           {/* THE HANDWRITTEN LINE, under the photograph, with its own stroke. */}
           <Rise show={show} i={5} className="absolute right-[150px] top-[752px] z-[2] w-[300px]">
@@ -299,7 +299,7 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           {/* THE HALLWAY, tall, in the rounded frame. */}
           <Rise show={show} i={1} className="absolute left-[44px] top-[88px] z-[2] w-[580px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/photo/appraisal-hall-tall.webp" alt="" aria-hidden className="w-full rounded-[44px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "6 / 7" }} />
+            <img src="/brand/photo/appraisal-hall-tall-real.webp" alt="" aria-hidden className="w-full rounded-[44px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "6 / 7" }} />
           </Rise>
           {/* THE HANDWRITTEN LINE on the pink, bottom-left. */}
           <Rise show={show} i={6} className="absolute left-[78px] top-[792px] z-[3] w-[320px]">
@@ -696,7 +696,7 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
             <path d="M44 0C70 -4 96 8 100 30L100 100L22 100C6 94 -4 74 4 50C10 28 24 4 44 0Z" fill="#f6dcd7" />
           </svg>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/photo/appointment.webp" alt="" aria-hidden className="absolute left-[7%] -top-[2%] h-[134%] w-auto max-w-none" />
+          <img src="/brand/photo/appointment-real.webp" alt="" aria-hidden className="absolute left-[7%] -top-[2%] h-[134%] w-auto max-w-none" />
         </Rise>
       )}
 
@@ -1988,7 +1988,7 @@ function WhyHouse({ deck, show }: { deck: Deck; show: boolean }) {
         <div className="pointer-events-none absolute -right-[40px] -top-[60px] z-[1] h-[820px] w-[600px] overflow-hidden" style={{ clipPath: "path('M600 0 L600 820 L120 820 C40 760 0 640 0 420 C0 200 60 60 200 0 Z')" }}>
           <div className="absolute inset-0" style={{ background: "#fbeae6" }} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/photo/commitment.webp" alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover object-[60%_center]" />
+          <img src="/brand/photo/commitment-real.webp" alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover object-[60%_center]" />
         </div>
       )}
     </>
@@ -2175,7 +2175,7 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
               proportions as the welcome's door. */}
           <Rise show={show} i={2} className="absolute right-[100px] top-[150px] z-[2] w-[540px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/photo/close-door.webp" alt="" aria-hidden className="w-full rounded-[28px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "540 / 580" }} />
+            <img src="/brand/photo/close-door-real.webp" alt="" aria-hidden className="w-full rounded-[28px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "540 / 580" }} />
           </Rise>
           <Rise show={show} i={5} className="absolute right-[120px] top-[776px] z-[2] w-[320px]">
             <p className="text-[28px] leading-[1.1]" style={{ ...SCRIPT, color: SAGE_INK, transform: "rotate(-6deg)" }}>

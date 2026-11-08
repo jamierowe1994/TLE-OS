@@ -17,7 +17,7 @@ type Art = "street" | "desk" | "house" | "building";
 
 const ART: Record<Art, { src: string; scene: boolean; position?: string }> = {
   /* Held to the right so the door and the bicycle survive the crop. */
-  street: { src: "/brand/art/sign-in.webp", scene: true, position: "78% center" },
+  street: { src: "/brand/art/sign-in-real.webp", scene: true, position: "78% center" },
   house: { src: "/brand/art/lead-house.webp", scene: false },
   building: { src: "/brand/art/lead-building.webp", scene: false },
   desk: { src: "/brand/art/desk.webp", scene: false },

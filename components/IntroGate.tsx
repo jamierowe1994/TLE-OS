@@ -28,7 +28,7 @@ import { useNewLook } from "@/lib/use-new-look";
 
 /** James's own paintings (13 Sep 2026), not the stock line drawings. */
 const ART = [
-  "/brand/art/sign-in.webp",
+  "/brand/art/sign-in-real.webp",
   "/brand/art/lead-house.webp",
   "/brand/art/lead-building.webp",
   "/brand/art/appraisal-house.webp",

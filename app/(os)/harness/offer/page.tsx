@@ -27,7 +27,7 @@ const HOME: OfferHome = {
   locality: "Nottingham NG2",
   askingPcm: 850,
   beds: 2,
-  photo: "/brand/photo/property.jpg",
+  photo: "/brand/photo/property-real.jpg",
 };
 
 const TENANTS: OfferTenant[] = [

@@ -56,7 +56,7 @@ function Hub() {
         eyebrow="Pre-tenancy knowledge"
         title="How it all works"
         blurb="A guide for each screen, with a picture of every part and what it is for. Open one and scroll; nothing here changes anything."
-        photo="/brand/photo/welcome-door.webp"
+        photo="/brand/photo/welcome-door-real.webp"
         photoPosition="50% 30%"
         line="Learn it once, do it every day"
       />
