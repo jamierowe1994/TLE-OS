@@ -42,3 +42,34 @@
   [data-look="new"] .nl-tl-group { margin-bottom: 32px; }
 }
 @media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-tl { animation: none; transition: none; } }
+
+/* ===========================================================================
+   TOOLS ON THE WEBSITE'S EDGE (James, 8 Nov 2026): each group in its own
+   brand colour - a bar along the top of every tile, its icon on a square of
+   that colour - condensed capitals for the group heads, the tool names and
+   Open, square corners, the serif gone.
+   =========================================================================== */
+[data-look="new"].nl-tools.nl-edge { --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; --nl-serif: var(--font-body); --line: rgba(20, 20, 19, 0.14); }
+[data-look="new"].nl-tools.nl-edge .nl-mast .nl-blurb { font-family: var(--font-body); font-size: 15px; line-height: 22px; color: var(--muted); }
+[data-look="new"].nl-tools.nl-edge .nl-tl-group { --tone: var(--accent, #a85a51); --tone-soft: var(--pal-pink, #fdefec); }
+[data-look="new"].nl-tools.nl-edge .nl-tl-group[data-tone="olive"] { --tone: var(--sage-deep, #56634a); --tone-soft: var(--sage-soft, #f1f4ec); }
+[data-look="new"].nl-tools.nl-edge .nl-tl-group[data-tone="clay"] { --tone: var(--pal-clay, #cfa096); --tone-soft: #f7ece8; }
+[data-look="new"].nl-tools.nl-edge .nl-tl-group[data-tone="brown"] { --tone: var(--primary, #56423e); --tone-soft: #efe9e7; }
+[data-look="new"].nl-tools.nl-edge .nl-tl-head { border-bottom-color: var(--line-strong); }
+[data-look="new"].nl-tools.nl-edge .nl-tl-head .nl-section-title {
+  display: inline-flex; align-items: center; gap: 12px; margin: 0;
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 28px; line-height: 1;
+}
+[data-look="new"].nl-tools.nl-edge .nl-tl-head .nl-section-title::before { content: ""; width: 12px; height: 12px; background: var(--tone); flex: none; }
+[data-look="new"].nl-tools.nl-edge .nl-tl { border-radius: 0; border: 1px solid var(--line); border-top: 5px solid var(--tone); background: var(--page); }
+[data-look="new"].nl-tools.nl-edge a.nl-tl:hover { background: #fff; border-color: var(--line-strong); border-top-color: var(--tone); }
+[data-look="new"].nl-tools.nl-edge .nl-tl.is-shut { border-top-color: var(--line-strong); }
+[data-look="new"].nl-tools.nl-edge .nl-tl-ico { border-radius: 0; background: var(--tone-soft); color: var(--tone); }
+[data-look="new"].nl-tools.nl-edge .nl-tl-group[data-tone="clay"] .nl-tl-ico { color: var(--accent-dark, #8c4a42); }
+[data-look="new"].nl-tools.nl-edge a.nl-tl:hover .nl-tl-ico { background: var(--tone); color: #fff; }
+[data-look="new"].nl-tools.nl-edge .nl-tl-tag { border-radius: 0; font-family: var(--nl-cond); font-stretch: 75%; text-transform: uppercase; letter-spacing: .12em; font-size: 10.5px; }
+[data-look="new"].nl-tools.nl-edge .nl-tl-name { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 26px; line-height: 1.05; }
+[data-look="new"].nl-tools.nl-edge .nl-tl-blurb { margin-top: 10px; }
+[data-look="new"].nl-tools.nl-edge .nl-tl-go { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 12px; color: var(--ink); }
+[data-look="new"].nl-tools.nl-edge a.nl-tl:hover .nl-tl-go { color: var(--accent-dark, #8c4a42); }
+@media (max-width: 640px) { [data-look="new"].nl-tools.nl-edge .nl-tl { border-radius: 0; } [data-look="new"].nl-tools.nl-edge .nl-tl-name { font-size: 22px; } }

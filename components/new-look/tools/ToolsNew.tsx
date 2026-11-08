@@ -116,13 +116,14 @@ export default function ToolsNew() {
   const { access, admin } = useToolAccess();
   let n = 0;
   return (
-    <div data-look="new" className="nl-page nl-rise nl-tools">
+    <div data-look="new" className="nl-page nl-rise nl-tools nl-edge">
       <Mast title="Tools" blurb="The kit that sits alongside your book. Some comes with your package, some is bought separately." />
-      {TOOL_GROUPS.map((group) => {
+      {TOOL_GROUPS.map((group, gi) => {
         const tools = toolsInGroup(group.key);
         if (!tools.length) return null;
         return (
-          <section key={group.key} className="nl-tl-group">
+          /* Each group its own brand colour (James, 8 Nov 2026): terracotta, olive, clay, brown, round again. */
+          <section key={group.key} className="nl-tl-group" data-tone={["terra", "olive", "clay", "brown"][gi % 4]}>
             <div className="nl-tl-head">
               <h2 className="nl-section-title">{group.label}</h2>
               <p className="nl-meta">{group.blurb}</p>
