@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PresentationBuilder from "@/components/PresentationBuilder";
 import PresentationBuilderV2 from "@/components/presentation-builder/Builder";
-import { useNewLook } from "@/lib/use-new-look";
 import { effectiveStage, type MarketAppraisal } from "@/lib/market-appraisal";
 import { DECK_KINDS, type DeckKind } from "@/lib/present";
 
@@ -50,9 +49,11 @@ export default function BuildPage({ params }: { params: Promise<{ id: string }> 
   const [ma, setMa] = useState<MarketAppraisal | null | undefined>(undefined);
   /* A failed read is not "No such appraisal" (Rig run 4, P-075). */
   const [failed, setFailed] = useState(false);
-  /* The four-step builder (James, 24 Oct 2026), appraisal deck only, behind
-     its switch in Admin > Switches. Null while asking: the loading line below. */
-  const v2 = useNewLook("builder");
+  /* The four-step builder (James, 24 Oct 2026), appraisal deck only. Was
+     behind its switch in Admin > Switches; on for everyone from 8 Nov 2026
+     (James: "switch it on"), so the five-step builder now only builds the
+     other decks (pre- and post-appraisal). */
+  const v2 = true;
   useEffect(() => {
     let gone = false;
     fetch("/api/appraisals", { cache: "no-store" })
@@ -77,7 +78,7 @@ export default function BuildPage({ params }: { params: Promise<{ id: string }> 
     };
   }, [id]);
 
-  if (ma === undefined || (kind === "appraisal" && v2 === null)) {
+  if (ma === undefined) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
         <p className="text-[12.5px] text-muted">Finding the appraisal&hellip;</p>
