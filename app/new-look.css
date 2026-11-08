@@ -1228,3 +1228,18 @@
 [data-look="new"] .nl-navpick-swatch { display: grid; gap: 4px; align-content: start; width: 44px; height: 54px; padding: 8px 7px; border: 1px solid rgba(20, 20, 19, .14); margin-bottom: 6px; }
 [data-look="new"] .nl-navpick-swatch i { display: block; height: 4px; background: rgba(20, 20, 19, .28); }
 [data-look="new"] .nl-navpick-swatch i:first-child { background: #a85a51; width: 70%; }
+
+/* The page you're on is a darker shade of the bar, not white (James,
+   8 Nov 2026: "lighter when we hover, darker when we're selecting it").
+   Every colour, the default off-white included. */
+:root:not([data-theme="dark"]) [data-nav-look="new"] { --nv-on: #ebe7df; --nv-sel-edge: #a85a51; }
+:root[data-nav="linen"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-on: #e8ddcd; --nv-hover: rgba(255, 255, 255, .55); }
+:root[data-nav="sage"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-on: #dfe6d4; --nv-hover: rgba(255, 255, 255, .6); }
+:root[data-nav="clay"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-on: #ac8577; --nv-hover: rgba(255, 255, 255, .2); --nv-sel-edge: #56423e; }
+:root:not([data-theme="dark"]) [data-nav-look="new"] .nl-nav-item.is-on,
+:root:not([data-theme="dark"]) [data-nav-look="new"] .nl-nav-sub.is-on { background: var(--nv-on); box-shadow: inset 2px 0 0 var(--nv-sel-edge); }
+:root:not([data-theme="dark"]) [data-nav-look="new"] .nl-nav-item.is-on svg { color: var(--nv-sel-edge); }
+/* The You menu at the foot: square, on the bar's own colour. */
+[data-nav-look="new"] [data-os-profile-menu] { border-radius: 0; background: var(--nv-bg); border-color: var(--nv-line); box-shadow: 0 16px 32px -16px rgba(20, 20, 19, .35); }
+[data-nav-look="new"] [data-os-profile-menu] > * { border-radius: 0; }
+[data-nav-look="new"] [data-os-profile-menu] > *:hover { background: var(--nv-on); }

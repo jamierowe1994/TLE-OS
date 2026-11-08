@@ -174,7 +174,8 @@ export default function LetPage() {
       checklist={checklist}
       /* Only once the offer is accepted - in REX or here. Before that there
          is nothing to push, and offering it invites somebody to jump the gun. */
-      aside={appRaw && isLet(appRaw) ? <HandoffPanel applicationId={String(appRaw.id)} /> : undefined}
+      /* "What Goes to Propoly" folded into the Push to Propoly pop-out (8 Nov 2026). */
+      aside={look ? undefined : appRaw && isLet(appRaw) ? <HandoffPanel applicationId={String(appRaw.id)} /> : undefined}
       initialTab={initialTab}
       newLook={look}
     />

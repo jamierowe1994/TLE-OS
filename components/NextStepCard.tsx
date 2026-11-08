@@ -77,6 +77,7 @@ export default function NextStepCard({
   playing,
   confirming,
   onChanged,
+  onPush,
 }: {
   applicationId: string;
   actions: NextAction[] | null;
@@ -87,6 +88,8 @@ export default function NextStepCard({
   confirming: string | null;
   /** Something moved: read the journey (and the updates) again. */
   onChanged: () => void;
+  /** Push to Propoly opens its own pop-out (components/propoly/PushToPropoly, 8 Nov 2026). */
+  onPush?: () => void;
 }) {
   /* The journey lists actions in the order of the process: the first that
      is not a reminder IS the next step, whoever's move it is. */
@@ -233,8 +236,17 @@ export default function NextStepCard({
           <p className="text-[15px] font-semibold leading-snug">{next.label}</p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{next.detail}</p>
 
-          {/* PUSH TO PROPOLY */}
-          {next.push && (
+          {/* PUSH TO PROPOLY: one normal-sized button that opens the pop-out
+              with everything that goes over (James, 8 Nov 2026). */}
+          {next.push && onPush && (
+            <div className="mt-4">
+              <button type="button" onClick={onPush} className="nl-btn nl-btn--primary" data-steve="application.push-open">
+                <DoodleIcon name="rocket" size={14} />
+                Push to Propoly
+              </button>
+            </div>
+          )}
+          {next.push && !onPush && (
             <div className="mt-4">
               {!match && terms && !dealStarted && (
                 <div className="mb-3 rounded-2xl border border-line/60 bg-accent-soft/25 p-4" data-steve="application.deal-terms">

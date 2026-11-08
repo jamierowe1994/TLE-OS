@@ -123,7 +123,7 @@ export default function Guarantors({
           many="Guarantors"
           steve="guarantors"
           cards={rows === null ? null : rows.map((g) => ({ key: g.id, node: card(g) }))}
-          empty={error ? <span className="text-accent-dark">{error}</span> : applicants.length ? "No guarantor yet. Add one if they need it for referencing." : "No applicant on this let yet, so there is nobody to add a guarantor for."}
+          empty={error ? <span className="text-accent-dark">{error}</span> : applicants.length ? (<><b className="nl-pdeck-empty-t">No guarantor needed</b><span>Add one here if referencing asks for it.</span></>) : "No applicant on this let yet, so there is nobody to add a guarantor for."}
           actions={rows !== null && applicants.length > 0 ? (
             <button type="button" onClick={() => setEditing("new")} className="nl-pdeck-add">+ Add a guarantor</button>
           ) : undefined}

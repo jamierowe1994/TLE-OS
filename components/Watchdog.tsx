@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import CrashScreen from "@/components/CrashScreen";
-import { note } from "@/lib/trail";
+import { note, trail } from "@/lib/trail";
+import { problemToast } from "@/lib/toast";
+import { explainFailure, serverWords } from "@/lib/plain-why";
 import { autoReport } from "@/lib/auto-report";
 
 /**
@@ -27,6 +29,31 @@ import { autoReport } from "@/lib/auto-report";
  * It watches OUR api only. A slow map tile or a font from Google is not a
  * fault worth interrupting anybody about.
  */
+
+/**
+ * A press that didn't work says so (James, 8 Nov 2026): any change the OS
+ * sends - not a read - that comes back refused or broken shows a red toast
+ * under Steve. Pressed, it says why in plain English and offers to send it
+ * in as a ticket with the last few steps and a picture already attached.
+ * Sign-in (401) and look-only (423) answers are not failures, and the
+ * background calls below are nobody's button.
+ */
+const QUIET = /^\/api\/(bugs|trail|internal|read-log|new-look|activity|presence|heartbeat|steve|assistant|telemetry|track|area-access|auth\/lock-state)/;
+let lastProblem = 0;
+function whatTheyPressed(short: string): string {
+  const did = [...trail()].reverse().find((l) => l.kind === "did" && Date.now() - l.at < 8000);
+  const label = did?.text.replace(/^"|"( x\d+)?$/g, "").replace(/"$/, "").trim();
+  if (label && label.length <= 48) return label;
+  const tail = short.replace(/^\/api\//, "").split("/").filter((x) => x && !/^\d+$|^[a-f0-9-]{16,}$/i.test(x)).slice(-2).join(" ");
+  return tail ? `${tail.charAt(0).toUpperCase()}${tail.slice(1).replace(/[-_]/g, " ")}` : "That";
+}
+async function sayProblem(short: string, method: string, res: Response | null) {
+  if (QUIET.test(short) || Date.now() - lastProblem < 4000) return;
+  lastProblem = Date.now();
+  let said: string | null = null;
+  if (res) said = serverWords(await res.clone().json().catch(() => null));
+  problemToast(explainFailure({ action: whatTheyPressed(short), url: short, method, status: res ? res.status : null, said }));
+}
 
 /** Long enough that a big REX pull is not an accusation. */
 const STUCK_AFTER = 25_000;
@@ -118,13 +145,19 @@ export default function Watchdog() {
         if (res.status >= 500 && !reporting) {
           autoReport({ what: `${method} ${short}`, status: res.status, message: `came back ${res.status}` });
         }
+        if (!res.ok && method !== "GET" && method !== "HEAD" && res.status !== 401 && res.status !== 423 && !leaving) {
+          void sayProblem(short, method, res);
+        }
         return res;
       } catch (err) {
         window.clearTimeout(timer);
         /* A cancelled request is not a fault: React aborts them on purpose
            when a screen is left before its data lands. */
         const name = (err as Error)?.name ?? "";
-        if (name !== "AbortError" && !leaving) note("failed", `${short} did not answer`);
+        if (name !== "AbortError" && !leaving) {
+          note("failed", `${short} did not answer`);
+          if (method !== "GET" && method !== "HEAD") void sayProblem(short, method, null);
+        }
         throw err;
       }
     };

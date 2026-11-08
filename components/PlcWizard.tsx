@@ -29,6 +29,7 @@ import { demoCase } from "@/lib/plc-demo";
 import { prettyWhen } from "@/components/PlcReview";
 import { unwatchSend, watchSend } from "@/lib/plc-send-watch";
 import { toast } from "@/lib/toast";
+import HomeFilesPanel from "@/components/plc/HomeFilesPanel";
 
 /**
  * Starting a PLC check.
@@ -74,7 +75,8 @@ import { toast } from "@/lib/toast";
 
 /* ─────────────────────────────── plumbing ─────────────────────────────── */
 
-type Step = "gathering" | "details" | "landlord" | "tenant" | "review" | "sending" | "done" | "returned";
+type Step = "gathering" | "resume" | "details" | "landlord" | "tenant" | "review" | "sending" | "done" | "returned";
+export type PlcStepName = Step;
 
 const ORDER: Step[] = ["gathering", "details", "landlord", "tenant", "review", "sending", "done"];
 
@@ -154,7 +156,15 @@ export default function PlcWizard({
   applicationId,
   listingId,
   demo,
+  embedded = false,
+  onStep,
+  onClose,
 }: {
+  /** Inside the pop-out over the let (components/plc/PlcOverlay, 8 Nov 2026):
+   *  the overlay draws the steps and the close, and the screens use its width. */
+  embedded?: boolean;
+  onStep?: (s: Step) => void;
+  onClose?: () => void;
   applicationId?: string;
   listingId?: string;
   /**
@@ -221,6 +231,12 @@ export default function PlcWizard({
     };
   }, []);
   const [step, setStep] = useState<Step>("gathering");
+  const stepTold = useRef(onStep);
+  stepTold.current = onStep;
+  useEffect(() => stepTold.current?.(step), [step]);
+  /* Start fresh (8 Nov 2026): asked once before the files come off. */
+  const [fresh, setFresh] = useState<"ask" | "busy" | null>(null);
+  const [showAddress, setShowAddress] = useState(false);
   /* Try again on a failed opening read (22 Oct 2026): bumped to run it again. */
   const [attempt, setAttempt] = useState(0);
   const [leaving, setLeaving] = useState(false);
@@ -290,7 +306,9 @@ export default function PlcWizard({
     window.setTimeout(() => {
       setStep(to);
       setLeaving(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      const box = document.querySelector<HTMLElement>("[data-plc-scroll]");
+      if (box) box.scrollTo({ top: 0, behavior: "smooth" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
     }, 240);
   }, []);
 
@@ -339,7 +357,11 @@ export default function PlcWizard({
         setLetType(existing?.letType ?? (got ? (got.hmo ? "hmo" : "home") : null));
         setError(failed);
         if (existing) setKase(existing);
-        go(existing && existing.state !== "assembling" ? "returned" : "details");
+        /* A pack already started, with something in it: pick up where it was
+           left, or start again (James, 8 Nov 2026: "there's nothing more
+           annoying than them having to re-upload all of their documents"). */
+        const started = existing && existing.state === "assembling" && (existing.documents.length > 0 || (existing.waivers ?? []).length > 0);
+        go(existing && existing.state !== "assembling" ? "returned" : started && !d ? "resume" : "details");
       }, wait);
     })();
 
@@ -438,6 +460,42 @@ export default function PlcWizard({
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Pick up where it was left: straight to the documents, with anything
+   *  new on the home's file brought in on the way. */
+  const pickUp = () => {
+    if (!kase) return go("details");
+    pullFromFile(kase);
+    go("landlord");
+  };
+
+  /** Start fresh: the files come off this check and anything marked not
+   *  needed is undone. The files stay on the home's Documents tab, where the
+   *  first pass put them, so nothing is lost by accident. */
+  const startFresh = async () => {
+    if (!kase) return go("details");
+    setFresh("busy");
+    setError(null);
+    try {
+      let current = kase;
+      for (const d of kase.documents) {
+        const r = await api<{ case: PlcCase }>(`/api/plc/${kase.id}/documents?key=${encodeURIComponent(d.key)}`, { method: "DELETE" });
+        current = r.case;
+      }
+      for (const w of kase.waivers ?? []) {
+        const r = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, { method: "POST", body: JSON.stringify({ action: "unwaive", checkId: w.checkId }) });
+        current = r.case;
+      }
+      setKase(current);
+      pulling.current = null;
+      setPulled(null);
+      setFresh(null);
+      go("details");
+    } catch (e) {
+      setError((e as Error).message);
+      setFresh(null);
     }
   };
 
@@ -623,15 +681,15 @@ export default function PlcWizard({
   const filedFor = (id: CheckId) => documents.some((d) => d.checkId === id || d.covers?.includes(id));
   const stepNumber = useMemo(() => ORDER.indexOf(step), [step]);
 
-  const panel = `mx-auto w-full max-w-2xl ${leaving ? "plc-panel-out" : "plc-panel-in"}`;
+  const panel = `mx-auto w-full ${embedded ? "max-w-[1180px]" : "max-w-2xl"} ${leaving ? "plc-panel-out" : "plc-panel-in"}`;
 
   /* Back to the let it came from (James, 12 Oct 2026): "there should be a
      button in the top left-hand corner to say Go back to application".
      Coming back to the check picks up the pack already started. */
-  const backTo = !demo ? prefill?.applicationId ?? applicationId ?? null : null;
+  const backTo = !demo && !embedded ? prefill?.applicationId ?? applicationId ?? null : null;
 
   return (
-    <div className="relative mx-auto flex min-h-[70vh] max-w-3xl flex-col justify-center px-4 py-10 sm:px-6">
+    <div className={embedded ? "nl-plc-wizard relative flex min-h-full flex-col px-5 py-8 sm:px-10" : "relative mx-auto flex min-h-[70vh] max-w-3xl flex-col justify-center px-4 py-10 sm:px-6"}>
       <WizardStyles />
       {backTo && (
         <Link
@@ -645,7 +703,7 @@ export default function PlcWizard({
 
       {/* Where you are, once there is somewhere to be. Hidden during the
           opening and the ending, which are moments rather than steps. */}
-      {stepNumber > 0 && stepNumber < 5 && (
+      {!embedded && stepNumber > 0 && stepNumber < 5 && (
         <div className="mx-auto mb-8 flex w-full max-w-2xl gap-1.5">
           {["details", "landlord", "tenant", "review"].map((s, i) => (
             <span
@@ -676,9 +734,50 @@ export default function PlcWizard({
           </div>
         )}
 
+        {step === "resume" && kase && (
+          <div className="nl-plc-resume">
+            <h1 className="nl-plc-h1">Pick Up Where You Left Off?</h1>
+            <p className="nl-plc-lede">
+              {(() => {
+                const n = kase.documents.length;
+                const w = (kase.waivers ?? []).length;
+                const files = n ? `${n} ${n === 1 ? "file is" : "files are"} in` : "";
+                const ticks = w ? `${w} ${w === 1 ? "check is" : "checks are"} marked not needed` : "";
+                return `This check was started already: ${[files, ticks].filter(Boolean).join(", and ")}.`;
+              })()}
+            </p>
+            {error && <p className="nl-plc-err">{error}</p>}
+            <div className="nl-plc-choices">
+              <button type="button" className="nl-plc-choice is-main" onClick={pickUp} disabled={fresh === "busy"} data-steve="plc.resume">
+                <b>Pick up where I left off</b>
+                <span>Everything already in stays in. Carries on at the landlord documents.</span>
+              </button>
+              <button type="button" className="nl-plc-choice" onClick={() => setFresh("ask")} disabled={fresh === "busy"} data-steve="plc.start-fresh">
+                <b>Start fresh</b>
+                <span>Clears this check and starts again from the details. Files stay on the home&apos;s Documents tab.</span>
+              </button>
+            </div>
+            {fresh && (
+              <div className="nl-plc-confirm" role="alert">
+                <p>
+                  {kase.documents.length
+                    ? `Take the ${kase.documents.length} ${kase.documents.length === 1 ? "file" : "files"} off this check? They stay on the home's Documents tab, so nothing is lost.`
+                    : "Clear what's been marked not needed and start again from the details?"}
+                </p>
+                <div>
+                  <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setFresh(null)} disabled={fresh === "busy"}>Keep them</button>
+                  <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => void startFresh()} disabled={fresh === "busy"}>
+                    {fresh === "busy" ? "Clearing…" : "Yes, start fresh"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {step === "details" && (
           <div>
-            <h1 className="text-2xl tracking-normal text-ink">
+            <h1 className={embedded ? "nl-plc-h1" : "text-2xl tracking-normal text-ink"}>
               {prefill ? "Check These Over" : "The Application Didn't Come Through"}
             </h1>
             {prefill && (
@@ -718,113 +817,107 @@ export default function PlcWizard({
             )}
             {prefill && (
               <>
-                <dl className="mt-6 divide-y divide-neutral-100 rounded-xl border border-line">
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
-                      Property
-                    </dt>
-                    <dd className="min-w-0 flex-1 text-sm">{prefill.address}</dd>
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
-                      {prefill.tenants.length > 1 ? "Tenants" : "Tenant"}
-                    </dt>
-                    <dd className="min-w-0 flex-1 text-sm">
-                      {prefill.tenants.length
-                        ? prefill.tenants.map((t) => t.name).join(", ")
-                        : "Nobody recorded"}
-                    </dd>
-                  </div>
-                  {/* Move-in dates move all the time (James, 6 Oct 2026, on a
-                      room whose date came through as the 5th for a Friday the
-                      9th). The pack's date is the one every certificate is
-                      measured against, so it is changed here, plainly, and
-                      can be changed again from the last screen. */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-full shrink-0 self-start pt-2.5 text-xs uppercase tracking-wide text-muted sm:w-32">
-                      Move-in date
-                    </dt>
-                    <dd className="min-w-0 flex-1 text-sm">
-                      {/* The OS's own calendar, the one the offer screens use,
-                          rather than the browser's plain one (7 Oct 2026). */}
-                      <div className="max-w-sm">
-                        <DateField
-                          value={moveIn}
-                          onChange={setMoveIn}
-                          placeholder="Choose the move-in date"
-                          className="block h-10 w-full min-w-0 rounded-[12px] border border-line/80 bg-white px-3.5 text-[14px] outline-none focus:border-accent-dark"
-                        />
+                {/* The let as one tidy sheet (James, 8 Nov 2026): what we pulled
+                    through on the left, the two things to settle on the right.
+                    No "Open the application" - everything it would show is here. */}
+                <div className="nl-plc-details">
+                  <dl className="nl-plc-facts">
+                    <div>
+                      <dt>Property</dt>
+                      <dd>
+                        <span className={showAddress ? "" : "nl-plc-clip"} title={prefill.address}>{prefill.address}</span>
+                        {prefill.address.length > 48 && (
+                          <button type="button" className="nl-plc-more" onClick={() => setShowAddress((v) => !v)}>
+                            {showAddress ? "Less" : "See it all"}
+                          </button>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{prefill.tenants.length > 1 ? "Tenants" : "Tenant"}</dt>
+                      <dd className="nl-plc-people">
+                        {prefill.tenants.length ? prefill.tenants.map((t) => (
+                          <span key={t.name}>{t.name}{t.isPrimary && prefill.tenants.length > 1 ? <em>Lead</em> : null}</span>
+                        )) : <span className="text-muted">Nobody recorded</span>}
+                      </dd>
+                    </div>
+                    {prefill.landlordName && (
+                      <div>
+                        <dt>Landlord</dt>
+                        <dd>{prefill.landlordName}</dd>
                       </div>
+                    )}
+                    {(prefill.rentPcm || prefill.agentName) && (
+                      <div className="nl-plc-pair">
+                        {prefill.rentPcm ? (
+                          <span><dt>Rent</dt><dd>£{Math.round(prefill.rentPcm).toLocaleString("en-GB")} pcm</dd></span>
+                        ) : null}
+                        {prefill.agentName ? (
+                          <span><dt>Agent</dt><dd>{prefill.agentName}</dd></span>
+                        ) : null}
+                      </div>
+                    )}
+                  </dl>
+                  <div className="nl-plc-settle">
+                    <div className="nl-plc-field">
+                      <span className="nl-plc-label">Move-in date</span>
+                      {/* The OS's own calendar, the one the offer screens use. */}
+                      <DateField
+                        value={moveIn}
+                        onChange={setMoveIn}
+                        placeholder="Choose the move-in date"
+                        className="nl-plc-date"
+                      />
                       {!prefill.moveInDate ? (
-                        <span className="mt-1.5 block text-xs text-amber-700">Not on the application, so add it.</span>
+                        <span className="nl-plc-note is-warn">Not on the application, so add it.</span>
                       ) : moveIn && moveIn !== prefill.moveInDate ? (
-                        <span className="mt-1.5 block text-xs text-muted">
-                          Changed from {prettyDate(prefill.moveInDate)}
-                        </span>
-                      ) : null}
-                    </dd>
+                        <span className="nl-plc-note">Changed from {prettyDate(prefill.moveInDate)}</span>
+                      ) : (
+                        <span className="nl-plc-note">From the application. Change it if it has moved.</span>
+                      )}
+                    </div>
+                    <div className="nl-plc-field">
+                      <span className="nl-plc-label">Property type</span>
+                      {/* Pre-picked from the property record (8 Nov 2026); the
+                          agent has the last word. HMO adds the HMO documents. */}
+                      <div className="nl-plc-seg" role="radiogroup" aria-label="Property type">
+                        {([
+                          ["home", "Residential"],
+                          ["hmo", "HMO"],
+                        ] as const).map(([v, label]) => (
+                          <button key={v} type="button" role="radio" aria-checked={letType === v} onClick={() => setLetType(v)} className={letType === v ? "is-on" : ""}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="nl-plc-note">
+                        {prefill.hmo ? "The property record says HMO." : "The property record says residential."} HMO adds the HMO checks.
+                      </span>
+                    </div>
                   </div>
-                  {/* Residential or HMO (James, 6 Oct 2026: "this property is an
-                      HMO, and therefore it needs a PAT test"). Guessed from the
-                      property; the agent has the last word. Two words and no
-                      explanation underneath (7 Oct): agents know what an HMO
-                      needs. */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-                    <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
-                      Property type
-                    </dt>
-                    <dd className="flex min-w-0 flex-1 flex-wrap gap-2">
-                      {([
-                        ["home", "Residential"],
-                        ["hmo", "HMO"],
-                      ] as const).map(([v, label]) => (
-                        <button
-                          key={v}
-                          type="button"
-                          aria-pressed={letType === v}
-                          onClick={() => setLetType(v)}
-                          className={`rounded-lg border px-3 py-1.5 text-sm transition ${
-                            letType === v ? "border-ink bg-ink text-white" : "border-line hover:bg-box"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </dd>
-                  </div>
-                </dl>
+                </div>
                 {prefill.warnings.length > 0 && (
-                  <ul className="mt-4 space-y-1.5">
+                  <ul className="nl-plc-warnings">
                     {prefill.warnings.map((w) => (
-                      <li key={w} className="text-sm text-amber-700">
-                        {w}
-                      </li>
+                      <li key={w}>{w}</li>
                     ))}
                   </ul>
                 )}
-                <div className="mt-8 flex flex-wrap items-center gap-3">
+                <div className="nl-plc-foot">
+                  {embedded && onClose && (
+                    <button type="button" onClick={onClose} className="nl-btn nl-btn--quiet">
+                      Not now
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={startAndContinue}
                     disabled={busy || !letType}
-                    title={!letType ? "Say whether this is a whole home or an HMO first" : undefined}
-                    className={PRIMARY}
+                    title={!letType ? "Say whether this is residential or an HMO first" : undefined}
+                    className="nl-btn nl-btn--primary"
                   >
                     {busy ? "One moment…" : "Continue"}
                   </button>
-                  {/* The people and the property are the application's, so a
-                      wrong name is put right there. Opened in a new tab so the
-                      pack in progress is not lost. */}
-                  {!demo && (
-                    <a
-                      href={`/applications/${encodeURIComponent(prefill.applicationId)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={SECONDARY}
-                    >
-                      Open the application
-                    </a>
-                  )}
                 </div>
               </>
             )}
@@ -833,7 +926,7 @@ export default function PlcWizard({
 
         {(step === "landlord" || step === "tenant") && kase && (
           <div>
-            <h1 className="text-2xl tracking-normal text-ink">
+            <h1 className={embedded ? "nl-plc-h1" : "text-2xl tracking-normal text-ink"}>
               {step === "landlord" ? "Landlord Documents" : "Tenant Documents"}
             </h1>
             {rexNote && step === "landlord" && (
@@ -867,18 +960,25 @@ export default function PlcWizard({
                 The home&apos;s Documents tab couldn&apos;t be read just now, so upload anything that isn&apos;t below.
               </p>
             )}
-            <PlcDocuments
-              key={step}
-              step={step}
-              kase={kase}
-              onChanged={setKase}
-              context={{
-                tenants: prefill?.tenants.map((t) => t.name) ?? [],
-                landlord: prefill?.landlordName ?? null,
-              }}
-              focus={focus}
-              demo={Boolean(demo)}
-            />
+            <div className={embedded && !demo ? "nl-plc-docs-split" : ""}>
+              <PlcDocuments
+                key={step}
+                step={step}
+                kase={kase}
+                onChanged={setKase}
+                context={{
+                  tenants: prefill?.tenants.map((t) => t.name) ?? [],
+                  landlord: prefill?.landlordName ?? null,
+                }}
+                focus={focus}
+                demo={Boolean(demo)}
+              />
+              {/* What the home already holds, beside it, to map anything the
+                  reader missed (James, 8 Nov 2026). */}
+              {embedded && !demo && (
+                <HomeFilesPanel kase={kase} step={step} address={prefill?.address ?? kase.address} propertyId={prefill?.propertyId ?? null} onChanged={setKase} />
+              )}
+            </div>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button type="button" onClick={() => go(step === "landlord" ? "details" : "landlord")} className={SECONDARY}>
                 Back

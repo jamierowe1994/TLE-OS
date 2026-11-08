@@ -249,8 +249,8 @@ export default function HomeLandlords({
   if (deck) {
     const noLandlord = people !== null && main !== null && !main.length && !joint.length && requireOne;
     const cards = main === null ? null : [
-      ...main.map((m) => ({ key: m.key, node: <div className="nl-pcard nl-pcard--landlord">{mainBody(m)}</div> })),
-      ...joint.map((p) => ({ key: p.id, node: <div className="nl-pcard nl-pcard--landlord">{cardBody(p)}</div> })),
+      ...main.map((m) => ({ key: m.key, node: <EditCard canEdit={!readOnly && Boolean(m.personRef || m.saver)}>{mainBody(m)}</EditCard> })),
+      ...joint.map((p) => ({ key: p.id, node: <EditCard canEdit={!readOnly}>{cardBody(p)}</EditCard> })),
       ...contacts.map((p) => ({ key: p.id, node: <div className="nl-pcard"><p className="nl-pcard-tag">Point of contact</p>{cardBody(p)}</div> })),
     ];
     return (
@@ -426,6 +426,34 @@ export function AddPersonModal({ kind, address, note, onClose, onSubmit }: {
           <button type="button" onClick={() => void save()} disabled={busy} className="rounded-full bg-accent-dark px-5 py-2 text-[12.5px] font-semibold text-page disabled:opacity-50">{busy ? "Saving…" : "Add them"}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A landlord's card with an Edit button (James, 8 Nov 2026: "what if their
+ * number changes halfway?"). The details were always click-to-change, but
+ * nothing said so. Edit outlines each one and says where it saves; the
+ * change goes where that landlord is kept, so it carries forward.
+ */
+function EditCard({ canEdit, children }: { canEdit: boolean; children: React.ReactNode }) {
+  const [on, setOn] = useState(false);
+  return (
+    <div className={`nl-pcard nl-pcard--landlord${on ? " is-editing" : ""}`}>
+      {canEdit && (
+        <button type="button" className="nl-pcard-edit nl-pcard-corner" onClick={() => setOn((v) => !v)} data-steve="landlord.edit">
+          {on ? (
+            "Done"
+          ) : (
+            <>
+              <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" /></svg>
+              Edit
+            </>
+          )}
+        </button>
+      )}
+      {on && <p className="nl-pcard-hint">Click a detail to change it. It saves as you go, to the landlord&apos;s record.</p>}
+      {children}
     </div>
   );
 }

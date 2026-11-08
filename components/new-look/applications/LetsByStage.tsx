@@ -170,7 +170,7 @@ export default function LetsByStage({
   /* Unknown while Propoly is read; "-" if it failed, never a number we don't have. */
   const tabs: { id: StageId; label: string; n: number | null | "-" }[] = [
     { id: "all", label: "All", n: error ? "-" : deals === null || !waitingReady ? null : mine.length + waitingMine.length },
-    { id: "handover", label: "To hand over", n: waitingReady ? waitingMine.length : null },
+    { id: "handover", label: "To push to Propoly", n: waitingReady ? waitingMine.length : null },
     ...PORTAL_STAGES.map((s) => ({ id: s.key, label: s.label, n: error ? ("-" as const) : deals === null ? null : countOf(s.key) })),
   ];
 
@@ -340,7 +340,7 @@ export default function LetsByStage({
         {showWaiting && (
           <section className="nl-apps-group">
             <div className="nl-apps-group-head">
-              <h2 className="nl-section-title">To Hand Over</h2>
+              <h2 className="nl-section-title">To Push to Propoly</h2>
               <span className="nl-count">{waitingFound.length}</span>
               <span className="nl-meta nl-apps-group-note">Accepted, not in Propoly yet. Open one and press Push to Propoly.</span>
             </div>
@@ -372,7 +372,7 @@ export default function LetsByStage({
                         go();
                       }}
                     >
-                      Hand over
+                      Push to Propoly
                     </button>
                   </div>
                 </div>
@@ -410,7 +410,7 @@ export default function LetsByStage({
                 : stage === "all"
                   ? `No lets in progress${all ? "" : " on your book"} yet. Once an offer is accepted and Kirstie starts the deal, it shows here.`
                   : stage === "handover"
-                    ? "Nothing waiting to hand over. Lovely."
+                    ? "Nothing waiting to go to Propoly. Lovely."
                     : `Nothing at ${tabs.find((t) => t.id === stage)?.label ?? "this stage"}. Lovely.`}
             </span>
           </div>

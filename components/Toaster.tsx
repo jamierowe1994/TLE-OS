@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { TOAST_EVENT, TOAST_LIFT_EVENT, type ToastDetail, type ToastLift } from "@/lib/toast";
+import { TOAST_EVENT, TOAST_LIFT_EVENT, type Problem, type ToastDetail, type ToastLift } from "@/lib/toast";
+import ProblemSheet from "@/components/ProblemSheet";
 
 /**
  * Shows lib/toast's messages, one at a time, at the foot of the window.
@@ -30,6 +31,8 @@ const GAP = 14;
 export default function Toaster({ at = "bottom" }: { at?: "bottom" | "top" } = {}) {
   const [item, setItem] = useState<(ToastDetail & { key: number }) | null>(null);
   const [shown, setShown] = useState(false);
+  /* A "didn't work" toast pressed: why, and the ticket (8 Nov 2026). */
+  const [opened, setOpened] = useState<Problem | null>(null);
   const pill = useRef<HTMLDivElement | null>(null);
   const hideTimer = useRef<number | null>(null);
   const clearTimer = useRef<number | null>(null);
@@ -89,7 +92,33 @@ export default function Toaster({ at = "bottom" }: { at?: "bottom" | "top" } = {
         at === "top" ? "inset-x-0 top-4 justify-center px-4" : "os-toast-pill-wrap bottom-3 right-3 justify-end pl-4"
       }`}
     >
-      {item && (
+      {item?.problem && (
+        <button
+          key={item.key}
+          ref={pill as unknown as React.RefObject<HTMLButtonElement>}
+          type="button"
+          data-steve="toast.problem"
+          onClick={() => {
+            const p = item.problem!;
+            if (hideTimer.current) window.clearTimeout(hideTimer.current);
+            setShown(false);
+            clearTimer.current = window.setTimeout(() => setItem(null), 250);
+            setOpened(p);
+          }}
+          className={`os-problem-toast pointer-events-auto flex max-w-[min(calc(100vw-1.5rem),420px)] items-start gap-3 bg-accent-dark px-4 py-3 text-left text-white shadow-[0_16px_36px_-14px_rgba(0,0,0,0.5)] transition-[opacity,translate] ease-out motion-reduce:transition-none ${
+            shown ? "translate-y-0 opacity-100 duration-200 delay-100" : "translate-y-3 opacity-0 duration-200"
+          }`}
+        >
+          <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-0.5 shrink-0">
+            <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7.5v5.5M12 16.5h.01" />
+          </svg>
+          <span className="min-w-0">
+            <span className="block text-[13.5px] font-semibold leading-[19px]">{item.text}</span>
+            <span className="mt-0.5 block text-[12.5px] leading-[18px] opacity-90">Press here to see why, and send it to us in one go.</span>
+          </span>
+        </button>
+      )}
+      {item && !item.problem && (
         <div
           key={item.key}
           ref={pill}
@@ -115,6 +144,7 @@ export default function Toaster({ at = "bottom" }: { at?: "bottom" | "top" } = {
           <span className={item.tone === "bad" ? "line-clamp-3" : "truncate"}>{item.text}</span>
         </div>
       )}
+      {opened && <ProblemSheet problem={opened} onClose={() => setOpened(null)} />}
     </div>
   );
 }

@@ -319,3 +319,77 @@
 [data-look="new"] .nl-pcard .group\/row { flex-wrap: wrap; }
 [data-look="new"] .nl-pcard .group\/row > span.flex-1 { flex: 1 1 auto; min-width: min(100%, 9.5em); }
 [data-look="new"] .nl-pcard .group\/row > :last-child:is(button) { display: none; }
+/* Every box the same size, always (James, 8 Nov 2026): the applicant's box
+   sets it, a touch bigger than its content, and the guarantor and landlord
+   match it however little they hold. Anything longer scrolls inside. */
+@media (min-width: 761px) {
+  [data-look="new"] .nl-people3 .nl-pdeck-card > .nl-pcard,
+  [data-look="new"] .nl-people3 .nl-pdeck-stack > .nl-pdeck-card > *,
+  [data-look="new"] .nl-people3 .nl-pdeck-empty { height: 420px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+}
+[data-look="new"] .nl-pdeck-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; background: var(--card); border-style: solid; }
+[data-look="new"] .nl-pdeck-empty-t { font-size: 15px; font-weight: 600; color: var(--ink); }
+/* What the step you're on means, under the line (8 Nov 2026). */
+[data-look="new"] .nl-apps-track-about { margin: 6px 0 0; max-width: 760px; font-size: 13.5px; line-height: 20px; color: var(--ink); padding-left: 12px; border-left: 2px solid var(--accent); }
+/* Tighter, and the same type on every card (8 Nov 2026: "a little bit too
+   big", "the landlord's text much smaller than the tenant's"). */
+@media (min-width: 761px) {
+  [data-look="new"] .nl-people3 .nl-pdeck-card > .nl-pcard,
+  [data-look="new"] .nl-people3 .nl-pdeck-stack > .nl-pdeck-card > *,
+  [data-look="new"] .nl-people3 .nl-pdeck-empty { height: 300px; }
+}
+[data-look="new"] .nl-people3 { gap: 20px; }
+[data-look="new"] .nl-pcard { position: relative; padding: 18px 20px; }
+[data-look="new"] .nl-pcard .group\/row > span.flex-1,
+[data-look="new"] .nl-pcard .group\/row > span.flex-1 *,
+[data-look="new"] .nl-pcard .nl-pcard-lines { font-size: 14px; line-height: 20px; }
+[data-look="new"] .nl-pcard--landlord > div > p.leading-snug:first-child,
+[data-look="new"] .nl-pcard--landlord > div > p.leading-snug:first-child * { font-size: 16px; line-height: 22px; font-weight: 600; }
+[data-look="new"] .nl-pcard--landlord > div > p.leading-snug:first-child { margin-bottom: 8px; padding-right: 72px; }
+[data-look="new"] .nl-pcard-corner { position: absolute; top: 16px; right: 18px; z-index: 1; }
+[data-look="new"] .nl-pcard-hint { margin: 0 0 10px; padding-right: 72px; font-size: 12.5px; line-height: 18px; color: var(--sage-deep); }
+/* Editing: every detail shows as a box to click. */
+[data-look="new"] .nl-pcard.is-editing .group\/row > span.flex-1 > button,
+[data-look="new"] .nl-pcard.is-editing p.leading-snug > button,
+[data-look="new"] .nl-pcard.is-editing .text-\[11\.5px\] button { outline: 1px dashed color-mix(in srgb, var(--sage-deep) 60%, transparent); outline-offset: 2px; background: #fff; }
+
+/* ── Push to Propoly, the pop-out (components/propoly/PushToPropoly, 8 Nov 2026) ── */
+[data-look="new"] .nl-ptp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 36px; align-items: start; }
+[data-look="new"] .nl-ptp-info, [data-look="new"] .nl-ptp-act { min-width: 0; display: grid; gap: 14px; align-content: start; }
+[data-look="new"] .nl-ptp-act { position: sticky; top: 0; }
+@media (max-width: 960px) { [data-look="new"] .nl-ptp { grid-template-columns: 1fr; } [data-look="new"] .nl-ptp-act { position: static; } }
+[data-look="new"] .nl-ptp-lines { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-ptp-lines li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-ptp-lines li:first-child { border-top: 0; padding-top: 2px; }
+[data-look="new"] .nl-ptp-lines b { display: block; font-size: 14.5px; font-weight: 600; }
+[data-look="new"] .nl-ptp-lines small { display: block; font-size: 12.5px; color: var(--muted); }
+[data-look="new"] .nl-ptp-ok { flex: none; display: grid; place-items: center; width: 24px; height: 24px; background: var(--sage-deep); color: #fff; }
+[data-look="new"] .nl-ptp-warn { flex: none; padding: 3px 9px; font-size: 11.5px; font-weight: 600; color: var(--bad-ink); background: var(--bad-soft); white-space: nowrap; }
+[data-look="new"] .nl-ptp-none { margin: 0; font-size: 13.5px; color: var(--muted); }
+[data-look="new"] .nl-ptp-todo { margin: 0; padding: 0 0 0 18px; display: grid; gap: 6px; font-size: 14px; line-height: 20px; color: var(--bad-ink); }
+[data-look="new"] .nl-ptp-ready { margin: 0; font-size: 14px; line-height: 20px; color: var(--sage-deep); }
+[data-look="new"] .nl-ptp-go { margin-top: 16px; }
+[data-look="new"] .nl-ptp-why { margin: 0; font-size: 14px; line-height: 21px; }
+/* The deal form, inside the pop-out: square and on the panel. */
+[data-look="new"] .nl-ptp-act [data-steve="application.deal-terms"] { margin: 0 !important; background: var(--card) !important; border: 1px solid var(--line-strong) !important; padding: 18px 20px !important; }
+[data-look="new"] .nl-ptp-act [data-steve="application.deal-terms"] > p:first-child { font-family: var(--fs-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 13px; }
+[data-look="new"] .nl-ptp-act input, [data-look="new"] .nl-ptp-act select { height: 38px; font-size: 14px; background: #fff; border-color: var(--line-strong) !important; }
+/* It's in Propoly: the big moment. */
+[data-look="new"] .nl-ptp--landed { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+[data-look="new"] .nl-ptp-landed { display: grid; justify-items: start; gap: 10px; padding: 28px 0; }
+[data-look="new"] .nl-ptp-burst { display: grid; place-items: center; width: 84px; height: 84px; background: var(--sage-deep); color: #fff; animation: nl-ptp-pop 0.6s var(--nl-ease) backwards, nl-ptp-ring 1.6s ease-out 0.3s 2; }
+@keyframes nl-ptp-pop { from { transform: scale(0.3) rotate(-12deg); opacity: 0; } 60% { transform: scale(1.08) rotate(3deg); } }
+@keyframes nl-ptp-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sage-deep) 45%, transparent); } 100% { box-shadow: 0 0 0 28px transparent; } }
+[data-look="new"] .nl-ptp-landed-t { margin: 8px 0 0; font-size: 18px; font-weight: 600; }
+[data-look="new"] .nl-ptp-landed-s { margin: 0; font-size: 14px; color: var(--muted); max-width: 46ch; }
+[data-look="new"] .nl-ptp-landed-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+[data-look="new"] .nl-ptp-check { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-ptp-check li + li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-ptp-check label { display: flex; gap: 12px; align-items: flex-start; padding: 11px 0; cursor: pointer; }
+[data-look="new"] .nl-ptp-check input { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--sage-deep); flex: none; }
+[data-look="new"] .nl-ptp-check b { display: block; font-size: 14.5px; font-weight: 600; }
+[data-look="new"] .nl-ptp-check small { display: block; margin-top: 2px; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-ptp-check input:checked + span b { text-decoration: line-through; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-ptp-burst { animation: none; } }
+[data-look="new"] .nl-ptp-todo.is-soft { color: var(--ink); }
+[data-look="new"] .nl-ptp-note { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }

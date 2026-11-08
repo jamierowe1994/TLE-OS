@@ -59,7 +59,25 @@ export interface JourneyStop {
   sub: string | null;
   tone: "ok" | "warn" | "none";
   state: "done" | "current" | "upcoming" | "off";
+  /** What this step means, in a sentence an agent would use (8 Nov 2026). */
+  about?: string;
 }
+
+/** What each step means, said plainly (James, 8 Nov 2026: "what does
+ *  handover actually mean?"). Propoly's own steps fall back to their blurbs. */
+const STEP_ABOUT: Record<string, string> = {
+  received: "The offer came in from the applicant.",
+  decision: "The landlord says yes or no to the offer.",
+  handover:
+    "Sends the landlord, the home and the tenants to Propoly so the pre-tenancy team can run the paperwork. It's still your let: you stay the tenant's and the landlord's contact all the way to move-in.",
+  holding_fee: "The tenant pays the holding fee, which takes the home off the market.",
+  referencing: "Each tenant (and any guarantor) is referenced: credit, employer and last landlord.",
+  plc: "The pre-let checks: right to rent, the certificates and any licence, before anyone moves in.",
+  deposit: "The deposit is paid and registered with the scheme.",
+  tenancy_agreement: "The tenancy agreement goes out and everyone signs it.",
+  rent_payment: "The first month's rent is paid and the standing order is set up.",
+  move_day: "Keys, inventory and check-in. The tenant moves in.",
+};
 
 export interface JourneyAction {
   id: string;
@@ -802,6 +820,29 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       }
     }
   }
+
+  /* ONE STEP FOR PROPOLY (James, 8 Nov 2026). "Handover" read as handing
+     the let to Kirstie and walking away, and "Deal started" sat beside it
+     meaning the same thing from Propoly's side. Now one step, Push to
+     Propoly: done the moment the deal is there, and then the holding fee is
+     what's next. The id stays "handover" for everything that reads it. */
+  const hi = stops.findIndex((x) => x.id === "handover");
+  const di = stops.findIndex((x) => x.id === "deal_started");
+  if (hi >= 0) {
+    const h = stops[hi];
+    const pushed = h.state === "done";
+    h.label = "Push to Propoly";
+    if (!pushed && h.sub === "Not handed over yet") h.sub = "Not pushed yet";
+    if (di >= 0) {
+      const d = stops[di];
+      if (pushed && d.state === "current") {
+        const next = stops.slice(di + 1).find((x) => x.state === "upcoming");
+        if (next) next.state = "current";
+      }
+      stops.splice(di, 1);
+    }
+  }
+  for (const st of stops) st.about = STEP_ABOUT[st.id] ?? PORTAL_STAGES.find((p) => p.key === st.id)?.blurb ?? undefined;
 
   return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null, inPropoly, history };
 }

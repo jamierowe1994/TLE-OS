@@ -465,8 +465,9 @@ export default function PlcDocuments({
      home with no gas supply she pressed Add, found nothing to add, and was
      stuck. The reason is given here, on the row that asks for it - the same
      waiver the last screen records. */
-  const waive = async (id: CheckId, undo = false) => {
+  const waive = async (id: CheckId, undo = false, given?: string) => {
     setErr(null);
+    const reason = (given ?? why[id] ?? "").trim();
     if (demo) {
       onChanged({
         ...kase,
@@ -474,7 +475,7 @@ export default function PlcDocuments({
           ? (kase.waivers ?? []).filter((w) => w.checkId !== id)
           : [
               ...(kase.waivers ?? []).filter((w) => w.checkId !== id),
-              { checkId: id, reason: (why[id] ?? "").trim(), by: kase.agentName, at: new Date().toISOString() },
+              { checkId: id, reason, by: kase.agentName, at: new Date().toISOString() },
             ],
       });
       setWhyOpen(null);
@@ -484,7 +485,7 @@ export default function PlcDocuments({
     try {
       const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
         method: "POST",
-        body: JSON.stringify(undo ? { action: "unwaive", checkId: id } : { action: "waive", checkId: id, reason: why[id] ?? "" }),
+        body: JSON.stringify(undo ? { action: "unwaive", checkId: id } : { action: "waive", checkId: id, reason }),
       });
       onChanged(res.case);
       setWhyOpen(null);
@@ -754,38 +755,47 @@ export default function PlcDocuments({
                         : b.text}
                 </span>
                 <span className="ml-auto flex items-center gap-3">
-                  {conditional && !has && !waiver && whyOpen !== c.id && (
-                    <button
-                      type="button"
-                      onClick={() => setWhyOpen(c.id)}
-                      className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
-                    >
-                      Not needed?
-                    </button>
+                  {/* "Not needed" is a tick (James, 8 Nov 2026): ticked, it saves at
+                      once with a ready-made reason, and Edit puts the reason right. */}
+                  {conditional && !has && (
+                    <label className={`nl-plc-notneeded${waiver ? " is-on" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(waiver)}
+                        disabled={waiving === c.id}
+                        onChange={(e) => {
+                          if (e.target.checked) void waive(c.id, false, defaultReason(c.id));
+                          else void waive(c.id, true);
+                        }}
+                      />
+                      Not needed
+                    </label>
                   )}
-                  <button
+                  {!waiver && <button
                     type="button"
                     onClick={() => addTo(c.id)}
                     className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
                   >
                     Add
-                  </button>
+                  </button>}
                 </span>
               </div>
-              {waiver && (
-                <p className="mt-1 flex items-start gap-2 pl-5 text-xs text-muted">
-                  <span className="min-w-0">&ldquo;{waiver.reason}&rdquo;</span>
+              {waiver && whyOpen !== c.id && (
+                <p className="nl-plc-waiver">
+                  <span className="min-w-0">{waiver.reason}</span>
                   <button
                     type="button"
-                    onClick={() => void waive(c.id, true)}
+                    onClick={() => {
+                      setWhy((w) => ({ ...w, [c.id]: waiver.reason }));
+                      setWhyOpen(c.id);
+                    }}
                     disabled={waiving === c.id}
-                    className="shrink-0 underline hover:text-ink disabled:opacity-40"
                   >
-                    undo
+                    Edit
                   </button>
                 </p>
               )}
-              {whyOpen === c.id && !has && !waiver && (
+              {whyOpen === c.id && !has && (
                 <form
                   className="mt-2 flex flex-wrap items-center gap-2 pl-5"
                   onSubmit={(e) => {
@@ -805,7 +815,7 @@ export default function PlcDocuments({
                     disabled={(why[c.id] ?? "").trim().length < 8 || waiving === c.id}
                     className="rounded-lg border border-line px-3 py-1.5 text-xs transition hover:bg-box disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {waiving === c.id ? "Saving…" : "Not needed"}
+                    {waiving === c.id ? "Saving…" : "Save the reason"}
                   </button>
                   <button
                     type="button"
@@ -850,6 +860,10 @@ const RED_BOX = "rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text
 
 function PropolyNameNote({ doc }: { doc: PlcDocument }) {
   if (doc.placeholder || !propolyTypeFor(doc.checkId, doc.name)) return null;
+  /* Only the size now (James, 8 Nov 2026: "don't worry about the 40
+     characters ... I'd rather just hide it"). The push shortens a long name
+     itself, so that box only ever worried people. */
+  const HIDE_NAME_LENGTH = true;
   const big = propolyTooBig(doc.size);
   const sizeBox = big ? (
     <div className="order-last w-full pl-[3.25rem]">
@@ -870,7 +884,7 @@ function PropolyNameNote({ doc }: { doc: PlcDocument }) {
       </div>
     );
   }
-  if (name.length <= PROPOLY_NAME_MAX) return sizeBox;
+  if (HIDE_NAME_LENGTH || name.length <= PROPOLY_NAME_MAX) return sizeBox;
   return (
     <>
       {sizeBox}
@@ -915,9 +929,14 @@ function OtherLabel({ doc, busy, onSave }: { doc: PlcDocument; busy: boolean; on
         className="min-w-0 flex-1 basis-48 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs text-ink outline-none focus:border-amber-500 disabled:opacity-60"
       />
       {doc.label && draft.trim() === doc.label && <span className="text-xs text-emerald-700">Saved</span>}
-      {draft.trim().length > PROPOLY_NAME_MAX && (
-        <LongNameBox length={draft.trim().length} sent={propolyFileName(draft.trim(), "Document")} what="name" fix="Shorten it" inset={false} />
-      )}
+      {/* No 40-character warning (8 Nov 2026): the push shortens the name itself. */}
     </label>
   );
+}
+
+/** The reason a "Not needed" tick saves with, from the example the box
+ *  always showed (lib/plc whyPlaceholder). Edit puts it right. */
+function defaultReason(id: CheckId): string {
+  const ex = whyPlaceholder(id).replace(/^Why not needed\?\s*(e\.g\.)?\s*/i, "").trim();
+  return ex.length >= 8 ? ex : "Not needed for this let";
 }

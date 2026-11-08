@@ -20,6 +20,8 @@ import ContactBlock from "@/components/ContactBlock";
 import RightToRentField, { suggestedFor, type RtrShown, type RtrSuggested } from "@/components/RightToRentField";
 import Guarantors from "@/components/Guarantors";
 import PeopleDeck from "@/components/new-look/PeopleDeck";
+import PlcOverlay from "@/components/plc/PlcOverlay";
+import PushToPropoly from "@/components/propoly/PushToPropoly";
 import { GuarantorsToPropoly } from "@/components/LetPropoly";
 import LetTenants from "@/components/LetTenants";
 import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
@@ -304,7 +306,10 @@ function dealStops(d: PreTenancyDeal): SpineStop[] {
     const st = i <= at ? stageStatus(d, s.key) : null;
     return {
       id: s.key,
-      label: s.label,
+      /* "Deal started" read as a separate job (8 Nov 2026): on a let that is
+         only in Propoly it is simply that - it's in Propoly. */
+      label: s.key === "deal_started" ? "In Propoly" : s.label,
+      about: s.blurb,
       state: i < at ? "done" : i === at ? "current" : "upcoming",
       sub: st?.text,
       tone: st ? (/f1f4ec/.test(st.tone) ? "ok" : /fdefec|amber/.test(st.tone) ? "warn" : undefined) : undefined,
@@ -1071,6 +1076,10 @@ export default function ApplicationDrawer({
      Propoly alone, agreed before the OS (Joe Patten's 340 Four Chimneys
      Crescent, 2 Nov 2026) - from the deal itself: a deal is an accepted let. */
   const plcStartHref = app ? `/plc/start?application=${encodeURIComponent(app.id)}` : deal ? `/plc/start?application=${encodeURIComponent(deal.app.id)}` : null;
+  /* The PLC check opens over the let (James, 8 Nov 2026), not on a page of its own. */
+  const [plcOpen, setPlcOpen] = useState(false);
+  /* Push to Propoly as one pop-out (8 Nov 2026), from Next Up and the "Not in Propoly yet" chip. */
+  const [pushOpen, setPushOpen] = useState(false);
   const plcReady = app ? offerIn : Boolean(deal);
   const lead = people.find((p) => p.isPrimary) ?? people[0];
   const name = app?.property ?? deal?.app.propertyName ?? "This let";
@@ -1577,14 +1586,10 @@ export default function ApplicationDrawer({
       <button type="button" className="nl-btn nl-btn--primary" onClick={() => setBuilder({ mode: "update", start: { kind: "cancelled", to: "tenant:0" } })}>
         <Ico name="mail" /> Update the tenant
       </button>
-    ) : !intro && app && propoly.state === "push" ? (
-      <button type="button" className="nl-btn nl-btn--primary" onClick={() => setPropolyOpen(true)}>
-        <Ico name="arrow" /> Push to Propoly
-      </button>
-    ) : plcCan && plcHref ? (
-      <Link href={plcHref} className="nl-btn nl-btn--primary">
+    ) : plcCan && plcHref && !(!intro && app && propoly.state === "push") ? (
+      <button type="button" className="nl-btn nl-btn--primary" onClick={() => setPlcOpen(true)}>
         <Ico name="arrow" /> {plcLabel}
-      </Link>
+      </button>
     ) : !app && deal ? (
       <a href={propolyDealUrl(deal.app.id)} target="_blank" rel="noopener noreferrer" className="nl-btn nl-btn--primary">
         Open in Propoly <Ico name="arrow" />
@@ -1600,7 +1605,7 @@ export default function ApplicationDrawer({
       "rule",
       ...(people.length ? [{ label: people.length > 1 ? "The tenants" : "The tenant", onClick: () => setPerson({ role: "tenant", index: 0 }) }] : []),
       { label: noLandlord ? "Add the landlord" : landlordsAll.length > 1 ? "The landlords" : "The landlord", onClick: () => (noLandlord ? setAddLandlordOpen(true) : setPerson({ role: "landlord", index: 0 })) },
-      ...(plcHref && plcCan && !(mainJob && propoly.state !== "push") ? [{ label: plcLabel, href: plcHref }] : []),
+      ...(plcHref && plcCan && !(mainJob && propoly.state !== "push") ? [{ label: plcLabel, onClick: () => setPlcOpen(true) }] : []),
       ...(app && !intro && (propoly.state === "early" || (propoly.state === "in" && !propoly.url)) ? [{ label: propoly.state === "in" ? "In Propoly" : "Not in Propoly yet", sub: propoly.sub ?? undefined, onClick: () => setPropolyOpen(true) }] : []),
       ...(app && !intro && propoly.state === "push" && cancelled ? [{ label: "Push to Propoly", onClick: () => setPropolyOpen(true) }] : []),
       ...(propoly.state === "in" && propoly.url ? [{ label: "Open in Propoly", sub: propoly.sub ?? undefined, href: propoly.url }] : []),
@@ -1629,8 +1634,8 @@ export default function ApplicationDrawer({
         </button>
       )
     ) : propoly.state === "push" || propoly.state === "early" ? (
-      <button type="button" onClick={() => setPropolyOpen(true)} className="nl-market-btn nl-apps-notin">
-        {propoly.state === "push" ? "Not in Propoly - push it" : "Not in Propoly"}
+      <button type="button" onClick={() => (app && propoly.state === "push" ? setPushOpen(true) : setPropolyOpen(true))} className="nl-market-btn nl-apps-notin">
+        Not in Propoly yet
       </button>
     ) : null;
 
@@ -1639,7 +1644,9 @@ export default function ApplicationDrawer({
     const ideas: { says: string; act: string; go: () => void }[] = cancelled
       ? []
       : [
-          ...(app && !intro && propoly.state === "push" ? [{ says: "It's accepted and not in Propoly yet. Push it across and Kirstie can take it from there.", act: "Push to Propoly", go: () => setPropolyOpen(true) }] : []),
+          /* No third Push to Propoly here (8 Nov 2026): it lives once, in
+             Next Up, and Steve points at it rather than doubling it. */
+          ...(app && !intro && propoly.state === "push" ? [{ says: "The one thing waiting is in Next Up: push it to Propoly. It's still your let after that - you stay the tenant's and the landlord's contact.", act: "Show me", go: () => document.querySelector("[data-next-up]")?.scrollIntoView({ behavior: "smooth", block: "center" }) }] : []),
           ...(dealStatus?.text === "Move-in slipped" ? [{ says: `The move-in date has been and gone. Agree a new one with ${leadFirst} and the landlord.`, act: "Send a customer update", go: () => setBuilder({ mode: "update" }) }] : []),
           ...(noLandlord ? [{ says: "There's no landlord on this let yet. Every let needs one.", act: "Add the landlord", go: () => setAddLandlordOpen(true) }] : []),
           ...(flags.length ? [{ says: `Kirstie's side has flagged this one: ${flags[0]}.`, act: "Add a comment", go: () => setNlTab("notes") }] : []),
@@ -1839,6 +1846,31 @@ export default function ApplicationDrawer({
     return (
       <SaveScopeProvider scope={saves}>
         <div data-look="new" data-steve="application.drawer" className="nl-page nl-rise nl-app nl-edge">
+          {pushOpen && app && (
+            <PushToPropoly
+              applicationId={app.id}
+              address={[name, locality].filter(Boolean).join(", ")}
+              onClose={() => setPushOpen(false)}
+              onChanged={() => setJourneyTick((n) => n + 1)}
+              onEdit={(what, index) => {
+                setPushOpen(false);
+                if (what === "landlord") setPerson({ role: "landlord", index: index ?? 0 });
+                else if (what === "tenant") setPerson({ role: "tenant", index: index ?? 0 });
+                else if (what === "documents") setNlTab("documents");
+                else setFigEdit(true);
+              }}
+            />
+          )}
+          {plcOpen && (app || deal) && (
+            <PlcOverlay
+              applicationId={app?.id ?? deal!.app.id}
+              address={[name, locality].filter(Boolean).join(", ")}
+              onClose={() => {
+                setPlcOpen(false);
+                setDetailsTick((n) => n + 1);
+              }}
+            />
+          )}
           <div className="nl-crumbs">
             <Link href={backHref} className="nl-crumb">
               <Ico name="back" size={14} /> Applications
@@ -1995,7 +2027,7 @@ export default function ApplicationDrawer({
             <div className="nl-apps-track">
               <div className="nl-progress" style={{ "--nl-steps": stops.length } as React.CSSProperties} aria-label="Where it's up to">
                 {stops.map((st) => (
-                  <div key={st.id} title={st.sub ?? undefined} className={`nl-step${st.state === "done" ? " done" : st.state === "current" ? " now" : ""}${st.state === "off" ? " is-off" : ""}`}>
+                  <div key={st.id} title={[st.sub, st.about].filter(Boolean).join(" - ") || undefined} className={`nl-step${st.state === "done" ? " done" : st.state === "current" ? " now" : ""}${st.state === "off" ? " is-off" : ""}`}>
                     <i />
                     <span>{st.label}</span>
                   </div>
@@ -2006,6 +2038,7 @@ export default function ApplicationDrawer({
                 {here?.sub ? ` · ${here.sub}` : ""}
                 {intro ? " · Marketing only: the offer, and that's the end of it." : ""}
               </p>
+              {here?.about && !intro && <p className="nl-apps-track-about">{here.about}</p>}
             </div>
           ) : (
             <p className="nl-meta nl-apps-track-wait">
@@ -2025,7 +2058,7 @@ export default function ApplicationDrawer({
             {nlTab === "overview" && (
               <div className="nl-bento">
                 {/* ── Next Up ── */}
-                <section className="nl-cell span2 nl-apps-nextup">
+                <section className="nl-cell span2 nl-apps-nextup" data-next-up>
                   <div className="nl-cell-head">
                     <h3 className="nl-block-title">Next Up</h3>
                     <Badge tone={cancelled ? "accent" : "info"}>{stageLabel}</Badge>
@@ -2072,6 +2105,7 @@ export default function ApplicationDrawer({
                           playing={playing}
                           confirming={confirming}
                           onChanged={() => setJourneyTick((n) => n + 1)}
+                          onPush={() => setPushOpen(true)}
                         />
                       </div>
                       {journey?.ok && (journey.actions ?? []).some((a) => a.test || a.decide) && (
@@ -2160,7 +2194,7 @@ export default function ApplicationDrawer({
                 <section className="nl-cell">
                   <h3 className="nl-block-title">Things to Do</h3>
                   <ul className="nl-apps-todos">
-                    {!intro && thingLine(plcLabel, plcSub, null, plcCan ? plcHref : null, plcDone)}
+                    {!intro && thingLine(plcLabel, plcSub, plcCan ? () => setPlcOpen(true) : null, null, plcDone)}
                     {thingLine("Send a reminder", intro ? "Marketing only - nothing to chase" : "Sign, pay, references", cancelled || intro ? null : () => setBuilder({ mode: "reminder" }))}
                     {thingLine("Customer update", "Email tenant or landlord", () => setBuilder({ mode: "update" }))}
                     {thingLine("Add a document", "ID, payslips, receipts", () => setNlTab("documents"))}
@@ -2272,7 +2306,9 @@ export default function ApplicationDrawer({
                               )}
                               {/* Their right to rent expiry on the card, not only behind
                                   their name (Kirstie Mulholland, 3 Nov 2026, ticket 494b1e2e). */}
-                              {!scottishLet && letId && (
+                              {/* Only once there's something to say (8 Nov 2026): "no expiry
+                                  recorded" on every card was noise. Added from their details. */}
+                              {!scottishLet && letId && (rtrOf(p) || suggestedFor(rtrPack, p.name)) && (
                                 <div className="nl-pcard-rtr" data-steve="application.rtr-expiry-card">
                                   <p className="nl-pcard-label">Right to rent expiry</p>
                                   <RightToRentField

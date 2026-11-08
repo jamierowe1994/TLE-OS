@@ -42,10 +42,10 @@ export default function PeopleDeck({
         {n > 1 && <span className="nl-count">{n}</span>}
       </header>
       {cards === null ? (
-        <p className="nl-meta flex items-center gap-2 py-4">
-          <span aria-hidden className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" />
-          Reading {many.toLowerCase()}…
-        </p>
+        <div className="nl-pdeck-empty" role="status">
+          <span aria-hidden className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />
+          <span>Reading {many.toLowerCase()}…</span>
+        </div>
       ) : n === 0 ? (
         <div className="nl-pdeck-empty">{empty}</div>
       ) : (
