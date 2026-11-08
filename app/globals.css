@@ -1765,3 +1765,86 @@ body:has(.fixed.inset-0.flex.items-center.justify-center, .fixed.inset-0.flex.it
   100% { transform: scale(1, 1) rotate(0); }
 }
 @media (prefers-reduced-motion: reduce) { .os-steve-land { animation: none; } }
+
+/* ===========================================================================
+   THE ENTRANCE (components/IntroGate EntranceFilm, James 8 Nov 2026): the
+   website's film in a window that opens, the greeting in the condensed
+   capitals, then the window fills the screen and the cover lifts like a blind.
+=========================================================================== */
+.ent-cover { position: fixed; inset: 0; z-index: 250; cursor: pointer; background: #f5efe6; overflow: hidden; transition: transform .85s cubic-bezier(.76, 0, .24, 1); will-change: transform; }
+.ent-cover.is-leaving { transform: translateY(-100%); pointer-events: none; }
+.ent { position: absolute; inset: 0; display: grid; place-items: center; --ent-d: 4.4s; }
+/* In order, so nothing ever sits on anything: the greeting arrives, the two
+   lines spring apart, a window pops open in the gap on a quick run of real
+   moments from the website's fireside film, then it grows past the words
+   (turning them white) to fill the screen, and the lines snap back together
+   over the film. */
+.ent-window { position: absolute; inset: 0; clip-path: inset(50% 50% 50% 50%); animation: ent-open var(--ent-d) linear forwards; }
+@keyframes ent-open {
+  0%, 21% { clip-path: inset(50% 50% 50% 50%); animation-timing-function: cubic-bezier(.2, 0, .2, 1); }
+  24% { clip-path: inset(49.6% 44% 49.6% 44%); animation-timing-function: cubic-bezier(.34, 1.5, .64, 1); }
+  33%, 53% { clip-path: inset(35% 40% 35% 40%); animation-timing-function: cubic-bezier(.76, 0, .24, 1); }
+  73%, 100% { clip-path: inset(0 0 0 0); }
+}
+/* While the window is small the film is shrunk to fit it, so each moment
+   reads whole (a face, not an eyelash); it grows with the window to fill the
+   screen, then settles. */
+.ent-film { width: 100%; height: 100%; object-fit: cover; transform: scale(.36); animation: ent-zoom var(--ent-d) linear forwards; }
+@keyframes ent-zoom {
+  0%, 24% { transform: scale(.34); }
+  53% { transform: scale(.37); animation-timing-function: cubic-bezier(.76, 0, .24, 1); }
+  73% { transform: scale(1.08); animation-timing-function: cubic-bezier(.33, 0, .2, 1); }
+  100% { transform: scale(1); }
+}
+.ent-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(86, 66, 62, .12) 0%, rgba(54, 40, 36, .6) 100%); opacity: 0; animation: ent-tint var(--ent-d) ease forwards; }
+@keyframes ent-tint { 0%, 54% { opacity: 0; } 70%, 100% { opacity: 1; } }
+
+.ent-words { position: relative; z-index: 2; display: grid; justify-items: center; text-align: center; color: #141413; animation: ent-ink var(--ent-d) ease forwards; pointer-events: none; }
+@keyframes ent-ink { 0%, 56% { color: #141413; } 66%, 100% { color: #fff; } }
+.ent-eyebrow, .ent-line, .ent-date { display: block; overflow: hidden; }
+.ent-eyebrow > span, .ent-line > span, .ent-date > span { display: block; transform: translateY(105%); animation: ent-rise .8s cubic-bezier(.34, 1.4, .64, 1) forwards; }
+@keyframes ent-rise { to { transform: none; } }
+.ent-eyebrow { margin: 0 0 18px; font-family: var(--font-bricolage), sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .28em; font-size: 12px; color: #a85a51; }
+.ent-eyebrow > span { animation-delay: .1s; }
+.ent-hello { margin: 0; font-family: var(--font-bricolage), sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: clamp(54px, 8vw, 120px); line-height: .92; }
+.ent-line:nth-child(1) > span { animation-delay: .28s; }
+.ent-line:nth-child(2) > span { animation-delay: .4s; }
+.ent-hello .ent-line:nth-child(1) { animation: ent-split-up var(--ent-d) linear forwards; }
+.ent-hello .ent-line:nth-child(2) { animation: ent-split-down var(--ent-d) linear forwards; }
+.ent-eyebrow { animation: ent-eyebrow var(--ent-d) ease forwards, ent-split-eyebrow var(--ent-d) linear forwards; }
+/* Apart with a little spring, held, then back with a snap. */
+@keyframes ent-split-up {
+  0%, 11% { transform: translateY(0); animation-timing-function: cubic-bezier(.34, 1.45, .64, 1); }
+  25%, 74% { transform: translateY(calc(-15vh - 0.62em)); animation-timing-function: cubic-bezier(.5, 0, .3, 1.35); }
+  87%, 100% { transform: translateY(0); }
+}
+@keyframes ent-split-down {
+  0%, 11% { transform: translateY(0); animation-timing-function: cubic-bezier(.34, 1.45, .64, 1); }
+  25%, 74% { transform: translateY(calc(15vh + 0.62em)); animation-timing-function: cubic-bezier(.5, 0, .3, 1.35); }
+  87%, 100% { transform: translateY(0); }
+}
+@keyframes ent-split-eyebrow {
+  0%, 11% { transform: translateY(0); animation-timing-function: cubic-bezier(.34, 1.45, .64, 1); }
+  25%, 74% { transform: translateY(calc(-15vh - 0.3em - 64px)); animation-timing-function: cubic-bezier(.5, 0, .3, 1.35); }
+  87%, 100% { transform: translateY(0); }
+}
+@keyframes ent-eyebrow { 0%, 54% { color: #a85a51; } 64%, 100% { color: #f5efe6; } }
+.ent-rule { display: block; width: 0; height: 2px; margin: 26px 0 18px; background: #a85a51; animation: ent-rule var(--ent-d) cubic-bezier(.65, 0, .35, 1) forwards; }
+@keyframes ent-rule { 0%, 82% { width: 0; } 94%, 100% { width: 120px; } }
+.ent-date { font-family: var(--font-inter), sans-serif; font-size: 16px; letter-spacing: .02em; opacity: .92; }
+.ent-date > span { animation-delay: 3.5s; }
+.ent-skip { position: absolute; z-index: 3; right: 32px; bottom: 28px; padding: 8px 14px; font: inherit; font-family: var(--font-bricolage), sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; color: #141413; background: transparent; border: 1px solid currentColor; cursor: pointer; opacity: .6; animation: ent-ink 4.4s ease forwards; }
+.ent-skip:hover { opacity: 1; }
+@media (max-width: 640px) {
+  @keyframes ent-open {
+    0%, 21% { clip-path: inset(50%); animation-timing-function: cubic-bezier(.2, 0, .2, 1); }
+    24% { clip-path: inset(49.6% 30% 49.6% 30%); animation-timing-function: cubic-bezier(.34, 1.5, .64, 1); }
+    33%, 53% { clip-path: inset(36% 22% 36% 22%); animation-timing-function: cubic-bezier(.76, 0, .24, 1); }
+    73%, 100% { clip-path: inset(0); }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ent-window, .ent-film, .ent-tint, .ent-words, .ent-rule, .ent-hello .ent-line, .ent-eyebrow, .ent-skip { animation: none; }
+  .ent-window { clip-path: none; } .ent-film { transform: none; } .ent-tint { opacity: 1; } .ent-words { color: #fff; } .ent-rule { width: 120px; }
+  .ent-eyebrow > span, .ent-line > span, .ent-date > span { transform: none; animation: none; }
+}
