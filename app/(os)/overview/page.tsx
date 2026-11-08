@@ -12,6 +12,7 @@ import { Stat, Card as NlCard, Failed, Spin } from "@/components/new-look/backof
 import RecordsDrawer, { type PmRecordKind, type RecordAsk } from "@/components/new-look/dashboard/RecordsDrawer";
 import { CountUp } from "@/components/new-look/dashboard/Charts";
 import { PmCard, PmWait, BookRing, WorkBars, TenantFlow } from "@/components/new-look/dashboard/PmCharts";
+import BookPictures from "@/components/new-look/dashboard/BookPictures";
 
 /**
  * Overview (1 Oct 2026): property management at a glance, one tile per part
@@ -548,6 +549,10 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
           )}
         </PmCard>
       </div>
+
+      {/* The book in pictures, moved here from Portfolio (James, 8 Nov 2026:
+          Portfolio is just for the homes). Each part opens Portfolio filtered. */}
+      <BookPictures />
 
       <PmRow title="The Work" sub="Jobs, visits and the tenancies that need something doing.">
         <PmTile label="Maintenance" {...state(data?.maintenance)} value={md?.open ?? null}

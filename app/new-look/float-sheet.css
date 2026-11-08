@@ -506,3 +506,32 @@
   [data-look="new"] .nl-wo-letter { margin: 12px 12px 0; padding: 18px 16px 16px; }
   [data-look="new"] .nl-wo-add, [data-look="new"] .nl-wo-foot { padding-left: 14px; padding-right: 14px; }
 }
+
+/* Management transfer (8 Nov 2026), in the float sheet. */
+[data-look="new"] .nl-to-dl { display: grid; gap: 6px; margin: 0; }
+[data-look="new"] .nl-to-dl > div { display: flex; justify-content: space-between; gap: 16px; font-size: 13.5px; }
+[data-look="new"] .nl-to-dl dt { color: var(--muted); }
+[data-look="new"] .nl-to-dl dd { margin: 0; min-width: 0; text-align: right; font-weight: 500; }
+[data-look="new"] .nl-to-home { margin: 0; font-size: 16px; font-weight: 600; }
+[data-look="new"] .nl-to-miss { font-size: 12.5px; color: var(--accent-dark); }
+[data-look="new"] .nl-to-add { justify-self: start; padding: 4px 2px; font-size: 13px; font-weight: 500; color: #fff; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(255, 255, 255, .5); }
+[data-look="new"] .nl-to-tick { display: flex; align-items: center; gap: 8px; align-self: end; padding-bottom: 10px; font-size: 13.5px; }
+[data-look="new"] .nl-to-tick input { width: 16px; height: 16px; accent-color: var(--accent-dark); }
+[data-look="new"] .nl-to-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 19px; color: var(--muted); list-style: disc; }
+
+/* A home's own pop-ups (visit, notice, swap, past visit) in the float sheet,
+   8 Nov 2026: lighter - white card, the form's own boxes as hairlines. */
+[data-look="new"] .nl-prop-pop { padding: 22px 24px; }
+[data-look="new"] .nl-prop-pop .bg-page, [data-look="new"] .nl-prop-pop .bg-card, [data-look="new"] .nl-prop-pop .bg-panel { background: var(--page); }
+[data-look="new"] .nl-prop-pop .rounded-full.bg-accent-dark, [data-look="new"] .nl-prop-pop button.bg-ink, [data-look="new"] .nl-prop-pop button.bg-accent-dark { background: var(--primary); color: #fff; }
+[data-look="new"] .nl-prop-pop .text-\[22px\], [data-look="new"] .nl-prop-pop h2, [data-look="new"] .nl-prop-pop h3 {
+  font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em;
+}
+[data-look="new"] .nl-prop-pop [class*="uppercase"][class*="tracking"] { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; letter-spacing: .14em; }
+
+/* Rent review / Serve notice (components/sections/NoticeForm), 8 Nov 2026:
+   square, the title in the condensed capitals, brown to go on. */
+.nl-notice-pop [class*="rounded"]:not([class*="animate-spin"]):not(input[type="checkbox"]):not(input[type="radio"]) { border-radius: 0 !important; }
+.nl-notice-pop h2.hand { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 28px; line-height: 1; }
+.nl-notice-pop button.bg-ink, .nl-notice-pop .bg-ink.text-page { background: #56423e; color: #fff; }
+.nl-notice-pop [class*="uppercase"][class*="tracking"] { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; letter-spacing: .14em; }

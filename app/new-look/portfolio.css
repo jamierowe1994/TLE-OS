@@ -371,3 +371,33 @@
 /* The tenancy under the people: one line of dates, then right to rent. */
 [data-look="new"] .nl-bento > .nl-prop-tenancy { grid-column: 1 / -1; display: grid; gap: 12px; }
 [data-look="new"] .nl-prop-tenancy .nl-prop-dates { margin: 0; }
+
+/* A take-on's own page (8 Nov 2026): the management transfer in the house look. */
+[data-look="new"].nl-to-page { --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; max-width: 1180px; }
+[data-look="new"].nl-to-page .nl-to-box { background: #fff; border: 1px solid var(--line); }
+[data-look="new"].nl-to-page .nl-to-eyebrow { margin: 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11.5px; color: var(--accent); }
+[data-look="new"].nl-to-page .nl-to-title { margin: 6px 0 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .02em; font-size: 40px; line-height: 1; }
+[data-look="new"].nl-to-page .nl-to-h2 { margin: 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; font-size: 20px; line-height: 1.1; }
+[data-look="new"].nl-to-page [class*="rounded-"]:not([class*="rounded-full"]) { border-radius: 0; }
+[data-look="new"].nl-to-page span.rounded-full { border-radius: 0; font-family: var(--nl-cond); font-stretch: 75%; text-transform: uppercase; letter-spacing: .1em; }
+[data-look="new"].nl-to-page .bg-accent-dark { background: var(--primary); }
+[data-look="new"].nl-to-page .border-accent-dark { border-color: var(--primary); }
+@media (max-width: 640px) { [data-look="new"].nl-to-page .nl-to-title { font-size: 30px; } }
+
+/* A home's tabs brought in line (James, 8 Nov 2026: "all of the tabs
+   within here should do something fairly good ... lighten it up"): the
+   tab's head in the condensed capitals, Email Docs as a quiet outline not
+   a terracotta block, chips and buttons square, notes' Save in brown. */
+[data-look="new"].nl-prop-page.nl-edge .nl-tabhead-title {
+  font-family: var(--nl-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: .02em; font-size: 34px; line-height: 1;
+}
+[data-look="new"].nl-prop-page.nl-edge .nl-tabhead-sub { margin-top: 6px; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane .bg-accent-dark.text-page {
+  background: transparent; color: var(--ink); border: 1px solid var(--line-strong);
+}
+[data-look="new"].nl-prop-page.nl-edge .nl-pane .bg-accent-dark.text-page:hover { border-color: var(--ink); opacity: 1; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane [class*="rounded-full"]:not([class*="animate-spin"]):not([role="switch"]) { border-radius: 0; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane [class*="rounded-xl"], [data-look="new"].nl-prop-page.nl-edge .nl-pane [class*="rounded-2xl"] { border-radius: 0; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane button.bg-ink { background: var(--primary); color: #fff; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane button:disabled.bg-ink, [data-look="new"].nl-prop-page.nl-edge .nl-pane button.bg-ink:disabled { opacity: .45; }

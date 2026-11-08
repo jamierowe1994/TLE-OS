@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
-import { closeDocument, useDocument, type SheetDocument } from "@/lib/doc-sheet";
+import { canShow, closeDocument, useDocument, type SheetDocument } from "@/lib/doc-sheet";
 
 /**
  * The certificate, up from the bottom of the page.
@@ -46,56 +45,92 @@ export default function DocumentSheet() {
   if (!held) return null;
   const d = held;
   const save = `${d.url}${d.url.includes("?") ? "&" : "?"}save=1`;
+  /* Send is for a certificate on a home's record (the route reads the home from the key). */
+  const sendable = d.key.startsWith("documents/compliance-");
+  const shows = canShow(d.name);
 
+  /* The new look (8 Nov 2026): a centred pop-out on the linen, the file
+     large in the middle, Download in brown - nothing opens a new tab. */
   return (
-    <div className="fixed inset-0 z-[140]">
-      <button
-        aria-label="Close the document"
-        onClick={closeDocument}
-        className={`absolute inset-0 cursor-default bg-ink/45 transition-opacity duration-300 ${up ? "opacity-100" : "opacity-0"}`}
-      />
+    <div className="ds-wrap fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-6">
+      <button aria-label="Close the document" onClick={closeDocument} className={`ds-dim absolute inset-0 cursor-default transition-opacity duration-300 ${up ? "opacity-100" : "opacity-0"}`} />
       <section
-        className={`absolute inset-x-0 bottom-0 top-[6vh] mx-auto flex w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl bg-page shadow-[0_-24px_60px_-24px_rgba(0,0,0,0.45)] transition-transform duration-[460ms] ${up ? "translate-y-0" : "translate-y-full"}`}
+        role="dialog"
+        aria-label={d.name}
+        className={`ds-card relative flex h-full max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden transition-[transform,opacity] duration-[420ms] ${up ? "translate-y-0 scale-100 opacity-100" : "translate-y-6 scale-[0.98] opacity-0"}`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-6 py-4">
+        <header className="ds-head">
           <div className="min-w-0">
-            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{d.label}</p>
-            <h2 className="mt-0.5 truncate text-[17px] leading-tight">{d.property ?? d.name}</h2>
-            {d.property && <p className="mt-0.5 truncate text-[11.5px] text-muted">{d.name}</p>}
+            <p className="ds-kicker">{d.label}</p>
+            <h2 className="ds-name">{d.property ?? d.name}</h2>
+            {d.property && <p className="ds-sub">{d.name}</p>}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <a href={save} className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink">
-              <DoodleIcon name="folder" size={13} /> Save
+            {sendable && (
+              <button type="button" onClick={() => setMode(mode === "send" ? "view" : "send")} className={`ds-btn${mode === "send" ? " is-on" : ""}`}>
+                <Glyph d="M4 6h16v12H4zM4 7l8 6 8-6" /> Send
+              </button>
+            )}
+            <a href={save} download className="ds-btn is-primary">
+              <Glyph d="M12 4v11M7 10l5 5 5-5M5 20h14" /> Download
             </a>
-            <button
-              type="button"
-              onClick={() => setMode(mode === "send" ? "view" : "send")}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-semibold transition-colors ${mode === "send" ? "bg-ink text-page" : "border border-line/80 hover:border-ink"}`}
-            >
-              <DoodleIcon name="mail" size={13} /> Send
-            </button>
-            <button type="button" onClick={closeDocument} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">
-              ✕
+            <button type="button" onClick={closeDocument} aria-label="Close" className="ds-x">
+              <Glyph d="M6 6l12 12M18 6L6 18" />
             </button>
           </div>
-        </div>
+        </header>
 
-        <div className="relative min-h-0 flex-1 bg-box">
-          {isImage(d.name) ? (
+        <div className="ds-body relative min-h-0 flex-1">
+          {!shows ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+              <p className="ds-name">{d.name}</p>
+              <p className="ds-sub max-w-sm">This kind of file can&apos;t be shown inside the OS. Download it to open it on this computer.</p>
+              <a href={save} download className="ds-btn is-primary mt-2">
+                <Glyph d="M12 4v11M7 10l5 5 5-5M5 20h14" /> Download
+              </a>
+            </div>
+          ) : isImage(d.name) ? (
             <div className="flex h-full items-center justify-center overflow-auto p-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={d.url} alt={d.name} className="max-h-full max-w-full rounded-xl object-contain" />
+              <img src={d.url} alt={d.name} className="max-h-full max-w-full object-contain" />
             </div>
           ) : (
-            <iframe title={d.name} src={`${d.url}#toolbar=0`} className="h-full w-full border-0" />
+            <iframe title={d.name} src={`${d.url}#toolbar=0&view=FitH`} className="h-full w-full border-0 bg-white" />
           )}
-          {mode === "send" && <SendPanel doc={d} onDone={() => setMode("view")} />}
+          {mode === "send" && sendable && <SendPanel doc={d} onDone={() => setMode("view")} />}
         </div>
       </section>
+      <style>{CSS}</style>
     </div>
   );
 }
+
+function Glyph({ d }: { d: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+}
+
+const CSS = `
+.ds-dim { background: rgba(35, 29, 27, 0.5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.ds-card { background: var(--page, #faf8f5); border: 1px solid var(--line, #e6ded4); border-radius: 4px; box-shadow: 0 30px 80px -30px rgba(35, 29, 27, 0.55); }
+.ds-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px 14px 22px; border-bottom: 1px solid var(--line, #e6ded4); }
+.ds-kicker { margin: 0; font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11.5px; color: var(--accent, #a85a51); }
+.ds-name { margin: 3px 0 0; font-size: 17px; font-weight: 600; line-height: 1.25; color: var(--ink, #231d1b); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--muted, #6b5f5a); overflow: hidden; text-overflow: ellipsis; }
+.ds-btn { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border: 1px solid var(--line-strong, #d4c9bd); background: var(--card, #fff); color: var(--ink, #231d1b); font-size: 13px; font-weight: 500; border-radius: 2px; transition: border-color .2s, background-color .2s; }
+.ds-btn:hover { border-color: var(--ink, #231d1b); }
+.ds-btn.is-on { background: var(--ink, #231d1b); color: var(--page, #fff); border-color: var(--ink, #231d1b); }
+.ds-btn.is-primary { background: var(--primary, #56423e); border-color: var(--primary, #56423e); color: #fff; }
+.ds-btn.is-primary:hover { background: color-mix(in srgb, var(--primary, #56423e) 86%, #000); }
+.ds-x { display: grid; place-items: center; width: 38px; height: 38px; color: var(--muted, #6b5f5a); border: 1px solid transparent; border-radius: 2px; }
+.ds-x:hover { color: var(--ink, #231d1b); border-color: var(--line, #e6ded4); }
+.ds-body { background: var(--box, #efe8df); }
+@media (max-width: 640px) { .ds-head { flex-wrap: wrap; padding: 14px; } .ds-btn { height: 36px; padding: 0 11px; } }
+`;
 
 function SendPanel({ doc, onDone }: { doc: SheetDocument; onDone: () => void }) {
   const [who, setWho] = useState<"landlord" | "other">("landlord");

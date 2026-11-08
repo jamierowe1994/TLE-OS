@@ -53,6 +53,7 @@ import PastTenantPeople from "@/components/portfolio/PastTenantPeople";
 import SendToTenants from "@/components/portfolio/SendToTenants";
 import TeamEmail from "@/components/TeamEmail";
 import EmailChooser from "@/components/new-look/EmailChooser";
+import FloatSheet from "@/components/new-look/FloatSheet";
 import SendRecord from "@/components/portfolio/SendRecord";
 import { oneLine, ThreadView, type Thread } from "@/components/MailThreads";
 import { PropolyMailView, type PropolyMail } from "@/components/MoveInPack";
@@ -2718,6 +2719,20 @@ function SwapOpen({ s, onAnother, canAct }: { s: SwapUnderWay; onAnother: () => 
 
 /** A pop-up over the page: the actions open here and leave their mark in the latest activity. */
 function Modal({ title, wide = false, onClose, children }: { title?: string; wide?: boolean; onClose: () => void; children: React.ReactNode }) {
+  /* The new look (8 Nov 2026: Book a Property Visit, Tenant Gave Notice, the
+     swap and the past visit "brought in line"): the house's centred pop-out,
+     the same as Report a Repair and the notices. */
+  const look = useNewLook("property");
+  if (look)
+    return (
+      <FloatSheet title={title ?? "This home"} onClose={onClose} size={wide ? "lg" : "md"}>
+        <div className="nl-fs-card nl-prop-pop">{children}</div>
+      </FloatSheet>
+    );
+  return <OldModal title={title} wide={wide} onClose={onClose}>{children}</OldModal>;
+}
+
+function OldModal({ title, wide = false, onClose, children }: { title?: string; wide?: boolean; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);

@@ -51,3 +51,41 @@ export function useDocument(): SheetDocument | null {
 export function useDocumentOpen(): boolean {
   return useSyncExternalStore(subscribe, () => current != null, () => false);
 }
+
+/* ── Any file link opens here (James, 8 Nov 2026: "Anytime we're in
+   compliance or documents or anything and we click a file, it should open
+   up in the OS, not off of the OS") ─────────────────────────────────────── */
+
+const FILE_EXT = /\.(pdf|png|jpe?g|gif|webp|heic|jfif|docx?|xlsx?|csv|txt)$/i;
+
+/**
+ * A link that is a file, as the sheet should show it; null for anything
+ * else (a page, a map, a download someone asked for on purpose). Kept
+ * narrow: our own signed-file routes, a stored-file host, or a path that
+ * ends in a document's extension.
+ */
+export function fileFromHref(href: string): SheetDocument | null {
+  let u: URL;
+  try {
+    u = new URL(href, window.location.href);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  if (u.searchParams.get("save") === "1" || u.searchParams.get("bytes") === "1") return null;
+  const same = u.origin === window.location.origin;
+  const ours =
+    (same && (u.pathname === "/api/r2/file" || u.pathname.startsWith("/library/") || u.pathname === "/api/tools/learning/open" || u.pathname.startsWith("/api/my/property-files/") || u.pathname.startsWith("/api/tenant/documents/"))) ||
+    /\.r2\.cloudflarestorage\.com$|\.r2\.dev$/.test(u.hostname);
+  const last = decodeURIComponent(u.pathname.slice(u.pathname.lastIndexOf("/") + 1));
+  if (!ours && !FILE_EXT.test(last)) return null;
+  const key = same && u.pathname === "/api/r2/file" ? u.searchParams.get("key") ?? "" : "";
+  const rawName = key ? key.slice(key.lastIndexOf("/") + 1) : last || "Document";
+  const name = rawName.replace(/^\d{10,}-/, "");
+  return { key, name, label: "Document", url: u.href };
+}
+
+/** Whether the sheet can draw this file itself, or only offer Download. */
+export function canShow(name: string): boolean {
+  return !/\.(docx?|xlsx?|csv)$/i.test(name);
+}

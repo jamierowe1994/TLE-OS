@@ -42,7 +42,9 @@ export default function TakeOnTile({ home, className, icon, text, disabled, offe
       </Link>
     );
   }
-  if (found === undefined || !offer) return null;
+  /* Offered homes show the button straight away rather than popping in once
+     the check comes back (James, 8 Nov 2026: "a bit janky"). */
+  if (!offer) return null;
   return (
     <>
       <button type="button" disabled={disabled} onClick={() => setOpen(true)} className={className}>

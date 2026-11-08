@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import DoodleIcon from "@/components/DoodleIcon";
 import { LET_TYPES } from "@/lib/let-type";
 import type { TakeOn, TakeOnPush, TakeOnPushStep } from "@/lib/take-ons";
 
@@ -34,7 +33,7 @@ const DEPOSIT: Record<string, string> = {
   landlord: "With the landlord",
   none: "No deposit was taken",
 };
-const box = "rounded-2xl border border-line/70 bg-white";
+const box = "nl-to-box";
 
 type PushFlags = { propolyLive: boolean; rexLive: boolean; canPush: boolean };
 
@@ -117,7 +116,7 @@ function PushPanel(p: {
     </div>
   );
 }
-const eyebrow = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
+const eyebrow = "nl-to-eyebrow";
 const day = (iso: string | null | undefined) => (iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not given");
 const pounds = (n: number | null | undefined) => (n == null ? "Not given" : `£${n.toLocaleString("en-GB")}`);
 
@@ -189,21 +188,21 @@ export default function TakeOnPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    /* The new look (8 Nov 2026): square, condensed heads, brown action - styled from app/new-look/portfolio.css .nl-to-page. */
+    <div data-look="new" className="nl-page nl-rise nl-edge nl-to-page space-y-5">
       <Link href="/portfolio" className="inline-flex items-center gap-1.5 text-[12.5px] text-muted hover:text-ink">
-        <span aria-hidden>←</span> Properties
+        <span aria-hidden>‹</span> Properties
       </Link>
 
       <section className={`${box} p-5 sm:p-6`}>
         <div className="flex flex-wrap items-start gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name="pack/house" size={20} /></span>
-          <div className="min-w-[200px] flex-1">
+                    <div className="min-w-[200px] flex-1">
             <p className={eyebrow}>Management transfer</p>
-            <h1 className="mt-1 text-[24px] font-normal leading-tight tracking-normal">{t.line1}</h1>
+            <h1 className="nl-to-title">{t.line1}</h1>
             <p className="mt-1 text-[13px] text-muted">{[t.town, t.postcode].filter(Boolean).join(" ")}</p>
             <p className="mt-2 text-[12.5px] text-muted">Taken on by {t.by} on {day(t.at)}. We take over on {day(t.takeoverOn)}{t.previousAgent ? `, from ${t.previousAgent}` : ""}.</p>
           </div>
-          <Link href={`/portfolio/${encodeURIComponent(t.homeRef)}`} className="btn-press w-full shrink-0 rounded-full bg-ink px-5 py-2.5 text-center text-[12.5px] font-semibold text-page sm:w-auto">Open the home →</Link>
+          <Link href={`/portfolio/${encodeURIComponent(t.homeRef)}`} className="nl-btn nl-btn--primary w-full shrink-0 justify-center sm:w-auto">Open the Home</Link>
         </div>
       </section>
 
@@ -211,7 +210,7 @@ export default function TakeOnPage() {
         {/* ── onboarding ─────────────────────────────────────────────── */}
         <section className={`${box} p-5 sm:p-6`}>
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[17px] font-normal tracking-normal">Onboarding</h2>
+            <h2 className="nl-to-h2">Onboarding</h2>
             <span className="text-[12px] text-muted">{done} of {t.comms.length} done</span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line/60">
@@ -284,7 +283,7 @@ export default function TakeOnPage() {
           {/* ── Propoly ──────────────────────────────────────────────── */}
           <section className={`${box} p-5`}>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-[17px] font-normal tracking-normal">The Deal in Propoly</h2>
+              <h2 className="nl-to-h2">The Deal in Propoly</h2>
               <span className="rounded-full bg-card px-2.5 py-1 text-[10.5px] font-semibold text-muted">{state.push.propolyLive ? "Switched on" : "Keyed by hand for now"}</span>
             </div>
             <p className="mt-2 text-[12px] leading-relaxed text-muted">
@@ -314,7 +313,7 @@ export default function TakeOnPage() {
           {/* ── the listing system ───────────────────────────────────── */}
           <section className={`${box} p-5`}>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-[17px] font-normal tracking-normal">In the Listing System</h2>
+              <h2 className="nl-to-h2">In the Listing System</h2>
               <span className="rounded-full bg-card px-2.5 py-1 text-[10.5px] font-semibold text-muted">{state.push.rexLive ? "Switched on" : "Rehearsal only"}</span>
             </div>
             <p className="mt-2 text-[12px] leading-relaxed text-muted">
