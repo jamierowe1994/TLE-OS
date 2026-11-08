@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "TLE OS for Propoly",
   "short_name": "TLE OS",
-  "version": "0.1.0",
-  "description": "Shows The Letting Experts' agents whether the Propoly deal on screen is in TLE OS, with a link straight to the let.",
+  "version": "0.2.0",
+  "description": "Steve from TLE OS in the corner of Propoly: whether the deal on screen is in TLE OS, and help finding the right button. Reads only; never presses anything in Propoly.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -21,7 +21,9 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "https://tle-os.co.uk/*",
     "http://127.0.0.1/*",
@@ -29,8 +31,12 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://tle.propoly.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://tle.propoly.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

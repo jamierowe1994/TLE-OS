@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { hasDb, q } from "@/lib/db";
 import { resolveDealAccess } from "@/lib/business/deal-access";
 import { PORTAL_STAGE_BY_KEY, portalStageOf } from "@/lib/business/propoly-stages";
 import { publicOrigin } from "@/lib/origin";
+import { pushOfDeal } from "@/lib/propoly-steve";
 
 /**
  * "IS THIS DEAL IN TLE OS?" - asked by the TLE OS Chrome extension from a
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 
   const d = access.deal;
   const stage = PORTAL_STAGE_BY_KEY[portalStageOf(d.statusKey)];
-  const pushed = await pushOf(id);
+  const pushed = await pushOfDeal(id);
   const origin = publicOrigin(req);
   /* The let the OS pushed this deal from, or the deal itself: the let page
      opens on a Propoly deal's uuid as well as an application's. */
@@ -82,27 +82,4 @@ export async function GET(req: NextRequest) {
       letUrl: `${origin}/applications/${encodeURIComponent(letId)}`,
     },
   });
-}
-
-/** The live Push to Propoly that started this deal, if the OS started it. */
-async function pushOf(dealId: string): Promise<{ applicationId: string; by: string | null; at: string } | null> {
-  if (!hasDb()) return null;
-  const rows = await q<{ application_id: string; triggered_by: string; started_at: string }>(
-    `SELECT application_id, triggered_by, started_at
-       FROM os_handovers h
-      WHERE mode = 'live'
-        AND jsonb_typeof(steps) = 'array'
-        AND EXISTS (SELECT 1 FROM jsonb_array_elements(h.steps) s
-                     WHERE s->>'id' = 'deal' AND s->>'state' = 'ok' AND lower(s->'response'->>'uuid') = $1)
-      ORDER BY started_at DESC
-      LIMIT 1`,
-    [dealId]
-  ).catch(() => []);
-  const r = rows[0];
-  if (!r) return null;
-  return {
-    applicationId: r.application_id,
-    by: r.triggered_by || null,
-    at: new Date(r.started_at).toISOString(),
-  };
 }

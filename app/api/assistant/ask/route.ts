@@ -22,6 +22,7 @@ import { AGENT_NAV } from "@/lib/nav";
 import { keyIsOurs } from "@/lib/r2";
 import type { ScreenControl, ScreenSnapshot } from "@/lib/steve-never";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { propolyNoteFor } from "@/lib/propoly-steve";
 
 /**
  * Talking to the assistant.
@@ -138,6 +139,10 @@ export async function POST(req: NextRequest) {
     attachments?: unknown;
     /** The orb's chat card keeps conversations apart: only this thread is context. */
     separate?: boolean;
+    /** "propoly": asked from Propoly's website through the TLE OS extension. */
+    site?: string;
+    /** The Propoly deal open on that page, from its address. */
+    propolyDeal?: string;
   };
   const attachments = readAttachments(b.attachments);
   const text = (b.text ?? "").trim();
@@ -160,6 +165,9 @@ export async function POST(req: NextRequest) {
      or simply enormous payload must not be able to fill the context window or
      smuggle instructions in as a field label. */
   const surfaces = readSurfaces(b.surfaces);
+  /* Steve in the corner of Propoly (lib/propoly-steve): told where he is,
+     and the OS's facts on the deal on screen, scoped like the let page. */
+  const elsewhere = b.site === "propoly" ? await propolyNoteFor(req, b.propolyDeal).catch(() => null) : null;
   const common = { userId, userEmail: me.email, thread, path };
 
   await logLine({
@@ -218,6 +226,7 @@ export async function POST(req: NextRequest) {
       screen: readScreen(b.screen),
       today: readToday(b.today),
       viewingAs: Boolean(readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value)),
+      elsewhere,
     });
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,

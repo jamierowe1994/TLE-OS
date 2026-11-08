@@ -12,7 +12,7 @@ function show() {
     const b = (r && r.body) || {};
     if (r && r.status === 200 && b.signedIn) {
       status.innerHTML = `<h1><span class="good">${TICK}</span>Signed In</h1>
-        <p>As ${esc(b.me && b.me.name)}. Open any deal in Propoly and the TLE OS card shows in the bottom corner.</p>`;
+        <p>As ${esc(b.me && b.me.name)}. Steve is in the bottom-right corner of every Propoly page.</p>`;
     } else if (r && r.status === 404) {
       status.innerHTML = `<h1><span class="note">${LOCK}</span>Not Switched On Yet</h1>
         <p>TLE OS at ${esc(r.origin)} doesn't have the extension's side yet. It will work once the latest TLE OS is live.</p>`;
@@ -21,7 +21,7 @@ function show() {
         <p>${esc(b.error || `TLE OS answered with an error (${r.status}). Try again in a minute.`)}</p>`;
     } else if (r && r.status !== 0) {
       status.innerHTML = `<h1><span class="note">${LOCK}</span>Sign in to TLE OS</h1>
-        <p>Sign in once in this browser and the card will show on every Propoly deal you open.</p>
+        <p>Sign in once in this browser and Steve will be on every Propoly page.</p>
         <button class="btn" id="signin" type="button">Sign In</button>`;
       document.getElementById("signin").onclick = () => chrome.runtime.sendMessage({ type: "open", path: "/sign-in" });
     } else {
