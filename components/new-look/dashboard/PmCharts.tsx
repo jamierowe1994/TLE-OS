@@ -273,7 +273,7 @@ export function MixRing({
   );
 }
 
-export function RankBars({ rows }: { rows: { label: string; value: number; tone: Tone; onPick?: () => void; on?: boolean }[] }) {
+export function RankBars({ rows }: { rows: { label: string; value: number; tone: Tone; onPick?: () => void; on?: boolean; /** The figure as shown, when not the plain count ("£1,240"). */ shown?: string }[] }) {
   const on = useGrow();
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
@@ -283,7 +283,7 @@ export function RankBars({ rows }: { rows: { label: string; value: number; tone:
           <button type="button" className={`nl-pm-flow-row${r.on ? " is-on" : ""}`} onClick={r.onPick} disabled={!r.onPick} aria-pressed={r.on ?? undefined}>
             <span className="nl-pm-flow-i">{String(i + 1).padStart(2, "0")}</span>
             <span className="nl-pm-flow-name">{r.label}</span>
-            <b className="nl-pm-flow-n">{r.value.toLocaleString("en-GB")}</b>
+            <b className="nl-pm-flow-n">{r.shown ?? r.value.toLocaleString("en-GB")}</b>
             <span className="nl-pm-flow-tr" aria-hidden>
               <i className={`is-${r.tone}`} style={{ width: on ? `${Math.max(2, (r.value / max) * 100)}%` : 0, transitionDelay: `${i * 70}ms` }} />
             </span>

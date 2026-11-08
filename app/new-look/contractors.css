@@ -157,3 +157,68 @@
   [data-look="new"] .nl-ct-end .nl-link { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-ct-view { animation: none; } }
+
+/* ===========================================================================
+   THE WEBSITE'S EDGE ON CONTRACTORS (James, 8 Nov 2026: "do the same thing"
+   as the PM Dashboard and Portfolio). Condensed capitals for the title, the
+   figures, the section heads and the dates; the serif gone; the three figures
+   as boxed tiles with a coloured top bar (terracotta for what needs you, olive
+   for the week, clay for what we owe); and three brand-colour charts between
+   the figures and the tabs. Wider, so the charts sit three across.
+   =========================================================================== */
+[data-look="new"].nl-ct.nl-edge {
+  --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --font-figures: var(--font-body); --nl-serif: var(--font-body);
+  --line: rgba(20, 20, 19, 0.14);
+  max-width: 1180px;
+}
+[data-look="new"].nl-ct.nl-edge .nl-ct-top .nl-title { font-family: var(--nl-cond); font-stretch: 75%; letter-spacing: 0.04em; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-top .nl-blurb { font-family: var(--font-body); font-size: 15px; line-height: 22px; color: var(--muted); }
+
+/* The three figures as tiles. */
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip { gap: 14px; border: 0; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip > button,
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip > button:first-child {
+  position: relative; padding: 20px 22px 18px; border: 1px solid var(--line); border-top: 5px solid var(--sage-deep, #56634a); background: var(--page);
+  transition: transform .2s, box-shadow .2s, background .2s; animation: nl-pmc-in .55s cubic-bezier(.2, .8, .2, 1) both;
+}
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip > button:nth-child(1) { border-top-color: var(--accent, #a85a51); }
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip > button:nth-child(2) { border-top-color: var(--sage-deep, #56634a); animation-delay: 60ms; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip > button:nth-child(3) { border-top-color: var(--pal-clay, #cfa096); animation-delay: 120ms; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip > button:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -22px rgba(20, 20, 19, .45); background: #fff; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip span {
+  font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; color: var(--muted);
+}
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 44px; line-height: 1; letter-spacing: .02em; min-height: 46px; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip > button:hover b:not(.is-hot) { color: var(--ink); }
+[data-look="new"].nl-ct.nl-edge .nl-ct-strip em { color: var(--muted); }
+
+/* The charts band. */
+[data-look="new"].nl-ct.nl-edge .nl-ct-graphs { margin-top: 20px; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-owe { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 22px; letter-spacing: .02em; color: var(--ink); }
+[data-look="new"].nl-ct.nl-edge .nl-ct-calm.is-chart { border-top: 0; padding: 12px 0 0; font-size: 14px; line-height: 21px; }
+@media (max-width: 1000px) { [data-look="new"].nl-ct.nl-edge .nl-ct-graphs { grid-template-columns: minmax(0, 1fr); } }
+
+/* Sections, dates and money in the condensed face. */
+[data-look="new"].nl-ct.nl-edge .nl-ct-sh h2 { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 24px; line-height: 1; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-sh { padding-bottom: 12px; border-bottom: 1px solid var(--line-strong); margin-bottom: 0; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-sh + .nl-ct-job, [data-look="new"].nl-ct.nl-edge .nl-ct-sh + .nl-ct-inv, [data-look="new"].nl-ct.nl-edge .nl-ct-sh + .nl-ct-calm { border-top: 0; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-sh > .nl-ct-total { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 26px; letter-spacing: .02em; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-dt b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; font-size: 16px; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-amt { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 22px; letter-spacing: .02em; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-calm { font-size: 15px; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-later { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-chead .nl-ct-sort { font-family: var(--nl-cond); font-stretch: 75%; text-transform: uppercase; letter-spacing: .14em; font-size: 11px; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-crow:hover b, [data-look="new"].nl-ct.nl-edge .nl-ct-crow:hover b { color: var(--accent-dark); }
+/* The contractor's record pop-up: its figures out of the serif too. */
+[data-look="new"] .nl-ct-fig b { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; font-size: 26px; letter-spacing: .02em; }
+[data-look="new"] .nl-ct-docs > section { border-radius: 0; }
+@media (max-width: 640px) {
+  [data-look="new"].nl-ct.nl-edge .nl-ct-strip { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  [data-look="new"].nl-ct.nl-edge .nl-ct-strip > button { border-top-width: 5px; padding: 14px 16px; }
+  [data-look="new"].nl-ct.nl-edge .nl-ct-strip b { font-size: 36px; min-height: 38px; }
+}
+@media (prefers-reduced-motion: reduce) { [data-look="new"].nl-ct.nl-edge .nl-ct-strip > button { animation: none; } }
+/* Clear space between a section's rule and the note under it. */
+[data-look="new"].nl-ct.nl-edge .nl-ct-sh + .nl-ct-shnote { margin: 12px 0 10px; }
+[data-look="new"].nl-ct.nl-edge .nl-ct-shnote + .nl-ct-shnote { margin-top: -4px; }
