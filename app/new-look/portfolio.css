@@ -352,3 +352,22 @@
 [data-look="new"].nl-prop-page, [data-look="new"].nl-port { --font-figures: var(--font-body); --nl-serif: var(--font-body); }
 [data-look="new"].nl-prop-page .nl-prop-rent > p:first-child { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 18px; line-height: 1.15; letter-spacing: .06em; text-transform: uppercase; }
 [data-look="new"].nl-prop-page .nl-prop-rent .figures { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 30px; letter-spacing: .02em; }
+
+/* The people on the home's Overview, stacked (James, 8 Nov 2026): the
+   tenants and the landlords side by side, each card its own box, a second
+   person sitting behind the first. Across the whole row of the bento; two
+   columns unless a guarantor is held, then three. Cards size to what they
+   hold rather than the let's fixed 420px. */
+[data-look="new"] .nl-bento > .nl-prop-p3 { grid-column: 1 / -1; margin-top: 0; }
+[data-look="new"] .nl-prop-p3:not(:has(.nl-prop-g)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) { [data-look="new"] .nl-prop-p3:not(:has(.nl-prop-g)) { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 761px) {
+  [data-look="new"] .nl-prop-p3 .nl-pdeck-card > .nl-pcard,
+  [data-look="new"] .nl-prop-p3 .nl-pdeck-stack > .nl-pdeck-card > *,
+  [data-look="new"] .nl-prop-p3 .nl-pdeck-empty { height: auto; min-height: 168px; overflow: visible; }
+}
+[data-look="new"] .nl-prop-p3 .nl-pcard { background: #fff; }
+[data-look="new"] .nl-prop-p3 .nl-pcard .nl-lines { margin: 0; }
+/* The tenancy under the people: one line of dates, then right to rent. */
+[data-look="new"] .nl-bento > .nl-prop-tenancy { grid-column: 1 / -1; display: grid; gap: 12px; }
+[data-look="new"] .nl-prop-tenancy .nl-prop-dates { margin: 0; }

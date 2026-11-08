@@ -443,3 +443,66 @@
   [data-look="new"] .nl-fs-foot-r > * { flex: 1 1 auto; justify-content: center; text-align: center; }
   [data-look="new"] .nl-fs-foot-r > .nl-btn--primary { order: 9; flex-basis: 100%; }
 }
+
+/* ===========================================================================
+   THE WORKS ORDER, WRITTEN IN PLACE (James, 8 Nov 2026): the last screen of
+   Report a repair / Plan a certificate is the email itself on a white sheet,
+   the subject and the words typed into directly, the job's details as
+   buttons underneath that drop in where the cursor is.
+   components/maintenance/WorksOrderEmail.tsx
+   =========================================================================== */
+[data-look="new"] .nl-wo-mail { display: grid; gap: 0; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-wo-mail.is-wait { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 220px; padding: 20px; font-size: 13.5px; color: var(--muted); margin: 0; }
+[data-look="new"] .nl-wo-mail.is-err { color: var(--accent-dark); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); min-height: 0; justify-content: flex-start; }
+[data-look="new"] .nl-wo-head { display: grid; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-wo-head > p, [data-look="new"] .nl-wo-head > label {
+  display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: center; gap: 12px; margin: 0; padding: 12px 22px; font-size: 14px;
+}
+[data-look="new"] .nl-wo-head > p { grid-template-columns: 84px auto minmax(0, 1fr); }
+[data-look="new"] .nl-wo-head > label { border-top: 1px solid var(--line); cursor: text; }
+[data-look="new"] .nl-wo-head span, [data-look="new"] .nl-wo-k {
+  font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted);
+}
+[data-look="new"] .nl-wo-head b { font-weight: 600; }
+[data-look="new"] .nl-wo-head em { font-style: normal; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-wo-head input {
+  width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; padding: 4px 0; font: inherit; font-weight: 600; color: var(--ink);
+  border-bottom: 1px dashed transparent; transition: border-color .2s;
+}
+[data-look="new"] .nl-wo-head input:hover { border-bottom-color: var(--line-strong); }
+[data-look="new"] .nl-wo-head input:focus { border-bottom-color: var(--accent); }
+[data-look="new"] .nl-wo-letter { padding: 26px 30px 22px; border-left: 4px solid var(--accent); margin: 18px 22px 0; background: var(--page); }
+[data-look="new"] .nl-wo-h {
+  margin: 0 0 14px; font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 26px; line-height: 1;
+}
+[data-look="new"] .nl-wo-body {
+  display: block; width: calc(100% + 20px); min-height: 220px; resize: none; overflow: hidden; border: 1px solid transparent; outline: 0; margin: 0 -10px; padding: 8px 10px; box-sizing: border-box;
+  background: transparent; color: var(--ink); font-family: var(--font-inter), "Inter", sans-serif; font-size: 15px; line-height: 1.6; transition: border-color .2s, background .2s;
+}
+[data-look="new"] .nl-wo-body:hover { border-color: var(--line-strong); background: color-mix(in srgb, #fff 60%, transparent); }
+[data-look="new"] .nl-wo-body:focus { border-color: var(--ink); background: #fff; }
+[data-look="new"] .nl-wo-fixed { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+[data-look="new"] .nl-wo-add { display: grid; gap: 10px; padding: 18px 22px 0; }
+[data-look="new"] .nl-wo-k em { margin-left: 8px; font-style: normal; text-transform: none; letter-spacing: 0; font-family: var(--font-inter), sans-serif; font-stretch: 100%; font-size: 12px; }
+[data-look="new"] .nl-wo-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-look="new"] .nl-wo-chips button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink);
+  font-size: 13px; cursor: pointer; transition: border-color .15s, background .15s, color .15s, transform .15s;
+}
+[data-look="new"] .nl-wo-chips button svg { color: var(--accent); }
+[data-look="new"] .nl-wo-chips button:hover { border-color: var(--ink); transform: translateY(-1px); }
+[data-look="new"] .nl-wo-chips button.is-added { background: var(--sage-soft, #f1f4ec); border-color: var(--sage-deep, #56634a); }
+[data-look="new"] .nl-wo-chips button.is-added svg { color: var(--sage-deep, #56634a); }
+[data-look="new"] .nl-wo-foot { display: grid; gap: 10px; padding: 16px 22px 18px; }
+[data-look="new"] .nl-wo-links { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+[data-look="new"] .nl-wo-warn { margin: 0; padding: 10px 12px; background: var(--accent-soft); color: var(--accent-dark); font-size: 13px; line-height: 1.45; }
+[data-look="new"] .nl-wo-sent { display: grid; gap: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-wo-sent-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; background: var(--card); }
+[data-look="new"] .nl-wo-sent-bar span { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted); }
+[data-look="new"] .nl-wo-frame { display: block; width: 100%; height: 520px; border: 0; background: #fff; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-wo-head > p, [data-look="new"] .nl-wo-head > label { grid-template-columns: 64px minmax(0, 1fr); padding: 10px 14px; }
+  [data-look="new"] .nl-wo-head > p em { grid-column: 2; }
+  [data-look="new"] .nl-wo-letter { margin: 12px 12px 0; padding: 18px 16px 16px; }
+  [data-look="new"] .nl-wo-add, [data-look="new"] .nl-wo-foot { padding-left: 14px; padding-right: 14px; }
+}

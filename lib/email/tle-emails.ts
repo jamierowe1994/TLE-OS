@@ -314,7 +314,42 @@ function fillFor(vars: Record<string, string>, html: boolean) {
  * moved every time an email was added. The send paths call THIS, so what
  * Francesca changed is what goes out.
  */
-export async function renderTleEmailLive(id: string, vars: Record<string, string>): Promise<{ subject: string; html: string }> {
+/**
+ * The words an agent can change before one email goes (James, 8 Nov 2026,
+ * the works order: "they should be able to click into the email and edit
+ * it"). A run of the document's blocks, from one id through another, is
+ * swapped for the agent's own plain text; the heading, the button, the
+ * invoice line, the sign-off and the footer stay as the builder has them,
+ * so the link still works and the letterhead stays ours.
+ */
+export type EmailEdit = { from: string; through: string; subject?: string | null; body?: string | null };
+
+/** The block run an edit replaces, or null when the builder's version no longer has both ends. */
+function editRange(doc: EmailDoc, from: string, through: string): [number, number] | null {
+  const ids = doc.blocks.map((b) => (b as unknown as { id?: string }).id);
+  const a = ids.indexOf(from);
+  const z = ids.indexOf(through);
+  return a >= 0 && z >= a ? [a, z] : null;
+}
+
+/* Plain text to text blocks: a blank line starts a new paragraph, a line
+   break stays a line break, and a paragraph whose first line is short and
+   unpunctuated with more under it ("Tenants to arrange access with") has
+   that line in bold, as the template had it. */
+function textToBlocks(body: string, prefix: string): EmailDoc["blocks"] {
+  return body
+    .replace(/\r\n?/g, "\n")
+    .split(/\n\s*\n/)
+    .map((para) => para.split("\n").map((l) => l.trimEnd()))
+    .filter((lines) => lines.some((l) => l.trim()))
+    .map((lines, i) => {
+      const head = lines.length > 1 && lines[0].length <= 60 && !/[.,;:!?]$/.test(lines[0].trim());
+      const html = lines.map((l, j) => (j === 0 && head ? `<strong>${escapeHtml(l)}</strong>` : escapeHtml(l))).join("<br>");
+      return { type: "text", id: `${prefix}-edit-${i}`, text: html, bg: "" } as unknown as EmailDoc["blocks"][number];
+    });
+}
+
+async function liveDoc(id: string): Promise<{ doc: EmailDoc; audience?: EmailAudience }> {
   const entry = TLE_EMAILS.find((e) => e.id === id);
   if (!entry?.doc) throw new Error(`No email document for ${id}.`);
   let doc: EmailDoc = entry.doc;
@@ -330,6 +365,49 @@ export async function renderTleEmailLive(id: string, vars: Record<string, string
   } catch {
     /* the words in code, then */
   }
+  return { doc, audience: entry.audience };
+}
+
+/**
+ * What the agent starts from when they edit: the subject and the editable
+ * run as plain text, filled from the job. Null when the builder's version
+ * of the email no longer has the run's two ends.
+ */
+export async function editableEmailText(id: string, vars: Record<string, string>, from: string, through: string): Promise<{ subject: string; body: string } | null> {
+  const { doc } = await liveDoc(id);
+  const range = editRange(doc, from, through);
+  if (!range) return null;
+  const fillText = fillFor(vars, false);
+  const plain = (t: string) =>
+    t
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&");
+  const body = doc.blocks
+    .slice(range[0], range[1] + 1)
+    .map((b) => (b as unknown as { text?: string }).text)
+    .filter((t): t is string => typeof t === "string")
+    .map((t) => plain(fillText(t)).trim())
+    /* An empty field leaves "Access notes:" with nothing after it: drop it. */
+    .filter((t) => t && !/^[^\n]{1,40}:$/.test(t))
+    .join("\n\n");
+  return { subject: fillText(doc.subject), body };
+}
+
+export async function renderTleEmailLive(id: string, vars: Record<string, string>, edit?: EmailEdit | null): Promise<{ subject: string; html: string }> {
+  const entry = TLE_EMAILS.find((e) => e.id === id);
+  if (!entry?.doc) throw new Error(`No email document for ${id}.`);
+  let { doc } = await liveDoc(id);
+  if (edit?.body?.trim()) {
+    const range = editRange(doc, edit.from, edit.through);
+    if (range) doc = { ...doc, blocks: [...doc.blocks.slice(0, range[0]), ...textToBlocks(edit.body, edit.from), ...doc.blocks.slice(range[1] + 1)] };
+  }
+  if (edit?.subject?.trim()) doc = { ...doc, subject: edit.subject.trim().replace(/[\r\n]+/g, " ").slice(0, 200) };
   const fill = fillFor(vars, true);
   const fillText = fillFor(vars, false);
   const filled: EmailDoc = {

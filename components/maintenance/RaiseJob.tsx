@@ -14,6 +14,7 @@ import { searchMatches } from "@/lib/search-match";
 import DoodleIcon from "@/components/DoodleIcon";
 import FloatSheet, { FloatChoice, FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
 import CategoryIcon from "@/components/maintenance/CategoryIcon";
+import WorksOrderEmail, { type MailField, type MailWords } from "@/components/maintenance/WorksOrderEmail";
 
 type Group = "property" | "what" | "urgency" | "when" | "contractor" | "tenant" | "access" | "landlord" | "check";
 
@@ -269,6 +270,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: planned ? new Date(dueAt).toISOString() : null,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
         tenants: onJob, landlordSkipped, send, askQuote, quoteFrom: askQuote ? askIds : undefined,
+        contractorEdit: send && mailEdited ? mail : undefined,
         tellTenants,
         skipped: steps.filter((x) => skipped.has(x.id)).map((x) => x.title),
       }),
@@ -320,7 +322,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     { id: "access", title: "Access and the tenants", blurb: "How the contractor gets in, and whether the tenants hear from us.", required: true, why: "The contractor needs someone to ring, or a way in." },
     { id: "landlord", title: "The landlord", blurb: "Who the job is reported to, and how they hear about it. Nothing goes to them when you raise it.", required: false, why: "" },
     contractor
-      ? { id: "check", title: `Send to ${contractor.name}`, blurb: "This is the works order they'll get. Nothing goes until you press Send.", required: false, why: "" }
+      ? { id: "check", title: `Send to ${contractor.name}`, blurb: look === "float" && !inline ? "The works order they'll get. Click into it to change anything. Nothing goes until you press Send." : "This is the works order they'll get. Nothing goes until you press Send.", required: false, why: "" }
       : planned
         ? { id: "check", title: "Check and plan", blurb: "No contractor yet: plan it now and pick one on the job.", required: false, why: "" }
         : { id: "check", title: "Check and report", blurb: "No contractor yet: report it now and pick one on the job.", required: false, why: "" },
@@ -399,23 +401,28 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
 
   /* The works order, as the contractor will get it. Read when the last
      screen opens, and again if anything on it changed since. */
-  const [preview, setPreview] = useState<{ key: string; subject: string; html: string; to: string } | { key: string; error: string } | null>(null);
+  const [preview, setPreview] = useState<{ key: string; subject: string; html: string; to: string; text: MailWords | null; fields: MailField[] } | { key: string; error: string } | null>(null);
   const previewKey = JSON.stringify([title, description, category, urgency, dueAt, scheduledAt, access, contractorId, onJob, picked?.id, manual]);
+  /* The works order in the agent's own words (James, 8 Nov 2026): null until
+     they type, and the job's details it was written against. */
+  const [mail, setMail] = useState<MailWords | null>(null);
+  const [mailKey, setMailKey] = useState<string | null>(null);
+  const previewBody = () => ({
+    kind, urgency: planned ? null : urgency || null,
+    title, description, category, access, contractorId, tenants: onJob,
+    dueAt: planned ? dueAt || null : null, scheduledAt: scheduledAt || null,
+    propertyId: picked?.id ?? null, propertyName: picked?.name ?? manual.trim(), locality: picked?.locality ?? "",
+  });
   useEffect(() => {
     if (here.id !== "check" || !contractorId || preview?.key === previewKey) return;
     let live = true;
     fetch("/api/works-orders/preview", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        kind, urgency: planned ? null : urgency || null,
-        title, description, category, access, contractorId, tenants: onJob,
-        dueAt: planned ? dueAt || null : null, scheduledAt: scheduledAt || null,
-        propertyName: picked?.name ?? manual.trim(), locality: picked?.locality ?? "",
-      }),
+      body: JSON.stringify({ ...previewBody(), editable: true }),
     }).then((r) => r.json()).then((j) => {
       if (!live) return;
-      setPreview(j?.ok ? { key: previewKey, subject: j.subject, html: j.html, to: j.to } : { key: previewKey, error: j?.error ?? "The preview could not be written." });
+      setPreview(j?.ok ? { key: previewKey, subject: j.subject, html: j.html, to: j.to, text: j.text ?? null, fields: Array.isArray(j.fields) ? j.fields : [] } : { key: previewKey, error: j?.error ?? "The preview could not be written." });
     }).catch(() => { if (live) setPreview({ key: previewKey, error: "The preview could not be written." }); });
     return () => { live = false; };
   }, [here.id, contractorId, previewKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -433,6 +440,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const card = (cls: string) => (F ? `nl-fs-card ${cls}` : cls);
   const canSend = !!contractor;
   const contractorHasEmail = !!contractor?.email?.includes("@");
+  const readyPreview = preview && !("error" in preview) && preview.key === previewKey ? preview : null;
+  const original = preview && !("error" in preview) ? preview.text : null;
+  const mailEdited = !!mail && !!original && (mail.body !== original.body || mail.subject !== original.subject);
   const back = () => (moving ? backToCheck() : step === 0 ? onClose() : go(-1));
 
   const checkSkipped = stepped && at("check") && skipped.size > 0 && (
@@ -479,7 +489,33 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               ))}
             </dl>
           );
-  const checkOrder = stepped && at("check") && canSend && (
+  /* The new look: the email itself, written in place (James, 8 Nov 2026). */
+  const checkMail = stepped && at("check") && canSend && F && (
+            <div className="sm:col-span-2">
+              {!contractorHasEmail ? (
+                <p className="nl-wo-mail is-wait is-err">{contractor!.name} has no email in the book, so nothing can be sent. Plan it and ring them, or add their email on the Contractors list.</p>
+              ) : (
+                <WorksOrderEmail
+                  contractor={{ name: contractor!.name, email: contractor!.email }}
+                  heading={`Works order #${readyPreview?.subject.match(/#(\S+?):/)?.[1] ?? "(new)"}`}
+                  state={
+                    !preview || preview.key !== previewKey
+                      ? mail && preview && !("error" in preview) ? { kind: "ready", original: preview.text, fields: preview.fields, html: preview.html } : { kind: "loading" }
+                      : "error" in preview ? { kind: "error", error: preview.error } : { kind: "ready", original: preview.text, fields: preview.fields, html: preview.html }
+                  }
+                  words={mail}
+                  onWords={(w) => { setMail(w); if (!mailKey) setMailKey(previewKey); }}
+                  dirtyDetails={!!mailKey && mailKey !== previewKey}
+                  onReset={() => { setMail(null); setMailKey(null); }}
+                  renderAs={async (w) => {
+                    const j = await fetch("/api/works-orders/preview", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...previewBody(), edit: w }) }).then((r) => r.json()).catch(() => null);
+                    return j?.ok ? (j.html as string) : null;
+                  }}
+                />
+              )}
+            </div>
+          );
+  const checkOrder = stepped && at("check") && canSend && !F && (
             <div className={card("sm:col-span-2")}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className={label}>The works order</p>
@@ -895,10 +931,16 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           {stepped && at("check") && F ? (
             /* Across the width: what's going on the left, the works order as
                the contractor gets it on the right. */
-            <div className={`nl-rj-check sm:col-span-2${canSend ? "" : " is-solo"}`}>
-              <div>{checkSkipped}{checkSummary}</div>
-              {canSend ? <div>{checkOrder}</div> : null}
-            </div>
+            canSend ? (
+              /* Just the email (James, 8 Nov 2026): the steps beside it are where anything else changes. */
+              <div className="nl-rj-check is-solo sm:col-span-2">
+                <div>{checkSkipped}{checkMail}</div>
+              </div>
+            ) : (
+              <div className="nl-rj-check is-solo sm:col-span-2">
+                <div>{checkSkipped}{checkSummary}</div>
+              </div>
+            )
           ) : (<>
           {checkSkipped}
           {checkSummary}

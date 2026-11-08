@@ -27,6 +27,7 @@ import HomeKeys from "@/components/portfolio/HomeKeys";
 import HomeSource from "@/components/portfolio/HomeSource";
 import ContactBlock from "@/components/ContactBlock";
 import TenantCard from "@/components/new-look/TenantCard";
+import PeopleDeck from "@/components/new-look/PeopleDeck";
 import HomeDetails from "@/components/new-look/HomeDetails";
 import TermsPanel from "@/components/terms/TermsPanel";
 import { everyLandlord, useJointLandlords } from "@/lib/use-home-landlords";
@@ -51,6 +52,7 @@ import PastTenancies from "@/components/portfolio/PastTenancies";
 import PastTenantPeople from "@/components/portfolio/PastTenantPeople";
 import SendToTenants from "@/components/portfolio/SendToTenants";
 import TeamEmail from "@/components/TeamEmail";
+import EmailChooser from "@/components/new-look/EmailChooser";
 import SendRecord from "@/components/portfolio/SendRecord";
 import { oneLine, ThreadView, type Thread } from "@/components/MailThreads";
 import { PropolyMailView, type PropolyMail } from "@/components/MoveInPack";
@@ -313,7 +315,7 @@ export default function PropertyPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || showAll || showLogins || sendOpen || recordOpen || threadOpen || mailOpen || lightbox != null || gridFrom) return;
+      if (action || openJob || showAll || showLogins || sendOpen || emailPick || teamOpen || recordOpen || threadOpen || mailOpen || lightbox != null || gridFrom) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -454,6 +456,8 @@ export default function PropertyPage() {
   const [threadOpen, setThreadOpen] = useState<Thread | null>(null);
   /* Email the Team about this home (James, 6 Nov 2026): from your Outlook, the thread saved here. */
   const [teamOpen, setTeamOpen] = useState(false);
+  /* The Email button asks which email first (James, 8 Nov 2026). */
+  const [emailPick, setEmailPick] = useState(false);
   useEffect(() => {
     if (!p || p.test) return;
     let live = true;
@@ -964,6 +968,18 @@ export default function PropertyPage() {
       )}
       {recordOpen && <SendRecord id={recordOpen} onClose={() => setRecordOpen(null)} />}
       {threadOpen && <ThreadView thread={threadOpen} onClose={() => setThreadOpen(null)} />}
+      {emailPick && (
+        <EmailChooser
+          logins={loginListings.length > 0}
+          onClose={() => setEmailPick(false)}
+          onPick={(k) => {
+            if (k === "email") setSendOpen({ start: null, heading: "Email", blank: true });
+            else if (k === "docs") setSendOpen({ start: null, heading: "Email Docs" });
+            else if (k === "team") setTeamOpen(true);
+            else setShowLogins(true);
+          }}
+        />
+      )}
       {teamOpen && <TeamEmail listing={String(p.listingId)} listings={sendListings} onClose={() => setTeamOpen(false)} />}
       {mailOpen && <PropolyMailView mail={mailOpen} onClose={() => setMailOpen(null)} />}
       {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
@@ -1031,13 +1047,8 @@ export default function PropertyPage() {
         : comingIn
           ? { label: "New tenants on the way", sub: `${comingNames}, ${comingWhen}`, href: comingIn.href }
           : { label: "Change the tenants", sub: tenants.length ? "Add someone, swap a sharer or re-reference" : "No tenants on this home yet", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "swap" }) },
-      "rule",
-      { label: "Send out logins", sub: "Tenant account, to report repairs", disabled: p.test || !loginListings.length, onClick: () => setShowLogins(true) },
-      { label: "Email Docs", sub: "To the tenants, the landlord or both, kept on the record", disabled: p.test, onClick: () => setSendOpen({ start: null, heading: "Email Docs" }) },
-      { label: "Email the Team", sub: "The agent, compliance or anyone here, the thread kept on the record", disabled: p.test, onClick: () => setTeamOpen(true) },
-      { label: "Add a certificate", sub: "Read and filed on the home", disabled: !propertyId, onClick: () => goTab("compliance") },
-      { label: "Add a document", sub: "An inventory, an agreement, anything else", disabled: p.test, onClick: () => goTab("documents") },
-      { label: "Add a note", sub: "A call, an email, a query", disabled: !propertyId, onClick: () => goTab("notes", () => document.getElementById("home-note")?.focus({ preventScroll: true })) },
+      /* James, 8 Nov 2026: the emails and logins moved under the Email button's
+         chooser; Add a certificate / document / note went, each tab below has its own. */
       ...(everything && !p.test && p.onRex !== false ? ["rule" as const, { label: "Open the record behind this home", href: rexListingUrl(p.listingId, "leased") }] : []),
       ...(book.state === "ready" && book.data.canArchive && !p.test ? ["rule" as const, { label: "Archive this home", sub: "Not ours any more. Off the OS, the main record untouched", onClick: () => { setArchiveAsk(true); window.scrollTo({ top: 0, behavior: "smooth" }); } }] : []),
     ];
@@ -1243,7 +1254,7 @@ export default function PropertyPage() {
                 {/* Email at the top, so it is in reach from every tab (Sean McMahon,
                     29 Oct 2026: "if you open a maintenance screen ... you lose that
                     facility"). The Email Docs sheet with nothing ticked. */}
-                <button type="button" disabled={p.test} onClick={() => setSendOpen({ start: null, heading: "Email", blank: true })} className="nl-btn nl-btn--secondary" title="The tenants, the landlord or both, with anything attached">
+                <button type="button" disabled={p.test} onClick={() => setEmailPick(true)} className="nl-btn nl-btn--secondary" title="Email, Email Docs, Email the Team or Send out logins">
                   <Ico name="mail" /> Email
                 </button>
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className="nl-btn nl-btn--secondary" title="A gas safety, EICR or service, by a date">
@@ -1405,64 +1416,67 @@ export default function PropertyPage() {
               )}
               {tab === "overview" && (
                 <div className="nl-bento">
-                  {/* The tenants, or a shared house's rooms. */}
-                  <section className="nl-cell span2">
-                    <div className="nl-cell-head">
-                      <h3 className="nl-block-title">{roomsOnly ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</h3>
-                      {!p.test && (
-                        <button type="button" className="nl-link" onClick={() => goTab("tenancy", () => document.getElementById("past-tenants")?.scrollIntoView({ behavior: "smooth", block: "start" }))}>
-                          Past tenants
-                        </button>
-                      )}
-                    </div>
+                  {/* The people, stacked (James, 8 Nov 2026: "stack the tenants on top
+                      of each other and then the landlords ... the landlord and then
+                      the tenant box stacked against each other"). Each card is the
+                      box - no box inside a box - and any second person sits behind
+                      the first, a click away. Guarantors only when somebody has one:
+                      a running tenancy doesn't need the empty slot. */}
+                  <div className="nl-people3 nl-prop-p3">
                     {roomsOnly && house ? (
-                      <ul className="nl-lines">
-                        {house.rooms.map((r) => (
-                          <li key={r.listingId}>
-                            <button type="button" className="nl-line" onClick={() => setRoom(r.listingId)}>
-                              <span className="nl-strong w-[70px] shrink-0">{roomLabel(r)}</span>
-                              <span className="min-w-0 flex-1 truncate">{r.tenants[0]?.name ?? <span className="nl-meta">Empty</span>}</span>
-                              <span className="nl-price shrink-0 text-[16px]">{r.rent == null ? <span className="nl-meta">No rent</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : tenants.length ? (
-                      <ul className="nl-prop-people">
-                        {/* Each with an Edit button (James, 27 Oct 2026). */}
-                        {tenants.map((t) => <li key={t.contactId}><TenantCard contactId={t.contactId} person={{ name: t.name, email: t.email ?? null, phone: t.phone ?? null }} about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} /></li>)}
-                      </ul>
-                    ) : comingIn ? (
-                      <p className="nl-empty">
-                        None yet. {comingNames} {comingIn.tenants.length === 1 ? "is" : "are"} {comingWhen}, on a let going through Propoly.{" "}
-                        <Link href={comingIn.href} className="nl-link">Open their let</Link>
-                      </p>
-                    ) : p.vacantSince ? (
-                      /* PayProp's tenancy on this let has ended (lib/managed-book markEmptyHomes). */
-                      <p className="nl-empty">Nobody lives here now: the tenancy ended on {day(p.vacantSince)}, as PayProp has it. If somebody has moved in, add them with Edit.</p>
+                      <section className="nl-pdeck">
+                        <header className="nl-pdeck-head"><h3 className="nl-block-title">Rooms</h3><span className="nl-count">{house.rooms.length}</span></header>
+                        <div className="nl-pcard">
+                          <ul className="nl-lines">
+                            {house.rooms.map((r) => (
+                              <li key={r.listingId}>
+                                <button type="button" className="nl-line" onClick={() => setRoom(r.listingId)}>
+                                  <span className="nl-strong w-[70px] shrink-0">{roomLabel(r)}</span>
+                                  <span className="min-w-0 flex-1 truncate">{r.tenants[0]?.name ?? <span className="nl-meta">Empty</span>}</span>
+                                  <span className="nl-price shrink-0 text-[16px]">{r.rent == null ? <span className="nl-meta">No rent</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </section>
                     ) : (
-                      <p className="nl-empty">No tenant on record. It is empty, or the let has not been recorded.</p>
+                      <PeopleDeck
+                        title="Tenant"
+                        many="Tenants"
+                        steve="home.tenants"
+                        cards={tenants.map((t, i) => ({
+                          key: t.contactId,
+                          node: (
+                            /* Each with an Edit button (James, 27 Oct 2026). */
+                            <div className="nl-pcard">
+                              {tenants.length > 1 && <p className="nl-pcard-tag">{i === 0 ? "Lead tenant" : "Tenant"}</p>}
+                              <TenantCard contactId={t.contactId} person={{ name: t.name, email: t.email ?? null, phone: t.phone ?? null }} about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />
+                            </div>
+                          ),
+                        }))}
+                        empty={comingIn ? (
+                          <span>
+                            None yet. {comingNames} {comingIn.tenants.length === 1 ? "is" : "are"} {comingWhen}, on a let going through Propoly.{" "}
+                            <Link href={comingIn.href} className="nl-link">Open their let</Link>
+                          </span>
+                        ) : p.vacantSince ? (
+                          /* PayProp's tenancy on this let has ended (lib/managed-book markEmptyHomes). */
+                          <span>Nobody lives here now: the tenancy ended on {day(p.vacantSince)}, as PayProp has it. If somebody has moved in, add them with Edit.</span>
+                        ) : (
+                          <span>No tenant on record. It is empty, or the let has not been recorded.</span>
+                        )}
+                        actions={!p.test ? (
+                          <button type="button" className="nl-pdeck-add is-quiet" onClick={() => goTab("tenancy", () => document.getElementById("past-tenants")?.scrollIntoView({ behavior: "smooth", block: "start" }))}>
+                            Past tenants
+                          </button>
+                        ) : undefined}
+                      />
                     )}
-                    {/* Their guarantors, from the lead and the let (lib/guarantors). */}
-                    {tenants.length > 0 && !roomsOnly && !p.test && <Guarantors source={{ listing: String(p.listingId) }} />}
-                    {/* Overseas tenants' right to rent expiry (Kirstie, ticket 066bb29e). */}
-                    {tenants.length > 0 && !roomsOnly && !p.test && (
-                      <HomeRightToRent key={String(p.listingId)} listingId={String(p.listingId)} tenants={tenants.map((t) => ({ name: t.name, email: t.email }))} />
-                    )}
-                    {tenants.length > 0 && (
-                      <p className="nl-prop-dates">
-                        {tenancy.state === "loading" ? "Reading the tenancy dates…"
-                          : tenancy.state === "failed" ? "The tenancy dates could not be read."
-                          : tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} long />
-                          : tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}
-                      </p>
-                    )}
-                    {tenants.length > 0 && !roomsOnly && !swapOn && nextTenancy && <NextTenancyLine next={nextTenancy} />}
-                  </section>
 
-                  {/* The landlords section, the same on every screen (James, 20 Oct 2026). */}
-                  <section className="nl-cell">
+                    {/* The landlords section, the same on every screen (James, 20 Oct 2026). */}
                     <HomeLandlords
+                      deck
                       homeKey={p.test ? null : propertyId}
                       address={homeLine}
                       readOnly={p.test ? "A test home keeps its own people." : null}
@@ -1501,7 +1515,27 @@ export default function PropertyPage() {
                         ) : null
                       }
                     />
-                  </section>
+
+                    {/* Their guarantors, from the lead and the let (lib/guarantors), only when there are some. */}
+                    {tenants.length > 0 && !roomsOnly && !p.test && <Guarantors deck hideEmpty className="nl-prop-g" source={{ listing: String(p.listingId) }} />}
+                  </div>
+
+                  {/* The tenancy under the people: its dates, what's next, right to rent. */}
+                  {tenants.length > 0 && (
+                    <section className="nl-prop-tenancy">
+                      <p className="nl-prop-dates">
+                        {tenancy.state === "loading" ? "Reading the tenancy dates…"
+                          : tenancy.state === "failed" ? "The tenancy dates could not be read."
+                          : tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} long />
+                          : tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}
+                      </p>
+                      {!roomsOnly && !swapOn && nextTenancy && <NextTenancyLine next={nextTenancy} />}
+                      {/* Overseas tenants' right to rent expiry (Kirstie, ticket 066bb29e). */}
+                      {!roomsOnly && !p.test && (
+                        <HomeRightToRent key={String(p.listingId)} listingId={String(p.listingId)} tenants={tenants.map((t) => ({ name: t.name, email: t.email }))} />
+                      )}
+                    </section>
+                  )}
 
                   {/* Every board's newest, one list (James, 7 Oct 2026: five here, the rest in View all). */}
                   <section className="nl-cell span2" id="action-box">

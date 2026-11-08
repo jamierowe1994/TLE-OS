@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * A drop-down that looks like the rest of the form.
@@ -69,6 +69,30 @@ export default function FieldSelect({
     if (!open) return;
     setActive(Math.max(0, options.findIndex((o) => o.value === value)));
   }, [open, options.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* Opens upward when the box it sits in has more room above than below
+     (James, 8 Nov 2026: Reported by, the last field on a screen, had its
+     list cut off by the sheet's footer). Otherwise the box scrolls just
+     enough to show the whole list. */
+  const [up, setUp] = useState(false);
+  useLayoutEffect(() => {
+    if (!open) { setUp(false); return; }
+    const el = holder.current;
+    if (!el) return;
+    let clip: HTMLElement | null = el.parentElement;
+    while (clip && clip !== document.body) {
+      const o = getComputedStyle(clip).overflowY;
+      if (o === "auto" || o === "scroll" || o === "hidden" || o === "clip") break;
+      clip = clip.parentElement;
+    }
+    const box = clip && clip !== document.body ? clip.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+    const me = el.getBoundingClientRect();
+    const need = Math.min(264, (list.current?.scrollHeight ?? 264) + 8);
+    const below = Math.min(box.bottom, window.innerHeight) - me.bottom;
+    const above = me.top - Math.max(box.top, 0);
+    const flip = below < need && above > below;
+    setUp(flip);
+    if (!flip) requestAnimationFrame(() => list.current?.scrollIntoView({ block: "nearest" }));
+  }, [open]);
   useEffect(() => {
     if (!open || active < 0) return;
     list.current?.querySelector<HTMLElement>(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
@@ -114,7 +138,7 @@ export default function FieldSelect({
           ref={list}
           id={id}
           role="listbox"
-          className={`fade-up absolute left-0 top-full z-30 mt-1.5 max-h-64 ${variant === "inline" ? "w-max min-w-[220px] max-w-[300px]" : "right-0"} overflow-y-auto rounded-xl border border-line/80 bg-white p-1 shadow-[0_14px_34px_-14px_rgba(0,0,0,0.3)]`}
+          className={`fade-up absolute left-0 ${up ? "bottom-full mb-1.5" : "top-full mt-1.5"} z-30 max-h-64 ${variant === "inline" ? "w-max min-w-[220px] max-w-[300px]" : "right-0"} overflow-y-auto rounded-xl border border-line/80 bg-white p-1 shadow-[0_14px_34px_-14px_rgba(0,0,0,0.3)]`}
         >
           {!options.length && !extra && (
             <li role="presentation" className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-muted">

@@ -3,7 +3,7 @@ import { agentPhone, OFFICE_PHONE } from "@/lib/agent-phone";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
-import { renderTleEmailLive } from "@/lib/email/tle-emails";
+import { editableEmailText, renderTleEmailLive, type EmailEdit } from "@/lib/email/tle-emails";
 import { accountsInvoiceEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import { bankForInvoice } from "@/lib/contractor-bank";
 import { recentBankChanges } from "@/lib/bank-vault";
@@ -216,7 +216,24 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
  * which will be linked up to the authenticator"), so the reply lands in
  * their inbox and threads. Otherwise the public sender, as before.
  */
-async function send(o: WorksOrder, id: string, to: string, vars: Record<string, string>, me: OsUser, who: SendOutcome["to"]): Promise<SendOutcome> {
+/**
+ * The part of each works order the agent may rewrite before it goes (James,
+ * 8 Nov 2026): from the greeting through the access notes. The heading, the
+ * button to the job page, the invoice line and the sign-off stay fixed.
+ */
+const EDITABLE: Record<string, [string, string]> = {
+  "works-contractor-order": ["wc2", "wc5a"],
+  "works-contractor-planned": ["wp2", "wp6"],
+};
+/** What the agent typed on the last screen, for the works order only. */
+export type ContractorEdit = { subject?: string | null; body?: string | null };
+function editFor(id: string, e?: ContractorEdit | null): EmailEdit | null {
+  const r = EDITABLE[id];
+  if (!r || !e || (!e.body?.trim() && !e.subject?.trim())) return null;
+  return { from: r[0], through: r[1], subject: e.subject ?? null, body: e.body ?? null };
+}
+
+async function send(o: WorksOrder, id: string, to: string, vars: Record<string, string>, me: OsUser, who: SendOutcome["to"], edit?: EmailEdit | null): Promise<SendOutcome> {
   const address = to.trim();
   if (!address.includes("@")) return { to: who, sent: false, reason: `no email address for the ${who}` };
   /* Never from James to a contractor, tenant or landlord (lib/not-a-sender). */
@@ -224,7 +241,7 @@ async function send(o: WorksOrder, id: string, to: string, vars: Record<string, 
   if (notJames && !o.rehearsal) return { to: who, sent: false, address, reason: notJames };
   let subject = "", html = "";
   try {
-    ({ subject, html } = await renderTleEmailLive(id, vars));
+    ({ subject, html } = await renderTleEmailLive(id, vars, edit));
   } catch (e) {
     return { to: who, sent: false, address, reason: e instanceof Error ? e.message : "the email could not be written" };
   }
@@ -441,7 +458,7 @@ function chaseVars(o: WorksOrder, remindedAt: string | null | undefined): Record
 }
 
 /** Which emails a move sets off. Returns every outcome, for the timeline. */
-export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request" | "chase_reminder" | "chase_final", me: OsUser, detail: { how?: string; quiet?: boolean; remindedAt?: string | null } & MoveOut = {}): Promise<SendOutcome[]> {
+export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request" | "chase_reminder" | "chase_final", me: OsUser, detail: { how?: string; quiet?: boolean; remindedAt?: string | null; contractorEdit?: ContractorEdit | null } & MoveOut = {}): Promise<SendOutcome[]> {
   const out: SendOutcome[] = [];
   const vars = await varsFor(o, me);
   const contractor = await contractorOf(o.contractorId);
@@ -453,7 +470,8 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   const planned = o.kind === "planned";
   const contractorOrder = async () => {
     if (!contractor) return;
-    const sent = await send(o, planned ? "works-contractor-planned" : "works-contractor-order", contractor.email, vars, me, "contractor");
+    const id = planned ? "works-contractor-planned" : "works-contractor-order";
+    const sent = await send(o, id, contractor.email, vars, me, "contractor", action === "raised" ? editFor(id, detail.contractorEdit) : null);
     if (sent.sent && o.contractorId) await markOrderSent(o.id, o.contractorId, contractor.name);
     out.push(sent);
   };
@@ -602,11 +620,45 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
  * Plan a job shows the contractor what they are about to get (James, 8 Oct
  * 2026: "it should show a preview of what's going to get sent").
  */
-export async function previewJobEmail(o: WorksOrder, id: string, me: OsUser, over: Record<string, string> = {}): Promise<{ subject: string; html: string; to: string; contractorName: string }> {
+export async function previewJobEmail(o: WorksOrder, id: string, me: OsUser, over: Record<string, string> = {}, change?: ContractorEdit | null): Promise<{ subject: string; html: string; to: string; contractorName: string }> {
   const vars = { ...(await varsFor(o, me)), ...over };
   const c = await contractorOf(o.contractorId);
-  const { subject, html } = await renderTleEmailLive(id, vars);
+  const { subject, html } = await renderTleEmailLive(id, vars, editFor(id, change));
   return { subject, html, to: c?.email ?? "", contractorName: c?.name ?? o.contractorName };
+}
+
+/**
+ * The works order as words the agent can change (James, 8 Nov 2026): the
+ * subject and the editable run as plain text, and the details they can drop
+ * in where the cursor is ("add tenant number"), each already filled from
+ * the job. Null `text` when the builder's version has lost the run's ends.
+ */
+export async function editableJobEmail(o: WorksOrder, id: string, me: OsUser, over: Record<string, string> = {}): Promise<{ text: { subject: string; body: string } | null; fields: { label: string; value: string }[] }> {
+  const r = EDITABLE[id];
+  const vars = { ...(await varsFor(o, me)), ...over };
+  const text = r ? await editableEmailText(id, vars, r[0], r[1]).catch(() => null) : null;
+  const own = await jobTenants(o).catch(() => [] as JobTenant[]);
+  const home = own.length ? null : await homeAccessFor(o, own).catch(() => null);
+  const tenants = own.length ? own : home?.tenants ?? [];
+  const fields: { label: string; value: string }[] = [];
+  const add = (label: string, value: string | null | undefined) => { const v = (value ?? "").trim(); if (v && !fields.some((f) => f.label === label)) fields.push({ label, value: v }); };
+  const many = tenants.length > 1;
+  tenants.forEach((t) => {
+    const who = many ? ` (${first(t.name || "tenant")})` : "";
+    add(`Tenant name${who}`, t.name);
+    add(`Tenant number${who}`, t.phone);
+    add(`Tenant email${who}`, t.email);
+  });
+  add("Address", vars.address);
+  if (o.kind === "repair") add("Attend by", vars.dueBy);
+  else add("Expiry date", vars.dueDay);
+  if (o.scheduledAt) add("Booked for", vars.scheduledAt);
+  add("Access notes", o.access || home?.access || "");
+  if (o.propertyId) add("Key number", await keyNumbersFor(o.propertyId).catch(() => ""));
+  add("Landlord", o.landlord);
+  add("Your number", vars.agentPhone);
+  add("Your email", vars.agentEmail);
+  return { text, fields };
 }
 
 /** A chase email exactly as it would go to the contractor on this job, sent nowhere (lib/works-chase). */

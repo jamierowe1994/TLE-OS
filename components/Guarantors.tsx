@@ -44,12 +44,15 @@ export default function Guarantors({
   className = "",
   onChange,
   deck = false,
+  hideEmpty = false,
 }: {
   source: Source;
   title?: string;
   className?: string;
   /** One guarantor showing and any others stacked behind (a let's People tab, 8 Nov 2026). */
   deck?: boolean;
+  /** Draw nothing when there are none (a running tenancy on the home's page, 8 Nov 2026). */
+  hideEmpty?: boolean;
   /** Told the guarantors as they now stand, so what goes to Propoly can follow (components/LetPropoly). */
   onChange?: (signature: string) => void;
 }) {
@@ -115,6 +118,7 @@ export default function Guarantors({
           onSaved={(list) => { setRows(list); setEditing(null); }}
         />
   );
+  if (hideEmpty && !editing && (rows === null || rows.length === 0)) return null;
   if (deck) {
     return (
       <div className={className}>
