@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import OverviewPanel, { useOverviewPanel } from "@/components/portfolio/OverviewPanel";
 import { useNewLook } from "@/lib/use-new-look";
 import { Mast, Badge, Ico } from "@/components/new-look/Parts";
-import { Stat, Meter, Card as NlCard, Failed, Loading, Spin } from "@/components/new-look/backoffice/Bits";
+import { Stat, Card as NlCard, Failed, Spin } from "@/components/new-look/backoffice/Bits";
 import RecordsDrawer, { type PmRecordKind, type RecordAsk } from "@/components/new-look/dashboard/RecordsDrawer";
 import { CountUp } from "@/components/new-look/dashboard/Charts";
+import { PmCard, PmWait, BookRing, WorkBars, TenantFlow } from "@/components/new-look/dashboard/PmCharts";
 
 /**
  * Overview (1 Oct 2026): property management at a glance, one tile per part
@@ -455,6 +457,7 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
      dashboard's pop-out (app/api/overview/records), and the three boards that
      already open here (inspections, reviews, move-outs) as they always did. */
   const [ask, setAsk] = useState<RecordAsk | null>(null);
+  const router = useRouter();
   const list = (kind: PmRecordKind, title: string, figure: number, columns: [string, string, string, string, string], board: { href: string; label: string }, note: string, empty: string, drift = true) => () =>
     setAsk({ kind, endpoint: "/api/overview/records", title, figure, range: data?.scope ? (data.scope.agent ? `${data.scope.label}'s homes` : data.scope.whole ? "Every home" : "Your homes") : "Now", note, board, columns, empty, drift, agent });
   const md = data?.maintenance?.ok ? data.maintenance.data : null;
@@ -467,7 +470,7 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
   const state = (t: Tile<unknown> | undefined) => ({ loading: reading || (!t && !error), error: error ? "Couldn't be read just now" : tileErr(t) });
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-bo nl-pm">
+    <div data-look="new" className="nl-page nl-rise nl-bo nl-pm nl-edge">
       <Mast
         eyebrow={data?.scope ? (data.scope.agent ? `The homes on ${data.scope.label}'s book` : data.scope.whole ? "Every home across the business" : "The homes on your own book") : "Back office"}
         title="PM Dashboard"
@@ -495,6 +498,56 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
           sub={ad ? (ad.tenants > 0 ? `behind · largest ${pounds(ad.largest)}` : "nobody behind on rent") : null}
           onOpen={ad ? list("arrears", "Arrears", ad.tenants, ["Tenant", "Home", "Last invoice", "", "Owed"], { href: "/finances", label: "Open Finances" }, "Tenants behind on rent, most owed first.", "Nobody is behind on rent.") : undefined} />
       </PmRow>
+
+      {/* The pictures (James, 8 Nov 2026: "graphics like the homepage
+          dashboard ... the different brand colours"), from the same read. */}
+      <div className="nl-pm-graphs">
+        <PmCard title="The Book" aside={<Link href="/portfolio" className="nl-pmc-aside">Portfolio</Link>}>
+          {reading || !p ? (
+            <PmWait>Reading the book…</PmWait>
+          ) : error ? (
+            <p className="nl-pmc-off">Couldn&rsquo;t be read just now.</p>
+          ) : !p.ok ? (
+            <p className="nl-pmc-off">{p.error}</p>
+          ) : p.data.occupied == null ? (
+            <p className="nl-pmc-off">Tenanted and vacant come from the tenancy status, which hasn&rsquo;t been read yet.</p>
+          ) : (
+            <BookRing managed={p.data.managed} occupied={p.data.occupied} vacant={p.data.vacant ?? 0} upcoming={p.data.upcoming ?? 0} onOpen={() => open("move-outs")} />
+          )}
+        </PmCard>
+
+        <PmCard title="The Work" aside={<span className="nl-pmc-aside is-quiet">On time and late</span>}>
+          {reading ? (
+            <PmWait>Reading the work…</PmWait>
+          ) : (
+            <WorkBars
+              rows={[
+                { label: "Maintenance", total: md?.open ?? null, late: md?.overdue ?? 0, lateWord: "overdue", note: tileErr(data?.maintenance), onOpen: md ? list("maintenance", "Open Jobs", md.open, ["Job", "Home", "Due", "Urgency", "Status"], { href: "/maintenance", label: "Open Maintenance" }, "Overdue first, then by when they're due.", "No open jobs.") : undefined },
+                { label: "Inspections", total: ind?.due ?? null, late: ind?.overdue ?? 0, lateWord: "overdue", note: tileErr(data?.inspections), onOpen: () => open("inspections") },
+                { label: "Tenancy reviews", total: rd?.due ?? null, late: rd?.overdue ?? 0, lateWord: "overdue", note: tileErr(data?.reviews), onOpen: () => open("tenancy-reviews") },
+                { label: "Move-outs", total: mo?.open ?? null, late: mo?.overdue ?? 0, lateWord: "overdue", note: tileErr(data?.moveOuts), onOpen: () => open("move-outs") },
+                { label: "Certificates", total: cd ? cd.expired + cd.dueSoon : null, late: cd?.expired ?? 0, lateWord: "expired", note: tileErr(data?.compliance), onOpen: cd ? list("compliance", "Certificates", cd.expired + cd.dueSoon, ["Certificate", "Home", "Expires", "Landlord", "Status"], { href: "/compliance", label: "Open Compliance" }, "Expired first, then the ones due in the next 30 days.", "Nothing expired or due.") : undefined },
+              ]}
+            />
+          )}
+        </PmCard>
+
+        <PmCard title="On the Way to a Tenant" aside={<Link href="/listings" className="nl-pmc-aside">Listings</Link>}>
+          {reading ? (
+            <PmWait>Reading the lettings…</PmWait>
+          ) : (
+            <TenantFlow
+              steps={[
+                { label: "Drafts", value: ld?.drafts ?? null, note: tileErr(data?.lettings), tone: "clay", onOpen: () => { router.push("/listings"); } },
+                { label: "On the market", value: ld?.available ?? null, note: tileErr(data?.lettings), tone: "terra", onOpen: ld ? list("market", "On the Market", ld.available, ["Rent", "Home", "Live since", "", "Status"], { href: "/listings", label: "Open Listings" }, "Longest on the market first.", "Nothing on the market.") : undefined },
+                { label: "Applications", value: apd?.open ?? null, note: tileErr(data?.applications), tone: "olive", onOpen: apd ? list("applications", "Open Applications", apd.open, ["Applicants", "Home", "Received", "", "Status"], { href: "/applications", label: "Open Applications" }, "Newest first.", "No open applications.") : undefined },
+                { label: "Let agreed", value: ld?.letAgreed ?? null, note: tileErr(data?.lettings), tone: "sage", onOpen: () => { router.push("/applications"); } },
+                { label: "Moving in", value: apd?.movingIn ?? null, note: tileErr(data?.applications), tone: "brown", onOpen: () => { router.push("/applications"); } },
+              ]}
+            />
+          )}
+        </PmCard>
+      </div>
 
       <PmRow title="The Work" sub="Jobs, visits and the tenancies that need something doing.">
         <PmTile label="Maintenance" {...state(data?.maintenance)} value={md?.open ?? null}
@@ -541,45 +594,30 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
         <PmTile label="Let agreed" {...state(data?.lettings)} value={ld?.letAgreed ?? null} sub={ld ? "on their way to a move-in" : null} href="/applications" />
       </PmRow>
 
-      <div className="nl-bo-g2 nl-pm-cards">
-        <NlCard title="Occupancy" aside={<Link href="/portfolio" className="nl-link nl-bo-aside">Portfolio</Link>}>
-          {!p ? (
-            <Loading>Reading the book…</Loading>
-          ) : !p.ok ? (
-            <p className="nl-bo-err">{p.error}</p>
-          ) : p.data.occupied == null ? (
-            <p className="nl-meta">Tenanted and vacant come from the tenancy status, which has not been read yet.</p>
-          ) : (
-            <div className="nl-bo-meters">
-              <Meter label="Tenanted" n={p.data.occupied} of={p.data.managed} />
-              <Meter label="Vacant" n={p.data.vacant ?? 0} of={p.data.managed} quiet hot={(p.data.vacant ?? 0) > 0} />
-              <Meter label="Becoming vacant" n={p.data.upcoming ?? 0} of={p.data.managed} quiet />
-            </div>
-          )}
-        </NlCard>
-
-        <NlCard
+      <div className="nl-pm-cards">
+        <PmCard
           title="Upcoming Vacancies"
-          onClick={() => open("move-outs")}
-          aside={<button type="button" className="nl-link nl-bo-aside" onClick={(e) => { e.stopPropagation(); open("move-outs"); }}>View all</button>}
+          aside={<button type="button" className="nl-pmc-aside" onClick={() => open("move-outs")}>View all</button>}
         >
           {!vac ? (
-            <Loading>Reading the move-outs…</Loading>
+            <PmWait>Reading the move-outs…</PmWait>
           ) : !vac.ok ? (
-            <p className="nl-bo-err">{vac.error}</p>
+            <p className="nl-pmc-off">{vac.error}</p>
           ) : vac.data.next.length === 0 ? (
-            <p className="nl-meta">No move-out days ahead.</p>
+            <p className="nl-pmc-off">No move-out days ahead.</p>
           ) : (
-            <ul className="nl-bo-list">
+            <ul className="nl-pm-vac">
               {vac.data.next.map((l, i) => (
                 <li key={i}>
-                  <span className="nl-strong min-w-0 flex-1 truncate">{l.where}</span>
-                  <span className="nl-meta shrink-0">{l.on ? shortDay(l.on) : ""}</span>
+                  <button type="button" onClick={() => open("move-outs")}>
+                    <span className="nl-pm-vac-day">{l.on ? shortDay(l.on) : "No date"}</span>
+                    <span className="nl-pm-vac-where">{l.where}</span>
+                  </button>
                 </li>
               ))}
             </ul>
           )}
-        </NlCard>
+        </PmCard>
       </div>
 
       {data && (

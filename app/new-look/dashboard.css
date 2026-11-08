@@ -636,3 +636,192 @@
 /* Quick links: a solid hairline, as the site's outline buttons. */
 [data-look="new"] .nl-dash-pill, [data-look="new"] .nl-dash-pill.is-ask, [data-look="new"] .nl-dash-pill.is-edit { border-style: solid; border-color: var(--line); }
 [data-look="new"] .nl-dash-pill:hover { border-color: var(--ink); background: transparent; }
+
+/* ===========================================================================
+   PM DASHBOARD IN THE WEBSITE'S STYLE (James, 8 Nov 2026: "get everything in
+   line with the rest ... graphics like the homepage dashboard using the
+   different brand colours"). The page takes nl-edge and the front
+   dashboard's condensed face; three picture cards under The Book.
+=========================================================================== */
+[data-look="new"].nl-pm {
+  --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --line: rgba(20, 20, 19, 0.14);
+  --pm-sage: var(--pal-sage, #b3bea5);
+  --pm-olive: var(--sage-deep, #56634a);
+  --pm-clay: var(--pal-clay, #cfa096);
+  --pm-terra: var(--accent, #a85a51);
+  --pm-brown: var(--primary, #56423e);
+}
+[data-look="new"].nl-pm .nl-dash-stat-n { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; letter-spacing: 0.02em; }
+[data-look="new"].nl-pm .nl-dash-strip .is-ok { background: var(--pm-sage); }
+[data-look="new"].nl-pm .nl-dash-strip .is-late { background: var(--pm-terra); }
+[data-look="new"].nl-pm .nl-dash-stat-sub { font-family: var(--font-body); }
+[data-look="new"].nl-pm .nl-fsel, [data-look="new"].nl-pm select { border-radius: 0; }
+
+/* the cards */
+[data-look="new"] .nl-pm-graphs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1.1fr); gap: 20px; margin-top: 30px; }
+[data-look="new"] .nl-pmc { min-width: 0; border: 1px solid var(--line); background: var(--page); padding: 22px 24px 24px; display: flex; flex-direction: column; animation: nl-pmc-in .55s cubic-bezier(.2, .8, .2, 1) both; }
+[data-look="new"] .nl-pm-graphs > .nl-pmc:nth-child(2) { animation-delay: .07s; }
+[data-look="new"] .nl-pm-graphs > .nl-pmc:nth-child(3) { animation-delay: .14s; }
+@keyframes nl-pmc-in { from { opacity: 0; transform: translateY(10px); } }
+[data-look="new"] .nl-pmc-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-pmc-h h3 { margin: 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; font-size: 22px; line-height: 1.05; letter-spacing: 0.04em; color: var(--ink); }
+[data-look="new"] .nl-pmc-aside { padding: 0; border: 0; background: none; cursor: pointer; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--line); white-space: nowrap; }
+[data-look="new"] .nl-pmc-aside:hover { color: var(--accent-dark); text-decoration-color: currentColor; }
+[data-look="new"] .nl-pmc-aside.is-quiet { color: var(--muted); text-decoration: none; cursor: default; }
+[data-look="new"] .nl-pmc-wait { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13.5px; color: var(--muted); }
+[data-look="new"] .nl-pmc-off { margin: 4px 0 0; font-size: 13.5px; line-height: 21px; color: var(--muted); }
+
+/* the ring */
+/* The ring sits above its key in a narrow card and beside it in a wide one
+   (the card's own width decides, not the window's), so nothing collides. */
+[data-look="new"] .nl-pmc { container-type: inline-size; }
+[data-look="new"] .nl-pm-ring { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 18px; align-items: center; }
+[data-look="new"] .nl-pm-ring .nl-pm-legend { width: 100%; }
+@container (min-width: 460px) {
+  [data-look="new"] .nl-pm-ring { grid-template-columns: 160px minmax(0, 1fr); justify-items: stretch; gap: 28px; }
+}
+[data-look="new"] .nl-pm-ring-art { position: relative; width: 160px; height: 160px; padding: 0; border: 0; background: none; cursor: pointer; }
+[data-look="new"] .nl-pm-ring-art svg { transform: rotate(-90deg); display: block; }
+[data-look="new"] .nl-pm-ring-track { fill: none; stroke: color-mix(in srgb, var(--pal-pink, #fdefec) 70%, var(--line)); stroke-width: 18; }
+[data-look="new"] .nl-pm-ring-seg { fill: none; stroke-width: 18; transition: stroke-dasharray 1.1s cubic-bezier(.2, .8, .2, 1), stroke-width .2s; }
+[data-look="new"] .nl-pm-ring-art:hover .nl-pm-ring-seg { stroke-width: 21; }
+[data-look="new"] .nl-pm-ring-seg.is-sage { stroke: var(--pm-olive); }
+[data-look="new"] .nl-pm-ring-seg.is-clay { stroke: var(--pm-clay); }
+[data-look="new"] .nl-pm-ring-seg.is-terra { stroke: var(--pm-terra); }
+[data-look="new"] .nl-pm-ring-mid { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+[data-look="new"] .nl-pm-ring-mid b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 38px; line-height: 1; color: var(--ink); }
+[data-look="new"] .nl-pm-ring-mid span { margin-top: 4px; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+[data-look="new"] .nl-pm-legend { list-style: none; margin: 0; padding: 0; display: grid; }
+[data-look="new"] .nl-pm-legend li > button, [data-look="new"] .nl-pm-legend li.is-total { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 9px 0; border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; text-align: left; color: var(--ink); cursor: pointer; }
+[data-look="new"] .nl-pm-legend li.is-total { grid-template-columns: minmax(0, 1fr) auto; border-bottom: 0; cursor: default; color: var(--muted); }
+[data-look="new"] .nl-pm-legend li > button:hover span { color: var(--accent-dark); }
+[data-look="new"] .nl-pm-legend span { font-size: 13.5px; transition: color .2s; }
+[data-look="new"] .nl-pm-legend b { font-weight: 500; font-variant-numeric: tabular-nums; font-size: 14px; }
+[data-look="new"] .nl-pm-legend i, [data-look="new"] .nl-pm-key i { display: inline-block; width: 12px; height: 12px; }
+[data-look="new"].nl-pm i.is-sage { background: var(--pm-olive); }
+[data-look="new"].nl-pm i.is-clay { background: var(--pm-clay); }
+[data-look="new"].nl-pm i.is-terra { background: var(--pm-terra); }
+[data-look="new"] .nl-pm-key i.is-sage { background: var(--pm-sage); }
+
+/* the work bars */
+[data-look="new"] .nl-pm-work { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+[data-look="new"] .nl-pm-work-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name n" "bar bar"; gap: 6px 12px; width: 100%; padding: 8px 0; border: 0; background: none; font: inherit; text-align: left; color: var(--ink); cursor: pointer; }
+[data-look="new"] .nl-pm-work-row.is-still { cursor: default; }
+[data-look="new"] .nl-pm-work-name { grid-area: name; font-size: 13.5px; transition: color .2s; }
+[data-look="new"] button.nl-pm-work-row:hover .nl-pm-work-name { color: var(--accent-dark); }
+[data-look="new"] .nl-pm-work-n { grid-area: n; display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-pm-work-n b { font-weight: 500; font-size: 14px; }
+[data-look="new"] .nl-pm-work-n em { font-style: normal; font-size: 12px; color: var(--accent-dark); }
+[data-look="new"] .nl-pm-work-off { grid-column: 1 / -1; font-size: 12px; line-height: 17px; font-weight: 400; color: var(--faint); }
+[data-look="new"] .nl-pm-work-tr { grid-area: bar; display: flex; height: 10px; background: color-mix(in srgb, var(--pal-pink, #fdefec) 60%, transparent); }
+[data-look="new"] .nl-pm-work-tr i { display: block; height: 100%; transition: width .9s cubic-bezier(.2, .8, .2, 1); }
+[data-look="new"] .nl-pm-work-tr .is-ok { background: var(--pm-sage); }
+[data-look="new"] .nl-pm-work-tr .is-late { background: var(--pm-terra); }
+[data-look="new"] .nl-pm-key { display: flex; gap: 18px; margin: 14px 0 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+[data-look="new"] .nl-pm-key span { display: inline-flex; align-items: center; gap: 7px; }
+
+/* on the way to a tenant */
+[data-look="new"] .nl-pm-flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+[data-look="new"] .nl-pm-flow-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-areas: "i name n" ". bar bar"; gap: 6px 10px; width: 100%; padding: 8px 0; border: 0; background: none; font: inherit; text-align: left; color: var(--ink); cursor: pointer; }
+[data-look="new"] .nl-pm-flow-row.is-still { cursor: default; }
+[data-look="new"] .nl-pm-flow-i { grid-area: i; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; letter-spacing: 0.1em; color: var(--faint); }
+[data-look="new"] .nl-pm-flow-name { grid-area: name; font-size: 13.5px; transition: color .2s; }
+[data-look="new"] button.nl-pm-flow-row:hover .nl-pm-flow-name { color: var(--accent-dark); }
+[data-look="new"] .nl-pm-flow-n { grid-area: n; font-weight: 500; font-size: 14px; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-pm-flow-tr { grid-area: bar; height: 10px; }
+[data-look="new"] .nl-pm-flow-tr i { display: block; height: 100%; transition: width 1s cubic-bezier(.2, .8, .2, 1); }
+[data-look="new"] .nl-pm-flow-tr .is-clay { background: var(--pm-clay); }
+[data-look="new"] .nl-pm-flow-tr .is-terra { background: var(--pm-terra); }
+[data-look="new"] .nl-pm-flow-tr .is-olive { background: var(--pm-olive); }
+[data-look="new"] .nl-pm-flow-tr .is-sage { background: var(--pm-sage); }
+[data-look="new"] .nl-pm-flow-tr .is-brown { background: var(--pm-brown); }
+
+/* upcoming vacancies: day then address, two columns on a wide screen */
+[data-look="new"] .nl-pm-cards { margin-top: 34px; }
+[data-look="new"] .nl-pm-vac { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+[data-look="new"] .nl-pm-vac button { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 14px; align-items: baseline; width: 100%; padding: 11px 0; border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; text-align: left; color: var(--ink); cursor: pointer; }
+[data-look="new"] .nl-pm-vac-day { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-dark); }
+[data-look="new"] .nl-pm-vac-where { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .nl-pm-vac button:hover .nl-pm-vac-where { text-decoration: underline; text-underline-offset: 3px; }
+
+@media (max-width: 1180px) {
+  [data-look="new"] .nl-pm-graphs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  [data-look="new"] .nl-pm-graphs > .nl-pmc:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-pm-graphs { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  [data-look="new"] .nl-pmc { padding: 18px 16px 20px; }
+  [data-look="new"] .nl-pm-ring { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  [data-look="new"] .nl-pm-legend { width: 100%; }
+  [data-look="new"] .nl-pm-vac { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-pmc { animation: none; }
+  [data-look="new"] .nl-pm-ring-seg, [data-look="new"] .nl-pm-work-tr i, [data-look="new"] .nl-pm-flow-tr i { transition: none; }
+}
+
+/* ===========================================================================
+   THE BOARDS' POP-OUT (components/portfolio/OverviewPanel, 8 Nov 2026: "no
+   pull out drawers. Just pop outs"). Inspections, Tenancy Reviews and
+   Move-outs in one centred panel; their figure tiles and tabs restyled here
+   to the house's square cards and underlined condensed tabs.
+=========================================================================== */
+.nl-ovp { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 3.5vh 28px; --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; --line: rgba(20, 20, 19, 0.14); }
+.nl-ovp-dim { position: absolute; inset: 0; border: 0; padding: 0; cursor: default; background: rgba(20, 20, 19, .45); opacity: 0; transition: opacity .3s ease; }
+.nl-ovp[data-shown="true"] .nl-ovp-dim { opacity: 1; }
+.nl-ovp-panel { position: relative; display: flex; flex-direction: column; width: min(1240px, 100%); height: min(93vh, 1040px); background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); opacity: 0; transform: translateY(16px) scale(.985); transition: opacity .28s ease, transform .42s cubic-bezier(.2, .8, .2, 1); }
+.nl-ovp[data-shown="true"] .nl-ovp-panel { opacity: 1; transform: none; }
+.nl-ovp-head { display: flex; align-items: center; gap: 16px; padding: 22px 22px 20px 36px; border-bottom: 1px solid var(--line); }
+.nl-ovp-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: none; background: var(--accent-soft); color: var(--accent-dark); }
+.nl-ovp-eyebrow { margin: 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-dark); }
+.nl-ovp-title { margin: 4px 0 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 40px; line-height: .96; letter-spacing: .04em; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nl-ovp-close { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 16px; flex: none; border: 1px solid rgba(20, 20, 19, .24); background: transparent; color: var(--ink); cursor: pointer; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; transition: background .2s, color .2s; }
+.nl-ovp-close:hover { background: var(--ink); color: var(--page); }
+.nl-ovp-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 26px 36px 44px; }
+
+/* the boards' figure tiles: hairline squares, condensed labels and numbers */
+.nl-ovp [data-stat-tile] { border: 1px solid var(--line); background: var(--page); padding: 18px 20px; }
+.nl-ovp [data-stat-tile="pink"] { background: var(--pal-pink, #fdefec); border-color: transparent; }
+.nl-ovp [data-stat-tile="green"] { background: var(--sage-soft, #f1f4ec); border-color: transparent; }
+.nl-ovp button[data-stat-tile]:hover { border-color: var(--ink); }
+.nl-ovp [data-stat-tile] > p:first-child { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; letter-spacing: .16em; color: var(--muted); }
+.nl-ovp [data-stat-tile] > p:first-child > span { background: transparent; width: auto; height: auto; }
+.nl-ovp [data-stat-tile] .figures { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 40px; letter-spacing: .02em; margin-top: 10px; }
+.nl-ovp [data-stat-tile] > p:last-child { font-size: 12.5px; }
+
+/* the boards' tabs: words in the condensed capitals over a hairline, the one
+   you're on underlined in terracotta, as the record pages' tabs are */
+.nl-ovp [data-seg] { padding: 0; background: transparent; border: 0; border-bottom: 1px solid var(--line); justify-content: start; }
+.nl-ovp [data-seg] [data-seg-mark] { top: auto; bottom: -1px; height: 2px; background: var(--accent); }
+.nl-ovp [data-seg] [role="tab"] { padding: 12px 18px; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.nl-ovp [data-seg] [role="tab"][aria-selected="true"] { color: var(--ink); font-weight: 500; }
+.nl-ovp [data-seg] [role="tab"]:hover { color: var(--ink); }
+
+@media (max-width: 760px) {
+  .nl-ovp { padding: 0; }
+  .nl-ovp-panel { width: 100%; height: 100%; border: 0; }
+  .nl-ovp-head { padding: max(14px, env(safe-area-inset-top)) 12px 14px 16px; gap: 12px; }
+  .nl-ovp-icon { display: none; }
+  .nl-ovp-title { font-size: 30px; }
+  .nl-ovp-close span { display: none; }
+  .nl-ovp-close { width: 40px; padding: 0; justify-content: center; }
+  .nl-ovp-body { padding: 18px 16px max(32px, env(safe-area-inset-bottom)); }
+  .nl-ovp [data-seg] [role="tab"] { padding: 10px 10px; font-size: 13px; }
+}
+
+/* ===========================================================================
+   THE LIST BEHIND A FIGURE (RecordsDrawer, on the Dashboard and the PM
+   Dashboard): the same centred pop-out, now square with the condensed title.
+=========================================================================== */
+[data-look="new"].nl-rec-pop { --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; --line: rgba(20, 20, 19, 0.14); }
+[data-look="new"].nl-rec-pop .nl-drawer { border-color: rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); }
+[data-look="new"].nl-rec-pop .nl-drawer-head { padding-left: 36px; }
+[data-look="new"].nl-rec-pop .nl-eyebrow { color: var(--accent-dark); }
+[data-look="new"].nl-rec-pop .nl-dash-drawer-title { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 40px; line-height: .96; letter-spacing: .04em; text-transform: uppercase; }
+[data-look="new"].nl-rec-pop .nl-dash-drawer-fig b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; letter-spacing: .02em; color: var(--accent-dark); }
+[data-look="new"].nl-rec-pop .nl-dash-thead span { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 10.5px; letter-spacing: .16em; }
+[data-look="new"].nl-rec-pop .nl-iconbtn { border-color: rgba(20, 20, 19, .24); }
+[data-look="new"].nl-rec-pop .nl-iconbtn:hover { background: var(--ink); color: var(--page); }
+/* A long label and its badge on a phone: the badge drops under, never touches. */
+[data-look="new"].nl-pm .nl-dash-stat-top { flex-wrap: wrap; row-gap: 2px; }

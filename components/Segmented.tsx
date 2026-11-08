@@ -69,11 +69,13 @@ export default function Segmented<T extends string>({
          the same equal widths the sliding marker needs, with nothing cut. */
       className={`relative grid min-w-0 max-w-full auto-cols-fr grid-flow-col items-center rounded-full border border-line/60 bg-white p-1 ${className}`}
       role="tablist"
+      data-seg=""
     >
       {/* The marker. inset-1 matches the track's padding, so it sits inside
           the border rather than on it. */}
       <span
         aria-hidden
+        data-seg-mark=""
         /* The brown, not the accent (James, 11 Sep 2026): the chosen half of
            a two-way switch is the palette's contrast colour everywhere, and
            the brand accent is kept for the one button that makes something. */
