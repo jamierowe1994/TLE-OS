@@ -13,6 +13,12 @@ function show() {
     if (r && r.status === 200 && b.signedIn) {
       status.innerHTML = `<h1><span class="good">${TICK}</span>Signed In</h1>
         <p>As ${esc(b.me && b.me.name)}. Open any deal in Propoly and the TLE OS card shows in the bottom corner.</p>`;
+    } else if (r && r.status === 404) {
+      status.innerHTML = `<h1><span class="note">${LOCK}</span>Not Switched On Yet</h1>
+        <p>TLE OS at ${esc(r.origin)} doesn't have the extension's side yet. It will work once the latest TLE OS is live.</p>`;
+    } else if (r && r.status !== 0 && r.status !== 401 && !(r.status >= 300 && r.status < 400)) {
+      status.innerHTML = `<h1><span class="note">${LOCK}</span>Couldn't Reach TLE OS</h1>
+        <p>${esc(b.error || `TLE OS answered with an error (${r.status}). Try again in a minute.`)}</p>`;
     } else if (r && r.status !== 0) {
       status.innerHTML = `<h1><span class="note">${LOCK}</span>Sign in to TLE OS</h1>
         <p>Sign in once in this browser and the card will show on every Propoly deal you open.</p>

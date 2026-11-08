@@ -275,6 +275,8 @@
       state = { kind: "error", message: "TLE OS didn't answer. Check your connection and try again." };
     } else if (r.status === 401 || b.signedIn === false || (r.status >= 300 && r.status < 400)) {
       state = { kind: "signedOut" };
+    } else if (r.status === 404) {
+      state = { kind: "error", message: "TLE OS doesn't have the extension's side yet. It will work once the latest TLE OS is live." };
     } else if (r.status === 200 && b.found === false) {
       state = { kind: "missing" };
     } else if (r.status === 200 && b.found && b.yours === false) {
