@@ -31,6 +31,10 @@ function show() {
   });
 }
 
+/* Chrome focuses the first control when the pop-up opens, which drew a ring
+   round "For testing" (James, 8 Nov 2026). Nothing needs the focus at first. */
+requestAnimationFrame(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
+
 chrome.storage.local.get("osOrigin").then((v) => {
   input.value = (v && v.osOrigin) || "";
   show();
