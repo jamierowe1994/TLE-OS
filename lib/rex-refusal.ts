@@ -12,7 +12,7 @@
  */
 
 const KNOWN: [RegExp, string][] = [
-  [/epc lodgement date/i, "The EPC scores need the date on the EPC. Add it under EPC and save again."],
+  [/epc lodgement date/i, "The EPC scores need the EPC issue date (the start date, not the expiry). Add it under EPC and save again."],
   [/select a source/i, "This home has no Source yet - how the landlord came to us. Ask the office to add it, then try again."],
 ];
 

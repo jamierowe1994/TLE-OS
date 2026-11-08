@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { changesIn, draftFrom, orderedImages, shownFloorplans, type Draft } from "@/components/listing/listing-draft";
+import { changesIn, draftFrom, epcExpiryFor, orderedImages, shownFloorplans, type Draft } from "@/components/listing/listing-draft";
 import type { ListingDetails } from "@/lib/listing-details";
 import { toast } from "@/lib/toast";
 import { useSaveReporter } from "@/components/SaveChip";
@@ -122,7 +122,7 @@ export function useAdvertDraft({
         if (j.band) { next.epcBand = j.band; marks.epcBand = "the EPC"; }
         if (j.current != null) { next.epcCurrent = j.current; marks.epcCurrent = "the EPC"; }
         if (j.potential != null) { next.epcPotential = j.potential; marks.epcPotential = "the EPC"; }
-        if (j.lodged) { next.epcLodged = j.lodged; marks.epcLodged = "the EPC"; }
+        if (j.lodged) { next.epcLodged = j.lodged; next.epcExpiry = epcExpiryFor(j.lodged); marks.epcLodged = "the EPC"; }
         return next;
       });
       setFilledBy((m) => ({ ...m, ...marks }));
@@ -209,7 +209,7 @@ export function useAdvertDraft({
           d && !j.ok
             ? d
             : d && j.epcHeld
-              ? { ...draftFrom(j.details!), epcBand: d.epcBand, epcCurrent: d.epcCurrent, epcPotential: d.epcPotential, epcLodged: d.epcLodged }
+              ? { ...draftFrom(j.details!), epcBand: d.epcBand, epcCurrent: d.epcCurrent, epcPotential: d.epcPotential, epcLodged: d.epcLodged, epcExpiry: d.epcExpiry }
               : draftFrom(j.details!)
         );
         onSaved?.(j.details);

@@ -16,7 +16,7 @@ import { refusalInWords } from "@/lib/rex-refusal";
 import { recordFact } from "@/lib/property-facts";
 import { MAX_REG_NUMBERS, isRealDay, joinRegExpiries, joinRegNumbers, joinRegOwners, regNumbers, regOwnerName } from "@/lib/reg-numbers";
 import { bandForScore, forgetRecord, normaliseLarn, saveAgentLarn, withScottishFooter } from "@/lib/listing-record";
-import { bandScoreClash } from "@/lib/epc-band";
+import { bandScoreClash, epcExpiryFor } from "@/lib/epc-band";
 
 /**
  * The advert, live from REX, and saved back to it.
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-const EPC_NEEDS_DATE = "Everything else is saved. The EPC scores go to the portals once the date on the EPC is added.";
+const EPC_NEEDS_DATE = "Everything else is saved. The EPC scores go to the portals once the date the EPC was issued is added.";
 
 const count = (v: unknown): number | null | undefined => {
   if (v === undefined) return undefined;
@@ -185,7 +185,18 @@ export async function PATCH(req: NextRequest) {
     const day = typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00Z`) : null;
     if (v === null || v === "") epcLodged = null;
     else if (day && Number.isFinite(day.getTime()) && day.toISOString().slice(0, 10) === v && v <= new Date().toISOString().slice(0, 10)) epcLodged = v as string;
-    else bad.push("date on the EPC (a real date, not in the future)");
+    else bad.push("EPC issue date (the start date on the certificate, not the expiry - it can't be in the future)");
+  }
+  /* When the EPC runs out: editable, so a wrong issue date and the expiry
+     worked out from it can both be put right (Dan Richards / James, ticket
+     03060ff3, 8 Nov 2026). A real day, after the issue date. */
+  let epcExpiry: string | null | undefined;
+  if (b.epcExpiry !== undefined) {
+    const v = typeof b.epcExpiry === "string" ? b.epcExpiry.trim() : b.epcExpiry;
+    const day = typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00Z`) : null;
+    if (v === null || v === "") epcExpiry = null;
+    else if (day && Number.isFinite(day.getTime()) && day.toISOString().slice(0, 10) === v && (typeof epcLodged !== "string" || v > epcLodged)) epcExpiry = v as string;
+    else bad.push("EPC expiry date (a real date, after the issue date)");
   }
   let larn: string | null | undefined;
   if (b.landlordRegistration !== undefined) {
@@ -238,7 +249,7 @@ export async function PATCH(req: NextRequest) {
        must carry the landlord registration number and REX has no field for
        it, so it rides as the description's last line - the way Scottish
        agents put it on the portals. */
-    const epcTouched = epcBand !== undefined || epcCurrent !== undefined || epcPotential !== undefined || epcLodged !== undefined;
+    const epcTouched = epcBand !== undefined || epcCurrent !== undefined || epcPotential !== undefined || epcLodged !== undefined || epcExpiry !== undefined;
     let epcKeptOnly = false;
     /* Both scores, no lodgement date: kept here, not sent - sending them took
        the whole advert down with them (bug bf3ba4c2; Dan's description on 149
@@ -304,10 +315,17 @@ export async function PATCH(req: NextRequest) {
              ("Epc Lodgement Date is required" - Lianna's six saves on 12 South
              Chesters Lane, 28 Oct 2026, with the date on file and untouched). */
           epcWrite = { epc_current_eer: now, epc_potential_eer: pot, epc_lodgement_date: lodged };
-          if (epcLodged) {
+          if (epcExpiry) {
+            /* The expiry the agent saw on the screen: filled ten years on
+               from the issue date and editable there (ticket 03060ff3). */
+            if (epcExpiry <= lodged) return NextResponse.json({ ok: false, error: "The EPC expiry date has to be after the issue date." }, { status: 400 });
+            epcWrite.epc_expiry_date = epcExpiry;
+          } else if (epcLodged) {
             /* An EPC runs ten years from lodgement; REX holds both dates on
-               every listing that has one. Only filled where it has none. */
-            if (!current.epc.expiry) epcWrite.epc_expiry_date = `${Number(epcLodged.slice(0, 4)) + 10}${epcLodged.slice(4).replace("-02-29", "-02-28")}`;
+               every listing that has one. Filled where it has none, or where
+               the one it has was worked out from an issue date now corrected. */
+            const was = epcExpiryFor(current.epc.lodged);
+            if (!current.epc.expiry || (was && current.epc.expiry === was)) epcWrite.epc_expiry_date = epcExpiryFor(epcLodged)!;
           }
         } else if (now != null && pot != null) {
           epcKeptOnly = true;

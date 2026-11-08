@@ -6,7 +6,7 @@ import LineIcon from "@/components/LineIcon";
 import DropZone from "@/components/listing/DropZone";
 import RegNumbersInput from "@/components/listing/RegNumbersInput";
 import PortalPreview, { PORTAL_TABS, type Portal } from "@/components/listing/PortalPreview";
-import { CHANGE_WORDS, changesIn, draftFrom, fiveWeeks, money, orderedImages, shownFloorplans, type Draft, type FactField } from "@/components/listing/listing-draft";
+import { CHANGE_WORDS, changesIn, draftFrom, epcDateWarning, epcExpiryFor, fiveWeeks, money, orderedImages, shownFloorplans, type Draft, type FactField } from "@/components/listing/listing-draft";
 import type { ListingDetails } from "@/lib/listing-details";
 import GuideButton from "@/components/GuideButton";
 import { toast } from "@/lib/toast";
@@ -168,7 +168,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
         if (j.band) { next.epcBand = j.band; marks.epcBand = "the EPC"; }
         if (j.current != null) { next.epcCurrent = j.current; marks.epcCurrent = "the EPC"; }
         if (j.potential != null) { next.epcPotential = j.potential; marks.epcPotential = "the EPC"; }
-        if (j.lodged) { next.epcLodged = j.lodged; marks.epcLodged = "the EPC"; }
+        if (j.lodged) { next.epcLodged = j.lodged; next.epcExpiry = epcExpiryFor(j.lodged); marks.epcLodged = "the EPC"; }
         return next;
       });
       setFilledBy((m) => ({ ...m, ...marks }));
@@ -273,7 +273,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
           d && !j.ok
             ? d
             : d && j.epcHeld
-              ? { ...draftFrom(j.details!), epcBand: d.epcBand, epcCurrent: d.epcCurrent, epcPotential: d.epcPotential, epcLodged: d.epcLodged }
+              ? { ...draftFrom(j.details!), epcBand: d.epcBand, epcCurrent: d.epcCurrent, epcPotential: d.epcPotential, epcLodged: d.epcLodged, epcExpiry: d.epcExpiry }
               : draftFrom(j.details!)
         );
         onSaved?.(j.details);
@@ -596,8 +596,14 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
             <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcPotential ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcPotential: e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value)))) }))} placeholder="e.g. 79" className={`${fieldCls} mt-1 border-line/70`} />
           </label>
           <label className="block min-w-0">
-            {label("epcLodged", "Date on the EPC")}
-            <input type="date" max={new Date().toISOString().slice(0, 10)} disabled={!canEdit} value={draft.epcLodged ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcLodged: e.target.value || null }))} className={`${fieldCls} mt-1 border-line/70 ${draft.epcLodged ? "" : "text-muted"}`} />
+            {/* "Date on the EPC" didn't say which date (Dan Richards, ticket 03060ff3, 8 Nov 2026): it is the issue date. */}
+            {label("epcLodged", "EPC issue date (start, not expiry)")}
+            <input type="date" max={new Date().toISOString().slice(0, 10)} disabled={!canEdit} value={draft.epcLodged ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcLodged: e.target.value || null, epcExpiry: epcExpiryFor(e.target.value) ?? d.epcExpiry }))} className={`${fieldCls} mt-1 border-line/70 ${draft.epcLodged ? "" : "text-muted"}`} />
+          </label>
+          <label className="block min-w-0">
+            {/* Filled ten years on from the issue date, and editable so a wrong date can be put right (James, 8 Nov 2026). */}
+            {label("epcExpiry", "EPC expiry date")}
+            <input type="date" min={draft.epcLodged ?? undefined} disabled={!canEdit} value={draft.epcExpiry ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcExpiry: e.target.value || null }))} className={`${fieldCls} mt-1 border-line/70 ${draft.epcExpiry ? "" : "text-muted"}`} />
           </label>
           {details.record?.scotland && (
             <div className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-1">
@@ -615,10 +621,10 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
           )}
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
-          {epcNote ?? bandScoreClash(draft.epcBand, draft.epcCurrent) ?? (draft.epcCurrent != null && draft.epcPotential == null
+          {epcNote ?? epcDateWarning(draft.epcLodged, draft.epcExpiry, new Date().toISOString().slice(0, 10)) ?? bandScoreClash(draft.epcBand, draft.epcCurrent) ?? (draft.epcCurrent != null && draft.epcPotential == null
             ? "Add the potential score too and the rating goes to the portals with the advert. Until then it is kept here."
             : draft.epcCurrent != null && draft.epcPotential != null && !draft.epcLodged
-              ? "Add the date on the EPC and the rating goes to the portals with the advert. Until then it is kept here, and the rest of the advert still saves."
+              ? "Add the date the EPC was issued and the rating goes to the portals with the advert. Until then it is kept here, and the rest of the advert still saves."
               : "Every advert has to show the EPC rating.")}
           {details.record?.scotland && " In Scotland the landlord's registration number and your letting agent registration number (LARN) have to be on the advert as well, so saving adds both as the last lines of the description. Your LARN is remembered for your other Scottish listings."}
         </p>
