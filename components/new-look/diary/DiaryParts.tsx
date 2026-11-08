@@ -75,7 +75,7 @@ export function DiaryRow({ a, showDay, sentExtra, onOpen, drop }: { a: Appt; sho
         onClick={() => (drop ? drop.onToggle(a) : onOpen(a))}
       >
         <span className="nl-diary-time">{time}</span>
-        <span className={`nl-diary-dot is-${dotTone(a)}`} aria-hidden />
+        <span className={`nl-diary-dot is-${dotTone(a)} is-k-${a.fromPersonal ? "other" : a.kind}`} aria-hidden />
         <span className="min-w-0">
           <span className="nl-strong block truncate">{titleOf(a)}</span>
           <span className="nl-meta block truncate">
@@ -275,7 +275,8 @@ export function MonthGrid({
                     {list.length > 2 && <span className="nl-diary-mmore">+{list.length - 2} more</span>}
                   </span>
                   <span className="nl-diary-mdots" aria-hidden>
-                    {list.length > 3 ? <b>{list.length}</b> : list.map((a) => <i key={a.id} className={`nl-diary-dot is-${dotTone(a)}`} />)}
+                    {list.slice(0, 5).map((a) => <i key={a.id} className={`nl-diary-dot is-${dotTone(a)} is-k-${a.fromPersonal ? "other" : a.kind}`} />)}
+                    {list.length > 5 && <b>+{list.length - 5}</b>}
                   </span>
                 </>
               )}

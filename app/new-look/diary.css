@@ -183,3 +183,67 @@
   [data-look="new"].nl-diary-drawer .nl-drawer-foot > .nl-btn { flex: 1 1 auto; }
 }
 [data-look="new"] .nl-diary-quiet { color: var(--muted); }
+
+/* ===========================================================================
+   THE MONTH WITH THE DAY BESIDE IT (James, 7 Nov 2026, option A of three).
+   A compact month on the left, each day carrying a square mark per
+   appointment in its kind's colour; the day you pick opens on the right as
+   its timeline, so it is never scrolled to. Under 1100px the day falls back
+   under the month. With nl-edge for the website's type and square corners.
+=========================================================================== */
+[data-look="new"] .nl-diary-split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 0 36px; align-items: start; }
+[data-look="new"] .nl-diary-split > .nl-diary-under { margin-top: 0; position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow-y: auto; padding-left: 36px; border-left: 1px solid var(--line); }
+@media (max-width: 1099px) {
+  [data-look="new"] .nl-diary-split { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-diary-split > .nl-diary-under { position: static; max-height: none; overflow: visible; padding-left: 0; border-left: 0; margin-top: 34px; }
+}
+
+/* the month: shorter cells, marks not words */
+[data-look="new"] .nl-diary-split .nl-diary-mcell { min-height: 78px; padding: 8px 8px 6px; gap: 8px; }
+[data-look="new"] .nl-diary-split .nl-diary-mitems { display: none; }
+[data-look="new"] .nl-diary-split .nl-diary-mdots { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+[data-look="new"] .nl-diary-split .nl-diary-mdots .nl-diary-dot { width: 9px; height: 9px; }
+[data-look="new"] .nl-diary-split .nl-diary-mdots b { font-family: var(--font-body); font-size: 10.5px; font-weight: 600; color: var(--muted); line-height: 1; }
+[data-look="new"] .nl-diary-split .nl-diary-mcell.is-sel { background: var(--page); box-shadow: inset 0 0 0 2px var(--ink); }
+[data-look="new"] .nl-diary-split .nl-diary-mcell.is-today .nl-diary-mnum { background: var(--accent); color: #fff; }
+[data-look="new"].nl-edge .nl-diary-mnum { font-family: var(--font-body); font-size: 13px; width: 24px; height: 24px; margin: -2px 0 0 -2px; }
+[data-look="new"].nl-edge .nl-diary-mdow { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.16em; font-size: 10.5px; padding: 8px; }
+[data-look="new"].nl-edge .nl-diary-month-title { min-width: 0; text-align: left; flex: 1; font-size: 22px; }
+[data-look="new"].nl-edge .nl-diary-month-head { gap: 8px; }
+
+/* every kind its own colour, square */
+[data-look="new"] .nl-diary-dot.is-k-viewing { background: var(--accent); box-shadow: none; }
+[data-look="new"] .nl-diary-dot.is-k-viewing.is-unaccompanied { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); }
+[data-look="new"] .nl-diary-dot.is-k-slot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); }
+[data-look="new"] .nl-diary-dot.is-k-appraisal { background: var(--brown); box-shadow: none; }
+[data-look="new"] .nl-diary-dot.is-k-takeon { background: var(--pal-clay); box-shadow: none; }
+[data-look="new"] .nl-diary-dot.is-k-inspection, [data-look="new"] .nl-diary-dot.is-k-movein { background: var(--sage-deep); box-shadow: none; }
+[data-look="new"] .nl-diary-dot.is-k-other, [data-look="new"] .nl-diary-dot.is-k-travel { background: var(--line-strong); box-shadow: none; }
+[data-look="new"] .nl-diary-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 0; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-diary-key span { display: inline-flex; align-items: center; gap: 6px; }
+[data-look="new"] .nl-diary-key .nl-diary-dot { width: 9px; height: 9px; }
+
+/* the day beside it */
+[data-look="new"].nl-edge .nl-diary-dayhead .nl-section-title { font-size: 26px; }
+[data-look="new"] .nl-diary-split .nl-diary-row { grid-template-columns: 48px 9px minmax(0, 1fr) 14px; gap: 12px; padding: 14px 2px; }
+[data-look="new"] .nl-diary-split .nl-diary-row-end { grid-column: 3; grid-row: 2; justify-content: flex-start; margin-top: -6px; }
+[data-look="new"] .nl-diary-split .nl-diary-row-end:not(:has(.nl-badge)) { display: none; }
+[data-look="new"] .nl-diary-split .nl-diary-caret { grid-column: 4; grid-row: 1; }
+[data-look="new"] .nl-diary-split .nl-diary-row:hover { padding-left: 6px; padding-right: 6px; }
+[data-look="new"] .nl-diary-split .nl-diary-inline-body { padding-left: 70px; }
+[data-look="new"].nl-edge .nl-diary-time { font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+[data-look="new"].nl-edge .nl-diary-row .nl-diary-dot { width: 9px; height: 26px; }
+[data-look="new"].nl-edge .nl-diary-arrow { border-radius: 0; }
+
+/* The next 7 days, with the month's colours (7 Nov 2026): every block square,
+   on a pale ground, with its kind's colour down the left edge. */
+[data-look="new"].nl-edge .nl-diary-holder h2.hand { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 24px; }
+[data-look="new"].nl-edge .nl-diary-holder > * { border-radius: 0; }
+[data-look="new"].nl-edge .nl-wk-block { --k: var(--line-strong); border-radius: 0; border-color: var(--line) !important; background: var(--page) !important; box-shadow: inset 3px 0 0 var(--k); padding-left: 8px; }
+[data-look="new"].nl-edge .nl-wk-block.nl-wk-k-viewing { --k: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--page)) !important; }
+[data-look="new"].nl-edge .nl-wk-block.nl-wk-k-slot { --k: var(--accent); }
+[data-look="new"].nl-edge .nl-wk-block.nl-wk-k-appraisal { --k: var(--brown); background: color-mix(in srgb, var(--brown) 7%, var(--page)) !important; }
+[data-look="new"].nl-edge .nl-wk-block.nl-wk-k-takeon { --k: var(--pal-clay); background: color-mix(in srgb, var(--pal-clay) 12%, var(--page)) !important; }
+[data-look="new"].nl-edge .nl-wk-block.nl-wk-k-inspection, [data-look="new"].nl-edge .nl-wk-block.nl-wk-k-movein { --k: var(--sage-deep); background: var(--sage-soft) !important; }
+[data-look="new"].nl-edge .nl-wk-block.is-past { opacity: 0.6; }
+[data-look="new"].nl-edge .nl-diary-holder *:not([class*="spin"]) { border-radius: 0; }

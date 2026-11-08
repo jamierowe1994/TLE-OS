@@ -297,7 +297,10 @@ export default function Viewings() {
     const showDay = (offset: number) => {
       pickDay(offset);
       setNlTab("month");
-      window.setTimeout(() => dayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+      /* The day sits beside the month on a wide screen (James, 7 Nov 2026,
+         "the month with the day beside it"); only a narrow one, where it
+         falls under the month, is scrolled to it. */
+      if (window.matchMedia("(max-width: 1099px)").matches) window.setTimeout(() => dayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     };
     const dayList = byDay.get(selected) ?? [];
     const dayCount = counted(dayList);
@@ -308,7 +311,7 @@ export default function Viewings() {
       { id: "week", label: "Next 7 days", count: n(weekCount) },
     ];
     const blurbs: Record<NlTab, string> = {
-      month: "Pick a day and it opens below. Open anything on it to see the details, change it or confirm it.",
+      month: "Pick a day to see what's on it. Open anything there to see the details, change it or confirm it.",
       week: "Today and the six days after it, hour by hour. Pick one to open it under the month.",
     };
     const whose = fAgent ? (fAgent === me?.name ? "in your diary" : `in ${fAgent}'s diary`) : everything ? "across the team" : "";
@@ -326,7 +329,7 @@ export default function Viewings() {
     );
     return (
       <>
-        <div data-look="new" className="nl-page nl-rise nl-diary">
+        <div data-look="new" className="nl-page nl-rise nl-diary nl-edge">
           <Mast
             title="Diary"
             blurb={blurb}
@@ -418,8 +421,17 @@ export default function Viewings() {
 
           <div className="nl-diary-body" key={nlTab}>
             {nlTab === "month" && (
-              <>
-                <MonthGrid byDay={byDay} selected={selected} monthShift={monthShift} onMonthShift={setMonthShift} onPick={(d) => showDay(d)} />
+              <div className="nl-diary-split">
+                <div className="nl-diary-split-month">
+                  <MonthGrid byDay={byDay} selected={selected} monthShift={monthShift} onMonthShift={setMonthShift} onPick={(d) => showDay(d)} />
+                  <p className="nl-diary-key" aria-label="What the colours mean">
+                    <span><i className="nl-diary-dot is-k-viewing" />Viewing</span>
+                    <span><i className="nl-diary-dot is-k-appraisal" />Appraisal</span>
+                    <span><i className="nl-diary-dot is-k-takeon" />Take-on</span>
+                    <span><i className="nl-diary-dot is-k-inspection" />Inspection or move-in</span>
+                    <span><i className="nl-diary-dot is-k-other" />Anything else</span>
+                  </p>
+                </div>
                 <div ref={dayRef} className="nl-diary-under">
                   <div className="nl-diary-dayhead">
                     <h2 className="nl-section-title">{dayLabel(selected)}</h2>
@@ -440,7 +452,7 @@ export default function Viewings() {
                     <p className="nl-empty">{selected < 0 ? "Nothing was booked that day." : "A clear day. Rare. Enjoy it."}</p>
                   )}
                 </div>
-              </>
+              </div>
             )}
 
             {nlTab === "week" && (

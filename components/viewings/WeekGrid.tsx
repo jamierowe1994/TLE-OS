@@ -197,7 +197,7 @@ export default function WeekGrid({
                           width: `calc(${widthPct}% - 4px)`,
                           ...b.style,
                         }}
-                        className={`absolute overflow-hidden rounded-lg border px-1.5 py-1 text-left transition-[filter] hover:brightness-95 ${b.className}`}
+                        className={`nl-wk-block nl-wk-k-${a.kind}${past ? " is-past" : ""} absolute overflow-hidden rounded-lg border px-1.5 py-1 text-left transition-[filter] hover:brightness-95 ${b.className}`}
                       >
                         <span className={`figures block text-[9px] font-semibold leading-none ${isTravel ? "text-muted" : ""}`}>{a.start}</span>
                         <span className="block truncate text-[10.5px] font-semibold leading-tight">{subjectOf(a)}</span>
