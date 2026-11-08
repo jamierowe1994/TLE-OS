@@ -312,3 +312,43 @@
   [data-look="new"] .nl-prop-page .nl-cell { padding: 20px 18px; border-radius: 20px; }
   [data-look="new"] .nl-prop-page .nl-facts { padding: 18px 18px 14px; }
 }
+
+/* ===========================================================================
+   ONE HOME IN THE WEBSITE'S STYLE (James, 8 Nov 2026: "do the same thing for
+   Portfolio and the property view"). nl-edge on the page squares it and sets
+   the title, tabs and card titles in the condensed capitals; the four "how it
+   stands" lines become tiles in the palette - olive when all is well,
+   terracotta when something needs doing, clay when it hasn't been read.
+=========================================================================== */
+[data-look="new"].nl-prop-page { --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; --line: rgba(20, 20, 19, 0.14); }
+[data-look="new"].nl-prop-page .nl-prop-standing { gap: 14px; margin-bottom: 44px; }
+[data-look="new"].nl-prop-page .nl-prop-stand { position: relative; gap: 4px; padding: 18px 18px 16px; border: 1px solid var(--line); background: var(--page); transition: border-color .2s, background-color .2s, transform .2s; animation: nl-stand-in .5s cubic-bezier(.2, .8, .2, 1) both; }
+[data-look="new"].nl-prop-page .nl-prop-stand:nth-child(2) { animation-delay: .05s; }
+[data-look="new"].nl-prop-page .nl-prop-stand:nth-child(3) { animation-delay: .1s; }
+[data-look="new"].nl-prop-page .nl-prop-stand:nth-child(4) { animation-delay: .15s; }
+@keyframes nl-stand-in { from { opacity: 0; transform: translateY(8px); } }
+[data-look="new"].nl-prop-page .nl-prop-stand:hover { border-color: var(--ink); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-on { border-color: var(--ink); }
+[data-look="new"].nl-prop-page .nl-prop-stand i { position: absolute; left: -1px; right: -1px; top: -1px; height: 5px; border-radius: 0; }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-ok i { background: var(--sage-deep, #56634a); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-hot i { background: var(--accent, #a85a51); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-quiet i { background: var(--pal-clay, #cfa096); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-ok { background: color-mix(in srgb, var(--sage-soft, #f1f4ec) 70%, var(--page)); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-hot { background: var(--pal-pink, #fdefec); }
+[data-look="new"].nl-prop-page .nl-prop-stand > .nl-meta { margin-top: 6px; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; line-height: 16px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+[data-look="new"].nl-prop-page .nl-prop-stand > b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 20px; line-height: 1.15; letter-spacing: .02em; white-space: nowrap; }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-quiet > b { font-weight: 500; }
+/* the cards on the page: hairlines, no shadows */
+[data-look="new"].nl-prop-page .nl-cell { border-color: var(--line); box-shadow: none; }
+[data-look="new"].nl-prop-page .nl-tabhead .nl-block-title { font-size: 22px; }
+@media (max-width: 760px) {
+  [data-look="new"].nl-prop-page .nl-prop-standing { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  [data-look="new"].nl-prop-page .nl-prop-stand { padding: 14px 12px 12px; }
+  [data-look="new"].nl-prop-page .nl-prop-stand > b { font-size: 17px; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { [data-look="new"].nl-prop-page .nl-prop-stand { animation: none; } }
+/* The figures in the plain face the website uses, not the old serif; the
+   Rent card's title in the condensed capitals like the cards beside it. */
+[data-look="new"].nl-prop-page, [data-look="new"].nl-port { --font-figures: var(--font-body); --nl-serif: var(--font-body); }
+[data-look="new"].nl-prop-page .nl-prop-rent > p:first-child { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 18px; line-height: 1.15; letter-spacing: .06em; text-transform: uppercase; }
+[data-look="new"].nl-prop-page .nl-prop-rent .figures { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 30px; letter-spacing: .02em; }

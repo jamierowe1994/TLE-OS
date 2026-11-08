@@ -825,3 +825,43 @@
 [data-look="new"].nl-rec-pop .nl-iconbtn:hover { background: var(--ink); color: var(--page); }
 /* A long label and its badge on a phone: the badge drops under, never touches. */
 [data-look="new"].nl-pm .nl-dash-stat-top { flex-wrap: wrap; row-gap: 2px; }
+
+/* ── The charts shared with Portfolio (8 Nov 2026). The palette's tones on
+   the ring and the bars, and the part you've filtered by marked. ────────── */
+[data-look="new"] .nl-port-graphs, [data-look="new"] .nl-pm-graphs { --pm-sage: var(--pal-sage, #b3bea5); --pm-olive: var(--sage-deep, #56634a); --pm-clay: var(--pal-clay, #cfa096); --pm-terra: var(--accent, #a85a51); --pm-brown: var(--primary, #56423e); --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; --line: rgba(20, 20, 19, 0.14); }
+[data-look="new"] .nl-pm-ring-art.is-still { cursor: default; }
+[data-look="new"] .nl-pm-ring-seg.is-olive { stroke: var(--pm-olive); }
+[data-look="new"] .nl-pm-ring-seg.is-sage { stroke: var(--pm-olive); }
+[data-look="new"] .nl-port-graphs .nl-pm-ring-seg.is-sage { stroke: var(--pm-sage); }
+[data-look="new"] .nl-pm-ring-seg.is-brown { stroke: var(--pm-brown); }
+[data-look="new"] .nl-pm-ring-seg.is-clay { stroke: var(--pm-clay); }
+[data-look="new"] .nl-pm-ring-seg.is-terra { stroke: var(--pm-terra); }
+[data-look="new"] .nl-pm-ring-seg.is-on { stroke-width: 22; }
+[data-look="new"] .nl-pm-legend i.is-olive { background: var(--pm-olive); }
+[data-look="new"] .nl-pm-legend i.is-sage { background: var(--pm-olive); }
+[data-look="new"] .nl-port-graphs .nl-pm-legend i.is-sage { background: var(--pm-sage); }
+[data-look="new"] .nl-pm-legend i.is-brown { background: var(--pm-brown); }
+[data-look="new"] .nl-pm-legend i.is-clay { background: var(--pm-clay); }
+[data-look="new"] .nl-pm-legend i.is-terra { background: var(--pm-terra); }
+[data-look="new"] .nl-pm-legend li > button:disabled { cursor: default; }
+[data-look="new"] .nl-pm-legend li > button.is-on span, [data-look="new"] .nl-pm-flow-row.is-on .nl-pm-flow-name { color: var(--accent-dark); font-weight: 500; }
+[data-look="new"] .nl-pm-flow-row:disabled { cursor: default; }
+[data-look="new"] .nl-pm-flow.is-rank .nl-pm-flow-row { padding: 7px 0; }
+
+/* ── PORTFOLIO in the website's style (8 Nov 2026) ───────────────────────── */
+[data-look="new"].nl-port { --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; --line: rgba(20, 20, 19, 0.14); }
+[data-look="new"].nl-port .nl-port-fig > .nl-meta:first-child { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; line-height: 16px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+[data-look="new"].nl-port .nl-port-fig > b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; letter-spacing: .02em; }
+[data-look="new"].nl-port .nl-port-fig > b .is-quiet { font-family: var(--nl-cond); color: var(--faint); }
+[data-look="new"] .nl-port-graphs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 20px; margin-top: 30px; }
+[data-look="new"] .nl-port-graphs > .nl-pmc:nth-child(2) { animation-delay: .07s; }
+[data-look="new"] .nl-port-graphs > .nl-pmc:nth-child(3) { animation-delay: .14s; }
+[data-look="new"].nl-port .nl-prop, [data-look="new"].nl-port .nl-prop * { border-radius: 0; }
+[data-look="new"].nl-port .nl-prop { border-color: var(--line); }
+@media (max-width: 1180px) {
+  [data-look="new"] .nl-port-graphs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  [data-look="new"] .nl-port-graphs > .nl-pmc:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-port-graphs { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+}

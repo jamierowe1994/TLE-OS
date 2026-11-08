@@ -1178,7 +1178,7 @@ export default function PropertyPage() {
 
     return (
       <SaveScopeProvider scope={saves}>
-        <div data-look="new" className="nl-page nl-prop-page">
+        <div data-look="new" className="nl-page nl-prop-page nl-edge">
           <div className="nl-rise">
             {/* Crumb, the save chip, and ‹ › through the list it was opened from. */}
             <div className="nl-crumbs">

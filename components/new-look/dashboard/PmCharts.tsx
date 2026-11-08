@@ -205,3 +205,91 @@ export function TenantFlow({ steps }: { steps: FlowStep[] }) {
     </ol>
   );
 }
+
+/* ── Shared by Portfolio (8 Nov 2026): a ring of parts and a ranked list of
+   bars, each part pressable (Portfolio uses them to filter the book). ───── */
+
+export type Tone = "olive" | "terra" | "clay" | "sage" | "brown";
+
+export function MixRing({
+  parts, middle, middleLabel, total,
+}: {
+  parts: { key: string; n: number; tone: Tone; onPick?: () => void; on?: boolean }[];
+  middle: string | number;
+  middleLabel: string;
+  /** The row under the key ("Homes 423"). */
+  total?: { label: string; n: number };
+}) {
+  const on = useGrow();
+  const sum = Math.max(1, parts.reduce((s, p) => s + p.n, 0));
+  const R = 64;
+  const C = 2 * Math.PI * R;
+  let run = 0;
+  return (
+    <div className="nl-pm-ring">
+      <div className="nl-pm-ring-art is-still">
+        <svg viewBox="0 0 160 160" width="160" height="160" aria-hidden>
+          <circle cx="80" cy="80" r={R} className="nl-pm-ring-track" />
+          {parts.map((p) => {
+            const len = (p.n / sum) * C;
+            const seg = (
+              <circle
+                key={p.key}
+                cx="80"
+                cy="80"
+                r={R}
+                className={`nl-pm-ring-seg is-${p.tone}${p.on ? " is-on" : ""}`}
+                strokeDasharray={`${on ? Math.max(0, len - (p.n > 0 ? 2 : 0)) : 0} ${C}`}
+                strokeDashoffset={-run}
+              />
+            );
+            run += len;
+            return seg;
+          })}
+        </svg>
+        <span className="nl-pm-ring-mid">
+          <b>{typeof middle === "number" ? <CountUp value={middle} /> : middle}</b>
+          <span>{middleLabel}</span>
+        </span>
+      </div>
+      <ul className="nl-pm-legend">
+        {parts.map((p) => (
+          <li key={p.key}>
+            <button type="button" onClick={p.onPick} disabled={!p.onPick} className={p.on ? "is-on" : undefined} aria-pressed={p.on ?? undefined}>
+              <i className={`is-${p.tone}`} aria-hidden />
+              <span>{p.key}</span>
+              <b>{p.n.toLocaleString("en-GB")}</b>
+            </button>
+          </li>
+        ))}
+        {total && (
+          <li className="is-total">
+            <span>{total.label}</span>
+            <b>{total.n.toLocaleString("en-GB")}</b>
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+export function RankBars({ rows }: { rows: { label: string; value: number; tone: Tone; onPick?: () => void; on?: boolean }[] }) {
+  const on = useGrow();
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <ol className="nl-pm-flow is-rank">
+      {rows.map((r, i) => (
+        <li key={r.label}>
+          <button type="button" className={`nl-pm-flow-row${r.on ? " is-on" : ""}`} onClick={r.onPick} disabled={!r.onPick} aria-pressed={r.on ?? undefined}>
+            <span className="nl-pm-flow-i">{String(i + 1).padStart(2, "0")}</span>
+            <span className="nl-pm-flow-name">{r.label}</span>
+            <b className="nl-pm-flow-n">{r.value.toLocaleString("en-GB")}</b>
+            <span className="nl-pm-flow-tr" aria-hidden>
+              <i className={`is-${r.tone}`} style={{ width: on ? `${Math.max(2, (r.value / max) * 100)}%` : 0, transitionDelay: `${i * 70}ms` }} />
+            </span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+}

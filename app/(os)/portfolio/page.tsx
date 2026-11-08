@@ -2,7 +2,7 @@
 
 import { asOf } from "@/lib/as-of";
 import { currentLets } from "@/lib/current-lets";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { rememberOrder } from "@/lib/portfolio-order";
@@ -28,6 +28,7 @@ import TakeOnWizard from "@/components/portfolio/TakeOnWizard";
 import RentRange from "@/components/portfolio/RentRange";
 import { searchMatches } from "@/lib/search-match";
 import { useNewLook } from "@/lib/use-new-look";
+import { PmCard, MixRing, RankBars, type Tone as ChartTone } from "@/components/new-look/dashboard/PmCharts";
 import { Mast, Badge, Tabs, Ico, type Tone } from "@/components/new-look/Parts";
 import { BoardSkeleton } from "@/components/Skeleton";
 
@@ -161,6 +162,8 @@ export default function Portfolio() {
   const [service, setService] = useState<string | null>(null);
   const [agent, setAgent] = useState<string | null>(null);
   const [town, setTown] = useState<string | null>(null);
+  /* Where the charts scroll to once a part of them is pressed. */
+  const listTop = useRef<HTMLDivElement | null>(null);
   /* Rent pcm between two figures; null is every rent (components/portfolio/RentRange). */
   const [rent, setRent] = useState<[number, number] | null>(null);
   const [lookOnly, setLookOnly] = useState(false);
@@ -492,7 +495,7 @@ export default function Portfolio() {
     };
 
     return (
-      <div data-look="new" className="nl-page nl-rise">
+      <div data-look="new" className="nl-page nl-rise nl-edge nl-port">
         {logins && (
           <SendLogins
             listings={filtering ? filteredHomes.filter((h) => h.tenants.length > 0).map((h) => String(h.listingId)) : undefined}
@@ -588,6 +591,43 @@ export default function Portfolio() {
               </div>
             </div>
 
+            {/* The book in pictures (James, 8 Nov 2026: "do the same thing for
+                Portfolio" as the PM Dashboard's graphics). Each part filters
+                the homes below and brings them into view. */}
+            {book && (() => {
+              const toList = () => window.setTimeout(() => listTop.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+              const SERVICE_TONE: Record<string, ChartTone> = { Managed: "olive", "Let Only": "terra", "Rent Collect": "clay", "Not set": "sage" };
+              const svc = Object.entries(book.counts.byService).sort((a, b) => b[1] - a[1]);
+              const topTowns = towns.slice(0, 6);
+              const TOWN_TONES: ChartTone[] = ["terra", "clay", "olive", "sage", "brown", "clay"];
+              const BANDS: [string, number, number][] = [["Under £750", 0, 749], ["£750 to £999", 750, 999], ["£1,000 to £1,249", 1000, 1249], ["£1,250 to £1,499", 1250, 1499], ["£1,500 to £1,999", 1500, 1999], ["£2,000 and over", 2000, 1000000]];
+              const BAND_TONES: ChartTone[] = ["sage", "olive", "clay", "terra", "brown", "brown"];
+              const priced = book.properties.filter((x) => x.rentMonthly != null);
+              const bands = BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: priced.filter((x) => x.rentMonthly! >= lo && x.rentMonthly! <= hi).length }));
+              return (
+                <div className="nl-port-graphs">
+                  <PmCard title="By Service" aside={service ? <button type="button" className="nl-pmc-aside" onClick={() => setService(null)}>Show all</button> : <span className="nl-pmc-aside is-quiet">Press one to filter</span>}>
+                    <MixRing
+                      middle={book.counts.properties}
+                      middleLabel="properties"
+                      parts={svc.map(([k, n]) => ({ key: k, n, tone: SERVICE_TONE[k] ?? "brown", on: service === k, onPick: () => { setView("properties"); setService(service === k ? null : k); toList(); } }))}
+                    />
+                  </PmCard>
+                  <PmCard title="Where the Homes Are" aside={town ? <button type="button" className="nl-pmc-aside" onClick={() => setTown(null)}>Show all</button> : <span className="nl-pmc-aside is-quiet">{book.counts.towns} towns</span>}>
+                    <RankBars rows={topTowns.map((t, i) => ({ label: t.id, value: book.properties.filter((x) => x.town === t.id).length, tone: TOWN_TONES[i], on: town === t.id, onPick: () => { setView("properties"); setTown(town === t.id ? null : t.id); toList(); } }))} />
+                  </PmCard>
+                  <PmCard title="Rent Bands" aside={rent ? <button type="button" className="nl-pmc-aside" onClick={() => setRent(null)}>Show all</button> : <span className="nl-pmc-aside is-quiet">Per month</span>}>
+                    {priced.length === 0 ? (
+                      <p className="nl-pmc-off">No rents were read for these homes, so no bands are drawn.</p>
+                    ) : (
+                      <RankBars rows={bands.map((b, i) => ({ label: b.label, value: b.n, tone: BAND_TONES[i], on: !!rent && rent[0] === b.lo, onPick: b.n ? () => { setView("properties"); setRent(rent && rent[0] === b.lo ? null : [b.lo, Math.min(b.hi, Math.max(rentTop, b.lo))]); toList(); } : undefined }))} />
+                    )}
+                  </PmCard>
+                </div>
+              );
+            })()}
+
+            <div ref={listTop} className="scroll-mt-6" aria-hidden />
             <Tabs
               label="Show the book as"
               className="mt-10"
