@@ -1,0 +1,12 @@
+.git
+node_modules
+.next
+.next-*
+previews
+ios
+art
+extension
+*.tsbuildinfo
+.env*
+!.env.example
+retry-ids.json
