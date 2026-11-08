@@ -1,8 +1,10 @@
 "use client";
 
+import { usePref } from "@/lib/prefs-store";
+
 import { watchPortalSend, TAKING_A_WHILE } from "@/lib/portal-watch";
 import { toast } from "@/lib/toast";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
 
@@ -71,7 +73,10 @@ export default function AdvertOffline({
   className = "",
   letAgreed = null,
   onLetAgreed,
+  compact = false,
 }: {
+  /** Just the button, for a page header beside Customer update (James, 8 Nov 2026). */
+  compact?: boolean;
   listingId: string;
   applicationId?: string | null;
   propertyId?: string | null;
@@ -113,6 +118,18 @@ export default function AdvertOffline({
       live = false;
     };
   }, [listingId, applicationId, tick]);
+
+  /* The agent's standing choice (Profile > Automations, 8 Nov 2026) becomes
+     this let's plan the first time it opens with none set. */
+  const [standing, , standingReady] = usePref<"fee" | "references" | "manual">("advert-offline-default", "manual");
+  const planned = useRef(false);
+  useEffect(() => {
+    if (!loaded || !standingReady || planned.current || !applicationId) return;
+    if (advert?.offlineAt || advert?.when || standing === "manual") return;
+    planned.current = true;
+    void plan(standing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, standingReady, standing, advert?.when, advert?.offlineAt, applicationId]);
 
   useEffect(() => {
     const go = () => setOpen(true);
@@ -192,6 +209,39 @@ export default function AdvertOffline({
     } finally {
       setBackBusy(false);
     }
+  }
+
+  const sheet = open && (
+    <TakeOfflineSheet
+      listingId={listingId}
+      applicationId={applicationId}
+      propertyId={propertyId}
+      address={address}
+      onPortals={onPortals}
+      onClose={() => {
+        setOpen(false);
+        setTick((n) => n + 1);
+      }}
+    />
+  );
+  if (compact) {
+    if (!loaded) return null;
+    return (
+      <>
+        {stuck ? (
+          <button type="button" disabled={offBusy} onClick={() => void takeOffAgain()} className="nl-btn nl-btn--secondary" title="Marked offline, but the portals still show it">
+            <DoodleIcon name="lock" size={14} /> {offBusy ? "Taking it off…" : "Take off the portals"}
+          </button>
+        ) : offline ? (
+          <span className="nl-advert-chip" title={advert?.offlineAt ? `Offline since ${day(advert.offlineAt)}` : undefined}>Advert offline</span>
+        ) : onPortals ? (
+          <button type="button" data-steve="listing.take-offline" onClick={() => setOpen(true)} className="nl-btn nl-btn--secondary" title="On Rightmove, OnTheMarket and Zoopla">
+            <DoodleIcon name="lock" size={14} /> Take offline
+          </button>
+        ) : null}
+        {sheet}
+      </>
+    );
   }
 
   return (

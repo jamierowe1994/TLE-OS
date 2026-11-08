@@ -487,7 +487,8 @@ export default function NextStepCard({
             </a>
           )}
 
-          {then.length > 0 && (
+          {/* "After that" off the card (James, 8 Nov 2026): Next Up is the one thing. */}
+          {false && then.length > 0 && (
             <div className="mt-4 border-t border-line/50 pt-3">
               <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">After That</p>
               <ul className="mt-1.5 space-y-1 text-[12px] leading-snug">

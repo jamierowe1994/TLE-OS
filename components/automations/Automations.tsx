@@ -1,5 +1,7 @@
 "use client";
 
+import { usePref } from "@/lib/prefs-store";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import AutomationEditor, { StepIcon, type Pickers } from "@/components/automations/AutomationEditor";
 import { actionDef, actionWords, blank, conditionWords, triggerDef, triggerWords, waitWords, type AutomationDef } from "@/lib/automations/catalogue";
@@ -192,6 +194,7 @@ export default function Automations({ look }: { look?: "new" } = {}) {
       !a.enabled ? (a.offBy ? `Switched off by ${a.offBy}` : "Off") : a.state !== "live" ? "On · checking the first send with you" : a.lastRunAt ? `Ran ${a.runsThisMonth ?? 0} ${a.runsThisMonth === 1 ? "time" : "times"} this month · last ${fmt(a.lastRunAt)}` : "On · not run yet";
     return (
       <div className="pb-16">
+        <AdvertOfflineDefault />
         <div className="nl-listbar">
           <div>
             <h3 className="nl-block-title">{all ? "Everyone's Automations" : "Your Automations"}</h3>
@@ -599,5 +602,37 @@ function Sentence({ def }: { def: AutomationDef }) {
       {def.conditions.length ? <>, and if <b>{def.conditions.map(conditionWords).join(" and ")}</b></> : null}
       {joined ? <>, {sched && !def.waitHours && !def.conditions.length ? "" : "then "}<b>{joined}</b>.</> : <>, then do nothing yet.</>}
     </p>
+  );
+}
+
+/**
+ * When to take an advert offline, as your standing choice (James, 8 Nov
+ * 2026: "pop it in their settings ... when the holding fee is in, when
+ * referencing is done, or I'll decide"). Each accepted let picks it up as
+ * its plan the first time its page opens (components/listing/AdvertOffline),
+ * and Next Step asks you to take it offline at that point. A let's own
+ * choice still wins.
+ */
+export const ADVERT_DEFAULT_KEY = "advert-offline-default";
+function AdvertOfflineDefault() {
+  const [when, setWhen, ready] = usePref<"fee" | "references" | "manual">(ADVERT_DEFAULT_KEY, "manual");
+  const opts: { id: "fee" | "references" | "manual"; label: string; sub: string }[] = [
+    { id: "fee", label: "When the holding fee is in", sub: "Or once the deal is in Propoly, in Scotland" },
+    { id: "references", label: "When referencing is done", sub: "The advert stays up until the tenant passes" },
+    { id: "manual", label: "I'll decide myself", sub: "Take offline from the let when you're ready" },
+  ];
+  return (
+    <section className="nl-auto-advert" aria-label="Taking adverts offline">
+      <h3 className="nl-block-title">Taking Adverts Offline</h3>
+      <p className="nl-meta">On every let you accept, ask me to take the advert off the portals:</p>
+      <div className="nl-choice-row" role="radiogroup" aria-label="When to take adverts offline">
+        {opts.map((o) => (
+          <button key={o.id} type="button" role="radio" aria-checked={ready && when === o.id} onClick={() => setWhen(o.id)} className={`nl-choice${ready && when === o.id ? " is-on" : ""}`}>
+            <span className="font-medium">{o.label}</span>
+            <small>{o.sub}</small>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }

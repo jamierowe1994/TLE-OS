@@ -408,3 +408,26 @@
 [data-look="new"] .nl-cu-save { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 [data-look="new"] .nl-cu-save .nl-fs-input { flex: 1 1 240px; }
 [data-look="new"] .nl-cu-saved { margin: 0; font-size: 14px; color: var(--sage-deep); }
+/* Attachments on a custom update. */
+[data-look="new"] .nl-cu-attach { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-cu-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; font-size: 13px; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-cu-chip button { padding: 0 6px; font: inherit; font-size: 15px; line-height: 1; color: var(--muted); background: none; border: 0; cursor: pointer; }
+[data-look="new"] .nl-cu-chip button:hover { color: var(--ink); }
+[data-look="new"] .nl-cu-attach-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; background: transparent; border: 1px dashed var(--line-strong); color: var(--ink); }
+[data-look="new"] .nl-cu-attach-btn:hover { border-style: solid; border-color: var(--ink); }
+[data-look="new"] .nl-cu-attach-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+[data-look="new"] .nl-cu-attach-pick button { display: grid; gap: 3px; text-align: left; padding: 12px 14px; font: inherit; cursor: pointer; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-cu-attach-pick button:hover { border-color: var(--ink); }
+[data-look="new"] .nl-cu-attach-pick b { font-size: 14px; font-weight: 600; }
+[data-look="new"] .nl-cu-attach-pick span { font-size: 12.5px; color: var(--muted); }
+[data-look="new"] .nl-cu-filelist { margin-top: 10px; padding: 10px 14px; background: #fff; border: 1px solid var(--line-strong); display: grid; gap: 10px; justify-items: start; }
+[data-look="new"] .nl-cu-filelist ul { list-style: none; margin: 0; padding: 0; width: 100%; max-height: 220px; overflow-y: auto; }
+[data-look="new"] .nl-cu-filelist li + li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-cu-filelist label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+[data-look="new"] .nl-cu-filelist input { margin-top: 3px; accent-color: var(--sage-deep); }
+[data-look="new"] .nl-cu-filelist b { display: block; font-size: 13.5px; font-weight: 600; }
+[data-look="new"] .nl-cu-filelist small { display: block; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-advert-chip { display: inline-flex; align-items: center; height: 40px; padding: 0 12px; font-size: 12px; color: var(--muted); border: 1px dashed var(--line-strong); white-space: nowrap; }
+/* Profile > Automations: when to take adverts offline. */
+[data-look="new"] .nl-auto-advert { margin-bottom: 32px; padding-bottom: 28px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+[data-look="new"] .nl-auto-advert .nl-choice-row { margin-top: 8px; }

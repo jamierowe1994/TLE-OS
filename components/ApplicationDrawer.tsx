@@ -1750,6 +1750,10 @@ export default function ApplicationDrawer({
                   <Ico name="mail" /> Customer update
                 </button>
               )}
+              {/* Take offline, beside Customer update (James, 8 Nov 2026). */}
+              {app?.listingId && !app.swapKind && !cancelled && !intro && (propoly.state === "in" || propoly.state === "push") && (
+                <AdvertOffline compact listingId={String(app.listingId)} applicationId={app.id} propertyId={app.propertyId ?? null} address={[app.property, app.locality].filter(Boolean).join(", ")} />
+              )}
               {mainJob}
               <Menu items={menu} />
             </div>
@@ -1977,9 +1981,9 @@ export default function ApplicationDrawer({
                           moveIn={moveIn}
                         />
                       )}
-                      {app.listingId && !app.swapKind && (propoly.state === "in" || propoly.state === "push") && (
-                        <AdvertOffline listingId={String(app.listingId)} applicationId={app.id} propertyId={app.propertyId ?? null} address={[app.property, app.locality].filter(Boolean).join(", ")} />
-                      )}
+                      {/* The advert box left Next Up (James, 8 Nov 2026): Take offline is a
+                          button beside Customer update, and when to be asked lives in
+                          Profile > Automations. */}
                     </div>
                   ) : (
                     <>

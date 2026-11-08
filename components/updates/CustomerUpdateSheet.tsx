@@ -109,6 +109,53 @@ export default function CustomerUpdateSheet({
   const [tplState, setTplState] = useState<"ask" | "naming" | "saved" | "no">("ask");
   /* A call. */
   const [callNote, setCallNote] = useState("");
+  /* Attachments (8 Nov 2026): from the home's file, or from their computer
+     (which goes onto the file too, so it's kept). */
+  const [attached, setAttached] = useState<{ key: string; name: string }[]>([]);
+  const [attachOpen, setAttachOpen] = useState<null | "choose" | "file">(null);
+  const [fileDocs, setFileDocs] = useState<{ key: string; name: string; label: string }[] | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const pickInput = useRef<HTMLInputElement | null>(null);
+  const keyOf = (url: string) => {
+    const m = /[?&]key=([^&]+)/.exec(url);
+    return m ? decodeURIComponent(m[1]) : null;
+  };
+  type HomeDoc = { name: string; fileName: string; typeLabel: string; url: string; at: string; standing?: unknown };
+  const asItems = (docs: HomeDoc[]) =>
+    docs
+      .filter((d) => !d.standing && keyOf(d.url))
+      .map((d) => ({ key: keyOf(d.url)!, name: d.name || d.fileName, label: [d.typeLabel, new Date(d.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })].filter(Boolean).join(" · ") }));
+  async function openFromFile() {
+    setAttachOpen("file");
+    if (fileDocs) return;
+    const j = (await fetch(`/api/documents?address=${encodeURIComponent(address)}&property=&from=application`, { cache: "no-store" })
+      .then((r) => r.json())
+      .catch(() => null)) as { ok?: boolean; docs?: HomeDoc[] } | null;
+    setFileDocs(j?.ok ? asItems(j.docs ?? []) : []);
+  }
+  async function uploadFromComputer(file: File) {
+    setUploading(true);
+    setErr(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("type", "other");
+    fd.append("name", file.name.replace(/\.[^.]+$/, ""));
+    fd.append("address", address);
+    fd.append("property", "");
+    fd.append("from", "application");
+    fd.append("fromId", letId);
+    const j = (await fetch("/api/documents", { method: "POST", body: fd })
+      .then((r) => r.json())
+      .catch(() => null)) as { ok?: boolean; docs?: HomeDoc[]; error?: string } | null;
+    setUploading(false);
+    if (!j?.ok) return setErr(j?.error ?? "That didn't upload. Try again.");
+    const items = asItems(j.docs ?? []);
+    setFileDocs(items);
+    const mine = [...(j.docs ?? [])].filter((d) => d.fileName === file.name || d.name === file.name.replace(/\.[^.]+$/, "")).sort((a, b) => b.at.localeCompare(a.at))[0];
+    const k = mine ? keyOf(mine.url) : null;
+    if (k) setAttached((a) => (a.some((x) => x.key === k) ? a : [...a, { key: k, name: mine!.name || mine!.fileName }]));
+    setAttachOpen(null);
+  }
 
   const party = parties.find((p) => p.key === to) ?? null;
   const first = (party?.name ?? "").split(/\s+/)[0] || "there";
@@ -165,7 +212,7 @@ export default function CustomerUpdateSheet({
       const s = await fetch("/api/confirmations", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "send", kind: "update", id: j.update.id, index: j.index ?? 0, ...(portal ? { portal: true } : {}), subject: fill(subject.trim()), html: asHtml(fill(body)) }),
+        body: JSON.stringify({ action: "send", kind: "update", id: j.update.id, index: j.index ?? 0, ...(portal ? { portal: true } : {}), subject: fill(subject.trim()), html: asHtml(fill(body)), ...(attached.length ? { attachments: attached } : {}) }),
       });
       const k = (await s.json().catch(() => ({}))) as { sent?: boolean; detail?: string; error?: string };
       if (!k.sent) throw new Error(k.detail ?? k.error ?? "It didn't send.");
@@ -394,6 +441,57 @@ export default function CustomerUpdateSheet({
             </div>
             <textarea id="cu-body" ref={bodyRef} className="nl-fs-input nl-cu-text" rows={10} value={body} onChange={(e) => setBody(e.target.value)} />
             <p className="nl-fs-hint">As it goes: &ldquo;{fill(body).split("\n")[0].slice(0, 80)}&rdquo;. Your email signature is added as usual.</p>
+            {/* Attach (8 Nov 2026): from the home's file, or from this computer. */}
+            <div className="nl-cu-attach">
+              {attached.map((a) => (
+                <span key={a.key} className="nl-cu-chip">
+                  <DoodleIcon name="doc" size={13} /> {a.name}
+                  <button type="button" aria-label={`Take ${a.name} off`} onClick={() => setAttached((x) => x.filter((y) => y.key !== a.key))}>×</button>
+                </span>
+              ))}
+              {attached.length < 5 && (
+                <button type="button" className="nl-cu-attach-btn" onClick={() => setAttachOpen(attachOpen ? null : "choose")} disabled={uploading}>
+                  <DoodleIcon name="link" size={13} /> {uploading ? "Uploading…" : "Attach"}
+                </button>
+              )}
+              <input ref={pickInput} type="file" className="hidden" accept="application/pdf,image/*,.doc,.docx" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFromComputer(f); e.target.value = ""; }} />
+            </div>
+            {attachOpen === "choose" && (
+              <div className="nl-cu-attach-pick">
+                <button type="button" onClick={() => void openFromFile()}>
+                  <b>From the file</b>
+                  <span>Anything on this home&apos;s Documents tab</span>
+                </button>
+                <button type="button" onClick={() => pickInput.current?.click()}>
+                  <b>From your computer</b>
+                  <span>Your Downloads or anywhere else. It&apos;s kept on the file too.</span>
+                </button>
+              </div>
+            )}
+            {attachOpen === "file" && (
+              <div className="nl-cu-filelist">
+                {fileDocs === null ? (
+                  <p className="nl-fs-reading"><span aria-hidden className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" /> Reading the file…</p>
+                ) : fileDocs.length === 0 ? (
+                  <p className="nl-meta">Nothing on this home&apos;s Documents tab yet.</p>
+                ) : (
+                  <ul>
+                    {fileDocs.map((d) => {
+                      const on = attached.some((a) => a.key === d.key);
+                      return (
+                        <li key={d.key}>
+                          <label>
+                            <input type="checkbox" checked={on} disabled={!on && attached.length >= 5} onChange={(e) => setAttached((a) => (e.target.checked ? [...a, { key: d.key, name: d.name }] : a.filter((x) => x.key !== d.key)))} />
+                            <span><b>{d.name}</b><small>{d.label}</small></span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setAttachOpen(null)}>Done</button>
+              </div>
+            )}
           </FloatCard>
         )}
 
