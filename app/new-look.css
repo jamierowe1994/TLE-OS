@@ -1098,6 +1098,86 @@
   .nl-ls-fields { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ── Edit landlord as ONE PANEL, in the website's edge (James, 9 Nov 2026:
+   "update the styling to match the rest of the website", with Rhiannon
+   Dodge's ticket b51878b0). As every pop-up went on 8 Nov: one solid panel
+   over a lighter dim, no see-through boxes on the dark; square corners; the
+   title, labels and buttons in the condensed capitals; each person a section
+   of the panel with a fine line between, the new one on linen with a
+   terracotta rule; brown for the main button, terracotta for what is missing. ── */
+.nl-ls { --ls-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; }
+.nl-ls .nl-po-card *:not([class*="spin"]):not(input[type="checkbox"]):not(input[type="radio"]) { border-radius: 0; }
+.nl-ls .nl-po-scrim { background: rgba(20, 20, 19, .34); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.nl-ls .nl-po-card {
+  gap: 0; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14);
+  box-shadow: 0 1px 0 rgba(20, 20, 19, .04), 0 40px 80px -32px rgba(20, 20, 19, .45), 0 12px 24px -16px rgba(20, 20, 19, .2);
+  pointer-events: auto; animation: nl-ls-panel .42s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+:root[data-theme="dark"] .nl-ls .nl-po-card { border-color: rgba(255, 255, 255, .1); }
+.nl-ls .nl-po-card > .nl-po-in, .nl-ls .nl-ls-list > .nl-po-in { animation-name: nl-ls-settle; animation-duration: .45s; }
+@keyframes nl-ls-panel { from { opacity: 0; transform: translateY(18px) scale(.99); } }
+@keyframes nl-ls-settle { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* the head: the address small, LANDLORD in the capitals, a line under */
+.nl-ls .nl-po-head { color: var(--ink); padding: 22px 18px 22px 28px; border-bottom: 1px solid var(--line); }
+.nl-ls .nl-po-head .nl-eyebrow { color: var(--accent); font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; }
+.nl-ls .nl-po-title { margin-top: 8px; color: var(--ink); font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 40px; line-height: 1; }
+.nl-ls .nl-ls-lede { color: var(--muted); font-size: 14px; line-height: 21px; margin-top: 10px; }
+.nl-ls .nl-po-head .nl-iconbtn { background: var(--page); border-color: var(--line-strong); color: var(--ink); }
+.nl-ls .nl-po-head .nl-iconbtn:hover { background: var(--panel); border-color: var(--ink); }
+.nl-ls .nl-po-wait { color: var(--muted); padding: 22px 28px; }
+.nl-ls .nl-po-box { border: 0; border-bottom: 1px solid var(--line); padding: 20px 28px; background: transparent; }
+
+/* nothing held: a band across the panel, the terracotta rule down its edge */
+.nl-ls .nl-ls-none { margin: 0; padding: 14px 28px; background: var(--bad-soft); color: var(--bad-ink); box-shadow: inset 3px 0 0 var(--accent); border-bottom: 1px solid var(--line); }
+
+/* each person a section of the panel */
+.nl-ls .nl-ls-list { gap: 0; }
+.nl-ls .nl-ls-box { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; border-bottom: 1px solid var(--line); }
+.nl-ls .nl-ls-row { padding: 18px 28px; }
+.nl-ls .nl-ls-row:hover { background: var(--panel); }
+.nl-ls .nl-ls-av { width: 40px; height: 40px; font-family: var(--ls-cond); font-stretch: 75%; font-size: 14px; letter-spacing: .06em; font-weight: 500; }
+.nl-ls .nl-ls-first { background: var(--primary); color: var(--on-primary); box-shadow: none; font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10px; padding: 3px 8px; }
+.nl-ls .nl-ls-kind { font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11px; color: var(--muted); }
+.nl-ls .nl-ls-name { font-size: 17px; }
+.nl-ls .nl-ls-edit, .nl-ls .nl-ls-new-body { padding: 4px 28px 22px 82px; }
+.nl-ls .nl-ls-cb > p:first-child::before, .nl-ls .nl-ls-edit .min-h-\[42px\]::before { border-radius: 0; }
+/* The icon in its chip: ContactBlock's row now starts with the icon itself,
+   not a span round it, so the old rule above left it beside the chip. */
+.nl-ls .nl-ls-edit .min-h-\[42px\] > svg:first-child { position: absolute; left: 8px; top: 14px; width: 14px; height: 14px; color: var(--ink); }
+
+/* the new person, on linen with a terracotta rule, until they're saved */
+.nl-ls .nl-ls-new { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); animation: nl-ls-settle .4s cubic-bezier(.2, .8, .2, 1) both; }
+.nl-ls .nl-ls-new-head { padding: 18px 18px 18px 28px; }
+.nl-ls .nl-ls-new .nl-ls-av { background: var(--page); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.nl-ls .nl-ls-new .nl-ls-kind { color: var(--accent); }
+.nl-ls .nl-ls-x { background: var(--page); }
+.nl-ls .nl-ls-f > span { font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11px; color: var(--ink); }
+.nl-ls .nl-ls-f input { background: var(--page); }
+.nl-ls .nl-ls-f input:focus { border-color: var(--ink); box-shadow: none; }
+.nl-ls .nl-ls-same { background: var(--page); font-size: 12px; }
+.nl-ls .nl-btn { font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11.5px; }
+
+/* what was said, and the two ways to add someone, along the foot */
+.nl-ls .nl-ls-said { color: var(--muted); padding: 14px 28px 0; }
+.nl-ls .nl-ls-adds { padding: 18px 28px 24px; gap: 10px; }
+.nl-ls .nl-ls-add { border: 1px solid var(--line-strong); color: var(--ink); background: var(--page); padding: 11px 16px; font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11.5px; }
+.nl-ls .nl-ls-add:hover { background: var(--page); border-color: var(--ink); }
+.nl-ls .nl-ls-add[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+@media (max-width: 760px) {
+  .nl-po.nl-ls { padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .nl-ls .nl-po-head { padding: 18px 12px 18px 18px; }
+  .nl-ls .nl-po-title { font-size: 32px; }
+  .nl-ls .nl-ls-none, .nl-ls .nl-ls-row, .nl-ls .nl-po-box, .nl-ls .nl-po-wait { padding-left: 18px; padding-right: 18px; }
+  .nl-ls .nl-ls-new-head { padding: 14px 14px 14px 18px; }
+  .nl-ls .nl-ls-edit, .nl-ls .nl-ls-new-body { padding: 4px 18px 20px; }
+  .nl-ls .nl-ls-said { padding: 12px 18px 0; }
+  .nl-ls .nl-ls-adds { padding: 16px 18px 20px; }
+  .nl-ls .nl-ls-add { flex: 1 1 auto; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) { .nl-ls .nl-po-card, .nl-ls .nl-ls-new { animation: none; } }
+
 /* ── A tenant's passport on the stage (components/passport/PassportStage) ──
    The passport on the left with the next steps under it, every answer on the
    right in boxes that sit side by side. Under the email window and the
