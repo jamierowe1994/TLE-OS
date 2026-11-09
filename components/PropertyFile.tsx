@@ -558,7 +558,7 @@ export default function PropertyFile({
                     <Pill tone={r.renewal ? "neutral" : s.tone}>{r.renewal ? "With the council" : stateLabel(r)}</Pill>
                   )}
                   <span className="text-[11px] text-muted">
-                    {r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
+                    {r.issued && filesOnIssueDate(r.type) ? `Issued ${day(r.issued)}${r.expiry ? `, ${r.state === "expired" ? "was due" : "due again"} ${day(r.expiry)}` : ""}` : r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
                     {r.renewal ? ` · renewal applied for ${day(r.renewal.appliedOn)}${r.renewal.ref ? ` (ref ${r.renewal.ref})` : ""}, back on the list ${day(r.renewal.holdEnds)} if no new licence` : ""}
                     {r.inRex && !r.fileInRex && r.expiry ? " · no document on file" : ""}
                     {r.fromHouse ? ` · held on ${r.fromHouse}` : ""}
