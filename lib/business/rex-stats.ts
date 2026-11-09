@@ -5,6 +5,7 @@ import { rexCall, rexRows, rexConfigured, rexLettingsAgents } from "./rex";
 import { readCache, writeCache } from "./integration-cache";
 import { withoutRemoved } from "@/lib/certificate-remove";
 import { relnKind } from "@/lib/rex-reln";
+import { expiryFromIssue } from "@/lib/cert-life";
 
 // Per-agent funnel stats from REX — live pulls confirmed against the live
 // account (3517, "The Property Experts" — Property + Lettings share it) via the
@@ -1409,18 +1410,32 @@ function complianceStateOf(
   return { state: "missing", days: null, unparsed: false };
 }
 
+/**
+ * The date a certificate runs to: REX's expiry, else its issue date plus the
+ * type's usual life (lib/cert-life). Rhiannon Dodge, 9 Nov 2026: a PAT test
+ * and an emergency lighting check on an HMO carry only the day they were done,
+ * so the home's page called them in date for ever and they never came up when
+ * due, while the book (lib/rex-compliance) already counts them for a year.
+ * Same months as the book, so both say the same.
+ */
+function runsTo(raw: { type: string; expiry: string | null; issued: string | null }): string | null {
+  if (raw.expiry) return raw.expiry;
+  return raw.issued ? expiryFromIssue(raw.type, raw.issued.slice(0, 10)) : null;
+}
+
 function toComplianceItem(entry: Record<string, unknown>): ComplianceItem | null {
   const raw = readComplianceEntry(entry);
   const name = PROPERTY_COMPLIANCE[raw.type];
   if (!name) return null; // unrecognised type — the caller records it, see below
 
-  const { state, unparsed } = complianceStateOf(raw.expiry, raw.issued, raw.notRequired);
+  const expiry = runsTo(raw);
+  const { state, unparsed } = complianceStateOf(expiry, raw.issued, raw.notRequired);
   return {
     type: raw.type,
     label: name,
     state,
     issued: raw.issued,
-    expiry: raw.expiry,
+    expiry,
     notes: raw.notes,
     ...(unparsed ? { dateUnparsed: true } : {}),
     ...(raw.id ? { entryId: raw.id } : {}),
@@ -1880,7 +1895,7 @@ const PROBE_CONCURRENCY = 6;
 
 function toProbeRow(entry: Record<string, unknown>): ComplianceProbeRow {
   const raw = readComplianceEntry(entry);
-  const { state, days, unparsed } = complianceStateOf(raw.expiry, raw.issued, raw.notRequired);
+  const { state, days, unparsed } = complianceStateOf(runsTo(raw), raw.issued, raw.notRequired);
   return {
     id: String(entry.id ?? ""),
     parentObjectId: String(entry.parent_object_id ?? ""),
