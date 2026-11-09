@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import { dropJson } from "@/lib/page-cache";
+import { APPS_BOARD_URL } from "@/lib/applications-read";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
 import { MoveInPackCard } from "@/components/MoveInPack";
 import CustomerUpdates from "@/components/CustomerUpdates";
@@ -1382,7 +1383,7 @@ export default function ApplicationDrawer({
           onCancelled={(c) => {
             setCancelled(c);
             /* The board's held read is out of date the moment this lands. */
-            dropJson("/api/applications?limit=200");
+            dropJson(APPS_BOARD_URL);
           }}
           onTell={(role) => {
             setCancelOpen(false);
@@ -1629,7 +1630,7 @@ export default function ApplicationDrawer({
         if (!r.ok || !j.ok) throw new Error(j.error ?? "The figures didn't save. Try again.");
         setDetails({ canEdit: Boolean(j.canEdit), dealId: j.dealId ?? null, edits: j.edits ?? {}, history: j.history ?? [] });
         /* The board reads them again rather than show its held copy. */
-        dropJson("/api/applications?limit=200");
+        dropJson(APPS_BOARD_URL);
         settle({ ok: true });
         setFigSave("done");
         window.setTimeout(() => { setFigEdit(false); setFigSave("idle"); }, 1700);

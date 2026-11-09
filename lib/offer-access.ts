@@ -3,7 +3,7 @@ import type { Who } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { scopeForWho } from "@/lib/scope";
 import { bookFor } from "@/lib/listings-cache";
-import { assembled } from "@/lib/applications-board";
+import { assembled, type BoardRead } from "@/lib/applications-board";
 import { isTestId, testListingsFor } from "@/lib/test-overlay";
 
 /**
@@ -21,8 +21,10 @@ import { isTestId, testListingsFor } from "@/lib/test-overlay";
 
 export const isOffice = (who: Who | null): boolean => Boolean(who?.actor && can(who.actor.role, "staff:internal"));
 
-/** The listing ids an agent's offers may touch. Null means every listing (the office, an owner). */
-export async function offerListingIds(req: NextRequest, who: Who | null): Promise<Set<string> | null> {
+/** The listing ids an agent's offers may touch. Null means every listing (the office, an owner).
+    `read` is how their applications are read: the open-offers count on the
+    Applications screen reads them as the board does (lib/applications-board). */
+export async function offerListingIds(req: NextRequest, who: Who | null, read: BoardRead = {}): Promise<Set<string> | null> {
   if (!who?.actor) return new Set();
   if (isOffice(who)) return null;
   const scope = await scopeForWho(req, who);
@@ -33,7 +35,7 @@ export async function offerListingIds(req: NextRequest, who: Who | null): Promis
     /* And the homes their own applications are on (22 Oct 2026): a let home
        leaves the Listings book, so 12b Cliff Road's Offers were refused to
        Rhiannon the morning her tenant moved in, and read as none. */
-    scope.unlinked ? Promise.resolve([]) : assembled(scope.rexUserId).then(({ held }) => held.value.applications).catch(() => []),
+    scope.unlinked ? Promise.resolve([]) : assembled(scope.rexUserId, read).then(({ held }) => held.value.applications).catch(() => []),
   ]);
   const ids = new Set<string>();
   for (const l of book?.listings ?? []) ids.add(String(l.id));

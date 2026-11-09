@@ -98,3 +98,10 @@ export function dropJson(url: string): void {
   kept.delete(url);
   flying.delete(url);
 }
+
+/** Keep `json` as the last good answer for `url`: a fresher answer read at
+    another address, such as the Applications board's second read
+    (lib/applications-read), so the next screen paints that one. */
+export function keepJson(url: string, json: unknown): void {
+  kept.set(url, { at: Date.now(), json });
+}

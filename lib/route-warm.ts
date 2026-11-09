@@ -1,3 +1,4 @@
+import { APPS_BOARD_URL } from "@/lib/applications-read";
 import { warmJson } from "@/lib/page-cache";
 import { warmDiary } from "@/lib/diary-store";
 
@@ -18,7 +19,7 @@ const READS: Record<string, string[]> = {
   "/leads": ["/api/leads", "/api/contacts"],
   "/market-appraisals": ["/api/appraisals"],
   "/listings": ["/api/listings"],
-  "/applications": ["/api/applications?limit=200"],
+  "/applications": [APPS_BOARD_URL],
 };
 const DIARY = new Set(["/dashboard", "/viewings"]);
 
