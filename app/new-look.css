@@ -123,7 +123,13 @@
 /* ── the page ───────────────────────────────────────────────────────────── */
 /* The design's margins: the page sits centred in the panel, 1288px of content at most. */
 .nl-page { max-width: 1288px; margin-left: auto; margin-right: auto; }
-.nl-rise > * { animation: nl-in 0.5s var(--nl-ease) both; }
+/* Fills backwards only (Dan Richards, ticket 3ebc8060, 8 Nov 2026: asking the
+   tenant for access opened the sheet behind the sidebar, cut off on the left).
+   Held at the end (`both`), the rise kept a transform on the page, and a
+   transform turns the page into the frame for anything `fixed` inside it - so
+   every sheet opened from a listing was drawn in the page, not the window. The
+   same reason the screen-change fade in globals.css fills backwards. */
+.nl-rise > * { animation: nl-in 0.5s var(--nl-ease) backwards; }
 .nl-rise > *:nth-child(2) { animation-delay: 0.05s; }
 .nl-rise > *:nth-child(3) { animation-delay: 0.1s; }
 .nl-rise > *:nth-child(4) { animation-delay: 0.15s; }
