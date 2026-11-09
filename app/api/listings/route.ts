@@ -100,7 +100,13 @@ export async function GET(req: NextRequest) {
     /* Marked Offline is what the agent pressed, not where the advert is
        (22 Oct 2026, lib/advert-offline): 6 Ruskin Place read Offline here
        while Rightmove still had it. The feeds of those few are asked. */
-    const showing = off.size ? await offlineButStillShowing([...off.keys()]).catch(() => new Set<string>()) : new Set<string>();
+    /* Only the Offline listings on THIS board are asked about: an agent's
+       board holds a few dozen homes, the Offline list is the whole office's
+       (97 on 8 Nov 2026), and the answers are held, never waited on
+       (lib/portal-status-hold). */
+    const onBoard = new Set(archived.listings.map((l: { id?: unknown; listingId?: unknown }) => String(l.id ?? l.listingId)));
+    const ask = [...off.keys()].filter((id) => onBoard.has(id));
+    const showing = ask.length ? await offlineButStillShowing(ask).catch(() => new Set<string>()) : new Set<string>();
     /* Intro only (lib/intro-only), stamped at serve time too: kept in the OS,
        so the book never carries it. */
     /* Offline (19 Oct 2026, lib/advert-offline): the agent took the advert

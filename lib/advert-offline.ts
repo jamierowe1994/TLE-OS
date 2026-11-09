@@ -1,6 +1,9 @@
 import "server-only";
+import { after } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import { listingRead } from "@/lib/listing-details";
+import { createPortalStatusHold, type HeldPortalAnswer } from "@/lib/portal-status-hold";
+import { RULES } from "@/lib/staleness";
 
 /**
  * TAKE THE ADVERT OFFLINE (James, 19 Oct 2026).
@@ -123,12 +126,14 @@ export async function markOffline(listingId: string, applicationId: string | nul
            online_again_at = NULL, updated_at = NOW()`,
     [listingId, applicationId, by.name, by.email]
   );
+  portalHold.forget(listingId);
   return advertFor(listingId);
 }
 
 /** Back on the portals: the marker goes, the plan is kept for the next let. */
 export async function markOnline(listingId: string): Promise<AdvertState | null> {
   await aq(`UPDATE os_advert_offline SET offline_at = NULL, online_again_at = NOW(), updated_at = NOW() WHERE listing_id = $1`, [listingId]);
+  portalHold.forget(listingId);
   return advertFor(listingId);
 }
 
@@ -151,26 +156,59 @@ export function stillOnPortalFeeds(feeds: unknown): boolean {
   return running && f.most_recent_queue?.listing_status_to_send === "current";
 }
 
+/* The kept answers live in os_cache, so a deploy does not blank the stamps. */
+const PORTAL_KEY = "advert-offline:portals:v1";
+
+/* One copy per process, on globalThis like the other holds, so dev reloads and
+   every route module share it. The windows are the board's own (lib/staleness
+   "listing-book"): a ten-minute-old stamp is still the right stamp on a board
+   to scan, and one is shown for hours while a new read runs behind it. */
+const G = globalThis as unknown as { __osPortalHold?: ReturnType<typeof createPortalStatusHold> };
+const portalHold = (G.__osPortalHold ??= createPortalStatusHold({
+  freshMs: RULES["listing-book"].freshMs,
+  keepMs: RULES["listing-book"].keepMs,
+  parallel: 4,
+  read: async (id) => {
+    /* Fresh: this hold decides how old an answer may be, not the two-minute read behind it. */
+    const res = await listingRead(id, "ListingPortalUploads", "getStatuses", { listing_id: Number(id), include_last_sent: false }, { fresh: true });
+    return res?.ok ? stillOnPortalFeeds(res.result) : null;
+  },
+  later: (work) => {
+    try {
+      after(work);
+    } catch {
+      /* not inside a request (a script, a cron): just run it */
+      void work();
+    }
+  },
+  load: async () => {
+    if (!hasDb()) return null;
+    const rows = await q<{ payload: { answers?: Record<string, HeldPortalAnswer> } }>("SELECT payload FROM os_cache WHERE key = $1", [PORTAL_KEY]);
+    return rows[0]?.payload?.answers ?? null;
+  },
+  save: async (all) => {
+    if (!hasDb()) return;
+    await q(
+      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
+      [PORTAL_KEY, JSON.stringify({ answers: all })]
+    );
+  },
+}));
+
 /**
  * Of the listings marked Offline, the ones the portals still show, for the
- * Listings board. A feed that can't be read in time adds nothing: the board
- * never waits on it, and the listing's own page reads it again.
+ * Listings board. HELD (lib/portal-status-hold): the board takes what is
+ * held at once and never waits on REX for it - it used to ask for every
+ * Offline listing on every load and wait up to 2.5 s, which with 97 of them
+ * (8 Nov 2026) made Listings 2.5 s at the median. A listing nobody has read
+ * yet is not stamped until it has been, a moment later; its own page reads
+ * its feed live.
  */
 export async function offlineButStillShowing(ids: string[]): Promise<Set<string>> {
-  const out = new Set<string>();
   const numeric = ids.filter((id) => /^\d+$/.test(id));
-  if (!numeric.length) return out;
-  const timeout = new Promise<null>((r) => setTimeout(() => r(null), 2500));
-  await Promise.all(
-    numeric.map((id) =>
-      Promise.race([listingRead(id, "ListingPortalUploads", "getStatuses", { listing_id: Number(id), include_last_sent: false }), timeout])
-        .then((res) => {
-          if (res?.ok && stillOnPortalFeeds(res.result)) out.add(id);
-        })
-        .catch(() => {})
-    )
-  );
-  return out;
+  if (!numeric.length) return new Set<string>();
+  return portalHold.check(numeric);
 }
 
 /**
