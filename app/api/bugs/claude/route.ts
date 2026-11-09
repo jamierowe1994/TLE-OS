@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as {
-    id?: unknown; t?: unknown; state?: unknown; note?: unknown; pr?: unknown; branch?: unknown; reply?: unknown; do?: unknown;
+    id?: unknown; t?: unknown; state?: unknown; note?: unknown; pr?: unknown; branch?: unknown; reply?: unknown; do?: unknown; told?: unknown;
   };
   const id = typeof b.id === "string" ? b.id : "";
   if (!ticketTokenOk(id, typeof b.t === "string" ? b.t : "")) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
@@ -68,6 +68,14 @@ export async function PUT(req: NextRequest) {
     /* The answer for the person who asked, kept for James to send with one
        press (Send Claude's Answer on Tickets). Never sent from here: the
        person is staff, but the words are Claude's until James has read them. */
+    /* How it was fixed, for the person who reported it - plain words, no
+       code (9 Nov 2026, lib/ticket-fixed). Kept for the email and Steve when
+       the fix goes live; James can still change it before it goes. */
+    const told = text(b.told, 1500);
+    if (told) {
+      const { saveFixStory } = await import("@/lib/ticket-fixed");
+      await saveFixStory(id, told);
+    }
     const reply = text(b.reply, 4000);
     if (reply) await q(`UPDATE os_bugs SET context = coalesce(context, '{}'::jsonb) || jsonb_build_object('claudeReply', $2::text) WHERE id = $1`, [id, reply]);
     /* The button the answer is about, or none: a later report never keeps an earlier one's. */

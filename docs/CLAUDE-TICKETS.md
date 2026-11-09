@@ -74,7 +74,7 @@ where it was typed. Find both readers before changing either; fix the reader, ne
 Write the note to a file outside the repository, then:
 
 ```bash
-node scripts/claude-ticket.mjs report fix_ready /tmp/note.txt '<pull request link>' '<branch>'
+node scripts/claude-ticket.mjs report fix_ready /tmp/note.txt '<pull request link>' '<branch>' --told /tmp/told.txt
 node scripts/claude-ticket.mjs report needs_you /tmp/note.txt
 node scripts/claude-ticket.mjs report not_a_bug /tmp/note.txt '' '' /tmp/reply.txt
 ```
@@ -104,6 +104,12 @@ node scripts/claude-ticket.mjs report not_a_bug /tmp/note.txt '' '' /tmp/reply.t
   without one gets `--do` and `--label` only, and the screen opens without the pointer. Use the record's own page
   (`/listings/<id>`, `/applications/<id>`, `/portfolio/<id>`, `/portfolio/take-on/<id>`), from the ticket's path or
   what the screenshot shows.
+- With `fix_ready`, ALWAYS add `--told /tmp/told.txt`: how you fixed it, written TO THE PERSON WHO REPORTED IT
+  (an agent, not a developer). Two or three short sentences, plain everyday words, no code words, no file or
+  function names, no dashes. Say what was going wrong in their terms, and what is different now. For example:
+  "The Save button was quietly failing when a landlord had no email address, so nothing was kept. It now saves
+  either way and tells you if anything is missing." It goes out in the Fixed email and from Steve when the fix
+  goes live, and James can change it first.
 - `reply.txt` (with `not_a_bug`) is the answer for the person who asked, written to them. James reads it and
   sends it with one press.
 

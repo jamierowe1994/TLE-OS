@@ -11,6 +11,7 @@ import Tour from "@/components/Tour";
 import SteveGuide from "@/components/SteveGuide";
 import DocumentSheet from "@/components/DocumentSheet";
 import FileClickCatcher from "@/components/FileClickCatcher";
+import TicketFixedNotice from "@/components/TicketFixedNotice";
 import GuideLayer from "@/components/GuideLayer";
 import Watchdog from "@/components/Watchdog";
 import Toaster from "@/components/Toaster";
@@ -62,6 +63,7 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
             file was opened on. Drawers slide aside for it (lib/doc-sheet). */}
         <DocumentSheet />
         <FileClickCatcher />
+        <TicketFixedNotice />
         {/* An agent guide, popped over whichever screen asked for it (Steve's
             Guides tab, a How this works button, or ?walkthrough=<id>). */}
         <Suspense fallback={null}>

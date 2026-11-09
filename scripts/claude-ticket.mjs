@@ -7,6 +7,7 @@
  *   node scripts/claude-ticket.mjs read                 → ticket.json + shot.jpg (if any)
  *   node scripts/claude-ticket.mjs report <state> <note-file> [pr-url] [branch] [reply-file]
  *        [--shot picture]... [--do /screen/path --point data-steve-handle --label "Button Words"]
+ *        [--told how-we-fixed-it-file]
  *
  * state is fix_ready, needs_you or not_a_bug. Each --shot (PNG, JPEG or WebP,
  * up to four) is put on the ticket first, so James sees them with the report.
@@ -42,11 +43,13 @@ if (cmd === "read") {
   const shots = [];
   const plain = [];
   const doIt = { path: "", point: "", label: "" };
+  let toldFile = "";
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--shot") shots.push(args[++i]);
     else if (args[i] === "--do") doIt.path = args[++i] ?? "";
     else if (args[i] === "--point") doIt.point = args[++i] ?? "";
     else if (args[i] === "--label") doIt.label = args[++i] ?? "";
+    else if (args[i] === "--told") toldFile = args[++i] ?? "";
     else plain.push(args[i]);
   }
   const [state, noteFile, pr = "", branch = "", replyFile = ""] = plain;
@@ -74,6 +77,7 @@ if (cmd === "read") {
     branch,
     reply: replyFile ? readFileSync(replyFile, "utf8") : "",
     do: doIt.path ? doIt : null,
+    told: toldFile ? readFileSync(toldFile, "utf8") : "",
   };
   const res = await fetch(`${OS}/api/bugs/claude`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const j = await res.json().catch(() => ({}));

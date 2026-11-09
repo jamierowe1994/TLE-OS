@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import FloatSheet, { FloatCard, FloatFoot } from "@/components/new-look/FloatSheet";
 import { Badge, type Tone } from "@/components/new-look/Parts";
 import { ErrorLine, Loading, Section, Tab, nd, when } from "@/components/new-look/admin/bits";
 
@@ -130,6 +131,8 @@ const STATE_WORD: Record<string, { word: string; tone: Tone }> = {
 const ACTION: Record<string, string> = { open: "Reopen", ack: "Acknowledge", fixed: "Fixed, Tell Them", wontfix: "Won't Fix" };
 
 export default function TicketsNew({ state }: { state: "loading" | { err: string; retry: () => void } | Ready }) {
+  /* Fixed, Tell Them asks for "how we fixed it" first (9 Nov 2026, lib/ticket-fixed). */
+  const [telling, setTelling] = useState<Bug | null>(null);
   /* Which ticket is asking "Push it live?", and whose own recordings are open. */
   const [confirming, setConfirming] = useState<string | null>(null);
   const [watching, setWatching] = useState<Record<string, true>>({});
@@ -337,7 +340,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
             {(["open", "ack", "fixed", "wontfix"] as const)
               .filter((x) => x !== b.state)
               .map((x) => (
-                <button key={x} type="button" onClick={() => void patch(b.id, { state: x })} className="nl-btn nl-btn--quiet nl-btn--sm">
+                <button key={x} type="button" onClick={() => (x === "fixed" ? setTelling(b) : void patch(b.id, { state: x }))} className="nl-btn nl-btn--quiet nl-btn--sm">
                   {ACTION[x]}
                 </button>
               ))}
@@ -462,6 +465,67 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
           <ul className="nl-adm-rows">{working.map(row)}</ul>
         </details>
       )}
+      {telling && <TellThem bug={telling} onClose={() => setTelling(null)} onSend={async (story) => { await patch(telling.id, { state: "fixed", story }); setTelling(null); }} />}
     </Tab>
+  );
+}
+
+
+/**
+ * Fixed, Tell Them (9 Nov 2026): the plain-English "how we fixed it" goes to
+ * the person in the email and from Steve. Claude's own version is there when
+ * a Claude session wrote one (context.fixStory); otherwise James writes it,
+ * or leaves it empty and they just hear it's fixed.
+ */
+function TellThem({ bug, onClose, onSend }: { bug: Bug; onClose: () => void; onSend: (story: string) => Promise<void> }) {
+  const had = typeof bug.context?.fixStory === "string" ? (bug.context.fixStory as string) : "";
+  const [story, setStory] = useState(had);
+  const [busy, setBusy] = useState(false);
+  const who = bug.reporterEmail.split("@")[0].split(/[._-]/)[0].replace(/^./, (c) => c.toUpperCase());
+  return (
+    <FloatSheet
+      title="Fixed, Tell Them"
+      onClose={onClose}
+      dismissible={!busy}
+      question={`How did we fix it, for ${who}?`}
+      lede="Two or three plain sentences: what was going wrong, in their words, and what's different now. It goes in the email and from Steve the next time they're in the OS."
+      foot={
+        <FloatFoot left={<span className="nl-meta">{story.trim() ? "They'll get this, the email and Steve" : "Empty: they just hear it's fixed"}</span>}>
+          <button type="button" className="nl-btn nl-btn--secondary" disabled={busy} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="nl-btn nl-btn--primary"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await onSend(story.trim());
+              setBusy(false);
+            }}
+          >
+            {busy ? "Sending…" : "Mark Fixed and Tell Them"}
+          </button>
+        </FloatFoot>
+      }
+    >
+      <FloatCard>
+        <span className="nl-fs-label">They told us</span>
+        <p className="mt-1.5 line-clamp-4 text-[13.5px] leading-relaxed text-muted">{bug.body}</p>
+      </FloatCard>
+      <FloatCard>
+        <label className="block">
+          <span className="nl-fs-label">How we fixed it{had ? <em> (written by Claude, change anything)</em> : null}</span>
+          <textarea
+            className="nl-fs-input mt-1.5"
+            rows={5}
+            maxLength={1500}
+            value={story}
+            onChange={(e) => setStory(e.target.value)}
+            placeholder="The Save button was quietly failing when a landlord had no email address. It now saves either way and tells you if anything is missing."
+          />
+        </label>
+      </FloatCard>
+    </FloatSheet>
   );
 }

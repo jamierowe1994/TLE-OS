@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
-  const { id, state, priority, sendReply } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null; sendReply?: boolean };
+  const { id, state, priority, sendReply, story } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null; sendReply?: boolean; story?: string };
   if (!id) return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   /* Send Claude's Answer: the reply Claude wrote for somebody who asked how
      to do something goes to them, and the ticket closes. */
@@ -129,6 +129,12 @@ export async function PATCH(req: NextRequest) {
   }
   if (!["open", "ack", "fixed", "wontfix"].includes(state ?? "")) {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
+  }
+  /* "How we fixed it", in plain words, from the Fixed, Tell Them box (9 Nov
+     2026): kept on the ticket for the email and for Steve (lib/ticket-fixed). */
+  if (state === "fixed" && typeof story === "string") {
+    const { saveFixStory } = await import("@/lib/ticket-fixed");
+    await saveFixStory(id, story).catch(() => null);
   }
   await setBugState(id, state!);
   /* Fixed means live (15 Sep 2026): the person who reported it is told once,
