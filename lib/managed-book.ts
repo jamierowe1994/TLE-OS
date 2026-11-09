@@ -6,7 +6,7 @@ import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
 import { attach, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, livingNow, personKey, samePerson, sittingFromPayProp } from "@/lib/business/payprop-tenant-contacts";
 import { londonToday } from "@/lib/london-clock";
-import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
+import { nameKey, tenantContacts, type TenantContact } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty, type AcceptedLet } from "@/lib/rex-tenants";
 import { addrOf, parseAddress, postcodeOf, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
 import { q } from "@/lib/db";
@@ -811,7 +811,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      itself shows as vacant. Names only: there is no REX contact behind them. */
   /* Their email and mobile from REX PM's Tenancies report, imported into
      os_tenant_contacts on 9 Oct 2026 (lib/tenant-contacts). */
-  const held = await tenantContacts().catch(() => new Map<string, Map<string, { email: string | null; phone: string | null }>>());
+  const held = await tenantContacts().catch(() => new Map<string, Map<string, TenantContact>>());
   /* Not caught past here: no PayProp read means nothing is set aside. */
   const people = await payPropPeople().catch(() => null);
   const ppRows = people ? await payPropTenantRows().catch(() => null) : null;
@@ -915,6 +915,17 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   }
   if (ppRows?.length) markEmptyHomes(properties, ppRows, pmFor, today);
   if (applied) withLetPages(properties, applied);
+  /* A NAME PUT RIGHT IN THE OS (Lianna Denholm, 9 Nov 2026, ticket 00f77ec4):
+     the tenancy record holds many tenants as an initial and a surname, and an
+     agent can now give the whole name on the home's page. Laid on last, after
+     every match above has used the record's own spelling. */
+  for (const p of properties) {
+    p.tenants = p.tenants.map((t) => {
+      const home = /^rexpm:([^:]+):\d+$/.exec(String(t.contactId ?? ""))?.[1];
+      const shownAs = home ? held.get(home)?.get(nameKey(t.name))?.shownAs : null;
+      return shownAs ? { ...t, name: shownAs, recordName: t.name } : t;
+    });
+  }
   /* THE RENT (rewritten 22 Oct 2026, Lianna Denholm's missing rents).
      PayProp's rent invoice billed today is the rent: what the tenant is
      charged now. REX's figure is the rent agreed when the home was let, and
