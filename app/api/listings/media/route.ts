@@ -6,7 +6,7 @@ import { record } from "@/lib/audit";
 import { forgetListing, readListingDetails } from "@/lib/listing-details";
 import { gateListingWrite, listingIsTheirs } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
-import { R2_BUCKET, rexReadyKey, withR2 } from "@/lib/r2";
+import { keyClimbs, R2_BUCKET, rexReadyKey, withR2 } from "@/lib/r2";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   /* Only a file the drop zone put under THIS listing. A key from anywhere
      else in the bucket - a tenant's ID, a signed contract - must never be
      one request away from a public advert. */
-  if (!key.startsWith(`photos/listing-${id}/`) || key.includes("..")) {
+  if (!key.startsWith(`photos/listing-${id}/`) || keyClimbs(key)) {
     return NextResponse.json({ ok: false, error: "That file was not uploaded against this listing." }, { status: 400 });
   }
 

@@ -1,7 +1,7 @@
 import "server-only";
 import { CopyObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
-import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
+import { keyClimbs, R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
 import type { CertRow } from "@/lib/certificate-intake";
 
 /**
@@ -49,7 +49,7 @@ export async function removeCertificate(input: {
 }): Promise<{ ok: true; name: string; rexStillHolds: boolean } | { ok: false; error: string }> {
   if (!hasDb()) return { ok: false, error: "No database on this environment." };
   /* Only a file on this home's own shelf: the key comes from the browser. */
-  if (!input.key.startsWith(shelf(input.propertyId)) || input.key.includes("..")) {
+  if (!input.key.startsWith(shelf(input.propertyId)) || keyClimbs(input.key)) {
     return { ok: false, error: "That file is not one of this home's certificates." };
   }
   const rows = await q<CertRow>(`SELECT * FROM os_certificates WHERE property_id = $1 AND r2_key = $2`, [input.propertyId, input.key]);
