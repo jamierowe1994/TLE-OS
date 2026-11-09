@@ -528,6 +528,14 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       await tenantNotice();
       await accessNotice();
       break;
+    case "tell_tenants_access":
+      /* By hand from the job's page (Lianna Denholm, 9 Nov 2026): the same
+         note the tick sends, to every tenant on the job with an address. */
+      if (!planned || !contractor || o.scheduledAt) break;
+      for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {
+        out.push(await send(o, "works-tenant-planned-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
+      }
+      break;
     case "tell_tenants_booked":
       /* Every tenant on the job with an address, each greeted by name. */
       for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {

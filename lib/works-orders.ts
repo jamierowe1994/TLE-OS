@@ -192,6 +192,8 @@ export interface WorksOrder {
   tenantsToldBookedAt: string | null;
   /** Planned jobs: the tenants are told who will be in touch to arrange access (a tick, off by default). */
   accessNotice: boolean;
+  /** Planned jobs: when the tenants were told who will be in touch, by hand from the job's page. */
+  tenantsAccessToldAt: string | null;
   /* ── the workflow's facts (James and Michael, 7 Sep 2026) ── */
   landlordToldAt: string | null;
   /** Who is arranging it: the landlord with their own people, or us. */
@@ -313,6 +315,7 @@ function toOrder(r: Row): WorksOrder {
     orderSentTo: r.order_sent_to ? s(r.order_sent_to) : null,
     orderSentToName: s(r.order_sent_to_name),
     accessNotice: r.tenants_access_notice === true,
+    tenantsAccessToldAt: iso(r.tenants_access_told_at),
     landlordToldAt: iso(r.landlord_told_at),
     arranging: r.arranging === "landlord" || r.arranging === "us" ? r.arranging : null,
     landlordFollowUpAt: iso(r.landlord_follow_up_at),
@@ -375,7 +378,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
-  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, skipped_steps, quote_requested_at,
+  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, tenants_access_told_at, skipped_steps, quote_requested_at,
   landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, order_sent_to, order_sent_to_name, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
@@ -707,6 +710,9 @@ export type Move =
   | { action: "tell_landlord"; how: "rang" | "emailed" | "both" | "text"; note?: string }
   /* Planned jobs: the booking goes to the tenants only when the agent says so. */
   | { action: "tell_tenants_booked"; note?: string }
+  /* Planned jobs, before a date: who will be in touch to arrange access, by
+     hand (Lianna Denholm, 9 Nov 2026), when the tick wasn't on as it was raised. */
+  | { action: "tell_tenants_access"; note?: string }
   | { action: "arranging"; who: "landlord" | "us"; followUpAt?: string | null; note?: string }
   | { action: "landlord_resolved"; note?: string }
   | { action: "contact_contractor"; contractorId: string; note?: string }
@@ -831,6 +837,17 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
       set("tenants_told_booked_at", new Date());
       eventKind = "note";
       text = `Booking confirmation to ${told.length === 1 ? (told[0].name || "the tenant") : told.length === 2 ? "both tenants" : `all ${told.length} tenants`}.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "tell_tenants_access": {
+      if (o.kind !== "planned") throw new Error("Only a planned job sends this.");
+      if (o.scheduledAt) throw new Error("There is a date already - send them the booking instead.");
+      if (!o.contractorId) throw new Error("Pick a contractor first, so they know who will be in touch.");
+      const told = tenantsOf(o).filter((t) => t.email.includes("@"));
+      if (!told.length) throw new Error("No tenant on this job has an email address.");
+      set("tenants_access_told_at", new Date());
+      eventKind = "note";
+      text = `Told ${told.length === 1 ? (told[0].name || "the tenant") : told.length === 2 ? "both tenants" : `all ${told.length} tenants`} who will be in touch to arrange access.${move.note ? ` ${move.note}` : ""}`;
       break;
     }
     case "arranging": {

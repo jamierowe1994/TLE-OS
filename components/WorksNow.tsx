@@ -442,6 +442,7 @@ function Booking({ o, f, setF, move, busy }: StepProps) {
       ) : (
         <p className="text-[13px]">{o.contractorName} has the works order{planned ? " and arranges a time with the tenants" : ""}. They can set the date from their page, or type it in when they tell you.</p>
       )}
+      {planned && <TellTenantsAccess o={o} move={move} busy={busy} />}
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <div className="w-full sm:w-72">
           <label className="block text-[10px] font-bold uppercase tracking-wider text-muted">Booked for</label>
@@ -451,7 +452,7 @@ function Booking({ o, f, setF, move, busy }: StepProps) {
       </div>
       <p className="mt-2 text-[11.5px] text-muted">
         {planned
-          ? `Setting it confirms it with ${o.contractorName || "the contractor"}${o.landlordSkipped ? "" : " and lets the landlord know it's arranged"}. The tenants are only sent it if you choose to, on the next step.`
+          ? `Setting it confirms it with ${o.contractorName || "the contractor"}${o.landlordSkipped ? "" : " and lets the landlord know it's arranged"}. The tenants are only sent the booking if you choose to, on the next step.`
           : "Setting it tells the tenant and the contractor, and lets the landlord know it's arranged."}
       </p>
       <ContractorLink o={o} />
@@ -485,6 +486,40 @@ function Visit({ o, f, setF, move, busy, onCertificate }: StepProps & { onCertif
         )}
       </div>
       <ContractorLink o={o} />
+    </div>
+  );
+}
+
+/**
+ * Who will be in touch to arrange access, on a planned job before a date, by
+ * hand. Lianna Denholm, 9 Nov 2026: "For adding a compliance cert, not an
+ * option to notify tenants of the certificate due? should be same as
+ * maintenance." The tick on Plan a certificate sends it as the job goes; this
+ * is for a job raised without it, or taken on from the old system.
+ */
+function TellTenantsAccess({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean }) {
+  const all = o.tenants.length ? o.tenants : o.tenant || o.tenantEmail ? [{ name: o.tenant, phone: o.tenantPhone, email: o.tenantEmail }] : [];
+  const withEmail = all.filter((t) => t.email.includes("@"));
+  const who = o.contractorName || "the contractor";
+  const toldAsRaised = o.accessNotice && !!o.contractorContactedAt;
+  const told = o.tenantsAccessToldAt ?? null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/80 bg-card px-3 py-2.5">
+      <p className="min-w-0 text-[12.5px]">
+        {told
+          ? `The tenants were told ${stamp(told)} that ${who} will be in touch.`
+          : toldAsRaised
+            ? `The tenants were told ${who} will be in touch when it went to them.`
+            : withEmail.length
+              ? `Optional: tell ${withEmail.length === 1 ? (withEmail[0].name || "the tenant") : `all ${withEmail.length} tenants`} the certificate is due and ${who} will be in touch to arrange access.`
+              : "No tenant on this job has an email, so they can't be told by email."}
+        <span className="block text-[11px] text-muted">A short note by email. They never see the works order.</span>
+      </p>
+      {withEmail.length > 0 && o.contractorId && (
+        <button type="button" disabled={busy} onClick={() => void move({ action: "tell_tenants_access" })} className={told || toldAsRaised ? btn : primary}>
+          {told || toldAsRaised ? "Tell them again" : "Tell the tenants"}
+        </button>
+      )}
     </div>
   );
 }
