@@ -77,7 +77,14 @@ export async function GET(req: NextRequest) {
       : false;
   /* The shown tenants' own tenancy, where PayProp has one for them. */
   const shown = home.tenants.map((x) => x.name);
-  const own = shown.length ? homeTenancies(await payPropTenantRows().catch(() => []), home, shown).theirs : null;
+  /* Where PayProp's running tenancy gave the home its tenants (lib/managed-book,
+     9 Nov 2026: 50/5 Dalmeny Road, whose REX let of 7 Sep PayProp never saw),
+     that tenancy's own dates - joined by PayProp's property, not the address
+     key, which keys "Flat 5, 50 Dalmeny Road" apart from "Dalmeny Road, 50/5". */
+  const fromBook = home.tenantsFromPayProp?.replaced && home.tenantsFromPayProp.startDate ? home.tenantsFromPayProp : null;
+  const own = fromBook
+    ? { startDate: fromBook.startDate, endDate: fromBook.endDate, depositId: fromBook.depositId }
+    : shown.length ? homeTenancies(await payPropTenantRows().catch(() => []), home, shown).theirs : null;
   const paid = own ?? (t && !off ? t : null);
   const endValue = endSet ? (endSet.value === "rolling" ? null : String(endSet.value)) : paid?.endDate ?? null;
 

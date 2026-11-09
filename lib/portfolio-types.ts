@@ -69,6 +69,12 @@ export interface ManagedProperty {
   otherLandlords?: Party[];
   tenants: Party[];
   /**
+   * What PayProp's running tenancy changed in `tenants` (9 Nov 2026,
+   * lib/business/payprop-tenant-contacts sittingFromPayProp): who it added,
+   * who it took off, whether it replaced everyone, and that tenancy's dates.
+   */
+  tenantsFromPayProp?: { added: string[]; dropped: string[]; replaced: boolean; startDate: string | null; endDate: string | null; depositId: string | null };
+  /**
    * The lets behind this row in the OS (4 Nov 2026, lib/book-lets): the ids of
    * the accepted applications on its listing, newest first. Each is a let's
    * own page, where an agent's corrections to the tenants are kept. Read with
