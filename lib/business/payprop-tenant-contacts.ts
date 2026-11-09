@@ -305,10 +305,10 @@ export function homeLastTenancy(
 }
 
 const TITLES = new Set(["mr", "mrs", "ms", "miss", "dr", "prof", "mx"]);
-/** "HJarvie" is "H Jarvie"; titles and hyphens are not names. */
+/** "HSmith" is "H Smith"; titles and hyphens are not names. */
 const nameWords = (s: string) =>
   words(s.replace(/\b([A-Z])([A-Z][a-z])/g, "$1 $2").replace(/-/g, " ")).filter((w) => !TITLES.has(w.replace(/\.$/, "")));
-/** One letter out, for a surname of five letters or more: "Asfeld" is "Asfield". */
+/** One letter out, for a surname of five letters or more. */
 function nearly(a: string, b: string): boolean {
   if (a === b) return true;
   if (Math.min(a.length, b.length) < 5 || Math.abs(a.length - b.length) > 1) return false;
@@ -324,9 +324,9 @@ function nearly(a: string, b: string): boolean {
 }
 
 /**
- * Two spellings of one person: "K Glaize" is "Kevin Glaize", "R Gear-Hollis"
- * is "Ryan Gear Hollis", "Dr Busfield" is "Hallam Busfield", "Kayode-olasusi
- * Yetunde" is "Yetunde Kayode-Olasusi", "Tris" is "Tristan Davis".
+ * Two spellings of one person: "K Smith" is "Kate Smith", "R Ward-Hall" is
+ * "Rob Ward Hall", "Dr Hall" is "Ann Hall", "Ward-Hall Rob" is "Rob Ward-Hall",
+ * "Rob" is "Rob Hall", "Mitchel" is "Mitchell".
  */
 export function samePerson(a: string, b: string): boolean {
   const wa = nameWords(a);
@@ -345,7 +345,7 @@ export function samePerson(a: string, b: string): boolean {
   return wa[0][0] === wb[0][0];
 }
 
-/** A shown tenant can be a pair in one name: "Amy Codona & Rory Power", "Adewale & Naheemat Salam". */
+/** A shown tenant can be a pair in one name: "Ann Hall & Rob Ward", "Ann & Rob Hall". */
 const partsOf = (s: string) => s.split(/\s*(?:,|&|\band\b)\s*/i).map(tidy).filter(Boolean);
 const isShownAs = (shownName: string, n: string) => partsOf(shownName).some((part) => samePerson(part, n));
 const surnamesOf = (s: string) => partsOf(s).map((x) => nameWords(x).pop() ?? "").filter((x) => x.length > 1);
@@ -354,31 +354,32 @@ export type SittingPerson = { name: string; email: string | null; phone: string 
 export type Sitting = { tenants: SittingPerson[]; added: string[]; dropped: string[]; replaced: boolean; startDate: string | null; endDate: string | null; depositId: string | null };
 
 /**
- * WHO LIVES THERE, AS PAYPROP HAS IT TODAY (Lianna Denholm, 9 Nov 2026).
+ * WHO LIVES THERE, AS PAYPROP HAS IT TODAY (Lianna Denholm, 9 Nov 2026,
+ * tickets 1851a5b1, 4f9b7b74, bde77666).
  *
- * Three of her homes showed the wrong people. 16 Grindlay Street and 42
- * Argyle Place began new joint tenancies on 1 Oct with one flatmate changed
- * (Samuel Giles in for R Grant, Ng Ying in for A Cave); the book named them
+ * Three of her homes showed the wrong people. Two shared flats began new
+ * joint tenancies on 1 Oct with one flatmate changed; the book named them
  * from REX PM's record, last read 2 Oct and never updated, so the new
- * flatmate was missing and A Cave, gone since June, was still there. Flat 5,
- * 50 Dalmeny Road showed Alina and Igor Rozhko, whom REX put on the listing
- * when it was marked let on 7 Sep; PayProp, which takes the rent, has had
- * Dmitrii Mukhutdinov there since 23 Jun and never heard of them.
+ * flatmate was missing and the one who left in June was still there. The
+ * third showed two people REX put on the listing when it was marked let in
+ * September; PayProp, which takes the rent, has had somebody else there since
+ * June and never heard of them.
  *
  * PayProp takes the rent from whoever lives there, so its tenancy running
  * today is who lives there. Joined by PayProp's own property id (the home's
- * sure address match, lib/rent-status matchHome), never by a loose address
- * key: "Flat 5, 50 Dalmeny Road" and PayProp's "Dalmeny Road, 50/5" key apart.
+ * sure address match, lib/rent-status matchHome), never by the loose address
+ * key: "Flat 5, 50 X Road" and PayProp's "X Road, 50/5" key apart.
  *
  *   - Someone on the same running tenancy as a shown tenant, and not shown,
- *     is added (Samuel Giles).
+ *     is added.
  *   - A shown tenant PayProp holds on this home only on a tenancy that has
- *     ended or been replaced is taken off (A Cave). Never on absence alone:
- *     PayProp's joint record can name the lead only.
- *   - Where nobody shown is on the running tenancy, its people replace them
- *     (the Rozhkos) - unless the let began in the last six weeks and before
- *     PayProp's tenancy, which is PayProp not caught up with a new let yet.
+ *     ended or been replaced is taken off. Never on absence alone: PayProp's
+ *     joint record can name the lead only.
+ *   - Where nobody shown is on the running tenancy, its people replace them -
+ *     unless the let began in the last six weeks and before PayProp's
+ *     tenancy, which is PayProp not caught up with a new let yet.
  *
+ * Measured on the live book, 9 Nov 2026: 34 of 533 current lets change.
  * Null when PayProp has no running tenancy on the home (a let only home after
  * its first month) or nothing changes.
  */
@@ -410,7 +411,7 @@ export function sittingFromPayProp(
         current: payPropTenancyCurrent(t.status, tn.end_date, today),
         /* A company paying the rent - a rent-to-rent firm, a housing provider -
            is not who lives there; nor is one record renting several homes at
-           once (the Brookes, four Bristol homes). Not PayProp's business_name:
+           once (one couple held as renting four homes, 9 Nov 2026). Not PayProp's business_name:
            it is filled for most people. */
         business:
           /\b(ltd|limited|group|plc|llp|housing|council|network|services|suites)\b/i.test(display) ||
@@ -426,10 +427,10 @@ export function sittingFromPayProp(
   if (!running.length) return null;
   const over = entries.filter((e) => !running.includes(e));
 
-  /* A joint record with no lead named ("S Giles, k Glaize, J Brenner & E
-     Yong") is its email's owner's: the one whose surname the email carries,
-     where only one does - samuel.giles@ is S Giles. And "S Giles" is
-     "Samuel Giles" when the email spells it out first.last. */
+  /* A joint record with no lead named ("S Hall, K Ward & J Lee") is its
+     email's owner's: the one whose surname the email carries, where only one
+     does - sam.hall@ is S Hall. And "S Hall" is "Sam Hall" when the email
+     spells it out first.last. */
   const local = (e: Entry) => (e.email ?? "").split("@")[0].toLowerCase();
   const ownerOf = (e: Entry): string | null => {
     if (e.lead) return e.lead;
@@ -456,7 +457,7 @@ export function sittingFromPayProp(
   const shownHas = (n: string) => shown.some((s) => isShownAs(s.name, n));
   const onRunning = (s: SittingPerson) => people.some((p) => isShownAs(s.name, p.name));
 
-  /* The same family counts as the same household: Thomas Oxley paying for Vanessa Oxley adds, never replaces. */
+  /* The same family counts as the same household: a parent on the tenancy beside their child adds, never replaces. */
   const shownSurnames = new Set(shown.flatMap((s) => surnamesOf(s.name)));
   const kin = people.some((p) => surnamesOf(p.name).some((x) => shownSurnames.has(x)));
   if (shown.some(onRunning) || kin) {
@@ -479,8 +480,7 @@ export function sittingFromPayProp(
     };
   }
 
-  /* Nobody shown is on it. REX marked a let PayProp never took rent on (the
-     Rozhkos), or PayProp has a newer tenancy than the let REX knows. Not in a
+  /* Nobody shown is on it. REX marked a let PayProp never took rent on, or PayProp has a newer tenancy than the let REX knows. Not in a
      new let's first six weeks while PayProp's tenancy is the older one: that
      is PayProp not set up for the new tenants yet. Not where PayProp holds a
      shown tenant as living anywhere today - they are somebody's real tenant. */
