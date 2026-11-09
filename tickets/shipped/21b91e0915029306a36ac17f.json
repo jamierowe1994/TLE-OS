@@ -1,0 +1,1 @@
+{ "id": "21b91e0915029306a36ac17f", "summary": "On Edit the Advert, an EPC issue date in the future (usually the expiry typed in the wrong box) now turns the date box red and takes the tick off the EPC step, so it is clear what is stopping Save." }
