@@ -3,7 +3,7 @@ import { stampsFor } from "@/lib/home-send";
 import { checkStatesFor } from "@/lib/cert-check-state";
 import { londonToday } from "@/lib/london-clock";
 import { whoIs } from "@/lib/admin";
-import { getComplianceItemsFor, type ComplianceItem } from "@/lib/business/rex-stats";
+import { getComplianceItemsFor, PROPERTY_COMPLIANCE, type ComplianceItem } from "@/lib/business/rex-stats";
 import { matchProperty, pendingKeyFor, type MatchResult } from "@/lib/property-match";
 import { listVault, type VaultFile } from "@/lib/vault";
 import { rexConfigured } from "@/lib/rex";
@@ -112,13 +112,34 @@ async function houseSiblingsFor(req: NextRequest, propertyId: string): Promise<H
   siblings.sort((a, b) => Number(isRoomAddress(`${a.name}, ${a.locality}`)) - Number(isRoomAddress(`${b.name}, ${b.locality}`)));
   return Promise.all(
     siblings.map(async (sib) => {
+      /* A room the OS added (no REX record) holds its certificates in the OS,
+         not REX (Rhiannon's shared house, ticket 3d213aee, 9 Nov 2026). */
+      const sibId = sib.propertyId as string;
       const [rex, files] = await Promise.all([
-        getComplianceItemsFor(sib.propertyId as string).catch(() => ({ items: [] as ComplianceItem[], checked: false })),
-        listVault(sib.propertyId as string).catch(() => [] as VaultFile[]),
+        isOsPropertyId(sibId)
+          ? osCertRows([sibId]).then((r) => ({ items: osItemsFrom(r), checked: true })).catch(() => ({ items: [] as ComplianceItem[], checked: false }))
+          : getComplianceItemsFor(sibId).catch(() => ({ items: [] as ComplianceItem[], checked: false })),
+        listVault(sibId).catch(() => [] as VaultFile[]),
       ]);
       return { name: sib.name, rex, files };
     })
   );
+}
+
+/* The OS's own certificates as rows: the latest expiry per type, named as
+   REX names the type ("Emergency lighting / fire exit", not "FIRE"). */
+function osItemsFrom(certs: { type_id: string; expiry: string; issue: string | null }[]): ComplianceItem[] {
+  const today = londonToday();
+  const latest = new Map<string, { expiry: string; issue: string | null }>();
+  for (const r of certs) if (!latest.has(r.type_id)) latest.set(r.type_id, { expiry: r.expiry, issue: r.issue });
+  return [...latest].map(([type, v]) => ({
+    type,
+    label: PROPERTY_COMPLIANCE[type] ?? Object.entries(INTAKE_TYPE).find(([, t]) => t === type)?.[0]?.toUpperCase() ?? type,
+    state: v.expiry < today ? ("expired" as const) : ("valid" as const),
+    expiry: v.expiry,
+    issued: v.issue,
+    notes: null,
+  }));
 }
 
 /* A shared house: the certificate is the building's. When a room's own
@@ -164,7 +185,10 @@ export async function GET(req: NextRequest) {
      median last week). Each is used below exactly as before. */
   const pid = propertyId;
   const nothing = <T,>(v: T) => Promise.resolve(v);
-  const houseP = pid && !osOnly ? houseSiblingsFor(req, pid).catch(() => [] as HouseSibling[]) : nothing([] as HouseSibling[]);
+  /* A room the OS added reads the house too (ticket 3d213aee, 9 Nov 2026):
+     Room 3 of a shared house showed only its own fire certificate while
+     Room 1 showed the gas, EICR, EPC, licence and alarms for the building. */
+  const houseP = pid ? houseSiblingsFor(req, pid).catch(() => [] as HouseSibling[]) : nothing([] as HouseSibling[]);
   const osCertsP = osOnly && pid ? osCertRows([pid]).catch(() => []) : nothing([] as Awaited<ReturnType<typeof osCertRows>>);
   const checkingP = pid
     ? Promise.all([
@@ -195,14 +219,11 @@ export async function GET(req: NextRequest) {
   const seenVault = new Set<string>();
   /* A home REX CRM does not hold: the OS's own certificates are its rows. */
   if (osOnly && propertyId) {
-    const today = londonToday();
-    const latest = new Map<string, { expiry: string; issue: string | null }>();
-    for (const r of await osCertsP) if (!latest.has(r.type_id)) latest.set(r.type_id, { expiry: r.expiry, issue: r.issue });
-    for (const [type, v] of latest) {
-      const vk = VAULT_KEY[type];
+    for (const it of osItemsFrom(await osCertsP)) {
+      const vk = VAULT_KEY[it.type];
       const own = vk ? byVaultKey.get(vk) ?? [] : [];
       if (vk) seenVault.add(vk);
-      rows.push({ type, label: Object.entries(INTAKE_TYPE).find(([, t]) => t === type)?.[0]?.toUpperCase() ?? type, state: v.expiry < today ? "expired" : "valid", expiry: v.expiry, issued: v.issue, inRex: false, fileInRex: false, files: own });
+      rows.push({ type: it.type, label: it.label, state: it.state, expiry: it.expiry, issued: it.issued, inRex: false, fileInRex: false, files: own });
     }
   }
   for (const it of rex.items) {
@@ -220,7 +241,7 @@ export async function GET(req: NextRequest) {
   }
   /* A room of a shared house reads the house's certificates where it has
      none of its own; a missing row on the room is replaced by the house's. */
-  if (propertyId && !osOnly) {
+  if (propertyId) {
     const own = new Set(rows.filter((r) => r.state !== "missing").map((r) => r.type));
     let fromHouse: FileRow[] = [];
     try {
