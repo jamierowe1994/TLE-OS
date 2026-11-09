@@ -7,6 +7,7 @@ import FileDocuments, { UploadForm, type Doc } from "@/components/FileDocuments"
 import SendTermsPopout from "@/components/SendTermsPopout";
 import TermsPanel from "@/components/terms/TermsPanel";
 import HomeFacts from "@/components/HomeFacts";
+import { filesOnIssueDate } from "@/lib/cert-life";
 import QueryThread from "@/components/QueryThread";
 import { useSaveReporter } from "@/components/SaveChip";
 import { Badge, Ico, Menu, type Tone } from "@/components/new-look/Parts";
@@ -953,7 +954,10 @@ function NewLookCompliance({
     const queried = Boolean(r.checking?.queried);
     const withCompliance = Boolean(r.checking && !queried);
     const spare = !r.checking ? loose.find((d) => (answersType(r, d.type) || d.type === r.type) && (r.state !== "valid" || Boolean(f?.uploadedAt && d.at > (f.uploadedAt as string)))) ?? null : null;
-    const dated = r.expiry ? `${r.state === "expired" ? "Expired" : "Valid to"} ${ymd(r.expiry)}` : r.issued ? `Issued ${ymd(r.issued)}` : "";
+    /* A PAT or fire safety check carries only the day it was done; the date
+       after it is that day plus a year (lib/cert-life), so it says due again,
+       not expires (Rhiannon Dodge, 9 Nov 2026). */
+    const dated = r.issued && filesOnIssueDate(r.type) ? `Issued ${ymd(r.issued)}${r.expiry ? `, ${r.state === "expired" ? "was due" : "due again"} ${ymd(r.expiry)}` : ""}` : r.expiry ? `${r.state === "expired" ? "Expired" : "Valid to"} ${ymd(r.expiry)}` : r.issued ? `Issued ${ymd(r.issued)}` : "";
     const status: ListRow["status"] = r.renewal
       ? { label: "With the council", tone: "neutral", title: `Renewal applied for ${ymd(r.renewal.appliedOn)}` }
       : queried

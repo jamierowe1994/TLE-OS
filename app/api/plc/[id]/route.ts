@@ -290,6 +290,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     anyway?: string;
     /** push-propoly: retry only the files the last push could not place. */
     onlyFailed?: boolean;
+    /** With "check": email the final approver in the same press (ticket 8eb6adce). */
+    sendToFinal?: boolean;
   };
   try {
     body = await req.json();
@@ -521,6 +523,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           from: "reviewing",
           to: "checked",
         });
+        /* "Checked, Send to Susan" (Josel Banagua, ticket 8eb6adce, 8 Nov
+           2026): the first check and Send for Final Approval in one press.
+           The check stands even if the email is refused; the pack then sits
+           on Final approval with Send to Susan to press, and says why. */
+        if (body.sendToFinal === true) {
+          try {
+            const asked = await askFinalApproval(checked, { id: me?.id ?? null, name: me?.name ?? by, email: me?.email ?? null });
+            return NextResponse.json({ ok: true, message: asked.message, ...(await payload(asked.case, req)) });
+          } catch (e) {
+            const why = e instanceof PlcRefused ? e.message : "the email could not be sent";
+            const now = (await getCase(id).catch(() => null)) ?? checked;
+            return NextResponse.json({ ok: true, message: `Checked, but not sent for final approval: ${why}`, ...(await payload(now, req)) });
+          }
+        }
         return NextResponse.json({ ok: true, ...(await payload(checked, req)) });
       }
 
