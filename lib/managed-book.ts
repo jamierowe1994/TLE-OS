@@ -4,7 +4,7 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
-import { attach, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, personKey } from "@/lib/business/payprop-tenant-contacts";
+import { attach, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, livingNow, personKey, samePerson, sittingFromPayProp } from "@/lib/business/payprop-tenant-contacts";
 import { londonToday } from "@/lib/london-clock";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty, type AcceptedLet } from "@/lib/rex-tenants";
@@ -856,6 +856,33 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       const c = known?.get(nameKey(name)) ?? (joint ? known?.get(nameKey(joint)) : undefined);
       return { contactId: `rexpm:${o.id}:${i}`, name, email: c?.email ?? null, phone: c?.phone ?? null };
     });
+  }
+  /* WHO PAYPROP SAYS LIVES THERE TODAY (Lianna Denholm, 9 Nov 2026): a new
+     flatmate on a renewed joint tenancy added, one PayProp holds as gone taken
+     off, and a let whose shown people aren't on PayProp's running tenancy at
+     all given its people (lib/business/payprop-tenant-contacts
+     sittingFromPayProp). Over REX's listing and REX PM's record alike. A
+     person added keeps an editable card where the home has an OS record. */
+  if (ppRows?.length && ppBook) {
+    const living = livingNow(ppRows, today);
+    for (const p of currentLets(properties)) {
+      if (p.test) continue;
+      const hit = matchHome(ppBook, p);
+      if (typeof hit !== "object") continue;
+      const elsewhere = (name: string) => living.some((x) => x.propertyId !== hit.id && samePerson(x.name, name));
+      const now = sittingFromPayProp(ppRows, hit.id, p.tenants, p.letSince, today, elsewhere);
+      if (!now) continue;
+      const o = p.propertyId ? pmFor.get(p.propertyId) : undefined;
+      const kept = new Set(p.tenants);
+      const base = p.tenants.length;
+      let n = 0;
+      p.tenants = now.tenants.map((t) =>
+        kept.has(t as (typeof p.tenants)[number])
+          ? (t as (typeof p.tenants)[number])
+          : { contactId: o ? `rexpm:${o.id}:${base + n++}` : `payprop:${hit.id}:${n++}`, name: t.name, email: t.email, phone: t.phone }
+      );
+      p.tenantsFromPayProp = { added: now.added, dropped: now.dropped, replaced: now.replaced, startDate: now.startDate, endDate: now.endDate, depositId: now.depositId };
+    }
   }
   /* Email and mobile from PayProp where the book has neither (9 Oct 2026):
      REX PM gives names only. Joined by the home's address, and given only to
