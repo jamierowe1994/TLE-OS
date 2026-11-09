@@ -35,7 +35,7 @@ type NewPerson = { name: string; relation: string; phone: string; email: string;
 /* Adding someone (James, 25 Oct 2026): no pop-up over the stage. A blank box
    bubbles out in the list where they will sit - a landlord after the other
    landlords, a contact at the end - with an X to think better of it. */
-function NewPersonBox({ kind, address, onCancel, onSave }: { kind: Kind; address: string; onCancel: () => void; onSave: (d: NewPerson) => Promise<{ ok: boolean; error?: string }> }) {
+function NewPersonBox({ kind, address, first = false, onCancel, onSave }: { kind: Kind; address: string; first?: boolean; onCancel: () => void; onSave: (d: NewPerson) => Promise<{ ok: boolean; error?: string }> }) {
   const [d, setD] = useState<NewPerson>({ name: "", relation: "", phone: "", email: "", address: "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -72,7 +72,7 @@ function NewPersonBox({ kind, address, onCancel, onSave }: { kind: Kind; address
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
         </span>
         <span className="min-w-0 flex-1">
-          <span className="nl-ls-kind">{landlord ? "Additional landlord" : "Contact"}</span>
+          <span className="nl-ls-kind">{landlord ? (first ? "Landlord" : "Additional landlord") : "Contact"}</span>
           <span className="nl-ls-name">{d.name.trim() || (landlord ? "New landlord" : "New contact")}</span>
         </span>
         <button type="button" className="nl-ls-x" aria-label="Don't add them" disabled={busy} onClick={onCancel}>
@@ -157,9 +157,16 @@ export default function LandlordStage({
   const [adding, setAdding] = useState<Kind | null>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  /* Opening the stage on a home with no landlord (Rhiannon Dodge, 9 Nov 2026):
+     "Add the landlord" landed on "No landlord held" with only "Add another
+     landlord" under it, and its form said "Additional landlord". With nobody
+     held, the landlord's form now opens straight away and reads as the
+     landlord, the same way the landlords section's "Add the landlord" does. */
+  const offered = useRef(false);
 
   useEffect(() => {
     if (!open) {
+      offered.current = false;
       setShown(false);
       setShut(new Set());
       setSaid(null);
@@ -224,6 +231,12 @@ export default function LandlordStage({
     return [...all].sort((a, b) => at(a.key) - at(b.key));
   }, [main, mainSlot, people, order]);
   const landlords = entries.filter((e) => e.kind !== "contact").length + (mainSlot ? 1 : 0);
+  const noLandlord = !mainSlot && main !== null && people !== null && landlords === 0;
+  useEffect(() => {
+    if (!open || offered.current || readOnly || !homeKey || main === null || people === null) return;
+    offered.current = true;
+    if (noLandlord && !mainProblem) setAdding((a) => a ?? "joint_landlord");
+  }, [open, readOnly, homeKey, main, people, noLandlord, mainProblem]);
   const nameOf = (e: Entry) => (e.kind === "main" ? e.m.name : e.p.name);
 
   async function saveOrder(keys: string[]) {
@@ -447,7 +460,7 @@ export default function LandlordStage({
                 {main === null ? "Looking up the landlord…" : "Reading the other people on this home…"}
               </p>
             )}
-            {!mainSlot && main !== null && people !== null && entries.filter((e) => e.kind !== "contact").length === 0 && (
+            {noLandlord && (
               <div className="nl-ls-none nl-po-in" style={beat(1)}>
                 <b>No landlord held.</b> Every home needs one.{mainProblem ? ` ${mainProblem}` : ""}
               </div>
@@ -458,7 +471,7 @@ export default function LandlordStage({
                   const boxes = entries.map(box);
                   if (adding && homeKey) {
                     const after = adding === "joint_landlord" ? entries.reduce((n, e, i) => (e.kind !== "contact" ? i + 1 : n), 0) : entries.length;
-                    boxes.splice(after, 0, <NewPersonBox key={`new-${adding}`} kind={adding} address={address} onCancel={() => setAdding(null)} onSave={addPerson} />);
+                    boxes.splice(after, 0, <NewPersonBox key={`new-${adding}`} kind={adding} address={address} first={adding === "joint_landlord" && noLandlord} onCancel={() => setAdding(null)} onSave={addPerson} />);
                   }
                   return boxes;
                 })()}
@@ -470,7 +483,7 @@ export default function LandlordStage({
             {!readOnly && homeKey && (
               <div className="nl-ls-adds nl-po-in" style={beat(entries.length + 2)}>
                 <button type="button" className="nl-ls-add" aria-pressed={adding === "joint_landlord"} onClick={() => setAdding("joint_landlord")}>
-                  + Add another landlord
+                  {noLandlord ? "+ Add the landlord" : "+ Add another landlord"}
                 </button>
                 <button type="button" className="nl-ls-add" aria-pressed={adding === "contact"} onClick={() => setAdding("contact")}>
                   + Add a contact
