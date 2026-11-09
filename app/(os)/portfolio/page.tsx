@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { rememberOrder } from "@/lib/portfolio-order";
+import { warmJson } from "@/lib/page-cache";
 import DoodleIcon from "@/components/DoodleIcon";
 import StatTile from "@/components/StatTile";
 import PageHeader from "@/components/PageHeader";
@@ -411,12 +412,31 @@ export default function Portfolio() {
 
   /* Keyed as text: listing ids arrive as strings from links and the search bar. */
   const byId = useMemo(() => new Map((book?.properties ?? []).map((p) => [String(p.listingId), p])), [book]);
+  /* A home's certificate file is the longest wait when its page opens (REX's
+     ComplianceEntries, 1.5 s at the median last week), and it only started
+     once the page had. It now starts on the PRESS of a home's link, under the
+     page change, as the side menu does for its own screens (lib/route-warm,
+     9 Nov 2026) - and the page's own read joins it while it is on its way
+     (lib/fetch-dedupe). The press, not a hover: a pass of the mouse down the
+     list must not ask REX about thirty homes. */
+  useEffect(() => {
+    const warm = (e: PointerEvent) => {
+      const a = (e.target as Element | null)?.closest?.('a[href^="/portfolio/"]');
+      const listing = a ? decodeURIComponent((a.getAttribute("href") ?? "").split("?")[0].split("/")[2] ?? "") : "";
+      const pid = listing ? byId.get(listing)?.propertyId : null;
+      if (pid) warmJson(`/api/property-file?property=${encodeURIComponent(pid)}`);
+    };
+    document.addEventListener("pointerdown", warm, { passive: true });
+    return () => document.removeEventListener("pointerdown", warm);
+  }, [byId]);
   /* The home opens on its own page (James, 7 Oct 2026). The list's order goes
      with it, so ‹ › there steps through what was on screen here. */
   const remember = useCallback(() => rememberOrder(listRows.map((r) => String(r.p.listingId))), [listRows]);
   const openHome = useCallback(
     (id: string) => {
       remember();
+      const pid = byId.get(String(id))?.propertyId;
+      if (pid) warmJson(`/api/property-file?property=${encodeURIComponent(pid)}`);
       router.push(`/portfolio/${encodeURIComponent(id)}`);
     },
     [remember, router]

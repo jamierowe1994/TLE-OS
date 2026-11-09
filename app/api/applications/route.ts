@@ -92,6 +92,11 @@ export async function GET(req: NextRequest) {
      rebuild. Without either, the ten-minute rule (lib/applications-board). */
   const sp = req.nextUrl.searchParams;
   const read: BoardRead = sp.get("fresh") === "1" ? { fresh: true } : sp.get("quick") === "1" ? { upToMs: QUICK_MS } : {};
+  /* ?counts=1: only the applications, for the PM Dashboard's tile (9 Nov
+     2026). It never used the lets only Propoly knows about, and finding them
+     read the whole business's board a second time - a second cold rebuild
+     for an agent's own Overview. */
+  const countsOnly = sp.get("counts") === "1";
   /* The whole business's book, for the Propoly-only lets, read the same way;
      if it was the held one, the answer is stale too. */
   const business = { at: Infinity, stale: false };
@@ -115,7 +120,7 @@ export async function GET(req: NextRequest) {
          12 Oct 2026); this separate list stays empty so nothing shows twice. */
       Promise.resolve([] as Awaited<ReturnType<typeof osAcceptedOffers>>),
       /* Lets that only Propoly knows about (9 Oct 2026, 54 Maple Avenue). */
-      propolyOnlyLets(scope, { canPretenancy: Boolean(actor && can(actor.role as never, "see:pretenancy")), book: businessBook }).catch(() => []),
+      countsOnly ? Promise.resolve([]) : propolyOnlyLets(scope, { canPretenancy: Boolean(actor && can(actor.role as never, "see:pretenancy")), book: businessBook }).catch(() => []),
       /* Lets cancelled from their own page (lib/let-cancel, 12 Oct 2026). */
       allCancellations().catch(() => []),
     ]);

@@ -34,12 +34,15 @@ export default function BoardUpdating({
   asAt,
   onRetry,
   corner = false,
+  float = false,
 }: {
   state: BoardUpdate;
   asAt: string | null;
   onRetry?: () => void;
   /** On a desktop, pinned to the top right of the nearest positioned box rather than in the flow. */
   corner?: boolean;
+  /** The small pill at the foot of the screen at every width, for a screen with no header slot (the PM Dashboard). */
+  float?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -66,17 +69,19 @@ export default function BoardUpdating({
     );
   return (
     <>
-      <span
-        role="status"
-        aria-live="polite"
-        style={colour}
-        className={`hidden items-center gap-1.5 whitespace-nowrap text-[12px] ${tone} ${corner ? "lg:absolute lg:right-0 lg:top-0 lg:z-10 lg:flex" : "lg:inline-flex"}`}
-      >
-        {words}
-      </span>
+      {!float && (
+        <span
+          role="status"
+          aria-live="polite"
+          style={colour}
+          className={`hidden items-center gap-1.5 whitespace-nowrap text-[12px] ${tone} ${corner ? "lg:absolute lg:right-0 lg:top-0 lg:z-10 lg:flex" : "lg:inline-flex"}`}
+        >
+          {words}
+        </span>
+      )}
       {mounted &&
         createPortal(
-          <span className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center lg:hidden">
+          <span className={`pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center ${float ? "" : "lg:hidden"}`}>
             <span
               role="status"
               aria-live="polite"

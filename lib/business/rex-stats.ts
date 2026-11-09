@@ -1492,14 +1492,36 @@ interface ComplianceFetch {
  * expected to say so on screen. Losing items is survivable; claiming a property
  * is compliant because we didn't finish reading it is not.
  */
-async function fetchComplianceByParent(ids: string[]): Promise<ComplianceFetch> {
+/* ONE HOME'S ROWS, KEPT FOR A MINUTE (9 Nov 2026). Opening a home's page asks
+   ComplianceEntries about that one home - REX's slowest service, 1.5 s at the
+   median last week and the longest wait on the page - and agents go back and
+   forth between the same few homes. A home's rows are kept for a minute and
+   shared while they are on their way, but only until anything is written to
+   REX (the write count lib/rex keeps), so a certificate filed from here is on
+   the next open. Only the home's own page asks this way (`hold`): the
+   book's sweeps want REX's answer as it is now. The OS's own removals are
+   laid on after, on every read (withoutRemoved), so they are never held. */
+const HOME_ROWS_HOLD_MS = 60_000;
+type HomeRows = { at: number; gen: number; rows: Array<Record<string, unknown>> };
+const homeRows: Map<string, HomeRows> = ((globalThis as { __osHomeComplianceRows?: Map<string, HomeRows> }).__osHomeComplianceRows ??= new Map());
+const homeRowsInFlight: Map<string, Promise<{ chunk: string[]; rows: Array<Record<string, unknown>>; complete: boolean }>> = ((globalThis as { __osHomeComplianceInFlight?: Map<string, Promise<{ chunk: string[]; rows: Array<Record<string, unknown>>; complete: boolean }>> }).__osHomeComplianceInFlight ??= new Map());
+/** How many writes REX has had from here; null if lib/rex has not been loaded, and nothing is then held. */
+const rexWriteCount = (): number | null => (globalThis as { __osRexSharedReads?: { gen: number } }).__osRexSharedReads?.gen ?? null;
+const copyRows = <T,>(rows: T): T => {
+  try {
+    return structuredClone(rows);
+  } catch {
+    return JSON.parse(JSON.stringify(rows)) as T;
+  }
+};
+
+async function fetchComplianceByParent(ids: string[], opts?: { hold?: boolean }): Promise<ComplianceFetch> {
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += COMPLIANCE_CHUNK) {
     chunks.push(ids.slice(i, i + COMPLIANCE_CHUNK));
   }
 
-  const results = await Promise.all(
-    chunks.map(async (chunk) => {
+  const pull = async (chunk: string[]) => {
       const rows: Array<Record<string, unknown>> = [];
       for (let page = 0; page < COMPLIANCE_MAX_PAGES; page++) {
         const res = await rexCall(
@@ -1519,8 +1541,35 @@ async function fetchComplianceByParent(ids: string[]): Promise<ComplianceFetch> 
         if (batch.length < COUNT_LIMIT) return { chunk, rows, complete: true };
       }
       return { chunk, rows, complete: false }; // still full at the ceiling
-    })
-  );
+  };
+  const held = async (chunk: string[]) => {
+    const home = opts?.hold && chunk.length === 1 ? chunk[0] : null;
+    const gen = rexWriteCount();
+    if (!home || gen == null) return pull(chunk);
+    const hit = homeRows.get(home);
+    if (hit && hit.gen === gen && Date.now() - hit.at < HOME_ROWS_HOLD_MS) return { chunk, rows: copyRows(hit.rows), complete: true };
+    const flight = `${gen}|${home}`;
+    let p = homeRowsInFlight.get(flight);
+    if (!p) {
+      const started = pull(chunk).then((r) => {
+        if (r.complete) {
+          if (homeRows.size > 500) for (const [k, v] of homeRows) if (Date.now() - v.at >= HOME_ROWS_HOLD_MS) homeRows.delete(k);
+          homeRows.set(home, { at: Date.now(), gen, rows: copyRows(r.rows) });
+        }
+        return r;
+      });
+      p = started;
+      homeRowsInFlight.set(flight, started);
+      const done = () => {
+        if (homeRowsInFlight.get(flight) === started) homeRowsInFlight.delete(flight);
+      };
+      started.then(done, done);
+    }
+    const r = await p;
+    return { chunk, rows: copyRows(r.rows), complete: r.complete };
+  };
+
+  const results = await Promise.all(chunks.map(held));
 
   const byParent = new Map<string, ComplianceItem[]>();
   const unchecked = new Set<string>();
@@ -1637,7 +1686,7 @@ export interface DealCompliance {
  */
 export async function getComplianceItemsFor(propertyId: string): Promise<{ items: ComplianceItem[]; checked: boolean }> {
   if (!rexConfigured() || !propertyId) return { items: [], checked: false };
-  const { byParent, unchecked } = await fetchComplianceByParent([String(propertyId)]);
+  const { byParent, unchecked } = await fetchComplianceByParent([String(propertyId)], { hold: true });
   const checked = !unchecked.has(String(propertyId));
   return { items: addMissingRequired(byParent.get(String(propertyId)) ?? [], checked), checked };
 }

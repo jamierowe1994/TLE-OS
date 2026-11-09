@@ -18,6 +18,7 @@ import { GET as applicationsGET } from "@/app/api/applications/route";
 import { GET as listingsGET } from "@/app/api/listings/route";
 import { grantAgentBook, grantWholeBusiness } from "@/lib/scope";
 import { overviewAgentFor, overviewAgents, wholeOverviewFor, type OverviewAgent } from "@/lib/overview-access";
+import { QUICK_MS, type BoardRead } from "@/lib/applications-board";
 
 /**
  * The Overview board (1 Oct 2026): one tile per part of property management,
@@ -83,6 +84,20 @@ export async function GET(req: NextRequest) {
   /* One agent picked: read as their book, not the whole business. */
   const whole = everything && !agent;
   const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, everything, agent);
+  /* ?quick=1 - the PM Dashboard's first read (James, 9 Nov 2026: "Yes, do
+     it"): the last board of applications at once, up to an hour old, when its
+     rebuild is due, said `stale` with the time it is as at; the page marks
+     itself updating and reads again with ?fresh=1, which waits for the
+     rebuilt one. The applications tile and the lettings tile both wait on
+     that board, which is why a cold one held the whole page for 4-8 s.
+     Without either, and for every re-read after a save, the ten-minute rule. */
+  const mode = req.nextUrl.searchParams.get("fresh") === "1" ? "fresh" : req.nextUrl.searchParams.get("quick") === "1" ? "quick" : "";
+  const boardRead: BoardRead = mode === "fresh" ? { fresh: true } : mode === "quick" ? { upToMs: QUICK_MS } : {};
+  /* The oldest board held over for this answer, if any was. */
+  const heldOver: { at: number | null } = { at: null };
+  const noteBoard = (b: { at: number; stale: boolean }) => {
+    if (b.stale && Number.isFinite(b.at)) heldOver.at = heldOver.at == null ? b.at : Math.min(heldOver.at, b.at);
+  };
   /* An answer that could not be read is an error on its tile, never zeros
      (Rig run 4, P-065, 10 Oct 2026): an agent the OS cannot place got "0 to
      review", "0 applications" and "0 on the market" beside the tiles that
@@ -193,7 +208,8 @@ export async function GET(req: NextRequest) {
       };
     }))),
 
-    timed("applications", settle(get(applicationsGET, "/api/applications").then(honest).then((j) => {
+    timed("applications", settle(get(applicationsGET, `/api/applications?counts=1${mode ? `&${mode}=1` : ""}`).then(honest).then((j) => {
+      noteBoard({ at: typeof j.pulledAt === "string" ? Date.parse(j.pulledAt) : NaN, stale: j.stale === true });
       const apps = (Array.isArray(j.applications) ? j.applications : []) as { status: string; closed: unknown; startDate: string | null }[];
       const open = apps.filter((a) => !a.closed && /^(received|communicated)$/i.test(a.status));
       const movingIn = apps.filter((a) => !a.closed && /^accepted$/i.test(a.status) && (a.startDate ?? "") >= today);
@@ -203,7 +219,7 @@ export async function GET(req: NextRequest) {
     /* On the market, let agreed and drafts by the one rule every screen uses
        (lib/listing-stages, Rig run 3, P-026). Let agreed counted only the
        published ones here, and drafts counted the 140-odd filed away. */
-    timed("lettings", settle(Promise.all([get(listingsGET, "/api/listings?tests=0").then(honest), activity().catch(() => null)]).then(([j, act]) => {
+    timed("lettings", settle(Promise.all([get(listingsGET, "/api/listings?tests=0").then(honest), activity(boardRead, noteBoard).catch(() => null)]).then(([j, act]) => {
       const ls = (Array.isArray(j.listings) ? j.listings : []) as StageListing[];
       return stageCounts(ls, new Set(act?.accepted ?? []));
     }))),
@@ -244,6 +260,7 @@ export async function GET(req: NextRequest) {
     ok: true, at: new Date().toISOString(),
     scope: { whole, label, agent: agent?.rexUserId ?? null },
     ...(agents ? { agents } : {}),
+    ...(heldOver.at != null ? { stale: true, asAt: new Date(heldOver.at).toISOString() } : {}),
     properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears,
   });
 }

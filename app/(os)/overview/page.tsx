@@ -13,6 +13,7 @@ import RecordsDrawer, { type PmRecordKind, type RecordAsk } from "@/components/n
 import { CountUp } from "@/components/new-look/dashboard/Charts";
 import { PmCard, PmWait, BookRing, WorkBars, TenantFlow } from "@/components/new-look/dashboard/PmCharts";
 import BookPictures from "@/components/new-look/dashboard/BookPictures";
+import BoardUpdating, { type BoardUpdate } from "@/components/BoardUpdating";
 
 /**
  * Overview (1 Oct 2026): property management at a glance, one tile per part
@@ -42,6 +43,9 @@ interface Board {
   scope?: { whole: boolean; label: string; agent?: string | null };
   /** The agents to pick from - only for somebody who sees the whole business. */
   agents?: { id: string; name: string; homes: number }[];
+  /** The first read (?quick=1) held the last board of applications over while it rebuilds, as at `asAt`. */
+  stale?: boolean;
+  asAt?: string;
   properties: Tile<{ managed: number; avgRent: number; landlords: number; rentRoll: number; occupied: number | null; vacant: number | null; upcoming: number | null }>;
   maintenance: Tile<{ open: number; overdue: number; emergencies: number; followUp: number; late: { title: string; where: string; dueOn: string | null }[]; partial: string | null }>;
   inspections: Tile<{ due: number; overdue: number; booked: number; awaitingTenant: number }>;
@@ -81,18 +85,52 @@ export default function Overview() {
   /* Only the latest read lands: a quick change of agent can't be overwritten
      by the slower answer for the one before it. */
   const asked = useRef(0);
-  const load = useCallback(() => {
+  /* The last board of applications on screen while a fresh one is built
+     (James, 9 Nov 2026, as on Applications): what the marker says, and when
+     the board on screen is as at. */
+  const [update, setUpdate] = useState<BoardUpdate>(null);
+  const [asAt, setAsAt] = useState<string | null>(null);
+  const get = useCallback(
+    (extra: string) => {
+      const qs = [agent ? `agent=${encodeURIComponent(agent)}` : "", extra].filter(Boolean).join("&");
+      return fetch(qs ? `/api/overview?${qs}` : "/api/overview", { cache: "no-store" }).then((r) => r.json());
+    },
+    [agent]
+  );
+  /* `first`: the page's own opening read, which takes the last board at once
+     (?quick=1) and, if it was held over, reads again for the rebuilt one
+     (?fresh=1). Every other read - Try again, a board closing, the reload
+     button - is the ordinary one. */
+  const load = useCallback((first = false) => {
     if (agent === null) return;
     const n = ++asked.current;
-    fetch(agent ? `/api/overview?agent=${encodeURIComponent(agent)}` : "/api/overview", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
+    setUpdate(null);
+    (async () => {
+      let j;
+      try {
+        j = await get(first ? "quick=1" : "");
+      } catch {
+        if (n === asked.current) setError("The overview couldn't be read.");
+        return;
+      }
+      if (n !== asked.current) return;
+      if (!j.ok) { setError(j.error ?? "The overview couldn't be read."); return; }
+      setData(j); setError(null); if (j.agents) setAgents(j.agents);
+      if (!j.stale) return;
+      setUpdate("updating");
+      setAsAt(j.asAt ?? null);
+      try {
+        const k = await get("fresh=1");
         if (n !== asked.current) return;
-        if (j.ok) { setData(j); setError(null); if (j.agents) setAgents(j.agents); } else setError(j.error ?? "The overview couldn't be read.");
-      })
-      .catch(() => { if (n === asked.current) setError("The overview couldn't be read."); });
-  }, [agent]);
-  useEffect(load, [load]);
+        if (!k.ok) { setUpdate("failed"); return; }
+        setData(k); if (k.agents) setAgents(k.agents);
+        setUpdate(null);
+      } catch {
+        if (n === asked.current) setUpdate("failed");
+      }
+    })();
+  }, [agent, get]);
+  useEffect(() => load(true), [load]);
   const pickAgent = (id: string) => {
     const url = new URL(window.location.href);
     if (id) url.searchParams.set("agent", id);
@@ -122,6 +160,8 @@ export default function Overview() {
   }
   if (look) {
     return (
+      <>
+      <BoardUpdating float state={update} asAt={asAt} onRetry={() => load(true)} />
       <OverviewNew
         data={data}
         error={error}
@@ -131,11 +171,13 @@ export default function Overview() {
         agent={agent || null}
         picker={agents?.length ? <AgentPicker agents={agents} value={agent ?? ""} onChange={pickAgent} newLook /> : null}
       />
+      </>
     );
   }
 
   return (
     <>
+      <BoardUpdating float state={update} asAt={asAt} onRetry={() => load(true)} />
       <PageHeader
         title="Overview"
         blurb="Your homes at a glance: what is late, what is coming up, and where to go next. Every figure is live from the screen it opens."
