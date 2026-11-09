@@ -5,7 +5,7 @@ import { aiCreate } from "@/lib/ai";
 import { AiUnavailable } from "@/lib/ai-outage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
-import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
+import { keyClimbs, R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { deleteKnowledge, listKnowledge, upsertKnowledge } from "@/lib/business/knowledge-store";
 import { LIBRARY_SECTION } from "@/lib/marketing-library";
 
@@ -133,7 +133,7 @@ export async function readLibraryFile(key: string, by = "Steve read it on upload
     return { ok: false, note: text };
   };
   try {
-    if (!key.startsWith(SHELF) || key.includes("..")) return { ok: false, note: "That isn't a File Store file." };
+    if (!key.startsWith(SHELF) || keyClimbs(key)) return { ok: false, note: "That isn't a File Store file." };
     if (!r2Configured) return done("failed", "Storage isn't configured here.");
     if (!process.env.ANTHROPIC_API_KEY) return done("failed", "Steve has no key to read with on this environment.");
     await note(key, { state: "reading", at: new Date().toISOString() });

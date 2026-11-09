@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BoardSkeleton } from "@/components/Skeleton";
 import { useRouter } from "next/navigation";
-import { dropJson, peekJson, readJson } from "@/lib/page-cache";
+import { peekJson, readJson } from "@/lib/page-cache";
+import { APPS_BOARD_URL as APPS_URL, readFreshBoard } from "@/lib/applications-read";
+import BoardUpdating, { type BoardUpdate } from "@/components/BoardUpdating";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
@@ -142,8 +144,7 @@ const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en
 type OsAccepted = { id: string; name: string; address: string; listingId: string | null; amount: number | null; moveIn: string | null; by: string; at: string };
 /* A let only Propoly knows about (lib/propoly-only-lets, 9 Oct 2026). */
 type PropolyOnly = { id: string; address: string; locality: string; tenants: string; status: string; stage: string; offer: number | null; moveIn: string | null; received: string | null; agentName: string | null; href: string; external: boolean };
-type AppsAnswer = { applications?: Application[]; osAccepted?: OsAccepted[]; propolyOnly?: PropolyOnly[]; error?: string; scope?: string; everything?: boolean; stale?: boolean };
-const APPS_URL = "/api/applications?limit=200";
+type AppsAnswer = { applications?: Application[]; osAccepted?: OsAccepted[]; propolyOnly?: PropolyOnly[]; error?: string; scope?: string; everything?: boolean; stale?: boolean; pulledAt?: string };
 
 /**
  * One fetch, however many times this mounts - lib/page-cache shares the read
@@ -168,12 +169,15 @@ export default function Applications() {
   const [propolyOnly, setPropolyOnly] = useState<PropolyOnly[]>(() => peekJson<AppsAnswer>(APPS_URL)?.propolyOnly ?? []);
   /* Offers still waiting on a decision, across the listings - they live there now. */
   const [openOffers, setOpenOffers] = useState<number | null>(null);
-  useEffect(() => {
-    fetch("/api/offers/open", { cache: "no-store" })
+  /* Read as the board is (lib/applications-read, 9 Nov 2026): at once from
+     the last board, and again once the board's fresh read has landed. */
+  const readOffers = useCallback((quick: boolean) => {
+    fetch(quick ? "/api/offers/open?quick=1" : "/api/offers/open", { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { ok?: boolean; total?: number }) => setOpenOffers(j.ok ? (j.total ?? 0) : null))
       .catch(() => null);
   }, []);
+  useEffect(() => readOffers(true), [readOffers]);
   const [error, setError] = useState<string | null>(null);
   /* Customer updates still to tell, for the header link. */
   const [updatesOpen, setUpdatesOpen] = useState(0);
@@ -219,32 +223,61 @@ export default function Applications() {
     return held?.scope ? { label: held.scope, everything: Boolean(held.everything) } : null;
   });
 
+  /* A held board on screen while the fresh one loads (James, 9 Nov 2026):
+     what the marker says, and how old the board on screen is. */
+  const [update, setUpdate] = useState<BoardUpdate>(null);
+  const [asAt, setAsAt] = useState<string | null>(() => peekJson<AppsAnswer>(APPS_URL)?.pulledAt ?? null);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const take = useCallback((d: AppsAnswer) => {
+    if (d.error) setError(d.error);
+    if (d.scope) setScope({ label: d.scope, everything: Boolean(d.everything) });
+    setApps(d.applications ?? []);
+    setOsAccepted(d.osAccepted ?? []);
+    setPropolyOnly(d.propolyOnly ?? []);
+    setAsAt(d.pulledAt ?? null);
+  }, []);
+  /* The second read waits for the rebuilt board and swaps it in - every part
+     of it, and the open-offers count read from the same book. */
+  const freshen = useCallback(() => {
+    setUpdate("updating");
+    readFreshBoard<AppsAnswer>()
+      .then((k) => {
+        if (!alive.current) return;
+        if (k.error || !Array.isArray(k.applications)) {
+          setUpdate("failed");
+          return;
+        }
+        setError(null);
+        take(k);
+        setUpdate(null);
+        readOffers(false);
+      })
+      .catch(() => {
+        if (alive.current) setUpdate("failed");
+      });
+  }, [take, readOffers]);
+
   useEffect(() => {
     let live = true;
-    let again = 0;
     book()
       .then((d) => {
         if (!live) return;
-        /* A held board answered while the server rebuilds it: read once more
-           in a few seconds and take the rebuilt one. */
-        if (d.stale) {
-          again = window.setTimeout(() => {
-            dropJson(APPS_URL);
-            book().then((k) => { if (live && !k.error && k.applications) setApps(k.applications); }).catch(() => undefined);
-          }, 4000);
-        }
-        if (d.error) setError(d.error);
-        if (d.scope) setScope({ label: d.scope, everything: Boolean(d.everything) });
-        setApps(d.applications ?? []);
-        setOsAccepted(d.osAccepted ?? []);
-        setPropolyOnly(d.propolyOnly ?? []);
+        take(d);
+        /* The last board, answered at once while the server rebuilds it:
+           say so, and take the rebuilt one the moment it is ready. */
+        if (d.stale && !d.error) freshen();
       })
       .catch((e: Error) => live && setError(e.message));
     return () => {
       live = false;
-      window.clearTimeout(again);
     };
-  }, []);
+  }, [take, freshen]);
 
   const all = apps ?? [];
   /* The board is lets in progress; `all` keeps every application so ?open= can still find one. */
@@ -385,6 +418,7 @@ export default function Applications() {
           }
           actions={
             <>
+              <BoardUpdating state={update} asAt={asAt} onRetry={freshen} />
               {/* Who should hear what, across every let (2 Oct 2026). */}
               <Link href="/applications/updates" className="nl-btn nl-btn--secondary">
                 Customer updates
@@ -657,6 +691,8 @@ export default function Applications() {
             >
               Right to rent
             </Link>
+            {/* Last, so nothing moves when it goes. */}
+            <BoardUpdating state={update} asAt={asAt} onRetry={freshen} />
           </span>
         }
       />

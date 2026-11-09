@@ -6,7 +6,7 @@ import {
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { requireCapability } from "@/lib/admin";
-import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { keyClimbs, R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
 import { readLibraryFile } from "@/lib/library-reader";
 import { shelfFolder } from "@/lib/library-files";
 
@@ -43,7 +43,7 @@ const PART_SIZE = 8 * 1024 * 1024;
 
 const mb = (n: number) => `${Math.round(n / 1024 / 1024)}MB`;
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
-const onShelf = (key: string) => key.startsWith(SHELF) && !key.includes("..");
+const onShelf = (key: string) => key.startsWith(SHELF) && !keyClimbs(key);
 
 async function gate(req: NextRequest) {
   const me = await requireCapability(req, "see:marketing");
