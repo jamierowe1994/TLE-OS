@@ -36,6 +36,10 @@ import AppraisalTerms from "@/components/appraisal/AppraisalTerms";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Ico, Menu, Tabs, type Tone } from "@/components/new-look/Parts";
 
+/* Said under a missed appointment (ticket 8920febe). */
+const MISSED_NOTE =
+  "Landlord didn't show, or it didn't go ahead? Rearrange it to the new date - the file stays at the appraisal stage and nothing is counted as done.";
+
 /**
  * The appraisal file, to James's mock of 11 Sep 2026.
  *
@@ -296,6 +300,14 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   const missingFigure = needsValuation(ma);
   const when = ma.appointmentAt ? new Date(ma.appointmentAt) : null;
   const past = Boolean(when && when < new Date());
+  /* A NO-SHOW (Dan Richards, ticket 8920febe, 7 Nov 2026): the landlord
+     didn't turn up, the time passed, and Rearrange went with it, so the file
+     said "Visit done" and kept the missed date. A visit whose time has passed
+     with no figure recorded may not have happened, so it can still be
+     rearranged to the new date. The file stays at the appraisal stage; a
+     recorded figure is what moves it on. Cancel stays off: the server refuses
+     a past one, and Lost is the way out if it isn't going ahead. */
+  const missed = past && !ma.cancelledAt && missingFigure;
   const latest = (kind: string) => decks?.find((d) => d.kind === kind) ?? null;
   const pre = latest("pre-appraisal");
   const deck = latest("appraisal");
@@ -579,7 +591,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                     <>
                       <p className="nl-appr-when">{longDate(ma.appointmentAt!)}</p>
                       <div className="flex flex-wrap items-center gap-2">
-                        {past ? <Badge tone="good">Visit done</Badge> : <Badge tone="info">Coming up</Badge>}
+                        {past ? missingFigure ? <Badge tone="neutral">Time has passed</Badge> : <Badge tone="good">Visit done</Badge> : <Badge tone="info">Coming up</Badge>}
                         <span className="nl-meta">{ma.agent ? `with ${ma.agent}` : "In the diary"}</span>
                       </div>
                       {past && (
@@ -587,6 +599,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                           {missingFigure ? "No figure recorded yet - the post-appraisal deck waits on it." : "The figure is recorded, so the post-appraisal deck can go."}
                         </p>
                       )}
+                      {missed && <p className="nl-meta">{MISSED_NOTE}</p>}
                     </>
                   ) : ma.cancelledAt ? (
                     <>
@@ -601,11 +614,12 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                       No date on this appraisal. It was booked without one - worth chasing, because the pre-appraisal deck is scheduled from the appointment.
                     </p>
                   )}
-                  {(ma.cancelledAt || (when && !past)) && (
+                  {(ma.cancelledAt || (when && !past) || missed) && (
                     <div className="flex flex-wrap gap-2">
                       <AppraisalChange
                         appraisalId={ma.id}
                         appraisal={ma}
+                        showCancel={!missed}
                         buttonClass="nl-btn nl-btn--secondary nl-btn--sm"
                         noteClass="w-full nl-meta"
                         onChanged={(next) => {
@@ -1014,9 +1028,9 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                   {past ? "✓" : "…"}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[13.5px] font-semibold">{past ? "Visit completed" : "Still to come"}</p>
+                  <p className="text-[13.5px] font-semibold">{missed ? "Time has passed" : past ? "Visit completed" : "Still to come"}</p>
                   <p className="text-[12px] text-muted">
-                    {past ? "Been and gone" : "In the diary"}
+                    {missed ? "No figure recorded" : past ? "Been and gone" : "In the diary"}
                     {ma.agent ? ` · with ${ma.agent}` : ""}
                   </p>
                 </div>
@@ -1026,6 +1040,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                   {missingFigure ? "No figure recorded yet - the post-appraisal deck waits on it." : "The figure is recorded, so the post-appraisal deck can go."}
                 </p>
               )}
+              {missed && <p className="mt-2 text-[12px] leading-relaxed text-muted">{MISSED_NOTE}</p>}
             </>
           ) : ma.cancelledAt ? (
             /* Cancelled (James, 15 Oct 2026): the file and everything on it
@@ -1045,12 +1060,15 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             </p>
           )}
           {/* Rearrange and Cancel, the same as from the diary (James, 15 Oct
-              2026). A visit that has been is written up, not moved. */}
-          {(ma.cancelledAt || (when && !past)) && (
+              2026). A visit that has been is written up, not moved - but one
+              whose time passed with no figure may not have happened at all
+              (`missed`), so it keeps Rearrange. */}
+          {(ma.cancelledAt || (when && !past) || missed) && (
             <div className="mt-4 flex flex-wrap gap-2">
               <AppraisalChange
                 appraisalId={ma.id}
                 appraisal={ma}
+                showCancel={!missed}
                 buttonClass="inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-3.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-50"
                 noteClass="w-full text-[11.5px] leading-snug text-accent-dark"
                 onChanged={(next) => {

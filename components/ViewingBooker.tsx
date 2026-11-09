@@ -358,10 +358,12 @@ function ClassicViewingBooker({
        kept the viewing default and every appraisal was booked for half an
        hour, no matter what this line said. */
     setMins(mode === "appraisal" || mode === "takeon" ? 60 : 30);
-    /* Change time: start on the slot it already has. */
+    /* Change time: start on the slot it already has - unless that slot has
+       gone (a missed appraisal, ticket 8920febe): then start on today, as a
+       new booking does, so the agent picks the new date. */
     if (editing) {
       const at = new Date(editing.startsAt);
-      if (!Number.isNaN(at.getTime())) {
+      if (!Number.isNaN(at.getTime()) && at.getTime() > Date.now()) {
         const d = startOfDay(at);
         setDay(d);
         setSlot(`${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`);
