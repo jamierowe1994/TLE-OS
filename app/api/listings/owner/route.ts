@@ -93,23 +93,29 @@ export async function POST(req: NextRequest) {
   }
   const from = details.agent.name ?? "nobody";
 
+  /* The agent moves with an ordinary update. The OWNER does not: REX takes
+     system_owner_user on Listings/update and Properties/update, answers ok and
+     changes nothing (8 Oct and again 9 Nov 2026, 142 Queen Elizabeth's Drive -
+     the listing agent moved, both owners stayed Geraldine's). The only call
+     that moves an owner is MassActions/queueOwnerReassignment, which is
+     queued in REX and done within a few seconds. */
   const listing = await rexCall("Listings", "update", {
-    data: { id: String(id), listing_agent_1: { id: to }, system_owner_user: { id: to } },
+    data: { id: String(id), listing_agent_1: { id: to } },
   });
   if (!listing.ok) {
     return NextResponse.json({ ok: false, error: "The listing did not move. Try again in a minute." }, { status: 502 });
   }
 
-  /* The property too: a let home's Portfolio place follows its REX owner
-     (lib/managed-book). A refusal here does not undo the listing half. */
-  let property = "untouched";
-  if (details.propertyId) {
-    if (rexWritesLocked("Properties", "update")) property = "locked";
-    else {
-      const p = await rexCall("Properties", "update", { data: { id: details.propertyId, system_owner_user: { id: to } } });
-      property = p.ok ? "moved" : `refused (${p.error ?? p.status})`;
-    }
-  }
+  /* The owners: the listing's, and the property's - a let home's Portfolio
+     place follows its REX property owner (lib/managed-book). A refusal here
+     does not undo the agent half; the answer says what did not move. */
+  const reassign = async (service: "Listings" | "Properties", recordId: string): Promise<string> => {
+    if (rexWritesLocked("MassActions", "queueOwnerReassignment")) return "locked";
+    const r = await rexCall("MassActions", "queueOwnerReassignment", { service_name: service, new_owner_user_id: Number(to), record_ids: [Number(recordId)] });
+    return r.ok ? "moved" : `refused (${r.error ?? r.status})`;
+  };
+  const owner = await reassign("Listings", String(id));
+  const property = details.propertyId ? await reassign("Properties", String(details.propertyId)) : "untouched";
 
   /* Every board re-reads REX: the old agent's must lose it and the new one's
      gain it, and the Portfolio books are keyed per agent the same way. */
@@ -121,13 +127,14 @@ export async function POST(req: NextRequest) {
     kind: "listing_owner_changed",
     actorId: actor.id,
     actorEmail: actor.email,
-    detail: `${id}: ${from} -> ${who.name}; property ${details.propertyId ?? "none"} ${property}`,
+    detail: `${id}: ${from} -> ${who.name}; listing owner ${owner}; property ${details.propertyId ?? "none"} ${property}`,
   });
 
   const after = await readListingDetails(id).catch(() => null);
   return NextResponse.json({
     ok: true,
     agent: after?.agent.id ? { id: after.agent.id, name: after.agent.name } : { id: to, name: who.name },
+    owner,
     property,
   });
 }
