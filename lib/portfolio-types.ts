@@ -27,6 +27,8 @@ export interface Party {
   name: string;
   email: string | null;
   phone: string | null;
+  /** The name as the tenancy record spells it, where an agent has put `name` right in the OS (lib/tenant-contacts saveTenantName). */
+  recordName?: string;
 }
 
 export interface ManagedProperty {

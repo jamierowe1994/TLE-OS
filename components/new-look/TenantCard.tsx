@@ -19,7 +19,9 @@ import { Ico } from "@/components/new-look/Parts";
  *   rex:<id>              a tenant with a contact record: changed there, as before
  *   rexpm:<home>:<n>      a tenant named by the tenancy record: kept on the home
  *                         (os_tenant_contacts), never the old system; their
- *                         name comes from the tenancy record and stays
+ *                         name too since 9 Nov 2026 (Lianna Denholm, ticket
+ *                         00f77ec4: "only initial appearing"), kept beside
+ *                         the record's spelling (recordName), which keys it
  * Anyone else is shown read only, saying why.
  */
 
@@ -27,7 +29,7 @@ type Draft = { name: string; phone: string; email: string };
 const FIELDS = ["name", "phone", "email"] as const;
 const draftOf = (p: Person): Draft => ({ name: p.name ?? "", phone: p.phone ?? "", email: p.email ?? "" });
 
-export default function TenantCard({ contactId, person, about }: { contactId: string | null | undefined; person: Person; about?: string }) {
+export default function TenantCard({ contactId, person, about, recordName }: { contactId: string | null | undefined; person: Person; about?: string; recordName?: string }) {
   const id = String(contactId ?? "");
   const rexRef = /^\d+$/.test(id) ? `rex:${id}` : null;
   const pmRef = /^rexpm:[^:]+:\d+$/.test(id) ? id : null;
@@ -62,7 +64,7 @@ export default function TenantCard({ contactId, person, about }: { contactId: st
     let warned = false;
     let changed = false;
     for (const field of FIELDS) {
-      if (field === "name" && !rexRef) continue;
+      if (field === "name" && !rexRef && !pmRef) continue;
       const v = draft[field].trim();
       if (base[field] === v && !(field === "name" && asking)) continue;
       if (field === "name" && !v) { out.push("The tenant needs a name."); continue; }
@@ -70,7 +72,7 @@ export default function TenantCard({ contactId, person, about }: { contactId: st
       const sentWith = field === "name" && asking ? { [asking.field]: asking.value } : {};
       const body = rexRef
         ? { ref: rexRef, [field]: v, ...sentWith }
-        : { ref: pmRef, tenantName: shown.name, [field]: v, keep: { email: base.email, phone: base.phone } };
+        : { ref: pmRef, tenantName: recordName || person.name, [field]: v, keep: { email: base.email, phone: base.phone } };
       try {
         const r = await fetch("/api/people/contact", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
         const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; needsName?: boolean; sync?: { ok?: boolean; detail?: string } };
@@ -117,11 +119,10 @@ export default function TenantCard({ contactId, person, about }: { contactId: st
           <p className="nl-strong">Edit {shown.name}</p>
         </div>
         <div className="nl-appr-fields">
-          {rexRef ? input("Full name", draft.name, (v) => setDraft({ ...draft, name: v }), "text", "Name the tenant") : null}
+          {rexRef || pmRef ? input("Full name", draft.name, (v) => setDraft({ ...draft, name: v }), "text", "Name the tenant") : null}
           {input("Mobile", draft.phone, (v) => setDraft({ ...draft, phone: v }), "tel", "07...")}
           {input("Email", draft.email, (v) => setDraft({ ...draft, email: v }), "email", "name@example.com")}
         </div>
-        {!rexRef && <p className="nl-hint">Their name comes from the tenancy record, so it can&apos;t be changed here.</p>}
         {problems.length > 0 && (
           <div className="nl-appr-problems" role="alert">
             {problems.map((x, i) => <p key={i}>{x}</p>)}

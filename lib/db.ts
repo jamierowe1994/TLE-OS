@@ -640,6 +640,10 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_told_booked_at  TIM
 -- 10 Oct 2026: optional, a tick on Plan a certificate). Its own column, off
 -- by default, so no planned job raised before it starts emailing tenants.
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_access_notice   BOOLEAN NOT NULL DEFAULT false;
+-- When the tenants were told who will ring about access from the job's page,
+-- after it was raised (Lianna Denholm, 9 Nov 2026: a certificate job had no
+-- way to tell them, as a repair does).
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_access_told_at  TIMESTAMPTZ;
 -- Steps the agent skipped for now (Howard, 15 Oct 2026): only the ones
 -- lib/works-steps SKIPPABLE allows, so the job moves on without a landlord
 -- told or a tenant happy being written down that never happened.

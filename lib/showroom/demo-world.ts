@@ -120,6 +120,7 @@ function blankOrder(over: Partial<WorksOrder> & Pick<WorksOrder, "id" | "ref" | 
     quietTenants: false,
     skippedSteps: [],
     accessNotice: false,
+    tenantsAccessToldAt: null,
     tenantsToldBookedAt: null,
     landlordToldAt: null,
     arranging: null,

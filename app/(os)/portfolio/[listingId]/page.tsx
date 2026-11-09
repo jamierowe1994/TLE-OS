@@ -1452,7 +1452,7 @@ export default function PropertyPage() {
                             /* Each with an Edit button (James, 27 Oct 2026). */
                             <div className="nl-pcard">
                               {tenants.length > 1 && <p className="nl-pcard-tag">{i === 0 ? "Lead tenant" : "Tenant"}</p>}
-                              <TenantCard contactId={t.contactId} person={{ name: t.name, email: t.email ?? null, phone: t.phone ?? null }} about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />
+                              <TenantCard contactId={t.contactId} recordName={t.recordName} person={{ name: t.name, email: t.email ?? null, phone: t.phone ?? null }} about={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />
                             </div>
                           ),
                         }))}
