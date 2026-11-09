@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stampsFor } from "@/lib/home-send";
 import { checkStatesFor } from "@/lib/cert-check-state";
-import { londonToday } from "@/lib/london-clock";
+import { londonDay, londonToday } from "@/lib/london-clock";
 import { whoIs } from "@/lib/admin";
-import { getComplianceItemsFor, PROPERTY_COMPLIANCE, type ComplianceItem } from "@/lib/business/rex-stats";
+import { EXPIRING_DAYS, getComplianceItemsFor, PROPERTY_COMPLIANCE, type ComplianceItem } from "@/lib/business/rex-stats";
 import { matchProperty, pendingKeyFor, type MatchResult } from "@/lib/property-match";
 import { listVault, type VaultFile } from "@/lib/vault";
 import { rexConfigured } from "@/lib/rex";
@@ -11,7 +11,7 @@ import { checkingFor, osCertRows } from "@/lib/os-certs";
 import { HELD_FOR_CHECK, type CertChecking } from "@/lib/cert-hold";
 import { q } from "@/lib/db";
 import { notNeededAll } from "@/lib/cert-not-needed";
-import { HMO_SET, renewalHeld, renewalHoldEnds, requiredCerts } from "@/lib/compliance";
+import { HMO_SET, isStaleRecord, renewalHeld, renewalHoldEnds, requiredCerts, type Cert } from "@/lib/compliance";
 import { heldComplianceBook } from "@/lib/compliance-cache";
 import { isOsPropertyId } from "@/lib/os-properties";
 import { managedBookFor } from "@/lib/managed-book-cache";
@@ -299,6 +299,35 @@ export async function GET(req: NextRequest) {
       const key = VAULT_KEY[r.type];
       if (!key) continue;
       if ((owed && !owed.has(key)) || (notHmo && HMO_ONLY.has(key))) r.state = "not-required";
+    }
+    /* What the Compliance page already holds for the home (Lianna Denholm,
+       ticket ef3e6bec, 9 Nov 2026: a home's page said 3 certificates
+       outstanding that the Compliance page did not). The book reads the
+       clean sweep's dates, alarms evidenced by the gas safety record and
+       certificates filed in the OS (lib/sweep-certs); these rows read REX
+       alone, so a duty answered there stayed "No record" here. Where the
+       book has a later answer than REX, the row takes it. */
+    if (home && held) {
+      const today = londonToday();
+      const builtOn = londonDay(new Date(held.at).toISOString());
+      for (const r of rows) {
+        if (r.state !== "missing" && r.state !== "expired" && r.state !== "expiring") continue;
+        const key = VAULT_KEY[r.type];
+        const c = key ? (home.certs as Record<string, Cert | undefined>)[key] : undefined;
+        if (!c) continue;
+        if (c.undated && r.state === "missing") {
+          r.state = "held-here";
+          continue;
+        }
+        if (c.expires == null || isStaleRecord(c)) continue;
+        const d = new Date(`${builtOn}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + c.expires);
+        const expiry = d.toISOString().slice(0, 10);
+        if (r.expiry && r.expiry.slice(0, 10) >= expiry) continue;
+        const days = Math.round((d.getTime() - new Date(`${today}T12:00:00Z`).getTime()) / 86400000);
+        r.expiry = expiry;
+        r.state = days < 0 ? "expired" : days <= EXPIRING_DAYS ? "expiring" : "valid";
+      }
     }
   }
   /* What somebody took off (lib/certificate-remove, 20 Oct 2026): said on the

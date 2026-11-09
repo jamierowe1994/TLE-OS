@@ -1130,7 +1130,7 @@ export interface PropertyCompliance {
   unmapped: string[];
 }
 
-const EXPIRING_DAYS = 60;
+export const EXPIRING_DAYS = 60;
 
 /**
  * What a rented property is expected to hold, so the page can report what ISN'T
