@@ -112,21 +112,19 @@ function SignIn() {
   }
 
   return (
-    <DoorFrame art="street">
-      <p className="text-[13.5px] leading-relaxed text-muted">
-          Sign in with your work email.
+    <DoorFrame art="street" note="Accounts are by invite. If you should have one and don't, ask James. Coffee usually speeds it up.">
+      <h1>Sign In</h1>
+      <p className="door-lead mt-2 text-[14px] leading-relaxed text-muted">Use your work email.</p>
+
+      {error && (
+        <p role="alert" className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[13px] leading-relaxed">
+          {error}
         </p>
+      )}
 
-        {error && (
-          <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px] leading-relaxed">
-            {error}
-          </p>
-        )}
-
-        <form onSubmit={submit} className="mt-5">
-          <label htmlFor="email" className="text-[10px] uppercase tracking-wider text-muted">
-            Email
-          </label>
+      <form onSubmit={submit} className="mt-6 grid gap-4">
+        <div>
+          <label htmlFor="email">Email</label>
           <input
             id="email"
             type="email"
@@ -135,13 +133,13 @@ function SignIn() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[14px]"
+            className="mt-2"
           />
+        </div>
 
-          <label htmlFor="password" className="mt-4 block text-[10px] uppercase tracking-wider text-muted">
-            Password
-          </label>
-          <div className="relative mt-1.5">
+        <div>
+          <label htmlFor="password">Password</label>
+          <div className="relative mt-2">
             <input
               id="password"
               type={show ? "text" : "password"}
@@ -149,55 +147,58 @@ function SignIn() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-line/80 bg-box py-2.5 pl-3 pr-16 text-[14px]"
+              className="pr-16"
             />
             <button
               type="button"
               onClick={() => setShow((s) => !s)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-[11px] text-muted"
+              aria-pressed={show}
+              className="absolute right-1 top-1/2 -translate-y-1/2"
             >
               {show ? "Hide" : "Show"}
             </button>
           </div>
+        </div>
 
-          <label className="mt-3.5 flex items-center gap-2 text-[12px]">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="h-4 w-4 accent-[var(--brown)]"
-            />
-            Stay signed in on this device
-          </label>
+        <label className="flex items-center gap-2.5 text-[13px]">
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          Stay signed in on this device
+        </label>
 
-          <button
-            type="submit"
-            disabled={busy || !email.includes("@") || !password}
-            className="mt-5 w-full rounded-full bg-[var(--brown)] py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
+        <button type="submit" disabled={busy || !email.includes("@") || !password} className="mt-1">
+          {busy ? (
+            <>
+              <span className="door-spin" aria-hidden />
+              Signing In
+            </>
+          ) : (
+            <>
+              Sign In
+              <svg className="door-arrow" viewBox="0 0 16 10" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+                <path d="M0 5h14M10 1l4 4-4 4" />
+              </svg>
+            </>
+          )}
+        </button>
+      </form>
 
-        <p className="mt-4 text-[12px]">
-          <Link href="/reset" className="text-muted underline">Forgotten your password?</Link>
-        </p>
+      <p className="mt-5 text-[13px]">
+        <Link href="/reset" className="text-muted underline">Forgotten your password?</Link>
+      </p>
 
-        {/* No "set one up" link, deliberately. TLE OS is INVITE ONLY: having a
-            Letting Experts address is not the same as being meant to be in
-            here, and a self-serve doorway quietly makes it so. The /join route
-            still exists — it is where an invite link lands — but you have to
-            have been sent one. */}
-        <p className="mt-5 border-t border-line/70 pt-4 text-[11.5px] leading-relaxed text-muted">
-          Accounts are by invite. If you should have one and don&apos;t, ask James. Coffee usually speeds it up.
-        </p>
+      {/* No "set one up" link, deliberately. TLE OS is INVITE ONLY: having a
+          Letting Experts address is not the same as being meant to be in
+          here, and a self-serve doorway quietly makes it so. The /join route
+          still exists — it is where an invite link lands — but you have to
+          have been sent one. The line saying so sits under the card (the
+          note prop of DoorFrame). */}
     </DoorFrame>
   );
 }
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<main className="p-10 text-[12.5px] text-muted">Loading…</main>}>
+    <Suspense fallback={<DoorFrame art="street"><p className="text-[12.5px] text-muted">Loading…</p></DoorFrame>}>
       <SignIn />
     </Suspense>
   );

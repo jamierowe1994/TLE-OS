@@ -1,77 +1,181 @@
+import "@/app/door.css";
+import DoorStamp from "@/components/DoorStamp";
+import Wordmark from "@/components/Wordmark";
+
 /**
  * The frame every door wears: sign in, joining, a forgotten password, the
  * office code.
  *
- * One card, the form on the left and a painting on the right (James, 13 Sep
- * 2026). They were four separate centred boxes with a line-drawing on one of
- * them, and the first thing anybody sees of the OS is a door - so all four
- * now read as the same building.
+ * Rebuilt 9 Nov 2026 (James: "a really warm and inviting sign-in page ... I
+ * want the page to feel cinematic and dramatic whilst still keeping on theme
+ * ... a little bit retro, a little bit moody ... the same colour grading
+ * that we've got for the website"). It was a card with a painting beside it
+ * (13 Sep 2026); it is now one photograph from the website's own set filling
+ * the screen, wearing the website's house grade, with the words set in the
+ * website's type and the form on a linen card. Everything that does the work
+ * of the look is in app/door.css, scoped to .door.
  *
- * Two kinds of art, because James's own pictures come in two kinds. A SCENE
- * (the street, the house, the block of flats) fills its half edge to edge; a
- * CUT-OUT with no background (the desk) stands on the bottom edge of a sage
- * panel, the way a lead or an appraisal hero carries its picture.
+ * The art prop keeps its old names so no door had to change which one it
+ * asked for; each now names a photograph:
+ *
+ *   street    the candle-lit sofa - signing in (the warmest picture we have)
+ *   house     rain on the window - a forgotten password, a check on who you are
+ *   desk      the coral front door - joining
+ *   building  the village street - the office code
+ *
+ * Each photograph says where its point of interest is (fx, fy, as a percent
+ * of the picture) and where on the screen that should sit (tx, ty); the
+ * sofa's candle (gx, gy) is the one that moves.
  */
 
 type Art = "street" | "desk" | "house" | "building";
 
-const ART: Record<Art, { src: string; scene: boolean; position?: string }> = {
-  /* Held to the right so the door and the bicycle survive the crop. */
-  street: { src: "/brand/art/sign-in-real.webp", scene: true, position: "78% center" },
-  house: { src: "/brand/art/lead-house.webp", scene: false },
-  building: { src: "/brand/art/lead-building.webp", scene: false },
-  desk: { src: "/brand/art/desk.webp", scene: false },
+interface Scene {
+  src: string;
+  /** The photograph's own width over height. */
+  ar: number;
+  fx: number;
+  fy: number;
+  /** Where on the screen the point of interest sits: on a desktop (tx, ty) and on a phone or tablet (mx, my). */
+  tx: number;
+  ty: number;
+  mx: number;
+  my: number;
+  /** A flame, as a percent of the picture. */
+  glow?: { x: number; y: number };
+  title: [string, string];
+  line: string;
+}
+
+const SCENE: Record<Art, Scene> = {
+  street: {
+    src: "/brand/art/door-sofa.webp",
+    ar: 2000 / 1333,
+    fx: 67,
+    fy: 58,
+    tx: 72,
+    ty: 58,
+    mx: 74,
+    my: 24,
+    glow: { x: 67.2, y: 57.8 },
+    title: ["Welcome", "Home."],
+    line: "Your day, ready when you are.",
+  },
+  house: {
+    src: "/brand/art/door-rain.webp",
+    ar: 1920 / 1080,
+    fx: 50,
+    fy: 50,
+    tx: 50,
+    ty: 50,
+    mx: 50,
+    my: 50,
+    title: ["No", "Worries."],
+    line: "We'll get you back in.",
+  },
+  desk: {
+    src: "/brand/art/door-front-door.webp",
+    ar: 1280 / 1920,
+    fx: 38,
+    fy: 36,
+    tx: 70,
+    ty: 42,
+    mx: 62,
+    my: 30,
+    title: ["Come", "On In."],
+    line: "Let's get you set up.",
+  },
+  building: {
+    src: "/brand/art/door-village.webp",
+    ar: 1800 / 1350,
+    fx: 52,
+    fy: 58,
+    tx: 70,
+    ty: 56,
+    mx: 60,
+    my: 36,
+    title: ["Mind", "The Door."],
+    line: "A quick word, then you're in.",
+  },
 };
 
 export default function DoorFrame({
   art = "street",
+  title,
+  line,
+  eyebrow = "The Letting Experts",
+  note,
   children,
 }: {
   art?: Art;
+  /** Two lines, as the website breaks its headings. */
+  title?: [string, string];
+  line?: string;
+  eyebrow?: string;
+  /** A quiet aside under the card, on the picture. */
+  note?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const a = ART[art];
+  const s = SCENE[art];
+  const t = title ?? s.title;
   return (
-    <main className="os-type flex min-h-screen items-center justify-center bg-page px-5 py-10">
-      <div className="w-full max-w-[1020px] overflow-hidden rounded-[28px] border border-line/50 bg-card shadow-[0_40px_90px_-50px_rgba(0,0,0,0.35)]">
-        <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
-          <div className="min-w-0 p-8 sm:p-11">
-            {/* The logo itself, not the words. Two files because the wordmark
-                is ink: the dark theme gets the white copy. */}
-            <div className="mb-7">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-auto w-[188px] object-contain" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[188px] object-contain" />
-            </div>
-            {children}
-            <p className="mt-7 text-[11px] text-muted">The Letting Experts</p>
-          </div>
+    <main className="door os-type" data-art={art}>
+      <div className="door-stage" aria-hidden>
+        <div
+          className="door-cover"
+          style={
+            {
+              "--ar": s.ar,
+              "--fx": s.fx,
+              "--fy": s.fy,
+              "--tx-d": s.tx,
+              "--ty-d": s.ty,
+              "--tx-m": s.mx,
+              "--ty-m": s.my,
+            } as React.CSSProperties
+          }
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="door-photo" src={s.src} alt="" decoding="async" fetchPriority="high" />
+          {s.glow && <span className="door-glow" style={{ "--gx": s.glow.x, "--gy": s.glow.y } as React.CSSProperties} />}
+        </div>
+        <span className="door-warm" />
+        <span className="door-shade" />
+        <span className="door-leak" />
+        <span className="door-dust" />
+        <span className="door-vignette" />
+        <span className="door-grain" />
+      </div>
 
-          {/* Under md the panel drops away: on a phone the form is the whole
-              job, and 300px of picture above it just pushes it off screen. */}
-          <div className={`relative hidden min-h-[360px] overflow-hidden md:block ${a.scene ? "" : "bg-sage/25"}`}>
-            {a.scene ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={a.src}
-                alt=""
-                aria-hidden
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-                style={{ objectPosition: a.position ?? "center" }}
-              />
-            ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={a.src}
-                alt=""
-                aria-hidden
-                className="pointer-events-none absolute bottom-0 left-1/2 w-[118%] max-w-none -translate-x-1/2"
-              />
-            )}
+      <header className="door-bar door-bar-top">
+        <Wordmark size={24} />
+      </header>
+
+      <div className="door-wrap">
+        <div className="door-col">
+          <div className="door-copy">
+            <p className="door-k">{eyebrow}</p>
+            {/* Decorative: the form's own heading is the page's heading. */}
+            <p className="door-title" aria-hidden="true">
+              <span className="door-ln">
+                <span>{t[0]}</span>
+              </span>
+              <span className="door-ln d2">
+                <span>{t[1]}</span>
+              </span>
+            </p>
+            <span className="door-rule" aria-hidden />
+            <p className="door-line">{line ?? s.line}</p>
           </div>
+          <section className="door-panel">{children}</section>
+          {note && <p className="door-note">{note}</p>}
         </div>
       </div>
+
+      <footer className="door-bar door-bar-bottom">
+        <span className="door-cap">The Letting Experts</span>
+        <DoorStamp />
+      </footer>
     </main>
   );
 }
