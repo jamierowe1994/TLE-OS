@@ -122,6 +122,10 @@ export type AuditKind =
   /* Marketing's Base44 app read the lead figures with its key (12 Oct 2026,
      /api/marketing/leads-feed). Counts only; at most one line an hour. */
   | "marketing_feed_read"
+  /* The TEG Marketing Hub read the people feed with its key (9 Nov 2026,
+     /api/marketing/people). Names, roles, set-up and usage; at most one line
+     an hour. */
+  | "marketing_people_read"
   /* Saved through Steve's card (lib/assistant-actions, 15 Oct 2026): a
      tenant's right to rent expiry on a let, and a home's address in the OS. */
   | "rtr_expiry_recorded"
