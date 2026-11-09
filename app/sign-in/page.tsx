@@ -64,6 +64,8 @@ function SignIn() {
   const [show, setShow] = useState(false);
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
+  /* They are in: the door's light opens while the next page loads (DoorFrame). Nothing waits on it. */
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(locked ? "Your access to TLE OS has been paused. Speak to James." : null);
 
   async function submit(e: React.FormEvent) {
@@ -95,6 +97,7 @@ function SignIn() {
            the boards of whoever was signed in before - their session ran out
            and middleware brought them here mid-session. A fresh page holds
            nobody's (see lib/page-cache). replace, so Back skips the form. */
+        setOpen(true);
         window.location.replace(
           /* Michael lands on his own dashboard, as Kirstie does on hers (20 Sep 2026),
              and marketing on the Marketing Hub (28 Sep 2026): the dashboard is an
@@ -112,7 +115,7 @@ function SignIn() {
   }
 
   return (
-    <DoorFrame art="street" note="Accounts are by invite. If you should have one and don't, ask James. Coffee usually speeds it up.">
+    <DoorFrame art="street" open={open} note="Accounts are by invite. If you should have one and don't, ask James. Coffee usually speeds it up.">
       <h1>Sign In</h1>
       <p className="door-lead mt-2 text-[14px] leading-relaxed text-muted">Use your work email.</p>
 

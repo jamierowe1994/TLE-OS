@@ -17,6 +17,16 @@
    letterbox bars on a big screen with the wordmark and a date stamp in mono.
    Nothing here moves a figure or a form: the form is the same form, restyled.
 
+   Remade the same evening as the opening shot of a film (James: "remake the
+   entry screen ... fairly dramatic and interesting ... this kind of
+   retro/cinematic entrance screen ... add any animations you want. I don't
+   want it to be overdone. I want it to look clean."): the picture comes up
+   from black pulling into focus, the letterbox closes in, the camera pushes
+   slowly towards the lit front door, a lamp breathes in the hall, and on a
+   good sign-in that light opens over the screen (.door[data-open]). The still
+   is alive on a desktop (components/DoorLife: a short film laid over it, and
+   a few pixels of drift against the pointer).
+
    Written once, scoped to .door, so the five doors cannot drift apart. The
    form controls on the doors that still carry their old Tailwind classes are
    restyled by element here (this sheet is un-layered, so it wins over
@@ -59,20 +69,35 @@
   overflow: hidden;
   container-type: size;
   background: var(--door-ink);
-  animation: door-in 1.6s ease both;
+  /* Up from black, pulling into focus. */
+  animation: door-in 2.2s cubic-bezier(0.3, 0, 0.2, 1) both;
 }
 .door-cover {
+  /* The photograph in use: the wide one, or the upright one on a phone held upright (see the foot of this sheet). */
+  --ar: var(--ar-w);
+  --fx: var(--fx-w);
+  --fy: var(--fy-w);
+  /* How much taller than the screen the picture is held, at least (1 = it just covers). */
+  --zh: 1;
   --tx: var(--tx-d);
   --ty: var(--ty-d);
-  --bw: max(100cqw, calc(100cqh * var(--ar)));
-  --bh: max(100cqh, calc(100cqw / var(--ar)));
+  --bh: max(calc(100cqh * var(--zh)), calc(100cqw / var(--ar)));
+  --bw: calc(var(--bh) * var(--ar));
   position: absolute;
   width: var(--bw);
   height: var(--bh);
   left: clamp(calc(100cqw - var(--bw)), calc(var(--tx) * 1cqw - var(--fx) * var(--bw) / 100), 0px);
   top: clamp(calc(100cqh - var(--bh)), calc(var(--ty) * 1cqh - var(--fy) * var(--bh) / 100), 0px);
   transform-origin: calc(var(--fx) * 1%) calc(var(--fy) * 1%);
-  animation: door-push 30s cubic-bezier(0.22, 0.6, 0.2, 1) both;
+  /* The drift: a few pixels against the pointer (--px/--py, -1 to 1, set by DoorLife). */
+  translate: calc(var(--px, 0) * -8px) calc(var(--py, 0) * -5px);
+  /* The camera pushes in on the point of interest, quickest at the start and
+     never quite stopping. It never falls below 1.04, which is the room the
+     drift has before an edge could show. */
+  animation: door-push 44s cubic-bezier(0.2, 0.6, 0.2, 1) both;
+}
+.door-cover picture {
+  display: contents;
 }
 .door-photo {
   position: absolute;
@@ -83,18 +108,48 @@
   /* The website's house grade, word for word. */
   filter: contrast(0.95) brightness(0.99) saturate(0.88) sepia(0.12);
 }
-/* The candle. Irregular on purpose: a regular pulse reads as a loading light. */
+/* The still, alive: laid over the photograph once it is playing, in the same grade. */
+.door-film {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: contrast(0.95) brightness(0.99) saturate(0.88) sepia(0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.4s ease;
+}
+.door-film[data-on] {
+  opacity: 1;
+}
+/* The lamp in the hall, at the point of interest. Slow and uneven on purpose:
+   a regular pulse reads as a loading light. */
 .door-glow {
   position: absolute;
-  left: calc(var(--gx) * 1%);
-  top: calc(var(--gy) * 1%);
-  width: 30%;
+  left: calc(var(--fx) * 1%);
+  top: calc(var(--fy) * 1%);
+  width: var(--gw, 26%);
   aspect-ratio: 1;
   translate: -50% -50%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 190, 110, 0.6) 0%, rgba(255, 150, 70, 0.22) 24%, rgba(255, 130, 60, 0) 62%);
+  background: radial-gradient(circle, rgba(255, 190, 110, 0.44) 0%, rgba(255, 150, 70, 0.17) 26%, rgba(255, 130, 60, 0) 62%);
   mix-blend-mode: screen;
-  animation: door-flicker 6.3s linear infinite;
+  animation: door-breathe 11s ease-in-out infinite;
+}
+/* The light that opens over the screen once they are in. */
+.door-bloom {
+  position: absolute;
+  left: calc(var(--fx) * 1%);
+  top: calc(var(--fy) * 1%);
+  width: 12%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f5efe6 0%, #f6e6cb 46%, rgba(248, 208, 150, 0.92) 60%, rgba(255, 164, 86, 0) 74%);
+  opacity: 0;
+  transform: scale(0.2);
+  pointer-events: none;
 }
 /* Warm it: the brand's terracotta and brown laid over the grade. */
 .door-warm {
@@ -163,10 +218,12 @@
   justify-content: space-between;
   gap: 16px;
 }
+.door-bar > * {
+  animation: door-fade 1s 0.6s var(--door-ease) both;
+}
 .door-bar-top {
   padding: 22px var(--door-pad) 0;
   --ink: var(--door-linen);
-  animation: door-fade 1s 0.2s var(--door-ease) both;
 }
 .door-bar-bottom {
   padding: 0 var(--door-pad) 22px;
@@ -183,13 +240,23 @@
     height: 48px;
     padding-top: 0;
     padding-bottom: 0;
+  }
+  /* The letterbox closes in from the top and bottom edges as the picture comes up. */
+  .door-bar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
     background: var(--door-bar);
+    animation: door-letterbox 1.2s var(--door-ease) 0.1s both;
   }
-  .door-bar-top {
-    border-bottom: 1px solid rgba(245, 239, 230, 0.07);
+  .door-bar-top::before {
+    transform-origin: center top;
+    box-shadow: 0 1px 0 rgba(245, 239, 230, 0.07);
   }
-  .door-bar-bottom {
-    border-top: 1px solid rgba(245, 239, 230, 0.07);
+  .door-bar-bottom::before {
+    transform-origin: center bottom;
+    box-shadow: 0 -1px 0 rgba(245, 239, 230, 0.07);
   }
 }
 
@@ -474,13 +541,82 @@
   animation: door-fade 1s 1.15s var(--door-ease) both;
 }
 
+/* On a narrow desktop the house moves a little right, so its iron gate stays clear of the form as the camera pushes in. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .door[data-art="street"] .door-cover {
+    --tx: calc(var(--tx-d) + 3);
+  }
+}
+/* Outdoors at dusk there is no dust in a sunbeam. */
+.door[data-art="street"] .door-dust {
+  display: none;
+}
+
+/* ── They are in ─────────────────────────────────────────────────────────
+   The light from the picture opens over the screen while the next page is on
+   its way. Nothing waits on it: the page has already been asked for. */
+.door[data-open] .door-bloom {
+  opacity: 1;
+  transform: scale(34);
+  transition: transform 1.15s cubic-bezier(0.6, 0, 0.2, 1), opacity 0.3s ease;
+}
+.door[data-open] .door-shade,
+.door[data-open] .door-vignette,
+.door[data-open] .door-warm,
+.door[data-open] .door-leak {
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+.door[data-open] .door-wrap,
+.door[data-open] .door-bar {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+@media (min-width: 1024px) and (min-height: 760px) {
+  .door[data-open] .door-bar {
+    opacity: 1;
+  }
+}
+/* Seen only if the next page is slow: something is still coming. */
+.door-opening {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--door-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--door-brown);
+  pointer-events: none;
+  animation: door-fade 0.6s 0.85s ease both;
+}
+.door-opening .door-spin {
+  border-color: rgba(86, 66, 62, 0.25);
+  border-top-color: var(--door-brown);
+}
+
 /* ── Keyframes ──────────────────────────────────────────────────────────── */
 @keyframes door-in {
+  from { opacity: 0; filter: blur(12px); }
+  45% { opacity: 1; }
+  to { opacity: 1; filter: none; }
+}
+@keyframes door-in-plain {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 @keyframes door-push {
-  from { transform: scale(1.08) translate3d(-1.2%, 0.6%, 0); }
+  from { transform: scale(1.04); }
+  to { transform: scale(1.12); }
+}
+@keyframes door-letterbox {
+  from { transform: scaleY(0); }
   to { transform: none; }
 }
 @keyframes door-rise {
@@ -495,17 +631,13 @@
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
-@keyframes door-flicker {
-  0%, 100% { opacity: 0.8; transform: scale(1); }
-  6% { opacity: 0.96; transform: scale(1.04); }
-  12% { opacity: 0.7; transform: scale(0.98); }
-  19% { opacity: 0.92; transform: scale(1.03); }
-  31% { opacity: 0.74; transform: scale(1); }
-  44% { opacity: 1; transform: scale(1.06); }
-  52% { opacity: 0.82; transform: scale(1.01); }
-  63% { opacity: 0.68; transform: scale(0.97); }
-  77% { opacity: 0.94; transform: scale(1.03); }
-  88% { opacity: 0.76; transform: scale(1); }
+@keyframes door-breathe {
+  0%, 100% { opacity: 0.6; transform: scale(0.97); }
+  18% { opacity: 0.9; transform: scale(1.03); }
+  33% { opacity: 0.7; transform: scale(0.99); }
+  52% { opacity: 1; transform: scale(1.05); }
+  70% { opacity: 0.66; transform: scale(0.98); }
+  86% { opacity: 0.88; transform: scale(1.02); }
 }
 @keyframes door-leak {
   from { transform: translate3d(0, 0, 0); opacity: 0.75; }
@@ -530,6 +662,10 @@
 
 /* ── Smaller screens ────────────────────────────────────────────────────── */
 @media (max-width: 1023px) {
+  /* No focus pull on a phone: a plain fade up. */
+  .door-stage {
+    animation: door-in-plain 1.6s ease both;
+  }
   .door-cover {
     --tx: var(--tx-m);
     --ty: var(--ty-m);
@@ -544,6 +680,20 @@
   }
   .door-grain {
     animation: none;
+  }
+}
+/* A phone or tablet held upright shows the upright photograph, where a door
+   has one. The same words as the <source> in components/DoorFrame, so the
+   picture and its measurements change together. */
+@media (max-width: 1023px) and (orientation: portrait) {
+  .door-cover[data-tall] {
+    --ar: var(--ar-t);
+    --fx: var(--fx-t);
+    --fy: var(--fy-t);
+    --zh: var(--zh-t);
+    --tx: var(--tx-t);
+    --ty: var(--ty-t);
+    --gw: 36%;
   }
 }
 @media (max-width: 640px) {
