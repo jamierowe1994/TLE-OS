@@ -5,7 +5,7 @@ import { can } from "@/lib/roles";
 import { hasDb, q } from "@/lib/db";
 import { isFactKey, sweepDetail } from "@/lib/clean-sweep";
 import { recordFact } from "@/lib/property-facts";
-import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { keyClimbs, R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
 
 /**
  * A paper the checker found, filed against a home's column: into R2 under
@@ -68,7 +68,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const key = String(body.key ?? "");
   const home = `documents/property-${id}/`;
   const field = key.startsWith(home) ? key.slice(home.length).split("/")[0] : "";
-  if (!field || !isFactKey(field) || key.includes("..") || key.endsWith("/")) {
+  if (!field || !isFactKey(field) || keyClimbs(key) || key.endsWith("/")) {
     return NextResponse.json({ ok: false, error: "That file is not on this home." }, { status: 400 });
   }
   try {

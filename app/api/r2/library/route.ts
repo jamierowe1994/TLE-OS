@@ -2,7 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
-import { R2_BUCKET, r2Configured, SCOPES, withR2 } from "@/lib/r2";
+import { keyClimbs, R2_BUCKET, r2Configured, SCOPES, withR2 } from "@/lib/r2";
 import { forgetLibraryFile, readKeys, readLibraryFile, readNotes } from "@/lib/library-reader";
 import { shelfFolder } from "@/lib/library-files";
 import { readFolderAccess, setFolderAccess, visibilityOf, type Visibility } from "@/lib/shelf-access";
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     }
   }
   const key = String(body.key ?? "");
-  if (!key.startsWith(SHELF) || key.includes("..")) {
+  if (!key.startsWith(SHELF) || keyClimbs(key)) {
     return NextResponse.json({ ok: false, error: "That isn't a File Store file." }, { status: 400 });
   }
   if (!hasDb()) {
