@@ -55,10 +55,16 @@ export async function gateListingWrite(
  * One REX read per write. A listing that cannot be read is refused rather
  * than allowed, because "REX was slow" must not become "anyone may".
  */
-export async function listingIsTheirs(actor: OsUser, id: number): Promise<string | null> {
+export async function listingIsTheirs(actor: OsUser, id: number, opts: { cached?: boolean } = {}): Promise<string | null> {
   if (actor.role !== "agent") return null;
-  const mine = await ensureRexLink(actor).catch(() => null);
-  const details = await readListingDetails(id).catch(() => null);
+  /* A screen that only SHOWS the listing may pass `cached` (9 Nov 2026): the
+     same read from the last two minutes its own answer is about to use, so
+     an agent's page asks REX once, not twice. A write never does - it is
+     refused on what REX says now. Both asked at once. */
+  const [mine, details] = await Promise.all([
+    ensureRexLink(actor).catch(() => null),
+    readListingDetails(id, { cached: Boolean(opts.cached) }).catch(() => null),
+  ]);
   if (!details) return "That listing could not be read just now, so nothing was changed. Try again in a minute.";
   const a = details.agent;
   if (a.id && mine && String(a.id) === String(mine)) return null;

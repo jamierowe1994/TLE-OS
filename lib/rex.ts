@@ -340,9 +340,56 @@ export async function rexCall(
       const id = (body as { data?: { id?: unknown } } | undefined)?.data?.id;
       const reads = (globalThis as { __osListingReads?: Map<string, unknown> }).__osListingReads;
       if (reads) for (const k of [...reads.keys()]) if (id == null || k.startsWith(`${id}|`)) reads.delete(k);
+      sharedReads.gen++;
     }
   }
-  return rexCallOnce(service, method, body, actorToken, opts);
+  if (!isReadOnlyMethod(method)) {
+    try {
+      return await rexCallOnce(service, method, body, actorToken, opts);
+    } finally {
+      sharedReads.gen++;
+    }
+  }
+  /* THE SAME QUESTION ASKED TWICE AT ONCE (9 Nov 2026). A listing's page
+     opens a dozen routes together and several ask REX for the same thing -
+     the listing itself, its property, its compliance rows. While one is on
+     its way, an identical read made with the office's sign-in waits for that
+     answer instead of asking again, and each caller gets its own copy.
+     Nothing is kept afterwards, and a write anywhere starts a new round, so
+     no read ever answers with what REX said before somebody's save. A read
+     made as a person is never shared: it carries their sign-in. */
+  if (actorToken || opts?.fromQueue) return rexCallOnce(service, method, body, actorToken, opts);
+  let key: string;
+  try {
+    key = `${sharedReads.gen}|${service}/${method}|${opts?.quiet ? "q" : ""}|${JSON.stringify(body ?? null)}`;
+  } catch {
+    return rexCallOnce(service, method, body, actorToken, opts);
+  }
+  let p = sharedReads.inFlight.get(key);
+  if (!p) {
+    p = rexCallOnce(service, method, body, actorToken, opts);
+    sharedReads.inFlight.set(key, p);
+    const done = () => {
+      if (sharedReads.inFlight.get(key) === p) sharedReads.inFlight.delete(key);
+    };
+    p.then(done, done);
+  }
+  return p.then(copyOf);
+}
+
+/* On globalThis so every route module and every dev reload share one copy. */
+const sharedReads: { gen: number; inFlight: Map<string, Promise<RexResponse>> } = ((globalThis as { __osRexSharedReads?: { gen: number; inFlight: Map<string, Promise<RexResponse>> } }).__osRexSharedReads ??= {
+  gen: 0,
+  inFlight: new Map(),
+});
+
+/** Each caller its own answer, so one sorting or trimming its rows can never change another's. */
+function copyOf(res: RexResponse): RexResponse {
+  try {
+    return structuredClone(res);
+  } catch {
+    return { ...res, result: res.result === undefined ? undefined : JSON.parse(JSON.stringify(res.result)) };
+  }
 }
 
 async function rexCallOnce(

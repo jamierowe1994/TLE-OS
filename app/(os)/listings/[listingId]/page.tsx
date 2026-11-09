@@ -55,6 +55,21 @@ export default function ListingPage() {
   const [order, setOrder] = useState<string[]>([]);
   useEffect(() => setOrder(listingOrder()), []);
 
+  /* THE SLOW READS START WITH THE BOARD (9 Nov 2026: "speed up as much of
+     the system as possible"). The page draws once the listing is found in
+     the board, and only then did its sections ask for the listing's own
+     details - so on a direct link every one of them waited for the whole
+     board first. These are the same addresses the sections ask for: one
+     still on its way is joined (lib/fetch-dedupe), and one already back has
+     left the listing read warm on the server. Nothing here is drawn from. */
+  useEffect(() => {
+    if (!/^\d{1,9}$/.test(listingId)) return;
+    const id = encodeURIComponent(listingId);
+    for (const u of [`/api/listings/home?id=${id}`, `/api/listings/details?id=${id}`, `/api/listings/withdrawn?id=${id}`, `/api/listings/publish?id=${id}`, `/api/esign?listingId=${id}`, `/api/listings/owner?id=${id}`]) {
+      void fetch(u, { cache: "no-store" }).catch(() => null);
+    }
+  }, [listingId]);
+
   useEffect(() => {
     let live = true;
     (async () => {

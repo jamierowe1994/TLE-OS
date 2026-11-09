@@ -124,8 +124,15 @@ async function openTermsOn(id: string): Promise<WithdrawnTerms[]> {
     }));
 }
 
-export async function withdrawnFor(listingId: string): Promise<Withdrawn> {
+export async function withdrawnFor(listingId: string, opts: { cached?: boolean } = {}): Promise<Withdrawn> {
   const id = Number(listingId);
+  /* Asked side by side (9 Nov 2026): the listing's own state, the choice
+     already made, and - for the address the deal check needs - the listing's
+     details, which a screen that only shows this takes from the last two
+     minutes (`cached`) rather than reading REX again. A decision reads fresh. */
+  const keptP = keptChoice(listingId);
+  const detailsP = opts.cached ? readListingDetails(id, { cached: true }).catch(() => null) : null;
+  keptP.catch(() => null);
   const now = await listingNow(id);
   let source: Withdrawn["source"] = null;
   let on: string | null = null;
@@ -136,14 +143,14 @@ export async function withdrawnFor(listingId: string): Promise<Withdrawn> {
     on = now.on;
     why = now.why;
   } else {
-    const details = await readListingDetails(id).catch(() => null);
+    const details = await (detailsP ?? readListingDetails(id).catch(() => null));
     const fell = await fellThrough(listingId, details?.address ?? "");
     if (fell) {
       source = "deal";
       ({ on, why, tenants } = fell);
     }
   }
-  const [kept, terms] = await Promise.all([keptChoice(listingId), source ? openTermsOn(listingId) : Promise.resolve([])]);
+  const [kept, terms] = await Promise.all([keptP, source ? openTermsOn(listingId) : Promise.resolve([])]);
   const event = `${source}:${on ?? ""}`;
   return {
     source,

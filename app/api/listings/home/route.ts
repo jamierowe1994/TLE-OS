@@ -48,18 +48,30 @@ const listingId = (v: unknown): number | null => {
 type OsHome = { id: string; hmo: boolean; not_hmo: boolean | null; no_gas: boolean };
 
 async function answer(id: number) {
+  /* Marketing only needs nothing but the id, so it is asked alongside the
+     listing rather than after everything else (9 Nov 2026). */
+  const introP = introOnlyMark(id).catch(() => null);
   const d = await readListingDetails(id, { cached: true });
   const homeKey = d.propertyId ?? `listing:${id}`;
-  const [kept, homes] = await Promise.all([
+  /* What a person in the OS has said about the home (lib/home-facts, 19 Oct
+     2026) beats the property record's own columns. */
+  const factsKey = d.propertyId ?? d.record.osPropertyId ?? null;
+  /* Everything below needs only the listing, so it is all asked at once
+     (9 Nov 2026: these ran one after another - the database, the home's
+     facts, then REX for the terms - and this was the call a listing's page
+     waited on last, 2.5 s at the median). Used exactly as before. */
+  const termsP = d.propertyId
+    ? import("@/lib/terms-to-rex").then(({ osTermsFor, rexHasTerms }) =>
+        Promise.all([rexHasTerms(d.propertyId!).catch(() => null), osTermsFor(d.propertyId!, { record: true }).catch(() => null)])
+      )
+    : null;
+  const [kept, homes, facts] = await Promise.all([
     hasDb() ? q<{ let_type: string; by_name: string; set_at: Date }>(`SELECT let_type, by_name, set_at FROM os_home_let_types WHERE home_key = $1`, [homeKey]).catch(() => []) : Promise.resolve([]),
     hasDb()
       ? q<OsHome>(`SELECT id, hmo, not_hmo, no_gas FROM os_properties WHERE ($1::text IS NOT NULL AND rex_property_id = $1) OR id = $2`, [d.propertyId, d.record.osPropertyId ?? ""]).catch(() => [] as OsHome[])
       : Promise.resolve([] as OsHome[]),
+    factsKey ? homeFactsFor(factsKey).catch(() => NO_FACTS) : Promise.resolve(NO_FACTS),
   ]);
-  /* What a person in the OS has said about the home (lib/home-facts, 19 Oct
-     2026) beats the property record's own columns. */
-  const factsKey = d.propertyId ?? d.record.osPropertyId ?? null;
-  const facts = factsKey ? await homeFactsFor(factsKey).catch(() => NO_FACTS) : NO_FACTS;
   const hmo = facts.homeType ? facts.homeType === "hmo" : homes.some((h) => h.hmo && !h.not_hmo);
   const noGas = facts.gasSupply ? facts.gasSupply === "none" : homes.length > 0 && homes.every((h) => h.no_gas);
   const name = d.address || d.street;
@@ -70,9 +82,8 @@ async function answer(id: number) {
 
   /* Terms, from wherever they already are. */
   let terms: { rex: boolean | null; held: { how: string; name: string; at: string | null } | null } = { rex: null, held: null };
-  if (d.propertyId) {
-    const { osTermsFor, rexHasTerms } = await import("@/lib/terms-to-rex");
-    const [rex, mine] = await Promise.all([rexHasTerms(d.propertyId).catch(() => null), osTermsFor(d.propertyId, { record: true }).catch(() => null)]);
+  if (termsP) {
+    const [rex, mine] = await termsP;
     terms = {
       rex,
       held: mine
@@ -85,7 +96,7 @@ async function answer(id: number) {
     };
   }
 
-  const intro = await introOnlyMark(id).catch(() => null);
+  const intro = await introP;
   return {
     ok: true,
     introOnly: intro ? { by: intro.by, at: intro.at } : null,
@@ -142,7 +153,8 @@ export async function GET(req: NextRequest) {
   }
   const id = listingId(raw);
   if (!id) return NextResponse.json({ ok: false, error: "Which listing?" }, { status: 400 });
-  const notTheirs = await listingIsTheirs(actor, id);
+  /* Showing only: the gate takes the listing read the answer is about to use. */
+  const notTheirs = await listingIsTheirs(actor, id, { cached: true });
   if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
   try {
     return NextResponse.json(await answer(id), { headers: { "cache-control": "private, no-store" } });

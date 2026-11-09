@@ -31,14 +31,14 @@ export async function GET(req: NextRequest) {
     if (k) names.add(k);
   };
   add(actor.name);
+  /* The board is read while the names are worked out (9 Nov 2026), not after. */
+  const boardP = accessBoard(days).catch(() => []);
   const rexLogin = hasDb()
     ? await q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [actor.id]).catch(() => [])
     : [];
-  for (const email of [actor.email, rexLogin[0]?.rex_email]) {
-    if (email) add((await agentByEmail(email).catch(() => null))?.name);
-  }
+  for (const a of await Promise.all([actor.email, rexLogin[0]?.rex_email].map((email) => (email ? agentByEmail(email).catch(() => null) : null)))) add(a?.name);
   const first = (actor.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-  const rows = (await accessBoard(days).catch(() => [])).filter((r) => {
+  const rows = (await boardP).filter((r) => {
     const agent = (r.agent ?? "").trim().toLowerCase();
     /* A test booking carries only the booker's first name. */
     return names.has(agent) || Boolean(r.test && first && agent === first);

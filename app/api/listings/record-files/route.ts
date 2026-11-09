@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const id = Number(req.nextUrl.searchParams.get("id"));
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ ok: true, files: [], held: [] });
-  const notTheirs = await listingIsTheirs(actor, id);
+  /* Showing only: the gate takes the listing read the answer then uses (9 Nov 2026). */
+  const notTheirs = await listingIsTheirs(actor, id, { cached: true });
   if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
 
   try {

@@ -101,8 +101,17 @@ export async function GET(req: NextRequest) {
     ? Promise.resolve(null)
     : portfolio.then((j) => new Set(((Array.isArray(j.properties) ? j.properties : []) as { propertyId: string | null }[]).map((p) => String(p.propertyId ?? "")).filter(Boolean)));
 
+  /* Which tile holds the page up (9 Nov 2026): each part timed, and the
+     slow ones said in the server's log - the PM Dashboard was 2.4 s at the
+     median last week and every part on its own was under one. */
+  const startedAt = Date.now();
+  const took: Record<string, number> = {};
+  const timed = <T,>(name: string, p: Promise<T>): Promise<T> => {
+    p.then(() => { took[name] = Date.now() - startedAt; }, () => { took[name] = Date.now() - startedAt; });
+    return p;
+  };
   const [properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears, agents] = await Promise.all([
-    settle(portfolio.then((j) => {
+    timed("properties", settle(portfolio.then((j) => {
       const c = (j.counts ?? {}) as Json;
       return {
         /* REX PM's own count of managed homes once its list is read (rooms let
@@ -116,9 +125,9 @@ export async function GET(req: NextRequest) {
         rentRoll: Number(c.managedRentRoll ?? 0),
         ageMs: typeof j.ageMs === "number" ? j.ageMs : null,
       };
-    })),
+    }))),
 
-    settle(Promise.all([get(worksGET, "/api/works-orders?open=1"), mine]).then(([j, homes]) => {
+    timed("maintenance", settle(Promise.all([get(worksGET, "/api/works-orders?open=1"), mine]).then(([j, homes]) => {
       const s = (j.summary ?? {}) as Json;
       const ours = (id: string | null) => !homes || (!!id && homes.has(id));
       const carried = ((Array.isArray(j.carried) ? j.carried : []) as { propertyId: string | null; kind?: string | null; followUpOn: string | null; overdue: boolean; title: string; propertyName: string; dueOn: string | null }[]).filter((c) => ours(c.propertyId));
@@ -139,15 +148,15 @@ export async function GET(req: NextRequest) {
           ? orders.filter((o) => o.kind === "planned").length + carried.filter((c) => c.kind === "planned").length
           : Number((s.byKind as Json | undefined)?.planned ?? 0),
       };
-    })),
+    }))),
 
-    settle(get(inspectionsGET, "/api/inspections").then((j) => {
+    timed("inspections", settle(get(inspectionsGET, "/api/inspections").then((j) => {
       const s = (j.summary ?? {}) as Json;
       if (typeof j.bookError === "string") throw new Error(j.bookError);
       return { due: Number(s.due ?? 0), overdue: Number(s.overdue ?? 0), booked: Number(s.booked ?? 0), awaitingTenant: Number(s.awaitingTenant ?? 0) };
-    })),
+    }))),
 
-    settle(get(reviewsGET, "/api/tenancy-reviews").then(honest).then((j) => {
+    timed("reviews", settle(get(reviewsGET, "/api/tenancy-reviews").then(honest).then((j) => {
       const s = (j.summary ?? {}) as Json;
       const due = (Array.isArray(j.due) ? j.due : []) as { why: string; propertyName: string; agreement: string }[];
       const notice = due.filter((d) => /notice/i.test(d.why));
@@ -156,10 +165,10 @@ export async function GET(req: NextRequest) {
         noticeServed: notice.length,
         leaving: notice.slice(0, 3).map((d) => ({ where: d.propertyName, agreement: d.agreement })),
       };
-    })),
+    }))),
 
     /* Upcoming vacancies is the Move-outs screen's own list (2 Oct 2026). */
-    settle(get(moveOutsGET, "/api/move-outs").then(honest).then((j) => {
+    timed("moveOuts", settle(get(moveOutsGET, "/api/move-outs").then(honest).then((j) => {
       const s = (j.summary ?? {}) as Json;
       const open = (Array.isArray(j.open) ? j.open : []) as { propertyName: string; moveOutOn: string | null; daysAway: number | null }[];
       return {
@@ -167,11 +176,11 @@ export async function GET(req: NextRequest) {
         noDate: Number(s.noDate ?? 0), doneThisMonth: Number(s.doneThisMonth ?? 0),
         next: open.filter((m) => m.daysAway !== null && m.daysAway >= 0).slice(0, 3).map((m) => ({ where: m.propertyName, on: m.moveOutOn })),
       };
-    })),
+    }))),
 
     /* The compliance book is whole-business and the slowest read in the OS;
        it is cached, and the tile uses the Compliance screen's own rule. */
-    settle(Promise.all([getComplianceBook(), mine]).then(([{ book, ageMs }, homes]) => {
+    timed("compliance", settle(Promise.all([getComplianceBook(), mine]).then(([{ book, ageMs }, homes]) => {
       const seen = new Set<string>();
       const props = (book.properties as CompProperty[]).filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)) && (!homes || homes.has(String(p.id))));
       const due = dueWithin(30, props);
@@ -182,29 +191,29 @@ export async function GET(req: NextRequest) {
         homesAffected: new Set(expired.map((d) => d.p.id)).size,
         ageMs: typeof ageMs === "number" ? ageMs : null,
       };
-    })),
+    }))),
 
-    settle(get(applicationsGET, "/api/applications").then(honest).then((j) => {
+    timed("applications", settle(get(applicationsGET, "/api/applications").then(honest).then((j) => {
       const apps = (Array.isArray(j.applications) ? j.applications : []) as { status: string; closed: unknown; startDate: string | null }[];
       const open = apps.filter((a) => !a.closed && /^(received|communicated)$/i.test(a.status));
       const movingIn = apps.filter((a) => !a.closed && /^accepted$/i.test(a.status) && (a.startDate ?? "") >= today);
       return { open: open.length, movingIn: movingIn.length };
-    })),
+    }))),
 
     /* On the market, let agreed and drafts by the one rule every screen uses
        (lib/listing-stages, Rig run 3, P-026). Let agreed counted only the
        published ones here, and drafts counted the 140-odd filed away. */
-    settle(Promise.all([get(listingsGET, "/api/listings?tests=0").then(honest), activity().catch(() => null)]).then(([j, act]) => {
+    timed("lettings", settle(Promise.all([get(listingsGET, "/api/listings?tests=0").then(honest), activity().catch(() => null)]).then(([j, act]) => {
       const ls = (Array.isArray(j.listings) ? j.listings : []) as StageListing[];
       return stageCounts(ls, new Set(act?.accepted ?? []));
-    })),
+    }))),
 
     /* Money is Susan's and the owners' (see:business). Anyone else sees the
        tile say so rather than a number they are not meant to have. */
     /* PayProp's arrears carry PayProp's property ids, not an agent, so they
        are not split by agent: said on the tile rather than the whole
        business's figure under one agent's name. */
-    money && agent
+    timed("arrears", money && agent
       ? Promise.resolve({ ok: false as const, error: "Rent arrears aren't split by agent. Choose Every agent to see them." })
       : money
       ? settle(getArrears().then((a) => {
@@ -220,13 +229,16 @@ export async function GET(req: NextRequest) {
           const owing = a.tenants.filter((t) => !t.tenancyStart || t.tenancyStart <= today);
           return { tenants: owing.length, owed: owing.reduce((n, t) => n + t.owed, 0), largest: a.largest };
         }))
-      : Promise.resolve({ ok: false as const, error: "Rent arrears are for the business owners." }),
+      : Promise.resolve({ ok: false as const, error: "Rent arrears are for the business owners." })),
 
     /* The picker's agents, for somebody who sees everything. A failed read
        leaves the picker out rather than the page. */
-    everything ? overviewAgents().catch(() => null as OverviewAgent[] | null) : Promise.resolve(null),
+    timed("agents", everything ? overviewAgents().catch(() => null as OverviewAgent[] | null) : Promise.resolve(null))
+
   ]);
 
+  const total = Date.now() - startedAt;
+  if (total > 1500) console.log(`[overview] ${total}ms ${whole ? "whole" : agent ? "agent" : "own"}: ${Object.entries(took).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(", ")}`);
   const label = agent ? agent.name || "that agent" : whole ? "the whole business" : ((subject ?? actor).name || "your homes");
   return NextResponse.json({
     ok: true, at: new Date().toISOString(),

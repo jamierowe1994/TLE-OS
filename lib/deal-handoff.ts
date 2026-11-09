@@ -439,15 +439,41 @@ export function handoffFlowConfigured(): boolean {
   return Boolean((process.env.POWER_AUTOMATE_ACCEPTED_URL ?? "").trim());
 }
 
+/* Each tenant's name, email and mobile as put right on the let, over the
+   application's (Rhiannon and Lianna Denholm, 4 Nov 2026, lib/let-people
+   tenantsAsOnLet): a tenant's corrected email was on the let but the push
+   sent REX's. Who is referenced and who pays what is still worked out from
+   the names on the swap itself, before. */
+function tenantsAsOnLetFor(application: Application) {
+  /* Referenced: whoever joins, and anyone staying who is referenced again
+     (Add someone / Re-reference, 19 Oct 2026). */
+  const joining = new Set([...(application.swap?.joining ?? []), ...(application.swap?.rereference ?? [])]);
+  return tenantsAsOnLet(String(application.id), application.applicants.map((a) => ({
+    contactId: a.contactId,
+    name: a.name,
+    email: a.email,
+    phone: a.phone,
+    isPrimary: a.isPrimary,
+    ...(application.swap ? { reference: joining.has(a.name) } : {}),
+    /* The newcomer's rent portion goes onto them in Propoly as their rent
+       share (rent_share_pcm_pence, proven on the test home 13 Oct 2026). */
+    ...(application.swap && (application.swap.joining ?? []).includes(a.name) && application.swap.rentPortion ? { rentSharePcm: application.swap.rentPortion } : {}),
+  })));
+}
+
 export async function buildHandoff(application: Application): Promise<Handoff> {
   const listingId = application.listingId;
-  const { landlord, others: otherLandlords, from: landlordFrom, note: landlordNote, docs, letOnly } = listingId
-    ? await landlordOf(listingId, Boolean(application.swap))
-    : { landlord: null, others: [] as OtherLandlord[], from: null, note: null, docs: [] as HandoffDoc[], letOnly: false };
-
-  const certificates = application.propertyId
-    ? await certificatesFor(application.propertyId, application.startDate)
-    : [];
+  /* The landlord, the certificates and the tenants as on the let are asked
+     side by side (9 Nov 2026): they were read one after another, and the
+     packet is what Applications and a let's page wait on. */
+  const tenantsP = tenantsAsOnLetFor(application);
+  tenantsP.catch(() => null);
+  const [{ landlord, others: otherLandlords, from: landlordFrom, note: landlordNote, docs, letOnly }, certificates] = await Promise.all([
+    listingId
+      ? landlordOf(listingId, Boolean(application.swap))
+      : Promise.resolve({ landlord: null, others: [] as OtherLandlord[], from: null, note: null, docs: [] as HandoffDoc[], letOnly: false }),
+    application.propertyId ? certificatesFor(application.propertyId, application.startDate) : Promise.resolve([] as Awaited<ReturnType<typeof certificatesFor>>),
+  ]);
 
   // Absent is one problem; lapsing before they move in is a different one, and
   // saying which is the difference between "chase the landlord" and "book the
@@ -482,17 +508,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
      tenantsAsOnLet): a tenant's corrected email was on the let but the
      push sent REX's. Who is referenced and who pays what is still worked out
      from the names on the swap itself, before. */
-  const tenants = await tenantsAsOnLet(String(application.id), application.applicants.map((a) => ({
-    contactId: a.contactId,
-    name: a.name,
-    email: a.email,
-    phone: a.phone,
-    isPrimary: a.isPrimary,
-    ...(application.swap ? { reference: joining.has(a.name) } : {}),
-    /* The newcomer's rent portion goes onto them in Propoly as their rent
-       share (rent_share_pcm_pence, proven on the test home 13 Oct 2026). */
-    ...(application.swap && (application.swap.joining ?? []).includes(a.name) && application.swap.rentPortion ? { rentSharePcm: application.swap.rentPortion } : {}),
-  })));
+  const tenants = await tenantsP;
 
   const blockers: string[] = [];
   /* A swap is on a home Propoly already has, landlord and all; a REX PM home
@@ -582,11 +598,11 @@ export async function handoffFor(applicationId: string): Promise<Handoff | null>
   const apps = await getApplications(200);
   const app = apps.find((a) => a.id === applicationId);
   if (!app) return null;
-  const packet = await buildHandoff(app);
   /* Tenants added to the let in the OS (lib/let-tenants, 19 Oct 2026) go
-     onto its push only once tenant_changes_live is on. */
-  const { addedTenantsForPush } = await import("@/lib/let-tenants");
-  const added = await addedTenantsForPush(applicationId).catch(() => []);
+     onto its push only once tenant_changes_live is on. Asked alongside the
+     packet (9 Nov 2026). */
+  const addedP = import("@/lib/let-tenants").then(({ addedTenantsForPush }) => addedTenantsForPush(applicationId)).catch(() => []);
+  const [packet, added] = await Promise.all([buildHandoff(app), addedP]);
   const known = new Set(packet.tenants.map((t) => (t.email ?? t.name).trim().toLowerCase()));
   const extra = added.filter((t) => !known.has((t.email ?? t.name).trim().toLowerCase()));
   return extra.length ? { ...packet, tenants: [...packet.tenants, ...extra.map((t) => ({ contactId: null, name: t.name, email: t.email, phone: t.phone, isPrimary: false, ...(t.reference ? {} : { reference: false }) }))] } : packet;

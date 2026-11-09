@@ -90,10 +90,13 @@ const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license"
 /** The duties only an HMO carries (lib/compliance HMO_SET plus alarms). */
 const HMO_ONLY = new Set<string>([...HMO_SET, "alarms"]);
 
-/* A shared house: the certificate is the building's. When a room's own
-   record lacks a type, the house's row (or another room's) stands in for it,
-   labelled with where it is held. */
-async function houseRowsFor(req: NextRequest, propertyId: string, seen: Set<string>): Promise<FileRow[]> {
+type HouseSibling = { name: string; rex: { items: ComplianceItem[]; checked: boolean }; files: VaultFile[] };
+
+/* The other doors of a shared house and what each holds, read side by side
+   (9 Nov 2026: the rooms were read one after another). Started as soon as
+   the property is known; which rows it fills is decided once this home's
+   own rows are in (houseRowsFrom). */
+async function houseSiblingsFor(req: NextRequest, propertyId: string): Promise<HouseSibling[]> {
   const scope = await bookScope(req).catch(() => null);
   if (!scope || scope.unlinked) return [];
   const { book } = await managedBookFor(scope.rexUserId).catch(() => ({ book: null }));
@@ -107,16 +110,27 @@ async function houseRowsFor(req: NextRequest, propertyId: string, seen: Set<stri
   if (!siblings.length || (!isRoomAddress(myAddr) && !siblings.some((p) => isRoomAddress(`${p.name}, ${p.locality}`)))) return [];
   /* The house itself first, then the rooms. */
   siblings.sort((a, b) => Number(isRoomAddress(`${a.name}, ${a.locality}`)) - Number(isRoomAddress(`${b.name}, ${b.locality}`)));
+  return Promise.all(
+    siblings.map(async (sib) => {
+      const [rex, files] = await Promise.all([
+        getComplianceItemsFor(sib.propertyId as string).catch(() => ({ items: [] as ComplianceItem[], checked: false })),
+        listVault(sib.propertyId as string).catch(() => [] as VaultFile[]),
+      ]);
+      return { name: sib.name, rex, files };
+    })
+  );
+}
+
+/* A shared house: the certificate is the building's. When a room's own
+   record lacks a type, the house's row (or another room's) stands in for it,
+   labelled with where it is held. */
+function houseRowsFrom(siblings: HouseSibling[], seen: Set<string>): FileRow[] {
   const out: FileRow[] = [];
   const held = new Set(seen);
   for (const sib of siblings) {
-    const [rex, files] = await Promise.all([
-      getComplianceItemsFor(sib.propertyId as string).catch(() => ({ items: [] as ComplianceItem[], checked: false })),
-      listVault(sib.propertyId as string).catch(() => [] as VaultFile[]),
-    ]);
     const byVaultKey = new Map<string, VaultFile[]>();
-    for (const f of files) byVaultKey.set(f.certKey, [...(byVaultKey.get(f.certKey) ?? []), f]);
-    for (const it of rex.items) {
+    for (const f of sib.files) byVaultKey.set(f.certKey, [...(byVaultKey.get(f.certKey) ?? []), f]);
+    for (const it of sib.rex.items) {
       if (NOT_A_CERTIFICATE.has(it.type) || held.has(it.type) || it.state === "missing") continue;
       held.add(it.type);
       const vk = VAULT_KEY[it.type];
@@ -143,6 +157,31 @@ export async function GET(req: NextRequest) {
   }
 
   const pendingKey = address ? pendingKeyFor(address) : null;
+  /* EVERYTHING THAT ONLY NEEDS THE HOME, ASKED AT ONCE (9 Nov 2026: "speed
+     up as much of the system as possible"). These ran one after another -
+     REX, then the house's rooms, then four database reads in turn - and the
+     property file was the slowest call on a home's page (1.3 s at the
+     median last week). Each is used below exactly as before. */
+  const pid = propertyId;
+  const nothing = <T,>(v: T) => Promise.resolve(v);
+  const houseP = pid && !osOnly ? houseSiblingsFor(req, pid).catch(() => [] as HouseSibling[]) : nothing([] as HouseSibling[]);
+  const osCertsP = osOnly && pid ? osCertRows([pid]).catch(() => []) : nothing([] as Awaited<ReturnType<typeof osCertRows>>);
+  const checkingP = pid
+    ? Promise.all([
+        checkingFor([pid]).catch(() => new Map()),
+        q<{ type_id: string; expiry: string; by_name: string; at: Date }>(
+          `SELECT DISTINCT ON (c.type_id) c.type_id, c.expiry::text AS expiry, k.by_name, k.at
+             FROM os_certificates c
+             JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id AND k.state = 'verified'
+            WHERE c.property_id = $1 AND c.type_id = ANY($2) AND NOT c.awaiting_check
+            ORDER BY c.type_id, c.expiry DESC`,
+          [pid, [...HELD_FOR_CHECK]]
+        ).catch(() => []),
+      ])
+    : null;
+  const factsP = pid ? homeFactsFor(pid).catch(() => null) : nothing(null);
+  const heldBookP = pid ? heldComplianceBook().catch(() => null) : nothing(null);
+  const goneP = pid ? removedFor(pid).catch(() => []) : nothing([] as Awaited<ReturnType<typeof removedFor>>);
   const [rex, files, pendingFiles] = await Promise.all([
     propertyId && !osOnly ? getComplianceItemsFor(propertyId).catch(() => ({ items: [] as ComplianceItem[], checked: false })) : Promise.resolve({ items: [] as ComplianceItem[], checked: osOnly }),
     propertyId ? listVault(propertyId).catch(() => [] as VaultFile[]) : Promise.resolve([] as VaultFile[]),
@@ -158,7 +197,7 @@ export async function GET(req: NextRequest) {
   if (osOnly && propertyId) {
     const today = londonToday();
     const latest = new Map<string, { expiry: string; issue: string | null }>();
-    for (const r of await osCertRows([propertyId]).catch(() => [])) if (!latest.has(r.type_id)) latest.set(r.type_id, { expiry: r.expiry, issue: r.issue });
+    for (const r of await osCertsP) if (!latest.has(r.type_id)) latest.set(r.type_id, { expiry: r.expiry, issue: r.issue });
     for (const [type, v] of latest) {
       const vk = VAULT_KEY[type];
       const own = vk ? byVaultKey.get(vk) ?? [] : [];
@@ -183,7 +222,12 @@ export async function GET(req: NextRequest) {
      none of its own; a missing row on the room is replaced by the house's. */
   if (propertyId && !osOnly) {
     const own = new Set(rows.filter((r) => r.state !== "missing").map((r) => r.type));
-    const fromHouse = await houseRowsFor(req, propertyId, own).catch(() => [] as FileRow[]);
+    let fromHouse: FileRow[] = [];
+    try {
+      fromHouse = houseRowsFrom(await houseP, own);
+    } catch {
+      /* As before: a house that cannot be read adds nothing. */
+    }
     for (const h of fromHouse) {
       const at = rows.findIndex((r) => r.type === h.type);
       if (at >= 0) rows[at] = h; else rows.push(h);
@@ -192,18 +236,8 @@ export async function GET(req: NextRequest) {
   /* Gas and EICR (lib/cert-hold): a newer one with the compliance team shows
      as "Being processed by the compliance team" beside whatever is live; the
      live one carries a green tick once they have verified it. */
-  if (propertyId) {
-    const [checking, verified] = await Promise.all([
-      checkingFor([propertyId]).catch(() => new Map()),
-      q<{ type_id: string; expiry: string; by_name: string; at: Date }>(
-        `SELECT DISTINCT ON (c.type_id) c.type_id, c.expiry::text AS expiry, k.by_name, k.at
-           FROM os_certificates c
-           JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id AND k.state = 'verified'
-          WHERE c.property_id = $1 AND c.type_id = ANY($2) AND NOT c.awaiting_check
-          ORDER BY c.type_id, c.expiry DESC`,
-        [propertyId, [...HELD_FOR_CHECK]]
-      ).catch(() => []),
-    ]);
+  if (propertyId && checkingP) {
+    const [checking, verified] = await checkingP;
     const held = (checking.get(propertyId) ?? {}) as Partial<Record<string, CertChecking>>;
     for (const type of HELD_FOR_CHECK) {
       const ch = held[type === "gas_safety" ? "gas" : type];
@@ -222,7 +256,7 @@ export async function GET(req: NextRequest) {
      2026): no gas supply answers the gas row, and an EIC is the electrical
      certificate's name on a new build or a full rewire. */
   if (propertyId) {
-    const facts = await homeFactsFor(propertyId).catch(() => null);
+    const facts = await factsP;
     if (facts?.gasSupply === "none") {
       for (const r of rows) if (r.type === "gas_safety" && (r.state === "missing" || r.state === "expired")) r.state = "not-required";
     }
@@ -235,7 +269,7 @@ export async function GET(req: NextRequest) {
        the property page counted REX's licence row as outstanding). A duty the
        home does not have - the HMO set on a home that is not an HMO, legionella
        in England, anything marked not needed - is never outstanding here. */
-    const held = await heldComplianceBook().catch(() => null);
+    const held = await heldBookP;
     const home = held?.book.properties.find((p) => p.id === propertyId);
     const notHmo = facts?.homeType === "single" || (home ? !home.hmo : false);
     const owed = home ? new Set<string>(requiredCerts(home)) : null;
@@ -250,7 +284,7 @@ export async function GET(req: NextRequest) {
      row it came off, so a duty that has just gone back to missing explains
      itself. The newest per type. */
   if (propertyId) {
-    const gone = await removedFor(propertyId).catch(() => []);
+    const gone = await goneP;
     for (const r of rows) {
       const g = gone.find((x) => x.type === r.type);
       if (g) r.removed = { name: g.name, reason: g.reason, by: g.by, at: g.at };

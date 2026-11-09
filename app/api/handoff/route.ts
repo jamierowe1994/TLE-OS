@@ -153,11 +153,13 @@ export async function GET(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "application id is required" }, { status: 400 });
 
   try {
+    /* The let itself is read alongside the packet (9 Nov 2026), not after it. */
+    const appP = getApplicationById(id).catch(() => null);
     const handoff = await handoffFor(id);
     if (!handoff) {
       return NextResponse.json({ error: `No application ${id}.` }, { status: 404 });
     }
-    const app = await getApplicationById(id).catch(() => null);
+    const app = await appP;
     const refused = notTheirs(me, app?.agent);
     if (refused) return NextResponse.json({ error: refused }, { status: 403 });
     const [switchMode, runs, dealOn, held] = await Promise.all([handoverMode(), handoversFor(id, 5), switchOn("handover_deal"), heldForTenantChanges(app)]);
