@@ -12,8 +12,10 @@ import Wordmark from "@/components/Wordmark";
  * that we've got for the website"). It was a card with a painting beside it
  * (13 Sep 2026); it is now one photograph from the website's own set filling
  * the screen, wearing the website's house grade, with the words set in the
- * website's type and the form on a linen card. Everything that does the work
- * of the look is in app/door.css, scoped to .door.
+ * website's type and the form drawn straight on the picture - no box (the
+ * first version put it on a linen card, and James: "the box sitting in the
+ * middle of it seems a bit weird"). Everything that does the work of the look
+ * is in app/door.css, scoped to .door.
  *
  * The art prop keeps its old names so no door had to change which one it
  * asked for; each now names a photograph:
