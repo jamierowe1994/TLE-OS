@@ -46,6 +46,8 @@ export default function Compose({
   audience = "any",
   merge,
   language,
+  toName,
+  subject: startSubject,
 }: {
   open: boolean;
   onClose: () => void;
@@ -57,10 +59,21 @@ export default function Compose({
   merge: Record<string, string | undefined>;
   /** The customer's language, when a Translate press found one (lib/translate). */
   language?: string | null;
+  /** Who it is to, by name, shown beside the address (Lianna Denholm, 10 Nov 2026, ticket 7d51d864). */
+  toName?: string | null;
+  /** The subject it opens with, for the agent to type over: the home it is about, say. */
+  subject?: string | null;
 }) {
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [picked, setPicked] = useState<string>("");
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(startSubject ?? "");
+  /* THE SUBJECT IS THERE WHEN IT OPENS (Lianna Denholm, 10 Nov 2026, ticket
+     7d51d864: "the subject line needs to appear when we click on email").
+     It opened blank; now it opens with what the caller says it is about,
+     never over anything already typed, and a template still sets its own. */
+  useEffect(() => {
+    if (open && startSubject) setSubject((s) => s || startSubject);
+  }, [open, startSubject]);
   const [body, setBody] = useState("");
   const [preview, setPreview] = useState<{
     html: string;
@@ -120,7 +133,7 @@ export default function Compose({
         if (draft.body !== undefined) setBody(draft.body);
       },
       fields: [
-        { label: "To", value: to || "not set" },
+        { label: "To", value: [toName?.trim(), to || "not set"].filter(Boolean).join(", ") },
         { label: "Audience", value: audience },
         { label: "Subject so far", value: subject || "empty" },
         { label: "Body so far", value: body.slice(0, 400) || "empty" },
@@ -129,7 +142,7 @@ export default function Compose({
           .map(([k, v]) => ({ label: k, value: String(v) })),
       ],
     });
-  }, [open, to, audience, subject, body, merge]);
+  }, [open, to, toName, audience, subject, body, merge]);
 
   useEffect(() => {
     if (!open) return;
@@ -193,7 +206,9 @@ export default function Compose({
           <div className="min-w-0">
             <p className="nl-compose-title">Write an Email</p>
             <p className="nl-compose-to">
-              To {to || <span className="text-accent-dark">no address on this record</span>}
+              To {toName?.trim() ? <><b className="font-semibold">{toName.trim()}</b>{to ? ` · ${to}` : ""}</> : null}
+              {!toName?.trim() && (to || <span className="text-accent-dark">no address on this record</span>)}
+              {toName?.trim() && !to && <span className="text-accent-dark"> · no address on this record</span>}
             </p>
           </div>
           <button type="button" onClick={onClose} className="nl-compose-x" aria-label="Close">

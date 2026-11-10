@@ -5516,6 +5516,7 @@ function LeadDrawerBody({
            "Email sent" tick is that row, not the act of opening the window. */
         onSent={(subject) => void logTouch({ kind: "email", outcome: "sent", body: subject })}
         to={contact.email || lead.email}
+        toName={properName(lead.name)}
         audience={isTenant ? "tenant" : "landlord"}
         /* Cased, not passed through. A lead arrives from a portal or a form
            with whatever casing the sender used, and "Hi james," is not a
