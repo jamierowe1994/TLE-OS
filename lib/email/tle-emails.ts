@@ -108,6 +108,8 @@ import {
   TENANT_PORTAL_LOGIN,
   TENANT_DOCUMENTS,
   LANDLORD_DOCUMENTS,
+  TENANT_MOVE_IN_WELCOME,
+  LANDLORD_MOVE_IN_WELCOME,
   TENANT_PASSPORT_NUDGE_1,
   TENANT_PASSPORT_NUDGE_2,
   TENANT_PASSPORT_REMINDER,
@@ -1981,4 +1983,55 @@ TLE_EMAILS.push(
     REFERENCING_CHASE,
     { link: `${SITE}/tenant/tenancy` }
   )
+);
+
+/* The move-in welcomes (Kirstie Mulholland, ticket f180d1eb; James, 10 Nov
+   2026: "Feel free to make those automatic welcome emails after moving in").
+   lib/move-in-welcome sends both, behind their own switch. */
+const MOVE_IN_SAMPLE: Record<string, string> = {
+  address: "Flat 2, 14 Ruskin Place, Glasgow",
+  agentName: "Sam Whitaker",
+  agentFirst: "Sam",
+  agentPhone: "0115 123 4567",
+  agentEmail: "sam@thelettingexperts.co.uk",
+};
+
+TLE_EMAILS.push(
+  tenantEntry(
+    "tenant-move-in-welcome",
+    "Welcome to Your New Home",
+    "The morning after a managed let's move-in date",
+    "Wired 10 Nov 2026. lib/move-in-welcome, on the hourly tenant reminders run, 9am to 6pm: each tenant with an email on a Managed or Fully Managed let whose move-in was yesterday (up to 7 days back, and never before the switch went on, bar 3 days' grace). Once per tenant per let. From the home's agent. Makes their tenant account and a 14-day sign-in link, as Send out logins does. Needs its own switch, Move-in welcome emails, and customer email.",
+    "Each tenant on the let with an email",
+    "Welcome, who their property manager is and how to reach them, report a repair through the tenant account (the button signs them in), pay the rent by standing order with the reference in their paperwork, and what to do in an emergency, gas first.",
+    TENANT_MOVE_IN_WELCOME,
+    {
+      ...MOVE_IN_SAMPLE,
+      link: `${SITE}/tenant/enter?token=sample&next=/tenant/maintenance`,
+      signInLink: `${SITE.replace(/^https?:\/\//, "")}/tenant/sign-in`,
+      signInHref: `${SITE}/tenant/sign-in?link=1`,
+    }
+  ),
+  {
+    id: "landlord-move-in-welcome",
+    group: "Doorways",
+    name: "Welcome to Fully Managed (landlord)",
+    audience: "landlord",
+    trigger: "The morning after a managed let's move-in date",
+    fires: "Wired 10 Nov 2026. lib/move-in-welcome, on the hourly tenant reminders run, with the tenants' welcome. Each landlord with an email on a Managed or Fully Managed let, once per landlord per home, and not when we have let that home for them before (a re-let is not a welcome). From the home's agent. The visit cadence is read from the inspection rules. Needs its own switch, Move-in welcome emails, and customer email.",
+    to: "Every landlord on the home with an email",
+    summary: "The tenants are in and we are managing it now, who their property manager is, then what happens next: rent paid on with a PayProp statement, certificates tracked and renewed, the inspection cadence, repairs asked about first where they need a say, and a button to their property file.",
+    doc: LANDLORD_MOVE_IN_WELCOME,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_MOVE_IN_WELCOME, {
+          ...MOVE_IN_SAMPLE,
+          firstName: "David",
+          moveInPretty: "Monday 9 November 2026",
+          firstVisit: "three months",
+          everyVisit: "six months",
+          link: `${SITE}/landlord/sign-in`,
+        })
+      )(),
+  }
 );
