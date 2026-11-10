@@ -94,6 +94,27 @@ const ARRIVE = [
    years in the area; this keeps its voice and claims nothing. */
 const NOTE = "Thanks for booking in. I’ll walk round with you, take a few notes and talk through what your home could let for. Nothing to prepare, just show me round and ask me anything.";
 
+/**
+ * The agent's bio as paragraphs, one blank line between each (Dan Richards, ticket 12fb5b72, 10 Nov 2026:
+ * "Agent bio text aesthetics doesn't look good at all"). It used to be squashed onto one line, so a long bio
+ * was one block that ran off the top and bottom of slide 2. Their own paragraph breaks are kept; a long bio
+ * typed as one block is broken at the ends of sentences into a few even paragraphs. Their words are untouched.
+ */
+export function packNote(bio: string): string {
+  const own = bio.trim().split(/\s*\n\s*/).map((p) => p.replace(/\s+/g, " ")).filter(Boolean);
+  if (own.length > 1 || own[0].length <= 320) return own.join("\n\n");
+  const sentences = own[0].split(/(?<=[.!?][’'”"]?)\s+(?=[A-Z‘“"'])/);
+  const target = Math.ceil(own[0].length / Math.ceil(own[0].length / 340));
+  const paras: string[] = [];
+  let cur = "";
+  for (const s of sentences) {
+    cur = cur ? `${cur} ${s}` : s;
+    if (cur.length >= target) { paras.push(cur); cur = ""; }
+  }
+  if (cur) { if (paras.length && cur.length < 90) paras[paras.length - 1] += ` ${cur}`; else paras.push(cur); }
+  return paras.join("\n\n");
+}
+
 /** The plan's minutes stretched to the booked visit, in fives, adding up exactly. */
 export function packPlan(minutes: number): [string, number, string][] {
   const base = PLAN.reduce((s, p) => s + p[1], 0);
@@ -186,7 +207,7 @@ export function packData(
       email: a.email ?? "",
       photo: a.photo ?? "",
       photoY: a.photoY ?? opts.agentPhotoY ?? DEFAULT_PHOTO_Y,
-      note: a.bio?.trim() ? a.bio.trim().replace(/\s*\n+\s*/g, " ") : NOTE,
+      note: a.bio?.trim() ? packNote(a.bio) : NOTE,
       video: src ? { length: mmss(v?.durationSecs), link: null, src } : null,
     },
     plan: packPlan(minutes),
