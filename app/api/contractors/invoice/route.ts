@@ -78,6 +78,16 @@ export async function POST(req: NextRequest) {
   }
   const mayEdit = contractor.ownerId ? contractor.ownerId === me.id : can(actor.role, "see:business");
 
+  /* The landlord, off the home's own record where the picker had none - a
+     listing carries no landlord's name, and the job would be filed with a
+     blank one (10 Nov 2026). Never a reason to refuse the invoice. */
+  let landlord = str("landlord");
+  if (!landlord && str("propertyId")) {
+    const { homePeople } = await import("@/lib/home-people");
+    const people = await homePeople(str("propertyId")).catch(() => null);
+    landlord = [...new Set([people?.landlord?.name, ...(people?.otherLandlords ?? []).map((l) => l.name)].map((n) => (n ?? "").trim()).filter(Boolean))].join(" & ");
+  }
+
   try {
     const order = await createOrder(
       {
@@ -85,7 +95,7 @@ export async function POST(req: NextRequest) {
         propertyId: str("propertyId") || null,
         propertyName,
         locality: str("locality"),
-        landlord: str("landlord"),
+        landlord,
         title,
         category: "Other",
         urgency: "routine",

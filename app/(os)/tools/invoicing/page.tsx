@@ -33,7 +33,7 @@ type Inv = {
   createdAt: string;
   paidAt: string | null;
 };
-type Home = { listingId: string; propertyId?: string | null; name: string; locality?: string; service?: string | null; rentMonthly?: number | null; landlord?: { name: string } | null };
+type Home = { listingId: string; propertyId?: string | null; name: string; locality?: string; service?: string | null; rentMonthly?: number | null; landlord?: { name: string } | null; /** A home that is not a let yet: On the market, Let agreed... */ stage?: string };
 type View = "all" | "draft" | "out" | "overdue" | "paid";
 
 const GBP = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
@@ -199,10 +199,22 @@ function Generate({ onClose, onMade }: { onClose: () => void; onMade: (id: strin
 
   useEffect(() => {
     if (kind !== "home" || homes !== null) return;
-    fetch("/api/portfolio", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j: { ok?: boolean; properties?: Home[] }) => setHomes(j.ok && j.properties ? j.properties : "failed"))
-      .catch(() => setHomes("failed"));
+    /* Portfolio's lets, which carry the rent and the service the fee is worked
+       out from, and behind them every other home this person may act on - a
+       listing on the market or let agreed (/api/homes, lib/homes-to-pick).
+       Lets only meant a home could not be invoiced until REX called it let
+       (Lianna Denholm, 10 Nov 2026: an inventory fee before the move-in). */
+    const json = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    void Promise.all([json("/api/portfolio"), json("/api/homes")]).then(([folio, all]: [{ ok?: boolean; properties?: Home[] } | null, { homes?: { id: string; listingId: string | null; name: string; locality: string; landlord: string; stage: string }[] } | null]) => {
+      const lets = folio?.ok && Array.isArray(folio.properties) ? folio.properties : null;
+      const rest = Array.isArray(all?.homes) ? all.homes : null;
+      if (!lets && !rest) return setHomes("failed");
+      const have = new Set((lets ?? []).flatMap((h) => [h.propertyId, h.listingId]).filter(Boolean).map(String));
+      const others: Home[] = (rest ?? [])
+        .filter((h) => !have.has(String(h.id)) && !(h.listingId && have.has(String(h.listingId))))
+        .map((h) => ({ listingId: h.id, propertyId: h.id, name: h.name, locality: h.locality, landlord: h.landlord ? { name: h.landlord } : null, stage: h.stage }));
+      setHomes([...(lets ?? []), ...others]);
+    });
   }, [kind, homes]);
 
   const found = useMemo(() => {
@@ -215,7 +227,7 @@ function Generate({ onClose, onMade }: { onClose: () => void; onMade: (id: strin
   const make = async () => {
     setBusy(true);
     setError(null);
-    const body = kind === "home" && pick ? { propertyId: pick.listingId } : {};
+    const body = kind === "home" && pick ? { propertyId: pick.listingId, property: [pick.name, pick.locality].filter(Boolean).join(", ") } : {};
     const j = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
       .then((r) => r.json())
       .catch(() => null);
@@ -238,7 +250,7 @@ function Generate({ onClose, onMade }: { onClose: () => void; onMade: (id: strin
       dismissible={!busy}
       screenKey={step}
       question={step === 1 ? "What is it for?" : "Which home?"}
-      lede={step === 1 ? "It opens in the invoice editor to check before it is produced. Nothing is sent from here." : "The landlord, the rent and the service come off the home. The fee is worked out from the rates set in Finances."}
+      lede={step === 1 ? "It opens in the invoice editor to check before it is produced. Nothing is sent from here." : "Any of your listings or homes. The landlord comes off its record, and for a let the fee is worked out from the rates set in Finances."}
       foot={
         <FloatFoot left={error ? <span className="nl-to-miss">{error}</span> : <span className="nl-meta">{kind === "home" && pick ? pick.name : " "}</span>}>
           {step === 1 && kind === "home" ? (
@@ -278,7 +290,7 @@ function Generate({ onClose, onMade }: { onClose: () => void; onMade: (id: strin
                       <em>{[h.locality, h.landlord?.name].filter(Boolean).join(" · ")}</em>
                     </span>
                     <span className="nl-iv-pick-r">
-                      {h.service ?? "No service"}
+                      {h.stage ?? h.service ?? "No service"}
                       {h.rentMonthly ? ` · ${GBP.format(h.rentMonthly)} pcm` : ""}
                     </span>
                   </button>

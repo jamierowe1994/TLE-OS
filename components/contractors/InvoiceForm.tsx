@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Contractor } from "@/lib/works-orders";
-import { homesToSearch, type Property } from "@/components/maintenance/works-ui";
+import { readHomes, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import { useSlideOver } from "@/lib/use-slide-over";
 import FieldDate from "@/components/FieldDate";
@@ -31,6 +31,8 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
   canSaveBack?: boolean;
 }) {
   const [props, setProps] = useState<Property[] | null>(null);
+  /* Said under the search when a list of homes could not be read. */
+  const [homesNote, setHomesNote] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Property | null>(null);
   /* A home the search can't find - an agent searches their own Portfolio only - is typed in by hand
@@ -76,12 +78,11 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
     if (r?.ref) setRef((x) => x.trim() || r.ref!);
     setReadSaid(`Read from the invoice: ${line}. Check it before you log it.`);
   }
-  /* The office reads the whole compliance book; an agent is refused it and
-     searches their own Portfolio instead, the same as Raise a repair. Both
-     together now, so a home let since the book was read is still found
-     (homesToSearch, Lianna, 6 Nov 2026). */
+  /* Every home this person may act on - their listings as well as their lets
+     (readHomes, lib/homes-to-pick). Lianna, 10 Nov 2026: a home still listed,
+     with its tenant about to move in, was on neither list this used to read. */
   useEffect(() => {
-    void homesToSearch().then((all) => setProps(all.map((p) => ({ id: p.id, name: p.name, locality: p.locality, landlord: p.landlord }))));
+    void readHomes().then(({ homes, note }) => { setProps(homes); setHomesNote(note); });
   }, []);
   const hits = useMemo(() => {
     const needle = q.trim();
@@ -168,22 +169,22 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
         {typed && props && (
           <ul className={c.list}>
             {hits.map((p) => (
-              <li key={p.id}>
+              <li key={`${p.id}-${p.name}`}>
                 <button type="button" onClick={() => setPicked(p)} className={c.item}>
                   <span>{p.name}</span>
-                  <span className={c.sub}>{p.locality}</span>
+                  <span className={c.sub}>{[p.locality, p.stage].filter(Boolean).join(" · ")}</span>
                 </button>
               </li>
             ))}
             {hits.length === 0 && (
               <li className={`${c.item} cursor-default hover:bg-transparent`}>
-                <span className="text-muted">Nothing on your book matches that.</span>
+                <span className="text-muted">{homesNote ?? "None of your listings or homes match that."}</span>
               </li>
             )}
             <li>
               <button type="button" onClick={() => { setManual(true); setLine1((l) => l || q.trim()); }} className={c.item}>
                 <span className="font-semibold">Enter the address manually</span>
-                <span className={c.sub}>For a home that isn&apos;t on your book</span>
+                <span className={c.sub}>For a home that isn&apos;t among your listings or homes</span>
               </button>
             </li>
           </ul>

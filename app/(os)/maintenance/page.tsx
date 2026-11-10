@@ -18,7 +18,7 @@ import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import RaiseJob from "@/components/maintenance/RaiseJob";
 import { LogInvoice } from "@/components/contractors/ContractorProfile";
 import FieldSelect from "@/components/FieldSelect";
-import { OPEN, PAYRUN_LABEL, PayrunTag, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
+import { OPEN, PAYRUN_LABEL, PayrunTag, day, nextFor, pounds, readHomes, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import { usePref } from "@/lib/prefs-store";
 import { useNoteVisit } from "@/lib/recent-visits";
@@ -939,14 +939,15 @@ const totalOf = (lines: InvoiceRow["lines"]) => lines.reduce((a, l) => { const n
  * already worked out from that home's rent and service. The same managed
  * book the rest of Maintenance searches.
  */
-function PropertyInvoice({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) {
+function PropertyInvoice({ onClose, onPick }: { onClose: () => void; onPick: (home: Property) => void }) {
   const [props, setProps] = useState<Property[] | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  /* The same list Log an invoice and Raise a repair search (readHomes,
+     lib/homes-to-pick). This read the compliance book alone, which an agent
+     is refused, so for an agent it found no home at all (Lianna, 10 Nov 2026). */
   useEffect(() => {
-    fetch("/api/compliance/book", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => setProps(Array.isArray(j.properties) ? j.properties : []))
-      .catch(() => setProps([]));
+    void readHomes().then(({ homes, note }) => { setProps(homes); setNote(note); });
   }, []);
   const hits = useMemo(() => {
     const needle = q.trim();
@@ -959,7 +960,7 @@ function PropertyInvoice({ onClose, onPick }: { onClose: () => void; onPick: (id
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h3 className="text-[14px]">Invoice a property</h3>
-          <p className="mt-0.5 text-[11.5px] text-muted">The landlord, the rent and the service come off the book. The fee is worked out from the rates under Finances.</p>
+          <p className="mt-0.5 text-[11.5px] text-muted">Any of your listings or homes. The landlord comes off its record, and for a let the fee is worked out from the rates under Finances.</p>
         </div>
         <button type="button" onClick={onClose} className="text-[11.5px] text-muted underline">Cancel</button>
       </div>
@@ -967,16 +968,16 @@ function PropertyInvoice({ onClose, onPick }: { onClose: () => void; onPick: (id
       {hits.length > 0 && (
         <ul className="mt-2 divide-y divide-line/50 rounded-xl border border-line/80 bg-card">
           {hits.map((p) => (
-            <li key={p.id}>
-              <button type="button" onClick={() => onPick(p.id)} className="flex w-full flex-col px-3 py-2.5 text-left hover:bg-panel">
+            <li key={`${p.id}-${p.name}`}>
+              <button type="button" onClick={() => onPick(p)} className="flex w-full flex-col px-3 py-2.5 text-left hover:bg-panel">
                 <span className="text-[13px]">{p.name}</span>
-                <span className="text-[10.5px] text-muted">{p.locality}</span>
+                <span className="text-[10.5px] text-muted">{[p.locality, p.stage].filter(Boolean).join(" · ")}</span>
               </button>
             </li>
           ))}
         </ul>
       )}
-      {props && q.trim().length > 2 && hits.length === 0 && <p className="mt-2 text-[11.5px] text-muted">Nothing on the book matches that.</p>}
+      {props && q.trim().length > 2 && hits.length === 0 && <p className="mt-2 text-[11.5px] text-muted">{note ?? "None of your listings or homes match that. Use New invoice and type the address in."}</p>}
     </div>
   );
 }
@@ -995,9 +996,11 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
 
   /* An invoice against a home, with the fees worked out from that home's
      rent and service (James, 7 Sep 2026). */
-  async function fromHome(id: string) {
+  async function fromHome(home: Property) {
     setBusy(true);
-    const r = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ propertyId: id }) }).then((x) => x.json()).catch(() => null);
+    /* The address goes with the id, so the invoice names the home even where
+       the server can't find the id on a book (a home typed in on the OS). */
+    const r = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ propertyId: home.id, property: [home.name, home.locality].filter(Boolean).join(", ") }) }).then((x) => x.json()).catch(() => null);
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "Could not draft the invoice.");
     onOpen(r.invoice.id);
@@ -1042,7 +1045,7 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
       </div>
       {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
 
-      {fromProperty && <PropertyInvoice onClose={() => setFromProperty(false)} onPick={(id) => { setFromProperty(false); void fromHome(id); }} />}
+      {fromProperty && <PropertyInvoice onClose={() => setFromProperty(false)} onPick={(home) => { setFromProperty(false); void fromHome(home); }} />}
 
       {showSettings && settings && (
         <div className="rounded-[22px] border border-line/50 bg-white p-5">

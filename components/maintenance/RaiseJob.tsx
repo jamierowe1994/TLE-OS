@@ -9,7 +9,7 @@ import FieldDate, { sayDate } from "@/components/FieldDate";
 import { ContractorForm } from "@/components/WorksNow";
 import type { Contractor, JobTenant, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
 import { CATEGORY_TRADE, PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES, categoriesOf, joinCategories } from "@/lib/works-catalogue";
-import { CATEGORY_CERT, ContractorPick, REPORTED_BY, homesToSearch, type Property } from "@/components/maintenance/works-ui";
+import { CATEGORY_CERT, ContractorPick, REPORTED_BY, readHomes, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import DoodleIcon from "@/components/DoodleIcon";
 import FloatSheet, { FloatChoice, FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
@@ -57,6 +57,8 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
      a repair too since 9 Oct). */
   const stepped = true;
   const [props, setProps] = useState<Property[] | null>(null);
+  /* Said under the search when a list of homes could not be read. */
+  const [homesNote, setHomesNote] = useState<string | null>(null);
   const [pq, setPq] = useState("");
   const [picked, setPicked] = useState<Property | null>(home);
   /* The address, changed from the last screen (Lianna, 9 Oct 2026: realising
@@ -135,9 +137,10 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
        every job they raised from here carried the address as typed and no
        home (15 Oct 2026). They search their own book instead - Portfolio's,
        scoped to them - and can still type an address that isn't on it. */
-    /* And the office's book with Portfolio's laid behind it, so a home let
-       since the book was read can be found (homesToSearch, Lianna, 6 Nov 2026). */
-    void homesToSearch().then(setProps);
+    /* One list for everyone now, listings included (readHomes,
+       lib/homes-to-pick; Lianna, 10 Nov 2026): a home still on the market or
+       let agreed can have a job raised on it too. */
+    void readHomes().then(({ homes, note }) => { setProps(homes); setHomesNote(note); });
     try {
       const sp = new URLSearchParams(window.location.search);
       const pre = sp.get("property");
@@ -566,13 +569,13 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                       <li key={`${p.id}-${p.name}`}>
                         <button type="button" onClick={() => setPicked(p)} className="flex w-full flex-col px-3 py-2 text-left hover:bg-panel">
                           <span className="text-[13px]">{p.name}</span>
-                          <span className="text-[10.5px] text-muted">{p.locality}{p.landlord ? ` · landlord ${p.landlord}` : ""}{p.tenant ? ` · ${p.tenant}` : ""}</span>
+                          <span className="text-[10.5px] text-muted">{p.locality}{p.stage ? ` · ${p.stage}` : ""}{p.landlord ? ` · landlord ${p.landlord}` : ""}{p.tenant ? ` · ${p.tenant}` : ""}</span>
                         </button>
                       </li>
                     ))}
                   </ul>
                 )}
-                {props && props.length > 0 && pq.trim().length > 2 && hits.length === 0 && <p className={hint}>Not on the managed book. The job will carry the address as typed.</p>}
+                {props && pq.trim().length > 2 && hits.length === 0 && <p className={hint}>{homesNote ?? "None of your listings or homes match that."} The job will carry the address as typed.</p>}
               </>
             )}
           </div>
