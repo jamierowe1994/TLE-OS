@@ -401,6 +401,21 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
         </>
       ) : tab === "due" ? (
         <>
+          {/* Michael Healy, 10 Nov 2026 (ticket 9520a426): "when click on to
+              inspections the 28 overdue it don't come up". Overdue counts the
+              visits raised and not made yet as well as the homes here, so
+              however the board was opened, the Due list says where the rest
+              are and opens the Overdue view on all of them. */}
+          {!!s?.overdue && s.overdue > lateDue.length && (
+            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+              <span>
+                {s.overdue} overdue in all: {lateDue.length} here still to book, the rest raised and not made yet.
+              </span>
+              <button type="button" onClick={() => { setFocus(null); setLate(true); }} className="text-[12px] text-ink underline underline-offset-2">
+                Show all {s.overdue} overdue
+              </button>
+            </p>
+          )}
           {due.length === 0 ? (
             <Empty title="Nothing due." blurb="Every managed home has been visited inside the cadence, or is already in hand." />
           ) : (

@@ -603,7 +603,10 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
           strip={md ? [md.open - md.overdue, md.overdue] : null}
           onOpen={md ? list("maintenance", "Open Jobs", md.open, ["Job", "Home", "Due", "Urgency", "Status"], { href: "/maintenance", label: "Open Maintenance" }, "Overdue first, then by when they're due.", "No open jobs.") : undefined} />
         <PmTile label="Inspections due" {...state(data?.inspections)} value={ind?.due ?? null}
-          badge={ind && ind.overdue > 0 ? { text: `${ind.overdue} overdue`, tone: "warn" } : null}
+          /* Michael Healy, 10 Nov 2026 (ticket 9520a426): "when click on to
+             inspections the 28 overdue it don't come up". The red badge opened
+             the Due list (4 of the 28), so it opens the Overdue view too. */
+          badge={ind && ind.overdue > 0 ? { text: `${ind.overdue} overdue`, tone: "warn", onOpen: () => open("inspections", "overdue") } : null}
           links={ind ? [
             /* Michael Healy, 4 Nov 2026: the badge said 25 overdue and the Due
                list it opened showed 4 - the rest were visits raised and not
@@ -704,7 +707,7 @@ function PmRow({ title, sub, children }: { title: string; sub: string; children:
 function PmTile({
   label, value, loading, error, sub, links, badge, strip, money, suffix, onOpen, href,
 }: {
-  label: string; value: number | null; loading: boolean; error: string | null; sub?: React.ReactNode; badge?: { text: string; tone: "warn" | "up" | "flat" } | null;
+  label: string; value: number | null; loading: boolean; error: string | null; sub?: React.ReactNode; badge?: { text: string; tone: "warn" | "up" | "flat"; onOpen?: () => void } | null;
   /** The sub line as figures that each open their own list (the Inspections tile's booked and waiting, 1 Nov 2026). */
   links?: { text: string; onOpen: () => void }[] | null;
   strip?: [number, number] | null; money?: boolean; suffix?: string; onOpen?: () => void; href?: string;
@@ -715,7 +718,9 @@ function PmTile({
     <>
       <span className="nl-dash-stat-top">
         <span>{label}</span>
-        {ready && badge && <em className={`nl-dash-badge is-${badge.tone}`}>{badge.text}</em>}
+        {ready && badge && (badge.onOpen && linked
+          ? <button type="button" className={`nl-dash-badge nl-dash-stat-link is-${badge.tone}`} onClick={(e) => { e.stopPropagation(); badge.onOpen!(); }}>{badge.text}</button>
+          : <em className={`nl-dash-badge is-${badge.tone}`}>{badge.text}</em>)}
       </span>
       {loading ? (
         <span className="nl-dash-skel" aria-label="Loading"><i /></span>
