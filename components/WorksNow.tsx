@@ -467,7 +467,8 @@ function Visit({ o, f, setF, move, busy, onCertificate }: StepProps & { onCertif
   return (
     <div className="space-y-3">
       <p className="text-[13px]">{o.contractorName} booked for {stamp(o.scheduledAt)}.{past ? " That's passed - has it been done?" : ""}</p>
-      {planned && <TellTenants o={o} move={move} busy={busy} />}
+      {/* A repair too (ticket 8db317c4): booked by the contractor, the tenant heard nothing from us. Never on a discreet job. */}
+      {(planned || !o.quietTenants) && <TellTenants o={o} move={move} busy={busy} />}
       {planned && onCertificate && <CertificateUpload o={o} busy={busy} onCertificate={onCertificate} title="Done? Put the certificate on" />}
       <div className="rounded-xl border border-line/80 bg-card p-3">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{planned ? "Done with no certificate" : "Mark it done"}</p>
@@ -525,7 +526,8 @@ function TellTenantsAccess({ o, move, busy }: { o: WorksOrder; move: (m: Move) =
 }
 
 /**
- * The booking to the tenants, on a planned job, by hand. James, 8 Oct 2026:
+ * The booking to the tenants, by hand: a planned job, and since 10 Nov 2026
+ * a repair (Lianna Denholm, ticket 8db317c4). James, 8 Oct 2026:
  * "It should then show an option saying, 'Send confirmation to tenant,' but
  * it shouldn't be mandatory." The contractor agreed the time with them, so
  * most of the time nobody needs it in writing.

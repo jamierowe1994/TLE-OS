@@ -243,7 +243,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
     if (b.action === "date") {
       if (!b.scheduledAt) return NextResponse.json({ ok: false, error: "When?" }, { status: 400 });
       const next = await moveOrder(o.id, { action: "schedule", scheduledAt: new Date(b.scheduledAt).toISOString(), note: "Booked by the contractor from their page." }, by);
-      if (me) for (const e of await emailsForMove(next, "schedule", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
+      /* The tenant agreed this time with them: nothing automatic goes to the tenant (lib/works-emails, ticket 8db317c4). */
+      if (me) for (const e of await emailsForMove(next, "schedule", me, { byContractor: true }).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
       return NextResponse.json({ ok: true, job: await publicView(next) });
     }
     if (b.action === "quote") {

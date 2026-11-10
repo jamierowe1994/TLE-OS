@@ -199,7 +199,7 @@ function applyMove(w: DemoWorld, o: WorksOrder, move: Move, by: string): WorksOr
 }
 
 /** KEEP IN STEP with emailsForMove (lib/works-emails): which emails a move sends. */
-function emailsFor(o: WorksOrder, action: string, how?: string): string[] {
+function emailsFor(o: WorksOrder, action: string, how?: string, byContractor = false): string[] {
   const hasContractor = Boolean(o.contractorId);
   /* Planned: the tenants only hear when the agent sends the booking; a skipped landlord never does. */
   if (o.kind === "planned") {
@@ -223,7 +223,8 @@ function emailsFor(o: WorksOrder, action: string, how?: string): string[] {
     case "contact_contractor": return hasContractor ? ["works-contractor-report"] : [];
     case "contractor_confirmed": return ["works-contractor-order", "works-tenant-found"];
     case "assign": return ["works-contractor-order", ...(o.scheduledAt ? ["works-tenant-booked"] : [])];
-    case "schedule": return ["works-contractor-booked", "works-tenant-booked", "works-landlord-arranged"];
+    /* The contractor's own booking does not email the tenant (lib/works-emails, ticket 8db317c4). */
+    case "schedule": return ["works-contractor-booked", ...(byContractor ? [] : ["works-tenant-booked"]), ...(o.landlordSkipped ? [] : ["works-landlord-arranged"])];
     case "quote": return o.status === "approval" ? ["works-landlord-approval"] : [];
     case "done": return ["works-tenant-happy", "works-compliance-done"];
     case "invoice": return ["works-accounts-invoice"];
@@ -493,7 +494,7 @@ export function answer(w: DemoWorld, method: string, url: URL, body: Body): Demo
       if (b.action === "date") {
         if (!b.scheduledAt) return no("When?");
         const n = applyMove(w, o, { action: "schedule", scheduledAt: new Date(b.scheduledAt).toISOString(), note: "Booked by the contractor from their page." }, by);
-        const ids = emailsFor(n, "schedule");
+        const ids = emailsFor(n, "schedule", undefined, true);
         outcomes(w, n, ids);
         return ok({ job: contractorView(n) }, ids, "date");
       }

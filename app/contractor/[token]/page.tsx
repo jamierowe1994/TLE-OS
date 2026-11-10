@@ -61,7 +61,8 @@ export default function ContractorPage() {
     setBusy(null);
     if (!r?.ok) return setErr(r?.error ?? "That didn't work.");
     setJob(r.job);
-    setFlash(label === "date" ? (r.job?.kind === "planned" ? "Thanks - the date's on the job." : "Thanks - the date's on the job and the tenant and landlord have been told.") : "Thanks - marked done.");
+    /* The tenant agreed the date with them, so we don't email it to the tenant again (ticket 8db317c4). */
+    setFlash(label === "date" ? "Thanks - the date's on the job." : "Thanks - marked done.");
   }
   async function upload(file: File, kind: "photo" | "invoice" | "certificate") {
     const fd = new FormData();

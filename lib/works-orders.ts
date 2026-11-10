@@ -1045,6 +1045,8 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
     case "schedule": {
       if (!move.scheduledAt) throw new Error("A booking needs a date.");
       set("scheduled_at", new Date(move.scheduledAt));
+      /* A confirmation of the old date is not one of the new date. */
+      if (o.tenantsToldBookedAt && o.scheduledAt !== new Date(move.scheduledAt).toISOString()) set("tenants_told_booked_at", null);
       if (o.status !== "approval" && OPEN_STATUSES.includes(o.status)) set("status", "scheduled");
       text = `Booked for ${when(move.scheduledAt)}${o.contractorName ? ` with ${o.contractorName}` : ""}.${move.note ? ` ${move.note}` : ""}`;
       break;
@@ -1313,6 +1315,12 @@ export async function contractorsFor(order: WorksOrder, forUserId: string): Prom
 export async function markOrderSent(id: string, contractorId: string, name: string): Promise<void> {
   if (!hasDb()) return;
   await q(`UPDATE os_works_orders SET order_sent_to = $2, order_sent_to_name = $3 WHERE id = $1`, [id, contractorId, name]).catch(() => {});
+}
+
+/** The booking went to the tenant by itself (a date the agent set): the job page says so. */
+export async function markTenantsToldBooked(id: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`UPDATE os_works_orders SET tenants_told_booked_at = NOW() WHERE id = $1`, [id]).catch(() => {});
 }
 
 /** Place a contractor from their address, so distance can be read. */

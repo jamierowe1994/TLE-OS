@@ -11,7 +11,7 @@ import type { BankDetails } from "@/lib/bank";
 import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
 import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
-import { contractorBank, markOrderSent, pounds, tenantsOf, URGENCIES, type Move, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
+import { contractorBank, markOrderSent, markTenantsToldBooked, pounds, tenantsOf, URGENCIES, type Move, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
 import type { OsUser } from "@/lib/users";
 import { getLandlordPref, landlordHold } from "@/lib/landlord-prefs";
 import { propertyAgentFor } from "@/lib/works-property-agent";
@@ -461,7 +461,7 @@ function chaseVars(o: WorksOrder, remindedAt: string | null | undefined): Record
 }
 
 /** Which emails a move sets off. Returns every outcome, for the timeline. */
-export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request" | "chase_reminder" | "chase_final", me: OsUser, detail: { how?: string; quiet?: boolean; remindedAt?: string | null; contractorEdit?: ContractorEdit | null } & MoveOut = {}): Promise<SendOutcome[]> {
+export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request" | "chase_reminder" | "chase_final", me: OsUser, detail: { how?: string; quiet?: boolean; remindedAt?: string | null; contractorEdit?: ContractorEdit | null; byContractor?: boolean } & MoveOut = {}): Promise<SendOutcome[]> {
   const out: SendOutcome[] = [];
   const vars = await varsFor(o, me);
   const contractor = await contractorOf(o.contractorId);
@@ -488,7 +488,10 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     const live = await jobTenants(o);
     const to = o.tenantEmail.trim().toLowerCase();
     if (to && tenantsOf(o).some((t) => t.email.toLowerCase() === to && !live.some((l) => l.name === t.name && l.email === t.email))) return;
-    out.push(await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant"));
+    const sent = await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant");
+    /* Said on the job page ("Booking sent to the tenants"), so nobody sends it twice. */
+    if (sent.sent) await markTenantsToldBooked(o.id);
+    out.push(sent);
   };
   /* Every tenant on a repair hears that a contractor will ring them - never
      the works order, which can carry notes for the contractor only. */
@@ -576,7 +579,15 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       break;
     case "schedule":
       await contractorBooked();
-      await tenantBooked();
+      /* THE CONTRACTOR'S OWN BOOKING TELLS NOBODY ELSE THE DATE (Lianna
+         Denholm, 10 Nov 2026, ticket 8db317c4): a repair goes the way a
+         planned job does - the contractor rings the tenant and they agree the
+         time between them - so when the contractor puts that date on their
+         page the tenant already has it. The agent's "We've booked..." email
+         on top read as a second, different arrangement. The job page offers
+         Send confirmation to the tenants for anyone who wants it in writing.
+         A date the agent sets is still sent to the tenant, as before. */
+      if (!detail.byContractor) await tenantBooked();
       await landlord("works-landlord-arranged", "notice");
       break;
     case "ask_landlord_invoice":
