@@ -4,7 +4,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb } from "@/lib/db";
 import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, tenantsOf, getOrder, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
 import { askByToken } from "@/lib/works-quotes";
-import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
+import { emailsForMove, jobTenants, outcomeLine, tellAccounts } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { agentFor } from "@/lib/works-agent";
 import { invoiceSettings } from "@/lib/invoices";
@@ -39,7 +39,13 @@ import { fileJobCertificate, CertificateRefused } from "@/lib/works-certificate"
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function publicView(o: WorksOrder) {
+/* Who the contractor is given to ring: the job's tenants who still live
+   there (lib/works-emails jobTenants - Sean McMahon, 4 Nov 2026, "the
+   contractors are contacting old tenants"). The works order email already
+   left a past tenant off; this page, which that email links to, did not. */
+const livingThere = (o: WorksOrder) => jobTenants(o).catch(() => tenantsOf(o));
+
+async function publicView(o: WorksOrder) {
   /* The way in and the tenants' numbers only while the work is still to do
      (Rig run 4, P-037, 10 Oct 2026). The link never expires, so a finished,
      invoiced, paid or cancelled job went on showing a key-safe code and the
@@ -54,7 +60,7 @@ function publicView(o: WorksOrder) {
     address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: live ? o.access : null, contractorName: o.contractorName,
     quoteStage: pricing ? (o.quotePence == null ? "asked" : "with_landlord") : null, quotePence: o.quotePence,
     /* Every tenant to arrange access with (a shared house has several). */
-    tenant: live ? tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "",
+    tenant: live ? (await livingThere(o)).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "",
     scheduledAt: o.scheduledAt, completedAt: o.completedAt, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef,
     files: o.files.map((f) => ({ name: f.name, at: f.at })),
   };
@@ -75,7 +81,7 @@ async function askedJob(token: string): Promise<{ order: WorksOrder; ask: QuoteA
   return found && ask ? { order: found.order, ask } : null;
 }
 
-function askView(o: WorksOrder, a: QuoteAsk) {
+async function askView(o: WorksOrder, a: QuoteAsk) {
   const closed = o.status === "cancelled" || a.state === "closed";
   /* The tenants and the way in while this firm is still pricing it, so they
      can arrange a look (22 Oct 2026); gone once their part is over. */
@@ -84,16 +90,16 @@ function askView(o: WorksOrder, a: QuoteAsk) {
     ref: o.ref, kind: o.kind, title: o.title, category: o.category, description: o.description, status: o.status, step: "quote",
     address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: looking ? o.access : null, contractorName: a.contractorName,
     quoteStage: closed ? "closed" : a.state === "accepted" ? (o.status === "approval" ? "with_landlord" : "accepted") : a.state,
-    quotePence: a.quotePence, tenant: looking ? tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "", scheduledAt: null, completedAt: null, invoicePence: null, invoiceRef: "", files: [],
+    quotePence: a.quotePence, tenant: looking ? (await livingThere(o)).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "", scheduledAt: null, completedAt: null, invoicePence: null, invoiceRef: "", files: [],
   };
 }
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
   const o = await orderByToken("contractor", token);
-  if (o && o.contractorId) return NextResponse.json({ ok: true, job: publicView(o) });
+  if (o && o.contractorId) return NextResponse.json({ ok: true, job: await publicView(o) });
   const asked = await askedJob(token);
-  if (asked) return NextResponse.json({ ok: true, job: askView(asked.order, asked.ask) });
+  if (asked) return NextResponse.json({ ok: true, job: await askView(asked.order, asked.ask) });
   return NextResponse.json({ ok: false, error: "That link isn't one of ours." }, { status: 404 });
 }
 
@@ -139,7 +145,7 @@ async function answerAsk(req: NextRequest, order: WorksOrder, ask: QuoteAsk): Pr
   }
   if (me) for (const e of await emailsForMove(next, action, me, out).catch(() => [])) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
   const mine = next.quoteAsks.find((x) => x.id === ask.id) ?? ask;
-  return NextResponse.json({ ok: true, job: askView(next, mine) });
+  return NextResponse.json({ ok: true, job: await askView(next, mine) });
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
@@ -177,7 +183,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
         await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
         await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "quote" } }, by);
         const next = await takeQuote(o.id, amount, String(form.get("note") ?? ""), by, me);
-        return NextResponse.json({ ok: true, job: publicView(next) });
+        return NextResponse.json({ ok: true, job: await publicView(next) });
       }
       if (kind === "certificate") {
         /* Filed properly, not just attached (lib/works-certificate). The type
@@ -204,7 +210,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
            the expiry and everybody who now has it. The completion ping still
            goes once, because the job did just finish. */
         await pingCompliance(filed.next, "done");
-        return NextResponse.json({ ok: true, job: publicView(filed.next), certificate: filed.certificate });
+        return NextResponse.json({ ok: true, job: await publicView(filed.next), certificate: filed.certificate });
       }
       const key = `documents/works-${o.ref}/${Date.now()}-${safeName(file.name) || "file"}`;
       const body = Buffer.from(await file.arrayBuffer());
@@ -230,7 +236,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
            that is not, it rides along in the completion email. */
         await pingCompliance(next, "file");
       }
-      return NextResponse.json({ ok: true, job: publicView(next) });
+      return NextResponse.json({ ok: true, job: await publicView(next) });
     }
 
     const b = (await req.json().catch(() => ({}))) as { action?: string; scheduledAt?: string; note?: string };
@@ -238,19 +244,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       if (!b.scheduledAt) return NextResponse.json({ ok: false, error: "When?" }, { status: 400 });
       const next = await moveOrder(o.id, { action: "schedule", scheduledAt: new Date(b.scheduledAt).toISOString(), note: "Booked by the contractor from their page." }, by);
       if (me) for (const e of await emailsForMove(next, "schedule", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
-      return NextResponse.json({ ok: true, job: publicView(next) });
+      return NextResponse.json({ ok: true, job: await publicView(next) });
     }
     if (b.action === "quote") {
       const amount = Number(String((b as { amount?: unknown }).amount ?? "").replace(/[£,\s]/g, ""));
       if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, error: "Put the total in first." }, { status: 400 });
       const next = await takeQuote(o.id, amount, b.note ?? "", by, me);
-      return NextResponse.json({ ok: true, job: publicView(next) });
+      return NextResponse.json({ ok: true, job: await publicView(next) });
     }
     if (b.action === "done") {
       const next = await moveOrder(o.id, { action: "done", note: (b.note ?? "").trim() || "Marked done by the contractor." }, by);
       if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
       await pingCompliance(next, "done");
-      return NextResponse.json({ ok: true, job: publicView(next) });
+      return NextResponse.json({ ok: true, job: await publicView(next) });
     }
     return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
   } catch (e) {

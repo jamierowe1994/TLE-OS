@@ -126,7 +126,10 @@ const when = (iso: string | null) =>
  * tenant is left off; with nobody left, the home's own tenants are read.
  * PayProp unread leaves the job as it is.
  */
-async function jobTenants(o: WorksOrder): Promise<JobTenant[]> {
+/* Exported (10 Nov 2026): the contractor's own page and the certificate
+   email named the job's tenants raw, so the email left a past tenant off and
+   the page the email links to still gave the contractor their number. */
+export async function jobTenants(o: WorksOrder): Promise<JobTenant[]> {
   const own = tenantsOf(o);
   if (!own.length) return own;
   const past = await payPropPeople().then((p) => p.pastOnly).catch(() => new Set<string>());

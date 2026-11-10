@@ -5,6 +5,7 @@ import { withR2, R2_BUCKET, safeName, r2Configured } from "@/lib/r2";
 import { pendingKeyFor } from "@/lib/property-match";
 import { CERT_TYPES, PLAUSIBLE, REAL_DAY, fileCertificate } from "@/lib/certificate-intake";
 import type { SharePerson } from "@/lib/certificate-share";
+import { jobTenants } from "@/lib/works-emails";
 
 /**
  * A certificate from a job's visit, filed properly: on the job for its own
@@ -60,7 +61,8 @@ export async function fileJobCertificate(o: WorksOrder, input: {
   const c = o.contractorId ? await getContractor(o.contractorId).catch(() => null) : null;
   const people: SharePerson[] = [
     ...(o.landlordEmail && !o.landlordSkipped ? [{ role: "landlord" as const, name: o.landlord, email: o.landlordEmail }] : []),
-    ...tenantsOf(o).filter((t) => t.email.includes("@")).map((t) => ({ role: "tenant" as const, name: t.name, email: t.email })),
+    /* The tenants who still live there, as the works order names them (lib/works-emails jobTenants, 10 Nov 2026). */
+    ...(await jobTenants(o).catch(() => tenantsOf(o))).filter((t) => t.email.includes("@")).map((t) => ({ role: "tenant" as const, name: t.name, email: t.email })),
     ...(c?.email ? [{ role: "contractor" as const, name: c.contact || c.name, email: c.email }] : []),
   ];
   const address = [o.propertyName, o.locality].filter(Boolean).join(", ");
