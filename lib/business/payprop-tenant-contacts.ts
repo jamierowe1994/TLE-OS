@@ -345,6 +345,47 @@ export function samePerson(a: string, b: string): boolean {
   return wa[0][0] === wb[0][0];
 }
 
+/** Every name PayProp holds on one of its properties, past or present: each part of a joint record and its lead. */
+export function namesOnPayPropHome(rows: Array<Record<string, unknown>>, payPropId: string): string[] {
+  const out: string[] = [];
+  for (const t of rows) {
+    const props = (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>;
+    if (!props.some((pr) => str(pr.id) === payPropId)) continue;
+    out.push(...partsOf(str(t.display_name) || str(t.business_name)));
+    const lead = leadOf(t);
+    if (lead?.first) out.push(tidy(`${lead.first} ${lead.last}`));
+  }
+  return out;
+}
+
+/**
+ * THE WHOLE NAME WHERE THE RECORD HAS ONLY AN INITIAL (Lianna Denholm, 10 Nov
+ * 2026, ticket 74b80147: "tenants full names still not appearing"). The
+ * tenancy record holds many tenants as "J Smith"; 9 Nov let an agent type the
+ * whole name in, but the OS never used the whole name it already had. Given a
+ * name that is initials and a surname, the one fuller spelling with the same
+ * first initial and the same surname among `candidates` (names held on the
+ * same home), else the tenant's own email where it spells first.last. More
+ * than one fit, or none: null, and the record's spelling stands.
+ */
+export function spelledOut(name: string, candidates: string[], email?: string | null): string | null {
+  const w = nameWords(name);
+  if (w.length < 2 || w.slice(0, -1).some((x) => x.length > 1)) return null;
+  const last = w[w.length - 1];
+  const cased = (s: string) => (s === s.toUpperCase() || s === s.toLowerCase() ? s.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (_, a, b) => a + b.toUpperCase()) : s);
+  const fits = (c: string) => {
+    const cw = nameWords(c);
+    return cw.length >= 2 && cw[0].length > 1 && cw[0][0] === w[0] && cw[cw.length - 1] === last && !/\d/.test(c);
+  };
+  const hits = new Map<string, string>();
+  for (const c of candidates.map(tidy).filter(fits)) hits.set(nameWords(c).join(" "), cased(c));
+  if (hits.size === 1) return [...hits.values()][0];
+  if (hits.size > 1) return null;
+  const m = /^([a-z]{2,})[._]([a-z'-]{2,})$/.exec((email ?? "").split("@")[0].toLowerCase());
+  if (m && m[1][0] === w[0] && m[2] === last) return `${m[1][0].toUpperCase()}${m[1].slice(1)} ${tidy(name).split(/\s+/).pop()}`;
+  return null;
+}
+
 /** A shown tenant can be a pair in one name: "Ann Hall & Rob Ward", "Ann & Rob Hall". */
 const partsOf = (s: string) => s.split(/\s*(?:,|&|\band\b)\s*/i).map(tidy).filter(Boolean);
 const isShownAs = (shownName: string, n: string) => partsOf(shownName).some((part) => samePerson(part, n));

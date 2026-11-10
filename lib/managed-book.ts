@@ -4,7 +4,7 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
-import { attach, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, livingNow, personKey, samePerson, sittingFromPayProp } from "@/lib/business/payprop-tenant-contacts";
+import { attach, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, livingNow, namesOnPayPropHome, personKey, spelledOut, samePerson, sittingFromPayProp } from "@/lib/business/payprop-tenant-contacts";
 import { londonToday } from "@/lib/london-clock";
 import { nameKey, tenantContacts, type TenantContact } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty, type AcceptedLet } from "@/lib/rex-tenants";
@@ -924,6 +924,27 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       const home = /^rexpm:([^:]+):\d+$/.exec(String(t.contactId ?? ""))?.[1];
       const shownAs = home ? held.get(home)?.get(nameKey(t.name))?.shownAs : null;
       return shownAs ? { ...t, name: shownAs, recordName: t.name } : t;
+    });
+  }
+  /* THE WHOLE NAME THE OS ALREADY HOLDS (Lianna Denholm, 10 Nov 2026, ticket
+     74b80147: "tenants full names still not appearing"). An initial and a
+     surname from the record became the whole name only when an agent typed it
+     in. PayProp holds most of these tenants in full on the same home, and
+     their own email often spells first.last: where exactly one fuller
+     spelling fits (same initial, same surname), it is shown. A name an agent
+     put right above is never touched; the record's spelling is kept as
+     recordName, which still keys their email and mobile. */
+  for (const p of properties) {
+    if (p.test || !p.tenants.length) continue;
+    const hit = ppBook && ppRows?.length ? matchHome(ppBook, p) : null;
+    const onHome = hit && typeof hit === "object" ? namesOnPayPropHome(ppRows!, hit.id) : [];
+    const contacts = (ppContacts?.get(rentKey(p.address || p.name, p.postcode)) ?? []).flatMap((c) =>
+      [c.display, c.lead?.first ? `${c.lead.first} ${c.lead.last}` : ""].filter(Boolean));
+    const candidates = [...onHome, ...contacts];
+    p.tenants = p.tenants.map((t) => {
+      if (t.recordName) return t;
+      const full = spelledOut(t.name, candidates, t.email);
+      return full ? { ...t, name: full, recordName: t.name } : t;
     });
   }
   /* THE RENT (rewritten 22 Oct 2026, Lianna Denholm's missing rents).
