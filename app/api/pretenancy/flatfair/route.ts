@@ -159,10 +159,11 @@ async function peopleOf(deal: BusinessDeal, user: OsUser): Promise<{ tenants: Pe
   return { tenants, landlord: { name: lead.name, email: lead.email || same?.email || null, phone: lead.phone || same?.phone || null } };
 }
 
-function factsOf(dealId: string, app: import("@/lib/business/rex-stats").AgentApplication, landlordOptOut: OptOut | null, people: { tenants: Person[]; landlord: Person | null }): DraftFacts {
+function factsOf(dealId: string, app: import("@/lib/business/rex-stats").AgentApplication, landlordOptOut: OptOut | null, people: { tenants: Person[]; landlord: Person | null }, agentName: string | null): DraftFacts {
   const p = app.propoly;
   return {
     dealId,
+    agentName,
     propertyName: app.propertyName,
     locality: app.locality,
     rentPcm: app.offer,
@@ -204,7 +205,7 @@ export async function POST(req: NextRequest) {
       );
     }
     const people = await peopleOf(access.deal, access.user);
-    const out = await sendDraft(factsOf(id, access.deal.app, await landlordOptOutOf(access.deal.app, people.landlord), people), { id: access.user.id, name: access.user.name ?? "", email: access.user.email });
+    const out = await sendDraft(factsOf(id, access.deal.app, await landlordOptOutOf(access.deal.app, people.landlord), people, access.deal.managerName ?? null), { id: access.user.id, name: access.user.name ?? "", email: access.user.email });
     if (out.ok) {
       await logSystemEvent(
         id,
