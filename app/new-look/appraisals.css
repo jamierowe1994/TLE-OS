@@ -221,3 +221,9 @@
 [data-look="new"] .nl-appr-ln-recent { list-style: none; margin: 14px 0 0; padding: 0; }
 [data-look="new"] .nl-appr-ln-recent li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
 @media (max-width: 760px) { [data-look="new"] .nl-appr-ln { grid-template-columns: 1fr; } }
+/* A landlord's other emails, each with Work or Personal beside its box (Dan Richards, ticket 190230a3; James, 10 Nov 2026). */
+[data-look="new"] .nl-appr-emails { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+[data-look="new"] .nl-appr-email-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; min-width: 0; }
+[data-look="new"] .nl-appr-email-row > .nl-field { flex: 1 1 14rem; }
+[data-look="new"] .nl-appr-kind { flex: none; margin-bottom: 4px; }
+[data-look="new"] .nl-appr-email-off { flex: none; margin-bottom: 12px; }

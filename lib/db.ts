@@ -3269,6 +3269,23 @@ CREATE TABLE IF NOT EXISTS os_zero_deposit_optouts (
 );
 CREATE INDEX IF NOT EXISTS os_zero_deposit_optouts_email ON os_zero_deposit_optouts (email);
 CREATE INDEX IF NOT EXISTS os_zero_deposit_optouts_ref ON os_zero_deposit_optouts (person_ref);
+-- A landlord's other email addresses (Dan Richards, ticket 190230a3; James,
+-- 10 Nov 2026: "add a second email ... work or personal"). lib/landlord-emails:
+-- one row a person, found like os_landlord_addresses by email or contact ref.
+-- main_kind is the type of the REX email; extras is [{ email, kind }]. OS only,
+-- never written to REX, and no automatic send reads it.
+CREATE TABLE IF NOT EXISTS os_landlord_emails (
+  id          TEXT PRIMARY KEY,
+  email       TEXT NOT NULL DEFAULT '',
+  person_ref  TEXT NOT NULL DEFAULT '',
+  name        TEXT NOT NULL DEFAULT '',
+  main_kind   TEXT NOT NULL DEFAULT 'personal',
+  extras      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  set_by      TEXT NOT NULL DEFAULT '',
+  set_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_landlord_emails_email ON os_landlord_emails (email);
+CREATE INDEX IF NOT EXISTS os_landlord_emails_ref ON os_landlord_emails (person_ref);
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
 -- The tenants in residence, from the same sheet (24 Sep 2026), where REX CRM holds none.

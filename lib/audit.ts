@@ -111,6 +111,7 @@ export type AuditKind =
      lib/landlord-home). Personal data, and the terms of business carry it. */
   | "landlord_home_address_saved"
   | "zero_deposit_optout"
+  | "landlord_emails_saved"
   /* An owner locked somebody out of the OS, or let them back in (10 Oct
      2026, lib/lockout), and every sign-in a locked person tried. */
   | "user_locked"

@@ -7,6 +7,7 @@ import { WhatsAppButton } from "@/components/WhatsAppQr";
 import LandlordHomeAddress from "@/components/LandlordHomeAddress";
 import ZeroDepositOptOut from "@/components/ZeroDepositOptOut";
 import EmailPerson from "@/components/EmailPerson";
+import { KIND_LABEL, useLandlordEmails } from "@/components/LandlordOtherEmails";
 
 /**
  * ONE WAY TO SHOW A PERSON (James, 12 Oct 2026).
@@ -85,6 +86,11 @@ export default function ContactBlock({
      card that hides it, and the change that was refused goes with the name
      (Kayleigh, let 39522, 22 Oct 2026: "no name field opens"). */
   const [askName, setAskName] = useState<{ field: "email" | "phone"; value: string } | null>(null);
+  /* A landlord's other emails and the main one's type, kept in the OS only
+     (Dan Richards, ticket 190230a3; James, 10 Nov 2026: "add a second email
+     ... work or personal"). Shown on every landlord card; changed behind the
+     pencil on the appraisal (components/new-look/AppraisalLandlord). */
+  const other = useLandlordEmails(p.email, personRef, role === "landlord");
 
   async function save(field: "name" | "email" | "phone", value: string) {
     const v = value.trim();
@@ -137,13 +143,17 @@ export default function ContactBlock({
     }
   }
 
-  const row = (icon: string, label: string, value: string | null, field: "email" | "phone", type: string, actions: React.ReactNode) => (
+  const tagged = (t: string) => (
+    <span className="shrink-0 rounded-full bg-line/40 px-2 py-0.5 text-[11px] font-medium text-muted">{t}</span>
+  );
+
+  const row = (icon: string, label: string, value: string | null, field: "email" | "phone", type: string, actions: React.ReactNode, tag?: string, shownOnly = false) => (
     <div className="group/row flex min-h-[42px] flex-wrap items-center gap-x-2.5 gap-y-1 py-2">
       <DoodleIcon name={icon} size={14} className="shrink-0 text-muted" />
       {/* At least a number's width, so a narrow card puts the buttons
           underneath rather than cutting the number short. */}
       <span className="min-w-[11.5rem] flex-1 overflow-hidden text-[13px]">
-        {editable ? (
+        {editable && !shownOnly ? (
           <InlineField value={value ?? ""} type={type} placeholder={field === "phone" ? "+ Add number" : "+ Add email"} onChange={(v) => void save(field, v)} className="text-[13px]" />
         ) : value ? (
           <span className="block truncate">{value}</span>
@@ -151,6 +161,7 @@ export default function ContactBlock({
           <span className="text-muted">{field === "phone" ? "No number on file" : "No email on file"}</span>
         )}
       </span>
+      {value && tag ? tagged(tag) : null}
       {value ? actions : null}
       {value ? <CopyButton value={value} label={label} /> : null}
     </div>
@@ -192,7 +203,26 @@ export default function ContactBlock({
             <DoodleIcon name="mail" size={12} className="text-accent-dark" />
             Email
           </EmailPerson>
+        ), other.emails && p.email ? KIND_LABEL[other.emails.mainKind] : undefined)}
+        {/* Their other emails: shown, with the same Email and copy buttons. */}
+        {p.email && other.emails?.extras.map((x) => (
+          <div key={x.email}>
+            {row("mail", `${role ?? ""} ${KIND_LABEL[x.kind].toLowerCase()} email`.trim(), x.email, "email", "email", (
+              <EmailPerson
+                email={x.email}
+                name={p.name}
+                role={role}
+                address={home?.propertyAddress ?? about}
+                className={pill}
+                onSent={(subject) => setNote({ tone: "ok", text: `Sent to ${x.email}${subject ? `: ${subject}` : ""}.` })}
+              >
+                <DoodleIcon name="mail" size={12} className="text-accent-dark" />
+                Email
+              </EmailPerson>
+            ), KIND_LABEL[x.kind], true)}
+          </div>
         ))}
+        {other.failed && <p className="py-1.5 text-[11.5px] text-muted">Their other emails couldn&apos;t be read just now.</p>}
         {home && (
           <LandlordHomeAddress email={p.email} personRef={personRef} name={p.name} propertyAddress={home.propertyAddress ?? null} readOnly={fixed} />
         )}
