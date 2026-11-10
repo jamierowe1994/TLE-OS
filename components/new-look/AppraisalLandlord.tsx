@@ -6,6 +6,7 @@ import LandlordHomeAddress from "@/components/LandlordHomeAddress";
 import ZeroDepositOptOut from "@/components/ZeroDepositOptOut";
 import { AddPersonModal, type HomePerson, type Kind } from "@/components/HomeLandlords";
 import { Ico } from "@/components/new-look/Parts";
+import { KIND_LABEL, landlordEmailsChanged, readLandlordEmails, type EmailKind, type LandlordEmails } from "@/components/LandlordOtherEmails";
 
 /**
  * THE LANDLORD CARD ON THE NEW-LOOK APPRAISAL, FIXED UNTIL THE PENCIL (James,
@@ -33,6 +34,22 @@ type Draft = { name: string; phone: string; email: string };
 type OtherDraft = Draft & { relation: string; off: boolean };
 const FIELDS = ["name", "phone", "email"] as const;
 const KIND_TAG: Record<Kind, string> = { joint_landlord: "Additional landlord", contact: "Point of contact" };
+
+/* A landlord's other emails, as being typed (Dan Richards, ticket 190230a3;
+   James, 10 Nov 2026: "click +, and then you can select what type of email
+   it is (work or personal)"). Kept in the OS only (lib/landlord-emails): the
+   Email box above stays the one REX holds and every automatic send uses. */
+type EmailsDraft = { mainKind: EmailKind; extras: { key: string; email: string; kind: EmailKind }[] };
+type EmailsSlot = { state: "loading" | "ready" | "failed"; draft: EmailsDraft; base: EmailsDraft };
+const NO_EMAILS: EmailsDraft = { mainKind: "personal", extras: [] };
+const MAX_EXTRAS = 4;
+let extraKey = 0;
+const emailsDraftOf = (e: LandlordEmails | null): EmailsDraft => ({
+  mainKind: e?.mainKind ?? "personal",
+  extras: (e?.extras ?? []).map((x) => ({ key: `x${++extraKey}`, email: x.email, kind: x.kind })),
+});
+const emailsSig = (d: EmailsDraft) =>
+  JSON.stringify([d.mainKind, d.extras.map((x) => [x.email.trim().toLowerCase(), x.kind]).filter(([e]) => e)]);
 
 const draftOf = (p: Person): Draft => ({ name: p.name ?? "", phone: p.phone ?? "", email: p.email ?? "" });
 const otherOf = (p: HomePerson): OtherDraft => ({ ...draftOf(p), relation: p.relation ?? "", off: false });
@@ -66,6 +83,8 @@ export default function AppraisalLandlord({
   /* REX refused for want of a name: the next Save sends the name with it, as ContactBlock does. */
   const [askName, setAskName] = useState<{ field: "email" | "phone"; value: string } | null>(null);
   const [adding, setAdding] = useState<Kind | null>(null);
+  /* "main" for the landlord, else a joint landlord's id. */
+  const [emails, setEmails] = useState<Record<string, EmailsSlot>>({});
   const [busy, setBusy] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
@@ -104,6 +123,50 @@ export default function AppraisalLandlord({
     setProblems([]);
     setNote(null);
     setEditing(true);
+    /* Their other emails, read fresh for the open card. */
+    const whose: { slot: string; email: string; ref: string }[] = [
+      ...(landlordRef || landlord.email ? [{ slot: "main", email: landlord.email ?? "", ref: landlordRef ?? "" }] : []),
+      ...(people ?? []).filter((p) => p.kind === "joint_landlord" && p.email).map((p) => ({ slot: p.id, email: p.email ?? "", ref: "" })),
+    ];
+    setEmails(Object.fromEntries(whose.map((w) => [w.slot, { state: "loading", draft: NO_EMAILS, base: NO_EMAILS } as EmailsSlot])));
+    for (const w of whose) {
+      readLandlordEmails(w.email, w.ref)
+        .then((e) => {
+          const d = emailsDraftOf(e);
+          setEmails((cur) => ({ ...cur, [w.slot]: { state: "ready", draft: d, base: d } }));
+        })
+        .catch(() => setEmails((cur) => ({ ...cur, [w.slot]: { state: "failed", draft: NO_EMAILS, base: NO_EMAILS } })));
+    }
+  }
+
+  /* One person's other emails: saved when they changed, or when the email
+     they are kept against did. Never REX: PUT /api/people/emails only. */
+  async function saveEmailsFor(slot: string, who: { email: string; was: string; ref: string; name: string }): Promise<{ problem: string | null; changed: boolean }> {
+    const e = emails[slot];
+    if (!e || e.state !== "ready") return { problem: null, changed: false };
+    const moved = who.email.trim().toLowerCase() !== who.was.trim().toLowerCase();
+    if (emailsSig(e.draft) === emailsSig(e.base) && !(moved && emailsSig(e.base) !== emailsSig(NO_EMAILS))) return { problem: null, changed: false };
+    if (!who.email.trim() && !who.ref) return { problem: "Add their main email first, so the other emails have somebody to belong to.", changed: false };
+    try {
+      const j = await fetch("/api/people/emails", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: who.email.trim(),
+          was: moved ? who.was.trim() : "",
+          ref: who.ref,
+          name: who.name,
+          mainKind: e.draft.mainKind,
+          extras: e.draft.extras.filter((x) => x.email.trim()).map((x) => ({ email: x.email.trim(), kind: x.kind })),
+        }),
+      }).then((r) => r.json()).catch(() => null) as { ok?: boolean; error?: string; emails?: LandlordEmails } | null;
+      if (!j?.ok) return { problem: j?.error ?? "Their other emails didn't save.", changed: false };
+      const d = emailsDraftOf(j.emails ?? null);
+      setEmails((cur) => ({ ...cur, [slot]: { state: "ready", draft: d, base: d } }));
+      return { problem: null, changed: true };
+    } catch {
+      return { problem: "Their other emails didn't go through. Try again.", changed: false };
+    }
   }
 
   function cancel() {
@@ -113,8 +176,8 @@ export default function AppraisalLandlord({
   }
 
   /* The landlord, field by field, the body ContactBlock sends. */
-  async function saveMain(): Promise<{ problems: string[]; details: string[]; warned: boolean; changed: boolean }> {
-    const out = { problems: [] as string[], details: [] as string[], warned: false, changed: false };
+  async function saveMain(): Promise<{ problems: string[]; details: string[]; warned: boolean; changed: boolean; base: Draft }> {
+    const out = { problems: [] as string[], details: [] as string[], warned: false, changed: false, base: mainBase };
     if (!landlordRef) return out;
     let base = mainBase;
     let asking = askName;
@@ -153,6 +216,7 @@ export default function AppraisalLandlord({
     }
     setMainBase(base);
     setAskName(asking);
+    out.base = base;
     return out;
   }
 
@@ -185,8 +249,25 @@ export default function AppraisalLandlord({
   async function save() {
     setBusy(true);
     setProblems([]);
+    const wasMain = mainBase.email;
     const a = await saveMain();
     const b = await saveOthers();
+    /* The landlord's other emails go against the email their record now
+       holds: the new one if it saved, the old one if REX refused it. */
+    const c = { problems: [] as string[], changed: false };
+    {
+      const r = await saveEmailsFor("main", { email: a.base.email || landlord.email || "", was: wasMain || landlord.email || "", ref: landlordRef ?? "", name: a.base.name || landlord.name });
+      if (r.problem) c.problems.push(r.problem);
+      c.changed ||= r.changed;
+    }
+    for (const p of joint) {
+      const d = others[p.id];
+      if (!d || d.off || b.failedIds.includes(p.id)) continue;
+      const r = await saveEmailsFor(p.id, { email: d.email, was: p.email ?? "", ref: "", name: d.name.trim() || p.name });
+      if (r.problem) c.problems.push(`${p.name}: ${r.problem}`);
+      c.changed ||= r.changed;
+    }
+    if (c.changed) landlordEmailsChanged();
     const fresh = await load();
     /* Anyone whose change failed keeps what was typed; the rest show what saved. */
     setOthers((cur) => Object.fromEntries(fresh.map((p) => {
@@ -194,15 +275,15 @@ export default function AppraisalLandlord({
       return [p.id, kept && b.failedIds.includes(p.id) ? kept : otherOf(p)];
     })));
     setBusy(false);
-    if (a.changed || b.changed) onSaved();
-    const all = [...a.problems, ...b.problems];
+    if (a.changed || b.changed || c.changed) onSaved();
+    const all = [...a.problems, ...b.problems, ...c.problems];
     if (all.length) { setProblems(all); return; }
     setEditing(false);
     const said = [
       ...new Set(a.details),
       ...(b.offJoint.length ? [`${b.offJoint.join(" and ")} ${b.offJoint.length > 1 ? "are" : "is"} off this home. If they're on a Propoly deal, take them off it there too.`] : []),
     ];
-    if (a.changed || b.changed) {
+    if (a.changed || b.changed || c.changed) {
       setNote({ tone: a.warned ? "bad" : "ok", text: said.join(" ") || "Saved." });
       if (!b.offJoint.length) window.setTimeout(() => setNote((n) => (n?.tone === "ok" ? null : n)), 6000);
     }
@@ -259,6 +340,68 @@ export default function AppraisalLandlord({
       <input type={type} value={value} placeholder={placeholder} disabled={busy} onChange={(e) => set(e.target.value)} />
     </label>
   );
+  /* Work or Personal, beside each email box. */
+  const kindPicker = (kind: EmailKind, set: (k: EmailKind) => void, label: string) => (
+    <div role="radiogroup" aria-label={label} className="nl-toggle nl-appr-kind">
+      {(["personal", "work"] as const).map((k) => (
+        <button key={k} type="button" role="radio" aria-checked={kind === k} disabled={busy} className={kind === k ? "is-on" : undefined} onClick={() => set(k)}>
+          {KIND_LABEL[k]}
+        </button>
+      ))}
+    </div>
+  );
+  const setSlot = (slot: string, change: (d: EmailsDraft) => EmailsDraft) =>
+    setEmails((cur) => (cur[slot] ? { ...cur, [slot]: { ...cur[slot], draft: change(cur[slot].draft) } } : cur));
+
+  /* The Email box, its type, and the other emails under it with "+ Add Another Email". */
+  const emailRows = (slot: string, value: string, set: ((v: string) => void) | null) => {
+    const e = emails[slot];
+    const d = e?.draft ?? NO_EMAILS;
+    const ready = e?.state === "ready";
+    return (
+      <div className="nl-appr-emails">
+        <div className="nl-appr-email-row">
+          {set ? input("Email", value, set, "email", "name@example.com") : (
+            <div className="nl-field">
+              <span>Email</span>
+              <div className="nl-locked"><span>{value}</span></div>
+            </div>
+          )}
+          {e && kindPicker(d.mainKind, (k) => setSlot(slot, (x) => ({ ...x, mainKind: k })), "Type of email")}
+        </div>
+        {d.extras.map((x, i) => (
+          <div key={x.key} className="nl-appr-email-row">
+            {input(`Other email${d.extras.length > 1 ? ` ${i + 1}` : ""}`, x.email, (v) => setSlot(slot, (y) => ({ ...y, extras: y.extras.map((z) => (z.key === x.key ? { ...z, email: v } : z)) })), "email", "name@example.com")}
+            {kindPicker(x.kind, (k) => setSlot(slot, (y) => ({ ...y, extras: y.extras.map((z) => (z.key === x.key ? { ...z, kind: k } : z)) })), `Type of other email ${i + 1}`)}
+            <button type="button" className="nl-link text-[13px] nl-appr-email-off" disabled={busy} onClick={() => setSlot(slot, (y) => ({ ...y, extras: y.extras.filter((z) => z.key !== x.key) }))}>
+              Remove
+            </button>
+          </div>
+        ))}
+        {e?.state === "loading" && (
+          <p className="nl-meta flex items-center gap-2">
+            <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+            Looking for their other emails&hellip;
+          </p>
+        )}
+        {e?.state === "failed" && <p className="nl-meta">Their other emails couldn&apos;t be read just now, so they can&apos;t be changed. Cancel and try again.</p>}
+        {ready && d.extras.length < MAX_EXTRAS && (
+          <button
+            type="button"
+            className="nl-link self-start text-[13px]"
+            disabled={busy}
+            onClick={() => setSlot(slot, (y) => ({ ...y, extras: [...y.extras, { key: `x${++extraKey}`, email: "", kind: y.mainKind === "work" ? "personal" : "work" }] }))}
+          >
+            <Ico name="plus" size={13} /> Add Another Email
+          </button>
+        )}
+        {ready && d.extras.length > 0 && (
+          <p className="nl-hint">Kept in the OS only. The first email is the one on their contact record, and the one the confirmation, decks and terms go to.</p>
+        )}
+      </div>
+    );
+  };
+
   const setOther = (id: string, change: Partial<OtherDraft>) => setOthers((cur) => ({ ...cur, [id]: { ...cur[id], ...change } }));
 
   const otherEditor = (p: HomePerson) => {
@@ -279,7 +422,9 @@ export default function AppraisalLandlord({
               {input("Full name", d.name, (v) => setOther(p.id, { name: v }))}
               {input("Who they are", d.relation, (v) => setOther(p.id, { relation: v }), "text", p.kind === "contact" ? "e.g. Partner, lets us in" : "e.g. Director, Wife")}
               {input("Mobile", d.phone, (v) => setOther(p.id, { phone: v }), "tel", "07...")}
-              {input("Email", d.email, (v) => setOther(p.id, { email: v }), "email", "name@example.com")}
+              {p.kind === "joint_landlord" && emails[p.id]
+                ? emailRows(p.id, d.email, (v) => setOther(p.id, { email: v }))
+                : input("Email", d.email, (v) => setOther(p.id, { email: v }), "email", "name@example.com")}
             </div>
             {/* Their own home address and the opt-out, as on the classic card: these save as they change. */}
             {p.kind === "joint_landlord" && p.email && (
@@ -301,12 +446,14 @@ export default function AppraisalLandlord({
         <div className="nl-appr-fields">
           {input("Full name", main.name, (v) => setMain({ ...main, name: v }), "text", "Name the landlord")}
           {input("Mobile", main.phone, (v) => setMain({ ...main, phone: v }), "tel", "07...")}
-          {input("Email", main.email, (v) => setMain({ ...main, email: v }), "email", "name@example.com")}
+          {emailRows("main", main.email, (v) => setMain({ ...main, email: v }))}
         </div>
       ) : (
         <>
           <ContactBlock fixed role="landlord" person={landlord} personRef={null} />
           <p className="nl-hint">This landlord isn&apos;t linked to a contact record, so their name, number and email can&apos;t be changed here.</p>
+          {/* Their other emails are the OS's own, so they can still be added, kept against the email on file. */}
+          {landlord.email && emails.main && emailRows("main", landlord.email, null)}
         </>
       )}
       {/* Their own home address and the opt-out save as they change, as they always have. */}

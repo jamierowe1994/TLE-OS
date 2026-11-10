@@ -633,6 +633,38 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "LISTING_AUTO_TAKEDOWN",
     legacyOn: "on",
   },
+  {
+    /* Print Brochure (Erleta Vathej, ticket 47b2389c; James, 10 Nov 2026: an
+       A4 brochure to hand out at viewings, with no landlord details).
+       lib/viewing-brochure + app/brochure. Off, the buttons are hidden and the page
+       says it isn't switched on. No new variable: unset is off. */
+    key: "listing_brochure",
+    label: "Print a brochure for viewings",
+    what: "Shows Print Brochure on a live listing's page and on each viewing in the Diary. It opens an A4 sheet made from the listing as it is now: the photos, the advert heading and write-up, rent, bedrooms, type of home, when it's available, the EPC, and the listing agent's name and email with the office phone. The address is the street and postcode district only, and nothing about the landlord is on it. Only live listings print.",
+    who: "Nobody is emailed and nothing is written anywhere. Whoever is handed the printed sheet at a viewing.",
+    confirm: "PRINT BROCHURES",
+    legacyEnv: "LISTING_BROCHURE",
+    legacyOn: "on",
+  },
+  {
+    /* The move-in welcomes (Kirstie Mulholland, ticket f180d1eb, 8 Nov 2026:
+       "a welcome email to tenants and landlords for managed properties ... so
+       it goes out automatically once tenants have moved in"; James, 10 Nov
+       2026: "Feel free to make those automatic welcome emails after moving
+       in"). lib/move-in-welcome, on the hourly tenant reminders run. James's
+       own exception to his 2 Oct 2026 rule that nothing on a let writes to a
+       landlord or tenant by itself (lib/customer-updates). Its own switch
+       rather than Automatic tenant emails, because it writes to landlords
+       too. Off, every run is held, except to ALWAYS_SEND_TO. No new
+       variable: unset is off. */
+    key: "move_in_welcome",
+    label: "Move-in welcome emails",
+    what: "The morning after a Managed or Fully Managed let's move-in date (9am to 6pm), emails each tenant Welcome to Your New Home (their property manager, a button into their tenant account to report a repair, paying the rent, what to do in an emergency) and each landlord Welcome to Fully Managed (their property manager, rent statements, certificates, inspections, repairs). Once per person per let. Not Let Only or Rent Collect, not a re-let to the landlord, never a test file. No backlog: only lets that moved in from 3 days before this is switched on, and never more than 7 days after the move-in.",
+    who: "TENANTS AND LANDLORDS on new managed lets, from the home's agent's own Outlook where that is armed and connected, otherwise the Letting Experts sender. Email to landlords and tenants must be on as well. Each tenant's tenant account is made if they have none.",
+    confirm: "WELCOME NEW LETS",
+    legacyEnv: "MOVE_IN_WELCOME",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

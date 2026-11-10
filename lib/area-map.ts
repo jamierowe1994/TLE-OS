@@ -105,7 +105,9 @@ export const AREA_DEFS: AreaDef[] = [
     ],
     canHide: true,
   },
-  { id: "listings", label: "Listings", phase: 1, pages: ["/listings"], apis: ["/api/listings"], canHide: true },
+  /* /brochure is a listing on paper (Erleta Vathej, ticket 47b2389c, 10 Nov
+     2026), so it is seen by whoever may see Listings. */
+  { id: "listings", label: "Listings", phase: 1, pages: ["/listings", "/brochure"], apis: ["/api/listings"], canHide: true },
   /* James, 15 Sep 2026: going live on Rightmove, OnTheMarket and Zoopla is
      the one button in Listings that reaches the public, so it gets its own
      switch - off, look, testers, everyone - separate from the screen. */

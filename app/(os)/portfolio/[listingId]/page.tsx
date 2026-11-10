@@ -68,6 +68,8 @@ import { Badge, Tabs, Menu, Ico, type MenuItem, type Tone } from "@/components/n
 import PhotoGrid from "@/components/new-look/PhotoGrid";
 import type { IncomingLet, NextTenancy } from "@/app/api/portfolio/incoming/route";
 import HomeSwitch from "@/components/HomeSwitch";
+import LandlordRegistration, { type RegRecord } from "@/components/listing/LandlordRegistration";
+import { isScottish } from "@/lib/property-flags";
 
 /**
  * One home, the whole of it, on one page.
@@ -518,6 +520,25 @@ export default function PropertyPage() {
       .catch(() => { /* nothing shown; the home reads as before */ });
     return () => { live = false; };
   }, [look, p?.listingId, p?.test]);
+
+  /* The landlord registration on the Landlord card (Lianna Denholm, ticket
+     678d4606; James, 10 Nov 2026: "Scottish properties can have a
+     registration box on managed homes on the landlord card"): the listing's
+     own box, on a Scottish home only, saved on the same home record
+     (/api/portfolio/registration). New look only. */
+  const scottishHome = Boolean(p && !p.test && p.propertyId && isScottish(p.postcode, p.address, p.town, p.locality));
+  const [reg, setReg] = useState<Loaded<RegRecord | null>>({ state: "loading" });
+  /* Bumped when a landlord is added or changed, so the box names them. */
+  const [regRev, setRegRev] = useState(0);
+  useEffect(() => {
+    if (!look || !scottishHome || !p?.listingId) return;
+    let live = true;
+    setReg({ state: "loading" });
+    getJson<{ record: RegRecord | null }>(`/api/portfolio/registration?listing=${encodeURIComponent(p.listingId)}`)
+      .then((j) => { if (live) setReg({ state: "ready", data: j.record ?? null }); })
+      .catch((e) => { if (live) setReg({ state: "failed", error: e instanceof Error ? e.message : "The landlord registration couldn't be read just now." }); });
+    return () => { live = false; };
+  }, [look, scottishHome, p?.listingId]);
 
   /* ── drafts: a form started and not sent (lib/property-drafts) ───────── */
   const [drafts, setDrafts] = useState<Loaded<PropertyDraft[]>>({ state: "loading" });
@@ -1109,6 +1130,27 @@ export default function PropertyPage() {
       <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line pt-3" />
     ) : null;
     const isRecord = Boolean(landlord?.contactId.startsWith("record:"));
+    /* The Scottish landlord registration (ticket 678d4606): on the main
+       landlord's card, or under the landlords where no main card shows. */
+    const regBox = !scottishHome ? null : reg.state === "loading" ? (
+      <div className="mt-3 border-t border-line/50 pt-3"><Loading label="Reading the landlord registration" /></div>
+    ) : reg.state === "failed" ? (
+      <p className="mt-3 border-t border-line/50 pt-3 text-[12px] text-accent-dark">{reg.error}</p>
+    ) : (
+      <LandlordRegistration
+        home
+        look="new"
+        listingId={String(p.listingId)}
+        record={reg.data}
+        canEdit={!p.test}
+        onSaved={(s) => { if (s.record) setReg({ state: "ready", data: s.record }); }}
+        landlordName={landlord?.name ?? null}
+        moreLandlords={coOwners.map((o) => o.name)}
+        homeKey={propertyId}
+        rev={regRev}
+      />
+    );
+    const regOnCard = Boolean(landlord && (changed || !landlord.contactId.startsWith("person:")));
 
     /* Each tab's own buttons (James, 25 Oct 2026): what you do about that
        part of the home sits at the top of it, beside how it stands - book an
@@ -1481,6 +1523,7 @@ export default function PropertyPage() {
                       homeKey={p.test ? null : propertyId}
                       address={homeLine}
                       readOnly={p.test ? "A test home keeps its own people." : null}
+                      onChanged={() => setRegRev((r) => r + 1)}
                       main={
                         landlord && !changed
                           ? [
@@ -1492,7 +1535,7 @@ export default function PropertyPage() {
                                 phone: landlord.phone,
                                 personRef: /^\d+$/.test(landlord.contactId) ? `rex:${landlord.contactId}` : isRecord && propertyId ? `home:${propertyId}` : null,
                                 note: isRecord ? "From the home's own record in the OS - the main record names no owner." : null,
-                                after: jobEmails,
+                                after: <>{jobEmails}{regBox}</>,
                               }]),
                               ...coOwners.map((o) => ({ key: o.contactId, name: o.name, email: o.email, phone: o.phone, personRef: `rex:${o.contactId}` })),
                             ]
@@ -1503,6 +1546,7 @@ export default function PropertyPage() {
                           <div className="text-[13px]">
                             <ListingChangedLandlord key={landlord.contactId} listingId={String(p.listingId)} propertyId={propertyId} address={homeLine} onChanged={landlordUndone} />
                             {jobEmails}
+                            {regBox}
                           </div>
                         ) : undefined
                       }
@@ -1516,6 +1560,7 @@ export default function PropertyPage() {
                         ) : null
                       }
                     />
+                    {!regOnCard && regBox && <div className="nl-pcard">{regBox}</div>}
 
                     {/* Their guarantors, from the lead and the let (lib/guarantors), only when there are some. */}
                     {tenants.length > 0 && !roomsOnly && !p.test && <Guarantors deck hideEmpty className="nl-prop-g" source={{ listing: String(p.listingId) }} />}
