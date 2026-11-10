@@ -8,6 +8,7 @@ import { changedLandlordFor } from "@/lib/landlord-change";
 import { peopleOnHome } from "@/lib/home-aliases";
 import type { LandlordKind } from "@/lib/landlord-kinds";
 import { heldKey } from "@/lib/rex-landlord";
+import { appraisalForHome } from "@/lib/appraisal-for-home";
 
 /**
  * WHO ARE THE LANDLORDS OF THIS HOME - THE ONE READER (10 Nov 2026).
@@ -35,6 +36,10 @@ import { heldKey } from "@/lib/rex-landlord";
  *   listing   every owner REX joins to the listing ("Listing Owner", or a
  *             sub-type of it such as "Landlord" - lib/rex-reln). Every one:
  *             a listing with two owners has two landlords.
+ *   appraisal the landlord on the market appraisal the home came from
+ *             (lib/appraisal-for-home, 10 Nov 2026): a won appraisal became a
+ *             listing with no owner in REX, so the listing said "no landlord"
+ *             while the OS held their name, email and mobile on the lead.
  *   property  every owner REX joins to the property itself (Properties/read
  *             with its contacts), where an appraisal's signed terms put them.
  *   record    the landlord on the home's OS record (os_properties.landlord_*,
@@ -66,18 +71,26 @@ import { heldKey } from "@/lib/rex-landlord";
 
 type Row = Record<string, unknown>;
 
-export type LandlordFrom = "listing" | "changed" | "property" | "record" | "joint";
+export type LandlordFrom = "listing" | "changed" | "appraisal" | "property" | "record" | "joint";
 
 const FROM_NOTE: Record<LandlordFrom, string> = {
   listing: "On the listing.",
   changed: "Not on the listing. Added in the OS with Add the landlord.",
+  appraisal: "Not on the listing. Taken from the market appraisal this home came from.",
   property: "Not on the listing. Taken from the property's owner - check they are still the landlord.",
   record: "Not on the listing. Taken from the home's record in the OS - check they are still the landlord.",
   joint: "Not on the listing. Taken from the joint landlords on the home - check they are still the landlord.",
 };
 
 /** Where one landlord in the list was found, and for a changed one, what kind and which change. */
-export type LandlordSource = { from: LandlordFrom; kind?: LandlordKind; changeId?: string };
+export type LandlordSource = {
+  from: LandlordFrom;
+  kind?: LandlordKind;
+  changeId?: string;
+  /** For "appraisal": which appraisal, and who they are on it ("os:<contact>" / "rex:<contact>") for ContactBlock. */
+  appraisalId?: string;
+  ref?: string | null;
+};
 
 export interface LandlordsFound {
   /** REX-shaped contacts, the landlord first. */
@@ -109,6 +122,13 @@ function ownersIn(relns: unknown): Row[] {
     .filter((c): c is Row => Boolean(c));
 }
 
+/** A REX listing's address in one line, from its property's fields. */
+export function listingAddress(listing: Row): string | null {
+  const p = (listing.property ?? {}) as Row;
+  const line = [p.adr_unit_number, p.adr_street_number, p.adr_street_name].map(text).filter(Boolean).join(" ");
+  return [line, text(p.adr_suburb_or_town), text(p.adr_postcode)].filter(Boolean).join(", ") || null;
+}
+
 /** The owners REX joins to a listing it has read. */
 export function listingOwners(listing: Row): Row[] {
   return ownersIn(((listing.related ?? {}) as Row).contact_reln_listing);
@@ -126,6 +146,8 @@ async function propertyOwners(propertyId: string): Promise<Row[] | null> {
 type Sources = {
   listingId: string | null;
   propertyId: string | null;
+  /** The home's address, to find an appraisal never linked to its property. */
+  address?: string | null;
   /** The owners on the listing, already read. */
   onListing: Row[];
   /** The owners on the property; only asked when nobody is named before them. */
@@ -167,6 +189,19 @@ async function gather(s: Sources): Promise<LandlordsFound> {
       );
     }
     if (s.onListing.length) return found(s.onListing, "listing");
+    /* The appraisal the home came from, before REX's property owner: that
+       may be whoever owned it when REX first met the door, the appraisal is
+       who instructed us. */
+    const ma = s.propertyId || s.address ? await appraisalForHome({ propertyId: s.propertyId, address: s.address }).catch(() => null) : null;
+    if (ma?.landlord) {
+      const l = ma.landlord;
+      return found(
+        [{ id: l.rexContactId ?? `appraisal:${ma.id}`, name: l.name, email_address: l.email, phone_number: l.phone, ...asCompany(l.name) }],
+        "appraisal",
+        FROM_NOTE.appraisal,
+        { from: "appraisal", appraisalId: ma.id, ref: l.ref }
+      );
+    }
     if (s.propertyId) {
       const onProperty = await s.onProperty().catch(() => null);
       if (onProperty?.length) return found(onProperty, "property");
@@ -207,6 +242,7 @@ export async function landlordsForListing(listing: Row, opts: { listingId: numbe
   return gather({
     listingId: idOf(opts.listingId),
     propertyId,
+    address: listingAddress(listing),
     onListing: listingOwners(listing),
     onProperty: () => (propertyId ? propertyOwners(propertyId) : Promise.resolve([])),
     swap: opts.swap,
@@ -228,6 +264,9 @@ export type HomeLandlord = {
   /** For "changed": a company, an estate or a private owner, and the change behind it. */
   kind?: LandlordKind;
   changeId?: string;
+  /** For "appraisal": the appraisal, and who they are on it for ContactBlock. */
+  appraisalId?: string;
+  ref?: string | null;
 };
 
 export type LandlordsAnswer =
@@ -236,7 +275,7 @@ export type LandlordsAnswer =
   /** REX did NOT answer. Kept apart from "no landlord" all the way to the screen. */
   | { ok: false; problem: string };
 
-type Held = { propertyId: string | null; onListing: Row[]; onProperty: Row[] | null };
+type Held = { propertyId: string | null; onListing: Row[]; onProperty: Row[] | null; address?: string | null };
 
 /* A landlord changes hands rarely, and the viewing booker asks every time it
    opens. Twelve hours keeps a busy morning to one call per listing. */
@@ -309,7 +348,7 @@ export async function landlordsOfHome(
     return { ok: false, problem: "That listing has no reference in the listings system, so its landlord can't be looked up." };
   }
 
-  let rex: Held = { propertyId, onListing: [], onProperty: null };
+  let rex: Held = { propertyId, onListing: [], onProperty: null, address: null };
   if (listingId) {
     const hit = opts.fresh ? null : await heldFor(listingId);
     if (hit) {
@@ -330,7 +369,7 @@ export async function landlordsOfHome(
       /* The property's own owners are only wanted when the listing names
          nobody, so that is the only time REX is asked for them. */
       const onProperty = !onListing.some((c) => text(c.name)) && pid ? ((await propertyOwners(pid))?.map(slim) ?? null) : null;
-      rex = { propertyId: pid, onListing, onProperty };
+      rex = { propertyId: pid, onListing, onProperty, address: listingAddress(listing) };
       await hold(listingId, rex);
     }
     propertyId = rex.propertyId;
@@ -342,6 +381,7 @@ export async function landlordsOfHome(
   const found = await gather({
     listingId,
     propertyId,
+    address: rex.address ?? null,
     onListing: named(rex.onListing),
     onProperty: async () => named(rex.onProperty ?? (listingId || !propertyId ? null : await propertyOwners(propertyId))),
     keys: [letRef ? `let:${letRef}` : null, ...(home.keys ?? [])],
@@ -366,6 +406,7 @@ export async function landlordsOfHome(
       from: s.from,
       ...(s.kind ? { kind: s.kind } : {}),
       ...(s.changeId ? { changeId: s.changeId } : {}),
+      ...(s.appraisalId ? { appraisalId: s.appraisalId, ref: s.ref ?? null } : {}),
     });
   });
   return { ok: true, landlords, from: landlords[0]?.from ?? null, note: landlords.length ? found.note : null, propertyId };

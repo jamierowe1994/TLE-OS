@@ -69,6 +69,7 @@ import HomeKeys from "@/components/portfolio/HomeKeys";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import ListingOwner from "@/components/listing/ListingOwner";
 import ListingCompliance, { useListingHome } from "@/components/listing/ListingCompliance";
+import ListingAppraisal, { useListingAppraisal } from "@/components/listing/ListingAppraisal";
 import LandlordRegistration from "@/components/listing/LandlordRegistration";
 import FieldSelect from "@/components/FieldSelect";
 import { LET_TYPES, type LetType } from "@/lib/let-type";
@@ -140,6 +141,9 @@ export type Listing = {
 type PortalLink = { portal: string; url: string; remoteId: string | null };
 
 /** The landlord lookup. "REX didn't answer" is kept apart from "no landlord". */
+/** Marks a listing fact taken from the appraisal (components/listing/ListingAppraisal). */
+const MA_SUFFIX = " (from the appraisal)";
+
 type LandlordState =
   | { status: "idle" }
   | { status: "loading" }
@@ -442,6 +446,14 @@ function ListingDrawerBody({
    * it is (88% of rentals).
    */
   const [landlord, setLandlord] = useState<LandlordState>({ status: "idle" });
+  /* What the market appraisal behind this home learned (10 Nov 2026): its
+     section on the home, and its papers on Compliance. */
+  const appraisal = useListingAppraisal(listing?.id ?? null);
+  /* A fact the listing has not got yet, as the appraisal recorded it, said as such. */
+  const maFact = (label: string): string | null => {
+    const v = appraisal.status === "known" ? appraisal.appraisal.facts.find((f) => f.label === label)?.value ?? null : null;
+    return v ? `${v}${MA_SUFFIX}` : null;
+  };
   /* A landlord changed in the OS asks again (Dan Richards, 17 Oct 2026). */
   const [landlordRev, setLandlordRev] = useState(0);
   /* The photo set popped out full size; null when closed. */
@@ -1564,9 +1576,9 @@ function ListingDrawerBody({
     const availableFrom = live ? live.availableFrom : listing.availableFrom;
     const epc = live?.epc.expiry ?? listing.epcExpiry;
     return [
-      { icon: "home", label: "Type", text: set(live?.propertyType) },
-      { icon: "bed.png", label: "Bedrooms", text: set(live?.beds) },
-      { icon: "pack/house", label: "Bathrooms", text: set(live?.baths) },
+      { icon: "home", label: "Type", text: set(live?.propertyType || maFact("Property type")) },
+      { icon: "bed.png", label: "Bedrooms", text: set(live?.beds ?? maFact("Bedrooms")) },
+      { icon: "pack/house", label: "Bathrooms", text: set(live?.baths ?? maFact("Bathrooms")) },
       { icon: "coin", label: "Deposit", text: set(live?.deposit != null ? `£${live.deposit.toLocaleString("en-GB")}` : null) },
       { icon: "calendar", label: "Available from", text: availableFrom ? dayOf(availableFrom) : "Now" },
       { icon: "shield", label: "EPC expires", text: epc ? dayOf(epc) : "Not recorded" },
@@ -1574,7 +1586,7 @@ function ListingDrawerBody({
       { icon: "pack/photo", label: "Photos", text: `${photos.length} on file` },
       { icon: "home", label: "Type of let", text: home ? LET_TYPES.find((t) => t.value === home.letType)?.label ?? "Not set" : homeProblem ? "Did not load" : "Reading…" },
       /* Intro only is chosen here (16 Oct 2026, lib/intro-only); the rest is the listing's own. */
-      { icon: "home", label: "Service", text: home?.introOnly ? "Marketing only" : live ? (live.serviceOnRecord ?? live.service ?? "Not set") : wait ?? "Not set" },
+      { icon: "home", label: "Service", text: home?.introOnly ? "Marketing only" : live ? (live.serviceOnRecord ?? live.service ?? (appraisal.status === "known" && appraisal.appraisal.serviceLevel ? `${appraisal.appraisal.serviceLevel} (from the appraisal)` : "Not set")) : wait ?? "Not set" },
     ];
   })();
 
@@ -1967,6 +1979,7 @@ function ListingDrawerBody({
                     phone: landlord.status === "known" ? (landlord.landlord.phone ?? undefined) : undefined,
                   }}
                   otherLandlords={landlord.status === "known" ? landlord.landlords.slice(1) : []}
+                  appraisalPapers={appraisal.status === "known" ? appraisal.appraisal.papers : []}
                   agentLarn={live?.agentLarn ?? null}
                   service={live?.service ?? null}
                   homeProblem={homeProblem}
@@ -2475,7 +2488,7 @@ function ListingDrawerBody({
      never shown here. The joint landlords kept on the home are listed by
      HomeLandlords itself, and a landlord changed in the OS has its own card,
      so neither is repeated. */
-  const lOwners = landlord.status === "known" ? landlord.landlords.filter((x) => x.from === "listing" || x.from === "property" || x.from === "record") : [];
+  const lOwners = landlord.status === "known" ? landlord.landlords.filter((x) => x.from === "listing" || x.from === "appraisal" || x.from === "property" || x.from === "record") : [];
   const lMain = (
                       landlord.status === "loading" || landlord.status === "idle"
                         ? null
@@ -2486,8 +2499,10 @@ function ListingDrawerBody({
                               email: x.email,
                               phone: x.phone,
                               /* REX's owner changes in REX; the home's own record on the record. */
-                              personRef: x.from === "listing" && x.contactId ? `rex:${x.contactId}` : x.from === "record" && listing.propertyId ? `home:${listing.propertyId}` : null,
-                              note: x.from === "record"
+                              personRef: x.from === "listing" && x.contactId ? `rex:${x.contactId}` : x.from === "appraisal" ? x.ref ?? null : x.from === "record" && listing.propertyId ? `home:${listing.propertyId}` : null,
+                              note: x.from === "appraisal"
+                                ? "From the market appraisal this home came from. Not on this listing in REX yet."
+                                : x.from === "record"
                                 ? "From the home's record in the OS. Not on this listing in REX yet."
                                 : x.from === "property"
                                   ? "The property's owner in the listings system, not on this listing yet. Check they are still the landlord."
@@ -2805,9 +2820,9 @@ function ListingDrawerBody({
       { label: "Rent", text: listing.rent == null ? "Not set" : `£${listing.rent.toLocaleString("en-GB")} ${per}` },
       { label: "Deposit", text: wait ?? money(live?.deposit) },
       { label: "Available", text: availableShown },
-      { label: "Bedrooms", text: wait ?? (live?.beds != null ? String(live.beds) : "Not set") },
-      { label: "EPC", text: epcShown ?? (epcExpiry ? `Until ${dayOf(epcExpiry)}` : "Not recorded") },
-      { label: "Council tax", text: wait ?? (live?.facts.councilTaxBand ? (live.facts.councilTaxBand === "Exempt" ? "Exempt" : `Band ${live.facts.councilTaxBand}`) : "Not set") },
+      { label: "Bedrooms", text: wait ?? (live?.beds != null ? String(live.beds) : maFact("Bedrooms") ?? "Not set") },
+      { label: "EPC", text: epcShown ?? (epcExpiry ? `Until ${dayOf(epcExpiry)}` : maFact("EPC rating") ?? "Not recorded") },
+      { label: "Council tax", text: wait ?? (live?.facts.councilTaxBand ? (live.facts.councilTaxBand === "Exempt" ? "Exempt" : `Band ${live.facts.councilTaxBand}`) : maFact("Council tax band") ?? "Not set") },
     ];
     const fd = factsDraft;
     const setF = (k: keyof FactsDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFactsDraft((d) => (d ? { ...d, [k]: e.target.value } : d));
@@ -3118,12 +3133,17 @@ function ListingDrawerBody({
             </div>
             {!factsEdit || !fd ? (
               <div className="nl-facts-grid">
-                {view.map((f) => (
-                  <div key={f.label} className="nl-fact">
-                    <span>{f.label}</span>
-                    <b className={quietFact(f.text) ? "is-quiet" : ""}>{f.text}</b>
-                  </div>
-                ))}
+                {view.map((f) => {
+                  /* A fact only the appraisal holds says so beside its label, not in the value. */
+                  const fromMa = f.text.endsWith(MA_SUFFIX);
+                  const text = fromMa ? f.text.slice(0, -MA_SUFFIX.length) : f.text;
+                  return (
+                    <div key={f.label} className="nl-fact">
+                      <span>{f.label}{fromMa && <em> · from the appraisal</em>}</span>
+                      <b className={quietFact(text) ? "is-quiet" : ""}>{text}</b>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <>
@@ -3346,6 +3366,13 @@ function ListingDrawerBody({
                 </div>
               </section>
 
+              {/* What the appraisal learned, brought forward (James, 10 Nov 2026). */}
+              {!testListing && (
+                <section className="nl-cell span3">
+                  <ListingAppraisal state={appraisal} look="new" />
+                </section>
+              )}
+
               {(here.id === "accepted" || here.id === "handover") && link && (
                 <section className="nl-cell span3">
                   <h3 className="nl-block-title">The Let</h3>
@@ -3468,6 +3495,7 @@ function ListingDrawerBody({
                 phone: landlord.status === "known" ? (landlord.landlord.phone ?? undefined) : undefined,
               }}
               otherLandlords={landlord.status === "known" ? landlord.landlords.slice(1) : []}
+              appraisalPapers={appraisal.status === "known" ? appraisal.appraisal.papers : []}
               agentLarn={live?.agentLarn ?? null}
               service={live?.service ?? null}
                   homeProblem={homeProblem}
@@ -3867,6 +3895,12 @@ function ListingDrawerBody({
               {accessBlock}
             </div>
           </div>
+          {/* What the appraisal learned, brought forward (James, 10 Nov 2026). */}
+          {!testListing && (
+            <div className="mb-4 border-t border-line/50 pt-4">
+              <ListingAppraisal state={appraisal} look="classic" />
+            </div>
+          )}
           {/* Where it's up to, underneath, across the box (James, 12 Oct 2026:
               "bundling two sections into one"). Click a step to move it. */}
           <div className="mt-auto border-t border-line/50 pt-3.5">

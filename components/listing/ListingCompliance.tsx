@@ -21,6 +21,7 @@ import type { LetType } from "@/lib/let-type";
 import type { TermsRequest, TermsState } from "@/lib/use-listing-terms";
 import { regDay, regNumbers, regState, type RegState } from "@/lib/reg-numbers";
 import { everyLandlord, useJointLandlords, type HomeLandlord } from "@/lib/use-home-landlords";
+import type { AppraisalPaper } from "@/components/listing/ListingAppraisal";
 
 /**
  * THE LISTING'S COMPLIANCE, IN ONE PLACE (James, 12 Oct 2026).
@@ -151,6 +152,7 @@ export default function ListingCompliance({
   terms,
   landlord,
   otherLandlords = [],
+  appraisalPapers = [],
   landlordRegistration,
   landlordRegistrationExpiry = null,
   landlordRegistrationOwner = null,
@@ -177,6 +179,12 @@ export default function ListingCompliance({
    * never here, so the terms went to one signer and one ID was asked for.
    */
   otherLandlords?: HomeLandlord[];
+  /**
+   * The papers on the market appraisal this home came from and its lead
+   * (components/listing/ListingAppraisal, 10 Nov 2026): a landlord's ID or
+   * signed terms sent at the appraisal said "Not on file" on the listing.
+   */
+  appraisalPapers?: AppraisalPaper[];
   landlordRegistration: string | null;
   /** When each registration number runs out (lib/reg-numbers), from the listing's Landlord section. */
   landlordRegistrationExpiry?: Record<string, string> | null;
@@ -241,6 +249,12 @@ export default function ListingCompliance({
     const d = (docs ?? []).find(named) ?? (first ? (docs ?? []).find((x) => x.type === type && x.name === docTypeLabel(type)) : undefined);
     return d ? { how: `Uploaded ${when(d.at)}`, name: d.name, url: d.url } : null;
   };
+  /* From the appraisal, the newest of a type; one only the office may open still says it is held. */
+  const fromAppraisal = (type: string): Held => {
+    const p = appraisalPapers.find((x) => x.type === type);
+    if (!p) return null;
+    return p.url ? { how: `${p.how}, on the appraisal${p.at ? ` ${when(p.at)}` : ""}`, name: p.name, url: p.url } : { how: "Held by the office, from the appraisal" };
+  };
   const paper = (field: string, how = "On the property record"): Held => {
     const p = papers?.files.find((f) => f.field === field);
     if (p) return { how, name: p.name, url: p.url };
@@ -250,6 +264,7 @@ export default function ListingCompliance({
     (terms.status === "ready" && terms.docs[0] ? { how: "Signed online", name: terms.docs[0].name, url: terms.docs[0].open } : null) ??
     doc("terms_of_business") ??
     paper("doc_terms_of_business") ??
+    fromAppraisal("terms_of_business") ??
     (home?.terms.held ? { how: home.terms.held.how, name: home.terms.held.name } : null) ??
     (home?.terms.rex ? { how: "Filed on the home's compliance record" } : null);
   const waiting = terms.status === "ready" ? terms.outstanding[0] ?? null : null;
@@ -284,9 +299,9 @@ export default function ListingCompliance({
         </>
       ),
     },
-    { key: "id", label: "Landlord ID", held: doc("landlord_id") ?? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_id")} /> },
-    { key: "own", label: "Proof of ownership", held: doc("landlord_proof_of_ownership") ?? paper("doc_landlord_id_ownership"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_proof_of_ownership")} /> },
-    { key: "aml", label: "AML check", held: doc("landlord_aml") ?? paper("landlord_aml"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_aml")} /> },
+    { key: "id", label: "Landlord ID", held: doc("landlord_id") ?? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id") ?? fromAppraisal("landlord_id"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_id")} /> },
+    { key: "own", label: "Proof of ownership", held: doc("landlord_proof_of_ownership") ?? paper("doc_landlord_id_ownership") ?? fromAppraisal("landlord_proof_of_ownership"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_proof_of_ownership")} /> },
+    { key: "aml", label: "AML check", held: doc("landlord_aml") ?? paper("landlord_aml") ?? fromAppraisal("landlord_aml"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_aml")} /> },
     ...(home?.scotland
       ? [{ key: "reg", label: "Landlord registration", held: regHeld, reg: regWorst, need: "Not on file", action: <UploadButton onClick={() => upload("other")} /> }]
       : []),
@@ -302,13 +317,17 @@ export default function ListingCompliance({
       const who = (l.name ?? "").trim();
       const held =
         r.key === "id"
-          ? docFor("landlord_id", who, i === 0) ?? (i === 0 ? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id") : null)
-          : docFor("landlord_aml", who, i === 0) ?? (i === 0 ? paper("landlord_aml") : null);
+          ? docFor("landlord_id", who, i === 0) ?? (i === 0 ? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id") ?? fromAppraisal("landlord_id") : null)
+          : docFor("landlord_aml", who, i === 0) ?? (i === 0 ? paper("landlord_aml") ?? fromAppraisal("landlord_aml") : null);
       return { key: `${r.key}:${i}`, label: `${who}: ${r.key === "id" ? "ID" : "AML check"}`, held, reg: null, who };
     });
   };
 
-  const loose: LooseDoc[] = (docs ?? []).filter((d) => DOC_TO_CERT[d.type]).map((d) => ({ type: DOC_TO_CERT[d.type], name: d.fileName || d.name, url: d.url, at: d.at }));
+  const loose: LooseDoc[] = [
+    ...(docs ?? []).filter((d) => DOC_TO_CERT[d.type]).map((d) => ({ type: DOC_TO_CERT[d.type], name: d.fileName || d.name, url: d.url, at: d.at })),
+    /* A certificate the landlord sent at the appraisal, until one is filed on the home. */
+    ...appraisalPapers.filter((p) => DOC_TO_CERT[p.type] && p.url && p.at).map((p) => ({ type: DOC_TO_CERT[p.type], name: p.name, url: p.url as string, at: p.at as string })),
+  ];
   const reading = docs === null || papers === null || (terms.status === "loading" && !home);
   /* Terms can be filed on the home's own record, so nothing offers to send them until that has answered. */
   const termsReading = reading || (!home && !homeProblem) || joint === null;

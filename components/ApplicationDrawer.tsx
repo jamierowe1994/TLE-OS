@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import ListingAppraisal, { useListingAppraisal } from "@/components/listing/ListingAppraisal";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import { dropJson } from "@/lib/page-cache";
 import { APPS_BOARD_URL } from "@/lib/applications-read";
@@ -597,6 +598,8 @@ export default function ApplicationDrawer({
   /* Who is on the let, as the server holds it (lib/let-people), and whether
      it was cancelled - for the drawers, the email builder and Cancel deal. */
   const [info, setInfo] = useState<LetInfo | null>(null);
+  /* What the market appraisal behind the home learned, on the let too (James, 10 Nov 2026). */
+  const letAppraisal = useListingAppraisal(info?.listingId ?? null);
   const [cancelled, setCancelled] = useState<Cancellation | null>(null);
   /* Each person against the let's Propoly deal (lib/let-propoly-sync, 20 Oct 2026). */
   const [picture, setPicture] = useState<Picture | null>(null);
@@ -2194,6 +2197,11 @@ export default function ApplicationDrawer({
                       reload={reloadPeople}
                     />
                   )}
+                  {Number(info?.listingId) > 0 && (
+                    <section className="nl-cell mt-4">
+                      <ListingAppraisal state={letAppraisal} look="new" />
+                    </section>
+                  )}
                 </div>
               </div>
             )}
@@ -2597,6 +2605,12 @@ export default function ApplicationDrawer({
                 homeKey={info?.homeKey ?? null}
                 reload={reloadPeople}
               />
+            )}
+            {/* What the market appraisal behind the home learned (James, 10 Nov 2026). */}
+            {Number(info?.listingId) > 0 && (
+              <div className="mt-5 border-t border-line/50 pt-4">
+                <ListingAppraisal state={letAppraisal} look="classic" />
+              </div>
             )}
 
             {/* Where it's up to, across the box underneath (as on a listing). */}
