@@ -1430,7 +1430,14 @@
    WRITING AN EMAIL, IN THE MIDDLE (components/Compose, 8 Nov 2026): one
    panel, the words on the left and the email as they'll get it on the right.
 =========================================================================== */
-.nl-compose-wrap { position: fixed; inset: 0; z-index: 150; display: grid; place-items: center; padding: 3vh 3vw; background: rgba(20, 20, 19, .36); animation: nl-cmp-in .25s ease; }
+/* One row the height of the screen (Dan Richards, ticket c502c534, 10 Nov
+   2026: "cant literally send an email from the email button on the applicant
+   lead record"). Left to size itself, the wrap's row grew to the panel's own
+   content, so the panel's `100%` meant "as tall as it wants": on a laptop
+   screen it ran past the bottom edge and took Send with it, out of reach. Now
+   the panel is never taller than the screen, the writing scrolls inside it,
+   and Send is always on show. */
+.nl-compose-wrap { position: fixed; inset: 0; z-index: 150; display: grid; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); place-items: center; padding: 3vh 3vw; background: rgba(20, 20, 19, .36); animation: nl-cmp-in .25s ease; }
 .nl-compose { width: min(1240px, 100%); height: min(860px, 100%); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); animation: nl-cmp-up .42s var(--nl-ease, cubic-bezier(.16,1,.3,1)); }
 @keyframes nl-cmp-in { from { opacity: 0; } }
 @keyframes nl-cmp-up { from { opacity: 0; transform: translateY(16px) scale(.99); } }
@@ -1448,7 +1455,7 @@
 .nl-compose-write textarea { font-family: var(--font-inter), sans-serif; line-height: 1.55 !important; min-height: 260px; }
 .nl-compose-write button.rounded-full { border-color: var(--line-strong); background: #fff; font-size: 12.5px; padding: 6px 12px; }
 .nl-compose-write button.rounded-full.border-accent-dark { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
-.nl-compose-preview { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; padding: 22px 28px; background: var(--card); border-left: 1px solid var(--line); }
+.nl-compose-preview { min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; padding: 22px 28px; background: var(--card); border-left: 1px solid var(--line); }
 .nl-compose-preview iframe { width: 100%; height: 100%; min-height: 360px; background: #fff; border: 1px solid var(--line-strong); }
 .nl-compose-empty { margin: 0; padding: 40px 20px; text-align: center; font-size: 13.5px; color: var(--muted); border: 1px dashed var(--line-strong); }
 .nl-compose-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 28px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
@@ -1456,7 +1463,10 @@
 @media (max-width: 900px) {
   .nl-compose-wrap { padding: 0; }
   .nl-compose { height: 100%; }
-  .nl-compose-main { grid-template-columns: 1fr; overflow-y: auto; }
+  /* Each part its full height, one under the other, scrolling between the
+     head and Send (10 Nov 2026: held to the screen, the rows squeezed and the
+     preview sat over the message). */
+  .nl-compose-main { grid-template-columns: 1fr; grid-auto-rows: max-content; overflow-y: auto; }
   .nl-compose-write { overflow: visible; }
   .nl-compose-preview { border-left: 0; border-top: 1px solid var(--line); }
 }
