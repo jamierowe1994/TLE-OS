@@ -1468,6 +1468,11 @@ function ListingDrawerBody({
     ? { label: "Let agreed", tone: "neutral" as const }
     : withdrawnHere
       ? { label: pub?.status === "withdrawn" ? "Withdrawn" : pub?.status === "leased" ? "Let" : "Sold", tone: "neutral" as const }
+      : isLive && pub && !pub.onPortals
+      /* Published in the listings system but taken off the portals: it is
+         not available to anybody looking, so the badge stops saying so
+         (Lorna Fieldson, 28 Oct 2026; 10 Nov 2026). */
+      ? { label: "Off the market", tone: "neutral" as const }
       : isLive
       ? { label: "Available", tone: "good" as const }
       : { label: "Draft", tone: "accent" as const };
@@ -2735,7 +2740,7 @@ function ListingDrawerBody({
         setDescSave("error");
       }
     };
-    const tone = listing.letAgreed ? "accent" : isLive ? "good" : "neutral";
+    const tone = listing.letAgreed ? "accent" : isLive && pub && !pub.onPortals ? "neutral" : isLive ? "good" : "neutral";
     const onPortals = isLive && (pub ? pub.onPortals : true);
     /* Mark as Let Agreed / Back to available: its own switch, then the same people as Take off the market. */
     /* Back to available whenever the tick is on, switch or no switch (James, 6

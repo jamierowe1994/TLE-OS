@@ -8,7 +8,7 @@ import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
-import { stillOnPortalFeeds } from "@/lib/advert-offline";
+import { markOffline, markOnline, stillOnPortalFeeds } from "@/lib/advert-offline";
 import { ALL_CHANNELS, OFF_CHANNELS, queueUpload, takeAdvertOff, whereFrom } from "@/lib/listing-take-off";
 import { sendFrom, waitForSend } from "@/lib/portal-send";
 import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
@@ -313,6 +313,17 @@ export async function POST(req: NextRequest) {
         actorEmail: actor.email,
         detail: `${id}: off (${done.was.status ?? "?"} [${done.was.channels.join(",")}] -> ${done.now.status ?? "?"} [${done.now.channels.join(",")}])${token ? "" : " as the office account"}`,
       });
+      /* Read back, and believed only if the channel really went (10 Nov
+         2026): this answered ok whatever came back, so a change REX accepted
+         and did not make read "Taken off" beside a live advert. */
+      if (done.now.status === "published" && done.now.channels.includes("portals")) {
+        return NextResponse.json({ ok: false, error: "The portals did not take that change: the advert is still on. Try again in a minute, and report it if it happens twice." }, { status: 502 });
+      }
+      /* The OS's own Offline marker, the same one Take It Offline and the
+         automatic take-down write (lib/advert-offline). Without it the
+         Listings board showed nothing had changed. A marker that will not
+         save is not a reason to say the take-off failed. */
+      await markOffline(String(id), null, { name: actor.name, email: actor.email }).catch((e) => console.error("[publish] Offline marker not saved", id, e));
       return NextResponse.json({ ok: true, id, action, ...done.now });
     }
 
@@ -439,6 +450,9 @@ export async function POST(req: NextRequest) {
 
     await invalidateListingBook();
     forgetListing(id);
+    /* Back on, or published: the Offline marker goes, so the board stops
+       saying Offline about an advert that is up (10 Nov 2026). */
+    if (now.channels.includes("portals")) await markOnline(String(id)).catch((e) => console.error("[publish] Offline marker not cleared", id, e));
     await record({
       kind: "listing_publication",
       actorId: actor.id,
