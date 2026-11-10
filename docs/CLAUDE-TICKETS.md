@@ -42,6 +42,17 @@ taken on, and James had to find that out.)
 Most "details don't pull through" tickets are one screen reading a fact from a different place than the screen
 where it was typed. Find both readers before changing either; fix the reader, never the person's data.
 
+**A guess is not a fix (10 Nov 2026).** "The home doesn't come up" was reported fix_ready twice (28 Oct, 7 Nov)
+on a guess about the home ("it has just been let"). It had not: it was still a listing, the fix could not have
+found it, and the agent was told it was fixed. When the cause depends on what one named home, person or deal IS
+(let or listed, on which list, linked or not), you cannot see that from here: report `needs_you` with the one
+lookup that settles it, and say what you would change for each answer. If you do ship a change, the note's
+"I couldn't check" line must say which guess the fix rests on, first, not last.
+
+When something "doesn't come up" in a search, the list is the fault, not the search box. Every "which home?"
+search reads one list (`lib/homes-to-pick`, `GET /api/homes`): widen that, never add a second list to one screen.
+docs/BUG-HUNT-10-NOV.md groups the open faults by cause; check it before fixing a ticket on its own.
+
 ## 3. Fix it
 
 - Branch `claude/ticket-<first 8 characters of the id>` from `main`. Smallest change that fixes the cause.
