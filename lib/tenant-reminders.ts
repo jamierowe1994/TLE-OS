@@ -9,6 +9,7 @@ import { presentAgentFor } from "@/lib/rex-agents";
 import { applicationEmails, feedbackRequests, matchesAgain, rebooks } from "@/lib/tenant-journey-emails";
 import { alertsDue, markAlertSent, stopLink } from "@/lib/tenant-find";
 import { homesOnMarket } from "@/lib/tenant-homes";
+import { moveInWelcomes } from "@/lib/move-in-welcome";
 
 /**
  * The tenant emails that go on a timer (16 Sep 2026).
@@ -230,6 +231,10 @@ export async function runTenantReminders(opts: { dry?: boolean; now?: Date } = {
     ["anything close", () => matchesAgain(dry, run.results)],
     ["applications", () => applicationEmails(dry, run.results)],
     ["new-home alerts", () => homeAlerts(dry, now, run.results)],
+    /* The move-in welcomes (Kirstie Mulholland, ticket f180d1eb; James, 10
+       Nov 2026). Behind their own switch, not this run's: they write to
+       landlords as well (lib/move-in-welcome). */
+    ["move-in welcomes", () => moveInWelcomes(opts.dry === true, now, run.results)],
   ];
   const errors: string[] = [];
   for (const [name, job] of jobs) {

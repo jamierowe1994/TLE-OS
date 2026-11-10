@@ -2296,3 +2296,82 @@ export const WEEK_AHEAD_LINES_SCOTLAND = [
   "<strong>5.</strong> Your first month's rent, in cleared funds before move-in day",
   "<strong>6.</strong> Your keys",
 ].join("<br>");
+
+/* ── Welcome, once the tenants have moved in ──────────────────────────────
+
+   Kirstie Mulholland, ticket f180d1eb, 8 Nov 2026: "Please can we create a
+   welcome email to tenants and landlords for managed properties - we had one
+   on rex pm and could we make it so it goes out automatically once tenants
+   have moved in". James, 10 Nov 2026: "Feel free to make those automatic
+   welcome emails after moving in."
+
+   Sent by lib/move-in-welcome, the morning after the move-in date, on
+   managed homes only. No figures: the rent, the deposit and the bank details
+   are in the tenancy paperwork, and an email that guessed at them would be
+   the one a tenant pays from.
+
+   Placeholders: {{firstName}} {{address}} {{agentName}} {{agentFirst}}
+   {{agentPhone}} {{agentEmail}} {{link}}, and for the tenant {{signInLink}}
+   {{signInHref}}, for the landlord {{moveInPretty}} {{firstVisit}}
+   {{everyVisit}}. */
+
+export const TENANT_MOVE_IN_WELCOME = {
+  subject: "Welcome to your new home, {{firstName}}",
+  preheader: "Who looks after your home, how to report a repair, and what to do in an emergency.",
+  mode: "blocks",
+  blocks: [
+    H("tmw1", "Welcome to Your New Home"),
+    T("tmw2", "Hi {{firstName}},<br><br>Welcome to <strong>{{address}}</strong>. We hope the move went smoothly and you're settling in well. I'm {{agentName}}, your property manager at The Letting Experts, and I'll be looking after your home while you live there."),
+    FACTS("tmw3", [
+      ["Your property manager", "{{agentName}}"],
+      ["Phone", "{{agentPhone}}"],
+      ["Email", "{{agentEmail}}"],
+    ]),
+    H2("tmw4", "Reporting a Repair"),
+    T("tmw5", "If something needs fixing, the quickest way to tell us is your tenant account. Say what's wrong and where, add a photo if you can, and you can follow it all the way from reported to fixed."),
+    SP("tmw6", 8),
+    BTN("tmw7", "Report a repair", "{{link}}"),
+    SP("tmw8", 8),
+    T("tmw9", "The button signs you straight in and works for 14 days. After that, go to <a href=\"{{signInHref}}\">{{signInLink}}</a> at any time and type in this email address, and we'll send you a fresh link."),
+    H2("tmw10", "Paying Your Rent"),
+    T("tmw11", "Your rent is due on the day set out in your tenancy agreement. Please pay it by standing order, using the account details and payment reference in your tenancy paperwork, so it arrives on time every month. If you ever think a payment might be late, tell me before the day and we'll work it out together."),
+    H2("tmw12", "In an Emergency"),
+    T("tmw13", "If you smell gas, ring the National Gas Emergency Service on <strong>0800 111 999</strong> straight away. If anyone is in danger, ring 999."),
+    T("tmw14", "For anything else urgent, like a flood, no heating or hot water, or a door or window that won't lock, please don't report it online and wait for a reply. Ring {{agentFirst}} on <strong>{{agentPhone}}</strong>."),
+    T("tmw15", "Welcome home, and do get in touch if there's anything you need."),
+    SP("tmw16", 8),
+    T("tmw17", "Best wishes,<br>{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("tmw18", "You're getting this because you've moved into a home managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false, kicker: "Your new home", mast: "sage" },
+} as const;
+
+export const LANDLORD_MOVE_IN_WELCOME = {
+  subject: "Welcome to fully managed - {{address}}",
+  preheader: "Your tenants have moved in. Who looks after your property, and what happens next.",
+  mode: "blocks",
+  blocks: [
+    H("lmw1", "Welcome to Fully Managed"),
+    T("lmw2", "Dear {{firstName}},<br><br>Your tenants have moved in at <strong>{{address}}</strong>, and we're now looking after the property for you. Thank you for trusting us with it. I'm {{agentName}}, your property manager, and I'm your first point of contact for anything to do with it."),
+    FACTS("lmw3", [
+      ["Your property manager", "{{agentName}}"],
+      ["Phone", "{{agentPhone}}"],
+      ["Email", "{{agentEmail}}"],
+      ["Tenancy started", "{{moveInPretty}}"],
+    ]),
+    H2("lmw4", "What Happens Next"),
+    T("lmw5", "<strong>Rent and statements.</strong> We collect the rent each month and pay it on to you. Each time, you'll get a statement by email from PayProp, the client account system we use, so do look out for it."),
+    T("lmw6", "<strong>Certificates.</strong> We keep track of your gas safety, electrical and energy performance certificates, and we'll be in touch well before any of them is due for renewal."),
+    T("lmw7", "<strong>Inspections.</strong> Our first routine visit is about {{firstVisit}} after the move-in, then every {{everyVisit}}. You'll get a report from us after each one."),
+    T("lmw8", "<strong>Repairs.</strong> Your tenants report repairs straight to us and we arrange the work. Anything that needs your say, we'll ask you before it goes ahead."),
+    SP("lmw9", 8),
+    BTN("lmw10", "Open my property file", "{{link}}"),
+    SP("lmw11", 8),
+    T("lmw12", "Your property file is where you'll find your documents, certificates and messages from us. Sign in with this email address and we'll send you a link."),
+    T("lmw13", "Any questions at all, just reply or give me a call."),
+    SP("lmw14", 8),
+    T("lmw15", "Kind regards,<br>{{agentName}}<br>{{agentPhone}}<br>{{agentEmail}}<br>The Letting Experts"),
+    FOOT("lmw16", "You're getting this because The Letting Experts manage your property."),
+  ],
+  branding: { showSignoff: false, kicker: "Fully managed" },
+} as const;
