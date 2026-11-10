@@ -633,6 +633,19 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "LISTING_AUTO_TAKEDOWN",
     legacyOn: "on",
   },
+  {
+    /* Print Brochure (Erleta Vathej, ticket 47b2389c; James, 10 Nov 2026: an
+       A4 brochure to hand out at viewings, with no landlord details).
+       lib/viewing-brochure + app/brochure. Off, the buttons are hidden and the page
+       says it isn't switched on. No new variable: unset is off. */
+    key: "listing_brochure",
+    label: "Print a brochure for viewings",
+    what: "Shows Print Brochure on a live listing's page and on each viewing in the Diary. It opens an A4 sheet made from the listing as it is now: the photos, the advert heading and write-up, rent, bedrooms, type of home, when it's available, the EPC, and the listing agent's name and email with the office phone. The address is the street and postcode district only, and nothing about the landlord is on it. Only live listings print.",
+    who: "Nobody is emailed and nothing is written anywhere. Whoever is handed the printed sheet at a viewing.",
+    confirm: "PRINT BROCHURES",
+    legacyEnv: "LISTING_BROCHURE",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));
