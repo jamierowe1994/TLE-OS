@@ -1,0 +1,134 @@
+/* ============================================================================
+   TOOLS > NOTICE DATES, CALCULATORS, ROUTE PLANNER (10 Nov 2026). nl-at-* is
+   what these three add on top of Forecast's nl-fc-* furniture. Square edges,
+   final palette, nothing rounded.
+   ========================================================================== */
+.nl-at .nl-fc-seg { margin-top: 8px; }
+.nl-at .nl-fc-seg button { padding: 0 10px; min-height: 40px; height: auto; line-height: 1.2; border-left: 1px solid var(--line); }
+.nl-at .nl-fc-seg button:first-child { border-left: 0; }
+
+.nl-at-split { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 18px; margin-top: 26px; align-items: start; }
+.nl-at-form { display: flex; flex-direction: column; gap: 20px; }
+.nl-at-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 14px; }
+.nl-at-result { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 18px; }
+
+.nl-at-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nl-at-field input, .nl-at-field select { width: 100%; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 0; background: var(--page); font: inherit; font-size: 16px; color: var(--ink); appearance: none; }
+.nl-at-field input:focus-visible, .nl-at-field select:focus-visible { outline: 2px solid var(--fc-terra); outline-offset: 1px; }
+.nl-at-field small { font-size: 12px; line-height: 17px; color: var(--muted); }
+.nl-at-money { display: flex; align-items: stretch; border: 1px solid var(--line-strong); background: var(--page); }
+.nl-at-money i { display: grid; place-items: center; width: 38px; font-style: normal; font-size: 16px; color: var(--muted); border-right: 1px solid var(--line); }
+.nl-at-money input { border: 0; background: transparent; }
+.nl-at-money:focus-within { outline: 2px solid var(--fc-terra); outline-offset: 1px; }
+.nl-at-money input:focus-visible { outline: 0; }
+
+.nl-at-guide { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: 12.5px; line-height: 19px; color: var(--muted); }
+.nl-at-guide svg { flex: none; margin-top: 2px; color: var(--fc-terra); }
+
+/* Notice Dates */
+.nl-at-grounds { border: 0; padding: 0; margin: 0; min-width: 0; }
+.nl-at-grounds legend { padding: 0; margin-bottom: 8px; }
+.nl-at-grounds ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); max-height: 380px; overflow-y: auto; }
+.nl-at-grounds li + li { border-top: 1px solid var(--line); }
+.nl-at-grounds label { display: grid; grid-template-columns: 18px 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; font-size: 13.5px; line-height: 18px; cursor: pointer; }
+.nl-at-grounds label:hover { background: var(--page); }
+.nl-at-grounds label.is-on { background: var(--sage-soft, #f1f4ec); box-shadow: inset 3px 0 0 var(--fc-olive); }
+.nl-at-grounds input { width: 16px; height: 16px; margin: 0; accent-color: var(--fc-brown); }
+.nl-at-grounds b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 15px; }
+.nl-at-grounds em { font-style: normal; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+.nl-at-hero { background: var(--fc-brown); color: #fff; padding: 22px 22px 24px; }
+.nl-at-hero .nl-fc-k { color: rgba(255, 255, 255, .72); }
+.nl-at-date { margin: 12px 0 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .02em; font-size: 38px; line-height: 1.05; overflow-wrap: anywhere; }
+.nl-at-away { margin: 10px 0 0; font-size: 14px; color: rgba(255, 255, 255, .82); }
+.nl-at-ask { border-left: 4px solid var(--fc-terra); font-size: 15px; line-height: 22px; }
+.nl-at-ask p { margin: 0; }
+
+.nl-at-steps { list-style: none; margin: 12px 0 0; padding: 0; }
+.nl-at-steps li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 13.5px; line-height: 19px; }
+.nl-at-steps li:first-child { border-top: 0; }
+.nl-at-when { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 15px; color: var(--muted); }
+.nl-at-steps li.is-top .nl-at-when { color: var(--fc-terra); }
+.nl-at-steps b { font-weight: 600; }
+.nl-at-steps i { display: inline-block; margin-left: 8px; padding: 1px 7px; font-style: normal; font-size: 11px; color: #fff; background: var(--fc-terra); vertical-align: 1px; }
+.nl-at-steps small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--muted); }
+.nl-at-lapse { margin: 12px 0 0; padding: 10px 12px; background: var(--page); border-left: 3px solid var(--fc-clay); font-size: 13px; line-height: 19px; }
+.nl-at-notes { margin: 12px 0 0; padding-left: 18px; font-size: 13px; line-height: 20px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .nl-at-split { grid-template-columns: minmax(0, 1fr); }
+  .nl-at-result { position: static; }
+}
+@media (max-width: 640px) {
+  .nl-at-row { grid-template-columns: minmax(0, 1fr); }
+  .nl-at .nl-fc-seg { flex-wrap: wrap; }
+  .nl-at .nl-fc-seg button { flex: 1 1 30%; font-size: 13px; }
+  .nl-at-date { font-size: 30px; }
+  .nl-at-steps li { grid-template-columns: 78px minmax(0, 1fr); gap: 10px; }
+  .nl-at-grounds label { grid-template-columns: 18px 30px minmax(0, 1fr); }
+  .nl-at-grounds em { grid-column: 3; }
+}
+
+/* Calculators */
+.nl-at-tabs { margin-top: 22px; max-width: 640px; }
+.nl-at-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.nl-at-figs .nl-fc-fig { margin: 0; min-width: 0; }
+.nl-at-figs .nl-fc-v { overflow-wrap: anywhere; }
+.nl-at-empty { font-size: 14px; line-height: 21px; color: var(--muted); }
+.nl-at-verdict { margin: 0; padding: 12px 14px; font-size: 14.5px; line-height: 21px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--fc-olive); }
+.nl-at-verdict.is-no { border-left-color: var(--fc-terra); }
+.nl-at-result .nl-fc-table, .nl-at-result .nl-fc-wait, .nl-at-result .nl-fc-off, .nl-at-result .nl-at-notes { margin-top: 0; }
+.nl-at .nl-fc-table td.nl-at-wrap { white-space: normal; text-align: left; }
+.nl-at .nl-btn { border-radius: 0; }
+
+/* Route Planner */
+.nl-at-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin-top: 22px; border: 1px solid var(--line-strong); background: #fff; }
+.nl-at-days button { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; min-height: 56px; text-align: left; background: transparent; border: 0; border-left: 1px solid var(--line); color: var(--ink); cursor: pointer; font: inherit; }
+.nl-at-days button:first-child { border-left: 0; }
+.nl-at-days b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 15px; }
+.nl-at-days span { font-size: 12px; color: var(--muted); }
+.nl-at-days button.is-on { background: var(--fc-brown); color: #fff; }
+.nl-at-days button.is-on span { color: rgba(255, 255, 255, .78); }
+.nl-at-days button:focus-visible { outline: 2px solid var(--fc-terra); outline-offset: -2px; }
+.nl-at-route > .nl-fc-wait, .nl-at-days + .nl-fc-card { margin-top: 18px; }
+.nl-at-none { margin: 0; font-size: 14px; color: var(--muted); }
+.nl-at-stops { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.nl-at-stops li { display: grid; grid-template-columns: 62px minmax(0, 1fr); column-gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 20px; }
+.nl-at-stops li > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nl-at-stops b { font-weight: 600; overflow-wrap: anywhere; }
+.nl-at-stops small { font-size: 12.5px; line-height: 18px; color: var(--muted); overflow-wrap: anywhere; }
+.nl-at-stops small.is-bad { color: var(--fc-terra); }
+.nl-at-stops small.is-warn { color: var(--fc-brown); }
+.nl-at-stops li.is-base .nl-at-when { color: var(--fc-olive); }
+.nl-at-leg { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: -2px 0 12px; padding: 8px 12px; font-size: 13px; line-height: 19px; background: var(--page); border-left: 3px solid var(--sage, #b9bea6); }
+.nl-at-leg b { font-weight: 600; }
+.nl-at-leg em { font-style: normal; margin-left: auto; color: var(--muted); }
+.nl-at-leg.is-fine { border-left-color: var(--fc-olive); }
+.nl-at-leg.is-tight { border-left-color: var(--fc-clay); }
+.nl-at-leg.is-tight em { color: var(--fc-brown); font-weight: 600; }
+.nl-at-leg.is-short, .nl-at-leg.is-bad { border-left-color: var(--fc-terra); }
+.nl-at-leg.is-short em, .nl-at-leg.is-bad { color: var(--fc-terra); font-weight: 600; }
+.nl-at-go { align-self: flex-start; min-height: 44px; padding: 0 20px; }
+.nl-at-better ol { list-style: none; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.nl-at-better li { display: grid; grid-template-columns: 62px minmax(0, 1fr); column-gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 20px; }
+.nl-at-better li small { display: block; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.nl-at-save { margin: 8px 0 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .02em; font-size: 26px; line-height: 1.1; color: var(--fc-olive); }
+.nl-at-fine { margin: 0; padding: 12px 14px; font-size: 14px; line-height: 21px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--fc-olive); }
+
+@media (max-width: 760px) {
+  .nl-at-days { grid-template-columns: repeat(7, minmax(92px, 1fr)); overflow-x: auto; }
+}
+@media (max-width: 640px) {
+  .nl-at-figs { grid-template-columns: minmax(0, 1fr); }
+  /* Four tabs sit two by two, never three and a stray. */
+  .nl-at .nl-at-tabs .nl-fc-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nl-at .nl-at-tabs .nl-fc-seg button:nth-child(odd) { border-left: 0; }
+  .nl-at .nl-at-tabs .nl-fc-seg button:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  /* The tax owed is the column that matters: drop "Taxed" so it always fits. */
+  .nl-at-duty .nl-at-taxed { display: none; }
+  .nl-at-duty th, .nl-at-duty td { padding-left: 12px; padding-right: 12px; }
+  .nl-at-duty td:first-child { white-space: normal; }
+  .nl-at-leg em { margin-left: 0; flex-basis: 100%; }
+  .nl-at-go { align-self: stretch; }
+  .nl-at-stops li, .nl-at-better li { grid-template-columns: 52px minmax(0, 1fr); column-gap: 10px; }
+}

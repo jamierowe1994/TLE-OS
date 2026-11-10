@@ -17,6 +17,25 @@ import { TOOL_GROUPS, toolsInGroup, type Tool } from "@/lib/tools";
 
 /* Line icons in the new look's hand (components/new-look/Parts' Ico), one per tool. */
 const ICON: Record<string, React.ReactNode> = {
+  "notice-dates": (
+    <>
+      <rect x="4" y="5.5" width="16" height="14.5" rx="2" />
+      <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4M9 15l2 2 4-4" />
+    </>
+  ),
+  calculators: (
+    <>
+      <rect x="5.5" y="3.5" width="13" height="17" rx="2" />
+      <path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01" />
+    </>
+  ),
+  "route-planner": (
+    <>
+      <circle cx="6.5" cy="17.5" r="2" />
+      <circle cx="17.5" cy="6.5" r="2" />
+      <path d="M8.5 17.5H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5" />
+    </>
+  ),
   invoicing: (
     <>
       <path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.5l-3-2-3 2-3-2-3 2V5A1.5 1.5 0 0 1 7 3.5z" />
