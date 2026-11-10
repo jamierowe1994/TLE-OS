@@ -79,11 +79,15 @@ const READY: [string, string, string][] = [
    defaults, and the comment about pets, live in lib/pre-pack-questions. */
 
 /* The design's first line promised on-street parking at every home, which a
-   city flat can't have; this one is true everywhere. */
+   city flat can't have; this one is true everywhere. The other two promised
+   a text ten minutes out and a tape measure (Richard Callow, 10 Nov 2026):
+   nothing sends that text, and most agents don't carry one. James: keep the
+   parking line, make the other two about getting the home ready. Every line
+   here has to be true whoever is visiting. */
 const ARRIVE = [
   "Tell me if parking is tricky and I’ll plan around it",
-  "I’ll text you when I’m ten minutes away",
-  "I’ll bring everything I need, including a tape measure",
+  "Have every room open, so I can see the whole home",
+  "Need a different time? Call me and we’ll move it",
 ];
 
 /* When the agent hasn't written their own note. The design's sample claimed
