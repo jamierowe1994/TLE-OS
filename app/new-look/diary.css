@@ -80,6 +80,17 @@
 [data-look="new"] .nl-diary-row-end { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; }
 [data-look="new"] .nl-diary-kind { font-size: 12px; color: var(--muted); white-space: nowrap; }
 [data-look="new"] .nl-diary-caret { color: var(--faint); }
+/* Print Brochure under a viewing (ticket 47b2389c, 10 Nov 2026), lined up with the row's words. */
+[data-look="new"] .nl-diary-brochure {
+  display: inline-flex; align-items: center; gap: 6px; margin: -10px 0 14px 94px;
+  font-size: 12px; font-weight: 600; color: var(--primary); text-decoration: none;
+}
+[data-look="new"] .nl-diary-brochure:hover { text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-diary-brochure:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-diary-split .nl-diary-brochure { margin-left: 83px; margin-top: -8px; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-diary-brochure, [data-look="new"] .nl-diary-split .nl-diary-brochure { margin-left: 76px; margin-top: -8px; }
+}
 @media (max-width: 760px) {
   [data-look="new"] .nl-diary-row { grid-template-columns: 46px 8px minmax(0, 1fr) 14px; gap: 10px; padding: 16px 2px; }
   [data-look="new"] .nl-diary-row-end { grid-column: 3; grid-row: 2; justify-content: flex-start; margin-top: -4px; }

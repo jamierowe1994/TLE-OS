@@ -686,6 +686,22 @@ function ListingDrawerBody({
     };
   }, [tickFor]);
 
+  /* PRINT BROCHURE (Erleta Vathej, ticket 47b2389c; James, 10 Nov 2026: an A4
+     sheet to hand out at viewings, no landlord details). Behind its own switch
+     (lib/switches listing_brochure), asked once; the sheet is app/brochure. */
+  const [brochureArmed, setBrochureArmed] = useState(false);
+  useEffect(() => {
+    if (!newLook) return;
+    let off = false;
+    fetch("/api/listings/brochure", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; armed?: boolean }) => !off && setBrochureArmed(Boolean(j.ok && j.armed)))
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [newLook]);
+
   async function markLet(action: "let_agreed" | "available") {
     if (!listing) return;
     setLetBusy(true);
@@ -2938,6 +2954,12 @@ function ListingDrawerBody({
             <button type="button" data-steve="listing.tab.marketing" onClick={() => pickTab("marketing")} className="nl-btn nl-btn--secondary">
               <Ico name="pen" /> Edit the advert
             </button>
+            {/* Only a live listing prints (lib/viewing-brochure). */}
+            {brochureArmed && isLive && Number(listing.id) > 0 && (
+              <a href={`/brochure/${encodeURIComponent(String(listing.id))}`} target="_blank" rel="noopener" data-steve-never className="nl-btn nl-btn--secondary" title="An A4 sheet to hand out at viewings. No landlord details are on it.">
+                <Ico name="print" /> Print Brochure
+              </a>
+            )}
             {mainJob}
             <Menu
               items={[

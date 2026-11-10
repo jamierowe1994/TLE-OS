@@ -113,6 +113,29 @@ export default function Viewings() {
 
   const { appts: DIARY, loading, everything, error } = useDiary();
 
+  /* Print Brochure on each viewing (Erleta Vathej, ticket 47b2389c; James,
+     10 Nov 2026: "so we can hand out at viewings"). New look only, behind its
+     own switch (lib/switches listing_brochure). A viewing still to come, on a
+     listing, gets one; the sheet (app/brochure) prints live listings only. */
+  const [brochureArmed, setBrochureArmed] = useState(false);
+  useEffect(() => {
+    if (!look) return;
+    let off = false;
+    fetch("/api/listings/brochure", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; armed?: boolean }) => !off && setBrochureArmed(Boolean(j.ok && j.armed)))
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [look]);
+  const brochureListing = (a: Appt): string | null =>
+    brochureArmed && a.kind === "viewing" && !a.fromPersonal && a.day >= 0 && a.listingId && /^\d{1,9}$/.test(a.listingId) ? a.listingId : null;
+  const brochureHref = (a: Appt): string | null => {
+    const id = brochureListing(a);
+    return id ? `/brochure/${id}` : null;
+  };
+
   /* Who is looking. The owner's own entries are the default, matched on the
      mailbox rather than the name - see Appt.agentEmail. */
   const [me, setMe] = useState<{ name: string; email: string } | null>(null);
@@ -303,6 +326,8 @@ export default function Viewings() {
       if (window.matchMedia("(max-width: 1099px)").matches) window.setTimeout(() => dayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     };
     const dayList = byDay.get(selected) ?? [];
+    /* The day's homes, one brochure each, in one print (ticket 47b2389c). */
+    const dayHomes = [...new Set(dayList.map(brochureListing).filter((x): x is string => Boolean(x)))];
     const dayCount = counted(dayList);
     const weekCount = counted(week);
     const n = (x: number) => (sure ? x : null);
@@ -440,14 +465,19 @@ export default function Viewings() {
                       {nearLabel(selected) && sure && dayCount ? " · " : ""}
                       {sure && dayCount ? `${dayCount} ${dayCount === 1 ? "appointment" : "appointments"}` : ""}
                     </span>
-                    <button type="button" className="nl-link ml-auto" onClick={() => window.print()}>
+                    {dayHomes.length > 1 && (
+                      <a href={`/brochure/${dayHomes.join(",")}`} target="_blank" rel="noopener" className="nl-link ml-auto" title="Print one A4 brochure for each home on this day's viewings. No landlord details are on them.">
+                        {dayHomes.length} Brochures
+                      </a>
+                    )}
+                    <button type="button" className={`nl-link${dayHomes.length > 1 ? "" : " ml-auto"}`} onClick={() => window.print()}>
                       Print
                     </button>
                   </div>
                   {loading && !dayList.length ? (
                     loadingLine
                   ) : dayList.length ? (
-                    <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />
+                    <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} brochure={brochureHref} />
                   ) : (
                     <p className="nl-empty">{selected < 0 ? "Nothing was booked that day." : "A clear day. Rare. Enjoy it."}</p>
                   )}
