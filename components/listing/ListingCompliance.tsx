@@ -150,6 +150,7 @@ export default function ListingCompliance({
   home,
   terms,
   landlord,
+  otherLandlords = [],
   landlordRegistration,
   landlordRegistrationExpiry = null,
   landlordRegistrationOwner = null,
@@ -170,6 +171,12 @@ export default function ListingCompliance({
   home: ListingHome | null;
   terms: TermsState;
   landlord: { contactId: string | number | null; name?: string; email?: string; phone?: string };
+  /**
+   * Every landlord after the first, as the one reader names them
+   * (lib/landlords-for-home, 10 Nov 2026): the listing's second owner was
+   * never here, so the terms went to one signer and one ID was asked for.
+   */
+  otherLandlords?: HomeLandlord[];
   landlordRegistration: string | null;
   /** When each registration number runs out (lib/reg-numbers), from the listing's Landlord section. */
   landlordRegistrationExpiry?: Record<string, string> | null;
@@ -219,7 +226,7 @@ export default function ListingCompliance({
      joint landlords kept on the home (lib/property-people) under the same key
      the listing's Landlord section uses. A test listing keeps its own. */
   const joint = useJointLandlords(Number(listingId) < 0 ? null : propertyId ?? `listing:${listingId}`);
-  const landlords = everyLandlord([{ name: landlord.name, email: landlord.email, phone: landlord.phone }], joint ?? []);
+  const landlords = everyLandlord([{ name: landlord.name, email: landlord.email, phone: landlord.phone }], otherLandlords, joint ?? []);
 
   /* ── Where each landlord paper already is ── */
   const doc = (type: string): Held => {

@@ -75,8 +75,11 @@ export async function putPlcWithAgent(c: PlcCase, decision: "approved" | "deferr
     note: decision === "approved" ? "The PLC check passed afterwards, so this was no longer needed." : "The PLC check was decided again, and the newer update replaces this one.",
   }).catch(() => 0);
   const packet = c.applicationRef ? await handoffFor(c.applicationRef).catch(() => null) : null;
-  const landlord = packet?.landlord ?? null;
-  if (!landlord) return null;
+  /* EVERY LANDLORD, NOT THE FIRST (10 Nov 2026): the packet names them all
+     (lib/landlords-for-home) and only the first was put with the agent to
+     tell. Each is their own line on the update, told and ticked on their own. */
+  const landlords = packet?.landlord ? [packet.landlord, ...(packet.otherLandlords ?? [])] : [];
+  if (!landlords.length) return null;
   const { why, landlordNeeds } = decision === "approved" ? { why: "", landlordNeeds: [] } : plcSummary(c);
   const agentName = c.agentName || packet?.agent || "The Letting Experts";
   return createUpdate({
@@ -88,20 +91,19 @@ export async function putPlcWithAgent(c: PlcCase, decision: "approved" | "deferr
     kind,
     headline: HEADLINE[kind],
     why,
-    recipients: [
-      {
-        role: "landlord",
-        name: landlord.name,
-        email: landlord.email,
-        contactId: landlord.contactId,
-        emailId: "update-landlord",
-        vars: updateVars(kind, "landlord", {
-          address: c.address,
-          firstName: landlord.name.trim().split(/\s+/)[0] || "there",
-          agentName,
-          needs: landlordNeeds,
-        }),
-      },
-    ],
+    recipients: landlords.map((landlord) => ({
+      role: "landlord" as const,
+      name: landlord.name,
+      email: landlord.email,
+      /* A REX contact's id only: an OS landlord ("changed:", "record:", "person:") has none. */
+      contactId: landlord.contactId && /^\d+$/.test(landlord.contactId) ? landlord.contactId : null,
+      emailId: "update-landlord",
+      vars: updateVars(kind, "landlord", {
+        address: c.address,
+        firstName: landlord.name.trim().split(/\s+/)[0] || "there",
+        agentName,
+        needs: landlordNeeds,
+      }),
+    })),
   });
 }

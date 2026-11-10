@@ -2,10 +2,7 @@ import "server-only";
 import { rexCall } from "@/lib/rex";
 import { hasDb, q } from "@/lib/db";
 import { getApplications, type Application } from "@/lib/applications";
-import { isOwnerReln } from "@/lib/rex-reln";
-import { recordLandlordFor } from "@/lib/record-landlords";
-import { changedLandlordFor } from "@/lib/landlord-change";
-import { peopleOnHome } from "@/lib/home-aliases";
+import { isJointOwner, landlordsForListing, type LandlordFrom } from "@/lib/landlords-for-home";
 import { tenantsAsOnLet, type EditedPart } from "@/lib/let-people";
 
 /**
@@ -251,151 +248,17 @@ export interface Handoff {
 
 /* ── the landlord ─────────────────────────────────────────────────────────── */
 
-/**
- * WHERE THE LANDLORD IS FOUND (26 Oct 2026).
- *
- * The push took the landlord from one place: the owner REX joins to the
- * listing. Of the 60 newest current listings, 16 had nobody joined, so their
- * lets would stop at "No landlord on the listing" - while the landlord was
- * often on the property itself, or the agent had already put them in the OS.
- * So the listing first, as before, then in order:
- *
- *   changed   the landlord the agent added or changed on the listing in the
- *             OS (Add the landlord / Change landlord, lib/landlord-change).
- *             Before the property owner because it is what the listing's own
- *             Landlord box shows, and the agent's newer word.
- *   property  the owners REX joins to the property (Properties/read with its
- *             contacts), where an appraisal's signed terms put them.
- *   record    the landlord on the home's OS record (os_properties.landlord_*,
- *             lib/record-landlords): REX PM's name, changed with Edit
- *             landlord (record_landlord_saved).
- *   joint     the joint landlords added on the home (lib/property-people).
- *
- * A JOINT LANDLORD ALWAYS GOES (James, 2 Nov 2026): the joint landlords on
- * the home were only the last resort, so a home with a landlord on the
- * listing went to Propoly without its second owner. Now they go with
- * whoever the landlord is, after them, one each by email or name. A point of
- * contact (kind "contact") is not an owner and never goes. A swap still
- * sends nobody new: the home and its landlords are already in Propoly.
- *
- * Every one comes back in the shape of a REX contact (id, name,
- * email_address, phone_number, company_name), so lib/handover reads them as
- * it reads the listing's owners. Only the REX ones carry a numeric id; an OS
- * landlord's id is "changed:", "record:" or "person:", never written to REX.
- * Swaps keep the listing only: their landlord is already in Propoly.
- *
- * lib/deal-handoff (the packet and its blockers) and lib/handover (the push)
- * both ask here, so the panel the agent checks names the landlord the push
- * sends, and says where they came from.
+/*
+ * WHERE THE LANDLORD IS FOUND lives in lib/landlords-for-home since 10 Nov
+ * 2026: the reader the push always had is now the one every screen and email
+ * asks, so the panel the agent checks, the listing, the let and the push all
+ * name the same landlords. lib/deal-handoff (the packet and its blockers) and
+ * lib/handover (the push) ask it with the listing they have just read, so
+ * nothing held stands between the push and REX.
  */
-export type LandlordFrom = "listing" | "changed" | "property" | "record" | "joint";
-
-const FROM_NOTE: Record<LandlordFrom, string> = {
-  listing: "On the listing.",
-  changed: "Not on the listing. Added in the OS with Add the landlord.",
-  property: "Not on the listing. Taken from the property's owner - check they are still the landlord.",
-  record: "Not on the listing. Taken from the home's record in the OS - check they are still the landlord.",
-  joint: "Not on the listing. Taken from the joint landlords on the home - check they are still the landlord.",
-};
-
-export interface LandlordsFound {
-  owners: Row[];
-  from: LandlordFrom | null;
-  note: string | null;
-}
-
-/** A joint landlord from the home (lib/property-people), as the owners list carries them. */
-export const isJointOwner = (c: Row): boolean => String(c.id ?? "").startsWith("person:");
+export { isJointOwner, landlordsForListing, type LandlordFrom, type LandlordsFound } from "@/lib/landlords-for-home";
 
 const idOf = (v: unknown): string | null => (v == null || v === "" ? null : String(v).trim() || null);
-/* An OS landlord carries no company flag, so a name that is plainly a company
-   ("Home Select Finance (No 3) Limited") goes to Propoly as one, not as Mr
-   Limited. */
-const asCompany = (name: string | null | undefined) => (/\b(limited|ltd|llp|plc)\.?$/i.test((name ?? "").trim()) ? { company_name: (name ?? "").trim() } : {});
-
-/** The landlords for a listing REX has read, as REX-shaped contacts, the home's joint landlords after them. Reads only. */
-export async function landlordsForListing(listing: Row, opts: { listingId: number | string | null; swap?: boolean }): Promise<LandlordsFound> {
-  const main = await mainLandlords(listing, opts);
-  if (opts.swap) return main;
-  const listingId = idOf(opts.listingId);
-  const propertyId = idOf((listing.property as Row | null)?.id) ?? idOf(listing.property_id);
-  /* Every key the home is filed under, not only the REX property's (Lianna
-     Denholm, 4 Nov 2026: a joint landlord added on the
-     appraisal or the listing never went). lib/home-aliases. */
-  const joint = propertyId || listingId ? (await peopleOnHome(propertyId, listingId ? `listing:${listingId}` : null).catch(() => [])).filter((p) => p.kind === "joint_landlord") : [];
-  const key = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  const emails = new Set(main.owners.map((c) => key(c.email_address)).filter(Boolean));
-  const names = new Set(main.owners.map((c) => key(c.name)).filter(Boolean));
-  const extra: Row[] = [];
-  for (const p of joint) {
-    const e = key(p.email);
-    const n = key(p.name);
-    if ((e && emails.has(e)) || (n && names.has(n))) continue;
-    if (e) emails.add(e);
-    if (n) names.add(n);
-    extra.push({ id: `person:${p.id}`, name: p.name, email_address: p.email, phone_number: p.phone, ...asCompany(p.name) });
-  }
-  if (!extra.length) return main;
-  if (!main.owners.length) return { owners: extra, from: "joint", note: FROM_NOTE.joint };
-  return { ...main, owners: [...main.owners, ...extra] };
-}
-
-/**
- * The landlord the record holds, from the first place that has one (see
- * above), except that a landlord changed in the OS now comes before the
- * listing's own owners (4 Nov 2026, below).
- */
-async function mainLandlords(listing: Row, opts: { listingId: number | string | null; swap?: boolean }): Promise<LandlordsFound> {
-  const found = (owners: Row[], from: LandlordFrom): LandlordsFound => ({ owners, from, note: FROM_NOTE[from] });
-  const related = (listing.related ?? {}) as Row;
-  /* "Listing Owner" or a sub-type of it ("Landlord", 68 Main Street, 26 Oct 2026). */
-  const onListing = ((related.contact_reln_listing ?? []) as Row[])
-    .filter((r) => isOwnerReln(r))
-    .map((r) => (r.contact ?? null) as Row | null)
-    .filter((c): c is Row => Boolean(c));
-  /* A swap keeps the listing's owners, as before: its landlord is already in Propoly. */
-  if (opts.swap) return onListing.length ? found(onListing, "listing") : { owners: [], from: null, note: null };
-
-  const listingId = idOf(opts.listingId);
-  const propertyId = idOf((listing.property as Row | null)?.id) ?? idOf(listing.property_id);
-
-  /* THE NEWEST LANDLORD WINS (James, 1 Nov 2026: the newest figure wins
-     everywhere, new Propoly deals included). A landlord changed in the OS
-     with Change landlord (lib/landlord-change) is the one the listing, the
-     Terms and the let already show over REX's owner (lib/rex-landlord
-     landlordForListing), yet the push took the listing's owners first and
-     read the change only when REX had nobody, so a new Propoly deal got the
-     old owner. A current change for the listing or the home now comes first. */
-  const changed = await changedLandlordFor({ listingId, propertyId }).catch(() => null);
-  if (changed) {
-    const owners: Row[] = [{
-      id: `changed:${changed.id}`,
-      name: changed.name,
-      email_address: changed.email,
-      phone_number: changed.phone,
-      ...(changed.kind === "company" ? { company_name: changed.name } : asCompany(changed.name)),
-    }];
-    return onListing.length
-      ? { owners, from: "changed", note: "Changed in the OS with Change landlord, in place of the owner on the listing." }
-      : found(owners, "changed");
-  }
-  if (onListing.length) return found(onListing, "listing");
-
-  if (propertyId) {
-    const res = await rexCall("Properties", "read", { id: propertyId, extra_fields: ["contacts"] }).catch(() => null);
-    const onProperty = ((((res?.ok ? res.result : null) ?? {}) as Row).related as Row | undefined)?.contact_reln_property;
-    const owners = ((Array.isArray(onProperty) ? onProperty : []) as Row[])
-      .filter((r) => isOwnerReln(r))
-      .map((r) => (r.contact ?? null) as Row | null)
-      .filter((c): c is Row => Boolean(c));
-    if (owners.length) return found(owners, "property");
-
-    const record = await recordLandlordFor(propertyId).catch(() => null);
-    if (record) return found([{ id: record.contactId, name: record.name, email_address: record.email, phone_number: record.phone, ...asCompany(record.name) }], "record");
-  }
-
-  return { owners: [], from: null, note: null };
-}
 
 /** The landlord, the listing's uploads and its service. */
 async function landlordOf(listingId: number, swap: boolean): Promise<{ landlord: HandoffParty | null; others: OtherLandlord[]; from: LandlordFrom | null; note: string | null; docs: HandoffDoc[]; letOnly: boolean }> {

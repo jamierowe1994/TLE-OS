@@ -398,6 +398,7 @@ export default function PlcWizard({
       body: JSON.stringify({
         tenants: prefill?.tenants.map((t) => t.name) ?? [],
         landlord: prefill?.landlordName ?? null,
+        landlords: prefill?.landlords ?? [],
         propertyId: prefill?.propertyId ?? null,
       }),
     })
@@ -864,12 +865,24 @@ export default function PlcWizard({
                         )) : <span className="text-muted">Nobody recorded</span>}
                       </dd>
                     </div>
-                    {prefill.landlordName && (
-                      <div>
-                        <dt>Landlord</dt>
-                        <dd>{prefill.landlordName}</dd>
-                      </div>
-                    )}
+                    {/* Every landlord of the home, or the sentence that says why there
+                        is none and what to do: never a missing row (10 Nov 2026). */}
+                    {(() => {
+                      const names = prefill.landlords?.length ? prefill.landlords : prefill.landlordName ? [prefill.landlordName] : [];
+                      /* Not looked up at all (a sample or a test file with no landlord of its own): no row, as before. */
+                      if (!names.length && prefill.landlords === undefined && !prefill.landlordNote) return null;
+                      return (
+                        <div>
+                          <dt>{names.length > 1 ? "Landlords" : "Landlord"}</dt>
+                          {names.length ? (
+                            /* Plain words with commas: readable on the full page and in the pop-up alike. */
+                            <dd>{names.join(", ")}</dd>
+                          ) : (
+                            <dd className="text-muted">{prefill.landlordNote ?? "No landlord is held for this home. Add them under Landlord on the listing, then open the check again."}</dd>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {(prefill.rentPcm || prefill.agentName) && (
                       <div className="nl-plc-pair">
                         {prefill.rentPcm ? (
@@ -1010,7 +1023,8 @@ export default function PlcWizard({
                 onChanged={setKase}
                 context={{
                   tenants: prefill?.tenants.map((t) => t.name) ?? [],
-                  landlord: prefill?.landlordName ?? null,
+                  /* Every landlord by name, so a second owner's passport reads as a landlord's. */
+                  landlord: (prefill?.landlords?.length ? prefill.landlords.join(" & ") : prefill?.landlordName) ?? null,
                 }}
                 focus={focus}
                 demo={Boolean(demo)}

@@ -32,10 +32,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
   const landlord = answer.landlord;
   if (!landlord) {
-    return NextResponse.json({ ok: true, items: [], notes: ["REX has no landlord on this listing, so there's no conversation to show."], landlord: null });
+    return NextResponse.json({ ok: true, items: [], notes: ["No landlord is held for this home, so there's no conversation to show. Add them under Landlord on the listing."], landlord: null });
   }
-  const emails = landlord.email ? [landlord.email] : [];
-  const phones = landlord.phone ? [landlord.phone] : [];
+  /* Every landlord of the home (lib/landlords-for-home, 10 Nov 2026): an email
+     from the second owner is part of the listing's conversation too. A test
+     listing has its one landlord. */
+  const everyone = "landlords" in answer && answer.landlords.length ? answer.landlords : [landlord];
+  const emails = [...new Set(everyone.map((l) => (l.email ?? "").trim()).filter(Boolean))];
+  const phones = [...new Set(everyone.map((l) => (l.phone ?? "").trim()).filter(Boolean))];
 
   const open = req.nextUrl.searchParams.get("open");
   if (open) {
@@ -43,7 +47,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     return "error" in r ? NextResponse.json({ ok: false, error: r.error }, { status: 404 }) : NextResponse.json({ ok: true, email: r });
   }
   if (!emails.length && !phones.length) {
-    return NextResponse.json({ ok: true, items: [], notes: [`No email or mobile for ${landlord.name || "the landlord"} on REX, so there's no conversation to show.`], landlord: { name: landlord.name } });
+    return NextResponse.json({ ok: true, items: [], notes: [`No email or mobile is held for ${landlord.name || "the landlord"}, so there's no conversation to show. Add one under Landlord on the listing.`], landlord: { name: landlord.name } });
   }
   const home = isTestId(id) ? null : await homeForListing(id).catch(() => null);
   const conv = await conversationFor({ userId: actor.id, viewingAs, emails, phones, home });

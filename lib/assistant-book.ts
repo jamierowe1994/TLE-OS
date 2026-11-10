@@ -84,9 +84,9 @@ export async function homeContacts(listingId: string, at: { home: ManagedPropert
     for (const l of [at.home.landlord, ...(at.home.otherLandlords ?? [])]) if (l) add({ id: l.contactId, name: l.name, role: "Landlord", kind: "landlord", email: l.email, phone: l.phone });
   } else {
     const ll = await landlordForListing(listingId).catch(() => null);
-    const first = ll?.ok ? ll.landlord : null;
-    if (first) add({ id: first.contactId ?? `${first.from ?? "os"}:${key(first.name)}`, name: first.name, role: "Landlord", kind: "landlord", email: first.email, phone: first.phone });
-    if (first?.from !== "os") for (const c of rex.filter((x) => x.kind === "owner")) add(fromRex(c, "landlord", "Landlord"));
+    /* Everybody the one reader finds (lib/landlords-for-home): a landlord
+       changed in the OS stands in for REX's owners, so those are not added. */
+    for (const l of ll?.ok ? ll.landlords : []) add({ id: l.contactId ?? l.key, name: l.name, role: "Landlord", kind: "landlord", email: l.email, phone: l.phone });
   }
   for (const p of onHome.filter((x) => x.kind === "joint_landlord")) add({ id: `person:${p.id}`, name: p.name, role: "Landlord", kind: "landlord", email: p.email, phone: p.phone });
   if (at.home) for (const t of at.home.tenants) add({ id: t.contactId, name: t.name, role: "Tenant", kind: "tenant", email: t.email, phone: t.phone });

@@ -2,11 +2,13 @@ import "server-only";
 import { getApplicationById, getApplications, type Application } from "@/lib/applications";
 import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 import { isTestId, testApplication } from "@/lib/test-overlay";
+import { testLandlord } from "@/lib/test-listing-answers";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { findPropolyDeal, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { sameHome } from "@/lib/address-parse";
 import { dealForLet } from "@/lib/let-deal";
 import { tenantsAsOnLet } from "@/lib/let-people";
+import { landlordsOfHome } from "@/lib/landlords-for-home";
 
 /**
  * Everything the handover already knows before anybody types.
@@ -75,8 +77,21 @@ export interface Prefill {
    * on the first screen; it decides whether the HMO documents are needed.
    */
   hmo?: boolean;
-  /** The landlord on the OS's property record, so the reader can tell their ID from a tenant's. */
+  /**
+   * The home's landlord - the first of `landlords` - so the reader can tell
+   * their ID from a tenant's and their papers on other homes can be found.
+   */
   landlordName?: string | null;
+  /**
+   * EVERY landlord of the home by name (lib/landlords-for-home, 10 Nov 2026).
+   * The check used to start with the name on the OS's property record alone -
+   * the old system's, as it was on 2 Oct - so a landlord changed in the OS, the
+   * owner on the listing and a second owner never reached it, and a home whose
+   * record named nobody started with no landlord at all.
+   */
+  landlords?: string[];
+  /** Why no landlord is named, in the words the first screen shows. */
+  landlordNote?: string | null;
   /** The REX property, so the pack can find the certificates already on file for the home. */
   propertyId?: string | null;
 }
@@ -149,6 +164,28 @@ function shape(a: Application, facts?: { hmo: boolean; landlordName: string | nu
   };
 }
 
+/**
+ * The landlords laid over a shaped start: everybody the one reader finds for
+ * the let's listing and home, the first of them as `landlordName`. `known` is
+ * who the start already names (the record's landlord; a Propoly deal's own),
+ * kept when the reader finds nobody or the listings system does not answer -
+ * a name the OS holds is better than a blank, and the screen says which.
+ */
+async function withLandlords(p: Prefill, known: string[]): Promise<Prefill> {
+  const all = await landlordsOfHome({ listingId: p.listingId, propertyId: p.propertyId ?? null, letRef: p.applicationRef }).catch(() => null);
+  const names = [...new Set((all?.ok ? all.landlords.map((l) => l.name.trim()) : []).filter(Boolean))];
+  const landlords = names.length ? names : known;
+  if (landlords.length) return { ...p, landlordName: landlords[0], landlords, landlordNote: null };
+  return {
+    ...p,
+    landlordName: null,
+    landlords: [],
+    landlordNote: all && !all.ok
+      ? `${all.problem} Check the landlord on the listing before you send the pack.`
+      : "No landlord is held for this home. Add them under Landlord on the listing, then open the check again.",
+  };
+}
+
 /** A Propoly deal's id, as the let page uses it for a home let through Propoly alone. */
 const DEAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -169,13 +206,14 @@ async function shapeDeal(deal: BusinessDeal): Promise<Prefill> {
   ]);
   const home = homes.find((h) => sameHome(full, h.address) || sameHome(full, `${h.name}, ${h.postcode ?? ""}`)) ?? null;
   const fact = home?.rexPropertyId ? facts.get(home.rexPropertyId) ?? null : null;
-  const landlords = (d.propoly?.landlords ?? []).map((l) => (l.name ?? "").trim()).filter(Boolean);
+  const dealLandlords = (d.propoly?.landlords ?? []).map((l) => (l.name ?? "").trim()).filter(Boolean);
   const moveInDate = asYmd(d.startDate);
   const people = await onLet(d.id, d.tenants.map((t) => ({ name: t.name, email: t.email ?? null, phone: t.phone ?? null, contactId: null, isPrimary: Boolean(t.isPrimary) })), "propoly");
   const warnings: string[] = [];
   if (!moveInDate) warnings.push("No move-in date on the Propoly deal, so you will need to add it.");
   if (!people.length) warnings.push("No tenants are on the Propoly deal yet.");
-  return {
+  const recordName = (fact?.landlordName ?? home?.landlordName ?? "").trim();
+  return withLandlords({
     applicationRef: d.id,
     applicationId: d.id,
     listingId: d.listingId != null ? Number(d.listingId) : null,
@@ -187,9 +225,10 @@ async function shapeDeal(deal: BusinessDeal): Promise<Prefill> {
     rentPcm: d.offer == null ? null : d.offerPeriod === "week" ? Math.round((d.offer * 52) / 12) : d.offer,
     warnings,
     hmo: Boolean(home?.hmo) || Boolean(fact?.hmo) || ROOM.test(d.propertyName),
-    landlordName: fact?.landlordName ?? home?.landlordName ?? landlords[0] ?? null,
+    landlordName: recordName || dealLandlords[0] || null,
     propertyId: home?.rexPropertyId ?? null,
-  };
+    /* The record's name, else every landlord the deal itself holds. */
+  }, recordName ? [recordName] : dealLandlords);
 }
 
 /**
@@ -212,7 +251,11 @@ export async function prefillFor(opts: {
     const t = await testApplication(opts.applicationId);
     if (!t) return null;
     const app = applyLead(t.app, await leadOverrides().catch(() => new Map<string, string>()));
-    return shape(app, undefined, undefined, await onLet(String(app.id), app.applicants));
+    const shaped = shape(app, undefined, undefined, await onLet(String(app.id), app.applicants));
+    /* A test file's landlord is its test listing's own; nothing is asked of REX. */
+    const own = shaped.listingId != null ? await testLandlord(shaped.listingId).catch(() => null) : null;
+    const name = own?.landlord?.name?.trim();
+    return name ? { ...shaped, landlordName: name, landlords: [name] } : shaped;
   }
   /* A Propoly deal's id is never an application's (DEAL_ID above): nothing to look up. */
   const appId = opts.applicationId && !DEAL_ID.test(opts.applicationId) ? String(opts.applicationId) : null;
@@ -230,7 +273,8 @@ export async function prefillFor(opts: {
   /* The deal's move-in and the let's own people, side by side. */
   const full = async (a: Application) => {
     const [moveIn, people] = await Promise.all([dealMoveIn(a), onLet(String(a.id), a.applicants)]);
-    return shape(a, factsOf(a), moveIn, people);
+    const shaped = shape(a, factsOf(a), moveIn, people);
+    return withLandlords(shaped, shaped.landlordName ? [shaped.landlordName] : []);
   };
 
   if (opts.applicationId) {

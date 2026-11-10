@@ -1,7 +1,7 @@
 import "server-only";
 import { listingRead } from "@/lib/listing-details";
 import { hasDb, q } from "@/lib/db";
-import { isOwnerReln } from "@/lib/rex-reln";
+import type { HomeLandlord } from "@/lib/landlords-for-home";
 
 /**
  * The landlord of a property — the REAL one.
@@ -34,6 +34,16 @@ import { isOwnerReln } from "@/lib/rex-reln";
  * form of this: the owner relationship only comes back on a full read, not in
  * a search projection, so a book-wide landlord column would be one HTTP call
  * per property. Fetch it when a screen actually needs it.
+ *
+ * ── One reader since 10 Nov 2026 ──────────────────────────────────────────
+ *
+ * This file used to do its own read: the FIRST owner on the listing, never
+ * the property's own owners, and "no landlord" held for twelve hours. So a
+ * second owner was missing from the listing and its terms, and the Propoly
+ * push (which read every place) found a landlord the listing and the let said
+ * was missing. `landlordForListing` now asks lib/landlords-for-home, the
+ * reader the push uses, and names the first of everybody it finds; the whole
+ * list comes back beside it.
  */
 
 export type Landlord = {
@@ -43,10 +53,12 @@ export type Landlord = {
   email: string | null;
   phone: string | null;
   /** "record" = REX CRM holds no owner, so this is the OS property record's
-   *  landlord (REX PM's name for them): a name to show, nobody to write to.
+   *  landlord (REX PM's name for them), with the email and mobile typed there.
    *  "os" = an agent changed the landlord in the OS (lib/landlord-change):
-   *  the OS writes to them, REX still holds the old owner. */
-  from?: "rex" | "record" | "os";
+   *  the OS writes to them, REX still holds the old owner.
+   *  "joint" = nobody else is held anywhere, so this is the first joint
+   *  landlord kept on the home in the OS (lib/property-people). */
+  from?: "rex" | "record" | "os" | "joint";
   /** For "os": a company, an estate or a private owner, and the change behind it. */
   kind?: "company" | "executor" | "private";
   changeId?: string;
@@ -59,40 +71,20 @@ const str = (v: unknown): string | null => {
   return s ? s : null;
 };
 
-/* A landlord changes hands rarely, and the booker asks every time it opens.
-   Twelve hours keeps a busy morning to one call per property while still
-   picking up a correction the same day. */
-const CACHE_MS = 12 * 60 * 60 * 1000;
-/* v3 (Lianna Denholm, 4 Nov 2026): a landlord from the home's own record now
-   carries the email and mobile typed there. A v2 copy held them as null for up
-   to twelve hours, so those are read again rather than served. */
-const cacheKey = (listingId: string) => `landlord:v3:${listingId}`;
+/* What REX said about a listing's owners is held by lib/landlords-for-home,
+   under this key, with the listing's REX property beside it. v4 (10 Nov 2026):
+   every owner, not the first. */
+export const heldKey = (listingId: string) => `landlord:v4:${listingId}`;
+const cacheKey = heldKey;
 
-async function cached(listingId: string): Promise<{ landlord: Landlord | null; propertyId?: string | null } | null> {
+/** The REX property kept beside a held landlord read, of any age: a listing never moves property. */
+async function cached(listingId: string): Promise<{ propertyId?: string | null } | null> {
   if (!hasDb()) return null;
   try {
-    const rows = await q<{ payload: { landlord: Landlord | null; propertyId?: string | null }; computed_at: Date }>(
-      "SELECT payload, computed_at FROM os_cache WHERE key = $1",
-      [cacheKey(listingId)]
-    );
-    if (!rows[0]) return null;
-    if (Date.now() - new Date(rows[0].computed_at).getTime() > CACHE_MS) return null;
-    return rows[0].payload;
+    const rows = await q<{ payload: { propertyId?: string | null } }>("SELECT payload FROM os_cache WHERE key = $1", [cacheKey(listingId)]);
+    return rows[0]?.payload ?? null;
   } catch {
     return null;
-  }
-}
-
-async function keep(listingId: string, landlord: Landlord | null, propertyId: string | null): Promise<void> {
-  if (!hasDb()) return;
-  try {
-    await q(
-      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
-       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
-      [cacheKey(listingId), JSON.stringify({ landlord, propertyId })]
-    );
-  } catch {
-    /* slow, not broken */
   }
 }
 
@@ -151,13 +143,25 @@ export async function propertyIdForListing(listingId: string): Promise<string | 
 }
 
 export type LandlordAnswer =
-  /** REX answered. `landlord` null means it genuinely holds no owner. */
-  | { ok: true; landlord: Landlord | null }
+  /** REX answered. `landlord` null means nobody is held anywhere. `landlords`
+   *  is everybody (lib/landlords-for-home), `landlord` the first of them. */
+  | { ok: true; landlord: Landlord | null; landlords: HomeLandlord[] }
   /** REX did NOT answer. Distinct from "no landlord" on purpose — see below. */
   | { ok: false; problem: string };
 
+/** One of the home's landlords in the shape the older screens read. */
+export function asLandlordOf(l: HomeLandlord): Landlord {
+  const base = { contactId: l.contactId, name: l.name, email: l.email, phone: l.phone };
+  if (l.from === "changed") return { ...base, contactId: null, from: "os", ...(l.kind ? { kind: l.kind } : {}), ...(l.changeId ? { changeId: l.changeId } : {}) };
+  if (l.from === "record") return { ...base, contactId: null, from: "record" };
+  if (l.from === "joint") return { ...base, contactId: null, from: "joint" };
+  return base;
+}
+
 /**
- * One property's landlord.
+ * One listing's landlord: the first of everybody lib/landlords-for-home finds
+ * (a landlord changed in the OS, else the listing's owners, the property's
+ * owners, the home's record, then the joint landlords kept on the home).
  *
  * A failed call and an empty owner are DIFFERENT answers and are kept apart
  * all the way to the screen. Collapsing them would mean a REX outage renders
@@ -170,83 +174,8 @@ export async function landlordForListing(listingId: string): Promise<LandlordAns
   if (!Number.isFinite(id) || id <= 0) {
     return { ok: false, problem: "That listing has no reference in the listings system, so its landlord can't be looked up." };
   }
-
-  const hit = await cached(listingId);
-  if (hit) return { ok: true, landlord: (await changedOver(listingId, hit.propertyId ?? null)) ?? hit.landlord };
-
-  /* The same Listings/read the drawer's details make on open, shared through
-     the per-listing read cache rather than asked for a second time. */
-  const res = await listingRead(id, "Listings", "read", { id });
-  if (!res.ok) {
-    /**
-     * ⚠️ NEVER return `res.error` to a browser.
-     *
-     * REX puts the whole failing request in its error body, including the
-     * SESSION TOKEN it was made with:
-     *
-     *   {"message":"A record with the id '999999999' was not found…",
-     *    "extra":{"request_data":{"method":"Listings::read","args":{…},
-     *    "token":"6e47-ddc7-…"}}}
-     *
-     * Caught 1 Sep 2026 by curling this route with a nonsense id — the token
-     * came straight back down the wire, where anything with devtools could
-     * lift it and call REX as us. So the error is LOGGED here and a flat
-     * sentence goes out. Every REX-backed route that forwards `res.error`
-     * has this hole; this one no longer does.
-     */
-    console.error("[landlord] Listings/read failed", { listingId, status: res.status });
-    return {
-      ok: false,
-      problem: "The listings system didn't answer when asked who the landlord is, so nothing is being assumed.",
-    };
-  }
-
-  const related = ((res.result ?? {}) as Row).related as Row | undefined;
-  const relns = (related?.contact_reln_listing ?? []) as Row[];
-  const owner = Array.isArray(relns)
-    ? relns.find((r) => isOwnerReln(r))
-    : undefined;
-  const c = (owner?.contact ?? null) as Row | null;
-
-  const landlord: Landlord | null = c
-    ? {
-        contactId: str(c.id),
-        /* A contact with no name is a REX record somebody half-created. It is
-           not a person we can write to, so it counts as no landlord rather
-           than as a landlord called "Name not recorded". */
-        name: str(c.name) ?? "",
-        email: str(c.email_address),
-        phone: str(c.phone_number),
-      }
-    : null;
-
-  let usable = landlord && landlord.name ? landlord : null;
-  const prop = (((res.result ?? {}) as Row).property ?? null) as Row | null;
-  const propertyId = str(prop?.id) ?? str(((res.result ?? {}) as Row).property_id);
-  /* REX CRM has nobody (6 Oct 2026, 6 Ruskin Place: a property our sync
-     created with no contact on it). The OS's property record often has the
-     landlord from REX PM - show that rather than "no landlord held". */
-  if (!usable) {
-    if (propertyId) {
-      const { recordForProperty } = await import("@/lib/listing-record");
-      const rec = await recordForProperty(propertyId, {}).catch(() => null);
-      /* With the email and mobile typed on the record (Lianna Denholm, 4 Nov
-         2026: they were saved there and dropped here, so the listing read no
-         email for a landlord the home's page had one for). */
-      if (rec?.landlordName) usable = { contactId: null, name: rec.landlordName, email: rec.landlordEmail ?? null, phone: rec.landlordPhone ?? null, from: "record" };
-    }
-  }
-  await keep(listingId, usable, propertyId);
-  return { ok: true, landlord: (await changedOver(listingId, propertyId)) ?? usable };
-}
-
-/**
- * The landlord an agent changed in the OS (lib/landlord-change), over REX's
- * owner: a company, an estate or a new owner REX doesn't know about yet. Not
- * cached, so a change shows the moment it is confirmed and an undo the same.
- */
-async function changedOver(listingId: string, propertyId: string | null): Promise<Landlord | null> {
-  const { changedLandlordFor, asLandlord } = await import("@/lib/landlord-change");
-  const c = await changedLandlordFor({ listingId, propertyId }).catch(() => null);
-  return c ? asLandlord(c) : null;
+  const { landlordsOfHome } = await import("@/lib/landlords-for-home");
+  const all = await landlordsOfHome({ listingId });
+  if (!all.ok) return all;
+  return { ok: true, landlord: all.landlords[0] ? asLandlordOf(all.landlords[0]) : null, landlords: all.landlords };
 }

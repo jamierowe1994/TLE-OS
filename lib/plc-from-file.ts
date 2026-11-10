@@ -113,7 +113,7 @@ export type PullOutcome = {
 };
 
 type Read = Awaited<ReturnType<typeof readDroppedFile>>;
-type Ctx = { by: string; tenants: string[]; landlord: string | null; propertyId: string | null };
+type Ctx = { by: string; tenants: string[]; landlord: string | null; /** Every landlord the check started with, by name (lib/plc-prefill). */ landlords?: string[]; propertyId: string | null };
 
 /** Run `fn` over `items` three at a time, answers in order. */
 async function inThrees<T, R>(items: T[], fn: (t: T) => Promise<R>): Promise<R[]> {
@@ -183,7 +183,14 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
   const joint = await peopleOnHome(...home.ids, `let:${start.applicationRef}`)
     .then((ps) => [...new Set(ps.filter((p) => p.kind === "joint_landlord").map((p) => p.name.trim()).filter(Boolean))])
     .catch(() => [] as string[]);
-  const landlords = [...(landlord ? [landlord] : []), ...joint.filter((n) => n.toLowerCase() !== landlord?.toLowerCase())];
+  /* Then everybody the check started with (lib/plc-prefill, from the one
+     reader, 10 Nov 2026): the listing's other owners were never here, so
+     their ID and AML were not asked for. One each, by name. */
+  const landlords: string[] = [];
+  for (const n of [landlord, ...(ctx.landlords ?? []), ...joint]) {
+    const name = (n ?? "").trim();
+    if (name && !landlords.some((x) => x.toLowerCase() === name.toLowerCase())) landlords.push(name);
+  }
   if (hasDb()) {
     await q(`UPDATE os_plc_cases SET rex_property_id = COALESCE($2, rex_property_id), landlord_name = COALESCE($3, landlord_name) WHERE id = $1`, [
       caseId,

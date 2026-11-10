@@ -46,6 +46,7 @@ import { searchMatches } from "@/lib/search-match";
  */
 const LISTING_OFFERS_LIVE = false;
 import type { Landlord } from "@/lib/rex-landlord";
+import type { HomeLandlord as FoundLandlord } from "@/lib/landlords-for-home";
 import { DIARY, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { setOpenListing } from "@/lib/open-record";
@@ -142,7 +143,8 @@ type PortalLink = { portal: string; url: string; remoteId: string | null };
 type LandlordState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "known"; landlord: Landlord }
+  /* `landlords`: everybody the one reader finds (lib/landlords-for-home), `landlord` the first of them. */
+  | { status: "known"; landlord: Landlord; landlords: FoundLandlord[] }
   | { status: "none" }
   | { status: "problem"; says: string };
 
@@ -860,10 +862,10 @@ function ListingDrawerBody({
     setLandlord({ status: "loading" });
     fetch(`/api/listings/landlord?id=${encodeURIComponent(listing.id)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; landlord?: Landlord | null; problem?: string }) => {
+      .then((j: { ok?: boolean; landlord?: Landlord | null; landlords?: FoundLandlord[]; problem?: string }) => {
         if (gone) return;
         if (!j.ok) setLandlord({ status: "problem", says: j.problem ?? "We could not look the landlord up just now." });
-        else if (j.landlord) setLandlord({ status: "known", landlord: j.landlord });
+        else if (j.landlord) setLandlord({ status: "known", landlord: j.landlord, landlords: j.landlords ?? [] });
         else setLandlord({ status: "none" });
       })
       .catch(() => {
@@ -1964,6 +1966,7 @@ function ListingDrawerBody({
                     email: landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined,
                     phone: landlord.status === "known" ? (landlord.landlord.phone ?? undefined) : undefined,
                   }}
+                  otherLandlords={landlord.status === "known" ? landlord.landlords.slice(1) : []}
                   agentLarn={live?.agentLarn ?? null}
                   service={live?.service ?? null}
                   homeProblem={homeProblem}
@@ -2468,20 +2471,32 @@ function ListingDrawerBody({
   const l = landlord.status === "known" ? landlord.landlord : null;
   const lHomeKey = testListing ? null : listing.propertyId ?? `listing:${listing.id}`;
   const lReadOnly = testListing ? "A test listing keeps its own landlord." : null;
+  /* EVERY OWNER, NOT THE FIRST (10 Nov 2026): the listing's second owner was
+     never shown here. The joint landlords kept on the home are listed by
+     HomeLandlords itself, and a landlord changed in the OS has its own card,
+     so neither is repeated. */
+  const lOwners = landlord.status === "known" ? landlord.landlords.filter((x) => x.from === "listing" || x.from === "property" || x.from === "record") : [];
   const lMain = (
                       landlord.status === "loading" || landlord.status === "idle"
                         ? null
-                        : l && l.from !== "os"
-                          ? [{
-                              key: l.contactId ?? `record:${l.name}`,
-                              name: l.name,
-                              email: l.email,
-                              phone: l.phone,
+                        : lOwners.length
+                          ? lOwners.map((x) => ({
+                              key: x.key,
+                              name: x.name,
+                              email: x.email,
+                              phone: x.phone,
                               /* REX's owner changes in REX; the home's own record on the record. */
-                              personRef: l.contactId && l.from !== "record" ? `rex:${l.contactId}` : listing.propertyId ? `home:${listing.propertyId}` : null,
-                              note: l.from === "record" ? "From the home's record in the OS. Not on this listing in REX yet." : null,
-                            }]
-                          : []
+                              personRef: x.from === "listing" && x.contactId ? `rex:${x.contactId}` : x.from === "record" && listing.propertyId ? `home:${listing.propertyId}` : null,
+                              note: x.from === "record"
+                                ? "From the home's record in the OS. Not on this listing in REX yet."
+                                : x.from === "property"
+                                  ? "The property's owner in the listings system, not on this listing yet. Check they are still the landlord."
+                                  : null,
+                            }))
+                          : l && l.from !== "os" && l.from !== "joint" && landlord.status === "known" && !landlord.landlords.length
+                            /* A test listing answers with its one landlord and no list. */
+                            ? [{ key: l.contactId ?? `record:${l.name}`, name: l.name, email: l.email, phone: l.phone, personRef: null, note: null }]
+                            : []
   );
   const lMainSlot = (
                       l && l.from === "os" ? (
@@ -3264,6 +3279,22 @@ function ListingDrawerBody({
                       {ll.phone ? <a href={`tel:${ll.phone.replace(/\s/g, "")}`}><Ico name="phone" size={14} />{ll.phone}</a> : <span className="text-muted"><Ico name="phone" size={14} />No mobile on file</span>}
                       {ll.email ? <a href={`mailto:${ll.email}`}><Ico name="mail" size={14} />{ll.email}</a> : <span className="text-muted"><Ico name="mail" size={14} />No email on file</span>}
                     </div>
+                    {/* Every other landlord of the home, named with how to reach them (10 Nov 2026). */}
+                    {landlord.status === "known" && landlord.landlords.slice(1).map((x) => (
+                      <div key={x.key} className="mt-2 flex flex-col gap-2" data-landlord-also>
+                        <div className="nl-person">
+                          <span className="nl-avatar">{initialsOf(x.name || "?")}</span>
+                          <span className="min-w-0">
+                            <span className="nl-strong block truncate">{x.name}</span>
+                            <span className="nl-meta block">{x.from === "joint" ? "Joint landlord" : "Landlord"}</span>
+                          </span>
+                        </div>
+                        <div className="nl-contact">
+                          {x.phone ? <a href={`tel:${x.phone.replace(/\s/g, "")}`}><Ico name="phone" size={14} />{x.phone}</a> : <span className="text-muted"><Ico name="phone" size={14} />No mobile on file</span>}
+                          {x.email ? <a href={`mailto:${x.email}`}><Ico name="mail" size={14} />{x.email}</a> : <span className="text-muted"><Ico name="mail" size={14} />No email on file</span>}
+                        </div>
+                      </div>
+                    ))}
                     <div className="mt-1 flex flex-wrap items-center gap-3">
                       {ll.phone && <a href={`tel:${ll.phone.replace(/\s/g, "")}`} className="nl-btn nl-btn--secondary nl-btn--sm"><Ico name="phone" size={14} /> Call</a>}
                       <button type="button" className="nl-link" onClick={() => setPanelTab("messages")}>Send update</button>
@@ -3271,7 +3302,7 @@ function ListingDrawerBody({
                   </>
                 ) : (
                   <>
-                    <p className="nl-meta">{landlord.status === "problem" ? landlord.says : "No landlord on this listing yet."}</p>
+                    <p className="nl-meta">{landlord.status === "problem" ? landlord.says : "No landlord is held for this home yet: not on the listing, the property or the home's record. Add them here so the terms, the let and the PLC check have somebody to name."}</p>
                     {!testListing && <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" data-steve="listing.edit-landlord" onClick={() => setLandlordOpen(true)}>Add the landlord</button>}
                   </>
                 )}
@@ -3436,6 +3467,7 @@ function ListingDrawerBody({
                 email: landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined,
                 phone: landlord.status === "known" ? (landlord.landlord.phone ?? undefined) : undefined,
               }}
+              otherLandlords={landlord.status === "known" ? landlord.landlords.slice(1) : []}
               agentLarn={live?.agentLarn ?? null}
               service={live?.service ?? null}
                   homeProblem={homeProblem}

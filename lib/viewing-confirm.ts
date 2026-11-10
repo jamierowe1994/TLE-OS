@@ -9,6 +9,7 @@ import { icsFile } from "@/lib/outlook-calendar";
 import { calendarLinks, LINK } from "@/lib/calendar-links";
 import { cleanEmailHtml, isRepeat, lastSent, recordSent, sentWords } from "@/lib/confirmations";
 import { landlordForListing } from "@/lib/rex-landlord";
+import { firstNames } from "@/lib/landlords-for-home";
 import { isTestId } from "@/lib/test-overlay";
 
 /**
@@ -257,22 +258,39 @@ export async function sendViewingConfirmation(p: {
 
 const landlordKey = (b: ViewingBooking) => `viewing-landlord|${b.leadId}|${b.listingId ?? "-"}|${new Date(b.startsAt).toISOString()}`;
 
-type LandlordFound = { ok: true; name: string; email: string | null } | { ok: false; why: string };
+/* EVERY LANDLORD, NOT THE FIRST (10 Nov 2026). The confirmation went to one
+   owner; a home with two had one of them hear about a viewing and the other
+   not. It is one email, greeting them all by first name, sent to each
+   landlord who has an email address (lib/landlords-for-home). */
+type LandlordFound = { ok: true; name: string; to: { name: string; email: string }[]; noEmail: string[] } | { ok: false; why: string };
 
 async function landlordFor(b: ViewingBooking): Promise<LandlordFound> {
   if (!b.listingId) return { ok: false, why: "This viewing is not joined to a listing, so we cannot tell who the landlord is. Tell them yourself." };
   if (isTestId(b.listingId)) return { ok: false, why: "This is a test listing, so nothing goes to a landlord." };
   const a = await landlordForListing(b.listingId).catch(() => ({ ok: false as const, problem: "Could not look the landlord up just now." }));
   if (!a.ok) return { ok: false, why: `${a.problem} Nothing can be sent until we know who they are.` };
-  if (!a.landlord) return { ok: false, why: "No landlord is held against this property, so there is nobody to write to. Tell them yourself." };
-  return { ok: true, name: a.landlord.name, email: a.landlord.email };
+  if (!a.landlords.length) return { ok: false, why: "No landlord is held for this home, so there is nobody to write to. Add them under Landlord on the listing, or tell them yourself." };
+  const to: { name: string; email: string }[] = [];
+  const seen = new Set<string>();
+  for (const l of a.landlords) {
+    const email = (l.email ?? "").trim();
+    if (!emailOk(email) || seen.has(email.toLowerCase())) continue;
+    seen.add(email.toLowerCase());
+    to.push({ name: l.name, email });
+  }
+  const noEmail = a.landlords.filter((l) => !emailOk((l.email ?? "").trim())).map((l) => l.name);
+  /* The greeting names the people it goes to; with no address for anybody, the first landlord. */
+  return { ok: true, name: firstNames(to.length ? to : a.landlords.slice(0, 1)) || a.landlords[0].name, to, noEmail };
 }
+
+const andList = (names: string[]) => (names.length <= 1 ? names[0] ?? "" : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
 
 function renderLandlord(b: ViewingBooking, me: OsUser, landlordName: string) {
   const agentName = me.name || "Your agent";
   const from = movedOf(b);
   const vars = {
-    firstName: landlordName.trim().split(/\s+/)[0] || "there",
+    /* Already first names: one, or "Ann and Bob" where it goes to both. */
+    firstName: landlordName.trim() || "there",
     address: b.address || "your property",
     whenPretty: whenOf(b.startsAt),
     agentName,
@@ -290,16 +308,16 @@ export async function draftLandlordViewing(b: ViewingBooking, me: OsUser): Promi
   if (!ll.ok) {
     return { ok: true, to: null, toName: "The landlord", subject: "", html: "", blocked: ll.why, attachment: null };
   }
-  const to = (ll.email ?? "").trim();
   const prev = await lastSent(landlordKey(b));
   const { subject, html } = renderLandlord(b, me, ll.name);
   return {
     ok: true,
-    to: emailOk(to) ? to : null,
-    toName: ll.name,
+    /* Every address it will go to, as the agent reads it before sending. */
+    to: ll.to.length ? ll.to.map((t) => t.email).join(", ") : null,
+    toName: andList(ll.to.length ? ll.to.map((t) => t.name) : ll.noEmail),
     subject,
     html,
-    blocked: emailOk(to) ? undefined : `${ll.name} is the landlord but has no email address on file, so this cannot go. Ring them.`,
+    blocked: ll.to.length ? undefined : `${andList(ll.noEmail)} ${ll.noEmail.length === 1 ? "is the landlord but has" : "are the landlords but have"} no email address on file, so this cannot go. Ring them.`,
     alreadySent: prev && isRepeat(prev, b.startsAt) ? { at: prev.sentAt, to: prev.to, subject: prev.subject } : undefined,
     attachment: null,
   };
@@ -309,8 +327,7 @@ export async function sendLandlordViewing(p: { me: OsUser; booking: ViewingBooki
   const b = p.booking;
   const ll = await landlordFor(b);
   if (!ll.ok) return { sent: false, detail: ll.why };
-  const to = (ll.email ?? "").trim();
-  if (!emailOk(to)) return { sent: false, detail: `${ll.name} has no email address on file. Ring them.` };
+  if (!ll.to.length) return { sent: false, detail: `${andList(ll.noEmail)} ${ll.noEmail.length === 1 ? "has" : "have"} no email address on file. Ring them.` };
   const key = landlordKey(b);
   const prev = await lastSent(key);
   if (isRepeat(prev, b.startsAt) && !p.again) {
@@ -319,7 +336,19 @@ export async function sendLandlordViewing(p: { me: OsUser; booking: ViewingBooki
   const templ = renderLandlord(b, p.me, ll.name);
   const subject = (p.subject ?? "").trim() || templ.subject;
   const html = p.html ? cleanEmailHtml(p.html) : templ.html;
-  const r = await sendAsAgent({ me: p.me, to, toName: ll.name, subject, html });
-  if (r.sent) await recordSent(key, { sentAt: new Date().toISOString(), startsAt: b.startsAt, to, subject, by: p.me.email });
-  return { sent: r.sent, detail: r.detail };
+  /* One send each, the same email: there is no copying-in on an agent's send. */
+  const went: string[] = [];
+  const failed: string[] = [];
+  for (const t of ll.to) {
+    const r = await sendAsAgent({ me: p.me, to: t.email, toName: t.name, subject, html });
+    if (r.sent) went.push(t.email);
+    else failed.push(`${t.name}: ${r.detail}`);
+  }
+  if (went.length) await recordSent(key, { sentAt: new Date().toISOString(), startsAt: b.startsAt, to: went.join(", "), subject, by: p.me.email });
+  const detail = [
+    went.length ? `Sent to ${andList(went)}.` : "",
+    ...failed,
+    ll.noEmail.length ? `${andList(ll.noEmail)} ${ll.noEmail.length === 1 ? "has" : "have"} no email address on file, so ring them.` : "",
+  ].filter(Boolean).join(" ");
+  return { sent: went.length > 0, detail };
 }

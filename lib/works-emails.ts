@@ -283,6 +283,31 @@ async function send(o: WorksOrder, id: string, to: string, vars: Record<string, 
   }
 }
 
+/**
+ * The home's landlords other than the one the job names, with an email
+ * address, one each. Never throws: a failed read is nobody extra, and the
+ * job's own landlord has already been asked.
+ */
+async function otherLandlordsOf(o: WorksOrder): Promise<{ name: string; email: string }[]> {
+  if (!o.propertyId || o.rehearsal) return [];
+  try {
+    const { homePeople } = await import("@/lib/home-people");
+    const home = await homePeople(o.propertyId);
+    const low = (v: string) => v.trim().toLowerCase().replace(/\s+/g, " ");
+    const seen = new Set([low(o.landlordEmail)].filter(Boolean));
+    const out: { name: string; email: string }[] = [];
+    for (const l of [home.landlord, ...home.otherLandlords]) {
+      const email = (l?.email ?? "").trim();
+      if (!l || !email.includes("@") || seen.has(low(email)) || low(l.name) === low(o.landlord)) continue;
+      seen.add(low(email));
+      out.push({ name: l.name, email });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /** The newest invoice file on the job, read out of storage for an email. Never throws. */
 async function invoiceAttachments(o: WorksOrder): Promise<{ filename: string; content: string }[]> {
   const file = [...(o.files ?? [])].reverse().find((f) => f.kind === "invoice");
@@ -517,6 +542,17 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     if (o.landlordSkipped) return;
     const held = o.landlordEmail.includes("@") ? landlordHold(o, await getLandlordPref(o.landlordEmail).catch(() => ({ jobEmails: "all" as const, overAmount: 0, updatedBy: "", updatedAt: null })), kind) : null;
     out.push(held ? { to: "landlord", sent: false, address: o.landlordEmail, reason: held } : await send(o, id, o.landlordEmail, vars, me, "landlord"));
+    /* AN APPROVAL IS ASKED OF EVERY LANDLORD (10 Nov 2026). The job keeps one
+       landlord, so a quote over their authority was put to one owner of a home
+       two people own. The home's other landlords, as every screen now reads
+       them (lib/home-people, lib/landlords-for-home), are asked too, each
+       under their own choice about job emails. The "a date is set" notice
+       stays with the job's own landlord. */
+    if (kind !== "approval") return;
+    for (const l of await otherLandlordsOf(o)) {
+      const hold = landlordHold(o, await getLandlordPref(l.email).catch(() => ({ jobEmails: "all" as const, overAmount: 0, updatedBy: "", updatedAt: null })), kind);
+      out.push(hold ? { to: "landlord", sent: false, address: l.email, reason: hold } : await send(o, id, l.email, { ...vars, landlordName: first(l.name) }, me, "landlord"));
+    }
   };
 
   switch (action) {

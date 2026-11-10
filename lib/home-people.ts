@@ -95,6 +95,7 @@ export async function homePeople(id: string): Promise<HomePeople> {
     const direct = await peopleForProperty(id).catch(() => null);
     if (direct) {
       landlord = direct.landlord;
+      otherLandlords = direct.otherLandlords;
       /* REX's let still names the tenants of a home nobody lives in now. */
       tenants = vacant ? [] : direct.tenants;
       lat = lat ?? direct.lat;

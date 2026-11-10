@@ -3,11 +3,10 @@ import { getApplicationById, type Application } from "@/lib/applications";
 import { isTestId, testApplication } from "@/lib/test-overlay";
 import { testLandlord } from "@/lib/test-listing-answers";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
-import { landlordForListing, type Landlord } from "@/lib/rex-landlord";
+import { asLandlordOf, landlordForListing, type Landlord } from "@/lib/rex-landlord";
 import type { OsUser } from "@/lib/users";
 import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 import { recordLandlordFor } from "@/lib/record-landlords";
-import { listingRead } from "@/lib/listing-details";
 import { personEdits, type PersonEdit } from "@/lib/let-landlords";
 import { peopleOnHome } from "@/lib/home-aliases";
 import { propertyIdForListing } from "@/lib/rex-landlord";
@@ -15,7 +14,6 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { sameHome } from "@/lib/address-parse";
 import { letTenants, type LetTenant } from "@/lib/let-tenants";
 import { dealForLet, type LetDeal } from "@/lib/let-deal";
-import { isOwnerReln } from "@/lib/rex-reln";
 import { can } from "@/lib/roles";
 import { sameAgent } from "@/lib/agent-name";
 import { overridesFor } from "@/lib/home-overrides";
@@ -91,6 +89,9 @@ export type Household = { tenants: LetPerson[]; by: string; at: string };
 
 export type LetAnswer = { ok: true; let: LetPeople; app: Application | null } | { ok: false; status: number; error: string };
 
+/* The listings system answered and nobody is named anywhere: said with what to do, never a blank. */
+const NOBODY_HELD = "Nobody is named on the listing, the property or the home's record. Add them on the listing with Add the landlord and they show here.";
+
 const sameName = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 
 export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
@@ -117,12 +118,16 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
        its landlord is the one the OS record holds for the home. Shown as a
        record landlord - nobody in REX behind it. */
     const swapLandlord = !listingId && app.swap?.rexPropertyId ? await recordLandlordFor(app.swap.rexPropertyId).catch(() => null) : null;
+    /* Everybody the one reader finds for the listing (lib/landlords-for-home,
+       10 Nov 2026): a landlord changed in the OS, else every owner on the
+       listing, else every owner on the property, else the home's record. The
+       joint landlords kept on the home follow in withPeople, each changeable
+       there, so they are left out here. */
+    const mains = listedLandlords(ll);
     const landlord: Landlord | null = swapLandlord
       ? { contactId: null, name: swapLandlord.name, email: swapLandlord.email, phone: swapLandlord.phone, from: "record" }
-      : ll && ll.ok ? ll.landlord : null;
-    /* Every owner on the listing, not only the first (20 Oct 2026): the
-       handover already sends them all to Propoly. Off the same cached read. */
-    const coOwners = listingId && !isTestId(listingId) && landlord?.from !== "os" ? await otherOwners(listingId, landlord?.contactId ?? null) : [];
+      : mains[0] ?? null;
+    const coOwners = swapLandlord ? [] : mains.slice(1).map((l) => landlordParty(l, false));
     const deal = await dealForLet({ ref, app, propertyName: app.property, locality: app.locality, listingId }).catch(() => null);
     const homeKey = await homeKeyFor({ ref, listingId, rexPropertyId: app.swap?.rexPropertyId ?? null, property: app.property, locality: app.locality });
     const base: Omit<LetPeople, "people" | "deal" | "household"> = {
@@ -147,7 +152,7 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
           ? app.swap
             ? "No landlord is held for this home yet. Add them on the home's page with Change landlord."
             : "This let isn't linked to a listing, so its landlord can't be looked up."
-          : ll && !ll.ok ? ll.problem : null,
+          : ll && !ll.ok ? ll.problem : NOBODY_HELD,
     };
     const held: LetParty[] = [
       ...base.tenants.map((t, i) => tenantParty(t, i, "rex")),
@@ -170,7 +175,11 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
      in Propoly carries no listing number, so Apartment 30, 21 Wheatsheaf
      Court said "no landlord" while Propoly and REX both had Kieron Malloy. */
   const fromDeal = dealLandlords(d.app.propoly);
-  const listed = ll && ll.ok ? ll.landlord : null;
+  /* Every landlord the listing has, not the first (10 Nov 2026): a let opened
+     as its Propoly deal showed one owner where the same let opened as its
+     application showed them all. */
+  const listedAll = listedLandlords(ll);
+  const listed = listedAll[0] ?? null;
   const landlord: Landlord | null = listed ?? (fromDeal[0] ? { contactId: null, name: fromDeal[0].name ?? "", email: fromDeal[0].email, phone: fromDeal[0].phone } : null);
   const deal = await dealForLet({ ref, app: null, propertyName: d.app.propertyName, locality: d.app.locality, listingId }).catch(() => null);
   const homeKey = await homeKeyFor({ ref, listingId, rexPropertyId: null, property: d.app.propertyName, locality: d.app.locality });
@@ -187,12 +196,12 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
     moveIn: d.app.startDate,
     tenants: d.app.tenants.map((t) => ({ name: t.name, email: t.email, phone: t.phone, contactId: null, isPrimary: t.isPrimary })),
     landlord,
-    landlordProblem: landlord ? null : !listingId ? "Propoly's deal names no landlord, and it isn't linked to a listing to look one up." : ll && !ll.ok ? ll.problem : null,
+    landlordProblem: landlord ? null : !listingId ? "Propoly's deal names no landlord, and it isn't linked to a listing to look one up." : ll && !ll.ok ? ll.problem : NOBODY_HELD,
   };
   const held: LetParty[] = [
     ...base.tenants.map((t, i) => tenantParty(t, i, "propoly")),
     ...(listed
-      ? [landlordParty(listed)]
+      ? listedAll.map((l, i) => landlordParty(l, i === 0))
       : fromDeal.map((l, i) => ({
           key: `propoly:landlord:${(l.uuid ?? l.email ?? l.name ?? String(i)).toLowerCase()}`,
           role: "landlord" as const,
@@ -344,33 +353,22 @@ export async function tenantsAsOnLet<T extends { name: string; email: string | n
   return out;
 }
 
-function landlordParty(l: Landlord): LetParty {
+function landlordParty(l: Landlord, isPrimary = true): LetParty {
   const source: PersonSource = l.from === "record" ? "record" : l.from === "os" ? "changed" : l.contactId ? "rex" : "propoly";
   const key = source === "rex" ? `rex:${l.contactId}` : `${source}:landlord:${(l.email ?? l.name).trim().toLowerCase()}`;
-  return { key, role: "landlord", source, name: l.name, email: l.email, phone: l.phone, contactId: l.contactId, isPrimary: true, address: null };
+  return { key, role: "landlord", source, name: l.name, email: l.email, phone: l.phone, contactId: l.contactId, isPrimary, address: null };
 }
 
-/** The other owners on a listing, after the one landlordForListing names. */
-async function otherOwners(listingId: string, firstId: string | null): Promise<LetParty[]> {
-  const id = Number(listingId);
-  if (!Number.isFinite(id) || id <= 0) return [];
-  const res = await listingRead(id, "Listings", "read", { id }).catch(() => null);
-  if (!res?.ok) return [];
-  type Row = Record<string, unknown>;
-  const relns = ((((res.result ?? {}) as Row).related as Row | undefined)?.contact_reln_listing ?? []) as Row[];
-  const s = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
-  const seen = new Set<string>(firstId ? [firstId] : []);
-  const out: LetParty[] = [];
-  for (const r of Array.isArray(relns) ? relns : []) {
-    if (!isOwnerReln(r)) continue;
-    const c = (r.contact ?? null) as Row | null;
-    const cid = s(c?.id);
-    const name = s(c?.name);
-    if (!c || !cid || !name || seen.has(cid)) continue;
-    seen.add(cid);
-    out.push({ key: `rex:${cid}`, role: "landlord", source: "rex", name, email: s(c.email_address), phone: s(c.phone_number), contactId: cid, isPrimary: false, address: null });
-  }
-  return out;
+/**
+ * The landlords a listing's read names, the first first, without the joint
+ * landlords kept on the home (withPeople adds those, each with its own key so
+ * it can be changed or removed on the let). A test listing answers with its
+ * one landlord and no list.
+ */
+function listedLandlords(ll: { ok: true; landlord: Landlord | null; landlords?: Parameters<typeof asLandlordOf>[0][] } | { ok: false; problem: string } | null): Landlord[] {
+  if (!ll || !ll.ok) return [];
+  if (!ll.landlords) return ll.landlord ? [ll.landlord] : [];
+  return ll.landlords.filter((l) => l.from !== "joint").map(asLandlordOf);
 }
 
 /** Adds the people kept on the let in the OS, and the OS's edits over Propoly's copy. */
