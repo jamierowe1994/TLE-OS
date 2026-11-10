@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_PAPER } from "@/lib/upload-rules";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -513,7 +514,7 @@ function LandlordPapers({ change, where, from }: { change: ChangedLandlord; wher
         ref={picker}
         type="file"
         multiple={Boolean(slots.find((x) => x.key === slotFor)?.many)}
-        accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,.doc,.docx"
+        accept={ACCEPT_PAPER}
         className="hidden"
         onChange={(e) => void upload(e.target.files)}
       />

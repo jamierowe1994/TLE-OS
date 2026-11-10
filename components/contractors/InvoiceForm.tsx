@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useEffect, useMemo, useState } from "react";
 import type { Contractor } from "@/lib/works-orders";
 import { readHomes, type Property } from "@/components/maintenance/works-ui";
@@ -241,7 +242,7 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
               <label className={`${fl} mt-1 flex cursor-pointer items-center justify-between gap-2`}>
                 <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : "PDF or photo"}</span>
                 <span className="shrink-0 text-[12px] underline">{file ? "Change" : "Choose"}</span>
-                <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+                <input type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
               </label>
             </div>
           </div>
@@ -292,7 +293,7 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
         <label className={`${field} flex cursor-pointer items-center justify-between gap-2`}>
           <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : "Attach the invoice (PDF or photo)"}</span>
           <span className="shrink-0 text-[11.5px] underline">{file ? "Change" : "Choose"}</span>
-          <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+          <input type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
         </label>
         {(reading || readSaid) && (
           <p className="flex items-center gap-2 text-[12px] text-muted sm:col-span-2">

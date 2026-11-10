@@ -5,7 +5,8 @@ import { can } from "@/lib/roles";
 import { hasDb, q } from "@/lib/db";
 import { isFactKey, sweepDetail } from "@/lib/clean-sweep";
 import { recordFact } from "@/lib/property-facts";
-import { keyClimbs, R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { keyClimbs, R2_BUCKET, r2Configured, r2Problem, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 
 /**
  * A paper the checker found, filed against a home's column: into R2 under
@@ -28,19 +29,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const file = form.get("file");
   const field = String(form.get("field") ?? "");
   if (!isFactKey(field)) return NextResponse.json({ ok: false, error: "That is not one of the columns." }, { status: 400 });
-  if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
-  const scope = SCOPES.document;
-  if (file.size > scope.maxBytes) return NextResponse.json({ ok: false, error: `That file is over ${scope.maxBytes / 1024 / 1024}MB.` }, { status: 413 });
-  if (!(scope.types as readonly string[]).includes(file.type)) return NextResponse.json({ ok: false, error: "Only a PDF or a photo can go here." }, { status: 415 });
+  if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
+  /* One judge for every upload route (lib/upload-rules): the refusal names
+     the file and what would be taken, a .jfif is kept as the JPEG it is, and
+     a file the browser gave no type goes by its extension. */
+  const judged = judgeFile(file, SCOPES.document);
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: judged.status });
   if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't configured on this environment." }, { status: 503 });
 
   const prefix = `documents/property-${id}/${field}/`;
-  const key = `${prefix}manual-${Date.now()}-${safeName(file.name)}`;
+  const key = `${prefix}manual-${Date.now()}-${safeName(judged.name)}`;
   try {
     const body = new Uint8Array(await file.arrayBuffer());
-    await withR2((c) => c.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type, Metadata: { "original-name": encodeURIComponent(file.name), source: "manual" } })));
-  } catch {
-    return NextResponse.json({ ok: false, error: "Upload failed. The file wasn't stored." }, { status: 502 });
+    await withR2((c) => c.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: judged.type, Metadata: { "original-name": encodeURIComponent(file.name), source: "manual" } })));
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: r2Problem(e, `${file.name} did not reach file storage, so it was not kept. Try it again.`) }, { status: 502 });
   }
   const by = actor.name || actor.email;
   const detail = await sweepDetail(id);

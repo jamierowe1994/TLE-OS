@@ -127,15 +127,37 @@ back on the portals / Back to available; Archive meaning four different things.
 
 ### D. It won't take my file
 
-1. PAT and fire certificates are still blocked without an expiry date on four screens, greyed with no
-   reason shown (`ListingCompliance`, the compliance tracker, `WorksNow`, `lib/works-certificate.ts`); the
-   server takes the issue date alone.
-2. Clean sweep: an upload error is shown once above the table, not on the row, so "nothing is happening".
-3. Document types: no Tenant ID in `lib/doc-types.ts`; Fire Risk Assessment and Emergency Lighting share
-   one "Fire safety" slot; the sweep's "Newer one" offers three types only.
-4. The file picker offers more than the server takes (`image/*` against five exact types), a blank
-   browser type is refused everywhere, and the `.jfif` fix is in two of seven upload routes.
-5. A large phone photo may be over the reader's own limit while the route allows 12 MB (not confirmed).
+Closed on branch `claude/amazing-cartwright-0c67e2` (10 Nov), each item re-checked against the code first.
+Driven locally on invented files (a JPEG, a HEIC, a `.jfif`, a PDF, a GIF, a fake Word file and an 11MB
+phone photo) through each screen at desktop and phone width, against a stand-in file store.
+
+1. **PAT and fire certificates file on the day they were done, everywhere.** One rule
+   (`lib/cert-kinds` `certNotReadyBecause`) for the home's page, the listing, the compliance tracker, the
+   job sheet, the contractor's page, the clean sweep and the compliance desk's Verified on a landlord's
+   upload (a fifth door the hunt had missed). A greyed button now says why underneath.
+2. **Clean sweep says it on the row.** A refused or failed upload names the file on the row it was put on,
+   and a file on its way says "Uploading <name>".
+3. **Fire Risk Assessment and Emergency Lighting are offered by name**, with "Fire alarm or other fire
+   safety" beside them. All three file as REX's one fire type, because REX has no other (its schema, read
+   8 Oct): the name is kept on the certificate's source line. Tenant ID is a document type. The sweep's
+   Newer One offers all thirteen kinds.
+4. **One rule for what a file may be** (`lib/upload-rules`): the accepted types, the fallback to the file's
+   extension when the browser names no type, the `.jfif`-is-a-JPEG fix, the picker's `accept` and the
+   refusal sentence, which names the file and what would be taken. Used by every upload route that judges
+   a file's type.
+5. **Confirmed: a phone photo of about 7.5MB or more could never be read.** The reader's own ceiling is
+   10MB of base64 (tried against the live API on 10 Nov: 5.3MB read, 7.5MB refused), under the route's
+   12MB. A large photo is now made smaller for the read only (`lib/reader-image`); the file kept is the
+   one uploaded. The tracker shows the server's reason.
+
+Left open, on purpose:
+
+- A HEIC photo is stored but still cannot be read for its dates (nothing on the server can open one);
+  the screen says so and asks for the dates by hand. Pickers ask for `image/*` so an iPhone hands over a
+  JPEG instead.
+- The certificate doors (the home, the listing, the tracker, a job) still take any kind of file, as they
+  always have; only the picker narrows it.
+- The tickets themselves are not marked shipped: their ids were not in this file.
 
 ## Decisions that are James's
 
@@ -144,3 +166,7 @@ back on the portals / Back to available; Archive meaning four different things.
 - Should Available stop counting a published listing that has been taken off the portals? It changes the
   On the market figure on the dashboard, the Overview and Listings.
 - One name each for taking an advert down, putting it back, and archiving.
+- Should an HMO's fire risk assessment and its emergency lighting certificate be counted as two duties?
+  Today they are one ("Fire safety"), met by the newest of either, so a home with an in-date risk
+  assessment and a lapsed emergency lighting test reads as fine. Splitting it changes the Outstanding
+  figure on Compliance, and REX can only hold them under one type.

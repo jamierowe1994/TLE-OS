@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import DocViewer from "@/components/plc/DocViewer";
@@ -642,7 +643,7 @@ export default function PlcDocuments({
           ref={filesInput}
           type="file"
           multiple
-          accept="application/pdf,image/*"
+          accept={ACCEPT_EVIDENCE}
           className="hidden"
           onChange={(e) => {
             take(Array.from(e.target.files ?? []));
@@ -664,7 +665,7 @@ export default function PlcDocuments({
           ref={addInput}
           type="file"
           multiple
-          accept="application/pdf,image/*"
+          accept={ACCEPT_EVIDENCE}
           className="hidden"
           onChange={(e) => {
             take(Array.from(e.target.files ?? []), forceNext.current);

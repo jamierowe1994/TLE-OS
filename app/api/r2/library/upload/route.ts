@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { requireCapability } from "@/lib/admin";
 import { keyClimbs, R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { readLibraryFile } from "@/lib/library-reader";
 import { shelfFolder } from "@/lib/library-files";
 
@@ -73,19 +74,15 @@ export async function POST(req: NextRequest) {
 
   if (body.action === "start") {
     const name = String(body.name ?? "");
-    const type = String(body.type ?? "");
     const size = Number(body.size ?? 0);
     if (!name) return fail("The file has no name.");
     if (!size) return fail("The file is empty.");
-    if (size > LIB.maxBytes) {
-      return fail(`It is ${mb(size)}, and the limit is ${mb(LIB.maxBytes)} a file.`, 413);
-    }
-    if (!(LIB.types as readonly string[]).includes(type)) {
-      return fail(
-        `The File Store doesn't take that type of file (${type || "unknown type"}). PDFs, images, GIFs, MP4 and MOV video, Word and PowerPoint only.`,
-        415
-      );
-    }
+    /* One judge for every upload route (lib/upload-rules): the refusal names
+       the file and what would be taken, and a file the browser gave no type
+       goes by its extension. */
+    const judged = judgeFile({ name, type: String(body.type ?? ""), size }, LIB);
+    if (!judged.ok) return fail(judged.error, judged.status);
+    const type = judged.type;
     /* Into a folder when one is open on the page (lib/library-files). */
     const folder = shelfFolder(body.folder);
     const key = `${SHELF}${folder ? `${folder}/` : ""}${Date.now()}-${safeName(name)}`;

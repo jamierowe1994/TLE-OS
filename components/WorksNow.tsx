@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import type { Contractor, Move, RankedContractor, WorksOrder, PaidHow } from "@/lib/works-orders";
 import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_REQUIRED, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type StepId } from "@/lib/works-steps";
 import { categoriesOf, CATEGORY_CERT_TYPE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
-import FieldDate from "@/components/FieldDate";
+import FieldDate, { sayDate } from "@/components/FieldDate";
+import { certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import FieldSelect from "@/components/FieldSelect";
 import { FloatCard, FloatCardHead, FloatFoot } from "@/components/new-look/FloatSheet";
 /* Render-time use only, so the circle with works-ui (which draws ContractorForm) is harmless. */
@@ -564,17 +566,25 @@ export function CertificateUpload({ o, busy, onCertificate, title = "Add a certi
   const guess = categoriesOf(o.category).map((c) => CATEGORY_CERT_TYPE[c]).find(Boolean) ?? "";
   const [type, setType] = useState(guess);
   const [expiry, setExpiry] = useState("");
+  const [issue, setIssue] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  const ready = !!type && !!expiry && !!file;
+  /* A PAT report or a fire safety certificate prints the day it was done and
+     no expiry, so that day is what is asked for (lib/cert-kinds, one rule for
+     every door). This asked for an expiry whatever the type until 10 Nov
+     2026, so neither could be put on a job. */
+  const onIssue = kindFilesOnIssueDate(type);
+  const notReady = certNotReadyBecause({ type, expiry: onIssue ? "" : expiry, issue: onIssue ? issue : "", file, needsFile: true });
+  const ready = !notReady;
   const go = async () => {
-    if (!file) return;
+    if (!file || notReady) return;
     const fd = new FormData();
     fd.append("file", file);
     fd.append("type", type);
-    fd.append("expiry", expiry);
+    if (onIssue) fd.append("issue", issue);
+    else fd.append("expiry", expiry);
     setSending(true);
     setProblem(null);
     const p = await onCertificate(fd);
@@ -583,6 +593,7 @@ export function CertificateUpload({ o, busy, onCertificate, title = "Add a certi
     setDone(file.name);
     setFile(null);
     setExpiry("");
+    setIssue("");
     onDone?.();
   };
   return (
@@ -591,16 +602,21 @@ export function CertificateUpload({ o, busy, onCertificate, title = "Add a certi
       <p className="mt-1 text-[11.5px] text-muted">It goes on the job{o.completedAt ? "" : ", marks it done"} and replaces the home&apos;s current certificate once compliance have checked it.</p>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <FieldSelect value={type} onChange={setType} placeholder="What is it?" options={JOB_CERT_TYPES.map((t) => ({ value: t.id, label: t.label }))} />
-        <FieldDate value={expiry} onChange={setExpiry} placeholder="The date it runs out" min={localDate(0)} />
+        {onIssue ? (
+          <FieldDate value={issue} onChange={setIssue} placeholder={`The date it was ${type === "portable_appliance_testing" ? "tested" : "checked"}`} />
+        ) : (
+          <FieldDate value={expiry} onChange={setExpiry} placeholder="The date it runs out" min={localDate(0)} />
+        )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className={`${btn} cursor-pointer bg-white`}>
           {file ? file.name : "Choose the file"}
-          <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setDone(null); e.target.value = ""; }} />
+          <input type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setDone(null); setProblem(null); e.target.value = ""; }} />
         </label>
         <button type="button" disabled={busy || sending || !ready} onClick={() => void go()} className={primary}>{sending ? "Filing…" : o.completedAt ? "Put it on" : "Put it on and mark done"}</button>
       </div>
-      {!ready && !done && <p className="mt-1.5 text-[11px] text-muted">Say what it is and when it runs out, then choose the file.</p>}
+      {noExpiryNote(type, issue, "", (d) => sayDate(d)) && <p className="mt-1.5 text-[11px] text-muted">{noExpiryNote(type, issue, "", (d) => sayDate(d))}</p>}
+      {notReady && !done && <p className="mt-1.5 text-[11px] text-muted">{notReady.replace(" to file it", "")}</p>}
       {done && <p className="mt-1.5 text-[11.5px] text-accent-dark">{done} is on the job and waiting for compliance to check it.</p>}
       {problem && <p className="mt-1.5 text-[11.5px] text-accent-dark">{problem}</p>}
     </div>
@@ -736,7 +752,7 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord, canPayrun = false }:
           <label className={`mt-2 flex cursor-pointer items-center justify-between gap-2 ${field}`}>
             <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : o.payee === "agent" ? "Attach the receipt (PDF or photo)" : "Attach their invoice (PDF or photo)"}</span>
             <span className="shrink-0 text-[11.5px] underline">{file ? "Change" : "Choose"}</span>
-            <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+            <input type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { void attach(e.target.files?.[0] ?? null); e.target.value = ""; }} />
           </label>
           {(reading || readSaid) && (
             <p className="mt-1.5 flex items-center gap-2 text-[11.5px] text-muted">

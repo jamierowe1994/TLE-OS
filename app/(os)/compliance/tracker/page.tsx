@@ -1,5 +1,7 @@
 "use client";
 
+import { certNotReadyBecause, FIRE_KINDS, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { asOf } from "@/lib/as-of";
 import { Fragment, useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
@@ -44,7 +46,8 @@ const TYPES: Record<string, { id: string; label: string }[]> = {
   epc: [{ id: "epc", label: "EPC" }],
   pat: [{ id: "portable_appliance_testing", label: "PAT report" }],
   legionella: [{ id: "legionella_risk_assessment", label: "Legionella risk assessment" }],
-  fire: [{ id: "emergency_lighting_fire_exit", label: "Fire risk assessment / fire safety" }],
+  /* Offered by name; all three file as REX's one fire type (lib/cert-kinds). */
+  fire: FIRE_KINDS.map((k) => ({ id: k.id, label: k.label })),
   alarms: [
     { id: "smoke_alarms", label: "Smoke alarms" },
     { id: "co_alarms", label: "CO alarms" },
@@ -98,9 +101,16 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
         setRead(j.read);
         if (j.read.expiry) setExpiry(j.read.expiry);
         if (j.read.issue) setIssue(j.read.issue);
-      } else setMsg("We couldn't read the date off it. Type it in below.");
+        /* A fire risk assessment or an emergency lighting certificate, named by the reader, on the fire row. */
+        if (types.some((t) => t.id === j.read.type)) setType(j.read.type);
+      } else {
+        /* The server's own reason (10 Nov 2026): too big, a HEIC, out of
+           credit. It was always swapped for one sentence that said none of
+           them, so nobody knew whether to try again or type the date. */
+        setMsg(typeof j.error === "string" && j.error ? j.error : `The dates could not be read off ${f.name}. Type them in below; it can still be filed.`);
+      }
     } catch {
-      setMsg("We couldn't read the date off it. Type it in below.");
+      setMsg(`The dates could not be read off ${f.name}: the reader could not be reached. Type them in below; it can still be filed.`);
     } finally {
       setReading(false);
     }
@@ -112,8 +122,14 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
   const home = `${row.property} ${row.locality}`.replace(/\s+/g, "").toUpperCase();
   const wrongHome = Boolean(pc) && !home.includes(pc);
 
+  /* Why File It is greyed, said under it. One rule for every door
+     (lib/cert-kinds): a PAT report or a fire safety certificate has no
+     expiry, so the day it was done is enough. */
+  const notReady = certNotReadyBecause({ type, expiry, issue, file, needsFile: true });
+  const onIssue = kindFilesOnIssueDate(type);
+
   async function submit() {
-    if (!file || !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) return;
+    if (!file || notReady) return;
     setBusy(true);
     setMsg(null);
     const fd = new FormData();
@@ -121,13 +137,14 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
     fd.append("propertyId", row.propertyId);
     fd.append("propertyName", [row.property, row.locality].filter(Boolean).join(", "));
     fd.append("type", type);
-    fd.append("expiry", expiry);
+    if (expiry) fd.append("expiry", expiry);
     if (/^\d{4}-\d{2}-\d{2}$/.test(issue)) fd.append("issue", issue);
     fd.append("source", "Compliance tracker");
     try {
       const j = await fetch("/api/compliance/certificates?refresh=1", { method: "POST", body: fd }).then((r) => r.json());
-      if (!j.ok) setMsg(j.error || "That certificate did not file.");
-      else onFiled(expiry);
+      if (!j.ok) setMsg(j.error || `${file.name} did not file.`);
+      /* The date it was kept with: the one typed, or worked out from the day it was done. */
+      else onFiled(j.certificate?.expiry ?? expiry);
     } catch {
       setMsg("That did not file - the OS could not be reached. Try again.");
     } finally {
@@ -157,7 +174,7 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
           <input
             ref={pick}
             type="file"
-            accept="application/pdf,image/*"
+            accept={ACCEPT_EVIDENCE}
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -167,11 +184,11 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
           />
         </div>
         <label className="flex flex-col gap-1 text-[10.5px] text-muted">
-          Expires
+          {onIssue ? "Expires (optional)" : "Expires"}
           <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className={field} />
         </label>
         <label className="flex flex-col gap-1 text-[10.5px] text-muted">
-          Issued (optional)
+          {onIssue ? (type === "portable_appliance_testing" ? "Tested on" : "Checked on") : "Issued (optional)"}
           <input type="date" value={issue} onChange={(e) => setIssue(e.target.value)} className={field} />
         </label>
         <div className="ml-auto flex gap-2">
@@ -181,7 +198,7 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={!file || !expiry || busy || reading}
+            disabled={Boolean(notReady) || busy || reading}
             className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
           >
             {busy ? "Filing…" : "File it"}
@@ -202,7 +219,7 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
               {read.expiryDerived ? " (worked out from the issue date)" : ""}. Check it before filing.
             </>
           ) : (
-            "No expiry date could be read off it. Type it in."
+            onIssue ? "No expiry date is printed on it, which is usual for this kind." : "No expiry date could be read off it. Type it in."
           )}
           {read.address && <> Address on it: {read.address}{read.postcode ? `, ${read.postcode}` : ""}.</>}
         </p>
@@ -212,6 +229,8 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
           The postcode on this certificate ({read?.postcode}) isn&apos;t this home&apos;s. Make sure it&apos;s the right file.
         </p>
       )}
+      {!reading && !busy && notReady && <p className="mt-2 text-[11.5px] text-muted">{notReady}</p>}
+      {noExpiryNote(type, issue, expiry, pretty) && <p className="mt-1.5 text-[11.5px] text-muted">{noExpiryNote(type, issue, expiry, pretty)}</p>}
       {expiry && expiry < today() && (
         <p className="mt-1.5 text-[11.5px] text-accent-dark">That date has passed, so it will still show as expired once filed.</p>
       )}

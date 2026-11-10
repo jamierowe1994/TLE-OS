@@ -3,6 +3,7 @@ import { londonToday } from "@/lib/london-clock";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { recordLandlordDocument, type DocKind, type LandlordDocument } from "@/lib/landlord-account";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { hasDb } from "@/lib/db";
 import { bindPages, canBind } from "@/lib/doc-pages";
 
@@ -83,19 +84,13 @@ export async function storeLandlordDocument(d: {
 
   const { file } = d;
   const scope = SCOPES.document;
-  if (file.size === 0) return { ok: false, status: 400, error: "No file was attached." };
-  if (file.size > scope.maxBytes) {
-    return {
-      ok: false,
-      status: 413,
-      error: `That file is too big. Up to ${Math.round(scope.maxBytes / 1024 / 1024)}MB, please.`,
-    };
-  }
-  if (!(scope.types as readonly string[]).includes(file.type)) {
-    return { ok: false, status: 415, error: "A PDF or a photograph, please." };
-  }
+  /* One judge for every upload route (lib/upload-rules): the refusal names
+     the file and what would be taken, a .jfif is kept as the JPEG it is, and
+     a photo the phone gave no type goes by its extension. */
+  const judged = judgeFile(file, scope);
+  if (!judged.ok) return { ok: false, status: judged.status, error: judged.error };
 
-  const clean = safeName(file.name) || "document";
+  const clean = safeName(judged.name) || "document";
   const key = `${scope.prefix}/landlord/${d.accountId}/${Date.now()}-${clean}`;
   const body = new Uint8Array(await file.arrayBuffer());
 
@@ -106,7 +101,7 @@ export async function storeLandlordDocument(d: {
           Bucket: R2_BUCKET,
           Key: key,
           Body: body,
-          ContentType: file.type,
+          ContentType: judged.type,
           Metadata: {
             "original-name": encodeURIComponent(file.name),
             "landlord-account": d.accountId,
@@ -126,10 +121,10 @@ export async function storeLandlordDocument(d: {
     accountId: d.accountId,
     appraisalId: d.appraisalId,
     kind: d.kind,
-    name: file.name,
+    name: judged.name,
     r2Key: key,
     bytes: file.size,
-    contentType: file.type,
+    contentType: judged.type,
   });
   return { ok: true, document };
 }

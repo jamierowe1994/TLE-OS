@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { currentTenant } from "@/lib/tenant-account";
 import { loadTenantHome } from "@/lib/tenant-home-view";
 import { isTenantDocKind, recordTenantDocument, tenantDocuments } from "@/lib/tenant-documents";
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) {
+  if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
   }
   const kindRaw = String(form.get("kind") ?? "other");
@@ -55,18 +56,11 @@ export async function POST(req: NextRequest) {
      as /api/r2/upload, and for the reason written there: rules that can only
      be exercised in production are rules you are hoping about. */
   const scope = SCOPES.document;
-  if (file.size > scope.maxBytes) {
-    return NextResponse.json(
-      { ok: false, error: `That file is too big. Up to ${Math.round(scope.maxBytes / 1024 / 1024)}MB, please.` },
-      { status: 400 }
-    );
-  }
-  if (!(scope.types as readonly string[]).includes(file.type)) {
-    return NextResponse.json(
-      { ok: false, error: `${file.type || "That kind of file"} isn't allowed here. A PDF or a photograph, please.` },
-      { status: 400 }
-    );
-  }
+  /* One judge for every upload route (lib/upload-rules): the refusal names
+     the file and what would be taken, a .jfif is kept as the JPEG it is, and
+     a photo the phone gave no type goes by its extension. */
+  const judged = judgeFile(file, scope);
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: 400 });
   if (!r2Configured) {
     return NextResponse.json({ ok: false, error: "Storage isn't configured on this environment." }, { status: 503 });
   }
@@ -77,7 +71,7 @@ export async function POST(req: NextRequest) {
   const home = await loadTenantHome(me).catch(() => null);
   const dealId = home?.deal?.id ?? null;
 
-  const clean = safeName(file.name) || "document";
+  const clean = safeName(judged.name) || "document";
   const key = `${scope.prefix}/tenant/${me.id}/${Date.now()}-${clean}`;
   const body = new Uint8Array(await file.arrayBuffer());
 
@@ -88,7 +82,7 @@ export async function POST(req: NextRequest) {
           Bucket: R2_BUCKET,
           Key: key,
           Body: body,
-          ContentType: file.type,
+          ContentType: judged.type,
           Metadata: { "original-name": encodeURIComponent(file.name), "tenant-account": me.id, kind },
         })
       )
@@ -103,10 +97,10 @@ export async function POST(req: NextRequest) {
     accountId: me.id,
     dealId,
     kind,
-    name: file.name,
+    name: judged.name,
     r2Key: key,
     bytes: file.size,
-    contentType: file.type,
+    contentType: judged.type,
   });
   return NextResponse.json({ ok: true, document });
 }

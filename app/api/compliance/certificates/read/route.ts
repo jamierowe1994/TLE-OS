@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { readCertificate } from "@/lib/cert-read";
 import { whoIs } from "@/lib/admin";
+import { imageForReader } from "@/lib/reader-image";
 
 /**
  * POST /api/compliance/certificates/read → what one certificate says.
@@ -21,7 +22,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MAX_BYTES = 12 * 1024 * 1024;
+/* A PDF goes to the reader whole, so it keeps its 12MB. A photo is made
+   smaller before it is read (lib/reader-image), so it can be as big as the
+   certificate door itself takes. */
+const MAX_PDF_BYTES = 12 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   const { actor } = await whoIs(req);
@@ -32,23 +37,39 @@ export async function POST(req: NextRequest) {
   const file = form?.get("file");
   const expect = String(form?.get("expect") ?? "").trim();
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "That file is over 12MB, too big to read the dates off. Type them in below." }, { status: 413 });
+  const name = file.name || "That file";
+  const size = `${(file.size / 1024 / 1024).toFixed(1)}MB`;
+  if (file.size > MAX_PHOTO_BYTES) return NextResponse.json({ ok: false, error: `${name} is ${size}, too big to read the dates off (the most is 50MB). Type them in below.` }, { status: 413 });
 
   const bytes = Buffer.from(await file.arrayBuffer());
   const media = sniff(bytes);
-  if (media === "heic") {
-    return NextResponse.json({ ok: false, error: "That photo is a HEIC (the iPhone's own format), which can't be read. Save it as a JPEG or PDF and attach that, or fill in the dates by hand." }, { status: 415 });
+  if (media === "application/pdf" && file.size > MAX_PDF_BYTES) {
+    return NextResponse.json({ ok: false, error: `${name} is a ${size} PDF, and the reader can only open a PDF up to 12MB. It can still be filed as it is: type the dates in below.` }, { status: 413 });
   }
-  if (!media) return NextResponse.json({ ok: false, error: "Only PDFs and photos can be read. Save it as a JPEG or PDF and attach that, or fill in the dates by hand." }, { status: 415 });
+  if (media === "heic") {
+    return NextResponse.json({ ok: false, error: `${name} is a HEIC photo (the iPhone's own format), which the reader can't open. It can still be filed as it is: fill in the dates by hand. To have them read, save it as a JPEG or PDF and choose that.` }, { status: 415 });
+  }
+  if (!media) return NextResponse.json({ ok: false, error: `${name} is not a PDF or a photo, so the dates can't be read off it. Fill them in by hand, or save it as a PDF or JPEG and choose that.` }, { status: 415 });
+
+  /* A photo over the reader's own ceiling is made smaller for the read; the
+     file that gets filed is the one that was uploaded (lib/reader-image). */
+  let toRead: Buffer = bytes;
+  let readAs = media;
+  if (media !== "application/pdf") {
+    const small = await imageForReader(bytes, media, name);
+    if (!small.ok) return NextResponse.json({ ok: false, error: small.error }, { status: 413 });
+    toRead = small.bytes;
+    readAs = small.media;
+  }
 
   try {
-    return NextResponse.json({ ok: true, ...(await readCertificate(bytes, media, expect)) });
+    return NextResponse.json({ ok: true, ...(await readCertificate(toRead, readAs, expect)) });
   } catch (e) {
     /* Not 502: Cloudflare swaps an origin 502 for its own error page, and
        the reason (the backlog run, 6 Sep: "Your credit balance is too low")
        never reaches the caller. */
     /* Out of credit or busy is already one plain sentence (lib/ai-outage). */
-    return NextResponse.json({ ok: false, error: publicError(e, "The reader couldn't read this one. Type the dates in below.") }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, `The reader couldn't read ${name}. It can still be filed: type the dates in below.`) }, { status: 500 });
   }
 }
 

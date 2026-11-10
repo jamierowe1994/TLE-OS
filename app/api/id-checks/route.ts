@@ -5,6 +5,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireAnyCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { cleanShareCode, followUpFor, followUpsDue, isShareCode, listIdChecks } from "@/lib/id-checks";
 
 /**
@@ -70,20 +71,23 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File) || !file.size) {
     return NextResponse.json({ ok: false, error: "Attach the result page you saved from GOV.UK. It is the evidence; without it this is not a check." }, { status: 400 });
   }
-  if (!FILE_TYPES.includes(file.type)) return NextResponse.json({ ok: false, error: "Save the result as a PDF or a picture and attach that." }, { status: 415 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "That file is too large." }, { status: 413 });
+  /* One judge for every upload route (lib/upload-rules): the refusal names
+     the file and what would be taken, and a file the browser gave no type
+     goes by its extension. */
+  const judged = judgeFile(file, { types: FILE_TYPES, maxBytes: MAX_BYTES });
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: judged.status });
   if (!r2Configured || !hasDb()) return NextResponse.json({ ok: false, error: "Files can't be stored on this environment, so nothing was saved." }, { status: 503 });
 
   const id = randomUUID();
   const stamp = londonToday();
   const base = safeName(`right-to-rent share code ${name} ${stamp}`).replace(/\s+/g, "-").toLowerCase();
-  const ext = file.type === "application/pdf" ? "pdf" : file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const ext = judged.type === "application/pdf" ? "pdf" : judged.type === "image/png" ? "png" : judged.type === "image/webp" ? "webp" : "jpg";
   const key = `right-to-rent/${stamp.slice(0, 7)}/${id}/${base}.${ext}`;
 
   /* Storage first, then the row - the same order as the phone's, for the same reason. */
   const body = new Uint8Array(await file.arrayBuffer());
   try {
-    await withR2((c) => c.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type })));
+    await withR2((c) => c.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: judged.type })));
   } catch {
     return NextResponse.json({ ok: false, error: "The file did not save. Nothing was recorded - try again." }, { status: 502 });
   }
@@ -92,7 +96,7 @@ export async function POST(req: NextRequest) {
       `INSERT INTO os_id_checks (id, person_name, property, doc_type, pages, file_key, file_type, seen_in_person, checked_by, checked_by_name, likeness,
                                  method, share_code, right_until, no_time_limit, follow_up_on)
        VALUES ($1, $2, $3, 'share_code', 1, $4, $5, FALSE, $6, $7, TRUE, 'share_code', $8, $9, $10, $11)`,
-      [id, name, property, key, file.type, me.id, me.name ?? "", code, lasts === "until" ? rightUntil : null, lasts === "none", lasts === "until" ? followUpFor(rightUntil) : null]
+      [id, name, property, key, judged.type, me.id, me.name ?? "", code, lasts === "until" ? rightUntil : null, lasts === "none", lasts === "until" ? followUpFor(rightUntil) : null]
     );
   } catch {
     return NextResponse.json({ ok: false, error: "The file saved but the check was not recorded. Try again." }, { status: 500 });

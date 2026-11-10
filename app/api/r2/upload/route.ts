@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { judgeFile } from "@/lib/upload-rules";
 import {
   isScope,
-  jpegName,
-  keptType,
   R2_BUCKET,
   r2Configured,
   r2Problem,
@@ -63,28 +62,13 @@ export async function POST(req: NextRequest) {
 
   const scope = SCOPES[scopeRaw];
 
-  if (file.size === 0) {
-    return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
-  }
-  if (file.size > scope.maxBytes) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB — the limit is ${
-          scope.maxBytes / 1024 / 1024
-        }MB.`,
-      },
-      { status: 413 }
-    );
-  }
-  /* A .jfif is a JPEG and is kept as one, or REX refuses it later (lib/r2 jpegName). */
-  const type = keptType(file.name, file.type);
-  if (!(scope.types as readonly string[]).includes(type)) {
-    return NextResponse.json(
-      { ok: false, error: `${file.type || "That file type"} isn't allowed here.` },
-      { status: 415 }
-    );
-  }
+  /* Empty, too big or not a kind this scope keeps: one judge for every
+     upload route (lib/upload-rules), and the sentence names the file and what
+     would be taken. A .jfif is a JPEG and is kept as one, or REX refuses it
+     later; a file the browser gave no type goes by its extension. */
+  const judged = judgeFile(file, scope);
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: judged.status });
+  const type = judged.type;
 
   /* Everything above this line is a decision we can make without a vault.
      Everything below needs one. */
@@ -95,7 +79,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const clean = safeName(jpegName(file.name));
+  const clean = safeName(judged.name);
   const key = `${scope.prefix}/${ref}/${Date.now()}-${clean}`;
   const body = new Uint8Array(await file.arrayBuffer());
 

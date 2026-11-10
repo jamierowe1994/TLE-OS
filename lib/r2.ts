@@ -1,4 +1,5 @@
 import { CopyObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { fileType, storedName } from "@/lib/upload-rules";
 
 /**
  * Cloudflare R2, spoken to over the S3 protocol.
@@ -301,13 +302,15 @@ export function keyIsOurs(key: string): boolean {
 const JPEG_ALIAS = /\.(jfif|jpe|pjpeg|pjp)$/i;
 
 /** "GSR 24.07.2027.jfif" -> "GSR 24.07.2027.jpg"; anything else as it was. */
-export function jpegName(name: string): string {
-  return name.replace(JPEG_ALIAS, ".jpg");
-}
+export const jpegName = storedName;
 
-/** The content type to keep a file under: a JPEG alias is image/jpeg whatever the browser said. */
+/**
+ * The content type to keep a file under: a JPEG alias is image/jpeg whatever
+ * the browser said, and a file the browser gave no type goes by its extension
+ * (lib/upload-rules fileType, the one place that decides).
+ */
 export function keptType(name: string, type: string | null | undefined): string {
-  return JPEG_ALIAS.test(name) || /^image\/(pjpeg|jfif)$/i.test(type ?? "") ? "image/jpeg" : type || "";
+  return fileType(name, type);
 }
 
 /**

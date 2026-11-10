@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
@@ -382,7 +383,7 @@ function FactRow({ homeId, f, onSaved }: { homeId: string; f: Fact; onSaved: (d:
           {f.kind !== "file" && !editing && !f.choices?.length && (
             <button type="button" onClick={() => setEditing(true)} className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold hover:border-ink">{f.value ? "Edit" : "Add"}</button>
           )}
-          <input ref={fileRef} type="file" multiple className="hidden" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" onChange={(e) => void upload(e.target.files)} />
+          <input ref={fileRef} type="file" multiple className="hidden" accept={ACCEPT_EVIDENCE} onChange={(e) => void upload(e.target.files)} />
           <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold hover:border-ink disabled:opacity-60">
             {busy ? "Saving…" : "Upload"}
           </button>

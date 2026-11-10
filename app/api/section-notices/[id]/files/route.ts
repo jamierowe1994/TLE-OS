@@ -3,6 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { can } from "@/lib/roles";
 import { addFile, getNotice, removeFile } from "@/lib/section-notices";
 import { SPECS, agentCanEdit } from "@/lib/section-notices-spec";
@@ -32,7 +33,6 @@ const TYPES = [
   "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv",
   "message/rfc822", "application/vnd.ms-outlook",
 ];
-const BY_NAME = /\.(pdf|jpe?g|png|webp|heic|docx?|xlsx?|csv|eml|msg)$/i;
 /* Next cuts a request body off at 10MB once middleware has seen it (see
    SCOPES.library in lib/r2), so 10MB is the honest ceiling here. */
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -78,22 +78,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
-  if (file.size === 0) return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ ok: false, error: `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB - the limit is 10MB.` }, { status: 413 });
-  }
-  if (!TYPES.includes(file.type) && !BY_NAME.test(file.name)) {
-    return NextResponse.json({ ok: false, error: "Only a PDF, a photo, a Word or Excel file, or a saved email can go here." }, { status: 415 });
-  }
+  /* One judge for every upload route (lib/upload-rules): the refusal names
+     the file and what would be taken; a file the browser gave no type (a
+     saved email, most often) goes by its extension. */
+  const judged = judgeFile(file, { types: TYPES, maxBytes: MAX_BYTES });
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: judged.status });
   if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't configured on this environment." }, { status: 503 });
 
-  const key = `${SCOPES.document.prefix}/notice-${safeName(id)}/${Date.now()}-${safeName(file.name)}`;
+  const key = `${SCOPES.document.prefix}/notice-${safeName(id)}/${Date.now()}-${safeName(judged.name)}`;
   try {
     const body = new Uint8Array(await file.arrayBuffer());
     await withR2((client) =>
       client.send(
         new PutObjectCommand({
-          Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream",
+          Bucket: R2_BUCKET, Key: key, Body: body, ContentType: judged.type,
           Metadata: { "original-name": encodeURIComponent(file.name) },
         })
       )
@@ -104,7 +102,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   const saved = await addFile({
-    noticeId: id, lineId: line, side, name: file.name, r2Key: key, mime: file.type, sizeBytes: file.size,
+    noticeId: id, lineId: line, side, name: judged.name, r2Key: key, mime: judged.type, sizeBytes: file.size,
     byName: w.actor.name || w.actor.email,
   });
   return NextResponse.json({ ok: true, file: saved, notice: await getNotice(id) });

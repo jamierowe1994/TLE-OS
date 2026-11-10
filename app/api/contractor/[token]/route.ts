@@ -9,6 +9,7 @@ import { pingCompliance } from "@/lib/works-compliance";
 import { agentFor } from "@/lib/works-agent";
 import { invoiceSettings } from "@/lib/invoices";
 import { withR2, R2_BUCKET, safeName, r2Configured } from "@/lib/r2";
+import { fileType } from "@/lib/upload-rules";
 import { fileJobCertificate, CertificateRefused } from "@/lib/works-certificate";
 
 /**
@@ -125,8 +126,8 @@ async function answerAsk(req: NextRequest, order: WorksOrder, ask: QuoteAsk): Pr
     if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't connected on this environment." }, { status: 503 });
     const key = `documents/works-${order.ref}/${Date.now()}-${safeName(file.name) || "quote"}`;
     const body = Buffer.from(await file.arrayBuffer());
-    await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
-    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "quote", contractor: by } }, by);
+    await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: fileType(file.name, file.type) || "application/octet-stream" })));
+    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: fileType(file.name, file.type), kind: "quote", contractor: by } }, by);
     action = "ask_quote_in";
     next = await moveOrder(order.id, { action, askId: ask.id, quotePence: Math.round(amount * 100), note: `From their page.${String(form.get("note") ?? "").trim() ? ` ${String(form.get("note")).trim()}` : ""}` }, by, out);
   } else {
@@ -180,8 +181,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
         if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, error: "Put the total in first." }, { status: 400 });
         const key = `documents/works-${o.ref}/${Date.now()}-${safeName(file.name) || "quote"}`;
         const body = Buffer.from(await file.arrayBuffer());
-        await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
-        await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "quote" } }, by);
+        await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: fileType(file.name, file.type) || "application/octet-stream" })));
+        await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: fileType(file.name, file.type), kind: "quote" } }, by);
         const next = await takeQuote(o.id, amount, String(form.get("note") ?? ""), by, me);
         return NextResponse.json({ ok: true, job: await publicView(next) });
       }
@@ -214,8 +215,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       }
       const key = `documents/works-${o.ref}/${Date.now()}-${safeName(file.name) || "file"}`;
       const body = Buffer.from(await file.arrayBuffer());
-      await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
-      let next = await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: file.type, ...(kind === "invoice" ? { kind: "invoice" as const } : {}) } }, by);
+      await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: fileType(file.name, file.type) || "application/octet-stream" })));
+      let next = await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: fileType(file.name, file.type), ...(kind === "invoice" ? { kind: "invoice" as const } : {}) } }, by);
       const amount = Number(String(form.get("amount") ?? "").replace(/[£,\s]/g, ""));
       if (kind === "invoice" && Number.isFinite(amount) && amount > 0) {
         if (!next.completedAt) next = await moveOrder(o.id, { action: "done", note: String(form.get("note") ?? "").trim() || "Marked done by the contractor with their invoice." }, by);

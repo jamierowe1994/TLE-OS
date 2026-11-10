@@ -1,3 +1,5 @@
+import { ACCEPT_PAPER, PAPER_TYPES } from "@/lib/upload-rules";
+
 /**
  * THE DOCUMENT TYPES ON A FILE (James, 5 Oct 2026) - Kirstie's list, read off
  * what the office records on a tenancy today, plus Other with a name of the
@@ -18,12 +20,22 @@ export interface DocType {
   /** Kept once by the office and on every home it applies to by itself
    *  (lib/standing-documents), so it is never offered as an upload on a let. */
   standing?: boolean;
+  /** Offered as a type to file under, never listed under "Not on file yet":
+   *  a paper some lets have and most do not need separately. */
+  optional?: boolean;
 }
 
 export const DOC_TYPES: DocType[] = [
   { key: "holding_deposit_guide", label: "Holding Deposit Guide Signed", side: "tenant" },
   { key: "reference", label: "Reference", side: "tenant" },
   { key: "tenant_right_to_rent", label: "Tenant Right to Rent", side: "tenant" },
+  /* A tenant's passport or driving licence (10 Nov 2026). There was a
+     Landlord ID and a Guarantor ID and nothing for the tenant's own, so it
+     went on as Other or as their Right to Rent, which it is not. The tenant
+     portal already calls it "Photo ID" (lib/tenant-documents-kinds).
+     Optional: where the right to rent check holds the passport, nobody is
+     told a second copy is missing. */
+  { key: "tenant_id", label: "Tenant ID", side: "tenant", optional: true },
   { key: "tenant_proof_of_address", label: "Tenant Proof of Address", side: "tenant" },
   /* Kirstie Mulholland, 21 Oct 2026: "Please can you add Guarantor AML checks
      to documents." She and Lianna had been filing them as Other ("Gtor AML",
@@ -102,14 +114,7 @@ export const hasGuarantorPapers = (held: Set<string>): boolean =>
 
 export const isDocType = (key: string): boolean => key === OTHER || DOC_TYPES.some((t) => t.key === key);
 
-/** What a file may be: a PDF, a photo or a Word document. */
-export const DOC_ACCEPT = "application/pdf,image/jpeg,image/png,image/webp,image/heic,.doc,.docx";
-export const DOC_MIME = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
+/** What a file may be: a PDF, a photo or a Word document. The list, the
+ *  picker's `accept` and the refusal all come from lib/upload-rules. */
+export const DOC_ACCEPT = ACCEPT_PAPER;
+export const DOC_MIME: readonly string[] = PAPER_TYPES;

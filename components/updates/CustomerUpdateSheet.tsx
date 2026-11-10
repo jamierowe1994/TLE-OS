@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_PAPER } from "@/lib/upload-rules";
 import { useMemo, useRef, useState } from "react";
 import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
 import ConfirmSheet from "@/components/ConfirmSheet";
@@ -612,7 +613,7 @@ export default function CustomerUpdateSheet({
                   <DoodleIcon name="link" size={13} /> {uploading ? "Uploading…" : "Attach"}
                 </button>
               )}
-              <input ref={pickInput} type="file" className="hidden" accept="application/pdf,image/*,.doc,.docx" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFromComputer(f); e.target.value = ""; }} />
+              <input ref={pickInput} type="file" className="hidden" accept={ACCEPT_PAPER} onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFromComputer(f); e.target.value = ""; }} />
             </div>
             {attachOpen === "choose" && (
               <div className="nl-cu-attach-pick">

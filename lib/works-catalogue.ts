@@ -14,6 +14,8 @@
  * that already reads them has to change.
  */
 
+import { FIRE_KINDS } from "@/lib/cert-kinds";
+
 export const KINDS = ["repair", "planned"] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -61,7 +63,10 @@ export const JOB_CERT_TYPES: { id: string; label: string }[] = [
   { id: "legionella_risk_assessment", label: "Legionella risk assessment" },
   { id: "smoke_alarms", label: "Smoke alarms" },
   { id: "co_alarms", label: "CO alarms" },
-  { id: "emergency_lighting_fire_exit", label: "Fire safety" },
+  /* The fire family by name (lib/cert-kinds): a fire risk assessment and an
+     emergency lighting certificate each have their own line, and all three
+     file as REX's one fire type. */
+  ...FIRE_KINDS.map((k) => ({ id: k.id, label: k.label })),
 ];
 
 /** The certificate a planned category brings back, to start the job sheet's upload on the right one. */
@@ -72,6 +77,7 @@ export const CATEGORY_CERT_TYPE: Record<string, string> = {
   "PAT test": "portable_appliance_testing",
   "Legionella risk assessment": "legionella_risk_assessment",
   "Smoke & CO alarms": "smoke_alarms",
+  "Fire risk assessment": "fire_risk_assessment",
 };
 
 /** The trade a planned category wants, to start "Add a contractor" on a trade rather than a job name. */

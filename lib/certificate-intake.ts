@@ -5,6 +5,7 @@ import { q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { R2_BUCKET, jpegName, keptType, safeName, withR2 } from "@/lib/r2";
 import { expiryFromIssue, filesOnIssueDate } from "@/lib/cert-life";
+import { certFilesAs, certNamedAs } from "@/lib/cert-kinds";
 import { rexWriteBlockedBecause, writeCertificateToRex } from "@/lib/plc-rex";
 import { patchHeldHome, refreshComplianceBook } from "@/lib/compliance-cache";
 import { shareCertificate, type SharePerson, type ShareResult } from "@/lib/certificate-share";
@@ -209,7 +210,8 @@ export interface FileCertificate {
   contentType: string;
   propertyId: string;
   propertyName: string;
-  /** A REX compliance type id. Checked against CERT_TYPES by the caller. */
+  /** A REX compliance type id, or one of our named kinds that files as one
+   *  (lib/cert-kinds). Checked against CERT_TYPES by the caller. */
   type: string;
   /** YYYY-MM-DD. */
   expiry: string;
@@ -279,11 +281,18 @@ export async function fileCertificate(given: FileCertificate): Promise<{ row: Ce
      (1 Nov 2026, lib/r2 jpegName). A PAT or fire safety certificate has no
      expiry, only the day it was tested: it runs the type's usual life from
      then (Lianna Denholm, 1 Nov 2026; lib/cert-life). */
+  /* A kind picked by its own name - a fire risk assessment, an emergency
+     lighting certificate - is filed as the REX type that holds it, and its
+     name is kept on the record with where it came from (lib/cert-kinds). */
+  const type = certFilesAs(given.type);
+  const named = certNamedAs(given.type);
   const input: FileCertificate = {
     ...given,
+    type,
+    source: named && !given.source.startsWith(named) ? `${named}, ${given.source}`.slice(0, 160) : given.source,
     fileName: jpegName(given.fileName),
     contentType: keptType(given.fileName, given.contentType),
-    expiry: certificateExpiry(given.type, given.expiry, given.issue),
+    expiry: certificateExpiry(type, given.expiry, given.issue),
   };
   /* Every door checks the date first, but a date that is not on the calendar
      reached Postgres once (7 Oct) and failed as a bare 500; say so instead. */

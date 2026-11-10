@@ -8,6 +8,8 @@ import SendTermsPopout from "@/components/SendTermsPopout";
 import TermsPanel from "@/components/terms/TermsPanel";
 import HomeFacts from "@/components/HomeFacts";
 import { filesOnIssueDate } from "@/lib/cert-life";
+import { CERT_KINDS, CERT_KIND_LABEL, certFilesAs, certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import QueryThread from "@/components/QueryThread";
 import { useSaveReporter } from "@/components/SaveChip";
 import { Badge, Ico, Menu, type Tone } from "@/components/new-look/Parts";
@@ -590,7 +592,17 @@ const CERT_TYPE: Record<string, string> = {
   emergency_lighting_fire_exit: "Fire safety",
 };
 const EIC = "eic";
-const CERT_CHOICES: [string, string][] = Object.entries(CERT_TYPE).flatMap(([k, v]): [string, string][] => (k === "eicr" ? [[k, v], [EIC, "EIC (new build or full rewire)"]] : [[k, v]]));
+/* What can be picked: the shared list (lib/cert-kinds), which offers a fire
+   risk assessment and an emergency lighting certificate by name. */
+const CERT_CHOICES: [string, string][] = CERT_KINDS.flatMap((k): [string, string][] => (k.id === "eicr" ? [[k.id, k.label], [EIC, "EIC (new build or full rewire)"]] : [[k.id, k.label]]));
+/**
+ * Why File It is greyed, as a line under it, or null when it is ready. One
+ * rule for every door (lib/cert-kinds): a PAT report or a fire safety
+ * certificate has no expiry, so the day it was done is enough. This form
+ * wanted an expiry whatever the type until 10 Nov 2026, and did not say so.
+ */
+const filingNotReady = (f: Filing): string | null =>
+  certNotReadyBecause({ type: f.type, expiry: f.expiry, issue: f.issue, eic: f.type === EIC ? { reason: f.eicReason } : null });
 const READER_TYPE: Record<string, string> = { hmo_licence: "mandatory_hmo_license" };
 const readsAsEic = (r: CertRead | null) => Boolean(r && r.type === "eicr" && /installation certificate|new (electrical )?installation|\bEIC\b/i.test(r.notes) && !/condition report/i.test(r.notes));
 const capEic = (issue: string, expiry: string) => {
@@ -800,24 +812,23 @@ function NewLookCompliance({
       .then((r) => r.json())
       .catch(() => ({ ok: false }))) as { ok?: boolean; read?: CertRead; error?: string };
     const read = j.ok && j.read ? j.read : null;
-    const read0 = forType || (read ? READER_TYPE[read.type] ?? read.type : "");
+    /* The row's own type, unless the reader names a kind that files as it (a
+       fire risk assessment on the fire row): then the reader's, which says more. */
+    const readType = read ? READER_TYPE[read.type] ?? read.type : "";
+    const read0 = forType && certFilesAs(readType) !== forType ? forType : readType || forType;
     const type = read0 === "eicr" && readsAsEic(read) ? EIC : read0;
     const issue = read?.issue ?? "";
     const expiry = type === EIC && issue ? capEic(issue, read?.expiry ?? "") : read?.expiry ?? "";
     setFiling((p) =>
       p && p.file === file
-        ? { ...p, read, type: CERT_TYPE[type] || type === EIC ? type : p.type, expiry, issue, busy: false, note: j.ok ? null : j.error ?? "The reader could not open it; fill the dates in by hand." }
+        ? { ...p, read, type: CERT_KIND_LABEL[type] || type === EIC ? type : p.type, expiry, issue, busy: false, note: j.ok ? null : j.error ?? "The reader could not open it; fill the dates in by hand." }
         : p
     );
   }
 
   async function fileCert() {
-    if (!filing || !filing.type || !filing.expiry) return;
+    if (!filing || filingNotReady(filing)) return;
     const eic = filing.type === EIC;
-    if (eic && (!filing.issue || !filing.eicReason)) {
-      setFiling((p) => (p ? { ...p, note: "An EIC needs the date it was issued, and whether the home is a new build or was fully rewired." } : p));
-      return;
-    }
     setFiling((p) => (p ? { ...p, busy: true, note: null } : p));
     const target = propertyId ?? cert?.propertyId ?? null;
     const body = new FormData();
@@ -1130,7 +1141,7 @@ function NewLookCompliance({
         <>
           {filing.read && (
             <p className="nl-meta">
-              Reads as {readsAsEic(filing.read) ? "an EIC" : CERT_TYPE[READER_TYPE[filing.read.type] ?? filing.read.type] ?? filing.read.type}
+              Reads as {readsAsEic(filing.read) ? "an EIC" : CERT_KIND_LABEL[READER_TYPE[filing.read.type] ?? filing.read.type] ?? filing.read.type}
               {filing.read.expiry ? `, expires ${ymd(filing.read.expiry)}${filing.read.expiryDerived ? " (worked out from the issue date)" : ""}` : ", no expiry printed"}
               {filing.read.address ? `. Address on it: ${filing.read.address}` : ""}.
             </p>
@@ -1148,13 +1159,14 @@ function NewLookCompliance({
               </select>
             </label>
             <label className="nl-field">
-              <span>Expires</span>
+              <span>{kindFilesOnIssueDate(filing.type) ? "Expires (optional)" : "Expires"}</span>
               <input type="date" value={filing.expiry} onChange={(e) => setFiling((p) => (p ? { ...p, expiry: e.target.value } : p))} />
             </label>
             <label className="nl-field">
               <span>Issued</span>
               <input type="date" value={filing.issue} onChange={(e) => setFiling((p) => (p ? { ...p, issue: e.target.value, expiry: p.type === EIC && e.target.value ? capEic(e.target.value, p.expiry) : p.expiry } : p))} />
             </label>
+            {noExpiryNote(filing.type, filing.issue, filing.expiry, ymd) && <p className="nl-meta nl-cmp-span">{noExpiryNote(filing.type, filing.issue, filing.expiry, ymd)}</p>}
             {filing.type === EIC && (
               <label className="nl-field nl-cmp-span">
                 <span>Why an EIC</span>
@@ -1184,13 +1196,14 @@ function NewLookCompliance({
           </div>
           {filing.note && <p className="nl-meta nl-cmp-err">{filing.note}</p>}
           <div className="nl-cmp-filer-acts">
-            <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={filing.busy || !filing.type || !filing.expiry} onClick={() => void fileCert()}>
+            <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={filing.busy || Boolean(filingNotReady(filing))} onClick={() => void fileCert()}>
               {filing.busy ? "Filing…" : "File it"}
             </button>
             <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" disabled={filing.busy} onClick={() => setFiling(null)}>
               Cancel
             </button>
           </div>
+          {!filing.busy && filingNotReady(filing) && <p className="nl-meta">{filingNotReady(filing)}</p>}
         </>
       )}
     </div>
@@ -1198,7 +1211,7 @@ function NewLookCompliance({
 
   return (
     <div className="nl-cmp">
-      <input ref={certInput} type="file" accept="application/pdf,image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void startCert(f, certFor.current.type, certFor.current.replaces); }} />
+      <input ref={certInput} type="file" accept={ACCEPT_EVIDENCE} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void startCert(f, certFor.current.type, certFor.current.replaces); }} />
       <input ref={paperInput} type="file" accept={DOC_ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void paperChosen(f); }} />
 
       {(introOnly || letOnly) && (

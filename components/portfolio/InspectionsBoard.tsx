@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pastDueDay } from "@/lib/london-clock";
 import Link from "next/link";
@@ -985,7 +986,7 @@ function VisitFiles({ inspection: i, busy, onMove }: { inspection: Inspection; b
         <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Report and files</p>
         <label className={`text-[11.5px] font-semibold ${busy || uploading ? "text-muted" : "cursor-pointer text-accent-dark underline"}`}>
           {uploading ? "Uploading…" : "Add a file"}
-          <input type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" disabled={busy || uploading} onChange={(e) => { void add(Array.from(e.target.files ?? [])); e.target.value = ""; }} className="hidden" />
+          <input type="file" multiple accept={ACCEPT_EVIDENCE} disabled={busy || uploading} onChange={(e) => { void add(Array.from(e.target.files ?? [])); e.target.value = ""; }} className="hidden" />
         </label>
       </div>
       {files.length > 0 ? (

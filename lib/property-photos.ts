@@ -3,6 +3,7 @@ import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sd
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 
 /**
  * THE TAKE-ON PHOTOGRAPHS (James, 17 Sep 2026).
@@ -57,14 +58,17 @@ export async function storePhoto(p: { appraisalId: string; file: File; by: strin
   const scope = SCOPES.photo;
   const { file } = p;
   if (!file || file.size === 0) return { ok: false, status: 400, error: "No photograph was attached." };
-  if (file.size > scope.maxBytes) return { ok: false, status: 413, error: `${file.name} is too big. Up to ${Math.round(scope.maxBytes / 1024 / 1024)}MB each.` };
-  if (!(scope.types as readonly string[]).includes(file.type)) return { ok: false, status: 415, error: `${file.name} is not a photograph we can take.` };
+  /* One judge for every upload route (lib/upload-rules): the refusal names
+     the file and what would be taken, and a photo the phone gave no type
+     goes by its extension. */
+  const judged = judgeFile(file, scope);
+  if (!judged.ok) return { ok: false, status: judged.status, error: judged.error };
 
-  const key = `${scope.prefix}/takeon/${p.appraisalId}/${Date.now()}-${safeName(file.name) || "photo"}`;
+  const key = `${scope.prefix}/takeon/${p.appraisalId}/${Date.now()}-${safeName(judged.name) || "photo"}`;
   const body = new Uint8Array(await file.arrayBuffer());
   try {
     await withR2((client) =>
-      client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type, Metadata: { appraisal: p.appraisalId } }))
+      client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: judged.type, Metadata: { appraisal: p.appraisalId } }))
     );
   } catch (e) {
     console.error("[photos] R2 upload failed", (e as Error).message);
@@ -75,7 +79,7 @@ export async function storePhoto(p: { appraisalId: string; file: File; by: strin
     `INSERT INTO os_property_photos (id, appraisal_id, r2_key, name, bytes, content_type, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7)
      RETURNING id, name, bytes, content_type, uploaded_by, uploaded_at`,
-    [id, p.appraisalId, key, file.name, file.size, file.type, p.by]
+    [id, p.appraisalId, key, judged.name, file.size, judged.type, p.by]
   );
   return { ok: true, photo: shape(rows[0]) };
 }

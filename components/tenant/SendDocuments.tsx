@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useState } from "react";
 import { TENANT_DOC_KINDS, type TenantDocument } from "@/lib/tenant-documents-kinds";
 
@@ -91,7 +92,7 @@ export default function SendDocuments({ sample = false, noRightToRent = false }:
                 <input
                   type="file"
                   multiple
-                  accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                  accept={ACCEPT_EVIDENCE}
                   disabled={busy !== null}
                   onChange={(e) => void send(k.id, e.target.files)}
                   className="hidden"

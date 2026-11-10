@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useState } from "react";
 import type { Contractor, Move, PaidHow, Urgency, WorksOrder } from "@/lib/works-orders";
 import { URGENCIES } from "@/lib/works-catalogue";
@@ -114,7 +115,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
     <label className={`flex cursor-pointer items-center justify-between gap-2 ${field}`}>
       <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : what}</span>
       <span className="shrink-0 text-[11.5px] underline">{file ? "Change" : "Choose"}</span>
-      <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+      <input type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
     </label>
   );
 

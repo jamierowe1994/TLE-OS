@@ -10,6 +10,7 @@ import { setOrderBank } from "@/lib/contractor-bank";
 import { tellAccounts } from "@/lib/works-emails";
 import { invoiceSettings } from "@/lib/invoices";
 import { withR2, R2_BUCKET, safeName, r2Configured } from "@/lib/r2";
+import { fileType } from "@/lib/upload-rules";
 
 /**
  * A contractor's invoice for work nobody raised on the OS (Rhiannon, 19 Oct
@@ -109,8 +110,8 @@ export async function POST(req: NextRequest) {
     await logEvent(order.id, by, "note", "Logged from the contractor's invoice: the work was done without a job on the OS.");
     const key = `documents/works-${order.ref}/${Date.now()}-${safeName(file.name) || "invoice"}`;
     const body = Buffer.from(await file.arrayBuffer());
-    await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
-    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "invoice" } }, by);
+    await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: fileType(file.name, file.type) || "application/octet-stream" })));
+    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: fileType(file.name, file.type), kind: "invoice" } }, by);
     await moveOrder(order.id, { action: "done", note: "Done before it was logged; see the contractor's invoice.", completedAt: doneOn ? new Date(doneOn).toISOString() : null }, by);
     /* Nobody to ask whether they're happy about work done before it was
        logged (Rhiannon, 19 Oct 2026): it goes straight to the money. */
