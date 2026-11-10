@@ -17,11 +17,19 @@ import { MAX_REG_NUMBERS, isRealDay, joinRegNumbers, regByLandlord, regDay, regN
  * number gets a line asking for it (Lianna, 2 Nov 2026: "No place to add LL
  * reg expiry date on 2nd LL" - the box listed bare numbers and never named
  * John Hood, the additional landlord on South Chesters View).
+ *
+ * The same box on a managed home's Landlord card (Lianna Denholm, ticket
+ * 678d4606; James, 10 Nov 2026: "Scottish properties can have a registration
+ * box on managed homes on the landlord card"): `home` saves it through
+ * /api/portfolio/registration onto the same home record, never the advert,
+ * because a managed home may have no REX listing at all (a REX PM home).
  */
 
 const STATE_WORDS: Record<RegState, string> = { expired: "Expired", "due-soon": "Due soon", valid: "", "no-date": "" };
 
 type Row = { n: string; d: string; owner: string };
+/** What the box reads off the home's record (the listing's details carry it; a managed home's page reads it alone). */
+export type RegRecord = Pick<ListingDetails["record"], "scotland" | "landlordRegistration" | "landlordRegistrationExpiry" | "landlordRegistrationOwner">;
 
 export default function LandlordRegistration({
   listingId,
@@ -30,14 +38,21 @@ export default function LandlordRegistration({
   look,
   onSaved,
   landlordName = null,
+  moreLandlords,
   homeKey = null,
   rev = 0,
+  home = false,
 }: {
   listingId: string;
-  record: ListingDetails["record"] | null | undefined;
+  record: RegRecord | null | undefined;
   canEdit: boolean;
   look?: "new";
-  onSaved: (details: ListingDetails) => void;
+  /** The listing's details after a save; on a managed home (`home`), the home's record. */
+  onSaved: (saved: { details?: ListingDetails; record?: RegRecord }) => void;
+  /** Saved on a managed home's page (/api/portfolio/registration, `listingId` its Portfolio id), not on the listing. */
+  home?: boolean;
+  /** The home's other owners as the main record has them (a managed home's co-owners), named like the landlord. */
+  moreLandlords?: string[];
   /** The landlord on the listing, for naming their number. */
   landlordName?: string | null;
   /** Where the home's additional landlords are kept (HomeLandlords' key). */
@@ -69,7 +84,7 @@ export default function LandlordRegistration({
   const nl = look === "new";
   const numbers = regNumbers(record.landlordRegistration);
   const expiry = record.landlordRegistrationExpiry ?? {};
-  const landlords = [landlordName?.trim(), ...joint].filter((x): x is string => Boolean(x));
+  const landlords = [...new Set([landlordName?.trim(), ...(moreLandlords ?? []).map((x) => x.trim()), ...joint].filter((x): x is string => Boolean(x)))];
   const { rows: owned, missing } = regByLandlord(numbers, record.landlordRegistrationOwner ?? {}, landlords);
   const meta = nl ? "nl-meta" : "text-[12px] text-muted";
   const link = nl ? "nl-link" : "text-[12px] font-semibold text-ink underline";
@@ -90,19 +105,20 @@ export default function LandlordRegistration({
     if (kept.some((r) => r.d && !isRealDay(r.d))) return setError("One of the dates isn't a real date.");
     const joined = joinRegNumbers(kept.map((r) => r.n));
     const body: Record<string, unknown> = {
-      id: listingId,
+      ...(home ? { listingId } : { id: listingId }),
       landlordRegistrationExpiry: Object.fromEntries(kept.map((r) => [r.n, r.d || null])),
       landlordRegistrationOwner: Object.fromEntries(kept.map((r) => [r.n, r.owner || null])),
     };
     if (joined !== (joinRegNumbers(numbers) ?? null)) body.landlordRegistration = joined ?? "";
     setBusy(true);
     setError(null);
-    const j = (await fetch("/api/listings/details", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+    const j = (await fetch(home ? "/api/portfolio/registration" : "/api/listings/details", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
       .then((r) => r.json())
-      .catch(() => null)) as { ok?: boolean; error?: string; details?: ListingDetails | null } | null;
+      .catch(() => null)) as { ok?: boolean; error?: string; details?: ListingDetails | null; record?: RegRecord | null } | null;
     setBusy(false);
     if (!j?.ok) return setError(j?.error ?? "That didn't save. Try again in a minute.");
-    if (j.details) onSaved(j.details);
+    if (j.details) onSaved({ details: j.details });
+    else if (j.record) onSaved({ record: j.record });
     setRows(null);
   }
 

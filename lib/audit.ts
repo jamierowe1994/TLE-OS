@@ -131,6 +131,9 @@ export type AuditKind =
   | "rtr_expiry_recorded"
   /* Kirstie's check of a recorded right to rent expiry (ticket 066bb29e). */
   | "rtr_expiry_verified"
+  /* A Scottish landlord registration kept from a managed home's page (Lianna
+     Denholm, ticket 678d4606, 10 Nov 2026; app/api/portfolio/registration). */
+  | "home_registration_saved"
   | "property_address_changed"
   /* A list downloaded as a spreadsheet (19 Oct 2026, lib/exports): which
      screen, how many rows and the filters. No emails or phones go in one. */

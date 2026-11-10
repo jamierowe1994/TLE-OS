@@ -3248,7 +3248,7 @@ function ListingDrawerBody({
                     {!testListing && <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" data-steve="listing.edit-landlord" onClick={() => setLandlordOpen(true)}>Add the landlord</button>}
                   </>
                 )}
-                <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} look="new" onSaved={setLive} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
+                <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} look="new" onSaved={(s) => s.details && setLive(s.details)} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
               </section>
 
               {/* Steve, looking for the handy next thing on this home. */}
@@ -3800,7 +3800,7 @@ function ListingDrawerBody({
                   the landlord, every field changeable, plus additional
                   landlords and points of contact kept on the home. */}
               {landlordBlock}
-              <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} onSaved={setLive} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
+              <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} onSaved={(s) => s.details && setLive(s.details)} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
             </div>
 
             {/* How we get in - and, when it is through the tenant, the tenant. */}
