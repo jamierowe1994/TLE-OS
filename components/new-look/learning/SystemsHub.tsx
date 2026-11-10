@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Mast } from "@/components/new-look/Parts";
 import { JOURNEYS as TOUR } from "@/lib/learning/systems";
 import type { JourneyId } from "@/lib/learning/systems-types";
-import { JourneyCover } from "./Covers";
+import { JOURNEY_SCHEME, JourneyCover } from "./Covers";
 import { Arrow, Back } from "./LearningHub";
 
 /**
@@ -40,7 +40,7 @@ export default function SystemsHub() {
           const n = filesIn(j.side);
           return (
             <Link key={j.side} href={`/tools/learning/systems/${j.side}`} className={`nl-lr-journey is-${j.tone}`} style={{ animationDelay: `${80 + i * 80}ms` }}>
-              <span className="nl-lr-journey-art" aria-hidden>
+              <span className={`nl-lr-journey-art nl-ta is-s${JOURNEY_SCHEME[j.side]}`} aria-hidden>
                 <JourneyCover id={j.side} />
                 {n > 0 && <b>{n === 1 ? "1 file" : `${n} files`}</b>}
               </span>
