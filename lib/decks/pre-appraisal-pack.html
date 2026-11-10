@@ -706,6 +706,16 @@ body { background: #ebe5dc; }
 .seg-ctl button[aria-checked="true"] { background: var(--brown); color: #fff; box-shadow: none; }
 .title .soft { color: var(--coral); }
 .bar { border-radius: 0 !important; }
+
+/* The agent's bio, 10 Nov 2026 (Dan Richards: "doesn't look good at all"): its own paragraphs with a gap between,
+   a calmer size, and smaller steps as it gets longer so the whole of it fits the slide. */
+.note-text p { margin: 0; } .note-text p + p { margin-top: .75em; }
+.note-text.fit-2 { font-size: calc(var(--u) * 1.4); line-height: 1.5; letter-spacing: -.005em; }
+.note-text.fit-3 { font-size: calc(var(--u) * 1.18); line-height: 1.55; letter-spacing: 0; font-weight: 350; max-width: 34em; }
+.note-text.fit-4 { font-size: calc(var(--u) * 1.04); line-height: 1.55; letter-spacing: 0; font-weight: 350; max-width: 36em; }
+@media (max-aspect-ratio: 4/5), (max-width: 700px) {
+  .note-text, .note-text.fit-2, .note-text.fit-3, .note-text.fit-4 { font-size: 16px; line-height: 1.55; max-width: none; }
+}
 </style>
 </head>
 <body>
@@ -817,6 +827,9 @@ const VID = A.video && (A.video.src || A.video.link) ? A.video : null;
    'headshot' always puts the agent's headshot there and the video behind a button. */
 const MEET = D.meet === 'headshot' ? 'headshot' : 'video';
 const BOXVID = MEET === 'video' && VID;
+/* The bio comes in its own paragraphs (lib/pre-pack) and steps down a size as it gets longer, so a full bio sits
+   on the slide with the greeting and the name, not off the top and bottom of it (Dan Richards, 10 Nov 2026). */
+const NOTE_FIT = A.note.length > 820 ? 'fit-4' : A.note.length > 520 ? 'fit-3' : A.note.length > 260 ? 'fit-2' : 'fit-1';
 n = 0; slide('Meet ' + A.first, `
   <div class="cols" style="grid-template-columns:1.25fr 1fr">
     <div class="bigwrap in" ${i()}>${MEET === 'headshot' ? '<span class="bw-back" aria-hidden="true"></span>' : ''}<button class="bigvid${BOXVID ? '' : ' photo'}${MEET === 'headshot' ? ' hs' : ''}" ${BOXVID ? 'data-video' : 'tabindex="-1"'} aria-label="${BOXVID ? 'Play the video from ' + esc(A.name) : esc(A.name)}">
@@ -826,7 +839,7 @@ n = 0; slide('Meet ' + A.first, `
     <div>
       <p class="eyebrow in" ${i()}>Meet your expert</p>
       <h2 class="title in" ${i()}>Hi ${v('landlord.first')}, I’m ${v('agent.first')}.</h2>
-      <p class="note-text in" ${i()}>${v('agent.note')}</p>
+      <div class="note-text ${NOTE_FIT} in" ${i()}>${A.note.split(/\n{2,}/).map(p => `<p>${v('agent.note', p)}</p>`).join('')}</div>
       ${VID && !BOXVID ? `<div class="btns in" ${i('margin-top:calc(var(--u)*2.6)')}><button class="btn dark" data-video>${ic('play', '')}<span>Watch my video</span></button></div>` : ''}
       <div class="sign in${BOXVID ? '' : ' plain'}" ${i()}>${BOXVID ? face('sm') : ''}<div><b>${v('agent.name')}</b><span class="lab">${v('agent.role')}, The Letting Experts</span></div></div>
     </div>
