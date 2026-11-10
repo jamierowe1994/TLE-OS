@@ -38,17 +38,6 @@
 [data-look="new"] .nl-sx-fold { display: flex; flex-direction: column; width: 100%; height: 100%; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 26px; background: var(--card); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: transform .35s var(--nl-ease), box-shadow .35s var(--nl-ease), border-color .2s; }
 [data-look="new"] .nl-sx-fold:hover { transform: translateY(-3px); border-color: var(--line-strong); box-shadow: 0 24px 50px -30px rgba(20, 20, 19, .4); }
 [data-look="new"] .nl-sx-fold-art { display: grid; place-items: center; height: 170px; }
-[data-look="new"] .nl-sx-fold.is-clay .nl-sx-fold-art { background: #f4dccf; color: #c27758; }
-[data-look="new"] .nl-sx-fold.is-sage .nl-sx-fold-art { background: #e3e6d6; color: #7e8f6c; }
-[data-look="new"] .nl-sx-fold.is-brown .nl-sx-fold-art { background: #e6dcd2; color: #8f7a68; }
-[data-look="new"] .nl-sx-fold.is-coral .nl-sx-fold-art { background: #fbe3d9; color: #e0866a; }
-[data-look="new"] .nl-sx-fold.is-sky .nl-sx-fold-art { background: #e0e7ea; color: #6f8891; }
-[data-look="new"] .nl-sx-fold.is-olive .nl-sx-fold-art { background: #e8e5cf; color: #8d8a58; }
-[data-look="new"] .nl-sx-fold-svg { max-width: 80%; height: auto; overflow: visible; }
-[data-look="new"] .nl-sx-fold-paper { transition: transform .5s var(--nl-ease); }
-[data-look="new"] .nl-sx-fold:hover .nl-sx-fold-paper.is-0 { transform: translateY(-8px) rotate(-3deg); }
-[data-look="new"] .nl-sx-fold:hover .nl-sx-fold-paper.is-1 { transform: translateY(-12px); }
-[data-look="new"] .nl-sx-fold:hover .nl-sx-fold-paper.is-2 { transform: translateY(-8px) rotate(3deg); }
 [data-look="new"] .nl-sx-fold-text { display: flex; flex-direction: column; flex: 1; gap: 4px; padding: 20px 22px 22px; }
 [data-look="new"] .nl-sx-fold-n { font-size: 12.5px; color: var(--muted); }
 [data-look="new"] .nl-sx-fold-name { font-family: var(--font-heading); font-weight: 600; font-size: 22px; line-height: 28px; color: var(--ink); }
@@ -73,17 +62,9 @@
 [data-look="new"] .nl-sx-tile:hover { transform: translateY(-3px); border-color: var(--line-strong); box-shadow: 0 22px 44px -30px rgba(20, 20, 19, .4); }
 [data-look="new"] .nl-sx-tile:active { transform: translateY(-1px) scale(.99); }
 [data-look="new"] .nl-sx-tile-art { position: relative; display: grid; place-items: center; flex: none; height: 132px; overflow: hidden; }
-[data-look="new"] .nl-sx-art { max-width: 78%; height: auto; }
-[data-look="new"] .nl-sx-art-up, [data-look="new"] .nl-sx-art-back, [data-look="new"] .nl-sx-art-spin { transition: transform .5s var(--nl-ease); }
-[data-look="new"] .nl-sx-tile:hover .nl-sx-art-up { transform: translateY(-5px); }
-[data-look="new"] .nl-sx-tile:hover .nl-sx-art-spin { transform: rotate(60deg); }
-@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-sx-art-up, [data-look="new"] .nl-sx-art-spin { transition: none; } }
 [data-look="new"] .nl-sx-tile-art em { position: absolute; top: 12px; left: 14px; font-style: normal; font-size: 11.5px; font-weight: 500; opacity: .85; }
 [data-look="new"] .nl-sx-tile-art svg { transition: transform .5s var(--nl-ease); }
 [data-look="new"] .nl-sx-tile:hover .nl-sx-tile-art svg { transform: scale(1.04); }
-[data-look="new"] .is-page > .nl-sx-tile-art, [data-look="new"] .nl-sx-file-art.is-page { background: var(--sx-page-bg); color: var(--sx-page-ink); }
-[data-look="new"] .is-email > .nl-sx-tile-art, [data-look="new"] .nl-sx-file-art.is-email { background: var(--sx-email-bg); color: var(--sx-email-ink); }
-[data-look="new"] .is-process > .nl-sx-tile-art, [data-look="new"] .nl-sx-file-art.is-process { background: var(--sx-process-bg); color: var(--sx-process-ink); }
 [data-look="new"] .nl-sx-tile-text { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px 20px; min-width: 0; }
 [data-look="new"] .nl-sx-tile-when { font-size: 12px; line-height: 16px; color: var(--muted); }
 [data-look="new"] .nl-sx-tile-name { font-family: var(--font-heading); font-size: 18px; line-height: 23px; color: var(--ink); }
@@ -242,7 +223,7 @@
 @media (prefers-reduced-motion: reduce) {
   [data-look="new"] .nl-sx-folders > li, [data-look="new"] .nl-sx-pop-scrim, [data-look="new"] .nl-sx-folderview, [data-look="new"] .nl-sx-tiles > li, [data-look="new"] .nl-sx-file, [data-look="new"] .nl-sx-file.is-closing,
   [data-look="new"] .nl-sx-stage, [data-look="new"] .nl-sx-guide, [data-look="new"] .nl-sx-beat, [data-look="new"] .nl-sx-pill { animation: none; opacity: 1; }
-  [data-look="new"] .nl-sx-fold, [data-look="new"] .nl-sx-fold-paper, [data-look="new"] .nl-sx-tile, [data-look="new"] .nl-sx-tile-art svg, [data-look="new"] .nl-sx-dot, [data-look="new"] .nl-sx-pill { transition: none; }
+  [data-look="new"] .nl-sx-fold, [data-look="new"] .nl-sx-tile, [data-look="new"] .nl-sx-tile-art svg, [data-look="new"] .nl-sx-dot, [data-look="new"] .nl-sx-pill { transition: none; }
   [data-look="new"] .nl-sx-tile:hover, [data-look="new"] .nl-sx-pill:hover { transform: none; }
   [data-look="new"] .nl-sx-tile:hover .nl-sx-tile-art svg { transform: none; }
 }

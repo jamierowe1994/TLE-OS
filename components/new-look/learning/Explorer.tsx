@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Tabs } from "@/components/new-look/Parts";
 import { LEARNING_PAGES, type LearningPage } from "@/lib/learning/pages";
 import type { Folder, Journey, JourneyId, SysFile } from "@/lib/learning/systems-types";
 import PopGuide from "./PopGuide";
+import { FolderFan, TilePicture, schemeOf } from "./TileArt";
 
 /**
  * One journey of the Systems tour (Tools > Learning > Systems, James, 26 Oct
@@ -53,93 +55,6 @@ function quiet() {
 }
 
 /* ── glyphs ──────────────────────────────────────────────────────────────── */
-
-/* A drawn preview on each file tile (James, 26 Oct: "make these look like proper tiles rather than just that we stuck an icon on a thing"). */
-function TileArt({ kind }: { kind: SysFile["kind"] }) {
-  if (kind === "email")
-    return (
-      <svg className="nl-sx-art" width="150" height="96" viewBox="0 0 150 96" fill="none" aria-hidden>
-        <ellipse cx="75" cy="88" rx="50" ry="5" fill="currentColor" opacity=".08" />
-        <path className="nl-sx-art-back" d="M30 38 75 12l45 26v44a4 4 0 0 1-4 4H34a4 4 0 0 1-4-4z" fill="#fff" stroke="currentColor" strokeWidth="1.4" />
-        <g className="nl-sx-art-up">
-          <rect x="42" y="18" width="66" height="50" rx="4" fill="#fff" stroke="currentColor" strokeWidth="1.4" />
-          <path d="M51 29h18M51 37h48M51 44h40M51 51h44" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity=".55" />
-          <rect x="51" y="56" width="22" height="6" rx="3" fill="var(--primary)" />
-          <circle cx="96" cy="29" r="5" fill="var(--primary)" opacity=".9" />
-        </g>
-        <path d="M30 40l45 28 45-28v42a4 4 0 0 1-4 4H34a4 4 0 0 1-4-4z" fill="#fff" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M30 84l34-24M120 84 86 60" stroke="currentColor" strokeWidth="1.2" opacity=".5" />
-      </svg>
-    );
-  if (kind === "process")
-    return (
-      <svg className="nl-sx-art" width="150" height="96" viewBox="0 0 150 96" fill="none" aria-hidden>
-        <ellipse cx="75" cy="89" rx="52" ry="5" fill="currentColor" opacity=".08" />
-        <rect x="22" y="12" width="106" height="68" rx="7" fill="#fff" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M22 24h106" stroke="currentColor" strokeWidth="1.2" opacity=".4" />
-        <circle cx="30" cy="18" r="1.8" fill="currentColor" opacity=".45" /><circle cx="36" cy="18" r="1.8" fill="currentColor" opacity=".45" /><circle cx="42" cy="18" r="1.8" fill="currentColor" opacity=".45" />
-        <rect x="30" y="31" width="22" height="42" rx="3" fill="currentColor" opacity=".1" />
-        <path d="M60 34h34M60 42h56M60 50h46" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity=".5" />
-        <g className="nl-sx-art-up">
-          <rect x="60" y="58" width="36" height="11" rx="5.5" fill="var(--primary)" />
-          <path d="M92 62l8 20 3-8 8-3z" fill="#fff" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-        </g>
-        <g className="nl-sx-art-spin" style={{ transformOrigin: "118px 70px" }}>
-          <circle cx="118" cy="70" r="11" fill="#fff" stroke="currentColor" strokeWidth="1.4" />
-          <circle cx="118" cy="70" r="4" stroke="currentColor" strokeWidth="1.4" />
-          <path d="M118 56v4M118 80v4M104 70h4M128 70h4M108 60l3 3M125 77l3 3M128 60l-3 3M111 77l-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        </g>
-      </svg>
-    );
-  return (
-    <svg className="nl-sx-art" width="150" height="96" viewBox="0 0 150 96" fill="none" aria-hidden>
-      <ellipse cx="75" cy="89" rx="54" ry="5" fill="currentColor" opacity=".08" />
-      <rect x="16" y="12" width="104" height="70" rx="7" fill="#fff" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M16 23h104" stroke="currentColor" strokeWidth="1.2" opacity=".4" />
-      <circle cx="24" cy="17.5" r="1.8" fill="currentColor" opacity=".45" /><circle cx="30" cy="17.5" r="1.8" fill="currentColor" opacity=".45" /><circle cx="36" cy="17.5" r="1.8" fill="currentColor" opacity=".45" />
-      <rect x="24" y="30" width="42" height="26" rx="3" fill="var(--primary)" opacity=".85" />
-      <path d="M31 50l8-9 6 6 4-4 9 7" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M72 32h38M72 40h30M72 48h34M24 64h52M24 71h40" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity=".5" />
-      <g className="nl-sx-art-up">
-        <rect x="104" y="30" width="32" height="56" rx="6" fill="#fff" stroke="currentColor" strokeWidth="1.4" />
-        <rect x="109" y="38" width="22" height="13" rx="2" fill="currentColor" opacity=".18" />
-        <path d="M110 57h20M110 63h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity=".5" />
-        <rect x="110" y="70" width="20" height="6" rx="3" fill="var(--primary)" />
-      </g>
-    </svg>
-  );
-}
-
-export function KindGlyph({ kind, size = 40 }: { kind: SysFile["kind"]; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {kind === "page" && (
-        <>
-          <rect x="5" y="8" width="30" height="24" rx="3.5" />
-          <path d="M5 13.5h30" />
-          <circle cx="9" cy="10.8" r=".6" fill="currentColor" />
-          <circle cx="11.6" cy="10.8" r=".6" fill="currentColor" />
-          <circle cx="14.2" cy="10.8" r=".6" fill="currentColor" />
-          <path d="M10 19h11M10 23h16M10 27h8" />
-        </>
-      )}
-      {kind === "email" && (
-        <>
-          <rect x="5" y="10" width="30" height="21" rx="3.5" />
-          <path d="M6.5 12l13.5 10 13.5-10" />
-        </>
-      )}
-      {kind === "process" && (
-        <>
-          <path d="M26.42 20.74 L26.42 23.26 L23.99 23.74 L23.17 25.71 L24.55 27.76 L22.76 29.55 L20.71 28.17 L18.74 28.99 L18.26 31.42 L15.74 31.42 L15.26 28.99 L13.29 28.17 L11.24 29.55 L9.45 27.76 L10.83 25.71 L10.01 23.74 L7.58 23.26 L7.58 20.74 L10.01 20.26 L10.83 18.29 L9.45 16.24 L11.24 14.45 L13.29 15.83 L15.26 15.01 L15.74 12.58 L18.26 12.58 L18.74 15.01 L20.71 15.83 L22.76 14.45 L24.55 16.24 L23.17 18.29 L23.99 20.26 Z" />
-          <circle cx="17" cy="22" r="3" />
-          <path d="M13.25 7.99 A14.5 14.5 0 0 1 31.01 18.25" />
-          <path d="M32.96 14.41 L31.01 18.25 L27.40 15.90" />
-        </>
-      )}
-    </svg>
-  );
-}
 
 function FolderGlyph() {
   return (
@@ -321,12 +236,10 @@ function Email({ id }: { id: string }) {
 }
 
 /** A process with no screen of its own: what it is, the steps, and the way in. */
-function Summary({ file }: { file: SysFile }) {
+function Summary({ file, art }: { file: SysFile; art?: ReactNode }) {
   return (
     <div className="nl-sx-card">
-      <span className="nl-sx-card-art">
-        <KindGlyph kind="process" size={52} />
-      </span>
+      {art}
       <h3 className="nl-sx-card-title">Step by Step</h3>
       <p className="nl-sx-card-blurb">{file.guide.length ? `${file.guide.length} steps, done in the OS.` : file.blurb}</p>
       {file.guide.length > 0 && (
@@ -354,7 +267,7 @@ function Summary({ file }: { file: SysFile }) {
 
 type View = { key: string; label: string; draw: (narrow: boolean) => React.ReactNode };
 
-function viewsOf(file: SysFile): View[] {
+function viewsOf(file: SysFile, art?: ReactNode): View[] {
   const page = (p: LearningPage): View => ({ key: `page:${p}`, label: LEARNING_PAGES[p].label, draw: (n) => <Device key={p + String(n)} page={p} narrow={n} /> });
   const out: View[] = [];
   if (file.kind === "page" && file.page) out.push(page(file.page));
@@ -364,38 +277,12 @@ function viewsOf(file: SysFile): View[] {
   }
   if (file.kind === "process" && file.shows) out.push(page(file.shows));
   if (file.kind !== "process" && file.shows && file.shows !== file.page) out.push(page(file.shows));
-  if (file.kind === "process") out.push({ key: "summary", label: "The Summary", draw: () => <Summary file={file} /> });
+  if (file.kind === "process") out.push({ key: "summary", label: "The Summary", draw: () => <Summary file={file} art={art} /> });
   if (!out.length) out.push({ key: "none", label: file.name, draw: () => <p className="nl-sx-none">Nothing to show for this one yet.</p> });
   return out;
 }
 
 /* ── the explorer ───────────────────────────────────────────────────────── */
-
-const FOLDER_TONES = ["clay", "sage", "brown", "coral", "sky", "olive"] as const;
-
-/* A drawn folder, papers peeking out, for the folders on the page. */
-function FolderArt({ files }: { files: SysFile[] }) {
-  const kinds = files.slice(0, 3).map((f) => f.kind);
-  return (
-    <svg className="nl-sx-fold-svg" width="200" height="132" viewBox="0 0 200 132" fill="none" aria-hidden>
-      <ellipse cx="100" cy="124" rx="74" ry="6" fill="currentColor" opacity=".1" />
-      <path d="M30 30a8 8 0 0 1 8-8h38l10 10h76a8 8 0 0 1 8 8v8H30z" fill="currentColor" opacity=".28" />
-      {kinds.map((k, n) => (
-        <g key={n} className={`nl-sx-fold-paper is-${n}`}>
-          <rect x={52 + n * 22} y={20 - n * 2} width="70" height="78" rx="5" fill="#fff" stroke="currentColor" strokeWidth="1.3" />
-          {k === "email" ? (
-            <path d={`M${60 + n * 22} ${30 - n * 2}l27 17 27-17`} stroke="currentColor" strokeWidth="1.3" opacity=".6" />
-          ) : (
-            <rect x={60 + n * 22} y={28 - n * 2} width="30" height="16" rx="2" fill="var(--primary)" opacity=".8" />
-          )}
-          <path d={`M${60 + n * 22} ${52 - n * 2}h50M${60 + n * 22} ${60 - n * 2}h40M${60 + n * 22} ${68 - n * 2}h46`} stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity=".45" />
-        </g>
-      ))}
-      <path className="nl-sx-fold-front" d="M24 52a8 8 0 0 1 8-8h136a8 8 0 0 1 8 8l-6 58a8 8 0 0 1-8 7H38a8 8 0 0 1-8-7z" fill="currentColor" />
-      <path d="M44 66h40" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity=".55" />
-    </svg>
-  );
-}
 
 export default function Explorer({ side, journey, initialFolder, initialFile }: { side: JourneyId; journey: Journey | null; initialFolder: string | null; initialFile: string | null }) {
   const folders: Folder[] = journey?.folders ?? [];
@@ -425,7 +312,21 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
 
   const folder = folders.find((f) => f.id === folderId) ?? null;
   const file = folder?.files.find((x) => x.id === fileId) ?? null;
-  const views = useMemo(() => (file ? viewsOf(file) : []), [file]);
+  /* Where the open folder and file sit, which is what picks a tile's colours. */
+  const folderAt = folder ? folders.indexOf(folder) : 0;
+  const fileScheme = schemeOf(folderAt, folder && file ? folder.files.indexOf(file) : 0);
+  const views = useMemo(
+    () =>
+      file
+        ? viewsOf(
+            file,
+            <span className={`nl-sx-card-art nl-ta is-s${fileScheme}`}>
+              <TilePicture side={side} id={file.id} kind={file.kind} />
+            </span>,
+          )
+        : [],
+    [file, fileScheme, side],
+  );
   const view = views.find((v) => v.key === viewKey) ?? views[0] ?? null;
   const total = useMemo(() => folders.reduce((n, f) => n + f.files.length, 0), [folders]);
 
@@ -558,9 +459,9 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
         <ul className="nl-sx-folders" aria-label="Folders">
           {folders.map((f, i) => (
             <li key={f.id} style={{ animationDelay: `${60 + i * 80}ms` }}>
-              <button type="button" className={`nl-sx-fold is-${FOLDER_TONES[i % FOLDER_TONES.length]}`} data-folder={f.id} onClick={() => openFolder(f.id)}>
-                <span className="nl-sx-fold-art">
-                  <FolderArt files={f.files} />
+              <button type="button" className="nl-sx-fold" data-folder={f.id} onClick={() => openFolder(f.id)}>
+                <span className={`nl-sx-fold-art nl-ta is-s${schemeOf(i, 4)}`}>
+                  <FolderFan side={side} files={f.files} base={i} />
                 </span>
                 <span className="nl-sx-fold-text">
                   <span className="nl-sx-fold-n">{f.files.length === 1 ? "1 file" : `${f.files.length} files`}</span>
@@ -600,9 +501,10 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
               {folder.files.map((f, i) => (
                 <li key={f.id} style={{ animationDelay: `${40 + i * 45}ms` }}>
                   <button type="button" className={`nl-sx-tile is-${f.kind}`} data-file={f.id} onClick={(e) => openFile(f, e.currentTarget)}>
-                    <span className="nl-sx-tile-art">
-                      <TileArt kind={f.kind} />
+                    <span className={`nl-sx-tile-art nl-ta is-s${schemeOf(folderAt, i)}`}>
+                      <TilePicture side={side} id={f.id} kind={f.kind} />
                       <em>{KIND_WORD[f.kind]}</em>
+                      <i className="nl-ta-n">{String(i + 1).padStart(2, "0")}</i>
                     </span>
                     <span className="nl-sx-tile-text">
                       <span className="nl-sx-tile-when">{f.when}</span>
@@ -627,8 +529,8 @@ export default function Explorer({ side, journey, initialFolder, initialFile }: 
             <section key={file.id} className="nl-sx-file" style={{ transformOrigin: origin }}>
               <header className="nl-sx-file-head">
                 <div className="nl-sx-file-row">
-                  <span className={`nl-sx-file-art is-${file.kind}`}>
-                    <KindGlyph kind={file.kind} size={28} />
+                  <span className={`nl-sx-file-art nl-ta is-s${fileScheme}`}>
+                    <TilePicture side={side} id={file.id} kind={file.kind} />
                   </span>
                   <div className="nl-sx-file-words">
                     <p className="nl-sx-file-when">
