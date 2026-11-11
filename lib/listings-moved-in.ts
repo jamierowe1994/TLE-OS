@@ -92,7 +92,9 @@ export function decideMovedIn(
   apps: Pick<Assembled, "applications" | "closed"> | null,
   deals: BusinessDeal[] | null,
   completes: CompletedDeal[] | null,
-  today: string
+  today: string,
+  /** How long after the move-in a home counts: Susan's fortnight for the adverts, 0 for "has moved in". */
+  afterDays = AFTER_DAYS
 ): { homes: MovedInHome[]; notYet: number; noDate: number } {
   const homes: MovedInHome[] = [];
   let notYet = 0;
@@ -141,7 +143,7 @@ export function decideMovedIn(
     found.sort((a, b) => b.at.localeCompare(a.at));
     const last = found[0];
     const days = daysBetween(last.at, today);
-    if (days < AFTER_DAYS) {
+    if (days < afterDays) {
       notYet += 1;
       continue;
     }
@@ -224,6 +226,37 @@ async function agentsOf(ids: string[]): Promise<Map<string, string>> {
 async function applications() {
   const timeout = new Promise<null>((r) => setTimeout(() => r(null), 6000));
   return Promise.race([assembled(null).then((x) => x.held.value).catch(() => null), timeout]);
+}
+
+/**
+ * LIVE LISTINGS WHOSE LET HAS MOVED IN (Lianna Denholm, 11 Nov 2026, ticket
+ * c0840a39: "12 South Chesters Lane is not showing on my portfolio, still
+ * showing under listing? tenant moved in 2 days ago").
+ *
+ * Portfolio is every listing the listing system has marked let, and nothing
+ * in the OS marks one: that was done by hand in the old system, which agents
+ * no longer open. So a home let through the OS stayed a live listing for good
+ * and never reached its agent's Portfolio (43 let agreed homes still live on
+ * 11 Nov, 18 of them on a service we look after). The same evidence the
+ * advert list uses says who has moved in - the accepted let's start date, or
+ * Propoly's move-in - so the managed book reads these as let homes from the
+ * day the tenant is in (lib/managed-book). Read only: nothing is written to
+ * the listing system, and the listing stays where it is there.
+ *
+ * `rexUserId`: one agent's listings, or everyone's.
+ */
+export async function movedInListings(rexUserId: string | null, today = londonToday()): Promise<Map<string, { moveIn: string; source: MoveInSource }>> {
+  const [book, apps, deals, completes] = await Promise.all([
+    bookFor(rexUserId).then(withTakenState),
+    applications(),
+    getAllPropolyDeals().catch(() => null) as Promise<BusinessDeal[] | null>,
+    getPropolyCompletes().catch(() => null) as Promise<CompletedDeal[] | null>,
+  ]);
+  const live = (book.listings as (OsListing & { taken?: { why: string } | null })[]).filter(
+    (l) => !isTestId(l.id) && l.listingState !== "leased" && (l.letAgreed || l.taken)
+  );
+  const { homes } = decideMovedIn(live, apps, deals, completes, today, 0);
+  return new Map(homes.map((h) => [h.listingId, { moveIn: h.moveIn, source: h.source }]));
 }
 
 export interface MovedInRow extends MovedInHome {

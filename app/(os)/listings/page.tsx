@@ -82,6 +82,8 @@ type SampleListing = {
   /** Let in fact though still advertised, or its deal fell through: stamped
    *  by the server (lib/listings-taken, 12 Oct 2026). Both count as let agreed. */
   taken?: { why: string; at: string | null } | null;
+  /** The day its tenant moved in (lib/listings-archive-view, 11 Nov 2026): it is on Portfolio from then. */
+  movedIn?: string | null;
   /** Taken offline by the agent (lib/advert-offline). */
   offline?: boolean;
   /** Marked offline, but a portal feed still shows it (22 Oct 2026). */
@@ -856,6 +858,7 @@ export default function Listings() {
           <Badge tone={w.tone} title={w.why}>{w.label}</Badge>
           {l.introOnly && <Badge tone="info">Marketing only</Badge>}
           {!l.archived && l.offline && (l.stillOnPortals ? <Badge tone="accent">Still on the portals</Badge> : <Badge tone="neutral">Offline</Badge>)}
+          {!l.archived && l.movedIn && <Badge tone="good" title="The tenant is in, so this home is on Portfolio. It stays here until its advert is taken down.">Moved in</Badge>}
           {!l.archived && !l.letAgreed && !l.offline && l.taken && <Badge tone="accent">Still advertised</Badge>}
           {!l.archived && !l.letAgreed && !l.taken && l.fellThrough && <Badge tone="accent">Fell through</Badge>}
           {l.tenant && <Badge tone="info">Tenanted</Badge>}
@@ -1433,6 +1436,7 @@ export default function Listings() {
                       </Tag>
                       {l.introOnly && <Tag tone="neutral">Marketing only</Tag>}
                       {!l.archived && l.offline && (l.stillOnPortals ? <Tag tone="accent">Still on the portals</Tag> : <Tag tone="neutral">Offline</Tag>)}
+                      {!l.archived && l.movedIn && <Tag tone="good">Moved in</Tag>}
                       {!l.archived && !l.letAgreed && !l.offline && l.taken && <Tag tone="accent">Still advertised</Tag>}
                       {!l.archived && !l.letAgreed && !l.taken && l.fellThrough && <Tag tone="accent">Fell through</Tag>}
                       {l.tenant && <Tag tone="neutral">Tenanted</Tag>}

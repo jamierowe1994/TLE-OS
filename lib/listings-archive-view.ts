@@ -16,6 +16,8 @@ import { sittingTenantsByProperty } from "@/lib/rex-tenants";
  */
 
 export interface ArchivedListing extends OsListing {
+  /** The day its tenant moved in, where the let has (lib/listings-moved-in): the home is on Portfolio from then. */
+  movedIn: string | null;
   archived: boolean;
   archiveReason: ArchiveReason | null;
   /** The date the archiving is reckoned from, ISO. */
@@ -61,11 +63,25 @@ export function letElsewhereOf(l: { id: string; propertyId: string | null }, let
 }
 
 /** Stamp the archive state onto a set of listings. */
+/**
+ * The live listings that are on the managed book as a let: the ones whose
+ * tenant has moved in (lib/managed-book reads them from lib/listings-moved-in).
+ * A listing marked let has left this list already, so any listing here that
+ * is also on the book by its own id is one of those.
+ */
+async function movedInByListing(): Promise<Map<string, string>> {
+  const book = await managedBookFor(null).then((m) => m.book).catch(() => null);
+  const out = new Map<string, string>();
+  for (const p of book?.properties ?? []) if (p.letSince && /^\d+$/.test(String(p.listingId))) out.set(String(p.listingId), String(p.letSince).slice(0, 10));
+  return out;
+}
+
 export async function stampArchive(listings: OsListing[]): Promise<ArchivedListing[]> {
-  const [overrides, lets] = await Promise.all([archiveOverrides(), letsByProperty()]);
+  const [overrides, lets, movedIn] = await Promise.all([archiveOverrides(), letsByProperty(), movedInByListing()]);
   return listings.map((l) => {
-    const a = archiveOf(l, overrides.get(String(l.id)), letElsewhereOf(l, lets));
-    return { ...l, archived: a.archived, archiveReason: a.reason, archivedSince: a.since, archiveAgeDays: a.ageDays };
+    const at = l.listingState === "leased" ? null : movedIn.get(String(l.id)) ?? null;
+    const a = archiveOf(l, overrides.get(String(l.id)), letElsewhereOf(l, lets), at);
+    return { ...l, movedIn: at, archived: a.archived, archiveReason: a.reason, archivedSince: a.since, archiveAgeDays: a.ageDays };
   });
 }
 

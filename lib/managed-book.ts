@@ -558,6 +558,45 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     if (batch.length < PAGE) break;
   }
 
+  /* MOVED IN, AND NEVER MARKED LET (Lianna Denholm, 11 Nov 2026, ticket
+     c0840a39: 12 South Chesters Lane, tenant in two days, "not showing on my
+     portfolio, still showing under listing"). The search above is every
+     listing marked let, and nothing in the OS marks one: that was done by
+     hand in the old system, which agents no longer open, so a home let
+     through the OS stayed a live listing and never reached Portfolio. A live
+     listing whose let has moved in (lib/listings-moved-in: the accepted let's
+     start date, or Propoly's move-in) is read here as the let home it is,
+     let since the day the tenant went in. Read only; never fails the book. */
+  const movedInOn = new Map<string, string>();
+  try {
+    const { movedInListings } = await import("@/lib/listings-moved-in");
+    const movedIn = await movedInListings(rexUserId ?? null);
+    const have = new Set(rows.map((r) => String(r.id ?? "")));
+    const ids = [...movedIn.keys()].filter((id) => /^\d+$/.test(id) && !have.has(id));
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const res = await rexCall("Listings", "search", {
+        criteria: [
+          { name: "id", type: "in", value: chunk.map(Number) },
+          { name: "listing_category_id", value: "residential_rental" },
+        ],
+        limit: chunk.length,
+        extra_options: { extra_fields: ["related.listing_images", "related.contact_reln_listing"] },
+      });
+      if (!res.ok) break;
+      for (const r of rexRows(res.result) as Row[]) {
+        const id = String(r.id ?? "");
+        const at = movedIn.get(id)?.moveIn;
+        if (!at || have.has(id)) continue;
+        have.add(id);
+        rows.push(r);
+        movedInOn.set(id, at);
+      }
+    }
+  } catch {
+    /* The book as the listing system has it. */
+  }
+
   /* REX PM's own managed list decides the book (2 Oct 2026). James asked for
      the OS to read 527 like REX PM's dashboard; REX CRM's leased listings had
      it at 707, because they hold every home ever let - Let Only lettings, the
@@ -565,9 +604,21 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      has been read across, a REX letting is in the book only if its home is on
      that list. Before that (never read), the older rule stands. */
   const pm = await pmManagedHomes();
-  const lets = rows.map(toProperty);
+  const read = rows.map(toProperty);
+  const lets = read.filter((p) => !movedInOn.has(String(p.listingId)));
   if (pm) await linkByAddress(pm, lets);
   const pmRexIds = pm ? new Set(pm.map((h) => h.rexPropertyId).filter(Boolean) as string[]) : null;
+  /* The moved-in live listings join after the old system's list is linked, and
+     only where that list does not hold the home already (by its property or
+     its address): a home it holds is on Portfolio as it stands, and its row,
+     its page's address and everything saved against it are left alone. Each
+     is let since the day the tenant went in - a live listing has no let date. */
+  for (const p of read) {
+    const at = movedInOn.get(String(p.listingId));
+    if (!at || !p.propertyId || pmRexIds?.has(p.propertyId)) continue;
+    if (pm?.some((h) => sameHome(h.address, p.address || p.name))) continue;
+    lets.push({ ...p, letSince: at });
+  }
   /* Intro only is never ours to look after (lib/intro-only, 16 Oct 2026). */
   const intro = await introOnlyIds().catch(() => new Set<string>());
   /* A NEW LET SINCE REX PM WAS READ (Lorna, 2 Nov 2026: 44 Rosedale Grove,

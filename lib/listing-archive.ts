@@ -46,7 +46,9 @@ export type ArchiveReason =
   /** Withdrawn in REX - it came off the market with nobody in it. */
   | "withdrawn"
   /** Never published, and the home has since been let on another listing. */
-  | "let-elsewhere";
+  | "let-elsewhere"
+  /** Its own let has moved in and its advert is down: the home is on Portfolio. */
+  | "moved-in";
 
 export interface ArchiveState {
   archived: boolean;
@@ -111,7 +113,7 @@ function daysSince(iso: string | null | undefined): number | null {
  * goes quietly back to the archive. Self-healing, and nobody has to remember
  * to tidy up.
  */
-export function archiveOf(l: ArchivableListing, override?: ArchiveOverride | null, letElsewhere?: LetElsewhere | null): ArchiveState {
+export function archiveOf(l: ArchivableListing, override?: ArchiveOverride | null, letElsewhere?: LetElsewhere | null, movedIn?: string | null): ArchiveState {
   /* Withdrawn is REX's own word for "this came off the market". It is not our
      rule and it cannot be undone from here, so it is checked first and a hand
      override never contradicts it. */
@@ -119,6 +121,14 @@ export function archiveOf(l: ArchivableListing, override?: ArchiveOverride | nul
     return { archived: true, reason: "withdrawn", since: l.stateDate ?? l.createdAt ?? null, ageDays: daysSince(l.stateDate ?? l.createdAt) };
   }
 
+  /* THE TENANT IS IN (Lianna Denholm, 11 Nov 2026, ticket c0840a39: "still
+     showing under listing? tenant moved in 2 days ago"). A listing whose let
+     has moved in is on Portfolio now (lib/managed-book), and is history here.
+     Only once its advert is down: while it is still published it stays on the
+     working list, marked Moved In, so somebody takes the advert down. */
+  if (movedIn && l.publicationStatus !== "published") {
+    return { archived: true, reason: "moved-in", since: movedIn.slice(0, 10), ageDays: daysSince(movedIn) };
+  }
   /* A live advert or a tenancy in progress is never archived by age, and an
      agent cannot archive one by hand either - the button is not offered, and
      this is the second lock in case it ever is. */
@@ -158,6 +168,7 @@ export function archiveLabel(reason: ArchiveReason | null): string {
   if (reason === "by-hand") return "Archived";
   if (reason === "stale-draft") return "Draft, gone cold";
   if (reason === "let-elsewhere") return "Let on another listing";
+  if (reason === "moved-in") return "Let";
   return "";
 }
 
@@ -169,6 +180,7 @@ export function archiveWhy(s: ArchiveState): string {
   if (s.reason === "withdrawn") return when ? `Came off without a tenant, ${when}.` : "Came off the market without a tenant.";
   if (s.reason === "by-hand") return when ? `Put away by hand, ${when}.` : "Put away by hand.";
   if (s.reason === "let-elsewhere") return when ? `The home was let on another listing, ${when}.` : "The home was let on another listing.";
+  if (s.reason === "moved-in") return when ? `The tenant moved in, ${when}. It is on Portfolio now.` : "The tenant has moved in. It is on Portfolio now.";
   if (s.reason === "stale-draft") {
     const months = s.ageDays == null ? null : Math.round(s.ageDays / 30);
     return when
