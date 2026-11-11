@@ -7,7 +7,9 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import type { ChaseRow, QueuedReminder, TrackerBook } from "@/lib/compliance-tracker";
+import type { ChaseBrief, ChaseRecord } from "@/lib/cert-chase";
 import { searchMatches } from "@/lib/search-match";
+import ChasePanel, { chaseLine } from "@/components/compliance-desk/ChasePanel";
 
 /**
  * Michael's tracker — the back-office view of compliance.
@@ -27,14 +29,19 @@ type Payload = TrackerBook & {
   stale?: boolean;
   ageMs?: number;
   queue: QueuedReminder[];
-  /** What has actually gone, from the send log. Null = it could not be read. */
-  chases?: { key: string; to: string; at: string }[] | null;
+  /** Every chase on each certificate, by hand and automatic, keyed
+   *  propertyId:cert, newest first (lib/cert-chase). Null = it could not be read. */
+  chases?: Chases | null;
   error?: string;
 };
 
 const cell = "px-3 py-2 align-top";
 
-type Sent = Map<string, { to: string; at: string }>;
+type Chases = Record<string, ChaseBrief[]>;
+
+/* The briefs a certificate's whole history comes back as after a send. */
+const briefsOf = (h: ChaseRecord[]): ChaseBrief[] =>
+  h.map((c) => ({ at: c.at, how: c.how, agentName: c.agentName, byName: c.byName, sent: c.sent, stage: c.stage }));
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
@@ -364,14 +371,20 @@ function RenewalPanel({ row, onDone, onClose }: { row: ChaseRow; onDone: () => v
  * landlord: "he will always go through the agent" (James, 20 Sep 2026). The
  * landlord is on the row so he knows whose home it is, not who to ring.
  *
- * `sent` draws the Emailed column, on Coming up only - an expired certificate
- * is past its reminders and is a conversation, not an email. Undefined leaves
- * the column off; null says the log could not be read.
+ * `emailed` draws the Agent emailed column, on Coming up only. Undefined
+ * leaves the column off.
+ *
+ * `chases` is every chase on each certificate, by hand and automatic
+ * (lib/cert-chase, ticket 11c8acc9, 11 Nov 2026): one line under the reason,
+ * "Chased Sam, 3 Nov by Josel; reminder sent 10 Nov". `onChased` offers
+ * Chase the Agent on each row. Null chases = the record could not be read.
  */
 function Rows({
   rows,
   empty,
-  sent,
+  emailed,
+  chases,
+  onChased,
   onFiled,
   onNotNeeded,
   onUndo,
@@ -379,7 +392,9 @@ function Rows({
 }: {
   rows: ChaseRow[];
   empty: string;
-  sent?: Sent | null;
+  emailed?: boolean;
+  chases?: Chases | null;
+  onChased?: (r: ChaseRow, history: ChaseRecord[]) => void;
   onFiled: (r: ChaseRow, expiry: string) => void;
   /** Offers Not needed on each row. Left off where the row is not a gap. */
   onNotNeeded?: (r: ChaseRow, reason: string, by: string) => void;
@@ -389,7 +404,7 @@ function Rows({
   onRenewal?: () => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
-  const [mode, setMode] = useState<"upload" | "na" | "renewal">("upload");
+  const [mode, setMode] = useState<"upload" | "na" | "renewal" | "chase">("upload");
   const [undoing, setUndoing] = useState<string | null>(null);
   if (!rows.length) return <p className="py-6 text-[12.5px] text-muted">{empty}</p>;
   return (
@@ -402,13 +417,17 @@ function Rows({
             <th className={cell}>State</th>
             <th className={cell}>Chase via</th>
             <th className={cell}>Landlord</th>
-            {sent !== undefined && <th className={cell}>Agent emailed</th>}
+            {emailed && <th className={cell}>Agent emailed</th>}
             <th className={cell} />
           </tr>
         </thead>
         <tbody>
           {rows.slice(0, 200).map((r) => {
             const k = `${r.propertyId}-${r.cert}`;
+            const history = chases?.[`${r.propertyId}:${r.cert}`];
+            const line = chaseLine(history);
+            /* The last chase that went, by hand or automatic, inside the 30 days. */
+            const lastSent = history?.find((b) => b.sent && Date.now() - new Date(b.at).getTime() < 31 * 86_400_000);
             return (
             <Fragment key={k}>
             <tr className={`${open === k ? "" : "border-b border-line/40"} last:border-0`}>
@@ -430,17 +449,22 @@ function Rows({
                 <span className="mt-1 block max-w-[320px] text-[10.5px] leading-snug text-muted">
                   {r.reason}
                 </span>
+                {line && (
+                  <span className="mt-1 block max-w-[320px] text-[10.5px] font-semibold leading-snug text-ink" data-chase-line>
+                    {line}
+                  </span>
+                )}
               </td>
               <td className={cell}>
                 {r.agent ?? <span className="text-accent-dark">no agent on record</span>}
               </td>
               <td className={cell}>{r.landlord}</td>
-              {sent !== undefined && (
+              {emailed && (
                 <td className={cell}>
-                  {sent === null ? (
-                    <span className="text-muted">could not read the log</span>
-                  ) : sent.get(`${r.propertyId}:${r.cert}:${r.band}`) ? (
-                    <Pill tone="good">{day(sent.get(`${r.propertyId}:${r.cert}:${r.band}`)!.at)}</Pill>
+                  {chases === null || chases === undefined ? (
+                    <span className="text-muted">could not read the record</span>
+                  ) : lastSent ? (
+                    <Pill tone="good">{day(lastSent.at)}</Pill>
                   ) : (
                     <span className="text-accent-dark">not yet</span>
                   )}
@@ -503,6 +527,18 @@ function Rows({
                     >
                       Upload
                     </button>
+                    {onChased && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("chase");
+                          setOpen(k);
+                        }}
+                        className="whitespace-nowrap rounded-full border border-accent-dark/60 px-3 py-1 text-[11.5px] font-semibold text-accent-dark"
+                      >
+                        Chase the Agent
+                      </button>
+                    )}
                     {onRenewal && r.cert === "licence" && (
                       <button
                         type="button"
@@ -534,8 +570,19 @@ function Rows({
             </tr>
             {open === k && (
               <tr className="border-b border-line/40">
-                <td colSpan={sent !== undefined ? 7 : 6} className="px-3 pb-3">
-                  {mode === "renewal" && onRenewal ? (
+                <td colSpan={emailed ? 7 : 6} className="px-3 pb-3">
+                  {mode === "chase" && onChased ? (
+                    /* On a phone the table scrolls sideways; the message must not.
+                       Held to the screen's width at the left of the scroll. */
+                    <div className="sticky left-0 max-w-[calc(100vw-5rem)] sm:max-w-none">
+                      <ChasePanel
+                        propertyId={r.propertyId}
+                        cert={r.cert}
+                        onClose={() => setOpen(null)}
+                        onChased={(h) => onChased(r, h)}
+                      />
+                    </div>
+                  ) : mode === "renewal" && onRenewal ? (
                     <RenewalPanel
                       row={r}
                       onClose={() => setOpen(null)}
@@ -756,7 +803,10 @@ export default function ComplianceTracker() {
      the whole book, over that agent's rows. */
   const counts = d && (agent || cert) ? countsFor(d.counts, ofAgent(d.outstanding), ofAgent(d.upcoming)) : d?.counts;
 
-  const sent: Sent | null = d?.chases ? new Map(d.chases.map((c) => [c.key, { to: c.to, at: c.at }])) : null;
+  /* A chase sent from a row shows on it at once, without reading the book again. */
+  function onChased(r: ChaseRow, history: ChaseRecord[]) {
+    setD((cur) => (cur ? { ...cur, chases: { ...(cur.chases ?? {}), [`${r.propertyId}:${r.cert}`]: briefsOf(history) } } : cur));
+  }
 
   return (
     <>
@@ -907,6 +957,8 @@ export default function ComplianceTracker() {
               <Rows
                 rows={ofStatus(match(d.outstanding))}
                 empty={find || agent || cert || status ? "Nothing outstanding matches that." : "Nothing expired and nothing missing. That would be a first."}
+                chases={d.chases}
+                onChased={onChased}
                 onFiled={onFiled}
                 onNotNeeded={onNotNeeded}
                 onRenewal={() => void reload()}
@@ -951,16 +1003,17 @@ export default function ComplianceTracker() {
               </>
             )}
             {tab === "upcoming" && (
-              <Rows rows={match(d.upcoming)} empty="Nothing falls due in the next 30 days." sent={sent} onFiled={onFiled} />
+              <Rows rows={match(d.upcoming)} empty="Nothing falls due in the next 30 days." emailed chases={d.chases} onChased={onChased} onFiled={onFiled} />
             )}
             {tab === "queue" && (
               <>
                 <p className="mb-3 text-[11.5px] leading-relaxed text-muted">
-                  The reminders owed today, at 30, 14 and 7 days. They go to the agent, who
-                  speaks to their landlord.{" "}
-                  <span className="font-semibold text-ink">Nothing on this page can send.</span>{" "}
-                  The daily run sends them once James turns certificate chases on, and Coming up
-                  shows which have gone.
+                  The automatic reminders owed today, at the stages picked on{" "}
+                  <a href="/compliance-desk/chases" className="underline underline-offset-2">Agent Chases</a>. They go to the
+                  agent, who speaks to their landlord.{" "}
+                  <span className="font-semibold text-ink">This list does not send.</span>{" "}
+                  The early morning run sends them once James turns Certificate chases on, and each one is then recorded on its
+                  certificate and on Agent Chases.
                 </p>
                 {d.queue.length === 0 ? (
                   <p className="py-6 text-[12.5px] text-muted">Nothing due to be chased today.</p>
@@ -973,8 +1026,7 @@ export default function ComplianceTracker() {
                           <Pill tone={r.band === 0 ? "accent" : "neutral"}>{r.band === 0 ? "Expired" : `${r.band}-day`}</Pill>
                         </div>
                         <p className="mt-1 text-[11px] text-muted">
-                          To: {r.to.landlord}
-                          {r.to.agent ? ` and ${r.to.agent}` : ""}
+                          To: {r.to.agent ?? "nobody on record"} · Landlord: {r.to.landlord}
                         </p>
                         {r.blocked && (
                           <p className="mt-1 text-[11px] text-accent-dark">{r.blocked}</p>

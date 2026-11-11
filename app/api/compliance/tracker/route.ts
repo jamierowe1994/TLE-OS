@@ -1,11 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
-import { getComplianceBook } from "@/lib/compliance-cache";
-import { buildQueue, buildTracker } from "@/lib/compliance-tracker";
-import { COMP_BOOK } from "@/lib/compliance";
-import { rexConfigured } from "@/lib/rex";
-import { hasDb, q } from "@/lib/db";
+import { buildQueue } from "@/lib/compliance-tracker";
+import { chaseBriefs, chaseSettings, currentTracker } from "@/lib/cert-chase";
 
 /**
  * GET /api/compliance/tracker → what is outstanding, what is coming, who to chase.
@@ -14,28 +11,24 @@ import { hasDb, q } from "@/lib/db";
  * tracker after the compliance page costs nothing.
  *
  * Read-only and unable to send by construction — see lib/compliance-tracker.
- * The queue is a list, not an outbox.
+ * The queue is a list, not an outbox. Chase the Agent is its own route
+ * (/api/compliance/chase).
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Which chases have actually gone, to whom and when.
- *
- * "If the renewals are coming up, he will need to check that they've been
- * emailed and followed up on" (James, 20 Sep 2026). The send log has held this
- * since the chase was built; no screen read it. Null, not an empty list, when
- * it cannot be read - "nobody has been emailed" and "we could not look" are
- * different answers and he would act on the first.
+ * Every chase on each certificate, by hand and automatic (lib/cert-chase,
+ * ticket 11c8acc9, 11 Nov 2026), keyed propertyId:cert. It replaces the old
+ * send log the Agent emailed column read, which only ever knew the automatic
+ * run. Null, not an empty map, when it cannot be read - "nobody has been
+ * chased" and "we could not look" are different answers and he would act on
+ * the first.
  */
-async function chaseLog(): Promise<{ key: string; to: string; at: string }[] | null> {
-  if (!hasDb()) return null;
+async function chaseLog() {
   try {
-    const rows = await q<{ chase_key: string; sent_to: string; sent_at: Date }>(
-      `SELECT chase_key, sent_to, sent_at FROM os_compliance_chases_sent ORDER BY sent_at DESC LIMIT 2000`
-    );
-    return rows.map((r) => ({ key: r.chase_key, to: r.sent_to, at: new Date(r.sent_at).toISOString() }));
+    return await chaseBriefs();
   } catch {
     return null;
   }
@@ -48,40 +41,25 @@ export async function GET(req: NextRequest) {
   if (!(await requireCapability(req, "see:agent-compliance"))) {
     return NextResponse.json({ ok: false, error: "The tracker is the compliance desk's. Your homes are on Compliance." }, { status: 403 });
   }
-  // Without REX the sample book still exercises every code path, which is what
-  // makes this developable. Flagged as not live so nobody quotes the numbers.
-  if (!rexConfigured()) {
-    /* Live: never a stand-in (Rig run 2, P-018). The sample is for a laptop
-       with no REX; on the real site a missing connection is an error. */
-    if (process.env.NODE_ENV === "production") {
-      return NextResponse.json({ ok: false, live: false, error: "REX isn't connected here, so there is no compliance book to track.", reason: "REX isn't connected here, so there is no compliance book to track." }, { status: 503 });
-    }
-    const tracker = buildTracker(COMP_BOOK);
-    return NextResponse.json({
-      ok: true,
-      live: false,
-      reason: "REX isn't connected here - the sample book is standing in.",
-      ...tracker,
-      queue: buildQueue(tracker),
-    });
-  }
-
   try {
-    const { book, ageMs, stale } = await getComplianceBook();
-    const tracker = buildTracker(book.properties);
+    /* Live: never a stand-in (Rig run 2, P-018). currentTracker refuses on
+       the real site without REX; on a laptop it says it is not live. */
+    const [t, chases, settings] = await Promise.all([currentTracker(), chaseLog(), chaseSettings().catch(() => null)]);
     return NextResponse.json({
       ok: true,
-      live: true,
-      ageMs,
-      ...(stale ? { stale: true } : {}),
-      ...tracker,
-      queue: buildQueue(tracker),
-      chases: await chaseLog(),
+      live: t.live,
+      ...(t.reason ? { reason: t.reason } : {}),
+      ...(t.ageMs != null ? { ageMs: t.ageMs } : {}),
+      ...(t.stale ? { stale: true } : {}),
+      ...t.tracker,
+      queue: buildQueue(t.tracker, settings ?? undefined),
+      chases,
     });
   } catch (e) {
+    const offline = e instanceof Error && /REX isn't connected/.test(e.message);
     return NextResponse.json(
-      { ok: false, error: publicError(e, "Couldn't reach REX.") },
-      { status: 502 }
+      { ok: false, live: false, error: offline ? e.message : publicError(e, "Couldn't reach REX.") },
+      { status: offline ? 503 : 502 }
     );
   }
 }

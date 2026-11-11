@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { heldComplianceBook } from "@/lib/compliance-cache";
 import type { WorksOrder } from "@/lib/works-orders";
+import { matchLogin } from "@/lib/cert-chase";
 
 /**
  * The agent who looks after a job's home, for the copy of every contractor
@@ -40,15 +41,7 @@ export async function propertyAgentFor(o: Pick<WorksOrder, "propertyId">): Promi
   const users = await q<{ name: string; email: string; role: string }>(
     `SELECT name, email, role FROM os_users WHERE email <> ''`
   ).catch(() => []);
-  const words = (s: string) => s.toLowerCase().replace(/[^a-z\s-]/g, "").split(/[\s-]+/).filter(Boolean);
-  const want = words(name);
-  if (want.length === 0) return null;
-  const exact = users.filter((u) => words(u.name).join(" ") === want.join(" "));
-  const loose = users.filter((u) => {
-    const w = words(u.name);
-    return w.length >= 2 && want.length >= 2 && w[0] === want[0] && w[w.length - 1] === want[want.length - 1];
-  });
-  /* Two logins answering to one name is a guess either way: no copy. */
-  const pick = exact.length === 1 ? exact[0] : exact.length === 0 && loose.length === 1 ? loose[0] : null;
+  /* The one name rule, shared with the certificate chase (lib/cert-chase). */
+  const pick = matchLogin(name, users);
   return pick ? { name: pick.name, email: pick.email.trim() } : null;
 }

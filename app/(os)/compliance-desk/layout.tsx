@@ -41,6 +41,8 @@ const RAIL: RailGroup[] = [
       /* Susan's Compliance overview beside his task lists (2 Nov 2026). */
       { href: "/compliance-desk/overview", label: "Compliance Overview", icon: "dashboard" },
       { href: "/compliance-desk/properties", label: "Property Compliance", icon: "shield" },
+      /* Every chase of an agent about a certificate (Josel, ticket 11c8acc9, 11 Nov 2026). */
+      { href: "/compliance-desk/chases", label: "Agent Chases", icon: "mail" },
       { href: "/compliance-desk/verify", label: "Gas & Electric Check", icon: "checklist", also: ["/compliance-desk/verified"] },
       { href: "/compliance-desk/sections", label: "Section 8 & 13", icon: "file-contract" },
       { href: "/compliance-desk/plc", label: "PLC Queue", icon: "list" },

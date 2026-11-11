@@ -378,17 +378,63 @@ export function buildTracker(
 
 /* ── the reminder queue ───────────────────────────────────────────────────── */
 
-/** A chase: one of the three bands, or 0 for "it has expired" (4 Oct 2026). */
-export type ChaseBand = Band | 0;
+/** A chase stage: days before expiry, or 0 for "it has expired" (4 Oct 2026). */
+export type ChaseBand = number;
+
+/**
+ * Which stages the automatic chase sends at (Josel, ticket 11c8acc9, 11 Nov
+ * 2026: "automated reminders sent to agents when their certificates are
+ * approaching their renewal dates"). The compliance office picks them on
+ * Agent Chases; they are kept in os_settings "cert_chases" (lib/cert-chase).
+ * Only the tracker's own bands can be picked, because Coming up stops at 30.
+ */
+export const STAGE_CHOICES = [30, 14, 7] as const;
+export type ChaseStages = { before: number[]; onExpiry: boolean };
+/* What James approved on the Certificate chases switch (5 Sep 2026). */
+export const DEFAULT_STAGES: ChaseStages = { before: [30, 14, 7], onExpiry: true };
+
+/**
+ * The stage a certificate is owed, from the days left: the nearest stage it
+ * has crossed into, so a run that is missed still sends it the next morning
+ * (the band rule above). Null = none owed. 0 = it has run out.
+ */
+export function stageFor(daysLeft: number | null, s: ChaseStages): number | null {
+  if (daysLeft == null) return null;
+  if (daysLeft < 0) return s.onExpiry ? 0 : null;
+  const crossed = s.before.filter((b) => daysLeft <= b);
+  return crossed.length ? Math.min(...crossed) : null;
+}
+
+/** The book counts days from today (lib/compliance-cache asOfToday), so the date is today plus that. */
+export function expiryOf(daysLeft: number | null): string | null {
+  if (daysLeft == null) return null;
+  const d = new Date(`${todayLondon()}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + daysLeft);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * One automatic reminder's key: the home, the certificate, the stage and the
+ * expiry it was about. Stored unique (os_cert_agent_chases.stage_key), so a
+ * stage is never sent twice for the same certificate. The expiry is in it
+ * because a renewed certificate is a new date, and its 30-day reminder next
+ * year is a new reminder; keyed without it (as the first version was) the
+ * renewal would never be chased at all.
+ */
+export const stageKey = (propertyId: string, cert: string, stage: number, expiry: string | null) =>
+  `${propertyId}:${cert}:${stage}:${expiry ?? "none"}`;
 
 export interface QueuedReminder {
   key: string;
   band: ChaseBand;
   propertyId: string;
   property: string;
+  locality: string;
+  cert: CertKey;
   certLabel: string;
   daysLeft: number;
-  /** Both, always. A reminder that reaches only one of them is a defect. */
+  expiry: string | null;
+  /** The agent as the book names them; their login is matched at send time. */
   to: { landlord: string; agent: string | null };
   subject: string;
   /** Why this cannot be sent yet, if it can't. */
@@ -396,47 +442,47 @@ export interface QueuedReminder {
 }
 
 /**
- * What would go out, if sending were wired.
+ * What the automatic chase owes today, at the stages the office has picked.
  *
- * Nothing here sends. It is a list Michael can read, work by hand, and check
- * against once the sender exists — which is also the only honest way to
- * evaluate an automated chase before it starts writing to landlords.
+ * Nothing here sends: the daily run (app/api/compliance/reminders/run) does,
+ * behind the Certificate chases switch, and the queue tab lists the same.
  */
-export function buildQueue(tracker: TrackerBook): QueuedReminder[] {
-  const blocked = (r: ChaseRow) =>
-    r.agent ? null : "No agent on this property — the chase would reach the landlord without their agent knowing.";
-  const due = tracker.upcoming
-    .filter((r) => r.band !== null && !r.viaGas)
-    .map((r) => ({
-      key: `${r.propertyId}:${r.cert}:${r.band}`,
-      band: r.band as Band,
+export function buildQueue(tracker: TrackerBook, stages: ChaseStages = DEFAULT_STAGES): QueuedReminder[] {
+  const blocked = (r: ChaseRow) => (r.agent ? null : "No agent on this property, so there is nobody to chase.");
+  const item = (r: ChaseRow, stage: number, subject: string): QueuedReminder => {
+    const expiry = expiryOf(r.daysLeft);
+    return {
+      key: stageKey(r.propertyId, r.cert, stage, expiry),
+      band: stage,
       propertyId: r.propertyId,
       property: r.property,
+      locality: r.locality,
+      cert: r.cert,
       certLabel: r.certLabel,
       daysLeft: r.daysLeft ?? 0,
+      expiry,
       to: { landlord: r.landlord, agent: r.agent },
-      subject: `${r.certLabel} for ${r.property} expires in ${r.daysLeft} days`,
+      subject,
       blocked: blocked(r),
-    }));
+    };
+  };
+  const due = tracker.upcoming
+    .filter((r) => !r.viaGas && r.daysLeft != null && r.daysLeft >= 0)
+    .flatMap((r) => {
+      const stage = stageFor(r.daysLeft, stages);
+      return stage ? [item(r, stage, `${r.certLabel} for ${r.property} expires in ${r.daysLeft} days`)] : [];
+    });
   /* EXPIRED, once (James, 4 Oct 2026, compliance going live for agents). The
      band rule above stops at zero days, and the escalation it promised never
      got built - so a certificate that ran out was chased at 30, 14 and 7 days
      and then never again, which is the moment it matters most. It is now one
-     more chase, keyed :0, sent once. "Missing" (no record, or an old one past
+     more chase, stage 0, sent once. "Missing" (no record, or an old one past
      six months) is not here: that is Michael's list to work, and 278 of them
      in an agent's inbox on day one would bury the real ones. */
-  const expired = tracker.outstanding
-    .filter((r) => r.status === "expired" && r.daysLeft != null && !r.viaGas)
-    .map((r) => ({
-      key: `${r.propertyId}:${r.cert}:0`,
-      band: 0 as const,
-      propertyId: r.propertyId,
-      property: r.property,
-      certLabel: r.certLabel,
-      daysLeft: r.daysLeft ?? 0,
-      to: { landlord: r.landlord, agent: r.agent },
-      subject: `${r.certLabel} for ${r.property} expired ${Math.abs(r.daysLeft ?? 0)} days ago`,
-      blocked: blocked(r),
-    }));
+  const expired = stages.onExpiry
+    ? tracker.outstanding
+        .filter((r) => r.status === "expired" && r.daysLeft != null && !r.viaGas)
+        .map((r) => item(r, 0, `${r.certLabel} for ${r.property} expired ${Math.abs(r.daysLeft ?? 0)} days ago`))
+    : [];
   return [...expired, ...due];
 }

@@ -1537,6 +1537,10 @@ CREATE INDEX IF NOT EXISTS os_deal_alerts_sent_deal ON os_deal_alerts_sent (deal
 -- No cleared_at. A band is crossed once and never re-entered: days remaining
 -- only ever falls. A renewed certificate gets a NEW expiry date and therefore
 -- new keys, so the history stays readable rather than being reset.
+--
+-- RETIRED 11 Nov 2026, never having held a row: the key had no expiry in it,
+-- so the promise above did not hold. os_cert_agent_chases (below) replaced
+-- it. Kept, empty, rather than dropped.
 CREATE TABLE IF NOT EXISTS os_compliance_chases_sent (
   chase_key      TEXT PRIMARY KEY,
   property_id    TEXT NOT NULL,
@@ -1547,6 +1551,48 @@ CREATE TABLE IF NOT EXISTS os_compliance_chases_sent (
 );
 CREATE INDEX IF NOT EXISTS os_compliance_chases_property
   ON os_compliance_chases_sent (property_id);
+
+-- EVERY TIME AN AGENT IS CHASED ABOUT A CERTIFICATE (Josel, ticket 11c8acc9,
+-- 11 Nov 2026: "a clear audit trail ... a record of all follow-ups sent to
+-- agents regarding outstanding compliance certificates"). One row per chase,
+-- by hand from Property Compliance or automatic from the daily run, whether
+-- or not the email went: a chase that failed is still something somebody
+-- tried, and the trail says so rather than leaving a gap (lib/cert-chase).
+--
+-- stage_key is the automatic reminder's own key, propertyId:cert:stage:expiry.
+-- Unique, so the same certificate is never sent the same stage twice however
+-- often the run is called; null on a chase by hand, which may be sent again.
+-- The expiry is in it so a renewed certificate starts its stages afresh.
+CREATE TABLE IF NOT EXISTS os_cert_agent_chases (
+  id             TEXT PRIMARY KEY,
+  property_id    TEXT NOT NULL,
+  property       TEXT NOT NULL DEFAULT '',
+  cert           TEXT NOT NULL,
+  cert_label     TEXT NOT NULL DEFAULT '',
+  -- The certificate's expiry when chased (null = no record at all).
+  expiry         DATE,
+  -- expired | due | missing, as the certificate stood on the day.
+  cert_state     TEXT NOT NULL DEFAULT '',
+  agent_name     TEXT NOT NULL DEFAULT '',
+  agent_email    TEXT NOT NULL DEFAULT '',
+  agent_user_id  TEXT,
+  -- hand | auto
+  how            TEXT NOT NULL DEFAULT 'hand',
+  -- auto only: days before expiry (30/14/7), 0 = on expiry.
+  stage          INTEGER,
+  stage_key      TEXT UNIQUE,
+  by_user_id     TEXT,
+  by_name        TEXT NOT NULL DEFAULT '',
+  subject        TEXT NOT NULL DEFAULT '',
+  message        TEXT NOT NULL DEFAULT '',
+  sent           BOOLEAN NOT NULL DEFAULT FALSE,
+  -- mailbox (the sender's own Outlook) | ours (the OS sender)
+  via            TEXT,
+  note           TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_cert_agent_chases_cert ON os_cert_agent_chases (property_id, cert, at DESC);
+CREATE INDEX IF NOT EXISTS os_cert_agent_chases_at ON os_cert_agent_chases (at DESC);
 
 -- THE SWITCHES. What is armed, decided in the product rather than in Railway.
 --

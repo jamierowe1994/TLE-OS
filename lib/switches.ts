@@ -77,10 +77,14 @@ export const SWITCHES: Switch[] = [
     legacyOn: "yes",
   },
   {
+    /* Each reminder is recorded on its certificate and on Agent Chases, and
+       the compliance office picks the stages there (Josel, ticket 11c8acc9,
+       11 Nov 2026). A chase by hand from Property Compliance is not behind
+       this switch: a person writes and sends that one. */
     key: "compliance_chases",
     label: "Certificate chases",
-    what: "Emails agents, at 7am each morning, the certificates coming up for renewal on their book, once per 30/14/7 band, and once more for any that have already expired.",
-    who: "TLE agents only. The first morning it is on, every agent with a home already expired gets one email listing them. Landlords are not written to.",
+    what: "Emails agents, early each morning (6am, 7am in summer), the certificates coming up for renewal on their homes, once at each point the compliance office has picked on Agent Chases (30, 14 and 7 days before, and once more when it has run out, unless they change it). Each one is recorded on the certificate and on Agent Chases. Only homes we manage: not let only, not rent collect.",
+    who: "TLE agents only, at their OS login. The first morning it is on, every agent with a home already expired gets one email listing them. Landlords are not written to.",
     confirm: "SEND CHASES",
     legacyEnv: "COMPLIANCE_CHASES",
     legacyOn: "on",

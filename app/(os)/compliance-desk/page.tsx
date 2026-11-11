@@ -9,6 +9,7 @@ import { GREEN, RED, waited } from "@/components/compliance-desk/CheckRow";
 import { useDesk } from "@/components/compliance-desk/useDesk";
 import TodoCard from "@/components/compliance-desk/TodoCard";
 import type { ChaseRow, TrackerBook } from "@/lib/compliance-tracker";
+import type { ChaseBrief } from "@/lib/cert-chase";
 import { asOf } from "@/lib/as-of";
 import { SPECS, type Notice } from "@/lib/section-notices-spec";
 
@@ -32,7 +33,7 @@ import { SPECS, type Notice } from "@/lib/section-notices-spec";
  * Nothing here is a second copy of a figure: every card opens the list it counts.
  */
 
-type Tracker = TrackerBook & { ok: boolean; live: boolean; reason?: string; stale?: boolean; ageMs?: number; error?: string; chases?: { key: string; to: string; at: string }[] | null };
+type Tracker = TrackerBook & { ok: boolean; live: boolean; reason?: string; stale?: boolean; ageMs?: number; error?: string; chases?: Record<string, ChaseBrief[]> | null };
 
 const card = "rounded-[22px] border border-line/70 bg-card";
 
@@ -152,8 +153,12 @@ export default function ComplianceDashboard() {
   const overdue = book?.outstanding ?? [];
   const upcoming = book?.upcoming ?? [];
   const bookOk = book && !bookProblem ? book : null;
-  const sent = book?.chases ? new Set(book.chases.map((c) => c.key)) : null;
-  const notEmailed = sent ? upcoming.filter((r) => !sent.has(`${r.propertyId}:${r.cert}:${r.band}`)).length : null;
+  /* Emailed = a chase that went inside the last 30 days, by hand or the
+     automatic reminder (lib/cert-chase, 11 Nov 2026). */
+  const chases = book?.chases ?? null;
+  const notEmailed = chases
+    ? upcoming.filter((r) => !(chases[`${r.propertyId}:${r.cert}`] ?? []).some((b) => b.sent && Date.now() - new Date(b.at).getTime() < 31 * 86_400_000)).length
+    : null;
   const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
