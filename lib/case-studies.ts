@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { listingRead, readListingDetails } from "@/lib/listing-details";
 import { noDashes } from "@/lib/no-dashes";
+import { HIDE_KEYS, toWebsiteShape, type CaseFacts, type CasePhoto, type HideKey } from "@/lib/case-study-shape";
+
+export type { CaseFacts, CasePhoto, HideKey };
 
 /**
  * Case studies (James, 11 Nov 2026, from Richard): a home an agent has let,
@@ -20,24 +23,6 @@ import { noDashes } from "@/lib/no-dashes";
  */
 
 export type CaseStatus = "draft" | "published";
-
-export interface CasePhoto {
-  url: string;
-  /** "rex" came from the listing, "upload" the agent added. */
-  from: "rex" | "upload";
-}
-
-export interface CaseFacts {
-  beds: number | null;
-  baths: number | null;
-  propertyType: string | null;
-  rent: number | null;
-  rentPeriod: "month" | "week" | null;
-  /** YYYY-MM-DD the advert went live, and the day REX moved it on (let agreed or let). */
-  publishedOn: string | null;
-  letOn: string | null;
-  daysToLet: number | null;
-}
 
 export interface CaseStudy {
   id: string;
@@ -58,6 +43,7 @@ export interface CaseStudy {
   facts: CaseFacts;
   showRent: boolean;
   showDays: boolean;
+  hidden: HideKey[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -68,7 +54,7 @@ type Row = {
   id: string; slug: string; listing_id: string; property_id: string | null; agent_rex_id: string | null;
   agent_name: string; status: string; title: string; area: string; intro: string; headline: string;
   advert: string; story: string; notes: string; photos: unknown; facts: unknown; show_rent: boolean;
-  show_days: boolean; created_by: string; created_at: Date; updated_at: Date; published_at: Date | null;
+  show_days: boolean; hidden: unknown; created_by: string; created_at: Date; updated_at: Date; published_at: Date | null;
 };
 
 const EMPTY_FACTS: CaseFacts = { beds: null, baths: null, propertyType: null, rent: null, rentPeriod: null, publishedOn: null, letOn: null, daysToLet: null };
@@ -94,6 +80,7 @@ function toCase(r: Row): CaseStudy {
     facts: { ...EMPTY_FACTS, ...((r.facts ?? {}) as Partial<CaseFacts>) },
     showRent: r.show_rent,
     showDays: r.show_days,
+    hidden: Array.isArray(r.hidden) ? (r.hidden as string[]).filter((k): k is HideKey => (HIDE_KEYS as readonly string[]).includes(k)) : [],
     createdBy: r.created_by,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
@@ -233,7 +220,7 @@ export async function createCaseStudy(listingId: string, by: string): Promise<{ 
 
 export interface CasePatch {
   title?: string; area?: string; intro?: string; headline?: string; advert?: string; story?: string; notes?: string;
-  photos?: CasePhoto[]; showRent?: boolean; showDays?: boolean; status?: CaseStatus;
+  photos?: CasePhoto[]; showRent?: boolean; showDays?: boolean; hidden?: HideKey[]; status?: CaseStatus;
 }
 
 const TEXT_LIMITS: Record<string, number> = { title: 120, area: 80, intro: 400, headline: 300, advert: 8000, story: 6000, notes: 4000 };
@@ -262,6 +249,10 @@ export function cleanPatch(body: Record<string, unknown>): CasePatch | string {
   }
   if (typeof body.showRent === "boolean") out.showRent = body.showRent;
   if (typeof body.showDays === "boolean") out.showDays = body.showDays;
+  if (body.hidden !== undefined) {
+    if (!Array.isArray(body.hidden) || body.hidden.some((k) => !(HIDE_KEYS as readonly unknown[]).includes(k))) return "That isn't something that can be hidden.";
+    out.hidden = [...new Set(body.hidden as HideKey[])];
+  }
   if (body.status === "draft" || body.status === "published") out.status = body.status;
   return out;
 }
@@ -280,6 +271,7 @@ export async function updateCaseStudy(id: string, patch: CasePatch): Promise<Cas
   if (patch.photos !== undefined) set("photos", JSON.stringify(patch.photos), "::jsonb");
   if (patch.showRent !== undefined) set("show_rent", patch.showRent);
   if (patch.showDays !== undefined) set("show_days", patch.showDays);
+  if (patch.hidden !== undefined) set("hidden", JSON.stringify(patch.hidden), "::jsonb");
   if (patch.status !== undefined) {
     set("status", patch.status);
     sets.push(patch.status === "published" ? "published_at = coalesce(published_at, NOW())" : "published_at = NULL");
@@ -301,37 +293,9 @@ export async function removeCaseStudy(id: string): Promise<boolean> {
 
 /* --------------------------------------------------------------- public -- */
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-function paragraphs(s: string): string[] {
-  return s.split(/\n{2,}/).map((p) => p.replace(/\n/g, " ").trim()).filter(Boolean);
-}
-
-/** What the website gets: published only, already worded, nothing private. */
+/** What the website gets: published only, already worded, hidden things left out. */
 export function forWebsite(c: CaseStudy, osOrigin: string) {
-  const f = c.facts;
-  const let_ = f.letOn ? new Date(f.letOn) : null;
-  return {
-    id: c.id,
-    slug: c.slug,
-    title: c.title,
-    area: c.area || null,
-    propertyType: f.propertyType,
-    beds: f.beds,
-    baths: f.baths,
-    intro: c.intro || null,
-    headline: c.headline || null,
-    advert: paragraphs(c.advert),
-    story: paragraphs(c.story),
-    notes: paragraphs(c.notes),
-    photos: c.photos.map((p) => (p.url.startsWith("/") ? `${osOrigin}${p.url}` : p.url)),
-    rent: c.showRent ? f.rent : null,
-    rentPeriod: c.showRent ? f.rentPeriod : null,
-    daysToLet: c.showDays ? f.daysToLet : null,
-    letMonth: let_ ? `${MONTHS[let_.getUTCMonth()]} ${let_.getUTCFullYear()}` : null,
-    agent: c.agentRexId ? { id: c.agentRexId, name: c.agentName } : null,
-    publishedAt: c.publishedAt,
-  };
+  return toWebsiteShape(c, osOrigin);
 }
 
 /** The address the website shows it at. */

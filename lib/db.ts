@@ -5108,6 +5108,9 @@ CREATE TABLE IF NOT EXISTS os_case_studies (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS os_case_studies_listing ON os_case_studies (listing_id) WHERE removed_at IS NULL;
 CREATE INDEX IF NOT EXISTS os_case_studies_agent ON os_case_studies (agent_rex_id);
+-- What the agent switched off on the page in the visual editor (11 Nov 2026):
+-- any of type, beds, days, rent, let, advert (lib/case-study-shape HIDE_KEYS).
+ALTER TABLE os_case_studies ADD COLUMN IF NOT EXISTS hidden JSONB NOT NULL DEFAULT '[]';
 
 `;
 

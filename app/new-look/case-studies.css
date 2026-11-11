@@ -51,3 +51,44 @@
   [data-look="new"] .cs-facts > div:nth-child(n+3) { border-top: 1px solid var(--line); }
   [data-look="new"] .cs-photo-tools button { width: 32px; height: 32px; }
 }
+
+/* The visual editor (James, 11 Nov 2026): a bar, then the website itself in a frame. */
+[data-look="new"].cs-studio { display: flex; flex-direction: column; height: calc(100dvh - 24px); min-height: 560px; padding: 16px 20px 16px; gap: 10px; }
+[data-look="new"] .cs-bar { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+[data-look="new"] .cs-bar-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 260px; }
+[data-look="new"] .cs-bar .cs-back { margin: 0; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); justify-content: center; flex: none; color: var(--ink); }
+[data-look="new"] .cs-bar .cs-back::before { margin-left: 3px; }
+[data-look="new"] .cs-bar-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+[data-look="new"] .cs-bar-title b { font-family: var(--font-heading); font-weight: 600; font-size: 18px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .cs-bar-meta { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+[data-look="new"] .cs-bar-right { display: flex; align-items: center; gap: 8px; }
+[data-look="new"] .cs-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--line); gap: 2px; }
+[data-look="new"] .cs-seg button { border: 0; background: transparent; padding: 7px 16px; border-radius: 999px; font: 500 13px/1 var(--font-body, inherit); color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+[data-look="new"] .cs-seg button.is-on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+[data-look="new"] .cs-hint { margin: 0; font-size: 13px; color: var(--muted); }
+[data-look="new"] .cs-stage { flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--line); border-radius: 18px; padding: 12px; }
+[data-look="new"] .cs-frame-wrap { position: relative; width: 100%; height: 100%; border-radius: 12px; overflow: hidden; background: #f8f7f4; box-shadow: 0 10px 40px -20px rgba(20,20,19,.35); transition: width .25s ease; }
+[data-look="new"] .cs-stage--phone .cs-frame-wrap { width: 390px; max-width: 100%; border-radius: 28px; }
+[data-look="new"] .cs-frame { width: 100%; height: 100%; border: 0; display: block; }
+[data-look="new"] .cs-frame-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--muted); background: #f8f7f4; }
+[data-look="new"] .cs-confirm { margin: 0; }
+[data-look="new"] .cs-sheet-back { position: fixed; inset: 0; z-index: 80; background: rgba(20,20,19,.35); display: flex; align-items: center; justify-content: center; padding: 20px; }
+[data-look="new"] .cs-sheet { width: min(860px, 100%); max-height: min(720px, 100%); overflow: auto; background: #fff; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+[data-look="new"] .cs-sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+[data-look="new"] .cs-sheet-head .nl-section-title { margin: 0; }
+[data-look="new"] .cs-sheet-head .nl-meta { margin: 4px 0 0; }
+[data-look="new"] .cs-pick { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+[data-look="new"] .cs-pick button { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border: 0; padding: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--line); outline: 2px solid transparent; outline-offset: 2px; }
+[data-look="new"] .cs-pick button:hover { outline-color: var(--line-strong); }
+[data-look="new"] .cs-pick button.is-current { outline-color: var(--ink); cursor: default; }
+[data-look="new"] .cs-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+[data-look="new"] .cs-pick span { position: absolute; left: 6px; top: 6px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.92); color: var(--ink); }
+[data-look="new"] .cs-sheet-foot { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; }
+@media (max-width: 720px) {
+  [data-look="new"].cs-studio { padding: 12px; height: calc(100dvh - 72px); }
+  [data-look="new"] .cs-seg--device span { display: none; }
+  [data-look="new"] .cs-bar-right { width: 100%; }
+  [data-look="new"] .cs-bar-right .nl-btn { flex: 1; justify-content: center; }
+  [data-look="new"] .cs-stage { padding: 0; background: none; }
+  [data-look="new"] .cs-stage--phone .cs-frame-wrap { width: 100%; border-radius: 12px; }
+}
