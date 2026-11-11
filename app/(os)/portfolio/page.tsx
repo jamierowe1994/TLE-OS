@@ -30,6 +30,7 @@ import RentRange from "@/components/portfolio/RentRange";
 import { searchMatches } from "@/lib/search-match";
 import { useNewLook } from "@/lib/use-new-look";
 import { Mast, Badge, Tabs, Ico, type Tone } from "@/components/new-look/Parts";
+import { initialOnly } from "@/lib/first-names";
 import { BoardSkeleton } from "@/components/Skeleton";
 
 /**
@@ -471,6 +472,7 @@ export default function Portfolio() {
     };
     const clearAll = () => { setQ(""); setService(null); setAgent(null); setTown(null); setRent(null); setLookOnly(false); setNotOnRexOnly(false); setReletOnly(false); };
     const moreSet = [sort, rent].filter(Boolean).length;
+    const missingFirstNames = state.status === "ready" ? state.book.properties.reduce((n, p) => n + ((p as { test?: boolean }).test ? 0 : p.tenants.filter((t) => initialOnly(t.name)).length), 0) : 0;
     const certTone: Record<CertStatus, Tone> = { expired: "accent", urgent: "warning", missing: "neutral", watch: "neutral", ok: "good" };
     const nlBlurb =
       state.status === "loading" ? "Fetching the managed book…"
@@ -574,6 +576,16 @@ export default function Portfolio() {
             </>
           }
         />
+
+        {/* Tenants still held by an initial (Lianna Denholm, 11 Nov 2026): one place to type their first names in. */}
+        {missingFirstNames > 0 && (
+          <p className="nl-port-names">
+            <span>
+              {missingFirstNames === 1 ? "1 tenant is" : `${missingFirstNames} tenants are`} held by an initial, so jobs and works orders can&apos;t name them.{" "}
+              <Link href="/portfolio/tenant-names">Add their first names</Link>
+            </span>
+          </p>
+        )}
 
         {state.status === "failed" ? (
           <div className="py-6" role="alert">

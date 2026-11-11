@@ -9,6 +9,7 @@ import { recordLandlordFor, recordRowsFor, saveRecordLandlord } from "@/lib/reco
 import { forgetRecord } from "@/lib/listing-record";
 import { publicError } from "@/lib/public-error";
 import { nameKey, saveTenantContact, saveTenantName, tenantContacts } from "@/lib/tenant-contacts";
+import { forgetFullNames } from "@/lib/tenant-full-names";
 import { forgetBooks } from "@/lib/managed-book-cache";
 
 /**
@@ -116,6 +117,8 @@ export async function PATCH(req: NextRequest) {
         const held = (body?.keep ?? {}) as { email?: unknown; phone?: unknown };
         await saveTenantName(pm[1], tenantName, shownAs, actor.email, { email: clean(held.email, 200)?.toLowerCase() || null, phone: clean(held.phone, 40) || null });
         await forgetBooks();
+        /* Jobs already open on the home show the name from their next read (lib/tenant-full-names). */
+        forgetFullNames();
         await record({
           kind: "tenant_contact_saved",
           actorId: actor.id,

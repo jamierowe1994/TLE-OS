@@ -1,4 +1,5 @@
 import "server-only";
+import { withFullNames } from "@/lib/tenant-full-names";
 import { agentPhone, OFFICE_PHONE } from "@/lib/agent-phone";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
@@ -130,7 +131,8 @@ const when = (iso: string | null) =>
    email named the job's tenants raw, so the email left a past tenant off and
    the page the email links to still gave the contractor their number. */
 export async function jobTenants(o: WorksOrder): Promise<JobTenant[]> {
-  const own = tenantsOf(o);
+  /* By their whole names where the OS knows them (lib/tenant-full-names, 11 Nov 2026), however the job was read. */
+  const own = await withFullNames(tenantsOf(o)).catch(() => tenantsOf(o));
   if (!own.length) return own;
   const past = await payPropPeople().then((p) => p.pastOnly).catch(() => new Set<string>());
   const clean = (n: string) => n.replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "");

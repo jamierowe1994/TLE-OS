@@ -1,4 +1,5 @@
 import "server-only";
+import { withFullNames } from "@/lib/tenant-full-names";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -262,6 +263,17 @@ export interface WorksOrder {
 }
 
 export interface JobTenant { name: string; phone: string; email: string; room?: string }
+
+/**
+ * A job as it is read: each tenant held by an initial shown by their whole
+ * name where the OS knows it (lib/tenant-full-names, 11 Nov 2026). The job's
+ * own copy is from the day it was raised and is never rewritten.
+ */
+async function named(o: WorksOrder): Promise<WorksOrder> {
+  const tenants = await withFullNames(o.tenants ?? []).catch(() => o.tenants);
+  const [lead] = o.tenant ? await withFullNames([{ name: o.tenant, email: o.tenantEmail ?? "" }]).catch(() => [{ name: o.tenant }]) : [{ name: o.tenant }];
+  return tenants === o.tenants && lead.name === o.tenant ? o : { ...o, tenants, tenant: lead.name };
+}
 
 /** Every tenant on a job: the list when it has one, the single tenant on older jobs. */
 export function tenantsOf(o: Pick<WorksOrder, "tenants" | "tenant" | "tenantPhone" | "tenantEmail">): JobTenant[] {
@@ -640,7 +652,7 @@ export async function getOrder(id: string): Promise<{ order: WorksOrder; events:
     id: s(e.id), orderId: s(e.order_id), at: iso(e.at)!, by: s(e.by_name), kind: s(e.kind), text: s(e.text),
   }));
   const [quoteAsks, chase] = await Promise.all([asksFor(id), chaseOf(id)]);
-  return { order: { ...toOrder(r), quoteAsks, chase }, events };
+  return { order: { ...(await named(toOrder(r))), quoteAsks, chase }, events };
 }
 
 export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; tenantEmail?: string | null; limit?: number; rehearsal?: boolean } = {}): Promise<WorksOrder[]> {
@@ -665,7 +677,7 @@ export async function listOrders(filter: { kind?: Kind | null; open?: boolean; p
       LIMIT $${vals.length}`,
     vals
   );
-  return rows.map(toOrder);
+  return Promise.all(rows.map((r) => named(toOrder(r))));
 }
 
 export interface WorksSummary {
@@ -1236,7 +1248,7 @@ export async function orderByToken(kind: "contractor" | "tenant" | "landlord_inv
      P-048): a null byte in one was an empty 500 instead of "not one of ours". */
   if (!hasDb() || !token || token.length > 200 || /[\u0000-\u001f]/.test(token)) return null;
   const [r] = await q<Row>(`SELECT ${COLS} FROM os_works_orders WHERE ${kind === "contractor" ? "contractor_token" : kind === "tenant" ? "tenant_token" : "landlord_invoice_token"} = $1`, [token]);
-  return r ? toOrder(r) : null;
+  return r ? named(toOrder(r)) : null;
 }
 
 /* ── which contractor, for this job ─────────────────────────────────────── */

@@ -1,5 +1,6 @@
 import { currentLets, MANAGED_SERVICES } from "@/lib/current-lets";
 import "server-only";
+import { firstNamesIn, nameFromEmail } from "@/lib/first-names";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
@@ -934,6 +935,8 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      spelling fits (same initial, same surname), it is shown. A name an agent
      put right above is never touched; the record's spelling is kept as
      recordName, which still keys their email and mobile. */
+  /* Every first name PayProp holds, to recognise one inside an email address. */
+  const knownFirst = firstNamesIn((ppRows ?? []).map((t) => (typeof t.first_name === "string" ? t.first_name : "")));
   for (const p of properties) {
     if (p.test || !p.tenants.length) continue;
     const hit = ppBook && ppRows?.length ? matchHome(ppBook, p) : null;
@@ -943,7 +946,11 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     const candidates = [...onHome, ...contacts];
     p.tenants = p.tenants.map((t) => {
       if (t.recordName) return t;
-      const full = spelledOut(t.name, candidates, t.email);
+      /* And where PayProp holds only the initial too (1 Marchmont Road, 11 Nov 2026: the joint
+         let is "A George, O Kibble..." in both), their own email where it says the first name
+         plainly (lib/first-names): annageorgeuk@ is Anna George. Never a guess: an address that
+         does not say it leaves the initial, for a person to type in. */
+      const full = spelledOut(t.name, candidates, t.email) ?? nameFromEmail(t.name, t.email, knownFirst);
       return full ? { ...t, name: full, recordName: t.name } : t;
     });
   }
