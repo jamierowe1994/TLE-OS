@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { aiCreate } from "@/lib/ai";
+import { PDFDocument } from "pdf-lib";
 import { realDayOrNull } from "@/lib/real-day";
 
 /**
@@ -59,14 +60,36 @@ export type CertificateRead = {
   notes: string;
 };
 
+/* Every date the reader wants is on the first pages: the EICR's summary and
+   next inspection, the CP12, the EPC's front, a licence's opening page. A
+   long EICR's schedules of circuits and test results come after, and reading
+   all of them is the likeliest reason a phone waited past Cloudflare's 100 seconds
+   (11 Nov 2026, Chris Gurney, ticket 3a873c8a). The file filed is untouched. */
+const READ_PAGES = 6;
+
+async function firstPages(bytes: Buffer): Promise<Buffer> {
+  try {
+    const src = await PDFDocument.load(bytes, { ignoreEncryption: true });
+    if (src.getPageCount() <= READ_PAGES) return bytes;
+    const out = await PDFDocument.create();
+    const pages = await out.copyPages(src, Array.from({ length: READ_PAGES }, (_, i) => i));
+    for (const pg of pages) out.addPage(pg);
+    return Buffer.from(await out.save());
+  } catch {
+    /* One pdf-lib can't open goes to the reader whole, as before. */
+    return bytes;
+  }
+}
+
 export async function readCertificate(
   bytes: Buffer,
   media: string,
-  expect: string
+  expect: string,
+  opts: { within?: number } = {}
 ): Promise<{ read: CertificateRead; tokens: { in: number; out: number } }> {
   const block: Anthropic.ContentBlockParam =
     media === "application/pdf"
-      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: bytes.toString("base64") } }
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: (await firstPages(bytes)).toString("base64") } }
       : { type: "image", source: { type: "base64", media_type: media as "image/jpeg" | "image/png" | "image/webp" | "image/gif", data: bytes.toString("base64") } };
 
   const res = await aiCreate("cert-reader", {
@@ -80,7 +103,7 @@ export async function readCertificate(
         content: [block, { type: "text", text: `${expect ? `This file was filed as: ${expect}. ` : ""}Read the document and report.` }],
       },
     ],
-  });
+  }, { within: opts.within });
   const call = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_certificate");
   const r = (call?.input ?? {}) as Record<string, unknown>;
   /* A worked-out "2025-02-29" comes back as the 28th, never as a date the

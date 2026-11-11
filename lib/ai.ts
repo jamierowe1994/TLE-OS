@@ -181,8 +181,16 @@ const defaultClient = () => (shared ??= new Anthropic());
 export async function aiCreate(
   feature: AiFeature,
   params: AiParams,
-  opts: { client?: Anthropic; model?: string; effort?: Effort } = {}
+  opts: { client?: Anthropic; model?: string; effort?: Effort; within?: number } = {}
 ): Promise<Anthropic.Message> {
+  /* `within`: the most this whole call may take, in ms, retries and all
+     (11 Nov 2026, Chris Gurney, ticket 3a873c8a: an EICR read on a phone ran
+     past Cloudflare's 100 seconds twice, so the agent got a 524 and "something
+     broke" instead of "type the dates in"). Without it the SDK waits up to ten
+     minutes a try. Gives up as a timeout, which reads as "busy". */
+  const req: Anthropic.RequestOptions | undefined = opts.within
+    ? { signal: AbortSignal.timeout(opts.within), timeout: opts.within, maxRetries: 1 }
+    : undefined;
   let client: Anthropic;
   try {
     client = opts.client ?? defaultClient();
@@ -207,7 +215,7 @@ export async function aiCreate(
     body.system = withLine(params.system, `Answer by calling the ${forced} tool, once. Do not answer in prose.`);
   }
 
-  let res = await send(client, body, feature);
+  let res = await send(client, body, feature, req);
   if (forced && body.tool_choice?.type === "auto" && !called(res, forced) && res.stop_reason === "end_turn") {
     /* Answered in prose. Asked once more, as a new user turn after its reply,
        which is the shape every model accepts. */
@@ -221,13 +229,19 @@ export async function aiCreate(
           { role: "user", content: `Now call the ${forced} tool with what you found.` },
         ],
       },
-      feature
+      feature,
+      req
     );
   }
   return res;
 }
 
-async function send(client: Anthropic, body: Anthropic.MessageCreateParamsNonStreaming, feature: AiFeature): Promise<Anthropic.Message> {
+async function send(
+  client: Anthropic,
+  body: Anthropic.MessageCreateParamsNonStreaming,
+  feature: AiFeature,
+  req?: Anthropic.RequestOptions
+): Promise<Anthropic.Message> {
   let res: Anthropic.Message;
   try {
     if (HAS_FALLBACK.test(body.model)) {
@@ -235,11 +249,13 @@ async function send(client: Anthropic, body: Anthropic.MessageCreateParamsNonStr
         ...(body as unknown as Anthropic.Beta.Messages.MessageCreateParamsNonStreaming),
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
-      })) as unknown as Anthropic.Message;
+      }, req)) as unknown as Anthropic.Message;
     } else {
-      res = await client.messages.create(body);
+      res = await client.messages.create(body, req);
     }
   } catch (e) {
+    /* Out of time (aiCreate's `within`): said as a timeout, never as our own bug. */
+    if (req?.signal?.aborted && !(e instanceof Anthropic.APIConnectionTimeoutError)) e = new Anthropic.APIConnectionTimeoutError();
     throw aiFailure(feature, AI_FEATURES[feature].voice ?? "reader", e);
   }
   void noteAnswered();

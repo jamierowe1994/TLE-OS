@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
 import { publicError } from "@/lib/public-error";
 import { readCertificate } from "@/lib/cert-read";
 import { whoIs } from "@/lib/admin";
@@ -28,7 +29,13 @@ export const maxDuration = 60;
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 
+/* Cloudflare gives up on us at 100 seconds and shows a 524, which the screen
+   can only call "something broke" (11 Nov 2026, Chris Gurney, ticket 3a873c8a:
+   an EICR, twice). The reader stops well before, so the answer is always ours. */
+const READ_WITHIN_MS = 70_000;
+
 export async function POST(req: NextRequest) {
+  const started = Date.now();
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ ok: false, error: "No reader key on this environment." }, { status: 503 });
@@ -63,8 +70,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json({ ok: true, ...(await readCertificate(toRead, readAs, expect)) });
+    return NextResponse.json({ ok: true, ...(await readCertificate(toRead, readAs, expect, { within: Math.max(15_000, READ_WITHIN_MS - (Date.now() - started)) })) });
   } catch (e) {
+    if (e instanceof Error && e.cause instanceof Anthropic.APIConnectionTimeoutError) {
+      return NextResponse.json({ ok: false, error: `${name} took too long to read. It can still be filed as it is: type the dates in below.` }, { status: 500 });
+    }
     /* Not 502: Cloudflare swaps an origin 502 for its own error page, and
        the reason (the backlog run, 6 Sep: "Your credit balance is too low")
        never reaches the caller. */
