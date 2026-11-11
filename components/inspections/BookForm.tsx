@@ -5,6 +5,7 @@ import { PressButton } from "@/components/Bits";
 import type { Inspection } from "@/lib/inspections";
 import FieldSelect from "@/components/FieldSelect";
 import { EmailPreview } from "@/components/inspections/SentEmails";
+import DayInDiary from "@/components/inspections/DayInDiary";
 
 /**
  * BOOK THE VISIT (James, 3 Oct 2026: "we need to be able to book inspections,
@@ -160,6 +161,16 @@ export default function BookForm({
           )}
         </label>
       </div>
+
+      {/* Your diary for the day picked, so nothing is double booked (Rhiannon, ticket cbf2c42c). */}
+      <DayInDiary
+        date={date}
+        time={time}
+        mins={mins}
+        goingName={who?.name ?? null}
+        goingIsMe={Boolean(me && inspectorId === me.id)}
+        already={was ? { date: ymd(was), time: `${String(was.getHours()).padStart(2, "0")}:${String(was.getMinutes()).padStart(2, "0")}` } : null}
+      />
 
       <div>
         <span className={lab}>How we get in</span>
