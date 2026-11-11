@@ -62,7 +62,8 @@ export type CertificateRead = {
 export async function readCertificate(
   bytes: Buffer,
   media: string,
-  expect: string
+  expect: string,
+  signal?: AbortSignal
 ): Promise<{ read: CertificateRead; tokens: { in: number; out: number } }> {
   const block: Anthropic.ContentBlockParam =
     media === "application/pdf"
@@ -80,7 +81,7 @@ export async function readCertificate(
         content: [block, { type: "text", text: `${expect ? `This file was filed as: ${expect}. ` : ""}Read the document and report.` }],
       },
     ],
-  });
+  }, { signal });
   const call = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_certificate");
   const r = (call?.input ?? {}) as Record<string, unknown>;
   /* A worked-out "2025-02-29" comes back as the 28th, never as a date the

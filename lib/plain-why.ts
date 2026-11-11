@@ -65,7 +65,9 @@ export function explainFailure(f: {
   } else if (f.status === 429) {
     why = sys ? `${sys} has asked us to slow down for a moment.` : "Too many things were asked for at once.";
     next = "Wait a minute and try again.";
-  } else if (f.status === 502 || f.status === 503 || f.status === 504) {
+  } else if (f.status === 502 || f.status === 503 || f.status === 504 || f.status === 524) {
+    /* 524 is Cloudflare giving up after 100 seconds with no answer (11 Nov
+       2026, ticket 860e34f2): slow, not broken, so it is said as slow. */
     why = sys ? `${sys} didn't answer us in time, so this didn't go through.` : "A system we rely on didn't answer in time, so this didn't go through.";
   } else if (f.status >= 500) {
     why = sys

@@ -28,6 +28,14 @@ export const maxDuration = 60;
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 
+/* How long the read may take before it is stopped (11 Nov 2026, Chris Gurney,
+   ticket 860e34f2: an EICR on a listing). The call to the model had no limit,
+   so a slow read ran past Cloudflare's 100 seconds and the phone got a bare
+   524 - "Something broke on our side" - instead of this route's own sentence
+   saying the dates can be typed in and the certificate filed anyway. Stopped
+   here, well inside that cut, it answers in words. */
+const READ_LIMIT_MS = 75_000;
+
 export async function POST(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
@@ -62,9 +70,14 @@ export async function POST(req: NextRequest) {
     readAs = small.media;
   }
 
+  const limit = AbortSignal.timeout(READ_LIMIT_MS);
   try {
-    return NextResponse.json({ ok: true, ...(await readCertificate(toRead, readAs, expect)) });
+    return NextResponse.json({ ok: true, ...(await readCertificate(toRead, readAs, expect, limit)) });
   } catch (e) {
+    if (limit.aborted) {
+      console.error(`[cert-read] stopped after ${READ_LIMIT_MS / 1000}s:`, size, media);
+      return NextResponse.json({ ok: false, error: `The reader took too long with ${name}, so it was stopped. It can still be filed: type the dates in below.` }, { status: 504 });
+    }
     /* Not 502: Cloudflare swaps an origin 502 for its own error page, and
        the reason (the backlog run, 6 Sep: "Your credit balance is too low")
        never reaches the caller. */
