@@ -544,3 +544,59 @@ export function livingNow(rows: Array<Record<string, unknown>>, today = londonTo
   }
   return out;
 }
+
+/**
+ * A CO-TENANT'S OWN EMAIL, FROM PAYPROP'S CC (Lianna Denholm, 11 Nov 2026,
+ * ticket 1d6da750, 10 Grindlay Street: "Tenants contact details are missing
+ * here?"). A joint tenancy is one PayProp record. Its email_address and
+ * mobile_number are the lead's; the other tenants' emails sit in
+ * email_cc_address, which the OS never read. Of the 30 tenants on the book
+ * with no email or mobile on 11 Nov, 28 had a CC on their PayProp record.
+ *
+ * A CC address is only given to the one person on the record it names: its
+ * part before the @ carries their first name or surname (jithinv80@ is
+ * Jithin Vennathra; andrew@ukjackson.com is Andrew Jacksonn). Where a surname
+ * is shared ("Michael Smith, Lorna Smith"), the first name must be there too
+ * (lornasmith@ is Lorna). A CC naming nobody, or more than one person, is
+ * left alone - it may be a parent or a guarantor. Never the lead: their email
+ * is the record's own. Email only: PayProp holds no co-tenant mobile.
+ *
+ * `onHome` says whether one of a record's properties is this home. Returns
+ * each named person with their CC email, for records running today.
+ */
+export function coTenantEmails(
+  rows: Array<Record<string, unknown>>,
+  onHome: (pr: Record<string, unknown>) => boolean,
+  today = londonToday()
+): Array<{ name: string; email: string }> {
+  const out: Array<{ name: string; email: string }> = [];
+  for (const t of rows) {
+    const props = (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>;
+    if (!props.some((pr) => onHome(pr) && payPropTenancyCurrent(t.status, (pr.tenant as Record<string, unknown> | undefined)?.end_date, today))) continue;
+    const cc = str(t.email_cc_address);
+    if (!cc) continue;
+    const names = partsOf(str(t.display_name) || str(t.business_name));
+    const lead = leadOf(t);
+    const leadName = lead ? `${lead.first} ${lead.last}` : null;
+    const own = str(t.email_address).toLowerCase();
+    for (const addr of cc.split(/[\s,;]+/).map((a) => a.trim().toLowerCase()).filter((a) => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(a))) {
+      if (addr === own) continue;
+      const local = addr.split("@")[0].replace(/[^a-z]/g, "");
+      const named = names.filter((n) => {
+        const w = nameWords(n);
+        if (w.length < 2) return false;
+        const first = w[0];
+        const last = w[w.length - 1];
+        const lastHit = last.length >= 3 ? local.includes(last) : last.length === 2 && local.startsWith(first[0]) && local.includes(last);
+        const firstHit = first.length >= 3 && local.includes(first);
+        return lastHit || firstHit;
+      });
+      /* A shared surname needs the first name as well. */
+      const owners = named.length > 1 ? named.filter((n) => { const f = nameWords(n)[0]; return f.length >= 3 && local.includes(f); }) : named;
+      if (owners.length !== 1) continue;
+      if (leadName && samePerson(leadName, owners[0])) continue;
+      if (!out.some((o) => samePerson(o.name, owners[0]))) out.push({ name: owners[0], email: addr });
+    }
+  }
+  return out;
+}

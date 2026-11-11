@@ -5,7 +5,7 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
-import { attach, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, livingNow, namesOnPayPropHome, personKey, spelledOut, samePerson, sittingFromPayProp } from "@/lib/business/payprop-tenant-contacts";
+import { attach, coTenantEmails, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, livingNow, namesOnPayPropHome, personKey, spelledOut, samePerson, sittingFromPayProp } from "@/lib/business/payprop-tenant-contacts";
 import { londonToday } from "@/lib/london-clock";
 import { nameKey, tenantContacts, type TenantContact } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty, type AcceptedLet } from "@/lib/rex-tenants";
@@ -964,6 +964,33 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       const c = known.get(nameKey(t.name));
       return c ? { ...t, email: t.email || c.email, phone: t.phone || c.phone } : t;
     });
+  }
+  /* A co-tenant's own email from PayProp's CC (Lianna Denholm, 11 Nov 2026,
+     ticket 1d6da750): a joint record's email is the lead's, and the others'
+     sit in its CC, given only to the one person the address names
+     (lib/business/payprop-tenant-contacts coTenantEmails). A blank only, and
+     after everything the OS holds, so an email typed in on the home wins. */
+  if (ppRows?.length) {
+    for (const p of currentLets(properties)) {
+      if (p.test || !p.tenants.some((t) => !t.email)) continue;
+      const hit = ppBook ? matchHome(ppBook, p) : null;
+      const key = rentKey(p.address || p.name, p.postcode);
+      const onHome = (pr: Record<string, unknown>) => {
+        if (typeof hit === "object" && hit && String(pr.id ?? "") === hit.id) return true;
+        const a = (pr.address ?? {}) as Record<string, unknown>;
+        return !!key && (rentKey(String(pr.property_name ?? ""), String(a.postal_code ?? "")) === key || rentKey(String(a.first_line ?? ""), String(a.postal_code ?? "")) === key);
+      };
+      const cc = coTenantEmails(ppRows, onHome, today);
+      if (!cc.length) continue;
+      const taken = new Set(p.tenants.map((t) => t.email?.toLowerCase()).filter(Boolean));
+      p.tenants = p.tenants.map((t) => {
+        if (t.email) return t;
+        const c = cc.find((x) => samePerson(x.name, t.name) && !taken.has(x.email));
+        if (!c) return t;
+        taken.add(c.email);
+        return { ...t, email: c.email };
+      });
+    }
   }
   if (ppRows?.length) markEmptyHomes(properties, ppRows, pmFor, today);
   if (applied) withLetPages(properties, applied);
