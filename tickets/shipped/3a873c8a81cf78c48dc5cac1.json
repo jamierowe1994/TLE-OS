@@ -1,0 +1,1 @@
+{ "id": "3a873c8a81cf78c48dc5cac1", "summary": "A long certificate such as an EICR is now read from its first pages, where the dates are, so it reads much quicker and no longer runs out of time." }
