@@ -245,7 +245,14 @@ async function applications() {
  *
  * `rexUserId`: one agent's listings, or everyone's.
  */
-export async function movedInListings(rexUserId: string | null, today = londonToday()): Promise<Map<string, { moveIn: string; source: MoveInSource }>> {
+export type MovedInLet = {
+  moveIn: string;
+  source: MoveInSource;
+  /** Who moved in: the people on the accepted let, where there is one (the listing itself names nobody until it is marked let). */
+  tenants: { contactId: string; name: string; email: string | null; phone: string | null }[];
+};
+
+export async function movedInListings(rexUserId: string | null, today = londonToday()): Promise<Map<string, MovedInLet>> {
   const [book, apps, deals, completes] = await Promise.all([
     bookFor(rexUserId).then(withTakenState),
     applications(),
@@ -256,7 +263,20 @@ export async function movedInListings(rexUserId: string | null, today = londonTo
     (l) => !isTestId(l.id) && l.listingState !== "leased" && (l.letAgreed || l.taken)
   );
   const { homes } = decideMovedIn(live, apps, deals, completes, today, 0);
-  return new Map(homes.map((h) => [h.listingId, { moveIn: h.moveIn, source: h.source }]));
+  /* The tenants, from the accepted let on the listing (12 South Chesters Lane, 11 Nov 2026: on
+     Portfolio the same afternoon, and reading "Empty" with its tenant two days in). The newest
+     accepted application that has not closed as anything but Moved In, as decideMovedIn reads them. */
+  const peopleOf = (listingId: string): MovedInLet["tenants"] => {
+    const mine = (apps?.applications ?? [])
+      .filter((a) => String(a.listingId ?? "") === listingId && (a.status === "accepted" || a.osDecision?.decision === "accepted") && a.status !== "unsuccessful")
+      .filter((a) => { const closed = apps?.closed.get(a.id); return !closed || closed === "Moved in"; })
+      .sort((a, b) => String(b.startDate ?? b.dateAccepted ?? "").localeCompare(String(a.startDate ?? a.dateAccepted ?? "")));
+    const a = mine[0];
+    return (a?.applicants ?? [])
+      .filter((x) => x.name.trim())
+      .map((x, i) => ({ contactId: x.contactId ? String(x.contactId) : `app:${a!.id}:${i}`, name: x.name.trim(), email: x.email ?? null, phone: x.phone ?? null }));
+  };
+  return new Map(homes.map((h) => [h.listingId, { moveIn: h.moveIn, source: h.source, tenants: peopleOf(h.listingId) }]));
 }
 
 export interface MovedInRow extends MovedInHome {

@@ -567,7 +567,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      listing whose let has moved in (lib/listings-moved-in: the accepted let's
      start date, or Propoly's move-in) is read here as the let home it is,
      let since the day the tenant went in. Read only; never fails the book. */
-  const movedInOn = new Map<string, string>();
+  const movedInOn = new Map<string, { at: string; tenants: Party[] }>();
   try {
     const { movedInListings } = await import("@/lib/listings-moved-in");
     const movedIn = await movedInListings(rexUserId ?? null);
@@ -586,11 +586,11 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       if (!res.ok) break;
       for (const r of rexRows(res.result) as Row[]) {
         const id = String(r.id ?? "");
-        const at = movedIn.get(id)?.moveIn;
-        if (!at || have.has(id)) continue;
+        const hit = movedIn.get(id);
+        if (!hit || have.has(id)) continue;
         have.add(id);
         rows.push(r);
-        movedInOn.set(id, at);
+        movedInOn.set(id, { at: hit.moveIn, tenants: hit.tenants });
       }
     }
   } catch {
@@ -614,10 +614,11 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      its page's address and everything saved against it are left alone. Each
      is let since the day the tenant went in - a live listing has no let date. */
   for (const p of read) {
-    const at = movedInOn.get(String(p.listingId));
-    if (!at || !p.propertyId || pmRexIds?.has(p.propertyId)) continue;
+    const moved = movedInOn.get(String(p.listingId));
+    if (!moved || !p.propertyId || pmRexIds?.has(p.propertyId)) continue;
     if (pm?.some((h) => sameHome(h.address, p.address || p.name))) continue;
-    lets.push({ ...p, letSince: at });
+    /* A live listing names no tenant: the people on its accepted let are who moved in. */
+    lets.push({ ...p, letSince: moved.at, tenants: p.tenants.length ? p.tenants : moved.tenants });
   }
   /* Intro only is never ours to look after (lib/intro-only, 16 Oct 2026). */
   const intro = await introOnlyIds().catch(() => new Set<string>());
