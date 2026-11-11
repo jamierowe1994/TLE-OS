@@ -83,6 +83,13 @@ export type LetPeople = {
    * home's id, or "listing:<id>" / "let:<ref>" where there is no home to name.
    */
   homeKey: string;
+  /**
+   * The managed home's own page (/portfolio/<this>), when the home is in the
+   * managed book; null when it is not managed by us or cannot be matched
+   * (Sean McMahon, ticket 4171e58c, 11 Nov 2026: "click through to the
+   * listing and management pages").
+   */
+  homePage: string | null;
 };
 
 export type Household = { tenants: LetPerson[]; by: string; at: string };
@@ -130,9 +137,11 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
     const coOwners = swapLandlord ? [] : mains.slice(1).map((l) => landlordParty(l, false));
     const deal = await dealForLet({ ref, app, propertyName: app.property, locality: app.locality, listingId }).catch(() => null);
     const homeKey = await homeKeyFor({ ref, listingId, rexPropertyId: app.swap?.rexPropertyId ?? null, property: app.property, locality: app.locality });
+    const homePage = await homePageFor({ homeKey, listingId, property: app.property, locality: app.locality });
     const base: Omit<LetPeople, "people" | "deal" | "household"> = {
       ref,
       homeKey,
+      homePage,
       kind: "application",
       property: app.property,
       locality: app.locality,
@@ -183,9 +192,11 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
   const landlord: Landlord | null = listed ?? (fromDeal[0] ? { contactId: null, name: fromDeal[0].name ?? "", email: fromDeal[0].email, phone: fromDeal[0].phone } : null);
   const deal = await dealForLet({ ref, app: null, propertyName: d.app.propertyName, locality: d.app.locality, listingId }).catch(() => null);
   const homeKey = await homeKeyFor({ ref, listingId, rexPropertyId: null, property: d.app.propertyName, locality: d.app.locality });
+  const homePage = await homePageFor({ homeKey, listingId, property: d.app.propertyName, locality: d.app.locality });
   const base: Omit<LetPeople, "people" | "deal" | "household"> = {
     ref,
     homeKey,
+    homePage,
     kind: "deal",
     property: d.app.propertyName,
     locality: d.app.locality,
@@ -280,6 +291,24 @@ async function homeKeyFor(h: { ref: string; listingId: string | null; rexPropert
   const hit = book.find((p) => !p.test && sameHome(here, [p.name, p.locality].filter(Boolean).join(", ")));
   if (hit?.propertyId) return hit.propertyId;
   return h.listingId ? `listing:${h.listingId}` : `let:${h.ref}`;
+}
+
+/**
+ * The managed home's page for a let: the managed book's home on the same REX
+ * property, the same listing, or the same door. Rooms in a house each have
+ * their own page, so the listing and the door are asked before the property.
+ * A home we do not manage has no page here, and the let says nothing.
+ */
+async function homePageFor(h: { homeKey: string; listingId: string | null; property: string; locality: string }): Promise<string | null> {
+  if (h.listingId && isTestId(h.listingId)) return null;
+  const book = await managedBookFor(null).then((b) => b.book.properties).catch(() => []);
+  const homes = book.filter((p) => !p.test);
+  const here = `${h.property}, ${h.locality}`;
+  const hit =
+    (h.listingId ? homes.find((p) => String(p.listingId) === h.listingId) : undefined) ??
+    homes.find((p) => sameHome(here, [p.name, p.locality].filter(Boolean).join(", "))) ??
+    homes.find((p) => p.propertyId && String(p.propertyId) === h.homeKey);
+  return hit?.listingId != null ? String(hit.listingId) : null;
 }
 
 type DealLandlord = { uuid: string | null; name: string | null; email: string | null; phone: string | null };

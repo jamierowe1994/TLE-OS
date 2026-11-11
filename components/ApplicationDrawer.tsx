@@ -19,6 +19,7 @@ import { Pill } from "@/components/Wire";
 import { type SpineStop } from "@/components/StageSpine";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import ContactBlock from "@/components/ContactBlock";
+import LetContacts from "@/components/LetContacts";
 import RightToRentField, { suggestedFor, type RtrShown, type RtrSuggested } from "@/components/RightToRentField";
 import Guarantors from "@/components/Guarantors";
 import PeopleDeck from "@/components/new-look/PeopleDeck";
@@ -413,7 +414,7 @@ type LetLandlord = { name: string; email: string | null; phone: string | null; c
    same as "no landlord": 12 South Chesters Lane's page and Steve both said
    there was none, and asked Lianna to add one, when the read had been
    refused - her landlord was on the listing all along. */
-type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string; household?: Household | null; failed?: string };
+type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string; homePage?: string | null; household?: Household | null; failed?: string };
 type Cancellation = { reason: string; note: string; by: string; at: string };
 type LetDetails = { canEdit: boolean; dealId: string | null; edits: Partial<Record<LetField, LetEditNow>>; history: LetEditEvent[] };
 
@@ -598,6 +599,8 @@ export default function ApplicationDrawer({
   /* Who is on the let, as the server holds it (lib/let-people), and whether
      it was cancelled - for the drawers, the email builder and Cancel deal. */
   const [info, setInfo] = useState<LetInfo | null>(null);
+  /* Everyone on the let, Call / WhatsApp / Email, from the top (Sean McMahon, ticket 4171e58c). */
+  const [contactsOpen, setContactsOpen] = useState(false);
   /* What the market appraisal behind the home learned, on the let too (James, 10 Nov 2026). */
   const letAppraisal = useListingAppraisal(info?.listingId ?? null);
   const [cancelled, setCancelled] = useState<Cancellation | null>(null);
@@ -1293,6 +1296,12 @@ export default function ApplicationDrawer({
                           Open the listing →
                         </Link>
                       )}
+                      {/* The managed home's own page too (Sean McMahon, ticket 4171e58c). */}
+                      {info.homePage && (
+                        <Link href={`/portfolio/${encodeURIComponent(info.homePage)}`} className="inline-flex text-[12.5px] font-semibold text-accent-dark hover:underline">
+                          Open the home&apos;s page →
+                        </Link>
+                      )}
                     </>
                   ) : info.failed ? (
                     <div className="rounded-xl bg-[#f6f1ea] px-4 py-3 text-[12.5px] text-muted">
@@ -1681,6 +1690,9 @@ export default function ApplicationDrawer({
       return x ? { ...p, name: x.name, email: x.email, phone: x.phone } : p;
     };
     const leadShown = lead ? shownPerson(lead) : lead;
+    /* The listing and the managed home's page, said at the top, not only in the ... menu (ticket 4171e58c). */
+    const listingHref = photoListing && Number(photoListing) > 0 ? `/listings/${encodeURIComponent(String(photoListing))}` : null;
+    const homeHref = info?.homePage ? `/portfolio/${encodeURIComponent(info.homePage)}` : null;
 
     return (
       <SaveScopeProvider scope={saves}>
@@ -1700,6 +1712,18 @@ export default function ApplicationDrawer({
               }}
             />
           )}
+          <LetContacts
+            open={contactsOpen}
+            onClose={() => setContactsOpen(false)}
+            address={[name, locality].filter(Boolean).join(", ")}
+            tenants={people.map((p, i) => {
+              const s = shownPerson(p);
+              return { key: `t-${p.contactId ?? ""}-${i}`, name: s.name, email: s.email ?? null, phone: s.phone ?? null, role: p.isPrimary ? "Lead applicant" : "Applicant" };
+            })}
+            landlords={landlordsAll.map((p, i) => ({ key: `l-${p.key ?? i}`, name: p.name, email: p.email ?? null, phone: p.phone ?? null, role: "Landlord" }))}
+            listingHref={listingHref}
+            homeHref={homeHref}
+          />
           {plcOpen && (app || deal) && (
             <PlcOverlay
               applicationId={app?.id ?? deal!.app.id}
@@ -1748,8 +1772,17 @@ export default function ApplicationDrawer({
                   .filter(Boolean)
                   .join(" · ")}
               </p>
+              {(listingHref || homeHref) && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px]" data-let-links>
+                  {listingHref && <Link href={listingHref} className="nl-link">Open the Listing</Link>}
+                  {homeHref && <Link href={homeHref} className="nl-link">Open the Home&apos;s Page</Link>}
+                </p>
+              )}
             </div>
             <div className="nl-rhead-acts">
+              <button type="button" className="nl-btn nl-btn--secondary" onClick={() => setContactsOpen(true)}>
+                <Ico name="phone" /> Get in Touch
+              </button>
               {!cancelled && (
                 <button type="button" className="nl-btn nl-btn--secondary" onClick={() => setBuilder({ mode: "update" })}>
                   <Ico name="mail" /> Customer update
