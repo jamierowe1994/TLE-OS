@@ -23,6 +23,7 @@ export default function AccessNow({
   tenant,
   viewing,
   onClose,
+  onFinish,
 }: {
   listingId: string;
   propertyId: string | null;
@@ -31,6 +32,8 @@ export default function AccessNow({
   tenant: { name: string; email: string; phone: string } | null;
   viewing: SheetViewing;
   onClose: () => void;
+  /** The booker's way out: Finish Booking at the foot of the sheet. */
+  onFinish?: () => void;
 }) {
   const accessKey = accessKeyFor({ listingId, propertyId });
   const [access, setAccess, status] = useCaseState<Access>("access", accessKey, NO_ACCESS);
@@ -78,6 +81,7 @@ export default function AccessNow({
       propertyId={propertyId ?? null}
       listingId={listingId ?? null}
       onClose={onClose}
+      finish={onFinish ? { label: "Finish Booking", run: onFinish } : undefined}
     />
   );
 }
