@@ -290,6 +290,10 @@ function ClassicViewingBooker({
   const [landlordBusy, setLandlordBusy] = useState(false);
   const [landlordSaid, setLandlordSaid] = useState<string | null>(null);
   const [accessOpen, setAccessOpen] = useState(false);
+  /* The access sheet has been opened and put away: the booking is finished,
+     so the last step says so and offers Done (Dan Richards, 11 Nov 2026,
+     ticket cf902b56: "goes nowhere beyond this point"). */
+  const [accessDone, setAccessDone] = useState(false);
 
   // Reset on OPEN only. The caller builds `properties` inline, so depending on
   // it here would throw the chosen day and time away on any parent re-render.
@@ -346,6 +350,7 @@ function ClassicViewingBooker({
     setLandlordSaid(null);
     setLandlordBusy(false);
     setAccessOpen(false);
+    setAccessDone(false);
     setPropertyId(firstId ?? seed.current[0]?.id ?? "");
     setFilters(NO_FILTERS);
     setWeek(0);
@@ -1242,7 +1247,7 @@ function ClassicViewingBooker({
                 : stage === "landlord"
                   ? "Tell the Landlord as Well?"
                   : stage === "access"
-                    ? "Confirm Access Now?"
+                    ? accessDone ? "All Booked" : "Confirm Access Now?"
                     : stage === "when" && editing
                       ? "Change the Time"
                       : stage === "done"
@@ -1867,7 +1872,20 @@ function ClassicViewingBooker({
 
           {/* ══ 5. ACCESS (viewings) ══
               Straight into the listing's own access sheet, for this viewing. */}
-          {flow && stage === "access" && (
+          {flow && stage === "access" && accessDone && (
+            <div className="relative mx-auto flex max-w-lg flex-col items-center py-10 text-center">
+              <DoneTick />
+              <p className="hand mt-5 text-[22px] leading-tight">The Viewing Is Booked</p>
+              <p className="mt-2 text-[12.5px]">{property?.name}</p>
+              <p className="mt-1 text-[12.5px] text-muted">{whenPretty}</p>
+              <p className="mt-4 max-w-md text-[12.5px] leading-relaxed text-muted">
+                It is in the diary and on the record. How we get in is kept on the listing, so you can check it again from there or from the diary.
+              </p>
+              {landlordSaid && <p className="mt-2 text-[12px] text-muted">{landlordSaid}</p>}
+              {addAnother}
+            </div>
+          )}
+          {flow && stage === "access" && !accessDone && (
             <div className="mx-auto flex max-w-lg flex-col items-center py-10 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
                 <DoodleIcon name="key" size={24} />
@@ -2125,6 +2143,19 @@ function ClassicViewingBooker({
                   </>
                 );
               })()
+            ) : flow && stage === "access" && accessDone ? (
+              <>
+                {result?.viewingId && property?.id ? (
+                  <button type="button" onClick={() => setAccessOpen(true)} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40">
+                    Check Access Again
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <PressButton onClick={onClose} className="press-ring shrink-0 rounded-full bg-ink px-6 py-2.5 text-[13px] font-semibold text-page">
+                  Done
+                </PressButton>
+              </>
             ) : flow && stage === "access" ? (
               <>
                 <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40">
@@ -2176,7 +2207,14 @@ function ClassicViewingBooker({
             feedbackId: null,
             contacts: chosen ? [{ id: leadId ?? chosen.email, name: chosen.name, email: chosen.email || null, phone: chosen.phone || null, leadId }] : [],
           }}
-          onClose={() => setAccessOpen(false)}
+          onClose={() => {
+            setAccessOpen(false);
+            setAccessDone(true);
+          }}
+          onFinish={() => {
+            setAccessOpen(false);
+            setAccessDone(true);
+          }}
         />
       )}
     </div>,

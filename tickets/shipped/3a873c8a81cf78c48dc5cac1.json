@@ -1,1 +1,1 @@
-{ "id": "3a873c8a81cf78c48dc5cac1", "summary": "Reading a certificate no longer hangs until it fails: a long EICR is read from its first pages, and if the reader is still slow it says so in plain words so you can type the dates in and file it." }
+{ "id": "3a873c8a81cf78c48dc5cac1", "summary": "A long certificate such as an EICR is now read from its first pages, where the dates are, so it reads much quicker and no longer runs out of time." }

@@ -63,7 +63,7 @@ export type CertificateRead = {
 /* Every date the reader wants is on the first pages: the EICR's summary and
    next inspection, the CP12, the EPC's front, a licence's opening page. A
    long EICR's schedules of circuits and test results come after, and reading
-   all of them is the likeliest reason a phone waited past Cloudflare's 100 seconds
+   all of them is the likeliest reason a phone waited past the time limit
    (11 Nov 2026, Chris Gurney, ticket 3a873c8a). The file filed is untouched. */
 const READ_PAGES = 6;
 
@@ -85,7 +85,7 @@ export async function readCertificate(
   bytes: Buffer,
   media: string,
   expect: string,
-  opts: { within?: number } = {}
+  signal?: AbortSignal
 ): Promise<{ read: CertificateRead; tokens: { in: number; out: number } }> {
   const block: Anthropic.ContentBlockParam =
     media === "application/pdf"
@@ -103,7 +103,7 @@ export async function readCertificate(
         content: [block, { type: "text", text: `${expect ? `This file was filed as: ${expect}. ` : ""}Read the document and report.` }],
       },
     ],
-  }, { within: opts.within });
+  }, { signal });
   const call = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_certificate");
   const r = (call?.input ?? {}) as Record<string, unknown>;
   /* A worked-out "2025-02-29" comes back as the 28th, never as a date the

@@ -69,6 +69,7 @@ export default function ViewingSheet({
   propertyId,
   listingId,
   onClose,
+  finish,
 }: {
   viewing: SheetViewing;
   address: string;
@@ -89,6 +90,10 @@ export default function ViewingSheet({
   propertyId?: string | null;
   listingId?: string | null;
   onClose: () => void;
+  /** Given, a button at the foot of the sheet that ends the job it was opened
+      for. The booker's access step had no way on from here (Dan Richards,
+      11 Nov 2026, ticket cf902b56). */
+  finish?: { label: string; run: () => void };
 }) {
   /* Read from the home's key register (/api/property/keys, which keeps who may
      see them to the agent and the office). Null while reading or not allowed. */
@@ -359,6 +364,14 @@ export default function ViewingSheet({
             </ul>
           )}
         </section>
+
+        {finish && (
+          <div className="flex justify-end border-t border-line/60 pt-4">
+            <button type="button" onClick={finish.run} className="rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90">
+              {finish.label}
+            </button>
+          </div>
+        )}
       </div>
 
       {setting && (

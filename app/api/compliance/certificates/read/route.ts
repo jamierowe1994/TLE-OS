@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { publicError } from "@/lib/public-error";
 import { readCertificate } from "@/lib/cert-read";
 import { whoIs } from "@/lib/admin";
@@ -29,13 +28,15 @@ export const maxDuration = 60;
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 
-/* Cloudflare gives up on us at 100 seconds and shows a 524, which the screen
-   can only call "something broke" (11 Nov 2026, Chris Gurney, ticket 3a873c8a:
-   an EICR, twice). The reader stops well before, so the answer is always ours. */
-const READ_WITHIN_MS = 70_000;
+/* How long the read may take before it is stopped (11 Nov 2026, Chris Gurney,
+   ticket 860e34f2: an EICR on a listing). The call to the model had no limit,
+   so a slow read ran past Cloudflare's 100 seconds and the phone got a bare
+   524 - "Something broke on our side" - instead of this route's own sentence
+   saying the dates can be typed in and the certificate filed anyway. Stopped
+   here, well inside that cut, it answers in words. */
+const READ_LIMIT_MS = 75_000;
 
 export async function POST(req: NextRequest) {
-  const started = Date.now();
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ ok: false, error: "No reader key on this environment." }, { status: 503 });
@@ -69,11 +70,13 @@ export async function POST(req: NextRequest) {
     readAs = small.media;
   }
 
+  const limit = AbortSignal.timeout(READ_LIMIT_MS);
   try {
-    return NextResponse.json({ ok: true, ...(await readCertificate(toRead, readAs, expect, { within: Math.max(15_000, READ_WITHIN_MS - (Date.now() - started)) })) });
+    return NextResponse.json({ ok: true, ...(await readCertificate(toRead, readAs, expect, limit)) });
   } catch (e) {
-    if (e instanceof Error && e.cause instanceof Anthropic.APIConnectionTimeoutError) {
-      return NextResponse.json({ ok: false, error: `${name} took too long to read. It can still be filed as it is: type the dates in below.` }, { status: 500 });
+    if (limit.aborted) {
+      console.error(`[cert-read] stopped after ${READ_LIMIT_MS / 1000}s:`, size, media);
+      return NextResponse.json({ ok: false, error: `The reader took too long with ${name}, so it was stopped. It can still be filed: type the dates in below.` }, { status: 504 });
     }
     /* Not 502: Cloudflare swaps an origin 502 for its own error page, and
        the reason (the backlog run, 6 Sep: "Your credit balance is too low")
