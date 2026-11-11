@@ -94,8 +94,6 @@ export const BACK: NavItem[] = [
          booked in when, and what we owe them. It was a corner of Maintenance
          nothing linked to. */
       { href: "/contractors", label: "Contractors" },
-      /* Homes let, written up for the website (James, 11 Nov 2026). */
-      { href: "/case-studies", label: "Case Studies" },
       /* Inspections, Tenancy Reviews and Move-outs came off here on 21 Oct
          2026 - James: "Under Portfolio, we should be able to get rid of a
          bunch of these different tabs ... we're just hiding it within the
@@ -332,7 +330,10 @@ export type AgentRoute = (typeof AGENT_ROUTES)[number];
  * assistant still needs to know them, so they stay in AGENT_ROUTES, and the
  * rail check below counts them as accounted for rather than missing.
  */
-export const OFF_RAIL: readonly AgentRoute[] = ["/inspections", "/tenancy-reviews", "/move-outs"];
+/* Case studies live under Settings > Your page since 11 Nov 2026 (James:
+   "it's not a maintenance or portfolio problem"); the list is still its own
+   address, /case-studies, for links and Steve. */
+export const OFF_RAIL: readonly AgentRoute[] = ["/inspections", "/tenancy-reviews", "/move-outs", "/case-studies"];
 
 /**
  * The rail and the route union describe the same thing twice, which is exactly

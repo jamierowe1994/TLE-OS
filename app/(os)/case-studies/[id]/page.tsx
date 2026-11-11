@@ -180,7 +180,7 @@ export default function CaseStudyStudio() {
     setBusy(null);
     if (!r?.ok) return toast("It couldn't be removed. Try again.", "bad");
     toast("Case study removed.");
-    router.push("/case-studies");
+    router.push("/profile?tab=page");
   };
 
   /* Change photo: the chosen photo takes this spot and the one there moves to where it was. */
@@ -230,7 +230,7 @@ export default function CaseStudyStudio() {
     return (
       <div data-look="new" className="nl-page py-16">
         <p className="nl-blurb">{loadError}</p>
-        <Link href="/case-studies" className="nl-btn nl-btn--secondary mt-6">Back to case studies</Link>
+        <Link href="/profile?tab=page" className="nl-btn nl-btn--secondary mt-6">Back to Your page</Link>
       </div>
     );
   }
@@ -251,7 +251,7 @@ export default function CaseStudyStudio() {
     <div data-look="new" className="cs-studio">
       <div className="cs-bar">
         <div className="cs-bar-left">
-          <Link href="/case-studies" className="cs-back" aria-label="Back to case studies" />
+          <Link href="/profile?tab=page" className="cs-back" aria-label="Back to Your page" />
           <div className="cs-bar-title">
             <b>{form.title || "Untitled case study"}</b>
             <span className="cs-bar-meta">

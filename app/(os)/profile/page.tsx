@@ -1,5 +1,6 @@
 "use client";
 
+import CaseStudyList from "@/components/case-studies/CaseStudyList";
 import { useCallback, useEffect, useRef, useState } from "react";
 import EmailFooterSetup from "@/components/EmailFooterSetup";
 import PersonalCalendar from "@/components/PersonalCalendar";
@@ -52,7 +53,7 @@ const SET_GROUPS: { title: string; items: { key: TabKey; label: string; sub: str
     items: [
       { key: "info", label: "Profile", sub: "Your name, number, photo and how landlords see you" },
       { key: "appearance", label: "Appearance", sub: "Light or dark, and the colour of your navigation bar" },
-      { key: "page", label: "Your page", sub: "Your own page on the new website, if you want one" },
+      { key: "page", label: "Your page", sub: "Your own page on the new website, and your case studies" },
     ],
   },
   {
@@ -586,7 +587,16 @@ export default function ProfilePage() {
                 <li><b>Reviews</b><span>What your landlords and tenants have said</span></li>
                 <li><b>How it looks</b><span>A choice of layouts and colours from the house palette</span></li>
               </ul>
-              <p className="nl-meta">Nothing to do yet. When the website goes live, the controls will appear here.</p>
+              {/* Case studies (James, 11 Nov 2026): moved here from under
+                  Portfolio - they are part of your page, not of a home. */}
+              <section className="nl-set-cases" aria-labelledby="set-cases-h">
+                <div className="nl-set-cases-head">
+                  <h3 id="set-cases-h">Case Studies</h3>
+                  <p className="nl-meta">Homes you have let, written up for the website. They show on your page and on the case studies page. To start one, open a let home and choose Use as a case study from its three-dot menu.</p>
+                </div>
+                <CaseStudyList />
+              </section>
+              <p className="nl-meta">The rest of these controls appear here when the website goes live.</p>
             </div>
           )}
           {tab === "info" && (

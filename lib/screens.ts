@@ -109,7 +109,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   "/case-studies": {
     purpose: "Homes you have let, written up as case studies for the website: the photos, how it was advertised, how it went and your own notes.",
     does: [
-      "List your case studies, drafts and ones on the website. The office sees every agent's.",
+      "List your case studies, drafts and ones on the website, under Settings > Your page (also at /case-studies). The office sees every agent's.",
       "Start one from a let home: open it on Portfolio, or a let listing, and choose Use as a case study from the three-dot menu. It starts from the advert and the photos.",
       "Open one and it shows as the real website page. In Edit, click any words on the page to change them (title, write-up, story, advert, your notes), press Change photo on any photo to swap it, upload one or remove one, and set each fact and the advert section to Shown or Hidden. Preview shows it exactly as it will go out, on a computer or a phone. It saves as you go.",
       "Put it on the website: it shows on the case studies page and on your own page there. Take it off again, copy its link, or remove it.",

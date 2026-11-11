@@ -94,3 +94,8 @@
 }
 [data-look="new"] .cs-frame-failed { flex-direction: column; text-align: center; padding: 24px; }
 [data-look="new"] .cs-frame-failed p { margin: 0; max-width: 30em; color: var(--ink); }
+/* On Settings > Your page. */
+[data-look="new"] .nl-set-cases { display: flex; flex-direction: column; gap: 14px; margin: 8px 0 20px; padding-top: 24px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-set-cases-head h3 { margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: 20px; line-height: 26px; }
+[data-look="new"] .nl-set-cases-head .nl-meta { margin: 6px 0 0; max-width: 44em; font-size: 13px; line-height: 20px; }
+[data-look="new"] .nl-set-cases .cs-grid { margin-top: 0; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
