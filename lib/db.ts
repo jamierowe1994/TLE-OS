@@ -5075,6 +5075,40 @@ CREATE TABLE IF NOT EXISTS os_portfolio_book_daily (
   taken_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Case studies (James, 11 Nov 2026, from Richard): a home an agent has let,
+-- written up from its listing and published on the website (/case-studies and
+-- the agent's own page). One per listing. Started from REX's photos and
+-- advert, then the agent's own: photo order, wording, notes. Nothing here is
+-- written back to REX. status is draft or published; a removed one keeps its
+-- row with removed_at so its link can say it has gone.
+CREATE TABLE IF NOT EXISTS os_case_studies (
+  id            TEXT PRIMARY KEY,
+  slug          TEXT NOT NULL UNIQUE,
+  listing_id    TEXT NOT NULL,
+  property_id   TEXT,
+  agent_rex_id  TEXT,
+  agent_name    TEXT NOT NULL DEFAULT '',
+  status        TEXT NOT NULL DEFAULT 'draft',
+  title         TEXT NOT NULL DEFAULT '',
+  area          TEXT NOT NULL DEFAULT '',
+  intro         TEXT NOT NULL DEFAULT '',
+  headline      TEXT NOT NULL DEFAULT '',
+  advert        TEXT NOT NULL DEFAULT '',
+  story         TEXT NOT NULL DEFAULT '',
+  notes         TEXT NOT NULL DEFAULT '',
+  photos        JSONB NOT NULL DEFAULT '[]',
+  facts         JSONB NOT NULL DEFAULT '{}',
+  show_rent     BOOLEAN NOT NULL DEFAULT TRUE,
+  show_days     BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by    TEXT NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  published_at  TIMESTAMPTZ,
+  removed_at    TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS os_case_studies_listing ON os_case_studies (listing_id) WHERE removed_at IS NULL;
+CREATE INDEX IF NOT EXISTS os_case_studies_agent ON os_case_studies (agent_rex_id);
+
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

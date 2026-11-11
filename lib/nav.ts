@@ -94,6 +94,8 @@ export const BACK: NavItem[] = [
          booked in when, and what we owe them. It was a corner of Maintenance
          nothing linked to. */
       { href: "/contractors", label: "Contractors" },
+      /* Homes let, written up for the website (James, 11 Nov 2026). */
+      { href: "/case-studies", label: "Case Studies" },
       /* Inspections, Tenancy Reviews and Move-outs came off here on 21 Oct
          2026 - James: "Under Portfolio, we should be able to get rid of a
          bunch of these different tabs ... we're just hiding it within the
@@ -311,6 +313,7 @@ export const AGENT_ROUTES = [
   "/compliance",
   "/maintenance",
   "/contractors",
+  "/case-studies",
   "/inspections",
   "/tenancy-reviews",
   "/move-outs",

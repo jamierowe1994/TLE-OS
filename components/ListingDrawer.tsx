@@ -1,4 +1,5 @@
 "use client";
+import { startCaseStudy } from "@/lib/case-study-start";
 import OsAddressLine from "@/components/OsAddressLine";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -3006,6 +3007,7 @@ function ListingDrawerBody({
                 ...(canFileAway ? [{ label: archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away", disabled: archiveBusy, onClick: () => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive") }] : []),
                 ...(mainIs === "push" ? [{ label: "Live without Portals", onClick: () => (publishCanPress ? (setQuietNote(null), setQuietAsk(true)) : setPortalNote(lockedSentence(publishArea, publishLevel))) }] : []),
                 ...(letShown ? [{ label: letTick?.letAgreed ? "Back to available" : "Mark as Let Agreed", onClick: askLet }] : []),
+                ...((listing.letAgreed || withdrawnHere) && Number(listing.id) > 0 ? [{ label: "Use as a case study", onClick: () => void startCaseStudy(listing.id, (h) => { window.location.href = h; }) }] : []),
                 ...(isLive && pub && !publishHidden && pub.onPortals ? [{ label: "Take off the market", danger: true, onClick: () => (publishCanPress ? setPortalConfirm(true) : setPortalNote(lockedSentence(publishArea, publishLevel))) }] : []),
               ]}
             />

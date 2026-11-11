@@ -4,6 +4,7 @@ import OsAddressLine from "@/components/OsAddressLine";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { startCaseStudy } from "@/lib/case-study-start";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PhotoLightbox from "@/components/PhotoLightbox";
@@ -1069,6 +1070,9 @@ export default function PropertyPage() {
         : comingIn
           ? { label: "New tenants on the way", sub: `${comingNames}, ${comingWhen}`, href: comingIn.href }
           : { label: "Change the tenants", sub: tenants.length ? "Add someone, swap a sharer or re-reference" : "No tenants on this home yet", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "swap" }) },
+      /* Case studies (James, 11 Nov 2026, from Richard): this home's advert and
+         photos, written up for the website. */
+      ...(!p.test && p.onRex !== false && p.listingId ? [{ label: "Use as a case study", sub: "A page for the website from its photos and advert", onClick: () => void startCaseStudy(p.listingId, (h) => router.push(h)) }] : []),
       /* James, 8 Nov 2026: the emails and logins moved under the Email button's
          chooser; Add a certificate / document / note went, each tab below has its own. */
       ...(everything && !p.test && p.onRex !== false ? ["rule" as const, { label: "Open the record behind this home", href: rexListingUrl(p.listingId, "leased") }] : []),

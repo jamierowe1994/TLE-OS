@@ -106,6 +106,20 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
   },
 
+  "/case-studies": {
+    purpose: "Homes you have let, written up as case studies for the website: the photos, how it was advertised, how it went and your own notes.",
+    does: [
+      "List your case studies, drafts and ones on the website. The office sees every agent's.",
+      "Start one from a let home: open it on Portfolio, or a let listing, and choose Use as a case study from the three-dot menu. It starts from the advert and the photos.",
+      "Open one to put the photos in order, make one the cover, remove some or add your own, and edit the title, a short write-up, the story, the advert and your notes. It saves as you go.",
+      "Put it on the website: it shows on the case studies page and on your own page there. Take it off again, copy its link, or remove it.",
+    ],
+    wiring: "live",
+    caveats: [
+      "The title shows the street and town, never the house number. Keep landlords and tenants unnamed.",
+      "Nothing is written back to the listing: the case study is its own copy.",
+    ],
+  },
   "/contractors": {
     purpose: "Everyone you can send on a job: who is out today, who is booked in when, and what we owe them.",
     does: [
