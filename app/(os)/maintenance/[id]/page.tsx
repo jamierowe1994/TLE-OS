@@ -22,6 +22,7 @@ import { StagePanel, StageTracker, currentStage, stagesOf } from "@/components/m
 import { TABS, daysFrom, engineerFacts, jobFiles, tel, titleCase, type Pop, type TabId, type Tile } from "@/components/maintenance/job-page";
 import JobPageNew, { JobFailedNew, JobLoadingNew } from "@/components/new-look/maintenance/JobPageNew";
 import { useNewLook } from "@/lib/use-new-look";
+import JobMessage from "@/components/maintenance/JobMessage";
 
 /**
  * One job, the whole of it, on one page.
@@ -71,7 +72,7 @@ const quiet = "rounded-full border border-line/80 bg-white px-3 py-1 text-[11.5p
 const GROUPS: { id: string; title: string; blurb: string; icon: string; keys: string[] }[] = [
   { id: "contractor", title: "Quotes and Contractor", blurb: "Prices, who does it, and the works order.", icon: "setting", keys: ["request_quote", "quote", "approve", "pick", "confirm", "resend"] },
   { id: "schedule", title: "Scheduling", blurb: "The landlord, the date and the visit.", icon: "calendar", keys: ["tell", "arranging", "date", "done", "happy"] },
-  { id: "talk", title: "Communication", blurb: "Ring or email the contractor or tenants.", icon: "message", keys: ["trade", "tenant", "note"] },
+  { id: "talk", title: "Communication", blurb: "Message the landlord and tenants, or ring the contractor.", icon: "message", keys: ["message", "trade", "tenant", "note"] },
   { id: "money", title: "Files and Billing", blurb: "Certificates, invoices and payment.", icon: "doc", keys: ["file", "cert", "payee", "invoice", "landlord_says", "raise", "payrun", "paid"] },
   { id: "edit", title: "Edit Details", blurb: "Change the job, or close it.", icon: "pencil", keys: ["edit", "cancel", "reopen"] },
 ];
@@ -116,6 +117,8 @@ export default function WorksOrderPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [popUp, setPop] = useState<Pop | null>(null);
+  /* One message to the landlord and the tenants (Sean McMahon, ticket 055aeda4). */
+  const [messaging, setMessaging] = useState(false);
   const [picked, setPicked] = useState<StepId | null>(null);
   const [lightbox, setLightbox] = useState<{ photos: string[]; start: number } | null>(null);
   const [tab, setTab] = useState<TabId>("updates");
@@ -343,6 +346,7 @@ export default function WorksOrderPage() {
       run: () => void move({ action: payrunAt ? "payrun_undo" : "payrun" } as Move, PAYRUN_LABEL),
     }] : []),
     { key: "paid", label: "Mark It Paid", what: o.paidAt ? `Paid ${day(o.paidAt)}` : "How it was settled", icon: "coin", off: o.status === "paid" ? "Already paid" : o.status === "cancelled" ? "The job is cancelled" : o.invoicePence == null ? "Log the invoice first" : undefined, done: o.status === "paid", run: () => openPop({ kind: "form", form: "paid" }) },
+    { key: "message", label: "Message the Landlord or Tenants", what: "One email, a copy each, noted on the job", icon: "mail", run: () => setMessaging(true) },
     { key: "note", label: "Add a Note", what: "A call, an email, a query", icon: "note", run: () => openPop({ kind: "form", form: "note" }) },
     { key: "file", label: "Add a File or Photo", what: "On the job and the home", icon: "camera", off: busy ? "Uploading…" : undefined, run: () => fileRef.current?.click() },
     { key: "tenant", label: tenants.length > 1 ? "Ring or Email the Tenants" : "Ring or Email the Tenant", what: tenants.length ? tenants.map((t) => t.name || "Unnamed").join(", ") : "None on the job", icon: "call", off: tenants.length ? undefined : "No tenant on the job", run: () => openPop({ kind: "people", who: "tenant" }) },
@@ -375,8 +379,14 @@ export default function WorksOrderPage() {
   const arrangedBy = o.arranging === "us" ? "Us" : o.arranging === "landlord" ? "The landlord" : "Not decided";
   const dueIn = o.dueAt && open ? daysFrom(o.dueAt) : null;
 
+  const messageWindow = (
+    <JobMessage jobId={o.id} jobTitle={`#${o.ref} ${o.title} - ${o.propertyName}`} open={messaging} onClose={() => setMessaging(false)} onSent={load} />
+  );
+
   if (look) {
     return (
+      <>
+      {messageWindow}
       <JobPageNew
         o={o}
         events={events}
@@ -428,12 +438,14 @@ export default function WorksOrderPage() {
         pickContractor={pickContractor}
         setJobData={(order, events) => setJob((cur) => ({ state: "ready", data: { order, events, canPayrun: cur.state === "ready" ? cur.data.canPayrun : false } }))}
       />
+      </>
     );
   }
 
   return (
     <SaveScopeProvider scope={saves}>
       <div className="space-y-5">
+        {messageWindow}
         {/* ── back, the chip, the photos and the home ───────────────────── */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="mr-auto flex min-w-0 items-center gap-3">
