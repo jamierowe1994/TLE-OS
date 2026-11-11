@@ -225,6 +225,7 @@ export default function TermsSendScreen({
   editions,
   registration = null,
   asks = false,
+  pack = false,
   preview,
   onClose,
   onSent,
@@ -236,6 +237,8 @@ export default function TermsSendScreen({
    * landlord".
    */
   asks?: boolean;
+  /** From Prepare and Send: the appraisal's landlord gets the presentation in the same email. */
+  pack?: boolean;
   /** A service just chosen on the home's page ("Managed", "Let Only", "Rent Collect"): it wins over the record's and the set being adjusted. */
   serviceWanted?: string | null;
   /** Adjust contract: the set out now, whose answers the screen starts from and which the new one replaces. */
@@ -827,6 +830,7 @@ export default function TermsSendScreen({
         people: people.map((p) => ({ name: p.name, email: p.email, phone: p.phone, address: p.homeIs === "set" ? p.home : "" })),
         replaces: from?.id ?? null,
         next: asks,
+        pack,
         prefill: pre ? { rentalPropertyNumber: rentalNo.trim() || undefined } : undefined,
         /* Gas always, and every subject sent to check anyway, filled in with what the file says. */
         askAgain: pre
@@ -1253,6 +1257,12 @@ export default function TermsSendScreen({
           <span><b>Terms of Business</b> · {people.length > 1 ? "each their own link" : "a link"} to read and sign, with your half already signed</span>
         </span>
       </div>
+      {/* From Prepare and Send (11 Nov 2026): the appraisal's landlord gets the presentation with it, never two emails. */}
+      {pack && (
+        <p className="mail-say">
+          The landlord on the appraisal gets this as one email with the presentation: their link opens their file, the presentation first, then the questions and the contract to sign.{people.length > 1 ? " Anyone else signing gets the email above." : ""}
+        </p>
+      )}
       <p className="mail-say">
         From your Outlook when it&apos;s connected, so replies come back to you; otherwise from The Letting Experts with your address to reply to.
         {people.length > 1 ? " Each person gets their own email." : ""}
@@ -1635,7 +1645,9 @@ export default function TermsSendScreen({
                 ? `Made, but nothing has gone yet. Sign and it goes straight to ${firstNames}.`
                 : from
                   ? `Change what you need and sign again. Everyone gets a fresh link, and the contract sent ${day(from.sentAt)} is withdrawn at the same moment.`
-                  : `Straight to ${firstNames}, without a presentation. ${pre ? "Four" : "Three"} steps and it's gone.`}
+                  : pack
+                    ? `To ${firstNames} with the presentation, in one email. ${pre ? "Four" : "Three"} steps and it's gone.`
+                    : `Straight to ${firstNames}, without a presentation. ${pre ? "Four" : "Three"} steps and it's gone.`}
             </p>
           </div>
           <div className="p-body">

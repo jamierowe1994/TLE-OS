@@ -59,7 +59,10 @@ function OnPagePanel({
   openNew = 0,
   quiet = false,
   reissue = null,
+  pack = false,
 }: {
+  /** From the appraisal's Prepare and Send: the presentation goes in the same email as the contract. */
+  pack?: boolean;
   /**
    * A change of service on the home's page (2 Nov 2026): each new `at` opens the send screen
    * on that service. Over terms that are out and not yet signed it adjusts them (the new set
@@ -347,6 +350,7 @@ function OnPagePanel({
           scottish={scottish}
           editions={asks && !(screen.mode === "sign") ? nextEditions : editions}
           asks={asks}
+          pack={pack}
           registration={registration}
           preview={preview}
           onClose={(changed) => {

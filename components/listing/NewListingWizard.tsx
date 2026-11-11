@@ -9,6 +9,8 @@ import { fiveWeeks, money } from "@/components/listing/listing-draft";
 import { LEAD_SOURCES } from "@/lib/leads-sample";
 import { isScottish } from "@/lib/property-flags";
 import RegNumbersInput from "@/components/listing/RegNumbersInput";
+import TermsPanel from "@/components/terms/TermsPanel";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * NEW LISTING, IN FIVE SCREENS (James, 12 Oct 2026).
@@ -49,6 +51,8 @@ const SERVICES = [
   { id: "intro_only", label: "Marketing only" },
 ] as const;
 const STEPS = ["The Home", "The Landlord", "The Let", "Check", "Terms"] as const;
+/** VAT in, to two places, as the contract words a fee (components/appraisal/AppraisalTerms). */
+const withVat = (n: number) => Math.round(n * 1.2 * 100) / 100;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const POSTCODE = /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i;
 const STAGE_WORDS: Record<string, string> = { booked: "appraisal booked", pre_appraisal: "pre-appraisal", appraisal: "appraisal", post_appraisal: "terms out", takeon: "take-on", aml: "AML", won: "won" };
@@ -102,6 +106,11 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
   const [made, setMade] = useState<Created | null>(null);
   const [parties, setParties] = useState<Party[] | null>(null);
   const [sendUnlocked, setSendUnlocked] = useState<boolean | null>(null);
+  /* The terms step sends the OS's own terms (James, 11 Nov 2026: "move them"), as the listing's
+     Compliance tab does: the questions before the contract, and the bank details on it. The older
+     contract stays only for a test file, which signs in the OS alone, and with the new terms off. */
+  const termsOnPage = useNewLook("terms") === true;
+  const [testFile, setTestFile] = useState(false);
   const [signing, setSigning] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "sign" | "send">(null);
   const [sent, setSent] = useState<string | null>(null);
@@ -329,9 +338,10 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
     if (!made?.appraisalId) return;
     try {
       const r = await fetch(`/api/appraisals/${encodeURIComponent(made.appraisalId)}/terms`, { cache: "no-store" });
-      const j = (await r.json()) as { parties?: Party[]; sendUnlocked?: boolean };
+      const j = (await r.json()) as { parties?: Party[]; sendUnlocked?: boolean; test?: boolean };
       setParties(j.parties ?? []);
       setSendUnlocked(j.sendUnlocked ?? false);
+      setTestFile(Boolean(j.test));
     } catch {
       setParties([]);
     }
@@ -697,6 +707,27 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
                 </p>
                 {!made.appraisalId ? (
                   <p className="mt-3 text-[12px] text-[#9d4340]">The file behind the listing did not save, so the terms can't be drawn up here. Ask the office.</p>
+                ) : parties === null ? (
+                  <p className="mt-3 flex items-center gap-2 text-[12px] text-muted" role="status">
+                    <span aria-hidden className="inline-block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                    Reading the terms…
+                  </p>
+                ) : termsOnPage && !testFile && !agentParty && !landlordParty ? (
+                  <div className="mt-3">
+                    <TermsPanel
+                      listingId={made.listingId}
+                      propertyId={made.propertyId || null}
+                      appraisalId={made.appraisalId}
+                      propertyAddress={homePostcode && !homeLabel.toUpperCase().includes(homePostcode.toUpperCase()) ? `${homeLabel}, ${homePostcode}` : homeLabel}
+                      landlords={[{ name: name.trim(), email: email.trim(), phone: mobile.trim() }]}
+                      serviceOnRecord={serviceLabel}
+                      scottish={scottish}
+                      feesOnRecord={{
+                        managementFee: !intro && service !== "tenant_find" && feePct !== "" ? `${Number(feePct)}% + VAT (${withVat(Number(feePct))}% inc VAT) of the rent each month` : null,
+                        setUpFee: Number(setupFee) === 0 ? "None" : `£${Number(setupFee).toLocaleString("en-GB")} + VAT (£${withVat(Number(setupFee)).toLocaleString("en-GB")} inc VAT)`,
+                      }}
+                    />
+                  </div>
                 ) : (
                   <div className="mt-3 space-y-2.5">
                     <div className="flex items-center justify-between gap-3 rounded-xl border border-line/60 px-3 py-2.5">

@@ -65,6 +65,8 @@ export interface TermsRow {
   cancelledAt: string | null;
   /** Adjust contract: the set this one takes over from, withdrawn when the agent signs this one. */
   replaces: string | null;
+  /** From Prepare and Send: the appraisal's landlord gets the presentation and the contract in one email. */
+  withPack: boolean;
 }
 
 type Raw = {
@@ -90,6 +92,7 @@ type Raw = {
   completed_at: Date | string | null;
   cancelled_at: Date | string | null;
   replaces: string | null;
+  with_pack?: boolean | null;
 };
 
 const iso = (d: Date | string | null) => (d ? new Date(d).toISOString() : null);
@@ -119,6 +122,7 @@ function shape(r: Raw): TermsRow {
     completedAt: iso(r.completed_at),
     cancelledAt: iso(r.cancelled_at),
     replaces: r.replaces ?? null,
+    withPack: Boolean(r.with_pack),
   };
 }
 
@@ -129,10 +133,10 @@ export async function insertTerms(t: Omit<TermsRow, "createdAt" | "sentAt" | "co
   if (!hasDb()) throw new Error("No database on this environment, so terms can't be kept.");
   await q(
     `INSERT INTO os_terms (id, version, listing_id, property_id, appraisal_id, property_address, terms_values, parties,
-       agent_id, agent_name, agent_email, submission_id, agent_submitter_id, agent_embed_src, status, replaces)
-     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16)`,
+       agent_id, agent_name, agent_email, submission_id, agent_submitter_id, agent_embed_src, status, replaces, with_pack)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
     [t.id, t.version, t.listingId, t.propertyId, t.appraisalId, t.propertyAddress, JSON.stringify(t.values), JSON.stringify(t.parties),
-      t.agentId, t.agentName, t.agentEmail, t.submissionId, t.agentSubmitterId, t.agentEmbedSrc, t.status, t.replaces]
+      t.agentId, t.agentName, t.agentEmail, t.submissionId, t.agentSubmitterId, t.agentEmbedSrc, t.status, t.replaces, t.withPack]
   );
 }
 

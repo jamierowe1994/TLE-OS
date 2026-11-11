@@ -60,6 +60,25 @@ export default function AppraisalTerms({ ma, onChanged }: { ma: MarketAppraisal;
   }
   if (older) return <TermsBanner ma={ma} onChanged={onChanged} />;
 
+  return <AppraisalTermsPanel ma={ma} joint={joint ?? []} onChanged={() => onChanged?.()} />;
+}
+
+/**
+ * The send screen for an appraisal, filled in from what the appraisal agreed.
+ * Its own part so Prepare and Send can show it too (11 Nov 2026), where `pack`
+ * puts the presentation in the same email as the contract.
+ */
+export function AppraisalTermsPanel({
+  ma,
+  joint,
+  pack = false,
+  onChanged,
+}: {
+  ma: MarketAppraisal;
+  joint: Array<{ name?: string | null; email?: string | null; phone?: string | null }>;
+  pack?: boolean;
+  onChanged?: () => void;
+}) {
   const service = SERVICE_LEVELS.find((s) => s.id === ma.serviceLevel)?.label ?? null;
   const findOnly = ma.serviceLevel === "tenant_find" || ma.serviceLevel === "intro_only";
   return (
@@ -68,13 +87,14 @@ export default function AppraisalTerms({ ma, onChanged }: { ma: MarketAppraisal;
       listingId={ma.listingId ?? null}
       propertyId={ma.rexPropertyId ?? null}
       propertyAddress={ma.postcode && !ma.address.toUpperCase().includes(ma.postcode.toUpperCase()) ? `${ma.address}, ${ma.postcode}` : ma.address}
-      landlords={everyLandlord([{ name: ma.landlord, email: ma.landlordEmail ?? "", phone: ma.landlordMobile ?? "" }], joint ?? [])}
+      landlords={everyLandlord([{ name: ma.landlord, email: ma.landlordEmail ?? "", phone: ma.landlordMobile ?? "" }], joint)}
       serviceOnRecord={service}
       feesOnRecord={{
         /* The contract's own wording, VAT out then in, from what was agreed at the appraisal. */
         managementFee: !findOnly && ma.feePct != null ? `${ma.feePct}% + VAT (${vat(ma.feePct)}% inc VAT) of the rent each month` : null,
         setUpFee: ma.setupFee === 0 ? "None" : ma.setupFee != null ? `£${ma.setupFee.toLocaleString("en-GB")} + VAT (£${vat(ma.setupFee).toLocaleString("en-GB")} inc VAT)` : null,
       }}
+      pack={pack}
       onChanged={() => onChanged?.()}
     />
   );

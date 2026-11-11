@@ -64,9 +64,9 @@ export default async function SendTermsPage({ params }: { params: Promise<{ id: 
     <div className="space-y-6">
       <PageHeader
         title="Prepare and send"
-        blurb={`Check the presentation as ${ma.landlord} will read it, sign your half of the terms, then send it.`}
+        blurb={`Check the presentation as ${ma.landlord} will read it, then sign your part of the terms to send it.`}
       />
-      <PrepareAndSend ma={subject} deck={deck} />
+      <PrepareAndSend ma={subject} deck={deck} full={ma} />
     </div>
   );
 }

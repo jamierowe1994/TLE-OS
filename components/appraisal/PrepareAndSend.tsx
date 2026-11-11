@@ -11,6 +11,10 @@ import { AGENT_SIGNING } from "@/lib/signing-steps";
 import { asStyle, slidesFor, type PresentDeck } from "@/lib/present";
 import AddressField from "@/components/AddressField";
 import { useLandlordHome } from "@/components/LandlordHomeAddress";
+import { AppraisalTermsPanel } from "@/components/appraisal/AppraisalTerms";
+import { useJointLandlords } from "@/lib/use-home-landlords";
+import { useNewLook } from "@/lib/use-new-look";
+import type { MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
  * PREPARE, CHECK, SIGN, SEND.
@@ -42,6 +46,19 @@ import { useLandlordHome } from "@/components/LandlordHomeAddress";
  * signing can happen either way round. Signing first used to lose the
  * signature: shut the signing sheet with its close button and the page never
  * asked DocuSeal again, so it still said "sign your half".
+ *
+ * ── The contract is the OS's own terms now (James, 11 Nov 2026) ───────────
+ *
+ * "Move them": this screen drew up the older DocuSeal contract, with no
+ * questions before it and no bank details on it, while the Compliance tab sent
+ * the terms written by the OS (lib/terms). With `full` (the whole appraisal)
+ * and the new terms switched on, the sign and send steps are the same send
+ * screen every other place uses, and the agent's signature is the send. The
+ * appraisal's landlord still gets what this screen always sent: one email with
+ * the presentation and a way into their file, where Sign opens the new terms
+ * (lib/terms/flow packForLead). A file with an older contract already drawn
+ * up keeps the older steps, so it can be finished and chased; so does a test
+ * file, which signs in the OS alone.
  */
 
 type Party = {
@@ -77,8 +94,14 @@ const money = (n: number | null) => (n == null ? null : `£${n.toLocaleString("e
 const day = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : null;
 
-export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: PresentDeck | null }) {
+export default function PrepareAndSend({ ma, deck, full = null }: { ma: SendSubject; deck: PresentDeck | null; /** The whole appraisal: with it, the contract is the OS's own terms. */ full?: MarketAppraisal | null }) {
   const router = useRouter();
+  const termsOnPage = useNewLook("terms") === true;
+  /* A test file signs in the OS alone (lib/test-terms): it keeps the older steps. */
+  const [test, setTest] = useState(false);
+  /* Terms from the OS already made on this file: null while asking. */
+  const [ours, setOurs] = useState<boolean | null>(null);
+  const joint = useJointLandlords(full ? full.rexPropertyId ?? `appraisal:${full.id}` : null);
   const [parties, setParties] = useState<Party[] | null>(null);
   const [sendUnlocked, setSendUnlocked] = useState<boolean | null>(null);
   const [read, setRead] = useState(false);
@@ -106,9 +129,10 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const pull = useCallback(async () => {
     try {
       const r = await fetch(`/api/appraisals/${ma.id}/terms`, { cache: "no-store" });
-      const j = (await r.json()) as { parties?: Party[]; sendUnlocked?: boolean };
+      const j = (await r.json()) as { parties?: Party[]; sendUnlocked?: boolean; test?: boolean };
       setParties(j.parties ?? []);
       setSendUnlocked(j.sendUnlocked ?? false);
+      setTest(Boolean(j.test));
     } catch {
       setParties([]);
     }
@@ -117,6 +141,17 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   useEffect(() => {
     void pull();
   }, [pull]);
+
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/terms?appraisalId=${encodeURIComponent(ma.id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { terms?: { status: string }[] }) => live && setOurs((j.terms ?? []).some((t) => t.status !== "cancelled")))
+      .catch(() => live && setOurs(false));
+    return () => {
+      live = false;
+    };
+  }, [ma.id]);
 
   /* After the signing sheet closes, however it closes: ask DocuSeal again, a
      few times, because it can take a moment to record the signature. */
@@ -144,6 +179,10 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const staleSignature = Boolean(agent?.completedAt && ma.valuedAt && agent.completedAt < ma.valuedAt);
   const signed = Boolean(agent?.completedAt) && !staleSignature;
   const gone = Boolean(landlord?.sentAt);
+  /* Which contract this file sends: the OS's own terms, unless an older one is
+     already drawn up here (finish that one), it is a test file, or the new
+     terms are switched off. Null while the file is still being read. */
+  const newRoute: boolean | null = !full ? false : parties === null || ours === null ? null : termsOnPage && !test && (ours || !(agent || landlord));
 
   /* Read means READ: the last spread has been reached, not the deck opened.
      That is the whole point of putting it here. */
@@ -300,6 +339,41 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
             sending on the right ── */}
       {/* minmax(0,1fr) on a phone: a bare grid track sized itself to the
           longest email on the file and pushed the steps off the screen. */}
+      {newRoute === null ? (
+        <p className="flex items-center gap-2 text-[12.5px] text-muted" role="status">
+          <span aria-hidden className="inline-block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+          Reading the terms…
+        </p>
+      ) : newRoute && full ? (
+        <div className="space-y-4">
+          {joint === null ? (
+            <p className="flex items-center gap-2 text-[12.5px] text-muted" role="status">
+              <span aria-hidden className="inline-block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+              Reading who signs…
+            </p>
+          ) : (
+            <AppraisalTermsPanel ma={full} joint={joint} pack={Boolean(deck)} onChanged={() => { setOurs(true); router.refresh(); }} />
+          )}
+          {/* Before anything is made: once terms are on the file the banner above says where they are. */}
+          {!ours && <p className="text-[12.5px] leading-relaxed text-muted">
+            {deck
+              ? `Your signature sends it. ${ma.landlord} gets one email from you${ma.landlordEmail ? ` at ${ma.landlordEmail}` : ""}: the presentation, and a link into their file to answer a few questions about the home and sign. Anyone else who signs gets their own link.`
+              : `Your signature sends it. With no presentation on this file, ${ma.landlord} gets their own link to answer a few questions about the home and sign. Build the presentation first if it should go in the same email.`}
+          </p>}
+          {deck?.valuation && (
+            <p className="text-[12.5px] leading-relaxed text-muted">
+              Service or fees not right?{" "}
+              <ChangeFees appraisalId={ma.id} className="font-semibold text-ink underline underline-offset-4" onSaved={() => router.refresh()}>
+                Change the fees
+              </ChangeFees>{" "}
+              before you send.
+            </p>
+          )}
+          <Link href={`/market-appraisals/${ma.id}`} className="inline-block text-[12.5px] text-muted underline underline-offset-4">
+            Back to the file
+          </Link>
+        </div>
+      ) : (
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
         <ol className="space-y-6 rounded-[20px] border border-line/60 bg-white p-6">
           {step(1, read, "Look through it", <p className="text-[12px] leading-relaxed text-muted">{read ? "Opened. Look through as much as you like." : "Optional. Open the booklet above if you want to check it first."}</p>)}
@@ -524,6 +598,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
         </Link>
         </div>
       </div>
+      )}
 
       {signing && (
         <SignModal

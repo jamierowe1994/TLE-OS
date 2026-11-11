@@ -1480,6 +1480,10 @@ CREATE INDEX IF NOT EXISTS os_terms_property ON os_terms (property_id);
 -- Adjust contract (James, 23 Oct 2026): the set this one replaces, withdrawn
 -- once the agent signs this one, so the landlord is never without a live link.
 ALTER TABLE os_terms ADD COLUMN IF NOT EXISTS replaces TEXT;
+-- Sent from the appraisal's Prepare and Send (11 Nov 2026): the lead landlord's
+-- email is the presentation and the contract together (lib/contract-send), not
+-- the bare link to sign. lib/terms/flow agentSigned.
+ALTER TABLE os_terms ADD COLUMN IF NOT EXISTS with_pack BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS os_signed_documents (
   submitter_id   BIGINT PRIMARY KEY,

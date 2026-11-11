@@ -79,6 +79,8 @@ export async function POST(req: NextRequest) {
       additionalFees: str("additionalFees") || null,
       people: Array.isArray(b.people) ? (b.people as Array<{ name: string; email: string; phone?: string; address?: string }>) : [],
       replaces: str("replaces") || null,
+      /* Prepare and Send: the presentation goes in the same email (lib/terms/flow packForLead). */
+      withPack: b.pack === true,
       next,
       askAgain: next && b.askAgain && typeof b.askAgain === "object"
         ? {

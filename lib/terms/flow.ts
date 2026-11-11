@@ -20,6 +20,7 @@ import {
 import { edition, editionFor } from "@/lib/terms/catalogue";
 import { agentPhone } from "@/lib/agent-phone";
 import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
+import { sendContractPack } from "@/lib/contract-send";
 import { cleanSignature, keepAgentSignature, saveSignature, signaturesFor } from "@/lib/terms/signatures";
 import { contractFooter, contractHtml, detailField, roleOf } from "@/lib/terms/render-html";
 import { fileAnswersRecord } from "@/lib/terms/answers-record";
@@ -96,6 +97,13 @@ export interface NewTerms {
   people: Array<{ name: string; email: string; phone?: string | null; address?: string | null }>;
   /** Adjust contract: the set out now, which this one replaces once the agent signs it. */
   replaces?: string | null;
+  /**
+   * Sent from the appraisal's Prepare and Send (11 Nov 2026): when the agent
+   * signs, the appraisal's landlord gets the presentation and the contract in
+   * one email with a way into their file, as that screen always sent it.
+   * Anyone else who signs gets their own link as usual.
+   */
+  withPack?: boolean;
   /**
    * The November 2026 wording, with the questions before the contract
    * (James, 5 Nov 2026), for whoever has the "Questions before signing" switch
@@ -293,6 +301,7 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
     agentEmbedSrc,
     status: "agent",
     replaces: n.replaces ?? null,
+    withPack: Boolean(n.withPack && n.appraisalId),
   });
   /* The subjects to check again, kept beside the contract: codes are never among them (they are not pulled through). */
   if (doc.asksFirst && n.askAgain) {
@@ -362,13 +371,44 @@ export async function agentSigned(id: string, origin: string, me?: OsUser | null
   /* Claimed before the email, so the screen and the webhook send it once between them. */
   if (t.status === "agent" && (await markSent(id))) {
     const agent = me ?? (await findUserById(t.agentId));
-    if (agent) await emailParties(t, agent, origin, t.parties.map((p) => p.key));
+    if (agent) {
+      /* From Prepare and Send: the appraisal's landlord gets the one email with the presentation. */
+      const packed = t.withPack ? await packForLead(t, agent, origin) : null;
+      await emailParties(t, agent, origin, t.parties.filter((p) => p.key !== packed).map((p) => p.key));
+    }
     /* The appraisal's Next up, At a glance and stage read this stamp, as they did for the old DocuSeal send. */
     if (t.appraisalId) await markTermsSent(t.appraisalId).catch(() => null);
     /* Adjust contract: the new one is out, so the old one's links stop now. */
     if (t.replaces) await cancelTerms(t.replaces).catch(() => null);
   }
   return (await getTerms(id))!;
+}
+
+/**
+ * The presentation and the contract in one email, to the appraisal's own
+ * landlord (lib/contract-send: the email Prepare and Send always sent). Their
+ * file opens on the presentation, and Sign there opens these terms
+ * (lib/landlord-home-view ownTermsLink). Returns that person's key, or null
+ * when there is no pack to send (no appraisal, no presentation built, they are
+ * not one of the signers, or the email did not go): they then get their own
+ * link like everyone else, so nobody is ever left without a way to sign.
+ */
+async function packForLead(t: TermsRow, agent: OsUser, origin: string): Promise<string | null> {
+  if (!t.appraisalId) return null;
+  try {
+    const ma = await getAppraisal(t.appraisalId);
+    const to = (ma?.landlordEmail ?? "").trim().toLowerCase();
+    const lead = to ? t.parties.find((p) => p.email.trim().toLowerCase() === to && p.status !== "signed") : null;
+    if (!ma || !lead) return null;
+    await sendContractPack({ ma, me: agent, origin });
+    lead.emailedAt = new Date().toISOString();
+    lead.emailError = null;
+    if (lead.status === "waiting") lead.status = "emailed";
+    return lead.key;
+  } catch (e) {
+    console.error("[terms] pack not sent, their own link goes instead", t.id, e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 /** Email the given people their link. Records each outcome on the person. */
