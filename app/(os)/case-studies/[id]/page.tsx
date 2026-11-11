@@ -26,6 +26,8 @@ const EDITABLE: (keyof Editable)[] = ["title", "intro", "headline", "advert", "s
 const TEXT_FIELDS = ["title", "intro", "story", "headline", "advert", "notes"] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 
+const FRAME_PATIENCE_MS = 15_000;
+
 const pick = (s: Study): Editable => Object.fromEntries(EDITABLE.map((k) => [k, s[k]])) as Editable;
 
 export default function CaseStudyStudio() {
@@ -40,6 +42,9 @@ export default function CaseStudyStudio() {
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [device, setDevice] = useState<"desktop" | "phone">("desktop");
   const [frameReady, setFrameReady] = useState(false);
+  /* The frame's load: 0 while waiting, "failed" after FRAME_PATIENCE_MS with no answer. */
+  const [frameState, setFrameState] = useState<"waiting" | "failed">("waiting");
+  const [frameKey, setFrameKey] = useState(0);
   const [picker, setPicker] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [askRemove, setAskRemove] = useState(false);
@@ -113,6 +118,27 @@ export default function CaseStudyStudio() {
     if (!frameReady || !draft || !site) return;
     frame.current?.contentWindow?.postMessage({ type: "cs:draft", draft }, site);
   }, [draft, frameReady, site]);
+
+  /* The hand-over (James, 11 Nov 2026: stuck on "Loading the website" for
+     two minutes). Waiting for the page to say hello once could miss it, so
+     until it answers the draft is offered every half second; the page
+     answers each one. No answer in FRAME_PATIENCE_MS says so, with Try again,
+     instead of spinning for ever. */
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  useEffect(() => {
+    if (frameReady || !site) return;
+    setFrameState("waiting");
+    const started = Date.now();
+    const offer = setInterval(() => {
+      if (draftRef.current) frame.current?.contentWindow?.postMessage({ type: "cs:draft", draft: draftRef.current }, site);
+      if (Date.now() - started > FRAME_PATIENCE_MS) {
+        clearInterval(offer);
+        setFrameState("failed");
+      }
+    }, 500);
+    return () => clearInterval(offer);
+  }, [frameReady, site, frameKey]);
 
   useEffect(() => {
     if (!site) return;
@@ -284,8 +310,15 @@ export default function CaseStudyStudio() {
 
       <div className={`cs-stage cs-stage--${device}`}>
         <div className="cs-frame-wrap">
-          {!frameReady && <div className="cs-frame-wait"><span className="cs-spin" aria-hidden /> Loading the website…</div>}
-          <iframe ref={frame} src={frameSrc} title="The case study on the website" className="cs-frame" />
+          {!frameReady && (frameState === "failed" ? (
+            <div className="cs-frame-wait cs-frame-failed" role="alert">
+              <p>The website page didn&rsquo;t open. Your words are saved; only the preview is missing.</p>
+              <button type="button" className="nl-btn nl-btn--secondary" onClick={() => { setFrameState("waiting"); setFrameKey((k) => k + 1); }}>Try again</button>
+            </div>
+          ) : (
+            <div className="cs-frame-wait"><span className="cs-spin" aria-hidden /> Loading the website…</div>
+          ))}
+          <iframe key={frameKey} ref={frame} src={frameSrc} title="The case study on the website" className="cs-frame" />
         </div>
       </div>
 

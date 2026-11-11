@@ -92,3 +92,5 @@
   [data-look="new"] .cs-stage { padding: 0; background: none; }
   [data-look="new"] .cs-stage--phone .cs-frame-wrap { width: 100%; border-radius: 12px; }
 }
+[data-look="new"] .cs-frame-failed { flex-direction: column; text-align: center; padding: 24px; }
+[data-look="new"] .cs-frame-failed p { margin: 0; max-width: 30em; color: var(--ink); }
