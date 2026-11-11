@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import ContactBlock from "@/components/ContactBlock";
+import PeopleDeck from "@/components/new-look/PeopleDeck";
 import DoodleIcon from "@/components/DoodleIcon";
 import { InlineField } from "@/components/Bits";
 
@@ -70,7 +71,10 @@ export default function HomeLandlords({
   className = "",
   heading,
   alsoKnownAs,
+  deck = false,
 }: {
+  /** One landlord showing and the rest stacked behind (a let's People tab, 8 Nov 2026). */
+  deck?: boolean;
   homeKey: string | null;
   /**
    * Other keys this screen knows the home by, read as well as homeKey (Lianna
@@ -162,7 +166,10 @@ export default function HomeLandlords({
   }
 
   const card = (p: HomePerson) => (
-    <li key={p.id} className="rounded-xl border border-line/50 bg-white p-3.5">
+    <li key={p.id} className="rounded-xl border border-line/50 bg-white p-3.5">{cardBody(p)}</li>
+  );
+  const cardBody = (p: HomePerson) => (
+    <>
       <div className="mb-1 flex items-start justify-between gap-2">
         {/* Points of contact sit under their own heading; only an additional landlord needs saying. */}
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-accent-dark">
@@ -195,8 +202,82 @@ export default function HomeLandlords({
       </div>
       {p.kind === "contact" && <p className="mt-1 text-[11px] text-muted">Not a landlord: not on the contract, and never sent to Propoly.</p>}
       {p.kind === "joint_landlord" && extraLine?.(p)}
-    </li>
+    </>
   );
+  const mainBody = (m: NonNullable<typeof main>[number]) => (
+    <>
+              <ContactBlock
+                role="landlord"
+                person={{ name: m.name, email: m.email, phone: m.phone }}
+                personRef={readOnly ? null : m.personRef}
+                saver={readOnly ? undefined : m.saver}
+                home={{ propertyAddress: address }}
+                onSaved={() => { m.onSaved?.(); onChanged?.(); }}
+              />
+              {m.note && <p className="mt-1.5 text-[11px] text-muted">{m.note}</p>}
+              {m.after}
+    </>
+  );
+  const modal = adding && homeKey ? (
+        <AddPersonModal
+          kind={adding}
+          address={address}
+          onClose={() => setAdding(null)}
+          onSubmit={async (f) => {
+            if (f.kind === "joint_landlord" && addLandlord) {
+              const r = await addLandlord(f);
+              if (r.ok) { load(); onChanged?.(); }
+              return r;
+            }
+            const j = await fetch("/api/portfolio/people", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ propertyId: homeKey, kind: f.kind, name: f.name, email: f.email, phone: f.phone, relation: f.relation }),
+            }).then((r) => r.json()).catch(() => null);
+            if (!j?.ok) return { ok: false, error: j?.error ?? "That didn't save. Try again." };
+            /* A landlord's own home goes where every landlord's is kept (lib/landlord-home). */
+            if (f.kind === "joint_landlord" && f.address.trim() && f.email.trim()) {
+              await fetch("/api/people/home-address", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: f.email, name: f.name, address: f.address }) }).catch(() => null);
+            }
+            load();
+            onChanged?.(j.person);
+            return { ok: true };
+          }}
+        />
+  ) : null;
+
+  if (deck) {
+    const noLandlord = people !== null && main !== null && !main.length && !joint.length && requireOne;
+    const cards = main === null ? null : [
+      ...main.map((m) => ({ key: m.key, node: <EditCard canEdit={!readOnly && Boolean(m.personRef || m.saver)}>{mainBody(m)}</EditCard> })),
+      ...joint.map((p) => ({ key: p.id, node: <EditCard canEdit={!readOnly}>{cardBody(p)}</EditCard> })),
+      ...contacts.map((p) => ({ key: p.id, node: <div className="nl-pcard"><p className="nl-pcard-tag">Point of contact</p>{cardBody(p)}</div> })),
+    ];
+    return (
+      <div className={className} data-steve="landlords.section">
+        <PeopleDeck
+          title="Landlord"
+          many="Landlords and Contacts"
+          steve="landlords.deck"
+          cards={mainSlot ? [{ key: "slot", node: mainSlot }] : cards}
+          empty={noLandlord ? (
+            <span className="text-accent-dark"><b className="font-semibold">No landlord held.</b> Every home needs one.{mainProblem ? ` ${mainProblem}` : ""}</span>
+          ) : "No landlord on this let yet."}
+          actions={!readOnly ? (
+            <>
+              <button type="button" onClick={() => setAdding("joint_landlord")} disabled={people === null} className="nl-pdeck-add">+ Add a landlord</button>
+              <button type="button" onClick={() => setAdding("contact")} disabled={people === null} className="nl-pdeck-add is-quiet">+ Add a point of contact</button>
+            </>
+          ) : undefined}
+        />
+        {!mainSlot && mainAction}
+        {failed && <p className="mt-2 text-[11.5px] text-muted">{failed}</p>}
+        {readOnly && <p className="mt-2 text-[11.5px] text-muted">{readOnly}</p>}
+        {msg && <p className="mt-2 text-[12px] text-muted">{msg}</p>}
+        {modal}
+      </div>
+    );
+  }
 
   return (
     <div className={className} data-steve="landlords.section">
@@ -263,33 +344,7 @@ export default function HomeLandlords({
       {readOnly && <p className="mt-2 text-[11.5px] text-muted">{readOnly}</p>}
       {msg && <p className="mt-2 text-[12px] text-muted">{msg}</p>}
 
-      {adding && homeKey && (
-        <AddPersonModal
-          kind={adding}
-          address={address}
-          onClose={() => setAdding(null)}
-          onSubmit={async (f) => {
-            if (f.kind === "joint_landlord" && addLandlord) {
-              const r = await addLandlord(f);
-              if (r.ok) { load(); onChanged?.(); }
-              return r;
-            }
-            const j = await fetch("/api/portfolio/people", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ propertyId: homeKey, kind: f.kind, name: f.name, email: f.email, phone: f.phone, relation: f.relation }),
-            }).then((r) => r.json()).catch(() => null);
-            if (!j?.ok) return { ok: false, error: j?.error ?? "That didn't save. Try again." };
-            /* A landlord's own home goes where every landlord's is kept (lib/landlord-home). */
-            if (f.kind === "joint_landlord" && f.address.trim() && f.email.trim()) {
-              await fetch("/api/people/home-address", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: f.email, name: f.name, address: f.address }) }).catch(() => null);
-            }
-            load();
-            onChanged?.(j.person);
-            return { ok: true };
-          }}
-        />
-      )}
+      {modal}
     </div>
   );
 }
@@ -371,6 +426,34 @@ export function AddPersonModal({ kind, address, note, onClose, onSubmit }: {
           <button type="button" onClick={() => void save()} disabled={busy} className="rounded-full bg-accent-dark px-5 py-2 text-[12.5px] font-semibold text-page disabled:opacity-50">{busy ? "Saving…" : "Add them"}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A landlord's card with an Edit button (James, 8 Nov 2026: "what if their
+ * number changes halfway?"). The details were always click-to-change, but
+ * nothing said so. Edit outlines each one and says where it saves; the
+ * change goes where that landlord is kept, so it carries forward.
+ */
+function EditCard({ canEdit, children }: { canEdit: boolean; children: React.ReactNode }) {
+  const [on, setOn] = useState(false);
+  return (
+    <div className={`nl-pcard nl-pcard--landlord${on ? " is-editing" : ""}`}>
+      {canEdit && (
+        <button type="button" className="nl-pcard-edit nl-pcard-corner" onClick={() => setOn((v) => !v)} data-steve="landlord.edit">
+          {on ? (
+            "Done"
+          ) : (
+            <>
+              <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" /></svg>
+              Edit
+            </>
+          )}
+        </button>
+      )}
+      {on && <p className="nl-pcard-hint">Click a detail to change it. It saves as you go, to the landlord&apos;s record.</p>}
+      {children}
     </div>
   );
 }

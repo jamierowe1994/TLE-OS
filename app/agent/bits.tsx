@@ -37,7 +37,7 @@ export function PhoneTop({
     <header className="mb-4">
       <TopBar back={back} />
       {eyebrow && <p className="m-eyebrow mt-3">{eyebrow}</p>}
-      <h1 className={`m-title mt-1 leading-[1.1] ${fresh ? "text-[30px]" : "text-[32px]"}`}>{title}</h1>
+      <h1 className={`m-title mt-1 leading-[1.1] ${fresh ? "text-[44px]" : "text-[32px]"}`}>{title}</h1>
       {children}
     </header>
   );
@@ -46,6 +46,38 @@ export function PhoneTop({
 /** The wordmark or a back button, and the bell. Home uses it on its own. */
 export function TopBar({ back }: { back?: string }) {
   const { bell, unread, fresh } = useFrame();
+  /* The new look (8 Nov 2026): Home's header on every screen - the tracked
+     wordmark (or the back arrow), search and the bell, on a hairline. */
+  if (fresh)
+    return (
+      <div className="m-h-top">
+        {back ? (
+          <Link href={back} aria-label="Back" className="m-h-back m-press">
+            <svg viewBox="0 0 24 24" aria-hidden className="h-[20px] w-[20px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+            Back
+          </Link>
+        ) : (
+          <Link href="/agent" aria-label="TLE OS, home" className="m-h-mark">
+            TLE OS
+          </Link>
+        )}
+        <span className="m-h-top-r">
+          <Link href="/agent/search" aria-label="Search people and homes" className="m-h-ic m-press">
+            <svg viewBox="0 0 24 24" aria-hidden className="h-[20px] w-[20px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4" />
+            </svg>
+          </Link>
+          <button type="button" onClick={bell} aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"} className="m-h-ic m-press relative">
+            <svg viewBox="0 0 24 24" aria-hidden className="h-[20px] w-[20px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0" />
+            </svg>
+            {unread > 0 && <span className="m-h-dot" aria-hidden />}
+          </button>
+        </span>
+      </div>
+    );
   return (
     <div className="flex h-12 items-center justify-between gap-3">
       {back ? (

@@ -4,7 +4,7 @@ import type { BusinessDeal } from "@/lib/business/propoly-deals";
 import type { DealEvent, DealEventKind } from "@/lib/business/deal-events";
 import { referenceState } from "@/lib/business/stage-evidence";
 import { findDuplicates } from "@/lib/business/deal-dupes";
-import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
+import { closeOvertaken, createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { AUDIENCE, HEADLINE, updateVars, type UpdateKind } from "@/lib/customer-update-copy";
 import { isScottish } from "@/lib/property-flags";
 
@@ -15,6 +15,34 @@ import { isScottish } from "@/lib/property-flags";
  * update where the agent emails them, rings, or marks it not needed. Nothing
  * goes to a landlord or tenant from here.
  */
+
+/** Moves that mean a failed reference or a guarantor ask is behind the let. */
+const PAST_PROBLEMS = new Set<UpdateKind>(["references_back", "agreement_out", "complete", "move_in_ready", "cancelled"]);
+
+/* The let's own news, in order. Each later step overtakes the steps before
+   it: "the agreement is out for signing" is not worth telling anyone once it
+   is signed and complete (Lianna Denholm, 7 Nov 2026: reminders that the
+   tenancy was out for signing kept coming after it was signed). */
+const STAGE_NEWS: UpdateKind[] = ["referencing_started", "references_back", "guarantor_needed", "agreement_out"];
+
+/** The earlier steps' news this one overtakes. Cancelled overtakes all of it.
+    Kirstie's move-in sign-off can come before the agreement is signed, so it
+    overtakes nothing. */
+function overtakenBy(kind: UpdateKind): UpdateKind[] {
+  switch (kind) {
+    case "cancelled":
+      return [...STAGE_NEWS, "complete", "move_in_ready"];
+    case "complete":
+      return STAGE_NEWS;
+    case "agreement_out":
+      return ["referencing_started", "references_back", "guarantor_needed"];
+    case "references_back":
+    case "guarantor_needed":
+      return ["referencing_started"];
+    default:
+      return [];
+  }
+}
 
 const FROM_EVENT: Partial<Record<DealEventKind, UpdateKind>> = {
   referencing_started: "referencing_started",
@@ -70,16 +98,48 @@ export async function updatesFromEvents(events: DealEvent[], deals: BusinessDeal
     if (dupes.has(e.dealId)) continue;
     let kind = FROM_EVENT[e.event];
     if (!kind) continue;
+    /* The let moved past a failed reference or a guarantor ask: that problem
+       is over, so it stops waiting on the agent (6 Nov 2026). Done before the
+       deal is looked up (7 Nov 2026): a deal that completes leaves the active
+       book, so it is not in `deals`, and its earlier news was never closed. */
+    const overtaken = new Set<string>(overtakenBy(kind));
+    if (PAST_PROBLEMS.has(kind)) ["reference_failed", "guarantor_needed"].forEach((k) => overtaken.add(k));
+    if (overtaken.size) {
+      await closeOvertaken({
+        prefix: `deal:${e.dealId}:`,
+        kinds: [...overtaken],
+        note: kind === "cancelled" ? "The deal was cancelled, so this was no longer needed." : "The let has moved on since, so this was no longer needed.",
+      }).catch(() => 0);
+    }
     const deal = deals.find((d) => d.app.id === e.dealId);
     if (!deal) continue;
     /* References back, but one of them only with a guarantor: that is the
        news the tenant needs, not "all fine". */
     if (kind === "references_back" && referenceState(deal.app.propoly)?.needGuarantor.length) kind = "guarantor_needed";
+    /* Propoly keeps a deal at "signing and move-in monies" after the
+       agreement is signed, until the money is in. Arriving there signed is
+       not "out for signing" news (Lianna Denholm, 7 Nov 2026). */
+    if (kind === "agreement_out" && deal.app.propoly?.agreement?.status === "signed") {
+      covered.add(e.id);
+      await q(`UPDATE os_deal_events SET told_note = $2 WHERE id = $1`, [e.id, "Not told - the agreement was already signed."]).catch(() => null);
+      continue;
+    }
+    const key = `deal:${e.dealId}:${kind}${kind === "reference_failed" ? `:${(e.toStatus ?? "").toLowerCase()}` : ""}`;
+    /* The agent has already been given this one (the deal went back a step
+       and forward again, or dropped out of Propoly's list for a run): a
+       second "Out for signing" email for the same let is a reminder nobody
+       asked for (Lianna Denholm, 7 Nov 2026). */
+    const had = await q<{ id: string }>(`SELECT id FROM os_customer_updates WHERE key = $1`, [key]).catch(() => []);
+    if (had[0]) {
+      covered.add(e.id);
+      await q(`UPDATE os_deal_events SET told_note = $2 WHERE id = $1`, [e.id, `Not told again - already with ${e.agentName ?? "the agent"} (update ${had[0].id}).`]).catch(() => null);
+      continue;
+    }
     const recipients = dealRecipients(deal, kind, kind === "reference_failed" && e.toStatus ? { onlyTenant: e.toStatus } : {});
     if (!recipients.length) continue;
     try {
       const made = await createUpdate({
-        key: `deal:${e.dealId}:${kind}${kind === "reference_failed" ? `:${(e.toStatus ?? "").toLowerCase()}` : ""}`,
+        key,
         dealId: e.dealId,
         property: e.property,
         agentEmail: e.agentEmail,
@@ -97,4 +157,24 @@ export async function updatesFromEvents(events: DealEvent[], deals: BusinessDeal
     }
   }
   return covered;
+}
+
+/**
+ * Every run: a let whose agreement Propoly now shows signed has no open
+ * "out for signing" news left with the agent (Lianna Denholm, 7 Nov 2026).
+ * Propoly keeps the deal at "signing and move-in monies" until the money is
+ * in, so no status move closes it; without this the update sat open and kept
+ * the let on the agent's Still to tell list and Kirstie's feed.
+ */
+export async function closeSignedAgreements(deals: BusinessDeal[]): Promise<number> {
+  let closed = 0;
+  for (const d of deals) {
+    if (d.app.propoly?.agreement?.status !== "signed") continue;
+    closed += await closeOvertaken({
+      prefix: `deal:${d.app.id}:`,
+      kinds: STAGE_NEWS,
+      note: "The tenancy agreement has been signed, so this was no longer needed.",
+    }).catch(() => 0);
+  }
+  return closed;
 }

@@ -2,10 +2,11 @@
 
 import { asOf } from "@/lib/as-of";
 import { currentLets } from "@/lib/current-lets";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { rememberOrder } from "@/lib/portfolio-order";
+import { warmJson } from "@/lib/page-cache";
 import DoodleIcon from "@/components/DoodleIcon";
 import StatTile from "@/components/StatTile";
 import PageHeader from "@/components/PageHeader";
@@ -161,6 +162,8 @@ export default function Portfolio() {
   const [service, setService] = useState<string | null>(null);
   const [agent, setAgent] = useState<string | null>(null);
   const [town, setTown] = useState<string | null>(null);
+  /* Where the charts scroll to once a part of them is pressed. */
+  const listTop = useRef<HTMLDivElement | null>(null);
   /* Rent pcm between two figures; null is every rent (components/portfolio/RentRange). */
   const [rent, setRent] = useState<[number, number] | null>(null);
   const [lookOnly, setLookOnly] = useState(false);
@@ -179,6 +182,18 @@ export default function Portfolio() {
       const v = window.localStorage.getItem("os-portfolio-view");
       if (v === "cards" || v === "list") setNlView(v);
     } catch { /* fine - cards */ }
+  }, []);
+  /* ?service= / ?town= / ?rent=lo-hi from the PM Dashboard's pictures (8 Nov 2026):
+     the book opens already filtered, scrolled to the homes. */
+  useEffect(() => {
+    const u = new URLSearchParams(window.location.search);
+    const sv = u.get("service");
+    const tw = u.get("town");
+    const rn = u.get("rent")?.match(/^(\d+)-(\d+)$/);
+    if (sv) setService(sv);
+    if (tw) setTown(tw);
+    if (rn) setRent([Number(rn[1]), Number(rn[2])]);
+    if (sv || tw || rn) window.setTimeout(() => listTop.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
   }, []);
   /* ?open=<listing id> from the search bar: straight to the home's own page. */
   useEffect(() => {
@@ -397,12 +412,31 @@ export default function Portfolio() {
 
   /* Keyed as text: listing ids arrive as strings from links and the search bar. */
   const byId = useMemo(() => new Map((book?.properties ?? []).map((p) => [String(p.listingId), p])), [book]);
+  /* A home's certificate file is the longest wait when its page opens (REX's
+     ComplianceEntries, 1.5 s at the median last week), and it only started
+     once the page had. It now starts on the PRESS of a home's link, under the
+     page change, as the side menu does for its own screens (lib/route-warm,
+     9 Nov 2026) - and the page's own read joins it while it is on its way
+     (lib/fetch-dedupe). The press, not a hover: a pass of the mouse down the
+     list must not ask REX about thirty homes. */
+  useEffect(() => {
+    const warm = (e: PointerEvent) => {
+      const a = (e.target as Element | null)?.closest?.('a[href^="/portfolio/"]');
+      const listing = a ? decodeURIComponent((a.getAttribute("href") ?? "").split("?")[0].split("/")[2] ?? "") : "";
+      const pid = listing ? byId.get(listing)?.propertyId : null;
+      if (pid) warmJson(`/api/property-file?property=${encodeURIComponent(pid)}`);
+    };
+    document.addEventListener("pointerdown", warm, { passive: true });
+    return () => document.removeEventListener("pointerdown", warm);
+  }, [byId]);
   /* The home opens on its own page (James, 7 Oct 2026). The list's order goes
      with it, so ‹ › there steps through what was on screen here. */
   const remember = useCallback(() => rememberOrder(listRows.map((r) => String(r.p.listingId))), [listRows]);
   const openHome = useCallback(
     (id: string) => {
       remember();
+      const pid = byId.get(String(id))?.propertyId;
+      if (pid) warmJson(`/api/property-file?property=${encodeURIComponent(pid)}`);
       router.push(`/portfolio/${encodeURIComponent(id)}`);
     },
     [remember, router]
@@ -452,7 +486,10 @@ export default function Portfolio() {
       const s = summaryOf(p);
       const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0).length : 0;
       const rentPcm = house && house.kind === "rooms" ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
-      const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
+      /* The first landlord, and the others the home has after them (6 Nov 2026). */
+      const lead = house ? (house.house?.landlord ? house.house : house.rooms.find((r) => r.landlord) ?? null) : p;
+      const landlord = lead?.landlord ?? null;
+      const moreLandlords = lead?.otherLandlords ?? [];
       const notice = house ? house.rooms.find((r) => r.notice)?.notice ?? null : p.notice ?? null;
       const where = house ? `${house.locality} · ${house.kind === "lets" ? `${house.rooms.length} lets on record` : `${house.rooms.length} rooms, ${letRooms} let`}` : p.locality;
       const who = house
@@ -485,11 +522,11 @@ export default function Portfolio() {
       const photo = p.image ?? house?.rooms.find((r) => r.image)?.image ?? null;
       /* Who lives there, for the card: "Empty" rather than "No tenant on record". */
       const living = house ? who : p.tenants.length ? p.tenants.map((t) => t.name).join(" & ") : "Empty";
-      return { s, price, tags, cert, photo, where, who, living, landlord, title: house ? house.name : p.name, letSince: house ? null : p.letSince };
+      return { s, price, tags, cert, photo, where, who, living, landlord, moreLandlords, title: house ? house.name : p.name, letSince: house ? null : p.letSince };
     };
 
     return (
-      <div data-look="new" className="nl-page nl-rise">
+      <div data-look="new" className="nl-page nl-rise nl-edge nl-port">
         {logins && (
           <SendLogins
             listings={filtering ? filteredHomes.filter((h) => h.tenants.length > 0).map((h) => String(h.listingId)) : undefined}
@@ -585,6 +622,7 @@ export default function Portfolio() {
               </div>
             </div>
 
+            <div ref={listTop} className="scroll-mt-6" aria-hidden />
             <Tabs
               label="Show the book as"
               className="mt-10"
@@ -732,7 +770,12 @@ export default function Portfolio() {
                           </span>
                           <span className="nl-row-fact nl-hide-sm min-w-0">
                             <span className="nl-meta">Landlord</span>
-                            <b className="truncate">{f.landlord ? f.landlord.name : "Not on record"}</b>
+                            <b className="flex min-w-0 items-baseline gap-1">
+                              <span className="min-w-0 truncate">{f.landlord ? f.landlord.name : "Not on record"}</span>
+                              {f.landlord && f.moreLandlords.length > 0 && (
+                                <span className="nl-meta shrink-0" title={`Also ${f.moreLandlords.map((l) => l.name).join(", ")}`}>+{f.moreLandlords.length}</span>
+                              )}
+                            </b>
                           </span>
                           <span className="nl-row-fact nl-hide-sm min-w-0">
                             <span className="nl-meta">{row.house ? "Tenants" : byAgent ? "Agent" : "Tenant"}</span>
@@ -1002,7 +1045,9 @@ export default function Portfolio() {
                     const s = summaryOf(p);
                     const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0).length : 0;
                     const rent = house && house.kind === "rooms" ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
-                    const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
+                    const lead = house ? (house.house?.landlord ? house.house : house.rooms.find((r) => r.landlord) ?? null) : p;
+                    const landlord = lead?.landlord ?? null;
+                    const more = lead?.otherLandlords ?? [];
                     const notice = house ? house.rooms.find((r) => r.notice)?.notice ?? null : p.notice ?? null;
                     return (
                       <li key={house ? house.key : p.listingId} className="border-b border-line/40 last:border-0">
@@ -1017,7 +1062,7 @@ export default function Portfolio() {
                             <span className="block truncate text-[11px] text-muted">
                               {house ? `${house.locality} · ${house.kind === "lets" ? `${house.rooms.length} lets on record` : `${house.rooms.length} rooms, ${letRooms} let`}` : p.locality}
                               {notice && <span className="font-semibold text-accent-dark md:hidden"> · Relet{notice.leavingOn ? ` ${shortDay(notice.leavingOn)}` : ""}</span>}
-                              <span className="md:hidden">{landlord ? ` · ${landlord.name}` : ""}</span>
+                              <span className="md:hidden">{landlord ? ` · ${landlord.name}${more.length ? ` +${more.length}` : ""}` : ""}</span>
                             </span>
                           </span>
                           <span className="figures text-[13px] md:text-[13px]">
@@ -1038,8 +1083,11 @@ export default function Portfolio() {
                             {p.onRex !== false && p.rexLet === false && !p.held && <Pill tone="neutral">Not let in REX</Pill>}
                             {notice && <Pill tone="accent">Relet{notice.leavingOn ? ` · ${shortDay(notice.leavingOn)}` : ""}</Pill>}
                           </span>
-                          <span className="hidden min-w-0 truncate text-[12px] md:block">
-                            {landlord ? landlord.name : <span className="text-muted">Not on record</span>}
+                          <span className="hidden min-w-0 items-baseline gap-1 text-[12px] md:flex">
+                            {landlord ? <span className="min-w-0 truncate">{landlord.name}</span> : <span className="text-muted">Not on record</span>}
+                            {landlord && more.length > 0 && (
+                              <span className="shrink-0 text-[11px] text-muted" title={`Also ${more.map((l) => l.name).join(", ")}`}>+{more.length}</span>
+                            )}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] text-muted xl:block">
                             {house ? `${new Set(house.rooms.flatMap((r) => r.tenants.map((t) => t.contactId))).size} tenants` : byAgent ? (p.agent?.name ?? "—") : (p.tenants[0]?.name ?? "—")}

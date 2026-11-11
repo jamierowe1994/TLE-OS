@@ -60,14 +60,20 @@ export default function EmailPerson({
     return () => { live = false; };
   }, [open, agent]);
 
-  const full = (name ?? "").trim();
+  const full = (name ?? "").replace(/\s+/g, " ").trim();
   const audience = role === "landlord" ? "landlord" : role === "tenant" ? "tenant" : "any";
+  /* Their full name, and the subject (Lianna Denholm, 10 Nov 2026, ticket
+     7d51d864): the window now says who it is to by name and opens with the
+     home as its subject. A name the tenancy record holds as an initial and a
+     surname ("A Clark") is greeted by the whole of it, never "Hi A,". */
+  const first = full.split(" ")[0] ?? "";
+  const firstName = !full ? undefined : /^[A-Za-z]\.?$/.test(first) ? full : first;
   const merge = useMemo(() => ({
     name: full || undefined,
-    firstName: full ? full.split(/\s+/)[0] : undefined,
+    firstName,
     address: address || undefined,
     agent: agent || undefined,
-  }), [full, address, agent]);
+  }), [full, firstName, address, agent]);
 
   return (
     <>
@@ -93,6 +99,8 @@ export default function EmailPerson({
         <Compose
           open
           to={email}
+          toName={full || null}
+          subject={address?.trim() || null}
           audience={audience}
           onClose={() => setOpen(false)}
           onSent={onSent}

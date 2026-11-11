@@ -19,7 +19,9 @@ Document types you may see: a Gas Safety Record (CP12, "next inspection due", us
 Certificate for a new installation also counts, with the interval it recommends), an
 Energy Performance Certificate (EPC, "valid until", 10 years), an HMO or selective
 licence (issue and expiry dates), a Portable Appliance Test report, a Legionella Risk
-Assessment (review date, usually 2 years), or something else entirely.
+Assessment (review date, usually 2 years), a Fire Risk Assessment (the date it was
+carried out, reviewed yearly), an Emergency Lighting test certificate (the date of the
+test, yearly), or something else entirely.
 
 If the document states an expiry or next-inspection date, use it. If it states only an
 issue or inspection date and an interval, work the expiry out from those and say so in
@@ -31,7 +33,7 @@ const TOOL: Anthropic.Tool = {
   input_schema: {
     type: "object",
     properties: {
-      type: { type: "string", enum: ["gas_safety", "eicr", "epc", "hmo_licence", "portable_appliance_testing", "legionella_risk_assessment", "other"] },
+      type: { type: "string", enum: ["gas_safety", "eicr", "epc", "hmo_licence", "portable_appliance_testing", "legionella_risk_assessment", "fire_risk_assessment", "emergency_lighting", "other"] },
       issue_date: { type: "string", description: "YYYY-MM-DD or empty" },
       expiry_date: { type: "string", description: "YYYY-MM-DD or empty" },
       expiry_derived: { type: "boolean", description: "true when the expiry was worked out from an issue date and an interval rather than printed" },

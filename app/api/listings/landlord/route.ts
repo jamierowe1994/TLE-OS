@@ -12,9 +12,14 @@ import { rexConfigured } from "@/lib/rex";
  * its Landlord panel.
  *
  * Three outcomes, kept apart all the way to the screen:
- *   { landlord: {...} }            — a real person
- *   { landlord: null }             — REX genuinely holds no owner (~1 in 8)
+ *   { landlord: {...}, landlords } — a real person, and everybody with them
+ *   { landlord: null }             — nobody is held anywhere (~1 in 8 in REX)
  *   { ok: false, problem }         — REX didn't answer; we do NOT know
+ *
+ * `landlords` is every landlord of the home (lib/landlords-for-home, 10 Nov
+ * 2026): the listing's second owner was never here, so it was missing from
+ * the listing's Landlord section and from its terms. `landlord` stays the
+ * first of them, for the screens that write to one person.
  *
  * The last two used to be the same thing, which is how "we couldn't reach REX"
  * would have read as "this property has no landlord".
@@ -54,5 +59,5 @@ export async function GET(req: NextRequest) {
     );
   }
   if (!answer.ok) return NextResponse.json({ ok: false, problem: answer.problem });
-  return NextResponse.json({ ok: true, landlord: answer.landlord });
+  return NextResponse.json({ ok: true, landlord: answer.landlord, landlords: answer.landlords });
 }

@@ -4,6 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { MailboxNotConnected, msAccessTokenFor, msConnectionFor } from "@/lib/microsoft";
 import { isInternalAddress } from "@/lib/email-policy";
 import { isRoomAddress, parseAddress, sameHome } from "@/lib/address-parse";
+import { activeOsProperties } from "@/lib/os-properties";
 
 /**
  * EMAIL REPLIES ON A PLC, LOGGED ON THE FILE (James, 20 Oct 2026, option A).
@@ -43,6 +44,22 @@ import { isRoomAddress, parseAddress, sameHome } from "@/lib/address-parse";
  * A thread is read for 60 days after its last message, then left alone. A
  * person who disconnects Outlook stops their threads being read, and the
  * pack says so rather than going quiet.
+ *
+ * ── Every email the OS sends, not just a PLC's (James, 6 Nov 2026) ───────
+ *
+ * Susan, on 22 Jubilee Gardens: "I thought this would automatically save to
+ * TLE OS". James: "Any emails from the system should be registered on the
+ * system automatically ... emails back from the tenant and landlords should
+ * automatically be saved". So every send that goes out of somebody's own
+ * Outlook through the OS (lib/microsoft msSendMail - confirmations, works
+ * orders, inspections, Email Docs, Steve's drafts, the team emails on a home)
+ * now carries the header and starts a thread here, filed against the home it
+ * names (homeInText). Still never the inbox as a whole: only conversations
+ * the OS itself started, read by their conversation id.
+ *
+ * With several hundred sends a week, a thread is read less often as it goes
+ * quiet: every check while it has moved in the last three days, every half
+ * hour for a fortnight, then every two hours (DUE below).
  */
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -96,7 +113,10 @@ function ensureTables(): Promise<void> {
       logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE UNIQUE INDEX IF NOT EXISTS os_mail_thread_messages_once ON os_mail_thread_messages (thread_id, internet_message_id);
-    CREATE INDEX IF NOT EXISTS os_mail_thread_messages_at ON os_mail_thread_messages (thread_id, at DESC)`).then(() => undefined).catch((e) => {
+    CREATE INDEX IF NOT EXISTS os_mail_thread_messages_at ON os_mail_thread_messages (thread_id, at DESC);
+    ALTER TABLE os_mail_threads ADD COLUMN IF NOT EXISTS origin_message_id TEXT;
+    CREATE INDEX IF NOT EXISTS os_mail_threads_marker ON os_mail_threads (marker);
+    CREATE INDEX IF NOT EXISTS os_mail_thread_messages_from ON os_mail_thread_messages (lower(from_email))`).then(() => undefined).catch((e) => {
     ready = null;
     throw e;
   });
@@ -134,6 +154,66 @@ export async function threadStarted(p: {
     );
   } catch (e) {
     console.error("[mail-threads] a thread could not be noted", p.caseId, e);
+  }
+}
+
+/**
+ * WHICH HOME A SEND IS ABOUT, from its own words: the OS's homes whose first
+ * line ("14 Sample Street", "Flat 2, 8 Example Road") appears whole in the
+ * subject or the body, the postcode settling a tie, the longest line winning
+ * (so Flat 2, 8 Example Road beats 8 Example Road). Null when none is named;
+ * the thread is still kept, and still shows on the person's Messages.
+ */
+let homesHeld: { at: number; homes: { line: RegExp; len: number; postcode: string; address: string; propertyId: string | null }[] } | null = null;
+export async function homeInText(text: string): Promise<{ address: string; propertyId: string | null } | null> {
+  if (!text.trim()) return null;
+  if (!homesHeld || Date.now() - homesHeld.at > 30 * 60_000) {
+    const all = await activeOsProperties().catch(() => []);
+    /* Word by word, a comma or none between: "Flat 2, 8 Example Road" is also "Flat 2 8 Example Road". */
+    const esc = (x: string) => x.split(/[\s,]+/).filter(Boolean).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s*,?\\s*");
+    homesHeld = {
+      at: Date.now(),
+      homes: all
+        .map((h) => {
+          const line = (h.address || h.name).split(",").slice(0, /^(flat|room|unit|apartment)\b/i.test(h.address) ? 2 : 1).join(", ").trim();
+          if (!/\d/.test(line) || line.length < 6) return null;
+          return { line: new RegExp(`(^|[^0-9a-z])${esc(line)}([^0-9a-z]|$)`, "i"), len: line.length, postcode: (h.postcode ?? "").replace(/\s+/g, "").toUpperCase(), address: h.postcode && !h.address.replace(/\s+/g, "").toUpperCase().includes(h.postcode.replace(/\s+/g, "").toUpperCase()) ? `${h.address}, ${h.postcode}` : h.address, propertyId: h.rexPropertyId };
+        })
+        .filter((h): h is NonNullable<typeof h> => Boolean(h)),
+    };
+  }
+  const flat = text.replace(/\s+/g, " ");
+  const squashed = flat.replace(/\s+/g, "").toUpperCase();
+  const hits = homesHeld.homes.filter((h) => h.line.test(flat));
+  if (!hits.length) return null;
+  hits.sort((a, b) => Number(Boolean(b.postcode && squashed.includes(b.postcode))) - Number(Boolean(a.postcode && squashed.includes(a.postcode))) || b.len - a.len);
+  return { address: hits[0].address, propertyId: hits[0].propertyId };
+}
+
+const plainText = (html: string) => html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+
+/**
+ * Any email that has just gone out of somebody's Outlook through the OS
+ * (lib/microsoft msSendMail), carrying `marker`. Filed against the home it is
+ * about: the one the caller named, else the one its words name. A PLC send
+ * notes its own thread (threadStarted) and never comes here. Never throws.
+ */
+export async function startedFromSend(p: {
+  userId: string; marker: string; subject: string; to: string; html: string; what?: string; by?: string;
+  about?: { address?: string | null; propertyId?: string | null } | null;
+}): Promise<void> {
+  if (!hasDb()) return;
+  try {
+    await ensureTables();
+    const home = p.about?.address ? { address: p.about.address, propertyId: p.about.propertyId ?? null } : await homeInText(`${p.subject}\n${plainText(p.html).slice(0, 8000)}`).catch(() => null);
+    const conn = await msConnectionFor(p.userId).catch(() => null);
+    await q(
+      `INSERT INTO os_mail_threads (id, plc_case_id, property_id, address, mailbox_user_id, mailbox_email, marker, subject, sent_to, started_how, started_what, started_by)
+       VALUES ($1,NULL,$2,$3,$4,$5,$6,$7,$8,'os',$9,$10)`,
+      [newMarker(), home?.propertyId ?? null, home?.address ?? "", p.userId, conn?.email ?? "", p.marker, p.subject.slice(0, 300), p.to, (p.what ?? "Sent from the OS").slice(0, 120), p.by ?? ""]
+    );
+  } catch (e) {
+    console.error("[mail-threads] a send's thread could not be noted", p.subject, e);
   }
 }
 
@@ -221,6 +301,7 @@ type ThreadRow = {
   id: string; plc_case_id: string | null; property_id: string | null; address: string; mailbox_user_id: string; mailbox_email: string;
   conversation_id: string | null; marker: string | null; subject: string; sent_to: string; started_how: string; started_what: string; started_by: string;
   created_at: Date; bound_at: Date | null; last_message_at: Date | null; last_polled_at: Date | null; poll_note: string | null; stopped_at: Date | null;
+  origin_message_id?: string | null;
 };
 
 const clean = (s?: string) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, 240);
@@ -237,33 +318,44 @@ async function graph<T>(token: string, path: string, text = false): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** An OS-started thread: find the sent email by its header and learn its conversation. */
-async function bind(t: ThreadRow, token: string): Promise<boolean> {
-  const since = new Date(new Date(t.created_at).getTime() - 10 * 60_000).toISOString();
+/**
+ * OS-started threads not yet tied to their Outlook conversation, one mailbox
+ * at a time: ONE look through Sent Items since the oldest of them, matched
+ * by the header (or, where a server dropped it, the same subject to the same
+ * person). Returns the ones it tied.
+ */
+async function bindAll(threads: ThreadRow[], token: string): Promise<Set<string>> {
+  const tied = new Set<string>();
+  if (!threads.length) return tied;
+  const oldest = Math.min(...threads.map((t) => new Date(t.created_at).getTime()));
   const params = new URLSearchParams({
-    $filter: `sentDateTime ge ${since}`,
+    $filter: `sentDateTime ge ${new Date(oldest - 10 * 60_000).toISOString()}`,
     $orderby: "sentDateTime desc",
-    $top: "40",
-    $select: "id,conversationId,subject,toRecipients,sentDateTime,internetMessageHeaders",
+    $top: "250",
+    $select: "id,conversationId,internetMessageId,subject,toRecipients,sentDateTime,internetMessageHeaders",
   });
   const j = await graph<{ value?: GraphMessage[] }>(token, `/me/mailFolders/SentItems/messages?${params}`);
-  const hit = (j.value ?? []).find((m) => (m.internetMessageHeaders ?? []).some((h) => h.name.toLowerCase() === THREAD_HEADER.toLowerCase() && h.value.trim() === t.marker))
-    /* A server that dropped the header: the same subject to the same person, after it was sent. */
-    ?? (j.value ?? []).find((m) => (m.subject ?? "").trim() === t.subject.trim() && addrs(m.toRecipients).some((a) => a.email === t.sent_to.toLowerCase()));
-  if (!hit?.conversationId) return false;
-  const claimed = await q(
-    `UPDATE os_mail_threads SET conversation_id = $2, bound_at = NOW(), poll_note = NULL WHERE id = $1 AND conversation_id IS NULL
-       AND NOT EXISTS (SELECT 1 FROM os_mail_threads o WHERE o.mailbox_user_id = $3 AND o.conversation_id = $2 AND coalesce(o.plc_case_id,'') = coalesce($4,'') AND o.id <> $1)
-     RETURNING id`,
-    [t.id, hit.conversationId, t.mailbox_user_id, t.plc_case_id]
-  );
-  if (!claimed.length) {
-    /* The same conversation is already on the pack (Send Again on a reminder): one thread, not two. */
-    await q(`UPDATE os_mail_threads SET stopped_at = NOW(), poll_note = 'Same conversation as another thread on this pack' WHERE id = $1`, [t.id]);
-    return false;
+  const sent = j.value ?? [];
+  const markerOf = (m: GraphMessage) => (m.internetMessageHeaders ?? []).find((h) => h.name.toLowerCase() === THREAD_HEADER.toLowerCase())?.value.trim() ?? null;
+  for (const t of threads) {
+    const hit = sent.find((m) => markerOf(m) === t.marker)
+      ?? sent.find((m) => !markerOf(m) && (m.subject ?? "").trim() === t.subject.trim() && addrs(m.toRecipients).some((a) => a.email === t.sent_to.toLowerCase()) && (m.sentDateTime ?? "") >= new Date(new Date(t.created_at).getTime() - 10 * 60_000).toISOString());
+    if (!hit?.conversationId) continue;
+    const claimed = await q(
+      `UPDATE os_mail_threads SET conversation_id = $2, origin_message_id = $5, bound_at = NOW(), poll_note = NULL WHERE id = $1 AND conversation_id IS NULL
+         AND NOT EXISTS (SELECT 1 FROM os_mail_threads o WHERE o.mailbox_user_id = $3 AND o.conversation_id = $2 AND coalesce(o.plc_case_id,'') = coalesce($4,'') AND o.id <> $1)
+       RETURNING id`,
+      [t.id, hit.conversationId, t.mailbox_user_id, t.plc_case_id, hit.internetMessageId ?? null]
+    );
+    if (!claimed.length) {
+      /* The same conversation is already followed (Send Again on a reminder, a reply sent from the OS): one thread, not two. */
+      await q(`UPDATE os_mail_threads SET stopped_at = NOW(), poll_note = 'Same conversation as another thread' WHERE id = $1`, [t.id]);
+      continue;
+    }
+    t.conversation_id = hit.conversationId;
+    tied.add(t.id);
   }
-  t.conversation_id = hit.conversationId;
-  return true;
+  return tied;
 }
 
 /** Every message in the conversation, copied in once each. Returns how many were new. */
@@ -310,12 +402,18 @@ export async function pollThreads(opts: { caseId?: string; limit?: number; budge
   const stopAt = Date.now() + (opts.budgetMs ?? 60_000);
   if (!hasDb()) return { threads: 0, bound: 0, logged: 0, problems: 0 };
   await ensureTables();
+  /* DUE: a thread that moved in the last three days every check, in the last
+     fortnight every half hour, older every two hours. A pack opened by hand
+     (caseId) reads its threads whatever. */
   const rows = await q<ThreadRow>(
     `SELECT * FROM os_mail_threads
       WHERE stopped_at IS NULL AND coalesce(last_message_at, created_at) > NOW() - INTERVAL '${LIVE_DAYS} days'
-        ${opts.caseId ? "AND plc_case_id = $2" : ""}
+        ${opts.caseId ? "AND plc_case_id = $2" : `AND (last_polled_at IS NULL
+          OR coalesce(last_message_at, created_at) > NOW() - INTERVAL '3 days'
+          OR (coalesce(last_message_at, created_at) > NOW() - INTERVAL '14 days' AND last_polled_at < NOW() - INTERVAL '30 minutes')
+          OR last_polled_at < NOW() - INTERVAL '2 hours')`}
       ORDER BY last_polled_at NULLS FIRST LIMIT $1`,
-    opts.caseId ? [opts.limit ?? 200, opts.caseId] : [opts.limit ?? 200]
+    opts.caseId ? [opts.limit ?? 400, opts.caseId] : [opts.limit ?? 400]
   );
   const byBox = new Map<string, ThreadRow[]>();
   for (const t of rows) byBox.set(t.mailbox_user_id, [...(byBox.get(t.mailbox_user_id) ?? []), t]);
@@ -330,18 +428,23 @@ export async function pollThreads(opts: { caseId?: string; limit?: number; budge
       problems += threads.length;
       continue;
     }
+    let tied = new Set<string>();
+    try {
+      tied = await bindAll(threads.filter((t) => !t.conversation_id), token);
+      bound += tied.size;
+    } catch (e) {
+      problems += 1;
+      console.error("[mail-threads] Sent Items could not be read", userId, e);
+    }
     for (const t of threads) {
       if (Date.now() > stopAt) break;
       try {
         if (!t.conversation_id) {
-          if (await bind(t, token)) bound += 1;
-          else {
-            /* Not in Sent Items after two days: it never went from Outlook, so there is no thread to read. */
-            const old = Date.now() - new Date(t.created_at).getTime() > 2 * 864e5;
-            await q(`UPDATE os_mail_threads SET last_polled_at = NOW(), poll_note = $2, stopped_at = CASE WHEN $3 THEN NOW() ELSE NULL END WHERE id = $1 AND conversation_id IS NULL`,
-              [t.id, old ? "The sent email was never found in Outlook, so replies can't be followed." : "Waiting for the sent email to show in Outlook.", old]);
-            continue;
-          }
+          /* Not in Sent Items after two days: it never went from Outlook, so there is no thread to read. */
+          const old = Date.now() - new Date(t.created_at).getTime() > 2 * 864e5;
+          await q(`UPDATE os_mail_threads SET last_polled_at = NOW(), poll_note = $2, stopped_at = CASE WHEN $3 THEN NOW() ELSE NULL END WHERE id = $1 AND conversation_id IS NULL`,
+            [t.id, old ? "The sent email was never found in Outlook, so replies can't be followed." : "Waiting for the sent email to show in Outlook.", old]);
+          continue;
         }
         logged += await readThread(t, token);
       } catch (e) {
@@ -358,6 +461,8 @@ export async function pollThreads(opts: { caseId?: string; limit?: number; budge
 export interface ThreadMessage {
   id: string; fromName: string; fromEmail: string; to: { name: string; email: string }[]; cc: { name: string; email: string }[];
   subject: string; preview: string; text: string; at: string; direction: "in" | "out"; ours: boolean; hasAttachments: boolean;
+  /** The email the OS itself sent to start the thread (its copy is also in os_sent_emails). */
+  origin: boolean;
 }
 export interface MailThread {
   id: string; caseId: string | null; address: string; subject: string; startedHow: "os" | "linked"; startedWhat: string; startedBy: string;
@@ -367,8 +472,8 @@ export interface MailThread {
 
 async function shape(rows: ThreadRow[]): Promise<MailThread[]> {
   if (!rows.length) return [];
-  const msgs = await q<{ id: string; thread_id: string; from_name: string; from_email: string; to_list: ThreadMessage["to"]; cc_list: ThreadMessage["cc"]; subject: string; preview: string; body_text: string; at: Date; direction: "in" | "out"; has_attachments: boolean }>(
-    `SELECT id, thread_id, from_name, from_email, to_list, cc_list, subject, preview, body_text, at, direction, has_attachments FROM os_mail_thread_messages WHERE thread_id = ANY($1) ORDER BY at`,
+  const msgs = await q<{ id: string; thread_id: string; internet_message_id: string; from_name: string; from_email: string; to_list: ThreadMessage["to"]; cc_list: ThreadMessage["cc"]; subject: string; preview: string; body_text: string; at: Date; direction: "in" | "out"; has_attachments: boolean }>(
+    `SELECT id, thread_id, internet_message_id, from_name, from_email, to_list, cc_list, subject, preview, body_text, at, direction, has_attachments FROM os_mail_thread_messages WHERE thread_id = ANY($1) ORDER BY at`,
     [rows.map((r) => r.id)]
   );
   return rows.map((t) => ({
@@ -379,6 +484,7 @@ async function shape(rows: ThreadRow[]): Promise<MailThread[]> {
     messages: msgs.filter((m) => m.thread_id === t.id).map((m) => ({
       id: m.id, fromName: m.from_name, fromEmail: m.from_email, to: m.to_list ?? [], cc: m.cc_list ?? [], subject: m.subject, preview: m.preview,
       text: m.body_text, at: new Date(m.at).toISOString(), direction: m.direction, ours: isInternalAddress(m.from_email), hasAttachments: m.has_attachments,
+      origin: Boolean(t.origin_message_id && m.internet_message_id === t.origin_message_id),
     })),
   }));
 }
@@ -408,4 +514,41 @@ export async function threadsForHome(propertyIds: string[], addresses: string[])
      since every room of a house shares the house's REX id. */
   const mine = rows.filter((r) => addresses.some((a) => sameHome(r.address, a)) || (r.property_id && propertyIds.includes(r.property_id) && !isRoomAddress(r.address)));
   return (await shape(mine)).filter((t) => t.messages.length > 0);
+}
+
+/**
+ * Every saved message with one of these people in it, for their Messages
+ * (lib/conversation): the replies to the OS's emails, kept whoever's mailbox
+ * they came out of, so a colleague opening the record sees them too. The
+ * OS's own first email is left out - its copy is already there from
+ * os_sent_emails.
+ */
+export async function savedMessagesWith(emails: string[], limit = 60): Promise<(ThreadMessage & { threadId: string; mailbox: string })[]> {
+  const who = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  if (!hasDb() || !who.length) return [];
+  await ensureTables();
+  const rows = await q<ThreadRow & { m_id: string }>(
+    `SELECT DISTINCT t.* , m.id AS m_id FROM os_mail_thread_messages m JOIN os_mail_threads t ON t.id = m.thread_id
+      WHERE lower(m.from_email) = ANY($1)
+         OR EXISTS (SELECT 1 FROM jsonb_array_elements(m.to_list || m.cc_list) x WHERE lower(x->>'email') = ANY($1))
+      ORDER BY t.created_at DESC LIMIT $2`,
+    [who, limit]
+  );
+  const keep = new Set(rows.map((r) => r.m_id));
+  const threads = [...new Map(rows.map((r) => [r.id, r])).values()];
+  const shaped = await shape(threads);
+  return shaped.flatMap((t) => t.messages.filter((m) => keep.has(m.id) && !m.origin).map((m) => ({ ...m, threadId: t.id, mailbox: t.mailbox })));
+}
+
+/** One saved message, for opening it from a person's Messages. */
+export async function savedMessage(id: string): Promise<(ThreadMessage & { threadId: string; thread: ThreadMessage[] }) | null> {
+  if (!hasDb()) return null;
+  await ensureTables();
+  const [r] = await q<{ thread_id: string }>(`SELECT thread_id FROM os_mail_thread_messages WHERE id = $1`, [id]);
+  if (!r) return null;
+  const [t] = await q<ThreadRow>(`SELECT * FROM os_mail_threads WHERE id = $1`, [r.thread_id]);
+  if (!t) return null;
+  const [shaped] = await shape([t]);
+  const m = shaped?.messages.find((x) => x.id === id);
+  return m ? { ...m, threadId: t.id, thread: shaped.messages } : null;
 }

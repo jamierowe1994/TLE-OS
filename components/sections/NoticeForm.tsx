@@ -511,7 +511,8 @@ export default function NoticeForm({
 
   /* z-[195]: above Steve and Report a problem (189-191), whose corner the sheet's own buttons share. */
   const body = (
-    <div className={stepped ? "fixed inset-0 z-[195] flex items-center justify-center p-3 sm:p-6" : "fixed inset-0 z-[195]"}>
+    /* nl-notice-pop: Rent review and Serve notice in the house look (8 Nov 2026), app/new-look/float-sheet.css. */
+    <div className={`nl-notice-pop ${stepped ? "fixed inset-0 z-[195] flex items-center justify-center p-3 sm:p-6" : "fixed inset-0 z-[195]"}`}>
       <button aria-label="Close" onClick={close} className={`absolute inset-0 cursor-default transition-opacity duration-300 ${stepped ? "bg-ink/55 backdrop-blur-[3px]" : "bg-ink/40"} ${shown ? "opacity-100" : "opacity-0"}`} />
       <aside
         className={

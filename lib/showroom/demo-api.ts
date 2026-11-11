@@ -69,6 +69,12 @@ function applyMove(w: DemoWorld, o: WorksOrder, move: Move, by: string): WorksOr
       kind = "note";
       text = "Booking confirmation sent to the tenants.";
       break;
+    case "tell_tenants_access":
+      if (o.scheduledAt) throw new Error("There is a date already - send them the booking instead.");
+      n.tenantsAccessToldAt = at;
+      kind = "note";
+      text = "Tenants told who will be in touch to arrange access.";
+      break;
     case "arranging":
       n.arranging = move.who;
       if (move.who === "landlord") {
@@ -193,7 +199,7 @@ function applyMove(w: DemoWorld, o: WorksOrder, move: Move, by: string): WorksOr
 }
 
 /** KEEP IN STEP with emailsForMove (lib/works-emails): which emails a move sends. */
-function emailsFor(o: WorksOrder, action: string, how?: string): string[] {
+function emailsFor(o: WorksOrder, action: string, how?: string, byContractor = false): string[] {
   const hasContractor = Boolean(o.contractorId);
   /* Planned: the tenants only hear when the agent sends the booking; a skipped landlord never does. */
   if (o.kind === "planned") {
@@ -203,6 +209,7 @@ function emailsFor(o: WorksOrder, action: string, how?: string): string[] {
       case "contractor_confirmed": case "assign": return ["works-contractor-planned"];
       case "schedule": return ["works-contractor-booked", ...(o.landlordSkipped ? [] : ["works-landlord-arranged"])];
       case "tell_tenants_booked": return ["works-tenant-booked"];
+      case "tell_tenants_access": return hasContractor && !o.scheduledAt ? ["works-tenant-planned-notice"] : [];
       case "quote": return o.status === "approval" && !o.landlordSkipped ? ["works-landlord-approval"] : [];
       case "done": return ["works-compliance-done"];
       case "invoice": return ["works-accounts-invoice"];
@@ -216,7 +223,8 @@ function emailsFor(o: WorksOrder, action: string, how?: string): string[] {
     case "contact_contractor": return hasContractor ? ["works-contractor-report"] : [];
     case "contractor_confirmed": return ["works-contractor-order", "works-tenant-found"];
     case "assign": return ["works-contractor-order", ...(o.scheduledAt ? ["works-tenant-booked"] : [])];
-    case "schedule": return ["works-contractor-booked", "works-tenant-booked", "works-landlord-arranged"];
+    /* The contractor's own booking does not email the tenant (lib/works-emails, ticket 8db317c4). */
+    case "schedule": return ["works-contractor-booked", ...(byContractor ? [] : ["works-tenant-booked"]), ...(o.landlordSkipped ? [] : ["works-landlord-arranged"])];
     case "quote": return o.status === "approval" ? ["works-landlord-approval"] : [];
     case "done": return ["works-tenant-happy", "works-compliance-done"];
     case "invoice": return ["works-accounts-invoice"];
@@ -234,6 +242,7 @@ const TOLD: Record<string, string> = {
   "works-contractor-planned": "Contractor emailed the works order, with every tenant to arrange access with.",
   "works-tenant-found": `Tenant emailed: "We've found someone" (${CAST.tenant.email}).`,
   "works-tenant-booked": "Tenant emailed the date.",
+  "works-tenant-planned-notice": "Tenants emailed who will be in touch to arrange access.",
   "works-contractor-booked": "Contractor emailed the date.",
   "works-landlord-arranged": "Landlord emailed: \"It's arranged\".",
   "works-landlord-approval": "Landlord emailed the quote for approval.",
@@ -280,7 +289,7 @@ function raise(w: DemoWorld, b: Partial<WorksOrder> & { send?: boolean }, by: st
     propertyId: b.propertyId ?? null, propertyName: b.propertyName ?? CAST.property, locality: b.locality ?? CAST.locality,
     landlord: b.landlord ?? CAST.landlord.name, tenant: b.tenant ?? CAST.tenant.name, tenantPhone: b.tenantPhone ?? CAST.tenant.phone, tenantEmail: b.tenantEmail ?? CAST.tenant.email,
     landlordEmail: skipped ? "" : (b.landlordEmail ?? CAST.landlord.email), landlordMobile: skipped ? "" : (b.landlordMobile ?? CAST.landlord.phone),
-    tenants: b.tenants ?? [], landlordSkipped: skipped, tenantsToldBookedAt: null,
+    tenants: b.tenants ?? [], landlordSkipped: skipped, tenantsToldBookedAt: null, tenantsAccessToldAt: null,
     landlordToldAt: null, arranging: planned ? "us" : null, landlordFollowUpAt: null, landlordResolvedAt: null, contractorContactedAt: sent ? at : null, contractorConfirmedAt: confirmed ? at : null, landlordArrangedAt: null,
     tenantHappy: null, tenantHappyAt: null, tenantHappyNote: "", payee: null, contractorToken: null, tenantToken: null, accountsToldAt: null, complianceToldAt: null,
     title: b.title ?? "A repair", description: b.description ?? "", category: b.category ?? "Other", urgency: b.kind === "planned" ? null : (b.urgency ?? "routine"),
@@ -485,7 +494,7 @@ export function answer(w: DemoWorld, method: string, url: URL, body: Body): Demo
       if (b.action === "date") {
         if (!b.scheduledAt) return no("When?");
         const n = applyMove(w, o, { action: "schedule", scheduledAt: new Date(b.scheduledAt).toISOString(), note: "Booked by the contractor from their page." }, by);
-        const ids = emailsFor(n, "schedule");
+        const ids = emailsFor(n, "schedule", undefined, true);
         outcomes(w, n, ids);
         return ok({ job: contractorView(n) }, ids, "date");
       }

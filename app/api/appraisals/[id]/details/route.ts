@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { appraisalRefusal } from "@/lib/appraisal-access";
 import { whoIs } from "@/lib/admin";
 import { getAppraisal } from "@/lib/appraisal-store";
-import { readAnswers } from "@/lib/property-answers-store";
+import { readHome } from "@/lib/home-answers";
 import { presentationsFor } from "@/lib/present-store";
 import { epcForAddress } from "@/lib/epc";
 import { landlordAccountByEmail, landlordDocuments, requiredDocKindsFor } from "@/lib/landlord-account";
@@ -34,7 +34,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const ma = await getAppraisal(id);
   if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
 
-  const answers: Record<string, unknown> = await readAnswers(id).catch(() => ({}));
+  /* Every answer kept for the home, the questions before the contract included (lib/home-answers, 5 Nov 2026). Codes are never used. */
+  const answers: Record<string, unknown> = await readHome({ appraisalId: id, propertyId: ma.rexPropertyId ?? null })
+    .then((h) => Object.fromEntries(Object.entries(h.answers).filter(([k]) => !k.endsWith("-code") && k !== "entry-code-detail")))
+    .catch(() => ({}));
   const refs = [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
   const decks = (await Promise.all(refs.map((r) => presentationsFor(r).catch(() => [])))).flat();
   const property = decks.find((d) => d.deck.property?.beds != null)?.deck.property ?? decks[0]?.deck.property ?? null;
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     baths: property?.baths != null ? String(property.baths) : "",
     receptions: "",
     furnishing: say(answers.furnishing),
-    heating: say(answers.heating).replace(/-/g, " "),
+    heating: say(answers["heating-type"]).replace(/-/g, " "),
     parking: say(answers.parking),
     garden: say(answers.garden),
     councilTax: say(answers["council-tax-band"]),

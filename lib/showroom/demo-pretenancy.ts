@@ -144,7 +144,7 @@ function plcCase(id: string, address: string, agent: string, agentEmail: string,
 
 const AGENTS = { sam: CAST.agent.name, priya: "Priya Shah", tom: "Tom Ellis" };
 const agentEmail = (name: string) => name === CAST.agent.name ? CAST.agent.email : `${name.split(" ")[0].toLowerCase()}.sample@example.com`;
-const PHOTOS = ["/brand/photo/property.jpg", "/brand/living-room.jpg", "/brand/photo/welcome.jpg", "/brand/photo/welcome-door.webp", "/brand/photo/marketing.jpg"];
+const PHOTOS = ["/brand/photo/property-real.jpg", "/brand/living-room.jpg", "/brand/photo/welcome.jpg", "/brand/photo/welcome-door-real.webp", "/brand/photo/marketing-real.jpg"];
 
 const refs = (name: string, decision: string | null) => ({
   tenantRefs: [{ name, required: true, decision }],
@@ -179,7 +179,7 @@ export function pretenancyBook(at: number, now = Date.now()): PretenancyBook {
   const ago = (h: number) => office(now - h * H);
   const sophieIn = now + 16 * D;
   const sophie: DemoDeal = deal(SOPHIE_DEAL, "references", CAST.property, CAST.tenant.name, AGENTS.sam, 16, 6, {
-    locality: CAST.locality, image: "/brand/photo/property.jpg",
+    locality: CAST.locality, image: "/brand/photo/property-real.jpg",
     propoly: { ...paid(now - 5 * D), ...refs(CAST.tenant.name, "awaiting_result"), holdingFee: 288, deposit: 1442, service: "full_managed", depositReplacement: false, landlord: { name: CAST.landlord.name, email: CAST.landlord.email, phone: CAST.landlord.phone } },
   }, now);
   if (at >= 1) { sophie.live = "tenancy_generation"; sophie.propoly = { ...sophie.propoly, ...refs(CAST.tenant.name, "acceptable") }; }

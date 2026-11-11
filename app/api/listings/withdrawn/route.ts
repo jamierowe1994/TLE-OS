@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   if (!id) return NextResponse.json({ ok: false, error: "Which listing?" }, { status: 400 });
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
   try {
-    const w = await withdrawnFor(id);
+    const w = await withdrawnFor(id, { cached: true });
     return NextResponse.json({ ok: true, withdrawn: w.source ? w : null });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "The listings system didn't answer. Try again in a minute.") }, { status: 502 });

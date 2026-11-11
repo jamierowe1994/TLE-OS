@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Sheet, TopBar } from "../../bits";
+import { useAppLook } from "@/components/app/AppFrame";
 
 /**
  * FOCUS HOUR (Tools, 3 Oct 2026): an hour (or more) to get the work done.
@@ -26,6 +27,7 @@ export default function FocusPage() {
 }
 
 function Focus() {
+  const fresh = useAppLook();
   const [until, setUntil] = useState<string | null | undefined>(undefined);
   const [now, setNow] = useState(Date.now());
   const [mins, setMins] = useState(60);
@@ -106,7 +108,7 @@ function Focus() {
               </button>
             ))}
           </div>
-          <button type="button" onClick={start} className="mt-3 h-[54px] w-full rounded-full text-[16px] font-semibold text-white shadow-[0_14px_26px_-12px_rgba(0,0,0,0.6)]" style={{ background: "#141210" }}>
+          <button type="button" onClick={start} className={`mt-3 h-[54px] w-full text-[16px] font-semibold ${fresh ? "rounded-[14px]" : "rounded-full text-white shadow-[0_14px_26px_-12px_rgba(0,0,0,0.6)]"}`} style={fresh ? { background: "#faf6f1", color: "#56423e" } : { background: "#141210" }}>
             Start Focus
           </button>
         </>

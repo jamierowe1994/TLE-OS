@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -92,7 +93,7 @@ export default function LandlordDocuments({
           <input
             type="file"
             className="hidden"
-            accept="image/*,application/pdf"
+            accept={ACCEPT_EVIDENCE}
             disabled={busy}
             onChange={(e) => {
               const f = e.target.files?.[0];

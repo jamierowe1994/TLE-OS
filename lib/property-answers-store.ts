@@ -86,7 +86,22 @@ export async function answersForProperties(propertyIds: string[]): Promise<Answe
   const ids = propertyIds.map((s) => s.trim()).filter(Boolean);
   if (!hasDb() || !ids.length) return [];
   const rows = await q<JoinRow>(`${JOINED} WHERE m.rex_property_id = ANY($1)`, [ids]).catch(() => []);
-  return rows.map(shape);
+  /* Answers given on terms sent from a listing, kept against the home itself (lib/home-answers, 5 Nov 2026). */
+  const own = await q<{ record_id: string; payload: Answers | null; updated_at: Date | string | null }>(
+    `SELECT record_id, payload, updated_at FROM os_case_state WHERE kind = 'property-answers' AND record_id = ANY($1)`,
+    [ids.map((i) => `property:${i}`)]
+  ).catch(() => []);
+  return [
+    ...rows.map(shape),
+    ...own.map((r) => ({
+      appraisalId: r.record_id,
+      landlord: "",
+      address: "",
+      propertyId: r.record_id.slice("property:".length),
+      answers: r.payload ?? {},
+      updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : null,
+    })),
+  ];
 }
 
 /**

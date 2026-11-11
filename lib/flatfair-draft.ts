@@ -1,6 +1,6 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import { flatfairEnv, flatfairWrite } from "@/lib/flatfair";
+import { flatfairEnv, flatfairWrite, listBranches, type FfBranch } from "@/lib/flatfair";
 import { switchOn } from "@/lib/switches";
 
 /**
@@ -21,6 +21,8 @@ import { switchOn } from "@/lib/switches";
 
 export interface DraftFacts {
   dealId: string;
+  /** The deal's agent as Propoly names them: their Flatfair branch is found by it. */
+  agentName?: string | null;
   propertyName: string;
   /** "Town POSTCODE", as the deal carries it. */
   locality: string;
@@ -45,7 +47,7 @@ const splitName = (n: string | null) => {
   return { first_name: parts.slice(0, -1).join(" ") || parts[0] || "", last_name: parts.length > 1 ? parts[parts.length - 1] : "" };
 };
 
-export function buildDraft(f: DraftFacts, testInbox: string | null): { payload: Record<string, unknown>; problems: string[] } {
+export function buildDraft(f: DraftFacts, testInbox: string | null, branchId: number | null = null): { payload: Record<string, unknown>; problems: string[] } {
   const problems: string[] = [];
   const pc = f.locality.match(POSTCODE);
   const postcode = pc ? `${pc[1]} ${pc[2]}`.toUpperCase() : "";
@@ -113,7 +115,7 @@ export function buildDraft(f: DraftFacts, testInbox: string | null): { payload: 
           },
         }
       : {}),
-    ...(process.env.FLATFAIR_BRANCH_ID ? { branch: Number(process.env.FLATFAIR_BRANCH_ID) } : {}),
+    ...(branchId ? { branch: branchId } : {}),
   };
   return { payload, problems };
 }
@@ -140,7 +142,14 @@ export async function sendDraft(
   }
   const already = await draftFor(f.dealId);
   if (already) return { ok: true, draft: already };
-  const { payload, problems } = buildDraft(f, env === "live" ? null : who.email);
+  /* Live drafts go to the agent's own branch, or not at all. */
+  let branchId: number | null = null;
+  if (env === "live") {
+    const found = await branchFor(f.agentName ?? null);
+    if (!found.ok) return { ok: false, error: found.error };
+    branchId = found.branch.id;
+  }
+  const { payload, problems } = buildDraft(f, env === "live" ? null : who.email, branchId);
   if (problems.length) return { ok: false, error: "Flatfair would refuse this draft as it stands.", problems };
   const r = await flatfairWrite<{ id: number }>("POST", "/flatbond/draft/", payload);
   if (!r.ok || !r.data?.id) {
@@ -152,4 +161,78 @@ export async function sendDraft(
     [f.dealId, env, r.data.id, who.id, who.name || who.email, JSON.stringify(payload)]
   );
   return { ok: true, draft: { draftId: r.data.id, env, by: who.name || who.email, at: new Date().toISOString(), test: env !== "live" } };
+}
+
+/* ── The agent's branch ───────────────────────────────────────────────── */
+
+/*
+ * EACH AGENT HAS THEIR OWN FLATFAIR BRANCH (James, 10 Nov 2026: "yes please").
+ * Flatfair holds The Letting Experts as one branch per agent ("The Letting
+ * Experts - Rhiannon Dodge"), and every flatbond keyed in by hand sits under
+ * its agent's. A draft sent with no branch lands wherever Flatfair defaults,
+ * and one FLATFAIR_BRANCH_ID would have put every agent's drafts under one
+ * person, so the branch is the deal's agent's, found by name. The names are
+ * typed by hand there - "Fieldston" for Fieldson, "Brain" for Brian, "Dan"
+ * on a branch and "Daniel" on the deal - so a surname one letter out and the
+ * same first initial will do, an exact name beating a near one. No branch,
+ * or two equally near: the draft is held, saying why, never sent elsewhere.
+ */
+
+const BRANCH_TTL_MS = 60 * 60_000;
+let branchList: { at: number; rows: FfBranch[] } | null = null;
+
+async function branchesNow(): Promise<FfBranch[] | null> {
+  if (branchList && Date.now() - branchList.at < BRANCH_TTL_MS) return branchList.rows;
+  const r = await listBranches().catch(() => null);
+  if (!r?.ok) return branchList?.rows ?? null;
+  branchList = { at: Date.now(), rows: r.rows };
+  return r.rows;
+}
+
+const nameWords = (s: string) => s.toLowerCase().replace(/[-']/g, " ").replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+
+/** One letter out, for a word of five letters or more. */
+function nearly(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.min(a.length, b.length) < 5 || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+/** The person a branch is for: the words after "The Letting Experts -". */
+const branchPerson = (name: string): string[] | null => {
+  const m = /^\s*the\s+let+[a-z]*\s+experts?\s*-\s*(.+)$/i.exec(name);
+  return m ? nameWords(m[1]) : null;
+};
+
+/** How well a branch's person is this agent: 3 the same name, 2 same first and surname, 1 near, 0 not them. */
+export function branchScore(agent: string, branchName: string): number {
+  const a = nameWords(agent);
+  const b = branchPerson(branchName);
+  if (!b || a.length < 2 || b.length < 2) return 0;
+  if (a.join(" ") === b.join(" ")) return 3;
+  const la = a[a.length - 1], lb = b[b.length - 1];
+  if (!nearly(la, lb)) return 0;
+  if (a[0] === b[0] && la === lb) return 2;
+  return a[0][0] === b[0][0] ? 1 : 0;
+}
+
+export async function branchFor(agentName: string | null): Promise<{ ok: true; branch: FfBranch } | { ok: false; error: string }> {
+  const who = (agentName ?? "").replace(/\s+/g, " ").trim();
+  if (!who) return { ok: false, error: "The deal names no agent, so Flatfair can't be told whose branch it goes in. Key it into Flatfair by hand." };
+  const rows = await branchesNow();
+  if (!rows) return { ok: false, error: "Flatfair's branches couldn't be read just now, so nothing was sent. Try again in a minute." };
+  const scored = rows.map((b) => ({ b, s: branchScore(who, b.name) })).filter((x) => x.s > 0);
+  const best = Math.max(0, ...scored.map((x) => x.s));
+  const top = scored.filter((x) => x.s === best);
+  if (!top.length) return { ok: false, error: `Flatfair has no branch for ${who}, so nothing was sent. Ask Flatfair to add one, or key it into Flatfair by hand.` };
+  if (top.length > 1) return { ok: false, error: `Flatfair has more than one branch that could be ${who}'s (${top.map((x) => x.b.name).join("; ")}), so nothing was sent. Key it into Flatfair by hand.` };
+  return { ok: true, branch: top[0].b };
 }

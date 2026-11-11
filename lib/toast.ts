@@ -16,13 +16,35 @@ export type ToastTone = "ok" | "bad";
 export interface ToastDetail {
   text: string;
   tone: ToastTone;
+  /** How long it stays up, for news worth reading (a listing now live). */
+  ms?: number;
+  /** Something didn't work: the toast can be pressed to say why, in plain
+   *  English, and to send it in as a ticket (components/ProblemSheet). */
+  problem?: Problem;
+}
+
+/** A failure explained (James, 8 Nov 2026: "explain to them why it didn't
+ *  work in the most simple of terms"). */
+export interface Problem {
+  /** What they were trying to do: "Submit to portal". */
+  action: string;
+  /** The toast's own words, when "<action> didn't work" isn't right (a slow page). */
+  title?: string;
+  /** The line under it on the toast. */
+  sub?: string;
+  /** Plain English: why it didn't work. */
+  why: string;
+  /** What to do about it, if anything. */
+  next: string;
+  /** For the ticket only: the call, the status, what the server said. */
+  technical: string;
 }
 
 export const TOAST_EVENT = "os-toast";
 
-export function toast(text: string, tone: ToastTone = "ok"): void {
+export function toast(text: string, tone: ToastTone = "ok", ms?: number): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent<ToastDetail>(TOAST_EVENT, { detail: { text, tone } }));
+  window.dispatchEvent(new CustomEvent<ToastDetail>(TOAST_EVENT, { detail: { text, tone, ms } }));
 }
 
 /**
@@ -33,3 +55,12 @@ export function toast(text: string, tone: ToastTone = "ok"): void {
 export const TOAST_LIFT_EVENT = "os-toast-lift";
 
 export type ToastLift = "up" | "down";
+
+/** Something they pressed didn't work: a red toast under Steve that opens
+ *  the reason and a one-press ticket. */
+export function problemToast(p: Problem): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<ToastDetail>(TOAST_EVENT, { detail: { text: p.title ?? `${p.action} didn't work`, tone: "bad", ms: 14000, problem: p } })
+  );
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import PeopleDeck from "@/components/new-look/PeopleDeck";
 import DoodleIcon from "@/components/DoodleIcon";
 import AddressField from "@/components/AddressField";
 
@@ -42,10 +43,16 @@ export default function Guarantors({
   title = "Guarantors",
   className = "",
   onChange,
+  deck = false,
+  hideEmpty = false,
 }: {
   source: Source;
   title?: string;
   className?: string;
+  /** One guarantor showing and any others stacked behind (a let's People tab, 8 Nov 2026). */
+  deck?: boolean;
+  /** Draw nothing when there are none (a running tenancy on the home's page, 8 Nov 2026). */
+  hideEmpty?: boolean;
   /** Told the guarantors as they now stand, so what goes to Propoly can follow (components/LetPropoly). */
   onChange?: (signature: string) => void;
 }) {
@@ -82,6 +89,53 @@ export default function Guarantors({
   }
 
   const many = applicants.length > 1;
+  const card = (g: GuarantorRow) => (
+            <div className="nl-pcard">
+              <div className="nl-pcard-head">
+                <div className="min-w-0">
+                  <p className="nl-pcard-name">{g.name}</p>
+                  <p className="nl-meta">{[g.relationship, `for ${g.applicantName || "the applicant"}`].filter(Boolean).join(" · ")}</p>
+                </div>
+                <div className="nl-pcard-tools">
+                  <button type="button" onClick={() => setEditing(g)} className="nl-pcard-edit">Change</button>
+                  <button type="button" onClick={() => void remove(g)} className="nl-pcard-quiet">Remove</button>
+                </div>
+              </div>
+              <div className="nl-pcard-lines">
+                {g.phone && <a href={`tel:${g.phone.replace(/\s/g, "")}`}><DoodleIcon name="call" size={13} />{g.phone}</a>}
+                {g.email && <a href={`mailto:${g.email}`}><DoodleIcon name="mail" size={13} /><span className="truncate">{g.email}</span></a>}
+                {g.address && <span><DoodleIcon name="home" size={13} />{g.address}</span>}
+              </div>
+            </div>
+  );
+  const form = editing && (
+        <GuarantorForm
+          source={source}
+          applicants={applicants}
+          many={many}
+          existing={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={(list) => { setRows(list); setEditing(null); }}
+        />
+  );
+  if (hideEmpty && !editing && (rows === null || rows.length === 0)) return null;
+  if (deck) {
+    return (
+      <div className={className}>
+        <PeopleDeck
+          title="Guarantor"
+          many="Guarantors"
+          steve="guarantors"
+          cards={rows === null ? null : rows.map((g) => ({ key: g.id, node: card(g) }))}
+          empty={error ? <span className="text-accent-dark">{error}</span> : applicants.length ? (<><b className="nl-pdeck-empty-t">No guarantor needed</b><span>Add one here if referencing asks for it.</span></>) : "No applicant on this let yet, so there is nobody to add a guarantor for."}
+          actions={rows !== null && applicants.length > 0 ? (
+            <button type="button" onClick={() => setEditing("new")} className="nl-pdeck-add">+ Add a guarantor</button>
+          ) : undefined}
+        />
+        {form}
+      </div>
+    );
+  }
   return (
     <div className={className} data-steve="guarantors">
       <div className="flex items-center justify-between gap-3">

@@ -515,6 +515,9 @@ export interface AskContext {
   viewingAs?: boolean;
   /** What this person calls him, when not Steve (lib/assistant-name). */
   assistantName?: string | null;
+  /** Asked from another website through the TLE OS extension (lib/propoly-steve):
+   *  where he is and what the OS knows about the record on that page. */
+  elsewhere?: string | null;
 }
 
 /**
@@ -539,7 +542,8 @@ function contextNote(ctx: AskContext): string | null {
   if (ctx.assistantName && ctx.assistantName !== "Steve") {
     bits.push(`This person calls you ${ctx.assistantName}. Answer to that name and use it when you refer to yourself; you are the same assistant.`);
   }
-  if (ctx.path) bits.push(`They are on the ${ctx.path} screen.`);
+  if (ctx.elsewhere) bits.push(ctx.elsewhere);
+  else if (ctx.path) bits.push(`They are on the ${ctx.path} screen.`);
   if (ctx.openListingId) {
     bits.push(
       `They have listing ${ctx.openListingId} open in front of them. If they say "this property", "it", or "here", that is the one — use that id directly and do not ask them which property they mean.`

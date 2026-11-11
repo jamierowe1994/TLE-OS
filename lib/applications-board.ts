@@ -46,6 +46,22 @@ export const ASSEMBLE_AT = 300; // the most any caller may ask for (see GET)
    agree within the minute, without the 2-8 s wait on every first look. */
 const FRESH_MS = RULES.application.freshMs;
 const KEEP_MS = RULES.application.keepMs;
+/* THE APPLICATIONS SCREEN ITSELF, UP TO AN HOUR (James, 9 Nov 2026, "Yes,
+   do it"). Past the ten minutes an agent's first look waited for the whole
+   rebuild - 2-8 s, p90 5.6 s in the live logs of 2-9 Nov - and that wait was
+   the slowest thing on the slowest tab. Now the Applications board and a
+   let's own page (and only they - ?quick=1) are answered at once from the
+   last board up to an hour old, with `stale: true`; the screen says it is
+   updating and reads again with ?fresh=1, which waits for the rebuild and
+   swaps it in. Every other caller keeps the ten minutes above, because
+   nothing else reads again. Past the hour the first look waits, as before. */
+export const QUICK_MS = 60 * 60_000;
+export type BoardRead = {
+  /** Show a held board up to this old while it is rebuilt behind. Default: the ten minutes. */
+  upToMs?: number;
+  /** The second read after a `stale` answer: wait for the rebuild rather than answer from the held board. */
+  fresh?: boolean;
+};
 const CACHE_KEY_BASE = "applications:assembled:v1";
 const cacheKeyFor = (rexUserId: string | null) => `${CACHE_KEY_BASE}:${rexUserId ?? "all"}`;
 
@@ -138,7 +154,7 @@ export function cut(apps: Assembled["applications"], limit: number): Assembled["
 
 /** The book for this scope: held if fresh, held and refreshed behind if not
     too old, otherwise assembled while the caller waits. */
-export async function assembled(rexUserId: string | null): Promise<{ held: Held; stale: boolean }> {
+export async function assembled(rexUserId: string | null, read: BoardRead = {}): Promise<{ held: Held; stale: boolean }> {
   const key = cacheKeyFor(rexUserId);
   let h: Held | null | undefined = board.held.get(key);
   if (!h) {
@@ -151,7 +167,10 @@ export async function assembled(rexUserId: string | null): Promise<{ held: Held;
   /* The REX copy's walk reads it again (lib/rex-outage, 21 Oct 2026). */
   const walk = await staleForWalk(h?.at);
   if (h && age < FRESH_MS && !walk) return { held: h, stale: false };
-  if (h && age < KEEP_MS && !walk) {
+  /* The screen already shows the held board and is waiting for the new one:
+     join the rebuild its first read started (or start one) and wait. */
+  if (read.fresh) return { held: await assemble(rexUserId), stale: false };
+  if (h && age < (read.upToMs ?? KEEP_MS) && !walk) {
     after(() => assemble(rexUserId).catch(() => {
       /* REX busy: the held copy stands and the next caller tries again */
     }));

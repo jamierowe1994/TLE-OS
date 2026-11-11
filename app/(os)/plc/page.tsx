@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Check, CheckId, Finding, PlcCase } from "@/lib/plc";
 import SaveChip, { SaveScopeProvider, trackSave, useSaveReporter, useSaveScope } from "@/components/SaveChip";
@@ -222,7 +223,7 @@ function AgentSide({
                           files.current[check.id] = el;
                         }}
                         type="file"
-                        accept="application/pdf,image/*"
+                        accept={ACCEPT_EVIDENCE}
                         className="hidden"
                         onChange={(e) => {
                           const f = e.target.files?.[0];
@@ -503,7 +504,7 @@ function AgentSide({
                           files.current[check.id] = el;
                         }}
                         type="file"
-                        accept="application/pdf,image/*"
+                        accept={ACCEPT_EVIDENCE}
                         className="hidden"
                         onChange={(e) => {
                           const f = e.target.files?.[0];

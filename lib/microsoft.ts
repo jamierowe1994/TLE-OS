@@ -350,6 +350,10 @@ export interface GraphSend {
   /** Extra headers, "x-" ones only (Graph refuses any other): a send's own record id, so the
    *  copy in their Sent Items, and any reply quoting it, can be matched back to it. */
   headers?: Record<string, string>;
+  /** The home it is about, when the caller knows (lib/mail-threads files it there); otherwise found from its words. */
+  about?: { address?: string | null; propertyId?: string | null } | null;
+  /** What it was, for the thread's label on the record ("Team email", "Works order"). */
+  what?: string;
 }
 
 /**
@@ -372,6 +376,17 @@ export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd
   assertMaySendAs(owner?.ms_email, recipients);
   const token = await msAccessTokenFor(userId);
   const bcc = await rexDropboxFor(msg.rexUserId ?? null);
+
+  /* EVERY SEND STARTS A THREAD ON THE RECORD (James, 6 Nov 2026: "Any emails
+     from the system should be registered on the system automatically ...
+     emails back from the tenant and landlords should automatically be saved").
+     The header is how its copy in Sent Items is found again, and from it the
+     conversation whose replies are copied in (lib/mail-threads). A PLC send
+     brings its own marker and notes its own thread, so is left alone. */
+  const { THREAD_HEADER } = await import("@/lib/mail-threads");
+  const own = Object.keys(msg.headers ?? {}).some((k) => k.toLowerCase() === THREAD_HEADER.toLowerCase());
+  const marker = own ? null : randomBytes(12).toString("hex");
+  const headers = marker ? { ...(msg.headers ?? {}), [THREAD_HEADER]: marker } : msg.headers;
 
   /* Their own footer, under everything that leaves their mailbox (James,
      21 Sep 2026). Here and not in the callers, because this is the one door
@@ -400,8 +415,8 @@ export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd
         toRecipients: [{ emailAddress: { address: msg.to.email, name: msg.to.name } }],
         ...(msg.cc?.length ? { ccRecipients: msg.cc.map((c) => ({ emailAddress: { address: c.email, name: c.name } })) } : {}),
         ...(bcc ? { bccRecipients: [{ emailAddress: { address: bcc } }] } : {}),
-        ...(msg.headers && Object.keys(msg.headers).length
-          ? { internetMessageHeaders: Object.entries(msg.headers).filter(([k]) => /^x-/i.test(k)).map(([name, value]) => ({ name, value })) }
+        ...(headers && Object.keys(headers).length
+          ? { internetMessageHeaders: Object.entries(headers).filter(([k]) => /^x-/i.test(k)).map(([name, value]) => ({ name, value })) }
           : {}),
         /* Graph wants the type named on every attachment, and the bytes inline.
            Fine for what we send here - a calendar file is under a kilobyte.
@@ -428,6 +443,10 @@ export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(`Microsoft refused the send (${res.status}). ${detail.slice(0, 300)}`);
+  }
+  if (marker) {
+    const { startedFromSend } = await import("@/lib/mail-threads");
+    await startedFromSend({ userId, marker, subject: msg.subject, to: msg.to.email, html: msg.body, about: msg.about, what: msg.what, by: owner?.email ?? "" });
   }
   return { bccd: Boolean(bcc) };
 }

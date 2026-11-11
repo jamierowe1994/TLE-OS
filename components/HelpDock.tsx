@@ -971,6 +971,15 @@ function Dock() {
     window.addEventListener("os-steve-ask", onAsk);
     return () => window.removeEventListener("os-steve-ask", onAsk);
   }, []);
+
+  /* He waves when he has news for them - a fixed ticket (components/TicketFixedNotice, 9 Nov 2026). */
+  useEffect(() => {
+    const onWave = () => {
+      if (!openRef.current) react("wave", 2400);
+    };
+    window.addEventListener("os-steve-wave", onWave);
+    return () => window.removeEventListener("os-steve-wave", onWave);
+  }, [react]);
   useEffect(() => {
     if (!queued || busy || !signedIn) return;
     setQueued(null);

@@ -20,7 +20,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { tenants?: string[]; landlord?: string | null; propertyId?: string | null } = {};
+  let body: { tenants?: string[]; landlord?: string | null; landlords?: string[]; propertyId?: string | null } = {};
   try {
     body = await req.json();
   } catch {
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       by: await actorName(req, "Agent"),
       tenants: Array.isArray(body.tenants) ? body.tenants.map(String).slice(0, 8) : [],
       landlord: typeof body.landlord === "string" ? body.landlord : null,
+      landlords: Array.isArray(body.landlords) ? body.landlords.map((n) => String(n).slice(0, 120)).slice(0, 8) : [],
       propertyId: typeof body.propertyId === "string" && /^[\w-]{1,40}$/.test(body.propertyId) ? body.propertyId : null,
     });
     return NextResponse.json({

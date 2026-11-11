@@ -46,6 +46,8 @@ export default function Compose({
   audience = "any",
   merge,
   language,
+  toName,
+  subject: startSubject,
 }: {
   open: boolean;
   onClose: () => void;
@@ -57,17 +59,27 @@ export default function Compose({
   merge: Record<string, string | undefined>;
   /** The customer's language, when a Translate press found one (lib/translate). */
   language?: string | null;
+  /** Who it is to, by name, shown beside the address (Lianna Denholm, 10 Nov 2026, ticket 7d51d864). */
+  toName?: string | null;
+  /** The subject it opens with, for the agent to type over: the home it is about, say. */
+  subject?: string | null;
 }) {
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [picked, setPicked] = useState<string>("");
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(startSubject ?? "");
+  /* THE SUBJECT IS THERE WHEN IT OPENS (Lianna Denholm, 10 Nov 2026, ticket
+     7d51d864: "the subject line needs to appear when we click on email").
+     It opened blank; now it opens with what the caller says it is about,
+     never over anything already typed, and a template still sets its own. */
+  useEffect(() => {
+    if (open && startSubject) setSubject((s) => s || startSubject);
+  }, [open, startSubject]);
   const [body, setBody] = useState("");
   const [preview, setPreview] = useState<{
     html: string;
     missing: string[];
     sendEnabled: boolean;
   } | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   /* Translate my reply (Amrit Bhogal, 14 Oct 2026): the agent writes in
      English, sees it in the customer's language, checks it, and puts it in
@@ -121,7 +133,7 @@ export default function Compose({
         if (draft.body !== undefined) setBody(draft.body);
       },
       fields: [
-        { label: "To", value: to || "not set" },
+        { label: "To", value: [toName?.trim(), to || "not set"].filter(Boolean).join(", ") },
         { label: "Audience", value: audience },
         { label: "Subject so far", value: subject || "empty" },
         { label: "Body so far", value: body.slice(0, 400) || "empty" },
@@ -130,7 +142,7 @@ export default function Compose({
           .map(([k, v]) => ({ label: k, value: String(v) })),
       ],
     });
-  }, [open, to, audience, subject, body, merge]);
+  }, [open, to, toName, audience, subject, body, merge]);
 
   useEffect(() => {
     if (!open) return;
@@ -181,24 +193,31 @@ export default function Compose({
   const canSend = Boolean(preview?.sendEnabled) && !missing.length && to.includes("@");
 
   return (
-    <div className="fixed inset-0 z-[150] flex justify-end bg-ink/35" onClick={onClose}>
+    /* In the middle of the screen, the writing on the left and what they'll
+       receive on the right (James, 8 Nov 2026: "open out on a central page,
+       not on the side tab"). */
+    <div data-look="new" className="nl-compose-wrap" onClick={onClose}>
       <aside
-        className="flex h-full w-full max-w-[620px] flex-col bg-page shadow-2xl"
+        className="nl-compose"
+        role="document"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-5 py-4">
+        <header className="nl-compose-head">
           <div className="min-w-0">
-            <p className="hand text-[17px] leading-tight">Write an email</p>
-            <p className="truncate text-[11.5px] text-muted">
-              To {to || <span className="text-accent-dark">no address on this record</span>}
+            <p className="nl-compose-title">Write an Email</p>
+            <p className="nl-compose-to">
+              To {toName?.trim() ? <><b className="font-semibold">{toName.trim()}</b>{to ? ` · ${to}` : ""}</> : null}
+              {!toName?.trim() && (to || <span className="text-accent-dark">no address on this record</span>)}
+              {toName?.trim() && !to && <span className="text-accent-dark"> · no address on this record</span>}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-[18px] leading-none text-muted hover:text-ink">
-            ✕
+          <button type="button" onClick={onClose} className="nl-compose-x" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="nl-compose-main">
+        <div className="nl-compose-write">
           {/* TEMPLATES. Pick one, then edit it — the words are a starting
               point, never a cage. */}
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Start from</p>
@@ -332,31 +351,21 @@ export default function Compose({
             </p>
           )}
 
-          {preview && (
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => setShowPreview((v) => !v)}
-                className="text-[12px] text-muted underline"
-              >
-                {showPreview ? "Hide" : "Show"} what they will receive
-              </button>
-              {showPreview && (
-                <iframe
-                  title="Email preview"
-                  srcDoc={preview.html}
-                  sandbox=""
-                  className="mt-2 h-[420px] w-full rounded-xl border border-line/70 bg-white"
-                />
-              )}
-            </div>
-          )}
-
           {note && <p className="mt-3 text-[12px] leading-relaxed text-accent-dark">{note}</p>}
+        </div>
+          {/* What they'll receive, always beside it. */}
+          <div className="nl-compose-preview">
+            <p className="nl-compose-k">What they&apos;ll receive</p>
+            {preview ? (
+              <iframe title="Email preview" srcDoc={preview.html} sandbox="" />
+            ) : (
+              <p className="nl-compose-empty">Pick a template or start writing, and it shows here as they&apos;ll see it.</p>
+            )}
+          </div>
         </div>
 
         {/* Clear of Steve's round button in the corner, which sat on top of Send. */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 py-3.5 pl-5 pr-24">
+        <div className="nl-compose-foot">
           <p className="text-[11px] leading-relaxed text-muted">
             {preview?.sendEnabled
               ? "This will go to the address above."
@@ -379,9 +388,7 @@ export default function Compose({
               }
             }}
             disabled={!canSend}
-            className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[12px] font-semibold ${
-              canSend ? "bg-accent-dark text-white" : "cursor-not-allowed bg-line/40 text-muted"
-            }`}
+            className="nl-btn nl-btn--primary"
           >
             <DoodleIcon name="mail" size={13} />
             {preview && !preview.sendEnabled ? "Sending is off" : "Send"}

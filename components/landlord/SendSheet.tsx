@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useEffect, useRef, useState } from "react";
 import DocCamera from "@/components/landlord/DocCamera";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -201,7 +202,7 @@ export default function SendSheet({
           <input
             ref={anyFile}
             type="file"
-            accept="application/pdf,image/*"
+            accept={ACCEPT_EVIDENCE}
             multiple
             className="hidden"
             onChange={(e) => {

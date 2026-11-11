@@ -68,7 +68,7 @@ function Door() {
   }
 
   return (
-    <DoorFrame art="building">
+    <DoorFrame art="building" title={["Knock,", "Knock."]} line="Pop the office code in.">
       <div>
 
         {!choosing ? (
@@ -108,7 +108,7 @@ function Door() {
                   key={w.id}
                   type="button"
                   onClick={() => go(w.href)}
-                  className="w-full rounded-2xl border border-line bg-card px-5 py-4 text-left transition-colors hover:border-ink/40"
+                  className="door-choice px-5 py-4"
                 >
                   <span className="block text-[14px] font-semibold">{w.label}</span>
                   <span className="mt-0.5 block text-[12px] text-muted">{w.detail}</span>

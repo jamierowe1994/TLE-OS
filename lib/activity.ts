@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { getApplications } from "@/lib/applications";
+import type { BoardRead } from "@/lib/applications-board";
 
 /**
  * When somebody last did something on a listing or an application.
@@ -59,13 +60,30 @@ export interface Activity {
    offer, and that must not take the new advert off the board. */
 const ARRIVING_DAYS = 14;
 
-export async function activity(): Promise<Activity> {
+/**
+ * `read` is how the held board is read (lib/applications-board): the PM
+ * Dashboard's first read takes the last board at once, and `seen` is told
+ * which board that was and whether it was held over, so the dashboard can say
+ * so on screen (9 Nov 2026).
+ */
+export async function activity(read: BoardRead = {}, seen?: (board: { at: number; stale: boolean }) => void): Promise<Activity> {
   const now = Date.now();
   const app = new Map<string, number>();
   const listing = new Map<string, number>();
 
   const [book, comments, plc, handovers, updates, viewings, archived, decided] = await Promise.all([
-    getApplications(300).catch(() => []),
+    /* The held board of every application (lib/applications-board, the same
+       one Applications shows, under the application rule in lib/staleness)
+       rather than a walk of its own (9 Nov 2026): a cold walk made this the
+       slowest call on Listings, 4 s at p90 last week. Its own walk only if
+       the board cannot be had. */
+    import("@/lib/applications-board")
+      .then(({ assembled }) => assembled(null, read))
+      .then(({ held, stale }) => {
+        seen?.({ at: held.at, stale });
+        return held.value.applications;
+      })
+      .catch(() => getApplications(300).catch(() => [])),
     rows<{ id: string; at: string }>(
       `SELECT application_id AS id, MAX(created_at) AS at FROM os_application_comments GROUP BY 1`
     ),

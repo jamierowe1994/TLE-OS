@@ -10,6 +10,7 @@ import { setOrderBank } from "@/lib/contractor-bank";
 import { tellAccounts } from "@/lib/works-emails";
 import { invoiceSettings } from "@/lib/invoices";
 import { withR2, R2_BUCKET, safeName, r2Configured } from "@/lib/r2";
+import { fileType } from "@/lib/upload-rules";
 
 /**
  * A contractor's invoice for work nobody raised on the OS (Rhiannon, 19 Oct
@@ -78,6 +79,16 @@ export async function POST(req: NextRequest) {
   }
   const mayEdit = contractor.ownerId ? contractor.ownerId === me.id : can(actor.role, "see:business");
 
+  /* The landlord, off the home's own record where the picker had none - a
+     listing carries no landlord's name, and the job would be filed with a
+     blank one (10 Nov 2026). Never a reason to refuse the invoice. */
+  let landlord = str("landlord");
+  if (!landlord && str("propertyId")) {
+    const { homePeople } = await import("@/lib/home-people");
+    const people = await homePeople(str("propertyId")).catch(() => null);
+    landlord = [...new Set([people?.landlord?.name, ...(people?.otherLandlords ?? []).map((l) => l.name)].map((n) => (n ?? "").trim()).filter(Boolean))].join(" & ");
+  }
+
   try {
     const order = await createOrder(
       {
@@ -85,7 +96,7 @@ export async function POST(req: NextRequest) {
         propertyId: str("propertyId") || null,
         propertyName,
         locality: str("locality"),
-        landlord: str("landlord"),
+        landlord,
         title,
         category: "Other",
         urgency: "routine",
@@ -99,8 +110,8 @@ export async function POST(req: NextRequest) {
     await logEvent(order.id, by, "note", "Logged from the contractor's invoice: the work was done without a job on the OS.");
     const key = `documents/works-${order.ref}/${Date.now()}-${safeName(file.name) || "invoice"}`;
     const body = Buffer.from(await file.arrayBuffer());
-    await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
-    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: file.type, kind: "invoice" } }, by);
+    await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: fileType(file.name, file.type) || "application/octet-stream" })));
+    await moveOrder(order.id, { action: "file", file: { key, name: file.name, type: fileType(file.name, file.type), kind: "invoice" } }, by);
     await moveOrder(order.id, { action: "done", note: "Done before it was logged; see the contractor's invoice.", completedAt: doneOn ? new Date(doneOn).toISOString() : null }, by);
     /* Nobody to ask whether they're happy about work done before it was
        logged (Rhiannon, 19 Oct 2026): it goes straight to the money. */

@@ -55,7 +55,15 @@ const STAGE_ICON: Record<string, string> = {
   post_appraisal: "checklist",
   takeon: "key",
   aml: "shield",
+  won: "star",
+  lost: "cross",
 };
+
+/* Won and Lost get tabs of their own after All open and the open stages
+   (James, 10 Nov 2026: an appraisal that became a listing vanished from the
+   board, with no tab and no search that could find it). They stay out of
+   All open and its count: that is the work still in play. */
+const DONE_STAGES = MA_STAGES.filter((s) => s.id === "won" || s.id === "lost");
 
 /**
  * How far back to look.
@@ -165,10 +173,29 @@ export default function MarketAppraisals() {
         .filter((m) => !needle || searchMatches(needle, m.address, m.postcode, m.landlord, m.agent))
         .sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
     }
+    if (filter === "won" || filter === "lost") {
+      /* Most recent visit first: there is nothing left to be urgent about. */
+      const when = (m: MarketAppraisal) => m.appointmentAt ?? m.valuedAt ?? "";
+      return withStage
+        .filter((m) => m.live === filter)
+        .sort((a, b) => when(b).localeCompare(when(a)));
+    }
     return (filter === "open" ? open : withStage.filter((m) => m.live === filter)).sort(
       (a, b) => urgencyOf(a) - urgencyOf(b)
     );
   }, [filter, all, archived, showArchived, period, q]);
+
+  /* A search on All open that matches won or lost ones says so, with the
+     tab to open, rather than "Nothing matches" over a file that exists. */
+  const doneMatches = useMemo(() => {
+    const needle = q.trim();
+    if (!needle || filter !== "open" || showArchived) return [] as { id: MaStage; label: string; n: number }[];
+    return DONE_STAGES.map((st) => ({
+      id: st.id,
+      label: st.label,
+      n: all.filter((m) => effectiveStage(m) === st.id && inPeriod(m.appointmentAt, period) && searchMatches(needle, m.address, m.postcode, m.landlord, m.agent)).length,
+    })).filter((x) => x.n > 0);
+  }, [q, filter, showArchived, all, period]);
 
   /* Arriving from Leads: booking an appraisal sends the agent here with
      ?open=<id>, and we forward to that appraisal's file.
@@ -236,7 +263,7 @@ export default function MarketAppraisals() {
         {booking ? (
           <BookAppraisalWizard onClose={() => setBooking(false)} onFinished={() => setReload((n) => n + 1)} />
         ) : null}
-        <div data-look="new" className="nl-page nl-rise nl-appr">
+        <div data-look="new" className="nl-page nl-rise nl-appr nl-edge">
           <Mast
             title="Market Appraisals"
             blurb={
@@ -290,6 +317,7 @@ export default function MarketAppraisals() {
               items={[
                 { id: "open", label: "All open", count: live === null ? null : openCount },
                 ...OPEN_STAGES.map((st) => ({ id: st.id as string, label: st.label, count: live === null ? null : counts.get(st.id) ?? 0 })),
+                ...DONE_STAGES.map((st) => ({ id: st.id as string, label: st.label, count: live === null ? null : counts.get(st.id) ?? 0 })),
                 ...(archived.length > 0 ? [{ id: "archived", label: "Archived", count: archived.length }] : []),
               ]}
             />
@@ -309,6 +337,16 @@ export default function MarketAppraisals() {
                 <p className="nl-block-title">The appraisals didn&apos;t load</p>
                 <p className="nl-meta mt-1">{loadError}</p>
               </div>
+            )}
+            {doneMatches.length > 0 && (
+              <p className="nl-meta mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>Also matches {doneMatches.map((d) => `${d.n} ${d.label.toLowerCase()}`).join(" and ")}.</span>
+                {doneMatches.map((d) => (
+                  <button key={d.id} type="button" className="nl-link" onClick={() => setFilter(d.id)}>
+                    Show {d.label}
+                  </button>
+                ))}
+              </p>
             )}
             {live === null ? (
               <BoardSkeleton kind="rows" label="Fetching the appraisals…" count={5} />
@@ -426,9 +464,9 @@ export default function MarketAppraisals() {
         onChange={(v) => { setFilter(v); setShowArchived(false); }}
         stages={[
           { id: "open" as const, label: "All open", icon: "analytics", count: openCount, blurb: "Everything still in play" },
-          ...OPEN_STAGES.map((st) => ({
+          ...[...OPEN_STAGES, ...DONE_STAGES].map((st) => ({
             id: st.id, label: st.label, icon: STAGE_ICON[st.id] ?? "doc",
-            count: counts.get(st.id) ?? 0, blurb: st.blurb,
+            count: counts.get(st.id) ?? 0, blurb: noDash(st.blurb),
           })),
         ]}
       />
@@ -457,6 +495,16 @@ export default function MarketAppraisals() {
         </div>
 
         {loadError && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12.5px] text-red-700">{loadError}</p>}
+        {doneMatches.length > 0 && (
+          <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted">
+            <span>Also matches {doneMatches.map((d) => `${d.n} ${d.label.toLowerCase()}`).join(" and ")}.</span>
+            {doneMatches.map((d) => (
+              <button key={d.id} type="button" onClick={() => setFilter(d.id)} className="underline">
+                Show {d.label}
+              </button>
+            ))}
+          </p>
+        )}
         {live === null ? (
           <BoardSkeleton kind={view === "tiles" ? "cards" : "rows"} label="Fetching the appraisals…" count={view === "tiles" ? 6 : 5} />
         ) : rows.length === 0 && loadError ? null : rows.length === 0 ? (

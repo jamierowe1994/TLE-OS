@@ -286,28 +286,24 @@ function quietWhenFixed(email: string): boolean {
  */
 export async function tellReporter(id: string, origin: string): Promise<boolean> {
   if (!hasDb()) return false;
-  const rows = await q<{ reporter_email: string; body: string; path: string; kind: string; told_at: Date | null }>(
-    `SELECT reporter_email, body, path, kind, told_at FROM os_bugs WHERE id = $1`,
+  const rows = await q<{ reporter_email: string; body: string; path: string; kind: string; told_at: Date | null; context: Record<string, unknown> | null }>(
+    `SELECT reporter_email, body, path, kind, told_at, context FROM os_bugs WHERE id = $1`,
     [id]
   ).catch(() => []);
   const b = rows[0];
   if (!b || b.told_at || b.kind === "auto" || !b.reporter_email.includes("@") || !isInternalAddress(b.reporter_email)) return false;
   if (quietWhenFixed(b.reporter_email)) return false;
 
-  const said = b.body.length > 400 ? `${b.body.slice(0, 400)}…` : b.body;
-  const subject = "Fixed: what you reported in TLE OS";
-  const text = [
-    "Thank you for reporting this. It has been fixed and is live now.",
-    "",
-    "You said:",
-    said,
-    "",
-    b.path ? `Try it again here: ${origin}${b.path}` : `Try it again in TLE OS: ${origin}`,
-    "",
-    "Still not right? Tell Steve in the bottom-right corner and it comes straight back.",
-  ].join("\n");
+  /* Steve tells them too, the next time they are in the OS or straight away
+     if they are (lib/ticket-fixed, 9 Nov 2026). Never fails the email. */
+  const { fixedEmail, fixStoryOf, leaveSteveNotice } = await import("@/lib/ticket-fixed");
+  await leaveSteveNotice(id).catch(() => false);
+
+  const who = await q<{ name: string | null }>(`SELECT name FROM os_users WHERE lower(email) = lower($1) LIMIT 1`, [b.reporter_email]).catch(() => []);
+  const firstName = (who[0]?.name ?? "").trim().split(/\s+/)[0] || b.reporter_email.split("@")[0].split(/[._-]/)[0].replace(/^./, (c) => c.toUpperCase());
+  const mail = fixedEmail({ firstName, said: b.body, story: fixStoryOf(b.context), link: b.path ? `${origin}${b.path}` : origin });
   try {
-    await sendEmail({ to: b.reporter_email, subject, html: renderPlain(subject, text).html, text });
+    await sendEmail({ to: b.reporter_email, subject: mail.subject, html: mail.html, text: mail.text });
     await q(`UPDATE os_bugs SET told_at = NOW() WHERE id = $1`, [id]);
     return true;
   } catch {

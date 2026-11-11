@@ -7,6 +7,9 @@ import FileDocuments, { UploadForm, type Doc } from "@/components/FileDocuments"
 import SendTermsPopout from "@/components/SendTermsPopout";
 import TermsPanel from "@/components/terms/TermsPanel";
 import HomeFacts from "@/components/HomeFacts";
+import { filesOnIssueDate } from "@/lib/cert-life";
+import { CERT_KINDS, CERT_KIND_LABEL, certFilesAs, certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import QueryThread from "@/components/QueryThread";
 import { useSaveReporter } from "@/components/SaveChip";
 import { Badge, Ico, Menu, type Tone } from "@/components/new-look/Parts";
@@ -18,6 +21,7 @@ import type { LetType } from "@/lib/let-type";
 import type { TermsRequest, TermsState } from "@/lib/use-listing-terms";
 import { regDay, regNumbers, regState, type RegState } from "@/lib/reg-numbers";
 import { everyLandlord, useJointLandlords, type HomeLandlord } from "@/lib/use-home-landlords";
+import type { AppraisalPaper } from "@/components/listing/ListingAppraisal";
 
 /**
  * THE LISTING'S COMPLIANCE, IN ONE PLACE (James, 12 Oct 2026).
@@ -147,6 +151,8 @@ export default function ListingCompliance({
   home,
   terms,
   landlord,
+  otherLandlords = [],
+  appraisalPapers = [],
   landlordRegistration,
   landlordRegistrationExpiry = null,
   landlordRegistrationOwner = null,
@@ -167,6 +173,18 @@ export default function ListingCompliance({
   home: ListingHome | null;
   terms: TermsState;
   landlord: { contactId: string | number | null; name?: string; email?: string; phone?: string };
+  /**
+   * Every landlord after the first, as the one reader names them
+   * (lib/landlords-for-home, 10 Nov 2026): the listing's second owner was
+   * never here, so the terms went to one signer and one ID was asked for.
+   */
+  otherLandlords?: HomeLandlord[];
+  /**
+   * The papers on the market appraisal this home came from and its lead
+   * (components/listing/ListingAppraisal, 10 Nov 2026): a landlord's ID or
+   * signed terms sent at the appraisal said "Not on file" on the listing.
+   */
+  appraisalPapers?: AppraisalPaper[];
   landlordRegistration: string | null;
   /** When each registration number runs out (lib/reg-numbers), from the listing's Landlord section. */
   landlordRegistrationExpiry?: Record<string, string> | null;
@@ -216,7 +234,7 @@ export default function ListingCompliance({
      joint landlords kept on the home (lib/property-people) under the same key
      the listing's Landlord section uses. A test listing keeps its own. */
   const joint = useJointLandlords(Number(listingId) < 0 ? null : propertyId ?? `listing:${listingId}`);
-  const landlords = everyLandlord([{ name: landlord.name, email: landlord.email, phone: landlord.phone }], joint ?? []);
+  const landlords = everyLandlord([{ name: landlord.name, email: landlord.email, phone: landlord.phone }], otherLandlords, joint ?? []);
 
   /* ── Where each landlord paper already is ── */
   const doc = (type: string): Held => {
@@ -231,6 +249,12 @@ export default function ListingCompliance({
     const d = (docs ?? []).find(named) ?? (first ? (docs ?? []).find((x) => x.type === type && x.name === docTypeLabel(type)) : undefined);
     return d ? { how: `Uploaded ${when(d.at)}`, name: d.name, url: d.url } : null;
   };
+  /* From the appraisal, the newest of a type; one only the office may open still says it is held. */
+  const fromAppraisal = (type: string): Held => {
+    const p = appraisalPapers.find((x) => x.type === type);
+    if (!p) return null;
+    return p.url ? { how: `${p.how}, on the appraisal${p.at ? ` ${when(p.at)}` : ""}`, name: p.name, url: p.url } : { how: "Held by the office, from the appraisal" };
+  };
   const paper = (field: string, how = "On the property record"): Held => {
     const p = papers?.files.find((f) => f.field === field);
     if (p) return { how, name: p.name, url: p.url };
@@ -240,6 +264,7 @@ export default function ListingCompliance({
     (terms.status === "ready" && terms.docs[0] ? { how: "Signed online", name: terms.docs[0].name, url: terms.docs[0].open } : null) ??
     doc("terms_of_business") ??
     paper("doc_terms_of_business") ??
+    fromAppraisal("terms_of_business") ??
     (home?.terms.held ? { how: home.terms.held.how, name: home.terms.held.name } : null) ??
     (home?.terms.rex ? { how: "Filed on the home's compliance record" } : null);
   const waiting = terms.status === "ready" ? terms.outstanding[0] ?? null : null;
@@ -274,9 +299,9 @@ export default function ListingCompliance({
         </>
       ),
     },
-    { key: "id", label: "Landlord ID", held: doc("landlord_id") ?? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_id")} /> },
-    { key: "own", label: "Proof of ownership", held: doc("landlord_proof_of_ownership") ?? paper("doc_landlord_id_ownership"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_proof_of_ownership")} /> },
-    { key: "aml", label: "AML check", held: doc("landlord_aml") ?? paper("landlord_aml"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_aml")} /> },
+    { key: "id", label: "Landlord ID", held: doc("landlord_id") ?? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id") ?? fromAppraisal("landlord_id"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_id")} /> },
+    { key: "own", label: "Proof of ownership", held: doc("landlord_proof_of_ownership") ?? paper("doc_landlord_id_ownership") ?? fromAppraisal("landlord_proof_of_ownership"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_proof_of_ownership")} /> },
+    { key: "aml", label: "AML check", held: doc("landlord_aml") ?? paper("landlord_aml") ?? fromAppraisal("landlord_aml"), need: "Not on file", action: <UploadButton onClick={() => upload("landlord_aml")} /> },
     ...(home?.scotland
       ? [{ key: "reg", label: "Landlord registration", held: regHeld, reg: regWorst, need: "Not on file", action: <UploadButton onClick={() => upload("other")} /> }]
       : []),
@@ -292,13 +317,17 @@ export default function ListingCompliance({
       const who = (l.name ?? "").trim();
       const held =
         r.key === "id"
-          ? docFor("landlord_id", who, i === 0) ?? (i === 0 ? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id") : null)
-          : docFor("landlord_aml", who, i === 0) ?? (i === 0 ? paper("landlord_aml") : null);
+          ? docFor("landlord_id", who, i === 0) ?? (i === 0 ? paper("doc_landlord_id_ownership") ?? paper("landlord_photo_id") ?? fromAppraisal("landlord_id") : null)
+          : docFor("landlord_aml", who, i === 0) ?? (i === 0 ? paper("landlord_aml") ?? fromAppraisal("landlord_aml") : null);
       return { key: `${r.key}:${i}`, label: `${who}: ${r.key === "id" ? "ID" : "AML check"}`, held, reg: null, who };
     });
   };
 
-  const loose: LooseDoc[] = (docs ?? []).filter((d) => DOC_TO_CERT[d.type]).map((d) => ({ type: DOC_TO_CERT[d.type], name: d.fileName || d.name, url: d.url, at: d.at }));
+  const loose: LooseDoc[] = [
+    ...(docs ?? []).filter((d) => DOC_TO_CERT[d.type]).map((d) => ({ type: DOC_TO_CERT[d.type], name: d.fileName || d.name, url: d.url, at: d.at })),
+    /* A certificate the landlord sent at the appraisal, until one is filed on the home. */
+    ...appraisalPapers.filter((p) => DOC_TO_CERT[p.type] && p.url && p.at).map((p) => ({ type: DOC_TO_CERT[p.type], name: p.name, url: p.url as string, at: p.at as string })),
+  ];
   const reading = docs === null || papers === null || (terms.status === "loading" && !home);
   /* Terms can be filed on the home's own record, so nothing offers to send them until that has answered. */
   const termsReading = reading || (!home && !homeProblem) || joint === null;
@@ -589,7 +618,17 @@ const CERT_TYPE: Record<string, string> = {
   emergency_lighting_fire_exit: "Fire safety",
 };
 const EIC = "eic";
-const CERT_CHOICES: [string, string][] = Object.entries(CERT_TYPE).flatMap(([k, v]): [string, string][] => (k === "eicr" ? [[k, v], [EIC, "EIC (new build or full rewire)"]] : [[k, v]]));
+/* What can be picked: the shared list (lib/cert-kinds), which offers a fire
+   risk assessment and an emergency lighting certificate by name. */
+const CERT_CHOICES: [string, string][] = CERT_KINDS.flatMap((k): [string, string][] => (k.id === "eicr" ? [[k.id, k.label], [EIC, "EIC (new build or full rewire)"]] : [[k.id, k.label]]));
+/**
+ * Why File It is greyed, as a line under it, or null when it is ready. One
+ * rule for every door (lib/cert-kinds): a PAT report or a fire safety
+ * certificate has no expiry, so the day it was done is enough. This form
+ * wanted an expiry whatever the type until 10 Nov 2026, and did not say so.
+ */
+const filingNotReady = (f: Filing): string | null =>
+  certNotReadyBecause({ type: f.type, expiry: f.expiry, issue: f.issue, eic: f.type === EIC ? { reason: f.eicReason } : null });
 const READER_TYPE: Record<string, string> = { hmo_licence: "mandatory_hmo_license" };
 const readsAsEic = (r: CertRead | null) => Boolean(r && r.type === "eicr" && /installation certificate|new (electrical )?installation|\bEIC\b/i.test(r.notes) && !/condition report/i.test(r.notes));
 const capEic = (issue: string, expiry: string) => {
@@ -799,24 +838,23 @@ function NewLookCompliance({
       .then((r) => r.json())
       .catch(() => ({ ok: false }))) as { ok?: boolean; read?: CertRead; error?: string };
     const read = j.ok && j.read ? j.read : null;
-    const read0 = forType || (read ? READER_TYPE[read.type] ?? read.type : "");
+    /* The row's own type, unless the reader names a kind that files as it (a
+       fire risk assessment on the fire row): then the reader's, which says more. */
+    const readType = read ? READER_TYPE[read.type] ?? read.type : "";
+    const read0 = forType && certFilesAs(readType) !== forType ? forType : readType || forType;
     const type = read0 === "eicr" && readsAsEic(read) ? EIC : read0;
     const issue = read?.issue ?? "";
     const expiry = type === EIC && issue ? capEic(issue, read?.expiry ?? "") : read?.expiry ?? "";
     setFiling((p) =>
       p && p.file === file
-        ? { ...p, read, type: CERT_TYPE[type] || type === EIC ? type : p.type, expiry, issue, busy: false, note: j.ok ? null : j.error ?? "The reader could not open it; fill the dates in by hand." }
+        ? { ...p, read, type: CERT_KIND_LABEL[type] || type === EIC ? type : p.type, expiry, issue, busy: false, note: j.ok ? null : j.error ?? "The reader could not open it; fill the dates in by hand." }
         : p
     );
   }
 
   async function fileCert() {
-    if (!filing || !filing.type || !filing.expiry) return;
+    if (!filing || filingNotReady(filing)) return;
     const eic = filing.type === EIC;
-    if (eic && (!filing.issue || !filing.eicReason)) {
-      setFiling((p) => (p ? { ...p, note: "An EIC needs the date it was issued, and whether the home is a new build or was fully rewired." } : p));
-      return;
-    }
     setFiling((p) => (p ? { ...p, busy: true, note: null } : p));
     const target = propertyId ?? cert?.propertyId ?? null;
     const body = new FormData();
@@ -845,7 +883,7 @@ function NewLookCompliance({
       return;
     }
     settle({ ok: true });
-    if (eic && target && /^(\d+|pm-[0-9a-f-]+)$/i.test(target)) {
+    if (eic && target && /^(\d+|pm-[0-9a-f-]+|mt-[a-z0-9]+)$/i.test(target)) {
       await fetch("/api/home-facts", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ home: target, electrical: "eic", eicReason: filing.eicReason }) }).catch(() => null);
     }
     setFiling(null);
@@ -953,7 +991,10 @@ function NewLookCompliance({
     const queried = Boolean(r.checking?.queried);
     const withCompliance = Boolean(r.checking && !queried);
     const spare = !r.checking ? loose.find((d) => (answersType(r, d.type) || d.type === r.type) && (r.state !== "valid" || Boolean(f?.uploadedAt && d.at > (f.uploadedAt as string)))) ?? null : null;
-    const dated = r.expiry ? `${r.state === "expired" ? "Expired" : "Valid to"} ${ymd(r.expiry)}` : r.issued ? `Issued ${ymd(r.issued)}` : "";
+    /* A PAT or fire safety check carries only the day it was done; the date
+       after it is that day plus a year (lib/cert-life), so it says due again,
+       not expires (Rhiannon Dodge, 9 Nov 2026). */
+    const dated = r.issued && filesOnIssueDate(r.type) ? `Issued ${ymd(r.issued)}${r.expiry ? `, ${r.state === "expired" ? "was due" : "due again"} ${ymd(r.expiry)}` : ""}` : r.expiry ? `${r.state === "expired" ? "Expired" : "Valid to"} ${ymd(r.expiry)}` : r.issued ? `Issued ${ymd(r.issued)}` : "";
     const status: ListRow["status"] = r.renewal
       ? { label: "With the council", tone: "neutral", title: `Renewal applied for ${ymd(r.renewal.appliedOn)}` }
       : queried
@@ -1126,7 +1167,7 @@ function NewLookCompliance({
         <>
           {filing.read && (
             <p className="nl-meta">
-              Reads as {readsAsEic(filing.read) ? "an EIC" : CERT_TYPE[READER_TYPE[filing.read.type] ?? filing.read.type] ?? filing.read.type}
+              Reads as {readsAsEic(filing.read) ? "an EIC" : CERT_KIND_LABEL[READER_TYPE[filing.read.type] ?? filing.read.type] ?? filing.read.type}
               {filing.read.expiry ? `, expires ${ymd(filing.read.expiry)}${filing.read.expiryDerived ? " (worked out from the issue date)" : ""}` : ", no expiry printed"}
               {filing.read.address ? `. Address on it: ${filing.read.address}` : ""}.
             </p>
@@ -1144,13 +1185,14 @@ function NewLookCompliance({
               </select>
             </label>
             <label className="nl-field">
-              <span>Expires</span>
+              <span>{kindFilesOnIssueDate(filing.type) ? "Expires (optional)" : "Expires"}</span>
               <input type="date" value={filing.expiry} onChange={(e) => setFiling((p) => (p ? { ...p, expiry: e.target.value } : p))} />
             </label>
             <label className="nl-field">
               <span>Issued</span>
               <input type="date" value={filing.issue} onChange={(e) => setFiling((p) => (p ? { ...p, issue: e.target.value, expiry: p.type === EIC && e.target.value ? capEic(e.target.value, p.expiry) : p.expiry } : p))} />
             </label>
+            {noExpiryNote(filing.type, filing.issue, filing.expiry, ymd) && <p className="nl-meta nl-cmp-span">{noExpiryNote(filing.type, filing.issue, filing.expiry, ymd)}</p>}
             {filing.type === EIC && (
               <label className="nl-field nl-cmp-span">
                 <span>Why an EIC</span>
@@ -1180,13 +1222,14 @@ function NewLookCompliance({
           </div>
           {filing.note && <p className="nl-meta nl-cmp-err">{filing.note}</p>}
           <div className="nl-cmp-filer-acts">
-            <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={filing.busy || !filing.type || !filing.expiry} onClick={() => void fileCert()}>
+            <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" disabled={filing.busy || Boolean(filingNotReady(filing))} onClick={() => void fileCert()}>
               {filing.busy ? "Filing…" : "File it"}
             </button>
             <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" disabled={filing.busy} onClick={() => setFiling(null)}>
               Cancel
             </button>
           </div>
+          {!filing.busy && filingNotReady(filing) && <p className="nl-meta">{filingNotReady(filing)}</p>}
         </>
       )}
     </div>
@@ -1194,7 +1237,7 @@ function NewLookCompliance({
 
   return (
     <div className="nl-cmp">
-      <input ref={certInput} type="file" accept="application/pdf,image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void startCert(f, certFor.current.type, certFor.current.replaces); }} />
+      <input ref={certInput} type="file" accept={ACCEPT_EVIDENCE} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void startCert(f, certFor.current.type, certFor.current.replaces); }} />
       <input ref={paperInput} type="file" accept={DOC_ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void paperChosen(f); }} />
 
       {(introOnly || letOnly) && (
@@ -1374,7 +1417,18 @@ function NewLookCompliance({
                 </div>
               </li>
             )}
-            {list.map((r) => (
+            {/* Two groups, the landlord's papers and the home's certificates
+                (James, 8 Nov 2026: "split the documents ... so it's less all
+                over the place"). */}
+            {([
+              ["The Landlord", paperList],
+              ["The Property", certError ? [] : certList],
+            ] as const).flatMap(([head, rowsIn]) => rowsIn.length ? [
+              <li key={`head-${head}`} className="nl-cmp-group">
+                <span>{head}</span>
+                <small>{rowsIn.filter((r) => r.count === "on").length} of {rowsIn.length} on file</small>
+              </li>,
+              ...rowsIn.map((r) => (
               <li key={r.key}>
                 <div className="nl-cmp-row">
                   <span className={`nl-cmp-ic${r.icon === "ok" ? " is-ok" : r.icon === "warn" ? " is-warn" : ""}`}>
@@ -1394,7 +1448,7 @@ function NewLookCompliance({
                 {r.below}
                 {filerRow?.key === r.key && filer}
               </li>
-            ))}
+            ))] : [])}
           </ul>
         )}
         {filing && !filerRow && filer}

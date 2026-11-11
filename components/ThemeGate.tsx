@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyDarkPalette,
+  applyNav,
+  readNav,
   applyTheme,
   isNight,
   readTheme,
@@ -134,6 +136,7 @@ export default function ThemeGate({ children }: { children: React.ReactNode }) {
   // First paint: honour the saved choice, or open the chooser if there isn't one.
   useEffect(() => {
     applyDarkPalette();
+    applyNav(readNav());
     const saved = readTheme();
     if (saved) {
       choice.current = saved;

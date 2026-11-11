@@ -112,9 +112,15 @@ export async function landlordTo(listingId: string): Promise<LandlordTo> {
   }
   const a = await landlordForListing(listingId).catch(() => null);
   if (!a || !a.ok) return { name: "", email: null, problem: "We couldn't look the landlord up just now. Try again in a minute, or ring them." };
-  if (!a.landlord) return { name: "", email: null, problem: "There is no landlord on this home's record, so there is nobody to email. Ring them instead." };
-  if (a.landlord.from === "record" || !a.landlord.email) return { name: a.landlord.name, email: null, problem: `There is no email address for ${a.landlord.name || "the landlord"}. Add one on their contact, or ring them.` };
-  return { name: a.landlord.name, email: a.landlord.email, problem: null };
+  if (!a.landlord) return { name: "", email: null, problem: "No landlord is held for this home, so there is nobody to email. Add them under Landlord on the listing, or ring them." };
+  /* A landlord from the home's own record was told "no email address" whether
+     or not the record had one (10 Nov 2026): the record has carried the email
+     typed there since 4 Nov. Where the first landlord has none and another
+     does, it goes to the one who can be written to; the agent sees who before
+     anything is sent. */
+  const to = a.landlords.find((l) => l.email) ?? null;
+  if (!to?.email) return { name: a.landlord.name, email: null, problem: `There is no email address for ${a.landlord.name || "the landlord"}. Add one under Landlord on the listing, or ring them.` };
+  return { name: to.name, email: to.email, problem: null };
 }
 
 /** The household in a line: names, then how many, then pets. */

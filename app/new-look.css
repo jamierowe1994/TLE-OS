@@ -19,8 +19,11 @@
 @import "./new-look/search-float.css";
 @import "./new-look/contractors.css";
 @import "./new-look/tools.css";
+@import "./new-look/money-tools.css";
+@import "./new-look/agent-tools.css";
 @import "./new-look/learning.css";
 @import "./new-look/systems.css";
+@import "./new-look/tile-art.css";
 @import "./new-look/job.css";
 @import "./new-look/job-chase.css";
 @import "./new-look/steve-orb.css";
@@ -51,23 +54,32 @@
   --line: #e9e9e6;
   --line-strong: #d6d6d2;
   --page: #ffffff;
-  --card: #fafaf9;
+  /* THE FINAL PALETTE (James, 7 Nov 2026), so the OS reads as one family
+     with the new website: brown #56423e for buttons, terracotta #a85a51 the
+     accent, dusty clay #c4a092, olive #56634a, linen #f5efe6, warm off-white
+     #f8f7f4, sage wash #f1f4ec. The design's orange #eb8c6d and its peach
+     washes are gone. */
+  --card: #f8f7f4;
   --panel: #f7f7f6;
   --box: #f0f0ee;
-  --primary: #eb8c6d;
-  --on-primary: #141413;
-  --accent: #eb8c6d;
-  --accent-dark: #aa4a2b;
-  --accent-soft: #f5e3c7;
-  --pal-pink: #f5e3c7;
-  --pal-clay: #aa4a2b;
+  --primary: #56423e;
+  --on-primary: #ffffff;
+  --accent: #a85a51;
+  /* What is late or wants attention: terracotta, 5.3:1 on white. */
+  --accent-dark: #a85a51;
+  --accent-soft: #f5efe6;
+  --pal-pink: #f5efe6;
+  --pal-clay: #c4a092;
   --pal-sage: #b9bea6;
-  --pal-brown: #141413;
+  --pal-brown: #56423e;
   --sage: #b9bea6;
-  --brown: #141413;
-  --sage-deep: #66785b;
-  --sage-ink: #55684a;
-  --sage-soft: #e3e3d3;
+  --brown: #56423e;
+  --sage-deep: #56634a;
+  --sage-ink: #56634a;
+  --sage-soft: #f1f4ec;
+  /* A problem, said quietly: a terracotta tint, darker terracotta words. */
+  --bad-soft: #f5ebea;
+  --bad-ink: #8a463f;
   --info: #3d3d3a;
   --info-soft: #e3dacc;
   --warning: #8a531a;
@@ -95,13 +107,15 @@
   --card: #262624;
   --panel: #2a2927;
   --box: #33322f;
-  --primary: #eb8c6d;
+  --primary: #c4a092;
   --on-primary: #141413;
-  --accent: #eb8c6d;
-  --accent-dark: #f0a283;
-  --accent-soft: #3a2c1f;
-  --pal-pink: #3a2c1f;
-  --pal-clay: #c86a4c;
+  --accent: #c28b85;
+  --accent-dark: #d9b3ae;
+  --accent-soft: #33292a;
+  --pal-pink: #33292a;
+  --pal-clay: #c4a092;
+  --bad-soft: #3a2a28;
+  --bad-ink: #d9b3ae;
   --pal-sage: #7e8f73;
   --pal-brown: #faf9f5;
   --sage: #7e8f73;
@@ -123,7 +137,13 @@
 /* ── the page ───────────────────────────────────────────────────────────── */
 /* The design's margins: the page sits centred in the panel, 1288px of content at most. */
 .nl-page { max-width: 1288px; margin-left: auto; margin-right: auto; }
-.nl-rise > * { animation: nl-in 0.5s var(--nl-ease) both; }
+/* Fills backwards only (Dan Richards, ticket 3ebc8060, 8 Nov 2026: asking the
+   tenant for access opened the sheet behind the sidebar, cut off on the left).
+   Held at the end (`both`), the rise kept a transform on the page, and a
+   transform turns the page into the frame for anything `fixed` inside it - so
+   every sheet opened from a listing was drawn in the page, not the window. The
+   same reason the screen-change fade in globals.css fills backwards. */
+.nl-rise > * { animation: nl-in 0.5s var(--nl-ease) backwards; }
 .nl-rise > *:nth-child(2) { animation-delay: 0.05s; }
 .nl-rise > *:nth-child(3) { animation-delay: 0.1s; }
 .nl-rise > *:nth-child(4) { animation-delay: 0.15s; }
@@ -156,7 +176,7 @@
 .nl-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .nl-btn--sm { padding: 6px 13px; font-size: 13px; border-radius: 10px; }
 .nl-btn--primary { background: var(--primary); color: var(--on-primary); border-radius: 10px; }
-.nl-btn--primary:hover:not(:disabled) { background: var(--accent-dark); color: #fff; }
+.nl-btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 84%, #000); color: var(--on-primary); }
 .nl-btn--secondary { border-color: var(--faint); }
 .nl-btn--secondary:hover:not(:disabled) { background: var(--sage-deep); border-color: var(--sage-deep); color: #fff; }
 .nl-btn--sage { background: var(--sage-deep); color: #fff; border-radius: 10px; }
@@ -195,6 +215,9 @@
 .nl-badge--bare { background: transparent; padding-left: 0; padding-right: 0; }
 .nl-live { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sage-ink); }
 .nl-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--sage-deep); animation: nl-pulse 2.4s ease-in-out infinite; }
+/* On its way to the portals (6 Nov 2026): the same dot, quicker and in clay - not a fault, just not there yet. */
+.nl-live-sending { color: var(--accent-dark); }
+.nl-live-sending i { background: var(--accent-dark); animation-duration: 1.2s; }
 @keyframes nl-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sage-deep) 45%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--sage-deep) 0%, transparent); } }
 .nl-mono { font-family: var(--nl-mono); font-size: 12px; color: var(--muted); letter-spacing: 0; }
 .nl-meta { font-size: 12px; line-height: 18px; color: var(--muted); }
@@ -713,15 +736,16 @@
    very light grey, full height, one 1px line down to a white page. No rounded
    window, no split corners. Measured off the prototype.
 =========================================================================== */
-/* Grey, not the website's beige (James, 24 Oct 2026: tried #f8f7f4 both ways
-   round, "change the beige to grey because everything else is grey"). */
+/* Warm off-white #f8f7f4, the website's ground (James, 7 Nov 2026: "keep it
+   warm" - the final palette made the rest warm too). It was grey #f6f6f5 from
+   24 Oct, when he said "change the beige to grey because everything else is grey". */
 [data-nav-look="new"] {
-  --nv-bg: #f6f6f5; --nv-page: #ffffff; --nv-line: #e9e9e6; --nv-ink: #141413; --nv-muted: #63625b; --nv-faint: #87867f;
-  --nv-hover: rgba(20, 20, 19, .04); --nv-on: #ffffff; --nv-count: #aa4a2b; --nv-avatar: #e3dacc;
+  --nv-bg: #f8f7f4; --nv-page: #ffffff; --nv-line: #e9e9e6; --nv-ink: #141413; --nv-muted: #63625b; --nv-faint: #87867f;
+  --nv-hover: rgba(20, 20, 19, .04); --nv-on: #ffffff; --nv-count: #a85a51; --nv-avatar: #f5efe6;
 }
 :root[data-theme="dark"] [data-nav-look="new"] {
   --nv-bg: #1a1918; --nv-page: #1f1e1d; --nv-line: #3a3936; --nv-ink: #faf9f5; --nv-muted: #b0aea5; --nv-faint: #87867f;
-  --nv-hover: rgba(250, 249, 245, .05); --nv-on: #2e2d2b; --nv-count: #f0a283; --nv-avatar: #33302a;
+  --nv-hover: rgba(250, 249, 245, .05); --nv-on: #2e2d2b; --nv-count: #d9b3ae; --nv-avatar: #33302a;
 }
 .nl-nav { background: var(--nv-bg); padding: 16px 12px 12px; font-family: var(--font-inter), system-ui, sans-serif; color: var(--nv-ink); }
 .nl-nav-head { display: flex; align-items: center; gap: 2px; padding: 4px 4px 18px 10px; }
@@ -729,7 +753,7 @@
 .nl-nav-logo { font-family: var(--font-inter), system-ui, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.8px; line-height: 1; color: var(--nv-ink); text-transform: uppercase; white-space: nowrap; }
 .nl-nav-icon { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 999px; background: transparent; color: var(--nv-muted); cursor: pointer; transition: background-color .2s, color .2s; }
 .nl-nav-icon:hover { background: var(--nv-hover); color: var(--nv-ink); }
-.nl-nav-dot { position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #eb8c6d; }
+.nl-nav-dot { position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #a85a51; }
 .nl-nav-search { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; margin-bottom: 10px; border: 0; border-radius: 12px; background: transparent; font: inherit; font-size: 13px; color: var(--nv-muted); cursor: pointer; transition: background-color .2s; }
 .nl-nav-search:hover { background: var(--nv-hover); color: var(--nv-ink); }
 .nl-nav-search.is-tight { justify-content: center; padding: 8px 0; }
@@ -759,6 +783,20 @@
 [data-nav-look="new"] [data-os-profile-menu] { border-color: var(--nv-line); border-radius: 14px; box-shadow: none; background: var(--nv-page); }
 /* One bell: with the sidebar's own, the page headers' copy goes. */
 [data-nav-look="new"] [data-page-bell] { display: none !important; }
+
+/* The website's edge on the sidebar (James, 7 Nov 2026), after the Dashboard:
+   the wordmark tracked out as the site's, section names in the small condensed
+   capitals, square corners, and the page you are on marked in terracotta. */
+[data-nav-look="new"] .nl-nav-logo { font-family: var(--font-bricolage), var(--font-inter), sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.16em; }
+[data-nav-look="new"] .nl-nav-label {
+  font-family: var(--font-bricolage), var(--font-inter), sans-serif; font-stretch: 75%; font-weight: 500;
+  font-size: 11px; line-height: 16px; letter-spacing: 0.16em; text-transform: uppercase; padding: 20px 10px 8px;
+}
+[data-nav-look="new"] .nl-nav-item, [data-nav-look="new"] .nl-nav-sub, [data-nav-look="new"] .nl-nav-search, [data-nav-look="new"] .nl-nav-icon { border-radius: 0; }
+[data-nav-look="new"] .nl-nav-item.is-on, [data-nav-look="new"] .nl-nav-sub.is-on { box-shadow: inset 0 0 0 1px rgba(20, 20, 19, 0.14), inset 2px 0 0 #a85a51; }
+[data-nav-look="new"] .nl-nav-item.is-on svg { color: #a85a51; }
+:root[data-theme="dark"] [data-nav-look="new"] .nl-nav-item.is-on, :root[data-theme="dark"] [data-nav-look="new"] .nl-nav-sub.is-on { box-shadow: inset 0 0 0 1px var(--nv-line), inset 2px 0 0 #c28b85; }
+:root[data-theme="dark"] [data-nav-look="new"] .nl-nav-item.is-on svg { color: #c28b85; }
 
 /* ── Terms of Business: the signing sheet and the send drawer (lib/terms) ── */
 .nl-signsheet { position: fixed; inset: 0; z-index: 420; display: flex; align-items: flex-end; justify-content: center; }
@@ -925,7 +963,7 @@
 .nl-po-verdict { display: flex; gap: 14px; align-items: flex-start; padding: 20px 22px; border-radius: 22px; background: #fff; }
 .nl-po-verdict-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 8px; flex: none; background: var(--faint); }
 .nl-po-verdict.is-good { background: #e9efe1; } .nl-po-verdict.is-good .nl-po-verdict-dot { background: var(--sage-deep); }
-.nl-po-verdict.is-look { background: #fbe6dc; } .nl-po-verdict.is-look .nl-po-verdict-dot { background: var(--primary); }
+.nl-po-verdict.is-look { background: var(--accent-soft); } .nl-po-verdict.is-look .nl-po-verdict-dot { background: var(--primary); }
 .nl-po-verdict-title { font-family: var(--font-heading); font-size: 22px; line-height: 28px; color: var(--ink); }
 .nl-po-verdict-line { margin-top: 2px; font-size: 14px; line-height: 21px; color: var(--muted); }
 
@@ -971,7 +1009,7 @@
 .nl-po-p-me { font-family: var(--font-heading); font-size: 19px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .nl-po-p-avg { font-size: 12.5px; color: var(--muted); }
 .nl-po-p-vs { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--box); color: var(--muted); }
-.nl-po-p-vs.is-up { background: #e9efe1; color: var(--sage-ink); } .nl-po-p-vs.is-down { background: #fbe6dc; color: var(--accent-dark); }
+.nl-po-p-vs.is-up { background: #e9efe1; color: var(--sage-ink); } .nl-po-p-vs.is-down { background: var(--bad-soft); color: var(--bad-ink); }
 
 /* views to date */
 .nl-po-line { display: block; width: 100%; height: 76px; }
@@ -1014,7 +1052,7 @@
 .nl-ls-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
 .nl-ls-note { margin-top: 8px; font-size: 12px; color: var(--muted); }
 .nl-ls-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 16px; }
-.nl-ls-none { padding: 16px 20px; border-radius: 20px; background: #fbe6dc; color: #8a3f2a; font-size: 13.5px; }
+.nl-ls-none { padding: 16px 20px; border-radius: 20px; background: var(--bad-soft); color: var(--bad-ink); font-size: 13.5px; }
 .nl-ls-said { font-size: 13px; color: #fff; padding: 2px 6px; }
 .nl-ls-adds { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 6px; }
 .nl-ls-add { font: inherit; font-size: 13.5px; padding: 10px 18px; border-radius: 999px; border: 1px dashed rgba(255, 255, 255, .55); background: transparent; color: #fff; cursor: pointer; transition: background-color .2s, border-color .2s; }
@@ -1062,6 +1100,86 @@
   .nl-ls-fields { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ── Edit landlord as ONE PANEL, in the website's edge (James, 9 Nov 2026:
+   "update the styling to match the rest of the website", with Rhiannon
+   Dodge's ticket b51878b0). As every pop-up went on 8 Nov: one solid panel
+   over a lighter dim, no see-through boxes on the dark; square corners; the
+   title, labels and buttons in the condensed capitals; each person a section
+   of the panel with a fine line between, the new one on linen with a
+   terracotta rule; brown for the main button, terracotta for what is missing. ── */
+.nl-ls { --ls-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; }
+.nl-ls .nl-po-card *:not([class*="spin"]):not(input[type="checkbox"]):not(input[type="radio"]) { border-radius: 0; }
+.nl-ls .nl-po-scrim { background: rgba(20, 20, 19, .34); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.nl-ls .nl-po-card {
+  gap: 0; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14);
+  box-shadow: 0 1px 0 rgba(20, 20, 19, .04), 0 40px 80px -32px rgba(20, 20, 19, .45), 0 12px 24px -16px rgba(20, 20, 19, .2);
+  pointer-events: auto; animation: nl-ls-panel .42s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+:root[data-theme="dark"] .nl-ls .nl-po-card { border-color: rgba(255, 255, 255, .1); }
+.nl-ls .nl-po-card > .nl-po-in, .nl-ls .nl-ls-list > .nl-po-in { animation-name: nl-ls-settle; animation-duration: .45s; }
+@keyframes nl-ls-panel { from { opacity: 0; transform: translateY(18px) scale(.99); } }
+@keyframes nl-ls-settle { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* the head: the address small, LANDLORD in the capitals, a line under */
+.nl-ls .nl-po-head { color: var(--ink); padding: 22px 18px 22px 28px; border-bottom: 1px solid var(--line); }
+.nl-ls .nl-po-head .nl-eyebrow { color: var(--accent); font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; }
+.nl-ls .nl-po-title { margin-top: 8px; color: var(--ink); font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 40px; line-height: 1; }
+.nl-ls .nl-ls-lede { color: var(--muted); font-size: 14px; line-height: 21px; margin-top: 10px; }
+.nl-ls .nl-po-head .nl-iconbtn { background: var(--page); border-color: var(--line-strong); color: var(--ink); }
+.nl-ls .nl-po-head .nl-iconbtn:hover { background: var(--panel); border-color: var(--ink); }
+.nl-ls .nl-po-wait { color: var(--muted); padding: 22px 28px; }
+.nl-ls .nl-po-box { border: 0; border-bottom: 1px solid var(--line); padding: 20px 28px; background: transparent; }
+
+/* nothing held: a band across the panel, the terracotta rule down its edge */
+.nl-ls .nl-ls-none { margin: 0; padding: 14px 28px; background: var(--bad-soft); color: var(--bad-ink); box-shadow: inset 3px 0 0 var(--accent); border-bottom: 1px solid var(--line); }
+
+/* each person a section of the panel */
+.nl-ls .nl-ls-list { gap: 0; }
+.nl-ls .nl-ls-box { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; border-bottom: 1px solid var(--line); }
+.nl-ls .nl-ls-row { padding: 18px 28px; }
+.nl-ls .nl-ls-row:hover { background: var(--panel); }
+.nl-ls .nl-ls-av { width: 40px; height: 40px; font-family: var(--ls-cond); font-stretch: 75%; font-size: 14px; letter-spacing: .06em; font-weight: 500; }
+.nl-ls .nl-ls-first { background: var(--primary); color: var(--on-primary); box-shadow: none; font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10px; padding: 3px 8px; }
+.nl-ls .nl-ls-kind { font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11px; color: var(--muted); }
+.nl-ls .nl-ls-name { font-size: 17px; }
+.nl-ls .nl-ls-edit, .nl-ls .nl-ls-new-body { padding: 4px 28px 22px 82px; }
+.nl-ls .nl-ls-cb > p:first-child::before, .nl-ls .nl-ls-edit .min-h-\[42px\]::before { border-radius: 0; }
+/* The icon in its chip: ContactBlock's row now starts with the icon itself,
+   not a span round it, so the old rule above left it beside the chip. */
+.nl-ls .nl-ls-edit .min-h-\[42px\] > svg:first-child { position: absolute; left: 8px; top: 14px; width: 14px; height: 14px; color: var(--ink); }
+
+/* the new person, on linen with a terracotta rule, until they're saved */
+.nl-ls .nl-ls-new { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); animation: nl-ls-settle .4s cubic-bezier(.2, .8, .2, 1) both; }
+.nl-ls .nl-ls-new-head { padding: 18px 18px 18px 28px; }
+.nl-ls .nl-ls-new .nl-ls-av { background: var(--page); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.nl-ls .nl-ls-new .nl-ls-kind { color: var(--accent); }
+.nl-ls .nl-ls-x { background: var(--page); }
+.nl-ls .nl-ls-f > span { font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11px; color: var(--ink); }
+.nl-ls .nl-ls-f input { background: var(--page); }
+.nl-ls .nl-ls-f input:focus { border-color: var(--ink); box-shadow: none; }
+.nl-ls .nl-ls-same { background: var(--page); font-size: 12px; }
+.nl-ls .nl-btn { font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11.5px; }
+
+/* what was said, and the two ways to add someone, along the foot */
+.nl-ls .nl-ls-said { color: var(--muted); padding: 14px 28px 0; }
+.nl-ls .nl-ls-adds { padding: 18px 28px 24px; gap: 10px; }
+.nl-ls .nl-ls-add { border: 1px solid var(--line-strong); color: var(--ink); background: var(--page); padding: 11px 16px; font-family: var(--ls-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 11.5px; }
+.nl-ls .nl-ls-add:hover { background: var(--page); border-color: var(--ink); }
+.nl-ls .nl-ls-add[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+@media (max-width: 760px) {
+  .nl-po.nl-ls { padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .nl-ls .nl-po-head { padding: 18px 12px 18px 18px; }
+  .nl-ls .nl-po-title { font-size: 32px; }
+  .nl-ls .nl-ls-none, .nl-ls .nl-ls-row, .nl-ls .nl-po-box, .nl-ls .nl-po-wait { padding-left: 18px; padding-right: 18px; }
+  .nl-ls .nl-ls-new-head { padding: 14px 14px 14px 18px; }
+  .nl-ls .nl-ls-edit, .nl-ls .nl-ls-new-body { padding: 4px 18px 20px; }
+  .nl-ls .nl-ls-said { padding: 12px 18px 0; }
+  .nl-ls .nl-ls-adds { padding: 16px 18px 20px; }
+  .nl-ls .nl-ls-add { flex: 1 1 auto; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) { .nl-ls .nl-po-card, .nl-ls .nl-ls-new { animation: none; } }
+
 /* ── A tenant's passport on the stage (components/passport/PassportStage) ──
    The passport on the left with the next steps under it, every answer on the
    right in boxes that sit side by side. Under the email window and the
@@ -1071,7 +1189,7 @@
 .nl-pp-state { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22); font-size: 12.5px; color: #fff; }
 .nl-pp-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
 .nl-pp-state.is-done i { background: #a9bf98; }
-.nl-pp-bad { padding: 16px 20px; border-radius: 20px; background: #fbe6dc; color: #8a3f2a; font-size: 13.5px; }
+.nl-pp-bad { padding: 16px 20px; border-radius: 20px; background: var(--bad-soft); color: var(--bad-ink); font-size: 13.5px; }
 .nl-pp-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
 .nl-pp-left { position: sticky; top: 0; display: flex; flex-direction: column; gap: 18px; }
 
@@ -1119,3 +1237,261 @@
   .nl-po.nl-pp { padding: 28px 16px 40px; }
   .nl-pp .tpx .pass { --w: min(320px, 100%); }
 }
+
+/* ===========================================================================
+   THE WEBSITE'S EDGE, ONE CLASS (James, 7 Nov 2026). Each screen brought into
+   line with the public website adds `nl-edge` to its root, beside nl-page:
+   the title in Bricolage at 75% width, capitals, tracked; the blurb in Inter;
+   the main button beside the title; square corners; buttons, tabs, toggles
+   and section titles in the small capitals; the tab you are on marked in
+   terracotta; fine lines. The Dashboard and Leads carry their own copies of
+   this (app/new-look/dashboard.css, leads.css) from before it existed.
+=========================================================================== */
+[data-look="new"].nl-edge {
+  --edge-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --line: rgba(20, 20, 19, 0.12);
+  --line-strong: rgba(20, 20, 19, 0.22);
+}
+:root[data-theme="dark"] [data-look="new"].nl-edge { --line: #3a3936; --line-strong: #4a4844; }
+[data-look="new"].nl-edge *:not([class*="spin"]):not(input[type="checkbox"]):not(input[type="radio"]) { border-radius: 0; }
+[data-look="new"].nl-edge .nl-badge::before { border-radius: 50%; }
+
+/* the title, its blurb, and the main button beside them */
+[data-look="new"].nl-edge > .nl-mast { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; align-items: end; padding-top: 28px; margin-bottom: 30px; }
+[data-look="new"].nl-edge > .nl-mast > * { grid-column: 1; }
+[data-look="new"].nl-edge > .nl-mast > .nl-actions { grid-column: 2; grid-row: 1 / span 3; align-self: end; margin-top: 0; }
+[data-look="new"].nl-edge .nl-title { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; font-size: 64px; line-height: 0.96; letter-spacing: 0.04em; }
+[data-look="new"].nl-edge .nl-blurb { font-family: var(--font-body); font-size: 15px; line-height: 23px; margin-top: 12px; max-width: 620px; }
+/* Under 1200px the buttons go under the title rather than squeeze it (the
+   Diary's four broke "DIARY" over two lines at 1024 wide, 7 Nov 2026). */
+@media (max-width: 1199px) {
+  [data-look="new"].nl-edge > .nl-mast { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"].nl-edge > .nl-mast > .nl-actions { grid-column: 1; grid-row: auto; margin-top: 18px; }
+}
+@media (max-width: 760px) {
+  [data-look="new"].nl-edge .nl-title { font-size: 44px; }
+}
+
+/* the small capitals */
+[data-look="new"].nl-edge .nl-btn,
+[data-look="new"].nl-edge .nl-toggle button,
+[data-look="new"].nl-edge .nl-tab,
+[data-look="new"].nl-edge .nl-section-title,
+[data-look="new"].nl-edge .nl-eyebrow {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em;
+}
+[data-look="new"].nl-edge .nl-btn { font-size: 11.5px; }
+[data-look="new"].nl-edge .nl-btn--quiet { font-family: var(--font-body); font-stretch: 100%; text-transform: none; letter-spacing: 0; font-size: 13px; }
+[data-look="new"].nl-edge .nl-tab { font-size: 16px; letter-spacing: 0.06em; }
+[data-look="new"].nl-edge .nl-tab-n { font-family: var(--font-body); font-stretch: 100%; letter-spacing: 0; font-size: 11px; }
+[data-look="new"].nl-edge .nl-tab-ind { background: var(--accent); }
+[data-look="new"].nl-edge .nl-section-title { font-size: 20px; line-height: 1.1; letter-spacing: 0.04em; }
+[data-look="new"].nl-edge .nl-eyebrow { font-size: 11px; letter-spacing: 0.16em; }
+[data-look="new"].nl-edge .nl-toggle { padding: 0; border-color: var(--line-strong); }
+[data-look="new"].nl-edge .nl-toggle button { font-size: 11px; padding: 8px 12px; }
+[data-look="new"].nl-edge .nl-toggle button.is-on { background: var(--ink); color: var(--page); }
+[data-look="new"].nl-edge .nl-fsel, [data-look="new"].nl-edge .nl-fsearch { border-color: var(--line-strong); background: var(--page); }
+[data-look="new"].nl-edge .nl-mono { font-family: var(--font-body); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+[data-look="new"].nl-edge .nl-empty { font-family: var(--font-body); font-size: 14px; }
+/* nl-edge on a record page (one appraisal, 7 Nov 2026): card titles in the
+   capitals, the line under the title in Inter, the record's tabs like the boards'. */
+[data-look="new"].nl-edge .nl-block-title {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; font-size: 18px; line-height: 1.15;
+}
+[data-look="new"].nl-edge .nl-rhead-sub { font-family: var(--font-body); font-size: 15px; line-height: 23px; }
+[data-look="new"].nl-edge .nl-title { overflow-wrap: anywhere; }
+[data-look="new"].nl-edge .nl-ltabs button, [data-look="new"].nl-edge .nl-ltabs a {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; font-size: 16px;
+}
+
+/* The navigation bar in any of the palette's secondary colours (James,
+   8 Nov 2026, Profile > Appearance; lib/theme NAV_COLOURS). Light only. */
+:root[data-nav="linen"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-bg: #f5efe6; --nv-line: #e6ddd0; --nv-avatar: #ffffff; --nv-hover: rgba(86, 66, 62, .06); }
+:root[data-nav="sage"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-bg: #f1f4ec; --nv-line: #dfe5d6; --nv-avatar: #ffffff; --nv-hover: rgba(86, 99, 74, .07); --nv-count: #56634a; }
+:root[data-nav="clay"]:not([data-theme="dark"]) [data-nav-look="new"] {
+  --nv-bg: #c4a092; --nv-line: rgba(20, 20, 19, .14); --nv-ink: #141413; --nv-muted: #3a2d2a; --nv-faint: #56423e;
+  --nv-hover: rgba(255, 255, 255, .18); --nv-on: #f8f7f4; --nv-count: #56423e; --nv-avatar: #f5efe6;
+}
+/* The swatches on Profile > Appearance: a little bar with three rows. */
+[data-look="new"] .nl-navpick .nl-choice { align-items: flex-start; }
+[data-look="new"] .nl-navpick-swatch { display: grid; gap: 4px; align-content: start; width: 44px; height: 54px; padding: 8px 7px; border: 1px solid rgba(20, 20, 19, .14); margin-bottom: 6px; }
+[data-look="new"] .nl-navpick-swatch i { display: block; height: 4px; background: rgba(20, 20, 19, .28); }
+[data-look="new"] .nl-navpick-swatch i:first-child { background: #a85a51; width: 70%; }
+
+/* The page you're on is a darker shade of the bar, not white (James,
+   8 Nov 2026: "lighter when we hover, darker when we're selecting it").
+   Every colour, the default off-white included. */
+:root:not([data-theme="dark"]) [data-nav-look="new"] { --nv-on: #ebe7df; --nv-sel-edge: #a85a51; }
+:root[data-nav="linen"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-on: #e8ddcd; --nv-hover: rgba(255, 255, 255, .55); }
+:root[data-nav="sage"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-on: #dfe6d4; --nv-hover: rgba(255, 255, 255, .6); }
+:root[data-nav="clay"]:not([data-theme="dark"]) [data-nav-look="new"] { --nv-on: #ac8577; --nv-hover: rgba(255, 255, 255, .2); --nv-sel-edge: #56423e; }
+:root:not([data-theme="dark"]) [data-nav-look="new"] .nl-nav-item.is-on,
+:root:not([data-theme="dark"]) [data-nav-look="new"] .nl-nav-sub.is-on { background: var(--nv-on); box-shadow: inset 2px 0 0 var(--nv-sel-edge); }
+:root:not([data-theme="dark"]) [data-nav-look="new"] .nl-nav-item.is-on svg { color: var(--nv-sel-edge); }
+/* The You menu at the foot: square, on the bar's own colour. */
+[data-nav-look="new"] [data-os-profile-menu] { border-radius: 0; background: var(--nv-bg); border-color: var(--nv-line); box-shadow: 0 16px 32px -16px rgba(20, 20, 19, .35); }
+[data-nav-look="new"] [data-os-profile-menu] > * { border-radius: 0; }
+[data-nav-look="new"] [data-os-profile-menu] > *:hover { background: var(--nv-on); }
+
+/* Activity lines that open (components/new-look/ActivityList, 8 Nov 2026). */
+[data-look="new"] .nl-actlist .nl-act-line { display: block; width: 100%; padding: 0; margin: 0; font: inherit; text-align: left; color: inherit; background: none; border: 0; cursor: pointer; }
+[data-look="new"] .nl-actlist .nl-act-line:hover > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-act-peek { display: block; margin-top: 2px; font-size: 12.5px; line-height: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-look="new"] .nl-act-body { margin: 0; font-size: 15px; line-height: 23px; white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-look="new"] .nl-act-body.is-quiet { color: var(--muted); font-size: 14px; }
+[data-look="new"] .nl-act-rows { margin: 0; display: grid; }
+[data-look="new"] .nl-act-rows > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-act-rows > div:first-child { border-top: 0; padding-top: 0; }
+[data-look="new"] .nl-act-rows dt { font-family: var(--fs-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted); padding-top: 3px; }
+[data-look="new"] .nl-act-rows dd { margin: 0; font-size: 14.5px; overflow-wrap: anywhere; }
+
+/* ===========================================================================
+   THE TENANT PASSPORT VIEW, TIDIED (James, 8 Nov 2026: "this looks better ...
+   clean it up so it's a nicer view"). One solid panel over a lighter dim,
+   in the house's square, condensed-capitals style; the passport itself stays.
+=========================================================================== */
+.nl-po.nl-pp { display: grid; place-items: start center; padding: 4vh 24px; }
+.nl-pp .nl-po-scrim { background: rgba(20, 20, 19, .36); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.nl-pp .nl-po-card.nl-pp-card { pointer-events: auto; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); padding: 0; gap: 0; }
+.nl-pp .nl-po-head { color: var(--ink); padding: 20px 20px 18px 32px; border-bottom: 1px solid var(--line); align-items: center; }
+.nl-pp .nl-po-head .nl-eyebrow { color: var(--accent-dark); font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; }
+.nl-pp .nl-po-title { color: var(--ink); font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 34px; line-height: 1; margin-top: 6px; }
+.nl-pp .nl-po-head .nl-iconbtn { background: transparent; border-color: var(--line-strong); color: var(--ink); border-radius: 0; }
+.nl-pp .nl-po-head .nl-iconbtn:hover { background: var(--ink); color: var(--page); }
+.nl-pp-state { border-radius: 0; background: var(--sage-soft); box-shadow: none; color: var(--sage-deep); font-weight: 500; }
+.nl-pp-state i { border-radius: 0; }
+.nl-pp-state.is-done i { background: var(--sage-deep); }
+.nl-pp .nl-po-wait, .nl-pp .nl-pp-bad { margin: 24px 32px; }
+.nl-pp-grid { padding: 28px 32px 32px; gap: 32px; }
+.nl-pp-left { top: 0; }
+.nl-pp-hint { color: var(--muted); }
+/* What to do next: square, brown for the main one, one family. */
+.nl-pp-act { border-radius: 0; height: 44px; background: #fff; color: var(--ink); box-shadow: none; border: 1px solid var(--line-strong); font-size: 13.5px; }
+.nl-pp-act:hover { transform: none; box-shadow: none; border-color: var(--ink); }
+.nl-pp-act.is-go { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.nl-pp-act.is-go:hover { background: color-mix(in srgb, var(--primary) 84%, #000); }
+.nl-pp-act.is-quiet { background: transparent; color: var(--ink); box-shadow: none; border-color: transparent; text-decoration: underline; text-underline-offset: 3px; justify-content: flex-start; }
+.nl-pp-act.is-quiet:hover { background: transparent; border-color: transparent; color: var(--accent-dark); }
+.nl-pp-said { color: var(--sage-deep); }
+/* The answers: square cards on the page colour, condensed headings. */
+.nl-pp-box { border-radius: 0; background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--line-strong); padding: 16px 20px 8px; }
+.nl-pp-box h3 { font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; letter-spacing: .14em; font-size: 11.5px; color: var(--ink); margin-bottom: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line-strong); }
+.nl-pp-box dt { font-size: 13px; }
+.nl-pp-box dd { font-size: 14px; }
+.nl-pp-open { border-radius: 0; }
+@media (max-width: 760px) {
+  .nl-po.nl-pp { padding: 0; }
+  .nl-pp-grid { padding: 20px 16px 24px; }
+  .nl-pp .nl-po-head { padding: 16px 12px 14px 16px; }
+}
+
+/* ===========================================================================
+   SETTINGS (James, 8 Nov 2026): a second navigation down the left in three
+   groups, the section's own heading on the right, and everything square.
+=========================================================================== */
+[data-look="new"].nl-settings .nl-set-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 48px; align-items: start; margin-top: 8px; }
+[data-look="new"].nl-settings .nl-set-nav { position: sticky; top: 24px; display: grid; gap: 22px; padding-right: 8px; border-right: 1px solid var(--line); }
+[data-look="new"].nl-settings .nl-set-group-t { margin: 0 0 8px; font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 10.5px; color: var(--muted); }
+[data-look="new"].nl-settings .nl-set-group ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+[data-look="new"].nl-settings .nl-set-group button { width: 100%; text-align: left; padding: 9px 12px; font: inherit; font-size: 14.5px; color: var(--ink); background: transparent; border: 0; border-left: 2px solid transparent; cursor: pointer; transition: background-color .2s, border-color .2s; }
+[data-look="new"].nl-settings .nl-set-group button:hover { background: var(--card); }
+[data-look="new"].nl-settings .nl-set-group button.is-on { background: var(--accent-soft); border-left-color: var(--accent); font-weight: 600; }
+[data-look="new"].nl-settings .nl-set-head { margin: 0 0 28px; padding-bottom: 18px; border-bottom: 1px solid var(--line-strong); }
+[data-look="new"].nl-settings .nl-set-head h2 { margin: 0; font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 34px; line-height: 1; }
+[data-look="new"].nl-settings .nl-set-head p { margin: 8px 0 0; font-size: 15px; line-height: 22px; color: var(--muted); }
+/* Square, house-style pieces inside every section. */
+[data-look="new"].nl-settings .nl-choice { border-radius: 0 !important; border-color: var(--line-strong); background: #fff; }
+[data-look="new"].nl-settings .nl-choice.is-on { background: var(--accent-soft); border-color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+[data-look="new"].nl-settings .nl-field input, [data-look="new"].nl-settings .nl-field textarea, [data-look="new"].nl-settings .nl-field select, [data-look="new"].nl-settings .nl-locked { border-radius: 0 !important; border-color: var(--line-strong); background: #fff; }
+[data-look="new"].nl-settings .nl-field > span:first-child { font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted); }
+[data-look="new"].nl-settings .nl-card, [data-look="new"].nl-settings .nl-cell { border-radius: 0 !important; }
+[data-look="new"].nl-settings .nl-set-body > .nl-pane > div > h2.nl-block-title:first-child { margin-top: 0; }
+/* Your page: what's coming. */
+[data-look="new"].nl-settings .nl-set-page { display: grid; gap: 20px; max-width: 820px; }
+[data-look="new"].nl-settings .nl-set-page-card { padding: 26px 28px; background: var(--card); border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); }
+[data-look="new"].nl-settings .nl-set-soon { display: inline-block; padding: 3px 10px; font-size: 11.5px; font-weight: 600; color: var(--accent-dark); background: var(--accent-soft); }
+[data-look="new"].nl-settings .nl-set-page-card h3 { margin: 14px 0 10px; font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 26px; }
+[data-look="new"].nl-settings .nl-set-page-card p { margin: 0 0 10px; font-size: 15px; line-height: 23px; max-width: 62ch; }
+[data-look="new"].nl-settings .nl-set-page-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line-strong); }
+[data-look="new"].nl-settings .nl-set-page-list li { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--line); font-size: 14.5px; }
+[data-look="new"].nl-settings .nl-set-page-list span { color: var(--muted); }
+@media (max-width: 960px) {
+  [data-look="new"].nl-settings .nl-set-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  [data-look="new"].nl-settings .nl-set-nav { position: static; border-right: 0; display: flex; gap: 6px; overflow-x: auto; padding: 0 0 4px; }
+  [data-look="new"].nl-settings .nl-set-group { display: contents; }
+  [data-look="new"].nl-settings .nl-set-group-t { display: none; }
+  [data-look="new"].nl-settings .nl-set-group ul { display: contents; }
+  [data-look="new"].nl-settings .nl-set-group button { white-space: nowrap; border: 1px solid var(--line-strong); }
+  [data-look="new"].nl-settings .nl-set-group button.is-on { border-color: var(--ink); }
+  [data-look="new"].nl-settings .nl-set-page-list li { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* ===========================================================================
+   WRITING AN EMAIL, IN THE MIDDLE (components/Compose, 8 Nov 2026): one
+   panel, the words on the left and the email as they'll get it on the right.
+=========================================================================== */
+/* One row the height of the screen (Dan Richards, ticket c502c534, 10 Nov
+   2026: "cant literally send an email from the email button on the applicant
+   lead record"). Left to size itself, the wrap's row grew to the panel's own
+   content, so the panel's `100%` meant "as tall as it wants": on a laptop
+   screen it ran past the bottom edge and took Send with it, out of reach. Now
+   the panel is never taller than the screen, the writing scrolls inside it,
+   and Send is always on show. */
+.nl-compose-wrap { position: fixed; inset: 0; z-index: 150; display: grid; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); place-items: center; padding: 3vh 3vw; background: rgba(20, 20, 19, .36); animation: nl-cmp-in .25s ease; }
+.nl-compose { width: min(1240px, 100%); height: min(860px, 100%); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); animation: nl-cmp-up .42s var(--nl-ease, cubic-bezier(.16,1,.3,1)); }
+@keyframes nl-cmp-in { from { opacity: 0; } }
+@keyframes nl-cmp-up { from { opacity: 0; transform: translateY(16px) scale(.99); } }
+.nl-compose * { border-radius: 0 !important; }
+.nl-compose [class*="spin"] { border-radius: 999px !important; }
+.nl-compose-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 18px 16px 28px; border-bottom: 1px solid var(--line); }
+.nl-compose-title { margin: 0; font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 26px; line-height: 1; }
+.nl-compose-to { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nl-compose-x { display: grid; place-items: center; width: 38px; height: 38px; background: transparent; border: 1px solid var(--line-strong); color: var(--ink); cursor: pointer; }
+.nl-compose-x:hover { background: var(--ink); color: var(--page); }
+.nl-compose-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; }
+.nl-compose-write { min-height: 0; overflow-y: auto; padding: 22px 28px; }
+.nl-compose-write > p:first-child, .nl-compose-write label > span:first-child, .nl-compose-k { font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted); }
+.nl-compose-write input, .nl-compose-write textarea { background: #fff !important; border-color: var(--line-strong) !important; font-size: 14.5px !important; }
+.nl-compose-write textarea { font-family: var(--font-inter), sans-serif; line-height: 1.55 !important; min-height: 260px; }
+.nl-compose-write button.rounded-full { border-color: var(--line-strong); background: #fff; font-size: 12.5px; padding: 6px 12px; }
+.nl-compose-write button.rounded-full.border-accent-dark { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.nl-compose-preview { min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; padding: 22px 28px; background: var(--card); border-left: 1px solid var(--line); }
+.nl-compose-preview iframe { width: 100%; height: 100%; min-height: 360px; background: #fff; border: 1px solid var(--line-strong); }
+.nl-compose-empty { margin: 0; padding: 40px 20px; text-align: center; font-size: 13.5px; color: var(--muted); border: 1px dashed var(--line-strong); }
+.nl-compose-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 28px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.nl-compose-foot p { margin: 0; }
+@media (max-width: 900px) {
+  .nl-compose-wrap { padding: 0; }
+  .nl-compose { height: 100%; }
+  /* Each part its full height, one under the other, scrolling between the
+     head and Send (10 Nov 2026: held to the screen, the rows squeezed and the
+     preview sat over the message). */
+  .nl-compose-main { grid-template-columns: 1fr; grid-auto-rows: max-content; overflow-y: auto; }
+  .nl-compose-write { overflow: visible; }
+  .nl-compose-preview { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+/* WhatsApp: bigger, square, the message with room to read (8 Nov 2026). */
+.nl-wa-wrap > button:first-child { background: rgba(20, 20, 19, .36); }
+.nl-wa { max-width: 860px; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); }
+.nl-wa * { border-radius: 0 !important; }
+.nl-wa [class*="spin"] { border-radius: 999px !important; }
+.nl-wa-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 18px 16px 28px; border-bottom: 1px solid var(--line); }
+.nl-wa-head h2 { margin: 0; font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 26px; line-height: 1; }
+.nl-wa-head p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
+.nl-wa-x { display: grid; place-items: center; width: 38px; height: 38px; background: transparent; border: 1px solid var(--line-strong); color: var(--ink); cursor: pointer; }
+.nl-wa-x:hover { background: var(--ink); color: var(--page); }
+.nl-wa-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, 1fr); }
+.nl-wa-msg { padding: 22px 28px; }
+.nl-wa-code { padding: 22px 28px; background: var(--card); border-left: 1px solid var(--line); display: grid; gap: 12px; align-content: start; justify-items: center; }
+.nl-wa-k { margin: 0 0 8px; justify-self: start; font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted); }
+.nl-wa-msg textarea { width: 100%; min-height: 220px; padding: 14px 16px; font: inherit; font-size: 15px; line-height: 1.55; background: #fff; border: 1px solid var(--line-strong); outline: none; resize: vertical; }
+.nl-wa-msg textarea:focus { border-color: var(--ink); }
+.nl-wa-count { margin: 6px 0 0; font-size: 12px; color: var(--muted); text-align: right; }
+.nl-wa-qr { display: grid; place-items: center; width: 200px; height: 200px; padding: 12px; background: #fff; border: 1px solid var(--line-strong); }
+.nl-wa-qr img { width: 100%; height: 100%; }
+.nl-wa-hint { margin: 0; font-size: 12.5px; line-height: 18px; color: var(--muted); text-align: center; }
+.nl-wa-also { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 14px 28px; border-top: 1px solid var(--line); }
+.nl-wa > p, .nl-wa > .mt-2, .nl-wa > .mt-3 { padding: 0 28px; }
+.nl-wa-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 28px; border-top: 1px solid var(--line); }
+@media (max-width: 700px) { .nl-wa-body { grid-template-columns: 1fr; } .nl-wa-code { border-left: 0; border-top: 1px solid var(--line); } }

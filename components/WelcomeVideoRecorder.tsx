@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import FloatSheet, { FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
 import type { WelcomeVideo } from "@/lib/present";
 
 /**
@@ -25,6 +25,9 @@ import type { WelcomeVideo } from "@/lib/present";
  *  · every failure leaves the deck exactly as it was. A pre-appraisal page
  *    without a welcome video is a good page.
  */
+
+/** "12 Dover Close", not the whole address with the postcode. */
+const shortStreet = (address: string) => address.split(",")[0]?.trim() || address;
 
 const WORDS: Record<WelcomeVideo["status"], string> = {
   awaiting_recording: "Ready when you are.",
@@ -174,99 +177,81 @@ export default function WelcomeVideoRecorder({
   }
 
   const ready = video?.status === "ready";
-  const working = video && !ready && video.status !== "failed";
+  /* A slot waiting for a recording is not "working": the agent who closed the
+     recorder before starting must be able to open it again (8 Nov 2026 - it
+     sat as a dead "Ready when you are." button). */
+  const working = video && !ready && video.status !== "failed" && video.status !== "awaiting_recording";
 
-  /* The modal is shared, so it is built once and rendered by both branches. */
+  /* The modal is shared, so it is built once and rendered by both branches.
+     Reworked 8 Nov 2026 (James: "click on pre-appraisal to record a video ...
+     we're going to need to rework that section"): the house's centred
+     pop-out, the recorder large on the left, what to say and the phone code
+     beside it, and a clear tick when it lands. */
   const modal =
-    open && recorderUrl && typeof document !== "undefined"
-      ? createPortal(
-          <div className="fixed inset-0 z-[140] flex items-center justify-center bg-ink/45 p-6">
-            <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-page shadow-2xl">
-              <div className="flex items-center justify-between gap-3 border-b border-line/70 px-5 py-3.5">
-                <div className="min-w-0">
-                  <p className="hand text-[16px] leading-tight">Record your welcome</p>
-                  <p className="truncate text-[11.5px] text-muted">
-                    {frameSays ?? `Up to two and a half minutes · ${address}`}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="shrink-0 text-[18px] leading-none text-muted transition-colors hover:text-ink"
-                  title="Close"
-                >
-                  ✕
-                </button>
-              </div>
-              {/* LANDED (James, 17 Sep 2026): recorded on the phone, the laptop
-                  showed nothing happening. The moment our own API says the
-                  recording is ready, the recorder makes way for a tick. If
-                  this screen's recorder never said a word, it came from the
-                  phone. */}
-              {ready ? (
-                <div className="flex flex-col items-center px-6 py-14 text-center">
-                  <span className="flex h-16 w-16 items-center justify-center rounded-full text-[30px] text-white" style={{ background: "#56634a" }}>✓</span>
-                  <p className="hand mt-5 text-[22px]">{frameSays ? "Video uploaded" : "Video uploaded from your phone"}</p>
-                  <p className="mt-1.5 max-w-sm text-[12.5px] text-muted">
-                    It&apos;s on the landlord&apos;s pre-appraisal, on the page that introduces you.
-                  </p>
-                  <button type="button" onClick={() => setOpen(false)} className="mt-6 rounded-full bg-ink px-6 py-2.5 text-[12.5px] font-semibold text-page">
-                    Done
-                  </button>
-                </div>
-              ) : (
-              <>
+    open && recorderUrl ? (
+      <FloatSheet
+        title="Record Your Welcome"
+        onClose={() => setOpen(false)}
+        size="xl"
+        question={ready ? undefined : "Ninety seconds, before you go"}
+        lede={ready ? undefined : `It goes at the top of ${shortStreet(address)}'s pre-appraisal, on the page that introduces you.`}
+        foot={
+          <FloatFoot left={<span className="nl-wv-say" aria-live="polite">{ready ? "On the landlord's page" : frameSays ?? "Up to two and a half minutes"}</span>}>
+            <button type="button" className={`nl-btn ${ready ? "nl-btn--primary" : "nl-btn--secondary"}`} onClick={() => setOpen(false)}>
+              {ready ? "Done" : "Close"}
+            </button>
+          </FloatFoot>
+        }
+      >
+        {/* LANDED (James, 17 Sep 2026): recorded on the phone, the laptop
+            showed nothing happening. The moment our own API says the
+            recording is ready, the recorder makes way for a tick. If this
+            screen's recorder never said a word, it came from the phone. */}
+        {ready ? (
+          <FloatDone title={frameSays ? "Video Uploaded" : "Video Uploaded From Your Phone"}>
+            It&apos;s on the landlord&apos;s pre-appraisal, on the page that introduces you. Kept for three months, then deleted.
+          </FloatDone>
+        ) : (
+          <div className="nl-wv">
+            <div className="nl-fs-card nl-wv-rec">
               {/* `allow` is REQUIRED. Without it the browser blocks camera and
                   microphone inside the frame and the recorder shows a
                   permissions error it cannot resolve on its own. */}
-              <iframe
-                src={recorderUrl}
-                allow="camera; microphone; display-capture"
-                className="h-[460px] w-full border-0"
-                title="Flow recorder"
-              />
-
-              {/* Scan and carry on — the SAME recording slot, so whichever
+              <iframe src={recorderUrl} allow="camera; microphone; display-capture" title="Flow recorder" />
+            </div>
+            <div className="nl-wv-side">
+              <div className="nl-fs-card">
+                <p className="nl-wv-k">What to say</p>
+                <ol className="nl-wv-list">
+                  <li><b>Who you are.</b> Your name, and that you&apos;re their local Letting Expert.</li>
+                  <li><b>One thing you know.</b> Something about {shortStreet(address)} or the street, so you arrive as someone they&apos;ve met.</li>
+                  <li><b>What happens next.</b> When you&apos;re coming, and that you&apos;ll bring the figures.</li>
+                </ol>
+              </div>
+              {/* Scan and carry on - the SAME recording slot, so whichever
                   device finishes first fills this deck. The phone is usually
-                  the better camera and always the better angle; a laptop
-                  webcam films the underside of a chin. */}
-              <div className="flex items-start gap-4 border-t border-line/70 px-5 py-4">
-                {qrSvg && (
+                  the better camera and always the better angle. */}
+              {qrSvg && (
+                <div className="nl-fs-card nl-wv-qr">
                   <span
-                    /* 190px, and that number is measured rather than chosen —
-                       see the note in /api/video. This code is ~70 modules
-                       wide; anything under about 160px is too dense for a
-                       phone to lock on to. */
-                    className="shrink-0 rounded-lg bg-white p-1.5 [&>svg]:block [&>svg]:h-[190px] [&>svg]:w-[190px]"
-                    /* Server-generated from the recorder URL by the qrcode
-                       package — a fixed SVG, no markup from anywhere else. */
+                    /* 150px is the smallest a phone locks on to at this density
+                       (see the note in /api/video). Server-generated SVG from
+                       the recorder URL by the qrcode package. */
+                    className="nl-wv-code"
                     dangerouslySetInnerHTML={{ __html: qrSvg }}
                   />
-                )}
-                <div className="min-w-0 text-[11px] leading-relaxed text-muted">
-                  {qrSvg && (
-                    <p className="mb-1 text-[12px] font-semibold text-ink">
-                      Rather use your phone? Scan this.
-                    </p>
-                  )}
-                  <p>
-                    It opens the same recording, so record on either — whichever you
-                    finish lands on the landlord&apos;s page. The link is good for two
-                    hours.
-                  </p>
-                  <p className="mt-1">
-                    You can close this once it says it has sent. The upload finishes on
-                    Flow&apos;s side either way.
-                  </p>
+                  <div>
+                    <p className="nl-wv-k">Rather use your phone?</p>
+                    <p className="nl-wv-note">Scan this. It opens the same recording, so whichever you finish lands on their page. The link is good for two hours.</p>
+                  </div>
                 </div>
-              </div>
-              </>
               )}
+              <p className="nl-wv-note">You can close this once it says it has sent. The upload finishes on Flow&apos;s side either way.</p>
             </div>
-          </div>,
-          document.body
-        )
-      : null;
+          </div>
+        )}
+      </FloatSheet>
+    ) : null;
 
   if (compact) {
     /* Done is shown as done, with a tick, not as a greyed-out button. */
@@ -305,11 +290,9 @@ export default function WelcomeVideoRecorder({
   }
 
   return (
-    <div className="rounded-2xl border border-line/80 bg-panel p-5">
+    <div className="nl-wv-panel">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-          Welcome video
-        </p>
+        <p className="nl-wv-k">Welcome Video</p>
         {video && <p className="text-[11px] text-muted">{WORDS[video.status]}</p>}
       </div>
 
@@ -319,7 +302,7 @@ export default function WelcomeVideoRecorder({
           <iframe
             src={`${video.embedUrl}?theme=light`}
             allow="autoplay; fullscreen; picture-in-picture"
-            className="w-full rounded-xl border-0"
+            className="w-full border-0"
             style={{ aspectRatio: "16 / 9" }}
             title="Welcome video"
           />
@@ -340,9 +323,9 @@ export default function WelcomeVideoRecorder({
             type="button"
             onClick={start}
             disabled={busy || Boolean(working)}
-            className="mt-3.5 rounded-lg bg-accent-dark px-3.5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
+            className="nl-btn nl-btn--primary mt-3.5"
           >
-            {busy ? "Setting up…" : working ? WORDS[video!.status] : "Record a welcome"}
+            {busy ? "Setting up…" : working ? WORDS[video!.status] : "Record a Welcome"}
           </button>
 
           <p className="mt-2.5 text-[11px] leading-relaxed text-muted">

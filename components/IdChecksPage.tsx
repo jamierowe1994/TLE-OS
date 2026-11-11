@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PreTenancyHero from "@/components/pretenancy/Hero";
@@ -189,7 +190,7 @@ function ShareCodeForm({ onSaved }: { onSaved: () => void }) {
         <button type="button" onClick={() => fileRef.current?.click()} className={`${field} truncate text-left ${file ? "" : "text-muted"}`}>
           {file ? file.name : "Attach the result page (PDF)"}
         </button>
-        <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.currentTarget.value = ""; }} />
+        <input ref={fileRef} type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.currentTarget.value = ""; }} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-[12.5px]">
         <span className="font-semibold">They can rent:</span>

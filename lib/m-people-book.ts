@@ -10,7 +10,7 @@ import { assembled } from "@/lib/applications-board";
  *   Tenants   open applicants (the applications board - its own stage words,
  *             and never one on a home since let or withdrawn), then the
  *             tenants living in the homes we manage (the managed book)
- *   Landlords the owners of the homes we manage, with how many
+ *   Landlords the owners of the homes we manage, every one, with how many
  *
  * Search, sort and the tabs happen on the phone. Anyone not in either book is
  * still found by typing: the screen falls back to the contact search.
@@ -79,7 +79,6 @@ export async function peopleBook(rexUserId: string | null): Promise<{ tenants: B
     }
   }
 
-  const landlords = new Map<string, BookPerson & { homes: number }>();
   for (const h of managed?.properties ?? []) {
     for (const t of h.tenants) {
       const id = idOf(t.name, t.phone, t.email);
@@ -101,32 +100,34 @@ export async function peopleBook(rexUserId: string | null): Promise<{ tenants: B
         at: h.letSince,
       });
     }
-    const l = h.landlord;
-    if (l?.name.trim()) {
-      const had = landlords.get(l.contactId);
-      if (had) {
-        had.homes += 1;
-        had.status = `${had.homes} homes`;
-      } else {
-        landlords.set(l.contactId, {
-          key: `l-${l.contactId}`,
-          side: "landlord",
-          name: l.name,
-          phone: l.phone ?? "",
-          email: l.email ?? "",
-          status: "1 home",
-          tone: "neutral",
-          address: h.name,
-          locality: h.locality,
-          since: h.onBooksSince,
-          tenancyType: h.service,
-          rent: money(h.rent, h.rentPeriod),
-          at: h.onBooksSince,
-          homes: 1,
-        });
-      }
-    }
   }
 
-  return { tenants, landlords: [...landlords.values()].map(({ homes: _homes, ...p }) => p) };
+  /* The book's own Landlords list (lib/managed-book landlordsOf, 6 Nov 2026):
+     every landlord on each home, joint landlords too, one person each, and
+     each home's current let only. This read the first landlord of every let
+     on record, so a joint landlord wasn't here and a re-let home counted
+     twice. Each is shown with their first home. */
+  const byListing = new Map((managed?.properties ?? []).map((h) => [h.listingId, h]));
+  const landlords: BookPerson[] = [];
+  for (const l of managed?.landlords ?? []) {
+    const h = byListing.get(l.listingIds[0]);
+    if (!h || !l.name.trim()) continue;
+    landlords.push({
+      key: `l-${l.contactId}`,
+      side: "landlord",
+      name: l.name,
+      phone: l.phone ?? "",
+      email: l.email ?? "",
+      status: l.listingIds.length === 1 ? "1 home" : `${l.listingIds.length} homes`,
+      tone: "neutral",
+      address: h.name,
+      locality: h.locality,
+      since: h.onBooksSince,
+      tenancyType: h.service,
+      rent: money(h.rent, h.rentPeriod),
+      at: h.onBooksSince,
+    });
+  }
+
+  return { tenants, landlords };
 }

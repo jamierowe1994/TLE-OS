@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -105,7 +106,7 @@ export default function UploadDoc({
           <input
             type="file"
             className="hidden"
-            accept="image/*,application/pdf"
+            accept={ACCEPT_EVIDENCE}
             multiple
             disabled={busy}
             onChange={(e) => {

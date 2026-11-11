@@ -1,5 +1,6 @@
 import "server-only";
 import { edition } from "@/lib/terms/catalogue";
+import { askedOf } from "@/lib/terms/detail-text";
 import type { TermsRow } from "@/lib/terms/store";
 
 /**
@@ -9,11 +10,14 @@ import type { TermsRow } from "@/lib/terms/store";
  * routes; a route file may only export its handlers.
  */
 export function forStaff(t: TermsRow, origin: string) {
-  const asked = (edition(t.version)?.details ?? []).filter((f) => f.required).map((f) => f.key);
+  const doc = edition(t.version);
+  /* Each person's own: the first landlord also gives the home's part (the bank account, the declarations). */
+  const asked = (i: number) => (doc ? askedOf(doc, i) : []).filter((f) => f.required).map((f) => f.key);
   return {
     ...t,
     country: edition(t.version)?.country ?? "scotland",
-    parties: t.parties.map((p) => ({
+    asksFirst: Boolean(doc?.asksFirst),
+    parties: t.parties.map((p, i) => ({
       key: p.key,
       name: p.name,
       email: p.email,
@@ -31,7 +35,7 @@ export function forStaff(t: TermsRow, origin: string) {
          gone, the address is the landlord's to change and stays theirs. */
       homeAddress: t.status === "agent" ? String(p.details?.address ?? "") : null,
       /* Everything this edition asks for is in. */
-      detailsIn: asked.length > 0 && asked.every((k) => String(p.details?.[k] ?? "").trim() !== ""),
+      detailsIn: asked(i).length > 0 && asked(i).every((k) => String(p.details?.[k] ?? "").trim() !== ""),
     })),
   };
 }

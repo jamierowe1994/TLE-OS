@@ -312,3 +312,92 @@
   [data-look="new"] .nl-prop-page .nl-cell { padding: 20px 18px; border-radius: 20px; }
   [data-look="new"] .nl-prop-page .nl-facts { padding: 18px 18px 14px; }
 }
+
+/* ===========================================================================
+   ONE HOME IN THE WEBSITE'S STYLE (James, 8 Nov 2026: "do the same thing for
+   Portfolio and the property view"). nl-edge on the page squares it and sets
+   the title, tabs and card titles in the condensed capitals; the four "how it
+   stands" lines become tiles in the palette - olive when all is well,
+   terracotta when something needs doing, clay when it hasn't been read.
+=========================================================================== */
+[data-look="new"].nl-prop-page { --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; --line: rgba(20, 20, 19, 0.14); }
+[data-look="new"].nl-prop-page .nl-prop-standing { gap: 14px; margin-bottom: 44px; }
+[data-look="new"].nl-prop-page .nl-prop-stand { position: relative; gap: 4px; padding: 18px 18px 16px; border: 1px solid var(--line); background: var(--page); transition: border-color .2s, background-color .2s, transform .2s; animation: nl-stand-in .5s cubic-bezier(.2, .8, .2, 1) both; }
+[data-look="new"].nl-prop-page .nl-prop-stand:nth-child(2) { animation-delay: .05s; }
+[data-look="new"].nl-prop-page .nl-prop-stand:nth-child(3) { animation-delay: .1s; }
+[data-look="new"].nl-prop-page .nl-prop-stand:nth-child(4) { animation-delay: .15s; }
+@keyframes nl-stand-in { from { opacity: 0; transform: translateY(8px); } }
+[data-look="new"].nl-prop-page .nl-prop-stand:hover { border-color: var(--ink); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-on { border-color: var(--ink); }
+[data-look="new"].nl-prop-page .nl-prop-stand i { position: absolute; left: -1px; right: -1px; top: -1px; height: 5px; border-radius: 0; }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-ok i { background: var(--sage-deep, #56634a); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-hot i { background: var(--accent, #a85a51); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-quiet i { background: var(--pal-clay, #cfa096); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-ok { background: color-mix(in srgb, var(--sage-soft, #f1f4ec) 70%, var(--page)); }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-hot { background: var(--pal-pink, #fdefec); }
+[data-look="new"].nl-prop-page .nl-prop-stand > .nl-meta { margin-top: 6px; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; line-height: 16px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+[data-look="new"].nl-prop-page .nl-prop-stand > b { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 20px; line-height: 1.15; letter-spacing: .02em; white-space: nowrap; }
+[data-look="new"].nl-prop-page .nl-prop-stand.is-quiet > b { font-weight: 500; }
+/* the cards on the page: hairlines, no shadows */
+[data-look="new"].nl-prop-page .nl-cell { border-color: var(--line); box-shadow: none; }
+[data-look="new"].nl-prop-page .nl-tabhead .nl-block-title { font-size: 22px; }
+@media (max-width: 760px) {
+  [data-look="new"].nl-prop-page .nl-prop-standing { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  [data-look="new"].nl-prop-page .nl-prop-stand { padding: 14px 12px 12px; }
+  [data-look="new"].nl-prop-page .nl-prop-stand > b { font-size: 17px; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { [data-look="new"].nl-prop-page .nl-prop-stand { animation: none; } }
+/* The figures in the plain face the website uses, not the old serif; the
+   Rent card's title in the condensed capitals like the cards beside it. */
+[data-look="new"].nl-prop-page, [data-look="new"].nl-port { --font-figures: var(--font-body); --nl-serif: var(--font-body); }
+[data-look="new"].nl-prop-page .nl-prop-rent > p:first-child { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 18px; line-height: 1.15; letter-spacing: .06em; text-transform: uppercase; }
+[data-look="new"].nl-prop-page .nl-prop-rent .figures { font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; font-size: 30px; letter-spacing: .02em; }
+
+/* The people on the home's Overview, stacked (James, 8 Nov 2026): the
+   tenants and the landlords side by side, each card its own box, a second
+   person sitting behind the first. Across the whole row of the bento; two
+   columns unless a guarantor is held, then three. Cards size to what they
+   hold rather than the let's fixed 420px. */
+[data-look="new"] .nl-bento > .nl-prop-p3 { grid-column: 1 / -1; margin-top: 0; }
+[data-look="new"] .nl-prop-p3:not(:has(.nl-prop-g)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) { [data-look="new"] .nl-prop-p3:not(:has(.nl-prop-g)) { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 761px) {
+  [data-look="new"] .nl-prop-p3 .nl-pdeck-card > .nl-pcard,
+  [data-look="new"] .nl-prop-p3 .nl-pdeck-stack > .nl-pdeck-card > *,
+  [data-look="new"] .nl-prop-p3 .nl-pdeck-empty { height: auto; min-height: 168px; overflow: visible; }
+}
+[data-look="new"] .nl-prop-p3 .nl-pcard { background: #fff; }
+[data-look="new"] .nl-prop-p3 .nl-pcard .nl-lines { margin: 0; }
+/* The tenancy under the people: one line of dates, then right to rent. */
+[data-look="new"] .nl-bento > .nl-prop-tenancy { grid-column: 1 / -1; display: grid; gap: 12px; }
+[data-look="new"] .nl-prop-tenancy .nl-prop-dates { margin: 0; }
+
+/* A take-on's own page (8 Nov 2026): the management transfer in the house look. */
+[data-look="new"].nl-to-page { --nl-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; max-width: 1180px; }
+[data-look="new"].nl-to-page .nl-to-box { background: #fff; border: 1px solid var(--line); }
+[data-look="new"].nl-to-page .nl-to-eyebrow { margin: 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11.5px; color: var(--accent); }
+[data-look="new"].nl-to-page .nl-to-title { margin: 6px 0 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .02em; font-size: 40px; line-height: 1; }
+[data-look="new"].nl-to-page .nl-to-h2 { margin: 0; font-family: var(--nl-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; font-size: 20px; line-height: 1.1; }
+[data-look="new"].nl-to-page [class*="rounded-"]:not([class*="rounded-full"]) { border-radius: 0; }
+[data-look="new"].nl-to-page span.rounded-full { border-radius: 0; font-family: var(--nl-cond); font-stretch: 75%; text-transform: uppercase; letter-spacing: .1em; }
+[data-look="new"].nl-to-page .bg-accent-dark { background: var(--primary); }
+[data-look="new"].nl-to-page .border-accent-dark { border-color: var(--primary); }
+@media (max-width: 640px) { [data-look="new"].nl-to-page .nl-to-title { font-size: 30px; } }
+
+/* A home's tabs brought in line (James, 8 Nov 2026: "all of the tabs
+   within here should do something fairly good ... lighten it up"): the
+   tab's head in the condensed capitals, Email Docs as a quiet outline not
+   a terracotta block, chips and buttons square, notes' Save in brown. */
+[data-look="new"].nl-prop-page.nl-edge .nl-tabhead-title {
+  font-family: var(--nl-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: .02em; font-size: 34px; line-height: 1;
+}
+[data-look="new"].nl-prop-page.nl-edge .nl-tabhead-sub { margin-top: 6px; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane .bg-accent-dark.text-page {
+  background: transparent; color: var(--ink); border: 1px solid var(--line-strong);
+}
+[data-look="new"].nl-prop-page.nl-edge .nl-pane .bg-accent-dark.text-page:hover { border-color: var(--ink); opacity: 1; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane [class*="rounded-full"]:not([class*="animate-spin"]):not([role="switch"]) { border-radius: 0; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane [class*="rounded-xl"], [data-look="new"].nl-prop-page.nl-edge .nl-pane [class*="rounded-2xl"] { border-radius: 0; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane button.bg-ink { background: var(--primary); color: #fff; }
+[data-look="new"].nl-prop-page.nl-edge .nl-pane button:disabled.bg-ink, [data-look="new"].nl-prop-page.nl-edge .nl-pane button.bg-ink:disabled { opacity: .45; }

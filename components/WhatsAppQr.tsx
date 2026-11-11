@@ -140,7 +140,8 @@ function WhatsAppSheet({
      pressed from (the landlord rows fold and drag). */
   return createPortal(
     <div
-      className="fixed inset-0 z-[430] flex items-center justify-center p-4"
+      className="nl-wa-wrap fixed inset-0 z-[430] flex items-center justify-center p-4"
+      data-look="new"
       role="dialog"
       aria-modal="true"
       aria-label={`WhatsApp ${first}`}
@@ -150,14 +151,35 @@ function WhatsAppSheet({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/45" />
-      <div className="fade-up relative w-full max-w-[440px] rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
-        <h2 className="hand text-[20px]">WhatsApp {first}</h2>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
-          Point your phone&apos;s camera at the code. WhatsApp opens on {first}&apos;s chat with your message ready to send.
-        </p>
+      {/* Bigger, in the house style (James, 8 Nov 2026: "make that page a bit
+          bigger so they can actually see all of their message"): the message
+          on the left with room to read it, the code on the right. */}
+      <div className="nl-wa fade-up relative w-full">
+        <div className="nl-wa-head">
+          <div>
+            <h2>WhatsApp {first}</h2>
+            <p>{phone}</p>
+          </div>
+          <button type="button" className="nl-wa-x" aria-label="Close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
 
-        <div className="mt-5 flex items-start gap-5">
-          <div className="flex h-[168px] w-[168px] shrink-0 items-center justify-center rounded-2xl border border-line/70 bg-white p-3">
+        <div className="nl-wa-body">
+          <div className="nl-wa-msg">
+            <p className="nl-wa-k">Your message</p>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={9}
+              maxLength={500}
+              placeholder="Type it here, send it from your phone"
+            />
+            <p className="nl-wa-count">{message.length} of 500</p>
+          </div>
+          <div className="nl-wa-code">
+            <p className="nl-wa-k">Send it from your phone</p>
+          <div className="nl-wa-qr">
             {src ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={src} alt={`Code that opens WhatsApp on ${first}'s chat`} className="h-full w-full" />
@@ -165,28 +187,18 @@ function WhatsAppSheet({
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-ink" aria-label="Drawing the code" />
             )}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Your message</p>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={5}
-              maxLength={500}
-              placeholder="Type it here, send it from your phone"
-              className="mt-1.5 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none placeholder:text-muted/70 focus:border-ink"
-            />
-            <p className="mt-1 text-[11px] text-muted">{phone}</p>
+            <p className="nl-wa-hint">Point your phone&apos;s camera at the code. WhatsApp opens on {first}&apos;s chat with your message ready to send.</p>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+        <div className="nl-wa-also">
           <button
             type="button"
             onClick={() => {
               setNoApp(false);
               openWhatsAppApp(waAppLink(phone, message) as string, () => setNoApp(true));
             }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-4 py-2 text-[12px] font-semibold text-ink transition-colors hover:border-ink/40"
+            className="nl-btn nl-btn--secondary nl-btn--sm"
           >
             <DoodleIcon name="message-2" size={12} />
             Open in WhatsApp on this computer
@@ -195,7 +207,7 @@ function WhatsAppSheet({
             href={waWebLink(phone, message) ?? "#"}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark hover:underline"
+            className="nl-link"
           >
             Or WhatsApp Web
           </a>
@@ -208,11 +220,11 @@ function WhatsAppSheet({
 
         {error && <p className="mt-3 text-[12px] text-red-700">{error}</p>}
 
-        <div className="mt-5 flex items-center justify-end gap-3">
+        <div className="nl-wa-foot">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40"
+            className="nl-btn nl-btn--quiet"
           >
             {onSent ? "Not sent" : "Done"}
           </button>
@@ -220,7 +232,7 @@ function WhatsAppSheet({
             <PressButton
               onClick={sent}
               disabled={busy}
-              className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-[13px] font-semibold ${busy ? "cursor-not-allowed bg-line/40 text-muted" : "bg-accent-dark text-page"}`}
+              className="nl-btn nl-btn--primary"
             >
               <DoodleIcon name="checklist" size={14} />
               {busy ? "Saving…" : "I've sent it - log it"}

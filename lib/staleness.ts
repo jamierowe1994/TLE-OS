@@ -108,6 +108,11 @@ export const RULES: Record<RecordKind, Rule> = {
      sits on it - an ageing answer says `stale`, the rebuild starts at once,
      and the board reads again seconds later and is corrected. Waiting the
      2-8 s rebuild on every first look was the slowest thing on the screen. */
+  /* 9 Nov 2026, the one exception (James: "Yes, do it"): the Applications
+     screen and a let's own page may show the last board up to an HOUR old,
+     marked "Updating · as at 10:42" until the rebuilt one lands seconds later
+     (QUICK_MS in lib/applications-board). Only they read again; every other
+     caller keeps these ten minutes. */
   application: { freshMs: MINUTE, keepMs: 10 * MINUTE, showWhileRefreshing: true, why: "Two people work the same deal. A minute keeps them agreeing without hammering the source; an ageing board is corrected within seconds, never left standing." },
 
   /* Certificates and their expiry dates. An hour to LOOK at; never for a

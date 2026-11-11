@@ -20,6 +20,7 @@ import { usePref } from "@/lib/prefs-store";
 import { useNewLook } from "@/lib/use-new-look";
 import { Tabs, Ico } from "@/components/new-look/Parts";
 import { Failed, Loading } from "@/components/new-look/backoffice/Bits";
+import { PmCard, PmWait, MixRing, RankBars } from "@/components/new-look/dashboard/PmCharts";
 
 /**
  * Portfolio > Contractors (James, 19 Oct 2026, after the back-office Q&A).
@@ -278,7 +279,7 @@ export default function ContractorsPage() {
           : `Nothing needs you. Every job has a contractor and a date.${upcoming.length ? ` ${plural(upcoming.length, "contractor")} booked this week.` : ""}`;
     const fig = (v: string) => (failed ? <span className="nl-ct-fig-err">Couldn&apos;t read</span> : loading ? <span className="nl-bo-spin" aria-label="Reading" /> : v);
     return (
-      <div data-look="new" className="nl-page nl-rise nl-bo nl-ct">
+      <div data-look="new" className="nl-page nl-rise nl-bo nl-ct nl-edge">
         <header className="nl-ct-top">
           <div className="min-w-0">
             <h1 className="nl-title">Your Jobs</h1>
@@ -325,6 +326,68 @@ export default function ContractorsPage() {
             <b>{fig(pounds(owedPence))}</b>
             <em>{loading || failed ? "" : unpaid.length ? `${plural(unpaid.length, "invoice")}${longWait.length ? ` · ${longWait.length} over ${WAITING_DAYS} days` : ""}` : "Nothing owed"}</em>
           </button>
+        </div>
+
+        {/* The pictures (James, 8 Nov 2026: "do the same thing" as the PM
+            Dashboard and Portfolio): the open jobs by where they stand, who
+            has the most on, and what we owe by how long it has waited. Read
+            off the same jobs as the figures above; every part opens its list. */}
+        <div className="nl-port-graphs nl-ct-graphs">
+          {(() => {
+            if (loading) return [0, 1, 2].map((i) => <PmCard key={i} title={["The Open Jobs", "Who Has the Most On", "What We Owe"][i]}><PmWait>Reading the jobs…</PmWait></PmCard>);
+            if (failed || !data) return null;
+            const open = jobs.filter((j) => OPEN.includes(j.status));
+            const isLate = (j: Job) => missed.includes(j) || late.includes(j);
+            const lateN = open.filter(isLate).length;
+            const bookedN = open.filter((j) => !isLate(j) && j.status === "scheduled").length;
+            const waitN = open.filter((j) => !isLate(j) && j.status !== "scheduled" && j.contractorContactedAt).length;
+            const notSentN = open.length - lateN - bookedN - waitN;
+            const toJobs = () => setTab("bookings");
+            const busiest = all
+              .map((c) => ({ c, n: per.get(c.id)?.open ?? 0, today: per.get(c.id)?.today ?? false }))
+              .filter((x) => x.n > 0)
+              .sort((a, b) => b.n - a.n || a.c.name.localeCompare(b.c.name))
+              .slice(0, 6);
+            const bands = [
+              { label: "Under 2 weeks", test: (d: number) => d < 14, tone: "sage" as const },
+              { label: `2 weeks to ${WAITING_DAYS} days`, test: (d: number) => d >= 14 && d <= WAITING_DAYS, tone: "clay" as const },
+              { label: `Over ${WAITING_DAYS} days`, test: (d: number) => d > WAITING_DAYS, tone: "terra" as const },
+            ].map((b) => {
+              const these = unpaid.filter((j) => b.test(waitedDays(j)));
+              const pence = these.reduce((a, j) => a + (j.invoicePence ?? 0), 0);
+              return { label: `${b.label} · ${plural(these.length, "invoice")}`, value: pence, shown: pounds(pence), tone: b.tone, onPick: () => setTab("pay") };
+            });
+            return (
+              <>
+                <PmCard title="The Open Jobs" aside={<button type="button" className="nl-link" onClick={toJobs}>Jobs</button>}>
+                  <MixRing
+                    middle={open.length}
+                    middleLabel={open.length === 1 ? "open job" : "open jobs"}
+                    parts={[
+                      { key: "Booked in", n: bookedN, tone: "olive", onPick: toJobs },
+                      { key: "Waiting for a date", n: waitN, tone: "clay", onPick: toJobs },
+                      { key: "Not sent yet", n: notSentN, tone: "sage", onPick: toJobs },
+                      { key: "Past its date", n: lateN, tone: "terra", onPick: toJobs },
+                    ]}
+                  />
+                </PmCard>
+                <PmCard title="Who Has the Most On" aside={<button type="button" className="nl-link" onClick={() => setTab("book")}>Contractors</button>}>
+                  {busiest.length ? (
+                    <RankBars rows={busiest.map((x, i) => ({ label: `${x.c.name}${x.today ? " · on site today" : ""}`, value: x.n, tone: x.today ? "brown" : i === 0 ? "terra" : "olive", onPick: () => setProfile(x.c) }))} />
+                  ) : (
+                    <p className="nl-ct-calm is-chart">Nobody has an open job just now.</p>
+                  )}
+                </PmCard>
+                <PmCard title="What We Owe" aside={<span className="nl-ct-owe">{pounds(owedPence)}</span>}>
+                  {unpaid.length ? (
+                    <RankBars rows={bands} />
+                  ) : (
+                    <p className="nl-ct-calm is-chart">Nothing owed. Every contractor invoice on the OS is paid.</p>
+                  )}
+                </PmCard>
+              </>
+            );
+          })()}
         </div>
 
         <div className="nl-ct-tabrow">

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Mast } from "@/components/new-look/Parts";
 import { JOURNEYS as TOUR } from "@/lib/learning/systems";
-import { GuidesCover, SystemsCover } from "./Covers";
+import { DOOR_SCHEME, GuidesCover, SystemsCover } from "./Covers";
 
 /**
  * Tools > Learning (James, 26 Oct 2026): two ways in. Guides, the library of
@@ -41,12 +41,12 @@ export default function LearningHub() {
   }, []);
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-lr">
+    <div data-look="new" className="nl-page nl-rise nl-lr nl-edge">
       <Back href="/tools" label="Tools" />
       <Mast title="Learning" blurb="The guides worth reading, and the whole system from every side. Dip in whenever you need it." />
       <div className="nl-lr-doors">
         <Link href="/tools/learning/guides" className="nl-lr-door is-guides" style={{ animationDelay: "80ms" }}>
-          <span className="nl-lr-door-art" aria-hidden>
+          <span className={`nl-lr-door-art nl-ta is-s${DOOR_SCHEME.guides}`} aria-hidden>
             <GuidesCover />
           </span>
           <span className="nl-lr-door-text">
@@ -59,7 +59,7 @@ export default function LearningHub() {
           </span>
         </Link>
         <Link href="/tools/learning/systems" className="nl-lr-door is-systems" style={{ animationDelay: "160ms" }}>
-          <span className="nl-lr-door-art" aria-hidden>
+          <span className={`nl-lr-door-art nl-ta is-s${DOOR_SCHEME.systems}`} aria-hidden>
             <SystemsCover />
           </span>
           <span className="nl-lr-door-text">

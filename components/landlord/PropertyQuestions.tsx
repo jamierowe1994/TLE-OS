@@ -4,9 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import UploadDoc from "@/components/landlord/UploadDoc";
 import {
+  KEPT,
   PROPERTY_QUESTIONS,
   allDone,
   asked,
+  cardAsked,
+  cardKey,
   firstUnfinished,
   progress,
   stepDone,
@@ -48,12 +51,15 @@ export default function PropertyQuestions({
   firstName,
   demo = false,
   onProgress,
+  signed = false,
 }: {
   /** Null on the sample: answers stay in this tab and nothing is written. */
   appraisalId: string | null;
   firstName?: string | null;
   demo?: boolean;
   onProgress?: (p: { done: number; of: number }) => void;
+  /** Asked before the contract now (James, 5 Nov 2026): the hello says so rather than thanking them for signing. */
+  signed?: boolean;
 }) {
   const [answers, setAnswers] = useState<Answers>({});
   const [at, setAt] = useState(0);
@@ -217,11 +223,11 @@ export default function PropertyQuestions({
       {fresh && at === 0 && (
         <div className="mb-6 rounded-[22px] bg-accent-soft/80 px-7 py-6">
           <h2 className="text-[26px] leading-tight">
-            That&rsquo;s signed{firstName ? `, ${firstName}` : ""}. Thank you.
+            {signed ? <>That&rsquo;s signed{firstName ? `, ${firstName}` : ""}. Thank you.</> : <>We need a few more details{firstName ? `, ${firstName}` : ""}.</>}
           </h2>
           <p className="mt-2 max-w-lg text-[14px] leading-relaxed text-muted">
-            Now the bit only you can do: a few things about the property itself, so we can market it, let it and
-            look after it without ringing you about the stopcock. Seven short screens, and it saves as you go.
+            {signed ? "Now the bit only you can do: a" : "Before your contract, a"} few things about the property itself, so we can market it, let it and
+            look after it without ringing you about the stopcock. {PROPERTY_QUESTIONS.length} short screens, and it saves as you go.
           </p>
         </div>
       )}
@@ -305,6 +311,8 @@ export default function PropertyQuestions({
               onChange={(v) => set(qn.id, v)}
               appraisalId={appraisalId}
               sample={demo || !appraisalId}
+              answers={answers}
+              onCard={(v) => set(cardKey(qn.id), v)}
             />
           ))}
         </div>
@@ -349,12 +357,17 @@ function Field({
   onChange,
   appraisalId,
   sample,
+  answers = {},
+  onCard,
 }: {
   q: Question;
   value: Answers[string];
   onChange: (v: string | string[]) => void;
   appraisalId: string | null;
   sample: boolean;
+  /** Everything answered so far, for a meter's "card or key meter?" (Susan, 4 Nov 2026). */
+  answers?: Answers;
+  onCard?: (v: string) => void;
 }) {
   const chosen = typeof value === "string" ? value : "";
   const offerUpload = Boolean(q.upload && q.upload.when.includes(chosen));
@@ -406,15 +419,24 @@ function Field({
           </div>
         )}
 
-        {q.kind === "text" && (
+        {/* A code, once saved: kept locked away and never shown back (lib/home-answers). */}
+        {q.kind === "text" && q.secret && chosen === KEPT ? (
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-accent-soft/70 px-3.5 py-2.5 text-[13px]">
+            <span>Saved and kept locked away</span>
+            <button type="button" onClick={() => onChange("")} className="text-[12.5px] underline underline-offset-4">
+              Change it
+            </button>
+          </div>
+        ) : q.kind === "text" ? (
           <input
             type="text"
             value={chosen}
             placeholder={q.placeholder}
+            autoComplete="off"
             onChange={(e) => onChange(e.target.value)}
             className={FIELD}
           />
-        )}
+        ) : null}
 
         {q.kind === "long" && (
           <textarea
@@ -429,7 +451,7 @@ function Field({
         {/* The usual answers, one tap each. A chip fills the box (or adds to
             it, where several things are listed) and the box stays theirs to
             edit. */}
-        {(q.kind === "text" || q.kind === "long") && q.suggestions?.length ? (
+        {(q.kind === "text" || q.kind === "long") && q.suggestions?.length && !(q.secret && chosen === KEPT) ? (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {q.suggestions.map((sug) => {
               const has = chosen.toLowerCase().includes(sug.toLowerCase());
@@ -452,6 +474,26 @@ function Field({
                   }
                 >
                   {sug}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {cardAsked(q, answers) && onCard ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+            <span>Is it a card or key meter?</span>
+            {(["yes", "no"] as const).map((v) => {
+              const on = answers[cardKey(q.id)] === v;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => onCard(v)}
+                  className="rounded-full border px-3 py-1.5 text-[12px] transition-colors"
+                  style={on ? { background: "#56423e", borderColor: "#56423e", color: "#fff" } : { borderColor: "rgba(86,66,62,0.22)", background: "#fff", color: "#56423e" }}
+                >
+                  {v === "yes" ? "Yes" : "No"}
                 </button>
               );
             })}

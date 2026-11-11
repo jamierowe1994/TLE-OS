@@ -15,7 +15,6 @@ import CornerSwell from "@/components/CornerSwell";
 import { searchMatches } from "@/lib/search-match";
 import { rememberListingOrder } from "@/lib/listing-order";
 import NewListingWizard from "@/components/listing/NewListingWizard";
-import MovedInStillAdvertised from "@/components/listing/MovedInStillAdvertised";
 import OffersInList, { offerHref, type HomeOnBoard } from "@/components/listing/OffersInList";
 import type { OpenOfferRow } from "@/app/api/offers/open/route";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -874,7 +873,7 @@ export default function Listings() {
           : null;
     const photo = (l: SampleListing, cls: string) => <PropertyPhoto src={l.image} seed={l.id} kind={`${l.propertyType ?? ""} ${l.name}`} className={cls} />;
     return (
-      <div data-look="new" className="nl-page nl-rise">
+      <div data-look="new" className="nl-page nl-rise nl-edge">
         <Mast
           title="Listings"
           blurb={
@@ -960,8 +959,8 @@ export default function Listings() {
           {here && !q.trim() && <p className="nl-meta mt-3">{here.blurb}</p>}
         </div>
 
-        {/* Moved in and still on the portals, for the owners (Susan Liles, 3 Nov 2026). */}
-        <MovedInStillAdvertised className="mt-6" />
+        {/* Moved in and still on the portals: taken down automatically now
+            (switch on, James 8 Nov 2026), so the owners' list is gone. */}
 
         <div className="mt-7">
           {stage === "offers" && (
@@ -1238,7 +1237,7 @@ export default function Listings() {
       </div>
 
       {/* Moved in and still on the portals, for the owners (Susan Liles, 3 Nov 2026). */}
-      <MovedInStillAdvertised className="mt-4" />
+
 
       {/* ── The board, in the same panel the other two boards use. ── */}
       {/* White with a hairline. A blush wash with doodles was tried here on

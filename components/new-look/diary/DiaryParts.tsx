@@ -60,8 +60,11 @@ export function Spinner() {
 export type RowDrop = { openId: string | null; onToggle: (a: Appt) => void; render: (a: Appt) => React.ReactNode };
 
 /** One appointment on the agenda: time, dot, who and what, its state, the way in. */
-export function DiaryRow({ a, showDay, sentExtra, onOpen, drop }: { a: Appt; showDay?: boolean; sentExtra?: Set<string>; onOpen: (a: Appt) => void; drop?: RowDrop }) {
+export function DiaryRow({ a, showDay, sentExtra, onOpen, drop, brochure }: { a: Appt; showDay?: boolean; sentExtra?: Set<string>; onOpen: (a: Appt) => void; drop?: RowDrop; brochure?: (a: Appt) => string | null }) {
   const st = statusOf(a, sentExtra);
+  /* Print Brochure under a viewing (Erleta Vathej, ticket 47b2389c, 10 Nov
+     2026): beside the row, never inside it - the row is itself a button. */
+  const brochureHref = brochure ? brochure(a) : null;
   const past = a.day < 0;
   const time = showDay ? fmtShort(dateOfOffset(a.day)).split(" ").slice(0, 2).join(" ") : a.allDay ? "All day" : a.start;
   const open = Boolean(drop && drop.openId === a.id);
@@ -75,7 +78,7 @@ export function DiaryRow({ a, showDay, sentExtra, onOpen, drop }: { a: Appt; sho
         onClick={() => (drop ? drop.onToggle(a) : onOpen(a))}
       >
         <span className="nl-diary-time">{time}</span>
-        <span className={`nl-diary-dot is-${dotTone(a)}`} aria-hidden />
+        <span className={`nl-diary-dot is-${dotTone(a)} is-k-${a.fromPersonal ? "other" : a.kind}`} aria-hidden />
         <span className="min-w-0">
           <span className="nl-strong block truncate">{titleOf(a)}</span>
           <span className="nl-meta block truncate">
@@ -91,13 +94,22 @@ export function DiaryRow({ a, showDay, sentExtra, onOpen, drop }: { a: Appt; sho
           <path d="M9 6l6 6-6 6" />
         </svg>
       </button>
+      {brochureHref && !open && (
+        <a href={brochureHref} target="_blank" rel="noopener" className="nl-diary-brochure" title="An A4 sheet to hand out at the viewing. No landlord details are on it.">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M7 8.5V4h10v4.5M7 16.5H5a1.5 1.5 0 0 1-1.5-1.5v-5A1.5 1.5 0 0 1 5 8.5h14a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5h-2" />
+            <rect x="7" y="13.5" width="10" height="6.5" />
+          </svg>
+          Print Brochure
+        </a>
+      )}
       {open && drop && <div className="nl-diary-drop">{drop.render(a)}</div>}
     </li>
   );
 }
 
 /** Rows, a page at a time: a real Thursday came back with 32 entries on it. */
-export function DiaryRows({ list, showDay, sentExtra, onOpen, page = 12, resetKey, drop }: { list: Appt[]; showDay?: boolean; sentExtra?: Set<string>; onOpen: (a: Appt) => void; page?: number; resetKey: string; drop?: RowDrop }) {
+export function DiaryRows({ list, showDay, sentExtra, onOpen, page = 12, resetKey, drop, brochure }: { list: Appt[]; showDay?: boolean; sentExtra?: Set<string>; onOpen: (a: Appt) => void; page?: number; resetKey: string; drop?: RowDrop; brochure?: (a: Appt) => string | null }) {
   const [shown, setShown] = useState<{ key: string; n: number }>({ key: resetKey, n: page });
   /* An entry opened from elsewhere (the week) is never hidden behind See more. */
   const at = drop?.openId ? list.findIndex((a) => a.id === drop.openId) : -1;
@@ -106,7 +118,7 @@ export function DiaryRows({ list, showDay, sentExtra, onOpen, page = 12, resetKe
     <>
       <ol className="nl-diary-agenda">
         {list.slice(0, n).map((a) => (
-          <DiaryRow key={a.id} a={a} showDay={showDay} sentExtra={sentExtra} onOpen={onOpen} drop={drop} />
+          <DiaryRow key={a.id} a={a} showDay={showDay} sentExtra={sentExtra} onOpen={onOpen} drop={drop} brochure={brochure} />
         ))}
       </ol>
       {list.length > n ? (
@@ -275,7 +287,8 @@ export function MonthGrid({
                     {list.length > 2 && <span className="nl-diary-mmore">+{list.length - 2} more</span>}
                   </span>
                   <span className="nl-diary-mdots" aria-hidden>
-                    {list.length > 3 ? <b>{list.length}</b> : list.map((a) => <i key={a.id} className={`nl-diary-dot is-${dotTone(a)}`} />)}
+                    {list.slice(0, 5).map((a) => <i key={a.id} className={`nl-diary-dot is-${dotTone(a)} is-k-${a.fromPersonal ? "other" : a.kind}`} />)}
+                    {list.length > 5 && <b>+{list.length - 5}</b>}
                   </span>
                 </>
               )}

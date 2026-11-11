@@ -3,6 +3,7 @@ import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { answersForAddress, answersForAppraisal, answersForProperties } from "@/lib/property-answers-store";
+import { openSecrets } from "@/lib/home-answers";
 
 /**
  * What the landlord told us, for the people who need to act on it.
@@ -56,7 +57,10 @@ export async function GET(req: NextRequest) {
     ).flat();
 
     const seen = new Set<string>();
-    const properties = found.filter((p2) => (seen.has(p2.appraisalId) ? false : (seen.add(p2.appraisalId), true)));
+    /* The codes (alarm, building or gate) are sealed at rest and opened here, for staff only. */
+    const properties = found
+      .filter((p2) => (seen.has(p2.appraisalId) ? false : (seen.add(p2.appraisalId), true)))
+      .map((p2) => ({ ...p2, answers: openSecrets(p2.answers) }));
     return NextResponse.json({ ok: true, properties });
   } catch (e) {
     /* Said out loud rather than thrown. A 500 with an empty body tells the

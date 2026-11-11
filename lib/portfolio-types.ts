@@ -27,6 +27,8 @@ export interface Party {
   name: string;
   email: string | null;
   phone: string | null;
+  /** The name as the tenancy record spells it, where an agent has put `name` right in the OS (lib/tenant-contacts saveTenantName). */
+  recordName?: string;
 }
 
 export interface ManagedProperty {
@@ -68,6 +70,12 @@ export interface ManagedProperty {
    */
   otherLandlords?: Party[];
   tenants: Party[];
+  /**
+   * What PayProp's running tenancy changed in `tenants` (9 Nov 2026,
+   * lib/business/payprop-tenant-contacts sittingFromPayProp): who it added,
+   * who it took off, whether it replaced everyone, and that tenancy's dates.
+   */
+  tenantsFromPayProp?: { added: string[]; dropped: string[]; replaced: boolean; startDate: string | null; endDate: string | null; depositId: string | null };
   /**
    * The lets behind this row in the OS (4 Nov 2026, lib/book-lets): the ids of
    * the accepted applications on its listing, newest first. Each is a let's
@@ -114,6 +122,12 @@ export interface ManagedProperty {
   /** REX no longer shows this let, but the tenants haven't moved out yet, so
    *  it is kept on the book from the tenancy archive until they do. */
   held?: boolean;
+  /**
+   * Nobody lives there now (lib/managed-book markEmptyHomes, 6 Nov 2026):
+   * PayProp's tenancy on this let ended on this day and none on the home is
+   * current, so `tenants` is empty whatever REX's let still names. ISO day.
+   */
+  vacantSince?: string;
   /**
    * Fields an agent put right in the OS with Edit on the home's page
    * (lib/home-overrides, 2 Nov 2026): who, when, and what REX or the record

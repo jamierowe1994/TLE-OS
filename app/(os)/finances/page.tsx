@@ -32,7 +32,7 @@ export default function Finances() {
   }
   if (look) {
     return (
-      <div data-look="new" className="nl-page nl-rise nl-bo">
+      <div data-look="new" className="nl-page nl-rise nl-bo nl-edge nl-fin">
         <Mast
           title="Finances"
           blurb="What the book earns this month, what comes to you, and where next month lands. Live off the book at the rates an owner sets."

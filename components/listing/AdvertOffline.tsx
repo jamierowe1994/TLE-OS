@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { usePref } from "@/lib/prefs-store";
+
+import { watchPortalSend, TAKING_A_WHILE } from "@/lib/portal-watch";
+import { toast } from "@/lib/toast";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
 
@@ -69,7 +73,10 @@ export default function AdvertOffline({
   className = "",
   letAgreed = null,
   onLetAgreed,
+  compact = false,
 }: {
+  /** Just the button, for a page header beside Customer update (James, 8 Nov 2026). */
+  compact?: boolean;
   listingId: string;
   applicationId?: string | null;
   propertyId?: string | null;
@@ -111,6 +118,18 @@ export default function AdvertOffline({
       live = false;
     };
   }, [listingId, applicationId, tick]);
+
+  /* The agent's standing choice (Profile > Automations, 8 Nov 2026) becomes
+     this let's plan the first time it opens with none set. */
+  const [standing, , standingReady] = usePref<"fee" | "references" | "manual">("advert-offline-default", "manual");
+  const planned = useRef(false);
+  useEffect(() => {
+    if (!loaded || !standingReady || planned.current || !applicationId) return;
+    if (advert?.offlineAt || advert?.when || standing === "manual") return;
+    planned.current = true;
+    void plan(standing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, standingReady, standing, advert?.when, advert?.offlineAt, applicationId]);
 
   useEffect(() => {
     const go = () => setOpen(true);
@@ -169,10 +188,15 @@ export default function AdvertOffline({
     try {
       if (pub?.status === "published" && !pub.onPortals) {
         const r = await fetch("/api/listings/publish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: Number(listingId), action: "on" }) });
-        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; sending?: boolean; since?: number };
         if (!j.ok) {
           setErr(j.error ?? "It didn't go back on the portals. Try again.");
           return;
+        }
+        /* Slower than usual to reach the portals: not a failure, followed and announced (lib/portal-watch). */
+        if (j.sending && j.since) {
+          watchPortalSend({ id: listingId, name: address, since: j.since });
+          toast(TAKING_A_WHILE, "ok", 9000);
         }
       }
       const r = await fetch("/api/listings/offline", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ listingId, applicationId, action: "online" }) });
@@ -185,6 +209,39 @@ export default function AdvertOffline({
     } finally {
       setBackBusy(false);
     }
+  }
+
+  const sheet = open && (
+    <TakeOfflineSheet
+      listingId={listingId}
+      applicationId={applicationId}
+      propertyId={propertyId}
+      address={address}
+      onPortals={onPortals}
+      onClose={() => {
+        setOpen(false);
+        setTick((n) => n + 1);
+      }}
+    />
+  );
+  if (compact) {
+    if (!loaded) return null;
+    return (
+      <>
+        {stuck ? (
+          <button type="button" disabled={offBusy} onClick={() => void takeOffAgain()} className="nl-btn nl-btn--secondary" title="Marked offline, but the portals still show it">
+            <DoodleIcon name="lock" size={14} /> {offBusy ? "Taking it off…" : "Take off the portals"}
+          </button>
+        ) : offline ? (
+          <span className="nl-advert-chip" title={advert?.offlineAt ? `Offline since ${day(advert.offlineAt)}` : undefined}>Advert offline</span>
+        ) : onPortals ? (
+          <button type="button" data-steve="listing.take-offline" onClick={() => setOpen(true)} className="nl-btn nl-btn--secondary" title="On Rightmove, OnTheMarket and Zoopla">
+            <DoodleIcon name="lock" size={14} /> Take offline
+          </button>
+        ) : null}
+        {sheet}
+      </>
+    );
   }
 
   return (
@@ -228,7 +285,7 @@ export default function AdvertOffline({
                 {letAgreed ? "Back to Available" : "Mark as Let Agreed"}
               </button>
             )}
-            <button type="button" onClick={() => setOpen(true)} className={primary}>
+            <button type="button" data-steve="listing.take-offline" onClick={() => setOpen(true)} className={primary}>
               <DoodleIcon name="lock" size={13} /> Take Offline
             </button>
           </span>

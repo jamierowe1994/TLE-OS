@@ -7,7 +7,7 @@ import { aiCreate } from "@/lib/ai";
 import { whoIs } from "@/lib/admin";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { SERVICE_LEVELS } from "@/lib/market-appraisal";
-import { readAnswers } from "@/lib/property-answers-store";
+import { readHome } from "@/lib/home-answers";
 import { presentationsFor } from "@/lib/present-store";
 import { epcForAddress } from "@/lib/epc";
 import { listPhotos, photoUrl } from "@/lib/property-photos";
@@ -90,7 +90,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
   const body = (await req.json().catch(() => ({}))) as { steer?: string; current?: string | null; action?: "advert" | "gaps"; known?: Record<string, string>; missing?: Array<{ id: string; label: string }> };
 
-  const answers: Record<string, unknown> = await readAnswers(id).catch(() => ({}));
+  /* Every answer kept for the home, the questions before the contract included (lib/home-answers, 5 Nov 2026). Codes are never used. */
+  const answers: Record<string, unknown> = await readHome({ appraisalId: id, propertyId: ma.rexPropertyId ?? null })
+    .then((h) => Object.fromEntries(Object.entries(h.answers).filter(([k]) => !k.endsWith("-code") && k !== "entry-code-detail")))
+    .catch(() => ({}));
   const refs = [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
   const decks = (await Promise.all(refs.map((r) => presentationsFor(r).catch(() => [])))).flat();
   const property = decks.find((d) => d.deck.property?.beds != null)?.deck.property ?? decks[0]?.deck.property ?? null;
@@ -107,8 +110,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     property?.baths != null ? `Bathrooms: ${property.baths}` : null,
     occupancy === "tenant" ? "Currently let to a tenant" : occupancy === "owner" ? "The owner lives there at the moment" : occupancy === "empty" ? "Empty now" : null,
     say(answers["available-from"]) ? `Available from: ${say(answers["available-from"])}` : null,
-    say(answers.heating) ? `Heating: ${say(answers.heating).replace(/-/g, " ")}` : null,
-    say(answers.parking) ? `Parking: ${say(answers.parking)}` : null,
+    say(answers["heating-type"]) ? `Heating: ${say(answers["heating-type"]).replace(/-/g, " ")}` : null,
+    say(answers["gas-supply"]) === "no" ? "No gas at the property: all electric" : null,
+    say(answers.parking) ? `Parking: ${say(answers.parking)}${say(answers["parking-detail"]) ? ` (${say(answers["parking-detail"])})` : ""}` : null,
     say(answers.garden) ? `Garden looked after by: ${say(answers.garden)}` : null,
     say(answers.furnishing) ? `Furnishing: ${say(answers.furnishing)}` : null,
     say(answers.pets) ? `Pets: ${say(answers.pets) === "open" ? "considered" : say(answers.pets)}` : null,

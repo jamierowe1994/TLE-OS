@@ -23,7 +23,8 @@ import { takeOnBooking, takeOnTimes } from "@/lib/takeon";
 import { DECK_KINDS } from "@/lib/present";
 import { currentApproval } from "@/lib/landlord-offers";
 import { STAGES, stepsForStage, type LandlordView, type Stage, type ViewOffer } from "@/lib/landlord-view";
-import { readAnswers } from "@/lib/property-answers-store";
+import { readHome } from "@/lib/home-answers";
+import { hasDb, q as dbq } from "@/lib/db";
 import { progress as answerProgress } from "@/lib/property-questions";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { EXTRA_DOC_KINDS } from "@/lib/landlord-doc-kinds";
@@ -263,15 +264,39 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
  * asked for on the portal: PayProp collects them. When PayProp already holds
  * an account for them, the file says so, by its last four digits only.
  */
-export type OnFile = { id: PaperOnFile | null; bank: BankOnFile | null };
-export const NOTHING_ON_FILE: OnFile = { id: null, bank: null };
+export type OnFile = { id: PaperOnFile | null; bank: BankOnFile | null; termsLink?: string | null };
+export const NOTHING_ON_FILE: OnFile = { id: null, bank: null, termsLink: null };
 
 async function landlordOnFile(me: Me, j: AppraisalJourney): Promise<OnFile> {
-  const [papers, bank] = await Promise.all([
+  const [papers, bank, termsLink] = await Promise.all([
     landlordPapersOnFile({ name: me.name, email: me.email, notAt: j.appraisal.address, notAppraisal: j.appraisal.id }).catch(() => ({ id: null, aml: null })),
     bankOnFile({ email: me.email, name: me.name }).catch(() => null),
+    ownTermsLink(me.email, j.appraisal.id, j.appraisal.rexPropertyId ?? null).catch(() => null),
   ]);
-  return { id: papers.id, bank };
+  return { id: papers.id, bank, termsLink };
+}
+
+/**
+ * Their own link to terms sent from the OS (lib/terms) for this home and not
+ * yet signed by them: the portal's Sign opens it, and it asks the questions
+ * about the home before the contract (James, 5 Nov 2026: "we'll basically
+ * rewire both sides of it"). Null when there are none, and the old signing
+ * stays as it was.
+ */
+async function ownTermsLink(email: string, appraisalId: string, propertyId: string | null): Promise<string | null> {
+  if (!hasDb() || !email) return null;
+  const rows = await dbq<{ parties: Array<{ email?: string; token?: string; signedAt?: string | null }> }>(
+    `SELECT parties FROM os_terms
+      WHERE status = 'sent' AND (appraisal_id = $1 OR ($2::text IS NOT NULL AND property_id = $2))
+      ORDER BY created_at DESC LIMIT 5`,
+    [appraisalId, propertyId]
+  ).catch(() => []);
+  const me = email.trim().toLowerCase();
+  for (const r of rows) {
+    const p = (r.parties ?? []).find((x) => String(x.email ?? "").trim().toLowerCase() === me);
+    if (p?.token) return p.signedAt ? null : `/sign/${p.token}`;
+  }
+  return null;
 }
 
 /** "On file  •  from 12 Moor Street" - for a paper from another of their homes. */
@@ -339,9 +364,9 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
      to carry a link (that link was the agent's own - see the builder). */
   const signUrl = a.termsSentAt ? "sent" : null;
   const signed = j.signed.length > 0;
-  /* Only asked for once they have signed, so only read then - a questionnaire
-     nobody has been offered has nothing to report. */
-  const answered = signed ? answerProgress(await readAnswers(a.id)) : { done: 0, of: 0, pct: 0 };
+  /* Asked before the contract now (James, 5 Nov 2026), so read from the
+     instruction on, across every key the home's answers can be under. */
+  const answered = a.valuation != null || signed ? answerProgress((await readHome({ appraisalId: a.id, propertyId: a.rexPropertyId ?? null })).answers) : { done: 0, of: 0, pct: 0 };
   const agentName = a.agent ?? deckAgent?.name ?? null;
   const stage = stageOf(j, offers);
   const at = STAGES.findIndex((s) => s.id === stage);
@@ -469,7 +494,10 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
         ? { id: "presentation", label: "View your presentation", sub: `${shownLabel}, from ${shown.authorName || agentName || "your agent"}`, href: null, icon: "analytics", action: "presentation" }
         : { id: "presentation", label: "View your presentation", sub: "Lands here before the visit", href: null, icon: "analytics" },
       /* Signed: off the list. Not yet: the tile opens the signing here. */
-      sign: { id: "sign", label: "Sign your contract", sub: a.valuation != null ? "Review and sign your management terms" : "Follows the valuation", href: null, icon: "pencil", action: "sign", done: signed },
+      sign: onFile.termsLink
+        ? /* Terms sent from the OS: their own link, which asks the questions first. */
+          { id: "sign", label: "Sign your contract", sub: "A few questions about the home, then your terms", href: onFile.termsLink, icon: "pencil", done: signed }
+        : { id: "sign", label: "Sign your contract", sub: a.valuation != null ? "Review and sign your management terms" : "Follows the valuation", href: null, icon: "pencil", action: "sign", done: signed },
       /* The things only they know. Held back until the contract is signed by
          stepsForStage; counted in screens, because that is the unit the
          questionnaire itself uses. */

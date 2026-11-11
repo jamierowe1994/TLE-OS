@@ -48,7 +48,7 @@ export const QUIET_PILL = "bg-page text-muted";
    same grey ... a little bit more uniform"), white cards on it, and the stage
    told apart by a small coloured bar beside its name. */
 const STAGE_MARK: Record<string, string> = {
-  deal_started: "#cfa096",
+  deal_started: "#c4a092",
   holding_fee: "#e0a54a",
   referencing: "#5aa1d6",
   plc: "#7fb3a8",

@@ -3,7 +3,8 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { leadAccess } from "@/lib/lead-access";
 import { hasDb } from "@/lib/db";
 import { addDoc, docsFor, docToRex, updateDoc, type DocRexResult } from "@/lib/lead-documents";
-import { R2_BUCKET, jpegName, keptType, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { DOC_MIME, DOC_TYPES } from "@/lib/doc-types";
 
 /**
@@ -67,19 +68,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const scope = SCOPES.document;
 
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
-  if (file.size === 0) return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
-  if (file.size > scope.maxBytes) {
-    return NextResponse.json(
-      { ok: false, error: `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB - the limit is ${scope.maxBytes / 1024 / 1024}MB.` },
-      { status: 413 }
-    );
-  }
-  /* A .jfif is a JPEG and is kept as one, or REX refuses it later (lib/r2 jpegName). */
-  const fileName = jpegName(file.name);
-  const mime = keptType(file.name, file.type);
-  if (!DOC_MIME.includes(mime) && !/\.docx?$/i.test(file.name)) {
-    return NextResponse.json({ ok: false, error: "Only a PDF, a photo or a Word document can go here." }, { status: 415 });
-  }
+  /* One judge for every upload route (lib/upload-rules): a .jfif is kept as
+     the JPEG it is, a file with no browser type goes by its extension, and a
+     refusal names the file and what would be taken. */
+  const judged = judgeFile(file, { types: DOC_MIME, maxBytes: scope.maxBytes });
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: judged.status });
+  const fileName = judged.name;
+  const mime = judged.type;
   if (!r2Configured) {
     return NextResponse.json({ ok: false, error: "Storage isn't configured on this environment." }, { status: 503 });
   }

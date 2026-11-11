@@ -1,5 +1,6 @@
 "use client";
 
+import { certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
 import PageHeader from "@/components/PageHeader";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import CheckRow, { GREEN } from "@/components/compliance-desk/CheckRow";
@@ -214,6 +215,8 @@ export default function ToVerify() {
   );
 }
 
+const sayDay = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
 /** One row, holding the number he checked until he presses Verified. */
 function VerifyRow({
   r,
@@ -236,8 +239,13 @@ function VerifyRow({
   const [type, setType] = useState(r.fileAs?.types[0]?.id ?? "");
   const [needDate, setNeedDate] = useState(false);
   const onRegister = Boolean(r.register);
+  /* A PAT report or a fire safety certificate has no expiry: the day it was
+     done is enough, and the reason the button will not go is said in words
+     (lib/cert-kinds, one rule for every door). */
+  const notReady = r.fileAs ? certNotReadyBecause({ type, expiry, issue }) : null;
+  const onIssue = Boolean(r.fileAs) && kindFilesOnIssueDate(type);
   const verify = () => {
-    if (r.fileAs && !expiry) return setNeedDate(true);
+    if (notReady) return setNeedDate(true);
     setNeedDate(false);
     void check(r.kind, r.id, "verified", undefined, onRegister ? number : undefined, r.fileAs ? { type, expiry, issue: issue || undefined } : null);
   };
@@ -270,14 +278,15 @@ function VerifyRow({
             </label>
           )}
           <label className="text-[11.5px] font-semibold">
-            Runs out
-            <input type="date" value={expiry} onChange={(e) => { setExpiry(e.target.value); setNeedDate(false); }} className={`mt-1 block rounded-lg border bg-card px-2.5 py-1.5 text-[12.5px] font-normal ${needDate ? "border-[#9d4340]" : "border-line/80"}`} />
+            Runs out{onIssue ? <span className="font-normal text-muted"> (optional)</span> : null}
+            <input type="date" value={expiry} onChange={(e) => { setExpiry(e.target.value); setNeedDate(false); }} className={`mt-1 block rounded-lg border bg-card px-2.5 py-1.5 text-[12.5px] font-normal ${needDate && !onIssue ? "border-[#9d4340]" : "border-line/80"}`} />
           </label>
           <label className="text-[11.5px] font-semibold">
-            Issued <span className="font-normal text-muted">(if it says)</span>
-            <input type="date" value={issue} onChange={(e) => setIssue(e.target.value)} className="mt-1 block rounded-lg border border-line/80 bg-card px-2.5 py-1.5 text-[12.5px] font-normal" />
+            Issued{onIssue ? null : <span className="font-normal text-muted"> (if it says)</span>}
+            <input type="date" value={issue} onChange={(e) => { setIssue(e.target.value); setNeedDate(false); }} className={`mt-1 block rounded-lg border bg-card px-2.5 py-1.5 text-[12.5px] font-normal ${needDate && onIssue ? "border-[#9d4340]" : "border-line/80"}`} />
           </label>
-          {needDate && <p className="w-full text-[12px] text-[#9d4340]">Put the date it runs out in first.</p>}
+          {noExpiryNote(type, issue, expiry, sayDay) && <p className="w-full text-[12px] text-muted">{noExpiryNote(type, issue, expiry, sayDay)}</p>}
+          {needDate && notReady && <p className="w-full text-[12px] text-[#9d4340]">{notReady.replace(" to file it", " first")}</p>}
         </div>
       )}
       {onRegister && (

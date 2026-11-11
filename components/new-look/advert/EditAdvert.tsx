@@ -5,7 +5,7 @@ import LineIcon from "@/components/LineIcon";
 import DropZone from "@/components/listing/DropZone";
 import RegNumbersInput from "@/components/listing/RegNumbersInput";
 import PortalPreview, { PORTAL_TABS, type Portal } from "@/components/listing/PortalPreview";
-import { CHANGE_WORDS, fiveWeeks, longDate, money, type Draft, type FactField } from "@/components/listing/listing-draft";
+import { CHANGE_WORDS, epcDateWarning, epcExpiryFor, fiveWeeks, longDate, money, type Draft, type FactField } from "@/components/listing/listing-draft";
 import type { ListingDetails } from "@/lib/listing-details";
 import type { Locks } from "@/components/listing/ListingMarketing";
 import GuideButton from "@/components/GuideButton";
@@ -167,12 +167,18 @@ export default function EditAdvert({
   }, [open]);
 
   const input = a.input;
-  const stepDone = (s: StepId) => (input ? STEP_NEEDS[s].every((k) => a.okFor(k)) : false);
+  /* A future issue date (the expiry typed in the wrong box) or an expiry before it is refused on Save, but the
+     EPC step still showed its tick and the box looked fine, so the only sign was the note by Save (Erleta Vathej,
+     ticket 21b91e09, 5 Nov 2026). The box goes red and the step loses its tick until it is put right. */
+  const today = new Date().toISOString().slice(0, 10);
+  const epcIssueBad = !!draft?.epcLodged && draft.epcLodged > today;
+  const epcExpiryBad = !!draft?.epcLodged && !!draft?.epcExpiry && draft.epcExpiry <= draft.epcLodged;
+  const stepDone = (s: StepId) => (input ? STEP_NEEDS[s].every((k) => a.okFor(k)) && !(s === "epc" && (epcIssueBad || epcExpiryBad)) : false);
   /* Opens on the first step that still needs something, once it has loaded. */
   useEffect(() => {
     if (opened.current || !input) return;
     opened.current = true;
-    setOpen(ORDER.find((s) => !STEP_NEEDS[s].every((k) => a.okFor(k))) ?? "home");
+    setOpen(ORDER.find((s) => !stepDone(s)) ?? "home");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input]);
 
@@ -358,9 +364,15 @@ export default function EditAdvert({
               {label("epcPotential", "Potential score")}
               <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcPotential ?? ""} placeholder="e.g. 79" onChange={(e) => setDraft((d) => ({ ...d, epcPotential: e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value)))) }))} />
             </label>
-            <label className="nl-adv-field">
-              {label("epcLodged", "Date on the EPC")}
-              <input type="date" max={new Date().toISOString().slice(0, 10)} disabled={!canEdit} value={draft.epcLodged ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcLodged: e.target.value || null }))} />
+            <label className={`nl-adv-field${epcIssueBad ? " is-missing" : ""}`}>
+              {/* "Date on the EPC" didn't say which date (Dan Richards, ticket 03060ff3, 8 Nov 2026): it is the issue date. */}
+              {label("epcLodged", "EPC issue date (start, not expiry)")}
+              <input type="date" max={new Date().toISOString().slice(0, 10)} disabled={!canEdit} value={draft.epcLodged ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcLodged: e.target.value || null, epcExpiry: epcExpiryFor(e.target.value) ?? d.epcExpiry }))} />
+            </label>
+            <label className={`nl-adv-field${epcExpiryBad ? " is-missing" : ""}`}>
+              {/* Filled ten years on from the issue date, and editable so a wrong date can be put right (James, 8 Nov 2026). */}
+              {label("epcExpiry", "EPC expiry date")}
+              <input type="date" min={draft.epcLodged ?? undefined} disabled={!canEdit} value={draft.epcExpiry ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcExpiry: e.target.value || null }))} />
             </label>
             {scot && (
               <div className={`nl-adv-field nl-adv-reg${missing("landlordRegistration") ? " is-missing" : ""}`}>
@@ -383,11 +395,12 @@ export default function EditAdvert({
           )}
           <p className="nl-meta nl-adv-aside">
             {a.epcNote ??
+              epcDateWarning(draft.epcLodged, draft.epcExpiry, new Date().toISOString().slice(0, 10)) ??
               bandScoreClash(draft.epcBand, draft.epcCurrent) ??
               (draft.epcCurrent != null && draft.epcPotential == null
                 ? "Add the potential score too and the rating goes to the portals with the advert. Until then it is kept here."
                 : draft.epcCurrent != null && draft.epcPotential != null && !draft.epcLodged
-                  ? "Add the date on the EPC and the rating goes to the portals with the advert. Until then it is kept here, and the rest of the advert still saves."
+                  ? "Add the date the EPC was issued and the rating goes to the portals with the advert. Until then it is kept here, and the rest of the advert still saves."
                   : "Every advert has to show the EPC rating.")}
             {scot && " In Scotland the landlord's registration number and your letting agent registration number (LARN) have to be on the advert as well, so saving adds both as the last lines of the description. Your LARN is remembered for your other Scottish listings."}
           </p>

@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import FieldDate from "@/components/FieldDate";
@@ -128,7 +129,7 @@ export default function ContractorDocs({ contractorId, trade }: { contractorId: 
           <label className={`${field} flex cursor-pointer items-center justify-between gap-2 bg-white`}>
             <span className={`truncate ${file ? "" : "text-muted"}`}>{file ? file.name : "Attach it (PDF or photo)"}</span>
             <span className="shrink-0 text-[11.5px] underline">{file ? "Change" : "Choose"}</span>
-            <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+            <input type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
           </label>
           {DOC_KINDS.find((k) => k.id === adding)?.expires && <FieldDate value={expires} onChange={setExpires} placeholder="When it runs out" />}
           {DOC_KINDS.find((k) => k.id === adding)?.number && (

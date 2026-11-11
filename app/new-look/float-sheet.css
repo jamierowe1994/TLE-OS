@@ -329,3 +329,242 @@
   [data-look="new"] .nl-rj-check.is-solo dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
   [data-look="new"] .nl-rj-check.is-solo dl > div:nth-child(2) { border-top-width: 0; }
 }
+
+/* ===========================================================================
+   ANGULAR (James, 7 Nov 2026, with the Diary): every pop-up sheet loses its
+   rounding to match the square, website-style screens - cards, buttons,
+   fields and the More below pill - and takes the condensed capitals for its
+   titles and buttons. Shared by every screen that opens one.
+=========================================================================== */
+[data-look="new"].nl-fs-wrap { --fs-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; }
+[data-look="new"].nl-fs-wrap *:not([class*="spin"]):not(input[type="checkbox"]):not(input[type="radio"]):not(.sorb):not(.sorb *) { border-radius: 0 !important; }
+[data-look="new"].nl-fs-wrap .nl-fs-title,
+[data-look="new"].nl-fs-wrap .nl-fs-card-head > :first-child,
+[data-look="new"].nl-fs-wrap .nl-block-title {
+  font-family: var(--fs-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em;
+}
+[data-look="new"].nl-fs-wrap .nl-fs-title { font-size: 20px; }
+[data-look="new"].nl-fs-wrap .nl-btn:not(.nl-btn--quiet) {
+  font-family: var(--fs-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11.5px;
+}
+[data-look="new"].nl-fs-wrap .nl-fs-card { box-shadow: none; border: 1px solid rgba(20, 20, 19, 0.12); }
+
+/* ===========================================================================
+   ONE PANEL (James, 8 Nov 2026): "this whole dark background with see-through
+   elements doesn't really work... make it one continuous thing, like a block
+   that sticks out". The header, the question, the content and the foot now
+   sit on one solid panel over a lighter dim, with fine lines between the
+   parts instead of the page showing through the gaps. Choices and tiles keep
+   an edge of their own so they still read as things to press.
+=========================================================================== */
+[data-look="new"] .nl-fs-scrim { background: rgba(20, 20, 19, 0.34); -webkit-backdrop-filter: none; backdrop-filter: none; }
+[data-look="new"] .nl-fs { padding-top: calc(5vh + env(safe-area-inset-top, 0px)); padding-bottom: calc(5vh + env(safe-area-inset-bottom, 0px)); }
+[data-look="new"] .nl-fs-stack {
+  background: var(--page); color: var(--ink);
+  border: 1px solid rgba(20, 20, 19, 0.14);
+  box-shadow: 0 1px 0 rgba(20, 20, 19, 0.04), 0 40px 80px -32px rgba(20, 20, 19, 0.45), 0 12px 24px -16px rgba(20, 20, 19, 0.2);
+}
+:root[data-theme="dark"] [data-look="new"] .nl-fs-stack { border-color: rgba(255, 255, 255, 0.1); }
+
+/* The parts: no shadows or boxes of their own. */
+[data-look="new"] .nl-fs-head { box-shadow: none; background: transparent; padding: 14px 14px 14px 28px; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-fs-prog { margin: 0; padding: 0; gap: 0; }
+[data-look="new"] .nl-fs-prog i { height: 2px; background: var(--line); }
+[data-look="new"] .nl-fs-prog i.is-past { background: var(--primary); }
+[data-look="new"] .nl-fs-prog i.is-on { background: var(--accent); }
+[data-look="new"] .nl-fs-body { padding: 26px 28px 28px; gap: 0; }
+[data-look="new"] .nl-fs-body > * + * { margin-top: 14px; }
+[data-look="new"] .nl-fs-foot { margin-top: 0; box-shadow: none; background: var(--page); border-top: 1px solid var(--line); padding: 14px 20px 14px 28px; }
+
+/* The question and the words that sat on the dark, now on the panel. */
+[data-look="new"] .nl-fs-q { color: var(--ink); font-family: var(--fs-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; font-size: 34px; line-height: 1.02; }
+[data-look="new"] .nl-fs-lede { color: var(--muted); margin: 8px 0 4px; font-size: 14px; line-height: 21px; }
+[data-look="new"] .nl-fs-lb { color: var(--ink); }
+[data-look="new"] .nl-fs-say { color: var(--muted); }
+[data-look="new"] .nl-fs-say.is-err { color: var(--accent-dark); }
+
+/* A card is a section of the panel: a line above it, not a box. */
+[data-look="new"].nl-fs-wrap .nl-fs-card { background: transparent; border: 0; border-top: 1px solid var(--line); box-shadow: none; padding: 20px 0 4px; }
+[data-look="new"].nl-fs-wrap .nl-fs-body > .nl-fs-card:first-child, [data-look="new"].nl-fs-wrap .nl-fs-lede + .nl-fs-card, [data-look="new"].nl-fs-wrap .nl-fs-q + .nl-fs-card { border-top-color: var(--line-strong); }
+[data-look="new"].nl-fs-wrap .nl-fs-card.is-tight { padding: 12px 0 0; }
+[data-look="new"].nl-fs-wrap .nl-fs-card-head { margin-bottom: 12px; }
+[data-look="new"].nl-fs-wrap .nl-fs-card-head > :first-child { font-size: 13px; letter-spacing: 0.14em; color: var(--ink); }
+[data-look="new"].nl-fs-wrap .nl-fs-done { border-top: 0; padding: 40px 0; }
+[data-look="new"].nl-fs-wrap .nl-fs-card.nl-fs-tick-row.is-on { box-shadow: inset 3px 0 0 var(--accent); padding-left: 14px; }
+
+/* Things to press keep an edge. */
+[data-look="new"] .nl-fs-choice, [data-look="new"] .nl-fs-tile { box-shadow: none; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-fs-choice:hover:not(:disabled), [data-look="new"] .nl-fs-tile:hover { border-color: var(--ink); }
+[data-look="new"] .nl-fs-choice.is-on, [data-look="new"] .nl-fs-tile.is-on { border-color: var(--fill, var(--primary)); box-shadow: none; }
+
+/* The step list down the left of the wide flows, on the panel. */
+[data-look="new"] .nl-rj-rail button { color: var(--muted); }
+[data-look="new"] .nl-rj-rail button:hover:not(:disabled) { background: var(--panel); color: var(--ink); }
+[data-look="new"] .nl-rj-rail button:disabled { color: var(--faint); }
+[data-look="new"] .nl-rj-rail .is-here { background: var(--accent-soft); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
+[data-look="new"] .nl-rj-n { border-color: var(--line-strong); }
+
+/* Scrolling inside the panel. */
+@media (min-width: 761px) {
+  [data-look="new"] .nl-fs-body { scrollbar-color: var(--line-strong) transparent; padding-right: 22px; margin-right: 0; }
+  [data-look="new"] .nl-fs-body::-webkit-scrollbar-thumb { background: var(--line-strong); }
+}
+
+/* It arrives as one block, and its contents settle into it a beat later. */
+[data-look="new"] .nl-fs-stack.is-anim { animation: nl-fs-panel 0.42s var(--nl-ease) backwards; }
+[data-look="new"] .nl-fs-stack.is-anim > * { animation: none; }
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-body > *,
+[data-look="new"] .nl-fs-stack.is-anim .nl-fs-cols > * { animation-name: nl-fs-settle; animation-duration: 0.45s; }
+@keyframes nl-fs-panel { from { opacity: 0; transform: translateY(18px) scale(0.99); } }
+@keyframes nl-fs-settle { from { opacity: 0; transform: translateY(6px); } }
+
+@media (max-width: 640px) {
+  [data-look="new"] .nl-fs { padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  [data-look="new"] .nl-fs-head { padding-left: 18px; }
+  [data-look="new"] .nl-fs-body { padding: 20px 18px 22px; }
+  [data-look="new"] .nl-fs-foot { padding: 12px 18px; }
+  [data-look="new"] .nl-fs-q { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-fs-stack.is-anim { animation: none; }
+}
+/* The wide sheet's own card padding must not come back over the sections. */
+[data-look="new"].nl-fs-wrap .nl-fs .nl-fs-card { padding: 20px 0 4px; }
+[data-look="new"].nl-fs-wrap .nl-fs .nl-fs-card.is-tight { padding: 12px 0 0; }
+[data-look="new"].nl-fs-wrap .nl-fs .nl-fs-done { padding: 40px 0; }
+
+/* On a phone too, the panel holds still and its middle scrolls, so nothing
+   shows below the buttons; More below sits just over them. */
+@media (max-width: 760px) {
+  [data-look="new"] .nl-fs { overflow: hidden; }
+  [data-look="new"] .nl-fs-stack { flex: 0 1 auto; min-height: 0; max-height: 100%; }
+  [data-look="new"] .nl-fs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  [data-look="new"] .nl-fs-more { position: relative; left: auto; right: auto; bottom: auto; }
+  [data-look="new"] .nl-fs-foot-r > * { flex: 1 1 auto; justify-content: center; text-align: center; }
+  [data-look="new"] .nl-fs-foot-r > .nl-btn--primary { order: 9; flex-basis: 100%; }
+}
+
+/* ===========================================================================
+   THE WORKS ORDER, WRITTEN IN PLACE (James, 8 Nov 2026): the last screen of
+   Report a repair / Plan a certificate is the email itself on a white sheet,
+   the subject and the words typed into directly, the job's details as
+   buttons underneath that drop in where the cursor is.
+   components/maintenance/WorksOrderEmail.tsx
+   =========================================================================== */
+[data-look="new"] .nl-wo-mail { display: grid; gap: 0; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-wo-mail.is-wait { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 220px; padding: 20px; font-size: 13.5px; color: var(--muted); margin: 0; }
+[data-look="new"] .nl-wo-mail.is-err { color: var(--accent-dark); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); min-height: 0; justify-content: flex-start; }
+[data-look="new"] .nl-wo-head { display: grid; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-wo-head > p, [data-look="new"] .nl-wo-head > label {
+  display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: center; gap: 12px; margin: 0; padding: 12px 22px; font-size: 14px;
+}
+[data-look="new"] .nl-wo-head > p { grid-template-columns: 84px auto minmax(0, 1fr); }
+[data-look="new"] .nl-wo-head > label { border-top: 1px solid var(--line); cursor: text; }
+[data-look="new"] .nl-wo-head span, [data-look="new"] .nl-wo-k {
+  font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted);
+}
+[data-look="new"] .nl-wo-head b { font-weight: 600; }
+[data-look="new"] .nl-wo-head em { font-style: normal; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-look="new"] .nl-wo-head input {
+  width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; padding: 4px 0; font: inherit; font-weight: 600; color: var(--ink);
+  border-bottom: 1px dashed transparent; transition: border-color .2s;
+}
+[data-look="new"] .nl-wo-head input:hover { border-bottom-color: var(--line-strong); }
+[data-look="new"] .nl-wo-head input:focus { border-bottom-color: var(--accent); }
+[data-look="new"] .nl-wo-letter { padding: 26px 30px 22px; border-left: 4px solid var(--accent); margin: 18px 22px 0; background: var(--page); }
+[data-look="new"] .nl-wo-h {
+  margin: 0 0 14px; font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 26px; line-height: 1;
+}
+[data-look="new"] .nl-wo-body {
+  display: block; width: calc(100% + 20px); min-height: 220px; resize: none; overflow: hidden; border: 1px solid transparent; outline: 0; margin: 0 -10px; padding: 8px 10px; box-sizing: border-box;
+  background: transparent; color: var(--ink); font-family: var(--font-inter), "Inter", sans-serif; font-size: 15px; line-height: 1.6; transition: border-color .2s, background .2s;
+}
+[data-look="new"] .nl-wo-body:hover { border-color: var(--line-strong); background: color-mix(in srgb, #fff 60%, transparent); }
+[data-look="new"] .nl-wo-body:focus { border-color: var(--ink); background: #fff; }
+[data-look="new"] .nl-wo-fixed { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+[data-look="new"] .nl-wo-add { display: grid; gap: 10px; padding: 18px 22px 0; }
+[data-look="new"] .nl-wo-k em { margin-left: 8px; font-style: normal; text-transform: none; letter-spacing: 0; font-family: var(--font-inter), sans-serif; font-stretch: 100%; font-size: 12px; }
+[data-look="new"] .nl-wo-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-look="new"] .nl-wo-chips button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink);
+  font-size: 13px; cursor: pointer; transition: border-color .15s, background .15s, color .15s, transform .15s;
+}
+[data-look="new"] .nl-wo-chips button svg { color: var(--accent); }
+[data-look="new"] .nl-wo-chips button:hover { border-color: var(--ink); transform: translateY(-1px); }
+[data-look="new"] .nl-wo-chips button.is-added { background: var(--sage-soft, #f1f4ec); border-color: var(--sage-deep, #56634a); }
+[data-look="new"] .nl-wo-chips button.is-added svg { color: var(--sage-deep, #56634a); }
+[data-look="new"] .nl-wo-foot { display: grid; gap: 10px; padding: 16px 22px 18px; }
+[data-look="new"] .nl-wo-links { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+[data-look="new"] .nl-wo-warn { margin: 0; padding: 10px 12px; background: var(--accent-soft); color: var(--accent-dark); font-size: 13px; line-height: 1.45; }
+[data-look="new"] .nl-wo-sent { display: grid; gap: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-wo-sent-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; background: var(--card); }
+[data-look="new"] .nl-wo-sent-bar span { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted); }
+[data-look="new"] .nl-wo-frame { display: block; width: 100%; height: 520px; border: 0; background: #fff; }
+@media (max-width: 760px) {
+  [data-look="new"] .nl-wo-head > p, [data-look="new"] .nl-wo-head > label { grid-template-columns: 64px minmax(0, 1fr); padding: 10px 14px; }
+  [data-look="new"] .nl-wo-head > p em { grid-column: 2; }
+  [data-look="new"] .nl-wo-letter { margin: 12px 12px 0; padding: 18px 16px 16px; }
+  [data-look="new"] .nl-wo-add, [data-look="new"] .nl-wo-foot { padding-left: 14px; padding-right: 14px; }
+}
+
+/* Management transfer (8 Nov 2026), in the float sheet. */
+[data-look="new"] .nl-to-dl { display: grid; gap: 6px; margin: 0; }
+[data-look="new"] .nl-to-dl > div { display: flex; justify-content: space-between; gap: 16px; font-size: 13.5px; }
+[data-look="new"] .nl-to-dl dt { color: var(--muted); }
+[data-look="new"] .nl-to-dl dd { margin: 0; min-width: 0; text-align: right; font-weight: 500; }
+[data-look="new"] .nl-to-home { margin: 0; font-size: 16px; font-weight: 600; }
+[data-look="new"] .nl-to-miss { font-size: 12.5px; color: var(--accent-dark); }
+[data-look="new"] .nl-to-add { justify-self: start; padding: 4px 2px; font-size: 13px; font-weight: 500; color: #fff; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(255, 255, 255, .5); }
+[data-look="new"] .nl-to-tick { display: flex; align-items: center; gap: 8px; align-self: end; padding-bottom: 10px; font-size: 13.5px; }
+[data-look="new"] .nl-to-tick input { width: 16px; height: 16px; accent-color: var(--accent-dark); }
+[data-look="new"] .nl-to-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 19px; color: var(--muted); list-style: disc; }
+
+/* A home's own pop-ups (visit, notice, swap, past visit) in the float sheet,
+   8 Nov 2026: lighter - white card, the form's own boxes as hairlines. */
+[data-look="new"] .nl-prop-pop { padding: 22px 24px; }
+[data-look="new"] .nl-prop-pop .bg-page, [data-look="new"] .nl-prop-pop .bg-card, [data-look="new"] .nl-prop-pop .bg-panel { background: var(--page); }
+[data-look="new"] .nl-prop-pop .rounded-full.bg-accent-dark, [data-look="new"] .nl-prop-pop button.bg-ink, [data-look="new"] .nl-prop-pop button.bg-accent-dark { background: var(--primary); color: #fff; }
+[data-look="new"] .nl-prop-pop .text-\[22px\], [data-look="new"] .nl-prop-pop h2, [data-look="new"] .nl-prop-pop h3 {
+  font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em;
+}
+[data-look="new"] .nl-prop-pop [class*="uppercase"][class*="tracking"] { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; letter-spacing: .14em; }
+
+/* Rent review / Serve notice (components/sections/NoticeForm), 8 Nov 2026:
+   square, the title in the condensed capitals, brown to go on. */
+.nl-notice-pop [class*="rounded"]:not([class*="animate-spin"]):not(input[type="checkbox"]):not(input[type="radio"]) { border-radius: 0 !important; }
+.nl-notice-pop h2.hand { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; font-size: 28px; line-height: 1; }
+.nl-notice-pop button.bg-ink, .nl-notice-pop .bg-ink.text-page { background: #56423e; color: #fff; }
+.nl-notice-pop [class*="uppercase"][class*="tracking"] { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; letter-spacing: .14em; }
+
+/* Record your welcome (components/WelcomeVideoRecorder), 8 Nov 2026. */
+[data-look="new"] .nl-wv { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+[data-look="new"] .nl-wv-rec { padding: 0; overflow: hidden; background: #1f1a19; }
+[data-look="new"] .nl-wv-rec iframe { display: block; width: 100%; height: min(62vh, 520px); border: 0; }
+[data-look="new"] .nl-wv-side { display: grid; gap: 12px; }
+[data-look="new"] .nl-wv-k { margin: 0 0 8px; font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 12px; color: var(--accent, #a85a51); }
+[data-look="new"] .nl-wv-list { margin: 0; padding-left: 18px; display: grid; gap: 9px; font-size: 13.5px; line-height: 19px; color: var(--muted); list-style: decimal; }
+[data-look="new"] .nl-wv-list b { color: var(--ink); font-weight: 600; }
+[data-look="new"] .nl-wv-qr { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+[data-look="new"] .nl-wv-code { display: block; background: #fff; padding: 4px; border: 1px solid var(--line); }
+[data-look="new"] .nl-wv-code > svg { display: block; width: 150px; height: 150px; }
+[data-look="new"] .nl-wv-note { margin: 0; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-wv-side > .nl-wv-note { padding: 0 4px; }
+[data-look="new"] .nl-wv-say { font-size: 13px; color: var(--muted); }
+@media (max-width: 900px) {
+  [data-look="new"] .nl-wv { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-wv-rec iframe { height: 70vh; }
+  [data-look="new"] .nl-wv-qr { display: none; }
+}
+.nl-wv-panel { padding: 20px; background: #fff; border: 1px solid var(--line, #e6ded4); }
+.nl-wv-panel .nl-wv-k { margin: 0; font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 12px; color: var(--accent, #a85a51); }
+
+/* /record/<appraisal>, the recorder as a whole page from the nudge email (8 Nov 2026). */
+.nl-rs { background: #f7f3ee; color: #231d1b; }
+.nl-rs [class*="rounded"]:not(.animate-pulse):not([class*="animate-spin"]) { border-radius: 0 !important; }
+.nl-rs .hand { font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .02em; line-height: 1; }
+.nl-rs h1.hand { font-size: 40px; }
+.nl-rs button.bg-ink, .nl-rs a.bg-ink, .nl-rs button.bg-accent-dark, .nl-rs a.bg-accent-dark { background: #56423e; color: #fff; font-family: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; }
+.nl-rs .bg-panel, .nl-rs .bg-card { background: #fff; }
+.nl-rs .border-line\/70, .nl-rs .border-line\/80 { border-color: #e6ded4; }
+@media (max-width: 640px) { .nl-rs h1.hand { font-size: 28px; } }
+html:has(.nl-rs), html:has(.nl-rs) body { background: #f7f3ee; }

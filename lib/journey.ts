@@ -288,7 +288,7 @@ export const LISTING_TRACK: JourneyStep[] = [
     action: "none", cta: "Accepted: confirm",
   },
   {
-    id: "handover", label: "Handover", icon: "key",
+    id: "handover", label: "Push to Propoly", icon: "key",
     /* Said as it is since the agent pushes the let themselves (9 Oct 2026).
        Sean, 15 Oct 2026, on a let only: "how can I progress?" - the step
        still read as a hand-off to Kirstie, with nothing to press. */

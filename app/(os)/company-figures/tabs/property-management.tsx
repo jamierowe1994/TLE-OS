@@ -186,7 +186,9 @@ export default function PropertyManagementTab({ month }: { month: string; seed?:
               <>
                 <Big value={d.due} label="inspections due" to={go({ panel: "inspections" })} />
                 <Figures items={[
-                  ["Overdue", n(d.overdue), go({ panel: "inspections" }), d.overdue > 0],
+                  /* Michael Healy, 10 Nov 2026 (ticket 9520a426): Overdue opens the
+                     board's Overdue view, not the Due list, which holds only some. */
+                  ["Overdue", n(d.overdue), go({ panel: "inspections", focus: "overdue" }), d.overdue > 0],
                   ["Booked in", n(d.booked), go({ panel: "inspections", focus: "booked" })],
                   ["Awaiting tenant", n(d.awaitingTenant), go({ panel: "inspections", focus: "awaiting" })],
                 ]} />

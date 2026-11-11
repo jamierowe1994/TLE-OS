@@ -15,7 +15,7 @@ import { testApplicationsFor } from "@/lib/test-overlay";
 import { applyLetEdits } from "@/lib/let-edits";
 import { allCancellations } from "@/lib/let-cancel";
 import { whoIs } from "@/lib/admin";
-import { ASSEMBLE_AT, assembled, cut, markApplicationsFiled } from "@/lib/applications-board";
+import { ASSEMBLE_AT, QUICK_MS, assembled, cut, markApplicationsFiled, type BoardRead } from "@/lib/applications-board";
 import { acceptedRexRefs } from "@/lib/offer-decisions";
 import { hasDb, q } from "@/lib/db";
 import { can } from "@/lib/roles";
@@ -86,11 +86,32 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  /* ?quick=1 - the Applications board and a let's page (James, 9 Nov 2026):
+     the last board at once, up to an hour old, said `stale` so the screen
+     marks itself updating and reads again with ?fresh=1, which waits for the
+     rebuild. Without either, the ten-minute rule (lib/applications-board). */
+  const sp = req.nextUrl.searchParams;
+  const read: BoardRead = sp.get("fresh") === "1" ? { fresh: true } : sp.get("quick") === "1" ? { upToMs: QUICK_MS } : {};
+  /* ?counts=1: only the applications, for the PM Dashboard's tile (9 Nov
+     2026). It never used the lets only Propoly knows about, and finding them
+     read the whole business's board a second time - a second cold rebuild
+     for an agent's own Overview. */
+  const countsOnly = sp.get("counts") === "1";
+  /* The whole business's book, for the Propoly-only lets, read the same way;
+     if it was the held one, the answer is stale too. */
+  const business = { at: Infinity, stale: false };
+  const businessBook = () =>
+    assembled(null, read).then((b) => {
+      business.at = b.held.at;
+      business.stale = b.stale;
+      return b.held.value.applications;
+    });
+
   try {
     /* The tester's own test offers (lib/test-overlay), on top - never anyone
        else's. Read alongside the book rather than after it. */
     const [{ held, stale }, testRows, decided, osAccepted, propolyOnlyAll, cancelledLets] = await Promise.all([
-      assembled(scope.rexUserId),
+      assembled(scope.rexUserId, read),
       req.nextUrl.searchParams.get("tests") === "0" ? Promise.resolve([]) : testApplicationsFor(actor?.email).catch(() => []),
       /* The agent's Accept or Decline in the OS (7 Oct 2026): the board shows
          an offer once it is accepted, here or in REX. */
@@ -99,7 +120,7 @@ export async function GET(req: NextRequest) {
          12 Oct 2026); this separate list stays empty so nothing shows twice. */
       Promise.resolve([] as Awaited<ReturnType<typeof osAcceptedOffers>>),
       /* Lets that only Propoly knows about (9 Oct 2026, 54 Maple Avenue). */
-      propolyOnlyLets(scope, { canPretenancy: Boolean(actor && can(actor.role as never, "see:pretenancy")) }).catch(() => []),
+      countsOnly ? Promise.resolve([]) : propolyOnlyLets(scope, { canPretenancy: Boolean(actor && can(actor.role as never, "see:pretenancy")), book: businessBook }).catch(() => []),
       /* Lets cancelled from their own page (lib/let-cancel, 12 Oct 2026). */
       allCancellations().catch(() => []),
     ]);
@@ -143,9 +164,10 @@ export async function GET(req: NextRequest) {
       propolyOnly,
       scope: scope.label,
       everything: scope.everything,
-      /* When REX actually said this, not when it was served. */
-      pulledAt: new Date(held.at).toISOString(),
-      ...(stale ? { stale: true } : {}),
+      /* When REX actually said this, not when it was served - the older of
+         the two books when the business's was read too. */
+      pulledAt: new Date(Math.min(held.at, business.at)).toISOString(),
+      ...(stale || business.stale ? { stale: true } : {}),
       writesLocked: rexWritesLocked(),
     });
   } catch (e) {

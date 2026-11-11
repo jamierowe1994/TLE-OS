@@ -218,6 +218,47 @@ export async function settleRecipient(
   return rows[0] ? fromRow(rows[0]) : null;
 }
 
+/**
+ * Something gone wrong on a let (James, 6 Nov 2026: "stop flogging a dead
+ * horse. when an email goes out about something wrong it should only be the
+ * once and it should clear when the issue gets fixed or the system passes the
+ * PLC"). These get their first email to the agent and no "Still to tell"
+ * reminder, and they close themselves when the let moves past them.
+ */
+export const PROBLEM_KINDS = new Set(["reference_failed", "guarantor_needed", "plc_deferred", "plc_declined"]);
+
+/**
+ * Closes every open update whose key starts with `prefix` (only `kinds`, when
+ * given; never `keep`), with nobody told and `note` as the reason, and marks
+ * its row on Kirstie's list as cleared. For news that has been overtaken:
+ * 68 Main Street's "the PLC check needs more" was still open, and still
+ * reminding Sean, the day after the check passed (5 Nov 2026).
+ */
+export async function closeOvertaken(f: { prefix: string; keep?: string; kinds?: string[]; note: string }): Promise<number> {
+  if (!hasDb()) return 0;
+  const rows = await q<{ id: string }>(
+    `UPDATE os_customer_updates
+        SET state = 'done', done_at = NOW(),
+            recipients = (
+              SELECT COALESCE(jsonb_agg(CASE WHEN r->>'state' = 'open'
+                       THEN r || jsonb_build_object('state', 'skipped', 'doneAt', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'doneBy', 'TLE OS', 'note', $3::text)
+                       ELSE r END), '[]'::jsonb)
+                FROM jsonb_array_elements(recipients) r)
+      WHERE state = 'open' AND LEFT(key, LENGTH($1)) = $1 AND key <> $2
+        AND ($4::text[] IS NULL OR kind = ANY($4::text[]))
+      RETURNING id`,
+    [f.prefix, f.keep ?? "", f.note, f.kinds?.length ? f.kinds : null]
+  );
+  if (rows.length) {
+    await q(
+      `UPDATE os_deal_events SET told_note = $2
+        WHERE event = 'update_untouched' AND deal_id = ANY($1::text[])`,
+      [rows.map((r) => `upd-${r.id}`), `Cleared: ${f.note}`]
+    ).catch(() => null);
+  }
+  return rows.length;
+}
+
 /* ───────────────────────────── the agent hears ─────────────────────────── */
 
 export function updateLink(id: number): string {
@@ -311,7 +352,9 @@ export async function runUpdateNudges(now = new Date()): Promise<{ nudged: numbe
     const created = new Date(u.createdAt);
     let nudgedAt = u.nudgedAt ? new Date(u.nudgedAt) : null;
     if (!nudgedAt && workingMinutes(created, now) >= 4 * 60) {
-      if (await tellAgent(u, "nudge").catch(() => false)) nudged += 1;
+      /* A problem is emailed once (6 Nov 2026): the reminder is skipped but
+         its time still stamped, so Kirstie's list keeps its timing. */
+      if (!PROBLEM_KINDS.has(u.kind) && (await tellAgent(u, "nudge").catch(() => false))) nudged += 1;
       else await q(`UPDATE os_customer_updates SET nudged_at = $2 WHERE id = $1`, [u.id, now]);
       nudgedAt = now;
     }

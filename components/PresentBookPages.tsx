@@ -1325,7 +1325,7 @@ export function BookTestimonial({ deck }: { deck: Deck }) {
             <p className="mt-4 text-[14px] uppercase tracking-[0.3em] text-black/60">{t.author}</p>
             <div className="mx-auto mt-8 h-[150px] w-[150px] overflow-hidden rounded-full shadow-[0_20px_40px_-20px_rgba(0,0,0,0.35)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/photo/close.jpg" alt="" aria-hidden className="h-full w-full object-cover" />
+              <img src="/brand/photo/close-real.jpg" alt="" aria-hidden className="h-full w-full object-cover" />
             </div>
           </div>
         ) : (
@@ -1583,7 +1583,7 @@ export function BookQuestions({ deck }: { deck: Deck }) {
       <Blob d="M860 -20 C 900 60, 840 140, 880 230 C 920 320, 860 400, 900 500 C 940 600, 870 700, 920 800 C 950 860, 1000 900, 1040 920 L1460 920 L1460 -20 Z" />
       <div className="pointer-events-none absolute overflow-hidden rounded-[28px] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ right: 110, top: 130, width: 470, height: 505 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/photo/close-door.webp" alt="" aria-hidden className="h-full w-full object-cover" />
+        <img src="/brand/photo/close-door-real.webp" alt="" aria-hidden className="h-full w-full object-cover" />
       </div>
       {/* The words, centred on the page's height. */}
       <div className="absolute left-[96px] top-0 flex h-full w-[760px] flex-col justify-center">

@@ -360,14 +360,15 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
   const outWords = goesOut ? preSendWhen(goesOut) : null;
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col px-3 py-3 sm:px-8 sm:py-8">
+    /* nl-rs: the house look (8 Nov 2026), app/new-look/float-sheet.css. */
+    <main className="nl-rs mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col px-3 py-3 sm:px-8 sm:py-8">
       {/* ── Head: what this is, in a line ─────────────────────────────── */}
       {/* On a phone this is three short lines, because the camera below
           needs every pixel of height; the date the page goes out waits for
           the "All done" screen, where it means something. */}
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
         <div className="min-w-0">
-          <h1 className="hand text-[22px] leading-tight sm:text-[28px]">Record your welcome</h1>
+          <h1 className="hand text-[22px] leading-tight sm:text-[28px]">Record Your Welcome</h1>
           {ctx && (
             <>
               <p className="mt-0.5 text-[14px] font-semibold leading-snug sm:text-[15px]">{street}</p>

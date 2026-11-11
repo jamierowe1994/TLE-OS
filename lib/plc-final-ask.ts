@@ -49,7 +49,11 @@ export async function finalAskOffer(
   me: { email: string | null } | null,
   canWork: boolean
 ): Promise<{ approver: { name: string; firstName: string } | null; canSend: boolean; blocked: string | null }> {
-  if (c.state !== "checked") return { approver: null, canSend: false, blocked: null };
+  /* Offered at the first check as well (Josel Banagua, ticket 8eb6adce, 8 Nov
+     2026): "Checked, Send to Susan" passes the pack and emails Susan in one
+     press, so it no longer waits for somebody to send it on. The same rules
+     decide both: a complete pack, the compliance team, never to yourself. */
+  if (c.state !== "checked" && c.state !== "reviewing") return { approver: null, canSend: false, blocked: null };
   const approver = await finalApprover();
   const plain = approver ? { name: approver.name, firstName: approver.firstName } : null;
   if (!approver) {

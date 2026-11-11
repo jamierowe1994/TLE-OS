@@ -7,6 +7,7 @@ import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { hasDb, q } from "@/lib/db";
 import { parseAddress, sameHome } from "@/lib/address-parse";
 import { isScottish } from "@/lib/property-flags";
+import { prefillFor } from "@/lib/plc-prefill";
 import { AML_WORDS } from "@/lib/doc-types";
 import {
   checkById,
@@ -152,6 +153,21 @@ Read the certificate and report:
 - the property address printed on it, and whether it matches ${c.address}`;
 
     case "reading":
+      /* A referencing report (James, 6 Nov 2026, Legal for Landlords'
+         guidelines): their decision, their conditions and the figures, read
+         as printed. The rules decide what follows, not the reader. */
+      if (doc.checkId === "tenant-checks" || doc.checkId === "guarantor-checks") {
+        return `${common}
+
+Read the document and report:
+- what it actually is, and which kind of reference (SMART, Complete, Fast Track, Student or Guarantor)
+- every person named on it, and their role
+- the overall decision exactly as printed (Accept, Conditional Accept, Accept with Guarantor or Decline) and any conditions or comments printed with it
+- the income it records for the person and the rent it assessed against, if printed
+- anything left blank or inconsistent within the document itself
+
+Do not re-judge the referencing company's decision or apply your own credit or affordability rules: report what it says.`;
+      }
       return `${common}
 
 Read the document and report:
@@ -273,9 +289,29 @@ const REPORT_TOOL: Anthropic.Tool = {
           },
           referenceRecommendation: {
             type: "string",
-            enum: ["accept", "accept_with_guarantor", "decline", "other", "not stated"],
+            enum: ["accept", "conditional_accept", "accept_with_guarantor", "decline", "other", "not stated"],
             description:
-              "Referencing reports only: the overall recommendation as printed. \"Accept with guarantor\" is accept_with_guarantor. Leave out for anything that is not a referencing report.",
+              "Referencing reports only: the overall decision as printed. Legal for Landlords use four: Accept, Conditional Accept (conditional_accept), Accept with Guarantor (accept_with_guarantor) and Decline. Leave out for anything that is not a referencing report.",
+          },
+          referenceConditions: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Referencing reports only: the conditions or decision comments printed with a Conditional Accept, Accept with Guarantor or Decline (for example 'rent to be paid 6 months in advance'). One short phrase each, as printed. Empty for a plain Accept.",
+          },
+          referenceType: {
+            type: "string",
+            enum: ["smart", "complete", "fast_track", "student", "guarantor", "other", "not stated"],
+            description:
+              "Referencing reports only: the kind of reference, as the report names it - SMART, Complete, Fast Track, Student or Guarantor reference.",
+          },
+          annualIncome: {
+            type: "number",
+            description: "Referencing reports only: the person's yearly income the report records, in pounds, as a plain number. Leave out if not printed.",
+          },
+          monthlyRent: {
+            type: "number",
+            description: "Referencing reports only: the monthly rent (or the person's share) the report assessed against, in pounds, as a plain number. Leave out if not printed.",
           },
         },
         required: ["isExpectedType", "addressMatches", "outcome", "signed"],
@@ -471,6 +507,12 @@ function readFacts(raw: unknown): DocFacts {
     const v = str(k);
     return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
   };
+  /* An amount as a number, or "£32,000" as text; anything else is not known. */
+  const money = (k: string): number | null => {
+    const v = f[k];
+    const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[£,\s]/g, "")) : NaN;
+    return Number.isFinite(n) && n > 0 && n < 10_000_000 ? n : null;
+  };
   /* A list sent as JSON text is opened; one plain string is a list of one. */
   const list = (k: string) => {
     const v = f[k];
@@ -498,9 +540,13 @@ function readFacts(raw: unknown): DocFacts {
     peopleNamed: list("peopleNamed"),
     referenceRecommendation: oneOf(
       "referenceRecommendation",
-      ["accept", "accept_with_guarantor", "decline", "other", "not stated"] as const,
+      ["accept", "conditional_accept", "accept_with_guarantor", "decline", "other", "not stated"] as const,
       "not stated"
     ),
+    referenceConditions: list("referenceConditions"),
+    referenceType: oneOf("referenceType", ["smart", "complete", "fast_track", "student", "guarantor", "other", "not stated"] as const, "not stated"),
+    annualIncome: money("annualIncome"),
+    monthlyRent: money("monthlyRent"),
   };
 }
 
@@ -509,7 +555,7 @@ async function scanOne(
   doc: PlcDocument,
   c: PlcCase,
   pack: PackContext
-): Promise<{ findings: Finding[]; result: RuleResult }> {
+): Promise<{ findings: Finding[]; result: RuleResult; facts?: DocFacts }> {
   /* Rule reasons first, then the model's prose. Kirstie should meet the
      decision before the commentary. */
   let fetched: Fetched;
@@ -545,6 +591,7 @@ async function scanOne(
   return {
     findings: [...reasonsAsFindings(doc.checkId, read.result, doc.name), ...read.observations],
     result: read.result,
+    facts: read.facts,
   };
 }
 
@@ -701,7 +748,7 @@ export async function scanCase(c: PlcCase, onProgress?: (done: number, total: nu
      tenant swap on 44 South Bridge) ran past the 100 seconds a page waits.
      Not all at once either: a rate limit would then fail most of the pack
      rather than one document. Each document's findings stay in pack order. */
-  type Read = { findings: Finding[]; result: RuleResult };
+  type Read = { findings: Finding[]; result: RuleResult; facts?: DocFacts };
   const reads: Array<{ ok: true; read: Read } | { ok: false; error: unknown }> = new Array(readable.length);
   let next = 0;
   let finished = 0;
@@ -737,6 +784,56 @@ export async function scanCase(c: PlcCase, onProgress?: (done: number, total: nu
       findings.push(...failed.findings);
       results.push({ checkId: doc.checkId, result: failed.result });
     }
+  }
+
+  /* A REFERENCE FOR EVERY ADULT ON THE LET (James, 6 Nov 2026, Legal for
+     Landlords' guidelines: each person on the tenancy is referenced, not the
+     household). Read only once every reference in the pack was read, and
+     never on a pack whose tenant checks were marked not needed. A question,
+     never a stop: a name can be spelt two ways. */
+  const refs = readable.map((d, at) => ({ d, got: reads[at] })).filter((x) => x.d.checkId === "tenant-checks");
+  const waivedRefs = (c.waivers ?? []).some((w) => w.checkId === "tenant-checks");
+  if (refs.length && !waivedRefs && refs.every((x) => x.got.ok)) {
+    const pre = await prefillFor({ applicationId: c.applicationRef }).catch(() => null);
+    const words = (n: string) => n.toLowerCase().replace(/[^a-z\s'-]/g, " ").split(/\s+/).filter((w) => w.length > 1 && !/^(mr|mrs|ms|miss|dr)$/.test(w));
+    const seen = refs.flatMap((x) => [
+      ...(x.got.ok ? x.got.read.facts?.peopleNamed ?? [] : []),
+      x.d.name,
+      x.d.label ?? "",
+    ]).map((t) => ` ${words(t).join(" ")} `);
+    const covered = (name: string) => {
+      const w = words(name);
+      if (w.length < 2) return true;
+      const [first, last] = [w[0], w[w.length - 1]];
+      return seen.some((t) => t.includes(` ${first} `) && t.includes(` ${last} `));
+    };
+    for (const t of pre?.tenants ?? []) {
+      if (!t.name || covered(t.name)) continue;
+      findings.push({
+        checkId: "tenant-checks",
+        level: "query",
+        message: `No reference found for ${t.name}. Each adult on the tenancy is referenced - add theirs, or say why not.`,
+        foundDate: null,
+      });
+      results.push({
+        checkId: "tenant-checks",
+        result: { verdict: "review", reasons: [{ verdict: "review", rule: "A reference for each adult", because: `no reference in the pack names ${t.name}.` }] },
+      });
+    }
+  }
+
+  /* Right to Rent in England (Legal for Landlords' guidelines, page 9): their
+     check is preliminary and does not replace ours - the original document,
+     or the share code, has to be checked by us. Asked once, and only where a
+     reference is in and no right to rent evidence is on the pack. */
+  const rtrFiled = c.documents.some((d) => d.checkId === "right-to-rent" || d.covers?.includes("right-to-rent"));
+  if (!pack.scottish && refs.length && !rtrFiled) {
+    findings.push({
+      checkId: "right-to-rent",
+      level: "query",
+      message: "Legal for Landlords' right to rent check is only preliminary. Has the original document or share code been checked for each adult? Add it to the pack, or say who checked it.",
+      foundDate: null,
+    });
   }
 
   return { findings, recommendation: summariseAll(results) };

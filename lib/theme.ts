@@ -130,3 +130,41 @@ export function writeDarkStep(key: string, step: number) {
   }
   applyDarkPalette();
 }
+
+/**
+ * The navigation bar's colour (James, 8 Nov 2026): any of the four
+ * secondary colours of the final palette, picked under Profile > Appearance.
+ * Each person's own, kept in this browser like the theme. Cream is the
+ * default and is the absence of the attribute. Dark mode keeps its own bar.
+ */
+export type NavColour = "cream" | "linen" | "sage" | "clay";
+export const NAV_KEY = "os-nav-colour";
+export const NAV_COLOURS: { id: NavColour; label: string; hex: string }[] = [
+  { id: "cream", label: "Off-white", hex: "#F8F7F4" },
+  { id: "linen", label: "Linen", hex: "#F5EFE6" },
+  { id: "sage", label: "Sage", hex: "#F1F4EC" },
+  { id: "clay", label: "Clay", hex: "#C4A092" },
+];
+
+export function readNav(): NavColour {
+  try {
+    const v = localStorage.getItem(NAV_KEY);
+    return NAV_COLOURS.some((c) => c.id === v) ? (v as NavColour) : "cream";
+  } catch {
+    return "cream";
+  }
+}
+
+export function applyNav(c: NavColour) {
+  if (c === "cream") delete document.documentElement.dataset.nav;
+  else document.documentElement.dataset.nav = c;
+}
+
+export function writeNav(c: NavColour) {
+  try {
+    localStorage.setItem(NAV_KEY, c);
+  } catch {
+    /* private browsing - works for the session */
+  }
+  applyNav(c);
+}

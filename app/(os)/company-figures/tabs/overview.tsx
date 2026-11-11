@@ -1571,7 +1571,7 @@ export default function Overview({ month }: { month: string }) {
       <Section title="Monthly GCI vs Budget" source={d.sources.income}>
         <Bars
           labels={d.gciByMonth.labels}
-          series={[{ name: "Actual GCI (exc VAT)", color: "#cfa096", values: d.gciByMonth.actual }]}
+          series={[{ name: "Actual GCI (exc VAT)", color: "#c4a092", values: d.gciByMonth.actual }]}
           format={(n) => `£${Math.round(n / 1000)}k`}
           height={240}
           details={d.gciByMonth.detail}

@@ -98,6 +98,8 @@ export const DEMO_PREFILL: Prefill = {
   moveInDate: MOVE_IN,
   agentName: "Sam Partner",
   rentPcm: 1100,
+  landlordName: "Pat Example",
+  landlords: ["Pat Example"],
   /* One real warning, because the wizard shows them and a demo where the
      panel is always empty never explains what it is for. */
   warnings: ["Right to Rent is not recorded for every adult applicant. Compliance will ask."],

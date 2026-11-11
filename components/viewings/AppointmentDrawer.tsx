@@ -36,6 +36,7 @@ import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/Ca
 import AppraisalChange, { canChangeAppraisalAppt } from "@/components/AppraisalChange";
 import { Badge, Ico } from "@/components/new-look/Parts";
 import FloatSheet, { FloatCard, FloatCardHead, FloatFoot } from "@/components/new-look/FloatSheet";
+import ConfirmSheet from "@/components/ConfirmSheet";
 
 /**
  * The quick look: what IS this, and what do I need to know before I go.
@@ -125,9 +126,19 @@ export default function AppointmentDrawer({
   const { appts: diary } = useDiary();
   const [removing, setRemoving] = useState<"ask" | "busy" | null>(null);
   const [slotSaid, setSlotSaid] = useState<string | null>(null);
+  /* Send out confirmation (James, 8 Nov 2026): the reviewed email, opened
+     on purpose from the quick look, never sent on its own. */
+  const [confirming, setConfirming] = useState(false);
+  const [confirmSaid, setConfirmSaid] = useState<string | null>(null);
+  /* Did they turn up: a no-show is saved from here; "They came" opens the
+     viewing file, where how it went is written down. */
+  const [turnout, setTurnout] = useState<"busy" | "no-show" | { error: string } | null>(null);
   useEffect(() => {
     setRemoving(null);
     setSlotSaid(null);
+    setConfirming(false);
+    setConfirmSaid(null);
+    setTurnout(null);
   }, [appt?.id]);
   /* Every way out plays the card out first (lib/use-slide-over). */
   /* The floating boxes play their own way in and out, and own Escape. */
@@ -179,6 +190,8 @@ export default function AppointmentDrawer({
   const tone = toneOf(appt.kind, appt.unaccompanied);
   const b = bubble(tone);
   const past = appt.day < 0;
+  /* Over, including earlier today: what "after the viewing" waits for. */
+  const ended = past || new Date(apptStartIso(appt)).getTime() + appt.mins * 60_000 < Date.now();
   const near = nearLabel(appt.day);
   const when = `${near ? `${near} · ` : ""}${fmtFull(dateOfOffset(appt.day))}`;
   const subject = subjectOf(appt);
@@ -239,7 +252,7 @@ export default function AppointmentDrawer({
     const anchor = anchorFromAppt({ ...appt, listingId: appt.listingId ?? match?.listingId ?? null });
     /* Each part on its own, so the drawer and the drop can run them as one
        list and the floating boxes can give each its own box. */
-    const whoTitle = appt.kind === "viewing" ? (past ? "Who viewed" : "Who's coming") : "Who it's with";
+    const whoTitle = appt.kind === "viewing" ? (ended ? "Who viewed" : "Who's coming") : "Who it's with";
     const whoBody = (<>
                     {appt.who ? appt.who : <span className="nl-diary-quiet">Nobody named on this entry.</span>}
                     {appt.contact && (appt.contact.phone || appt.contact.email) ? (
@@ -394,7 +407,7 @@ export default function AppointmentDrawer({
                 )}
                 {appt.comms.length === 0 ? (
                   appt.confirmPending ? null : (
-                    <p className="nl-meta mt-2">{appt.fromRex ? "No record of what was sent for this appointment." : "Nothing to send for this one."}</p>
+                    <p className="nl-meta mt-2">{appt.kind === "viewing" && !ended ? "No confirmation has gone from the OS for this viewing yet." : appt.fromRex ? "No record of what was sent for this appointment." : "Nothing to send for this one."}</p>
                   )
                 ) : (
                   <ul className="nl-lines mt-2">
@@ -421,8 +434,34 @@ export default function AppointmentDrawer({
                   </ul>
                 )}
                 {missing.length > 0 && !past && <p className="nl-diary-warn mt-2 text-[12px]">{missing.length} still to send.</p>}
+                {appt.kind === "viewing" && !ended && (
+                  <div className="nl-appt-send">
+                    {confirmSaid ? (
+                      <p className="nl-appt-said" role="status"><Ico name="check" size={13} /> {confirmSaid}</p>
+                    ) : (
+                      <p className="nl-meta">Opens the email to {appt.who || "the applicant"} so you can read it, change it and send it.</p>
+                    )}
+                    <button type="button" data-steve="appointment.send-confirmation" onClick={() => setConfirming(true)} className={np}>
+                      <Ico name="mail" size={14} />
+                      {confirmSaid ? "Send it again" : "Send out confirmation"}
+                    </button>
+                  </div>
+                )}
 </>) : null;
-    const afterBody = appt.kind === "viewing" && past ? (<>
+    const markNoShow = async () => {
+      setTurnout("busy");
+      const r = await fetch("/api/viewings/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ viewingId: appt.id, attended: false, choice: "no-show", label: "No-show", note: "", applicant: appt.who ?? "", address: appt.where ?? "", listingId: appt.listingId ? String(appt.listingId) : null, startsAt: apptStartIso(appt) }),
+      })
+        .then((x) => x.json() as Promise<{ ok?: boolean; error?: string }>)
+        .catch(() => ({ ok: false, error: "The connection dropped. Nothing was saved." }));
+      if (!r.ok) return setTurnout({ error: r.error ?? "Couldn't save it." });
+      setTurnout("no-show");
+      refreshDiary().catch(() => null);
+    };
+    const afterBody = appt.kind === "viewing" && ended ? (<>
                 {appt.feedback ? (
                   <>
                     <p className="mt-2 flex flex-wrap items-center gap-2">
@@ -435,6 +474,22 @@ export default function AppointmentDrawer({
                     </p>
                     {appt.feedback.note ? <p className="nl-diary-notes">{appt.feedback.note}</p> : <p className="nl-meta mt-2">Logged, with nothing written down.</p>}
                     {appt.feedback.agent && <p className="nl-meta mt-2">Recorded by {appt.feedback.agent}</p>}
+                  </>
+                ) : turnout === "no-show" ? (
+                  <p className="mt-2 flex flex-wrap items-center gap-2"><Badge tone="accent">No-show</Badge><span className="nl-meta">Saved. It no longer shows as feedback due.</span></p>
+                ) : float ? (
+                  <>
+                    <p className="nl-meta mt-1">Did {appt.who || "they"} turn up?</p>
+                    <div className="nl-appt-turnout">
+                      <button type="button" className="nl-btn nl-btn--primary nl-btn--sm nl-btn--olive" disabled={turnout === "busy"} onClick={() => onOpenViewing(appt)}>
+                        <Ico name="check" size={14} /> They came
+                      </button>
+                      <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" disabled={turnout === "busy"} onClick={markNoShow}>
+                        {turnout === "busy" ? "Saving…" : "No show"}
+                      </button>
+                    </div>
+                    <p className="nl-meta mt-2">They came opens the viewing file to write down how it went.</p>
+                    {turnout && typeof turnout === "object" && <p className="nl-diary-warn mt-2 text-[12.5px]">{turnout.error}</p>}
                   </>
                 ) : (
                   <p className="nl-meta mt-2">Nobody has written down what was said. Record it from the viewing file.</p>
@@ -512,7 +567,7 @@ export default function AppointmentDrawer({
                   </button>
                 )}
                 {onChangeTime && canChangeTime(appt) && (
-                  <button type="button" onClick={() => onChangeTime(appt)} className={nb}>
+                  <button type="button" onClick={() => onChangeTime(appt)} className="nl-btn nl-btn--primary nl-btn--sm nl-btn--olive">
                     Change time
                   </button>
                 )}
@@ -544,67 +599,107 @@ export default function AppointmentDrawer({
             )}
 </>);
     if (float) {
-      const boxTitle = appt.kind === "viewing" ? (past ? "Who Viewed" : "Who's Coming") : "Who It's With";
+      const boxTitle = appt.kind === "viewing" ? (ended ? "Who Viewed" : "Who's Coming") : "Who It's With";
+      /* One panel across the screen (James, 8 Nov 2026): the address as the
+         heading, the when / where / diary facts along the top, what you need
+         to know on the left and what to do (confirmations, feedback) in a
+         column of its own on the right. */
+      const heading = appt.where || (subject && subject.toLowerCase() !== meta.label.toLowerCase() ? subject : meta.label);
+      const side = confirmBody || afterBody;
       return (
+        <>
         <FloatSheet
           title={`${meta.label}${appt.unaccompanied ? " (Unaccompanied)" : ""}`}
           label={subject || meta.label}
-          size="lg"
+          size="xl"
           onClose={closeNow}
           screenKey={appt.id}
-          question={subject || meta.label}
-          lede={
-            <>
-              {when}, {time}
-              {past ? " · happened" : ""}
-            </>
-          }
+          question={heading}
+          lede={past ? "This has happened." : undefined}
           foot={<FloatFoot>{footParts}</FloatFoot>}
         >
-          <FloatCard>
-            <FloatCardHead title="When and Where" />
-            <dl className="nl-diary-dl">
-              {whenRows}
-              {diaryRow}
-            </dl>
-          </FloatCard>
-          {appt.kind !== "slot" && (
-            <FloatCard>
-              <FloatCardHead title={boxTitle} />
-              <div className="text-[14px] leading-[21px]">{whoBody}</div>
-            </FloatCard>
-          )}
-          {propertyRows && (
-            <FloatCard>
-              <FloatCardHead title="At the Property" />
-              <dl className="nl-diary-dl">{propertyRows}</dl>
-            </FloatCard>
-          )}
-          {notesBody && (
-            <FloatCard>
-              <FloatCardHead title="Notes" />
-              {notesBody}
-            </FloatCard>
-          )}
-          {slotBody && (
-            <FloatCard>
-              <FloatCardHead title={slotTitle} />
-              {slotBody}
-            </FloatCard>
-          )}
-          {confirmBody && (
-            <FloatCard>
-              <FloatCardHead title="Confirmations" />
-              {confirmBody}
-            </FloatCard>
-          )}
-          {afterBody && (
-            <FloatCard>
-              <FloatCardHead title="After the Viewing" />
-              {afterBody}
-            </FloatCard>
-          )}
+          <div className={`nl-appt-sheet${side ? "" : " is-solo"}`} data-kind={appt.kind}>
+            <div className="nl-appt-main">
+              <FloatCard>
+                <FloatCardHead
+                  title="When and Where"
+                  aside={
+                    onChangeTime && canChangeTime(appt) ? (
+                      <button type="button" className="nl-appt-edit" data-steve="appointment.edit" onClick={() => onChangeTime(appt)}>
+                        <Ico name="pen" size={13} /> Edit
+                      </button>
+                    ) : undefined
+                  }
+                />
+                <dl className="nl-diary-dl nl-appt-facts">
+                  {whenRows}
+                  {diaryRow}
+                </dl>
+              </FloatCard>
+              {appt.kind !== "slot" && (
+                <FloatCard>
+                  <FloatCardHead title={boxTitle} />
+                  <div className="text-[14px] leading-[21px]">{whoBody}</div>
+                </FloatCard>
+              )}
+              {propertyRows && (
+                <FloatCard>
+                  <FloatCardHead title="At the Property" />
+                  <dl className="nl-diary-dl">{propertyRows}</dl>
+                </FloatCard>
+              )}
+              {notesBody && (
+                <FloatCard>
+                  <FloatCardHead title="Notes" />
+                  {notesBody}
+                </FloatCard>
+              )}
+              {slotBody && (
+                <FloatCard>
+                  <FloatCardHead title={slotTitle} />
+                  {slotBody}
+                </FloatCard>
+              )}
+            </div>
+            {side && (
+              <aside className="nl-appt-side">
+                {confirmBody && (
+                  <FloatCard>
+                    <FloatCardHead title="Confirmations" />
+                    {confirmBody}
+                  </FloatCard>
+                )}
+                {afterBody && (
+                  <FloatCard>
+                    <FloatCardHead title="After the Viewing" />
+                    {afterBody}
+                  </FloatCard>
+                )}
+              </aside>
+            )}
+          </div>
         </FloatSheet>
+        {confirming && appt.kind === "viewing" && (
+          <ConfirmSheet
+            title="Send out confirmation"
+            target={{
+              kind: "viewing",
+              booking: {
+                leadId: appt.leadId ?? `diary-${appt.id}`,
+                listingId: appt.listingId ? String(appt.listingId) : null,
+                applicantName: appt.who ?? "",
+                applicantEmail: appt.contact?.email || null,
+                address: appt.where || subject || "the property",
+                startsAt: apptStartIso(appt),
+                minutes: appt.mins,
+                unaccompanied: Boolean(appt.unaccompanied),
+              },
+            }}
+            onClose={() => setConfirming(false)}
+            onSent={(detail) => setConfirmSaid(detail)}
+          />
+        )}
+        </>
       );
     }
     if (inline) {

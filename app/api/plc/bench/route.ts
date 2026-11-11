@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { judgeFile } from "@/lib/upload-rules";
 import { publicError } from "@/lib/public-error";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkById, type CheckId } from "@/lib/plc";
@@ -119,25 +120,18 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!ALLOWED.includes(file.type)) {
-    return NextResponse.json(
-      { ok: false, error: `${file.type || "That file type"} cannot be read. Use a PDF or a photograph.` },
-      { status: 415 }
-    );
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { ok: false, error: `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB — the limit is 12MB.` },
-      { status: 413 }
-    );
-  }
+  /* One judge for every upload route (lib/upload-rules): the refusal names
+     the file and what would be taken, and a file the browser gave no type
+     goes by its extension. */
+  const judged = judgeFile(file, { types: ALLOWED, maxBytes: MAX_BYTES });
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: judged.status });
 
   const started = Date.now();
   try {
     const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
     const read = await readDocument(
       new Anthropic(),
-      { name: file.name, media: file.type, base64 },
+      { name: file.name, media: judged.type, base64 },
       { checkId, address: address || "the property", moveInDate },
       { model, effort }
     );

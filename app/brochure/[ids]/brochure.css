@@ -1,0 +1,130 @@
+/* The viewing brochure (Erleta Vathej, ticket 47b2389c; James, 10 Nov 2026).
+   Paper in the website's final palette: brown #56423e, terracotta #a85a51,
+   olive #56634a, linen #f5efe6. Condensed Bricolage capitals for titles,
+   Source Serif for the rent, Inter for the words. Square edges throughout.
+   It is paper, so it is always light, whatever the OS theme. */
+
+.br-screen {
+  --br-ink: #141413;
+  --br-muted: #5f5a55;
+  --br-brown: #56423e;
+  --br-terra: #a85a51;
+  --br-olive: #56634a;
+  --br-linen: #f5efe6;
+  --br-line: #e3d9cc;
+  --br-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --br-serif: var(--font-serif4), Charter, Georgia, serif;
+  --br-sans: var(--font-inter), system-ui, sans-serif;
+  min-height: 100dvh;
+  background: #ece5da;
+  color: var(--br-ink);
+  font-family: var(--br-sans);
+  padding: 0 16px 48px;
+  color-scheme: light;
+}
+
+/* ── the bar on screen ─────────────────────────────────────────────────── */
+.br-bar {
+  position: sticky; top: 0; z-index: 2;
+  max-width: 210mm; margin: 0 auto 20px; padding: 14px 0;
+  display: flex; align-items: center; gap: 10px;
+  background: #ece5da;
+}
+.br-bar-text { flex: 1; min-width: 0; }
+.br-bar-title { margin: 0; font-family: var(--br-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0; font-size: 22px; line-height: 1; color: var(--br-brown); }
+.br-bar-sub { margin: 4px 0 0; font-size: 12.5px; color: var(--br-muted); }
+.br-bar-left { margin: 4px 0 0; font-size: 12.5px; color: var(--br-terra); }
+.br-btn {
+  font: 600 13px/1 var(--br-sans); letter-spacing: 0;
+  min-width: 84px; height: 40px; padding: 0 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--br-brown); color: #fff; border: 1px solid var(--br-brown); border-radius: 0; cursor: pointer;
+}
+.br-btn:disabled { opacity: 0.7; cursor: default; }
+.br-btn--quiet { background: transparent; color: var(--br-brown); }
+.br-spin { width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-top-color: #fff; border-radius: 50%; animation: br-spin 0.8s linear infinite; }
+@keyframes br-spin { to { transform: rotate(360deg); } }
+
+.br-notice { max-width: 520px; margin: 0 auto; padding: 96px 0; text-align: center; }
+.br-notice h1 { margin: 0; font-family: var(--br-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0; font-size: 30px; line-height: 1.05; color: var(--br-brown); }
+.br-notice p { margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: var(--br-muted); }
+
+/* ── the sheet: A4, drawn at A4 on screen too ──────────────────────────── */
+.br-sheet {
+  box-sizing: border-box;
+  width: 210mm; min-height: 297mm; margin: 0 auto 24px;
+  padding: 11mm 12mm 0;
+  display: flex; flex-direction: column;
+  background: #fffdf9;
+  box-shadow: 0 1px 2px rgba(20, 20, 19, 0.08), 0 12px 32px rgba(20, 20, 19, 0.1);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  /* A long write-up runs onto a second side with the same margins. */
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.br-sheet *, .br-sheet *::before { box-sizing: border-box; }
+
+.br-top { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 4mm; }
+.br-mark { font-family: var(--br-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; font-size: 12pt; color: var(--br-brown); }
+.br-tag { font-family: var(--br-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 9pt; color: var(--br-terra); }
+
+.br-hero { height: 84mm; background: var(--br-linen); overflow: hidden; }
+.br-hero img, .br-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.br-thumbs { display: grid; gap: 2.5mm; margin-top: 2.5mm; }
+.br-thumb { height: 25mm; background: var(--br-linen); overflow: hidden; }
+.br-sheet.is-long .br-hero { height: 70mm; }
+.br-sheet.is-long .br-thumb { height: 21mm; }
+
+.br-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 8mm; margin-top: 5mm; }
+.br-title-text { min-width: 0; }
+.br-title h1 { margin: 0; font-family: var(--br-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0; font-size: 28pt; line-height: 0.95; color: var(--br-brown); }
+.br-town { margin: 1.5mm 0 0; font-size: 9.5pt; color: var(--br-muted); }
+.br-rent { margin: 0; flex-shrink: 0; font-family: var(--br-serif); font-weight: 400; font-size: 22pt; line-height: 1; color: var(--br-terra); white-space: nowrap; }
+
+.br-facts { display: grid; margin: 4mm 0 0; border-top: 1px solid var(--br-ink); border-bottom: 1px solid var(--br-line); }
+.br-facts > div { padding: 2.6mm 3mm 2.8mm 0; min-width: 0; }
+.br-facts > div + div { padding-left: 3mm; border-left: 1px solid var(--br-line); }
+.br-facts dt { font-family: var(--br-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; font-size: 7.5pt; color: var(--br-olive); }
+.br-facts dd { margin: 1mm 0 0; font-size: 11pt; font-weight: 600; color: var(--br-ink); overflow-wrap: anywhere; }
+
+.br-body { display: grid; grid-template-columns: minmax(0, 1fr) 58mm; gap: 7mm; margin-top: 4.5mm; padding-bottom: 5mm; }
+.br-body.is-solo { grid-template-columns: minmax(0, 1fr); }
+.br-write h2 { margin: 0 0 2.5mm; font-family: var(--br-sans); font-weight: 600; font-size: 11.5pt; line-height: 1.3; letter-spacing: 0; color: var(--br-ink); }
+.br-write p { margin: 0 0 2.2mm; font-size: 9.2pt; line-height: 1.5; color: #2e2a27; }
+.br-features { align-self: start; background: var(--br-linen); padding: 4mm 4.5mm 3.5mm; }
+.br-features h3, .br-contact h3 { margin: 0 0 2.5mm; font-family: var(--br-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0; font-size: 13pt; line-height: 1; color: var(--br-brown); }
+.br-features ul { list-style: none; margin: 0; padding: 0; }
+.br-features li { position: relative; padding-left: 4mm; margin-bottom: 1.6mm; font-size: 8.8pt; line-height: 1.35; color: #2e2a27; }
+.br-features li::before { content: ""; position: absolute; left: 0; top: 1.5mm; width: 1.6mm; height: 1.6mm; background: var(--br-terra); }
+
+.br-foot {
+  margin: auto -12mm 0; padding: 5mm 12mm 6mm;
+  display: grid; grid-template-columns: minmax(0, 1fr) 70mm; gap: 8mm; align-items: end;
+  background: var(--br-brown); color: var(--br-linen);
+  break-inside: avoid;
+}
+.br-contact h3 { color: #fff; font-size: 15pt; }
+.br-contact p { margin: 0 0 1mm; font-size: 9.5pt; line-height: 1.4; }
+.br-contact p span { display: inline-block; min-width: 13mm; font-family: var(--br-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; font-size: 7.5pt; color: #d9c4b8; }
+.br-contact .br-agent { font-weight: 600; font-size: 11pt; margin-bottom: 1.6mm; color: #fff; }
+.br-small { margin: 0; font-size: 7pt; line-height: 1.45; color: #d9c4b8; }
+
+/* A narrow screen still shows the whole sheet: scaled, never scrolled sideways. */
+@media screen and (max-width: 840px) {
+  .br-screen { padding: 0 16px 32px; overflow-x: hidden; }
+  .br-bar { flex-wrap: wrap; }
+  .br-bar-text { flex-basis: 100%; }
+  .br-sheet { zoom: 0.72; }
+}
+@media screen and (max-width: 636px) { .br-sheet { zoom: 0.5; } }
+@media screen and (max-width: 461px) { .br-sheet { zoom: 0.42; } }
+@media screen and (max-width: 366px) { .br-sheet { zoom: 0.36; } }
+
+/* ── on paper ──────────────────────────────────────────────────────────── */
+@page { size: A4; margin: 0; }
+@media print {
+  html, body { background: #fff !important; }
+  .br-screen { background: none; padding: 0; min-height: 0; }
+  .br-bar { display: none !important; }
+  .br-sheet { margin: 0; box-shadow: none; min-height: 297mm; break-after: page; }
+  .br-sheet:last-of-type { break-after: auto; }
+}

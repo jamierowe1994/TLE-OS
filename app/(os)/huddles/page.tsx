@@ -1181,9 +1181,74 @@ function RoomPane({
   const faces = data && !general && !thread ? (groupFaces?.faces.length ? groupFaces : { faces: data.members.slice(0, 4), members: data.members.length }) : null;
 
   const nl = useNl();
+  /* The side column (James, 7 Nov 2026, "Team room"): who is in the chat
+     and the questions asked in it, beside the conversation on a wide screen.
+     Under 1200px it folds away and the People button in the head does the job. */
+  const questions = data && !thread ? data.messages.filter((m) => m.question).slice(-5).reverse() : [];
+  const side =
+    nl && data && !thread ? (
+      <aside className="nl-hud-side" aria-label="About this chat">
+        <p className="nl-hud-side-label">
+          In this chat<span>{general && !data.members.length ? "Everyone" : data.members.length}</span>
+        </p>
+        {general && !data.members.length ? (
+          <p className="nl-hud-side-note">Everyone at The Letting Experts.</p>
+        ) : (
+          <ul className="nl-hud-side-people">
+            {data.members.slice(0, 8).map((m) => (
+              <li key={m.id}>
+                <Avatar name={m.name} photo={m.photo} size={26} tone={toneOf(m.id)} />
+                <span>{m.name}</span>
+                {m.id === data.me && <em>You</em>}
+              </li>
+            ))}
+            {data.members.length > 8 && (
+              <li>
+                <button type="button" onClick={() => setPeople(true)} className="nl-hud-side-more">
+                  {data.members.length - 8} more
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
+        {!general && (
+          <div className="nl-hud-side-acts">
+            <button type="button" onClick={onInvite}>Invite People</button>
+            {admin && <button type="button" onClick={() => void rename()}>Rename</button>}
+            <button type="button" onClick={leave}>Leave</button>
+            {admin && (
+              <button type="button" onClick={() => void deleteForAll()} className="is-danger">
+                Delete for Everyone
+              </button>
+            )}
+          </div>
+        )}
+        {questions.length > 0 && (
+          <>
+            <p className="nl-hud-side-label is-gap">
+              Questions<span>{questions.length}</span>
+            </p>
+            <ul className="nl-hud-side-qs">
+              {questions.map((q) => (
+                <li key={q.id}>
+                  <button type="button" onClick={() => onOpenThread(q.id)}>
+                    <span>{q.body}</span>
+                    <small>
+                      {first(q.author)} · {q.replies ? `${q.replies} ${q.replies === 1 ? "answer" : "answers"}` : "Not answered yet"}
+                    </small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </aside>
+    ) : null;
+
   if (nl)
     return (
-      <>
+      <div className={`nl-hud-room${side ? " has-side" : ""}`}>
+        <div className="nl-hud-room-main">
         <PaneHead
           back={onBack}
           backAlways={Boolean(thread)}
@@ -1287,7 +1352,9 @@ function RoomPane({
             onTyping={onTyping}
           />
         )}
-      </>
+        </div>
+        {side}
+      </div>
     );
 
   return (
@@ -1690,7 +1757,7 @@ function Bubbles({ items, empty, typing = null }: { items: Item[]; empty: string
                 <span>{r.day}</span>
               </li>
             );
-          const { m, head, tail } = r;
+          const { m, head } = r;
           const gif = isGif(m.body);
           const quote = m.quote && (
             <button
@@ -1722,22 +1789,39 @@ function Bubbles({ items, empty, typing = null }: { items: Item[]; empty: string
               {m.body}
             </div>
           );
+          /* A RUNNING CONVERSATION (James, 7 Nov 2026, "Team room"): no
+             bubbles. Each run of messages from one person opens with their
+             face, name and the time, and the rest of the run follows under
+             it, everyone down the same left edge - easier to skim when
+             thirty-odd people post in one room. Yours are drawn the same way. */
           return (
             <li key={m.id} id={`msg-${m.id}`} className={`nl-hud-msg${m.mine ? " is-me" : ""}${head ? " is-head" : ""}`}>
-              {!m.mine && head && <span className="nl-hud-from">{m.who}</span>}
               <div className="nl-hud-line">
-                {!m.mine && (tail ? <Avatar name={m.who} photo={m.photo} size={28} tone={m.tone ?? toneOf(m.whoId)} /> : <span className="nl-hud-facegap" />)}
-                {content}
+                {head ? <Avatar name={m.who} photo={m.photo} size={34} tone={m.tone ?? toneOf(m.whoId)} /> : <span className="nl-hud-facegap" />}
+                <div className="nl-hud-body">
+                  {head && (
+                    <p className="nl-hud-from">
+                      <b>{m.mine ? "You" : m.who}</b>
+                      <span className="nl-hud-t">
+                        {timeOf(m.at)}
+                        {m.mine && m.tick && <Ticks seen={m.tick === "seen"} />}
+                      </span>
+                    </p>
+                  )}
+                  {content}
+                </div>
+                {!head && (
+                  <span className="nl-hud-t is-side">
+                    {timeOf(m.at)}
+                    {m.mine && m.tick && <Ticks seen={m.tick === "seen"} />}
+                  </span>
+                )}
                 {m.onReply && (
                   <button type="button" onClick={m.onReply} aria-label={`Reply to ${m.mine ? "your message" : m.who}`} title="Reply" className="nl-hud-reply">
                     <ReplyIcon />
                   </button>
                 )}
               </div>
-              <span className="nl-hud-t">
-                {timeOf(m.at)}
-                {m.mine && m.tick && <Ticks seen={m.tick === "seen"} />}
-              </span>
             </li>
           );
         })}

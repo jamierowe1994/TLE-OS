@@ -10,7 +10,9 @@ import PropertyAnswers from "@/components/PropertyAnswers";
 import { useSaveReporter } from "@/components/SaveChip";
 import { CHOICES, eicExpiry, type EicReason } from "@/lib/home-facts-shared";
 import SendRecord, { stamp } from "@/components/portfolio/SendRecord";
-import { expiryFromIssue, filesOnIssueDate, lifeInWords } from "@/lib/cert-life";
+import { filesOnIssueDate } from "@/lib/cert-life";
+import { CERT_KINDS, CERT_KIND_LABEL, certFilesAs, certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 
 /**
  * The property file: one panel, the same wherever a home is opened.
@@ -69,7 +71,9 @@ const READER_TO_TYPE: Record<string, string> = { hmo_licence: "mandatory_hmo_lic
  * named as an EIC, with the reason, and the home remembers it (lib/home-facts).
  */
 const EIC = "eic";
-const TYPE_CHOICES: [string, string][] = Object.entries(TYPE_LABEL).flatMap(([k, v]): [string, string][] => (k === "eicr" ? [[k, v], [EIC, "EIC (new build or full rewire)"]] : [[k, v]]));
+/* What can be picked: the shared list (lib/cert-kinds), which offers a fire
+   risk assessment and an emergency lighting certificate by name. */
+const TYPE_CHOICES: [string, string][] = CERT_KINDS.flatMap((k): [string, string][] => (k.id === "eicr" ? [[k.id, k.label], [EIC, "EIC (new build or full rewire)"]] : [[k.id, k.label]]));
 /** The reader calls an EIC an EICR (it is told one counts as the other); its notes say which it was. */
 const looksLikeEic = (r: Read | null) => Boolean(r && r.type === "eicr" && /installation certificate|new (electrical )?installation|\bEIC\b/i.test(r.notes) && !/condition report/i.test(r.notes));
 /** An EIC's expiry is five years from its issue at most, whatever it recommends. */
@@ -131,14 +135,8 @@ export interface LooseDoc { type: string; name: string; url: string; at: string 
  * so for those the Issued date is enough and Expires is optional.
  */
 function notReadyBecause(p: { type: string; expiry: string; issue: string; eicReason?: EicReason | "" }): string | null {
-  if (!p.type) return "Choose what type of certificate it is to file it.";
-  if (p.type === EIC) {
-    if (!p.issue) return "Put in the date the EIC was issued to file it.";
-    if (!p.eicReason) return "Say why it is an EIC - a new build or a full rewire - to file it.";
-    return null;
-  }
-  if (filesOnIssueDate(p.type)) return p.expiry || p.issue ? null : `Put in the date it was ${p.type === "portable_appliance_testing" ? "tested" : "checked"} as Issued to file it.`;
-  return p.expiry ? null : "Put in the date it runs out (Expires) to file it.";
+  /* One rule for every door that files a certificate (lib/cert-kinds). */
+  return certNotReadyBecause({ type: p.type, expiry: p.expiry, issue: p.issue, eic: p.type === EIC ? { reason: p.eicReason ?? "" } : null });
 }
 
 const day = (iso: string | null) => {
@@ -276,11 +274,14 @@ export default function PropertyFile({
     if (forType.current) body.set("expect", forType.current);
     const j = await fetch("/api/compliance/certificates/read", { method: "POST", body }).then((r) => r.json()).catch(() => ({ ok: false }));
     const read: Read | null = j.ok ? j.read : null;
-    const read0 = forType.current ?? (read ? READER_TO_TYPE[read.type] ?? read.type : "");
+    /* The row's own type, unless the reader names a kind that files as it (a
+       fire risk assessment on the fire row): then the reader's, which says more. */
+    const readType = read ? READER_TO_TYPE[read.type] ?? read.type : "";
+    const read0 = forType.current && certFilesAs(readType) !== forType.current ? forType.current : readType || forType.current || "";
     const type = read0 === "eicr" && looksLikeEic(read) ? EIC : read0;
     const issue = read?.issue ?? "";
     const expiry = type === EIC && issue ? cappedEic(issue, read?.expiry ?? "") : read?.expiry ?? "";
-    setPending((p) => (p ? { ...p, read, type: TYPE_LABEL[type] || type === EIC ? type : p.type, expiry, issue, eicReason: "", busy: false, note: j.ok ? null : j.error ?? "The reader could not open it; fill the facts in by hand." } : p));
+    setPending((p) => (p ? { ...p, read, type: CERT_KIND_LABEL[type] || type === EIC ? type : p.type, expiry, issue, eicReason: "", busy: false, note: j.ok ? null : j.error ?? "The reader could not open it; fill the facts in by hand." } : p));
   }
 
   async function file() {
@@ -318,7 +319,7 @@ export default function PropertyFile({
     settle({ ok: true });
     /* The home remembers its electrics are an EIC, so its row and the
        compliance tiles say so from now on (lib/home-facts). */
-    if (eic && effectiveId && /^(\d+|pm-[0-9a-f-]+)$/i.test(effectiveId)) {
+    if (eic && effectiveId && /^(\d+|pm-[0-9a-f-]+|mt-[a-z0-9]+)$/i.test(effectiveId)) {
       await fetch("/api/home-facts", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ home: effectiveId, electrical: "eic", eicReason: pending.eicReason }) }).catch(() => null);
     }
     setPending(null);
@@ -408,7 +409,7 @@ export default function PropertyFile({
 
   return (
     <section className="rounded-[22px] border border-line/50 bg-white p-5">
-      <input ref={input} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void chose(f); }} />
+      <input ref={input} type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void chose(f); }} />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-center gap-2.5 text-[14px]">
           <DoodleIcon name="shield" size={17} className="text-accent-dark" />
@@ -453,7 +454,7 @@ export default function PropertyFile({
             <>
               {pending.read && (
                 <p className="mt-1 text-[12px] leading-relaxed text-muted">
-                  Reads as {looksLikeEic(pending.read) ? "an EIC" : TYPE_LABEL[READER_TO_TYPE[pending.read.type] ?? pending.read.type] ?? pending.read.type}
+                  Reads as {looksLikeEic(pending.read) ? "an EIC" : CERT_KIND_LABEL[READER_TO_TYPE[pending.read.type] ?? pending.read.type] ?? pending.read.type}
                   {pending.read.expiry ? `, expires ${day(pending.read.expiry)}${pending.read.expiryDerived ? " (worked out from the issue date)" : ""}` : ", no expiry printed"}
                   {pending.read.address ? `. Address on it: ${pending.read.address}` : ""}
                   {pending.read.notes ? ` ${pending.read.notes}` : ""}
@@ -468,18 +469,15 @@ export default function PropertyFile({
                   </select>
                 </label>
                 <label className="text-[11px] text-muted">
-                  {filesOnIssueDate(pending.type) ? "Expires (optional)" : "Expires"}
+                  {kindFilesOnIssueDate(pending.type) ? "Expires (optional)" : "Expires"}
                   <input type="date" value={pending.expiry} onChange={(e) => setPending((p) => (p ? { ...p, expiry: e.target.value } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink" />
                 </label>
                 <label className="text-[11px] text-muted">
                   Issued
                   <input type="date" value={pending.issue} onChange={(e) => setPending((p) => (p ? { ...p, issue: e.target.value, expiry: p.type === EIC && e.target.value ? cappedEic(e.target.value, p.expiry) : p.expiry } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink" />
                 </label>
-                {filesOnIssueDate(pending.type) && !pending.expiry && (
-                  <p className="text-[11px] leading-snug text-muted sm:col-span-3">
-                    A {pending.type === "portable_appliance_testing" ? "PAT certificate" : "fire safety check"} has no expiry, so it is filed on the day it was {pending.type === "portable_appliance_testing" ? "tested" : "checked"} and counts for {lifeInWords(pending.type)}
-                    {pending.issue && expiryFromIssue(pending.type, pending.issue) ? `, to ${day(expiryFromIssue(pending.type, pending.issue))}` : ""}.
-                  </p>
+                {noExpiryNote(pending.type, pending.issue, pending.expiry, day) && (
+                  <p className="text-[11px] leading-snug text-muted sm:col-span-3">{noExpiryNote(pending.type, pending.issue, pending.expiry, day)}</p>
                 )}
                 {pending.type === EIC && (
                   <label className="text-[11px] text-muted sm:col-span-3">
@@ -558,7 +556,7 @@ export default function PropertyFile({
                     <Pill tone={r.renewal ? "neutral" : s.tone}>{r.renewal ? "With the council" : stateLabel(r)}</Pill>
                   )}
                   <span className="text-[11px] text-muted">
-                    {r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
+                    {r.issued && filesOnIssueDate(r.type) ? `Issued ${day(r.issued)}${r.expiry ? `, ${r.state === "expired" ? "was due" : "due again"} ${day(r.expiry)}` : ""}` : r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
                     {r.renewal ? ` · renewal applied for ${day(r.renewal.appliedOn)}${r.renewal.ref ? ` (ref ${r.renewal.ref})` : ""}, back on the list ${day(r.renewal.holdEnds)} if no new licence` : ""}
                     {r.inRex && !r.fileInRex && r.expiry ? " · no document on file" : ""}
                     {r.fromHouse ? ` · held on ${r.fromHouse}` : ""}

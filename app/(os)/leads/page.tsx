@@ -1133,7 +1133,13 @@ export default function Leads() {
                   const pw = passportWord(l);
                   const vw = viewingWord(l);
                   const facts = [real(l.email), real(l.phone), real(l.budget) && `Budget ${real(l.budget)}`, tenant && real(l.moveDate) && `Moving ${real(l.moveDate)}`].filter(Boolean) as string[];
-                  const who = `${tenant ? "Tenant" : "Landlord"}${manyAgents ? ` · ${l.agent && l.agent !== "Unassigned" ? `for ${l.agent}` : "not assigned"}` : ""}${askedWords(l) ? ` · ${askedWords(l).toLowerCase()}` : ""}${l.declinedBefore ? " · declined before" : ""}`;
+                  /* The tab already says Tenants or Landlords (James, 7 Nov 2026: one page
+                     at a time, sharpened), so the line under the name starts with the agent. */
+                  const who = [
+                    manyAgents ? (l.agent && l.agent !== "Unassigned" ? l.agent : "Not assigned") : "",
+                    askedWords(l) ? askedWords(l).toLowerCase() : "",
+                    l.declinedBefore ? "declined before" : "",
+                  ].filter(Boolean).join(" · ");
                   return (
                     <div key={l.id} className={`nl-leads-row${isOpen ? " is-open" : ""}${openId === l.id ? " is-current" : ""}`}>
                       <button type="button" data-steve-row="" className="nl-leads-rowbtn" aria-expanded={isOpen} onClick={() => setNlOpenRow(isOpen ? null : l.id)}>

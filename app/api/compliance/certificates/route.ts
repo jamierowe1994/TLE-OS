@@ -1,4 +1,6 @@
+import { isOsPropertyId } from "@/lib/os-properties";
 import { NextRequest, NextResponse } from "next/server";
+import { certFilesAs } from "@/lib/cert-kinds";
 import { requireAnyCapability, whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { pendingKeyFor } from "@/lib/property-match";
@@ -131,7 +133,11 @@ async function post(req: NextRequest) {
      and the file waits there for the property. */
   const address = String(form.get("address") ?? "").trim().slice(0, 200);
   const propertyId = String(form.get("propertyId") ?? "").trim() || (address ? pendingKeyFor(address) : "");
-  const type = String(form.get("type") ?? "").trim();
+  /* What was picked, and the REX type it is filed as: a fire risk assessment
+     and an emergency lighting certificate are offered by name and both file
+     as REX's one fire type (lib/cert-kinds). */
+  const chosen = String(form.get("type") ?? "").trim();
+  const type = certFilesAs(chosen);
   const typedExpiry = String(form.get("expiry") ?? "").trim();
   const issueRaw = String(form.get("issue") ?? "").trim();
   const propertyName = (String(form.get("propertyName") ?? "").trim() || address).slice(0, 200);
@@ -140,13 +146,13 @@ async function post(req: NextRequest) {
      this one takes the place of. It comes off once this one is kept. */
   const replacesKey = String(form.get("replaces") ?? "").trim();
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
-  if (!/^(\d+|pending-[a-z0-9-]+|pm-[0-9a-f-]+)$/i.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, an OS property id, or give an address." }, { status: 400 });
+  if (!/^(\d+|pending-[a-z0-9-]+)$/i.test(propertyId) && !isOsPropertyId(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, an OS property id, or give an address." }, { status: 400 });
   if (!CERT_TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...CERT_TYPES].join(", ")}.` }, { status: 400 });
   /* A PAT or fire safety certificate carries no expiry, only the day it was
      tested (Lianna Denholm, 1 Nov 2026): the issue date is enough, and it runs
      the type's usual life from there (lib/certificate-intake certificateExpiry). */
   if (!typedExpiry && filesOnIssueDate(type) && !issueRaw) {
-    return NextResponse.json({ ok: false, error: `A ${type === "portable_appliance_testing" ? "PAT" : "fire safety"} certificate needs the date it was tested. Put it in as Issued. Nothing was kept.` }, { status: 400 });
+    return NextResponse.json({ ok: false, error: `A ${type === "portable_appliance_testing" ? "PAT report needs the date it was tested" : "fire safety certificate needs the date it was checked"}. It has no expiry date, so put that day in as Issued. Nothing was kept.` }, { status: 400 });
   }
   const issueBad = issueRaw ? dateProblem(issueRaw, "issue") : null;
   const expiry = issueBad ? typedExpiry : certificateExpiry(type, typedExpiry, issueRaw);
@@ -171,7 +177,7 @@ async function post(req: NextRequest) {
       contentType: file.type,
       propertyId,
       propertyName,
-      type,
+      type: chosen,
       expiry,
       issue: issueRaw || null,
       source,

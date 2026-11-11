@@ -11,7 +11,7 @@ import { hasDb, q } from "@/lib/db";
  * (REX PM goes at launch): nothing is written back to REX PM.
  */
 
-export type TenantContact = { email: string | null; phone: string | null };
+export type TenantContact = { email: string | null; phone: string | null; shownAs?: string | null };
 
 let ready: Promise<void> | null = null;
 export function ensureTenantContacts(): Promise<void> {
@@ -25,7 +25,13 @@ export function ensureTenantContacts(): Promise<void> {
       source_ref TEXT,
       imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (os_property_id, name_key)
-    )`).then(() => undefined).catch((e) => {
+    )`)
+    /* The name as an agent put it right (Lianna Denholm, 9 Nov 2026, ticket
+       00f77ec4): the tenancy record holds many tenants as an initial and a
+       surname ("A Clark"), and the name could not be changed here. The row
+       stays keyed by the record's own spelling, so the record still finds it. */
+    .then(() => q(`ALTER TABLE os_tenant_contacts ADD COLUMN IF NOT EXISTS shown_as TEXT`))
+    .then(() => undefined).catch((e) => {
       ready = null;
       throw e;
     });
@@ -42,13 +48,13 @@ export async function tenantContacts(): Promise<Map<string, Map<string, TenantCo
   const out = new Map<string, Map<string, TenantContact>>();
   if (!hasDb()) return out;
   await ensureTenantContacts();
-  const rows = await q<{ os_property_id: string; name_key: string; email: string | null; phone: string | null }>(
-    `SELECT os_property_id, name_key, email, phone FROM os_tenant_contacts`,
+  const rows = await q<{ os_property_id: string; name_key: string; email: string | null; phone: string | null; shown_as: string | null }>(
+    `SELECT os_property_id, name_key, email, phone, shown_as FROM os_tenant_contacts`,
     []
   );
   for (const r of rows) {
     const home = out.get(r.os_property_id) ?? new Map<string, TenantContact>();
-    home.set(r.name_key, { email: r.email, phone: r.phone });
+    home.set(r.name_key, { email: r.email, phone: r.phone, shownAs: r.shown_as });
     out.set(r.os_property_id, home);
   }
   return out;
@@ -69,5 +75,24 @@ export async function saveTenantContact(osPropertyId: string, name: string, c: T
      ON CONFLICT (os_property_id, name_key) DO UPDATE
        SET email = EXCLUDED.email, phone = EXCLUDED.phone, source = 'os-edit', source_ref = EXCLUDED.source_ref, imported_at = NOW()`,
     [osPropertyId, name, nameKey(name), c.email, c.phone, by]
+  );
+}
+
+/**
+ * A tenant's name put right on the home's page (Lianna Denholm, 9 Nov 2026,
+ * ticket 00f77ec4). `recordName` is the name as the tenancy record spells it,
+ * which keys the row; `shownAs` is what the OS shows from now on, or blank to
+ * go back to the record's. The email and mobile on the row are kept.
+ */
+export async function saveTenantName(osPropertyId: string, recordName: string, shownAs: string, by: string, keep: TenantContact = { email: null, phone: null }): Promise<void> {
+  await ensureTenantContacts();
+  const v = shownAs.trim() && nameKey(shownAs) !== nameKey(recordName) ? shownAs.trim() : null;
+  /* A first row for them carries the email and mobile the card shows (from PayProp, say), so they aren't lost. */
+  await q(
+    `INSERT INTO os_tenant_contacts (os_property_id, name, name_key, email, phone, source, source_ref, imported_at, shown_as)
+     VALUES ($1, $2, $3, $4, $5, 'os-edit', $6, NOW(), $7)
+     ON CONFLICT (os_property_id, name_key) DO UPDATE
+       SET shown_as = EXCLUDED.shown_as, source_ref = EXCLUDED.source_ref, imported_at = NOW()`,
+    [osPropertyId, recordName, nameKey(recordName), keep.email || null, keep.phone || null, by, v]
   );
 }

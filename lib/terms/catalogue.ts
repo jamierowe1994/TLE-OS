@@ -2,6 +2,8 @@ import type { Country, TermsDoc } from "@/lib/terms/types";
 import { SCOTLAND_DEC24 } from "@/lib/terms/scotland";
 import { SCOTLAND_OCT26 } from "@/lib/terms/scotland-oct26";
 import { ENGLAND_OCT26 } from "@/lib/terms/england-oct26";
+import { ENGLAND_NOV26 } from "@/lib/terms/england-nov26";
+import { SCOTLAND_NOV26 } from "@/lib/terms/scotland-nov26";
 
 /**
  * Every edition of the terms the OS can send, by id, and which one is current
@@ -16,6 +18,8 @@ export const EDITIONS: Record<string, TermsDoc> = {
   [SCOTLAND_DEC24.id]: SCOTLAND_DEC24,
   [SCOTLAND_OCT26.id]: SCOTLAND_OCT26,
   [ENGLAND_OCT26.id]: ENGLAND_OCT26,
+  [ENGLAND_NOV26.id]: ENGLAND_NOV26,
+  [SCOTLAND_NOV26.id]: SCOTLAND_NOV26,
 };
 
 export const CURRENT: Partial<Record<Country, string>> = {
@@ -25,8 +29,19 @@ export const CURRENT: Partial<Record<Country, string>> = {
   england: ENGLAND_OCT26.id,
 };
 
-export function editionFor(country: Country): TermsDoc | null {
-  const id = CURRENT[country];
+/**
+ * The November 2026 wording (Susan Liles, 4 Nov 2026): bank details and the
+ * landlord declarations on page 2, and the questions about the home asked
+ * before the contract. Sent by whoever has the "Questions before signing"
+ * switch on (lib/new-look termsqs) until it becomes CURRENT for everyone.
+ */
+export const NEXT: Partial<Record<Country, string>> = {
+  scotland: SCOTLAND_NOV26.id,
+  england: ENGLAND_NOV26.id,
+};
+
+export function editionFor(country: Country, next = false): TermsDoc | null {
+  const id = (next ? NEXT[country] : null) ?? CURRENT[country];
   return id ? EDITIONS[id] ?? null : null;
 }
 

@@ -8,8 +8,9 @@ import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
-import { stillOnPortalFeeds } from "@/lib/advert-offline";
+import { markOffline, markOnline, stillOnPortalFeeds } from "@/lib/advert-offline";
 import { ALL_CHANNELS, OFF_CHANNELS, queueUpload, takeAdvertOff, whereFrom } from "@/lib/listing-take-off";
+import { sendFrom, waitForSend } from "@/lib/portal-send";
 import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked, type RexResponse } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -208,10 +209,19 @@ export async function GET(req: NextRequest) {
     const where = whereFrom(status.result, feeds.ok ? feeds.result : undefined);
     const state = own.ok ? String((own.result as { system_listing_state?: unknown } | null)?.system_listing_state ?? "") : "";
     const gone = state !== "" && state !== "current" && !stillOnPortalFeeds(feeds.ok ? feeds.result : undefined);
+    /* A send REX has not finished yet (Sean, 5 Nov 2026): the screen says it
+       is on its way rather than that it is on the portals. */
+    let sending = !gone && where.status === "published" && where.channels.includes("portals") && feeds.ok && sendFrom(feeds.result, 0).state === "sending";
+    /* The held copy may be from while it was still going: ask once more, fresh, before saying so. */
+    if (sending) {
+      const again = await listingRead(id, "ListingPortalUploads", "getStatuses", { listing_id: id, include_last_sent: false }, { fresh: true }).catch(() => null);
+      if (again?.ok) sending = sendFrom(again.result, 0).state === "sending";
+    }
     return NextResponse.json({
       ok: true,
       id,
       ...where,
+      sending,
       ...(gone ? { status: state, onPortals: false } : {}),
       listingState: state || null,
       blockers: [...new Set([...list(iss.errors), ...(upload.ok ? portalMessages(upload.result) : [])].map((m) => forAgent(actor, m, PORTAL_CHECK)))],
@@ -233,6 +243,8 @@ export async function POST(req: NextRequest) {
   }
 
   const b = (await req.json().catch(() => ({}))) as { id?: unknown; action?: unknown };
+  /* When they pressed: the send to the portals is judged from here (lib/portal-send). */
+  const since = Date.now();
 
   /* A TEST LISTING GOES LIVE HERE AND NOWHERE ELSE (James, 13 Oct 2026: a
      tester walks New listing to Push to the portals "without anything
@@ -301,6 +313,17 @@ export async function POST(req: NextRequest) {
         actorEmail: actor.email,
         detail: `${id}: off (${done.was.status ?? "?"} [${done.was.channels.join(",")}] -> ${done.now.status ?? "?"} [${done.now.channels.join(",")}])${token ? "" : " as the office account"}`,
       });
+      /* Read back, and believed only if the channel really went (10 Nov
+         2026): this answered ok whatever came back, so a change REX accepted
+         and did not make read "Taken off" beside a live advert. */
+      if (done.now.status === "published" && done.now.channels.includes("portals")) {
+        return NextResponse.json({ ok: false, error: "The portals did not take that change: the advert is still on. Try again in a minute, and report it if it happens twice." }, { status: 502 });
+      }
+      /* The OS's own Offline marker, the same one Take It Offline and the
+         automatic take-down write (lib/advert-offline). Without it the
+         Listings board showed nothing had changed. A marker that will not
+         save is not a reason to say the take-off failed. */
+      await markOffline(String(id), null, { name: actor.name, email: actor.email }).catch((e) => console.error("[publish] Offline marker not saved", id, e));
       return NextResponse.json({ ok: true, id, action, ...done.now });
     }
 
@@ -418,16 +441,35 @@ export async function POST(req: NextRequest) {
     ]);
     const now = whereFrom(after.ok ? after.result : res.result, feeds.ok ? feeds.result : undefined);
 
+    /* Then the send itself (James, 6 Nov 2026). Usually done in a few
+       seconds, so it is waited for briefly; a slower one is not a failure -
+       the screen says REX is taking a while and the watcher
+       (components/PortalSendWatcher) keeps asking until it is through. */
+    const send = action === "quiet" || !now.channels.includes("portals") ? null : await waitForSend(id, since, 6000).catch(() => null);
+    const sending = Boolean(send && send.state !== "live" && send.state !== "failed") || (action !== "quiet" && now.channels.includes("portals") && !send);
+
     await invalidateListingBook();
     forgetListing(id);
+    /* Back on, or published: the Offline marker goes, so the board stops
+       saying Offline about an advert that is up (10 Nov 2026). */
+    if (now.channels.includes("portals")) await markOnline(String(id)).catch((e) => console.error("[publish] Offline marker not cleared", id, e));
     await record({
       kind: "listing_publication",
       actorId: actor.id,
       actorEmail: actor.email,
-      detail: `${id}: ${action} (${was.status ?? "?"} [${was.channels.join(",")}] -> ${now.status ?? "?"} [${now.channels.join(",")}])${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"}`,
+      detail: `${id}: ${action} (${was.status ?? "?"} [${was.channels.join(",")}] -> ${now.status ?? "?"} [${now.channels.join(",")}])${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"}${send ? `, portals: ${send.state}${send.refused.length ? ` (${send.refused.map((r) => `${r.portal}: ${r.why}`).join("; ").slice(0, 200)})` : ""}` : sending ? ", portals: not read" : ""}`,
     });
 
-    return NextResponse.json({ ok: true, id, action, ...now });
+    return NextResponse.json({
+      ok: true,
+      id,
+      action,
+      ...now,
+      since,
+      sending,
+      portals: send?.state === "live" ? send.portals : [],
+      refused: send?.state === "failed" ? send.refused.map((r) => ({ portal: r.portal, why: forAgent(actor, r.why, "It did not pass that portal's checks.") })) : [],
+    });
   } catch (e) {
     if (e instanceof RexWriteBlocked) {
       const method = e.message.match(/Refusing to call (\S+)/)?.[1] ?? (action === "publish" || action === "quiet" ? "ListingPublication/publish" : "ListingPublication/setActivePublicationChannels");

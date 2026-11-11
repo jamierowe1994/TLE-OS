@@ -1069,7 +1069,7 @@ export async function adoptTestKit(p: { by: { email: string; name?: string | nul
 }
 
 /** Our own photographs, so a test advert passes the Photos check. */
-const TEST_PHOTOS = ["/brand/photo/property.jpg", "/brand/photo/cover-terrace.webp", "/brand/photo/marketing.jpg", "/brand/photo/property-sample.webp"];
+const TEST_PHOTOS = ["/brand/photo/property-real.jpg", "/brand/photo/cover-terrace.webp", "/brand/photo/marketing-real.jpg", "/brand/photo/property-sample-real.webp"];
 
 /**
  * A test listing, as a DRAFT, on the kit that owns the file. Filled in enough

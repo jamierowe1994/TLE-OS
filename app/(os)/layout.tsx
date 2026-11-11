@@ -10,9 +10,12 @@ import SetupGate from "@/components/SetupGate";
 import Tour from "@/components/Tour";
 import SteveGuide from "@/components/SteveGuide";
 import DocumentSheet from "@/components/DocumentSheet";
+import FileClickCatcher from "@/components/FileClickCatcher";
+import TicketFixedNotice from "@/components/TicketFixedNotice";
 import GuideLayer from "@/components/GuideLayer";
 import Watchdog from "@/components/Watchdog";
 import Toaster from "@/components/Toaster";
+import PortalSendWatcher from "@/components/PortalSendWatcher";
 import PlcSendCard from "@/components/PlcSendCard";
 import MailLinksNewTab from "@/components/MailLinksNewTab";
 
@@ -59,6 +62,8 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
         {/* The certificate viewer, up from the bottom of whichever page a
             file was opened on. Drawers slide aside for it (lib/doc-sheet). */}
         <DocumentSheet />
+        <FileClickCatcher />
+        <TicketFixedNotice />
         {/* An agent guide, popped over whichever screen asked for it (Steve's
             Guides tab, a How this works button, or ?walkthrough=<id>). */}
         <Suspense fallback={null}>
@@ -74,6 +79,8 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
             than in a drawer, so a save that lands as a drawer closes is still
             heard. */}
         <Toaster />
+        {/* A listing REX is still sending to the portals: watched on every page, a toast when it's live. */}
+        <PortalSendWatcher />
         {/* A PLC check reading in the background, in the corner on every page. */}
         <PlcSendCard />
       </IntroGate>

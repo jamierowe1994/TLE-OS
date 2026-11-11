@@ -59,7 +59,13 @@ export default function ListingOwner({ listingId }: { listingId: string | number
         setAgent(j.agent ?? null);
         setPicking(false);
         const first = (j.agent?.name ?? "").split(/\s+/)[0] || "They";
-        setNote({ tone: "good", text: `Moved. ${first} will see it on their board within a minute.` });
+        /* The owner moves by a separate REX call (9 Nov 2026); say so when it did not. */
+        const ownerStuck = [j.owner, j.property].some((s: unknown) => typeof s === "string" && s !== "moved" && s !== "untouched");
+        setNote(
+          ownerStuck
+            ? { tone: "bad", text: `${first} is now the agent, but the owner in REX did not move${j.owner === "locked" || j.property === "locked" ? " (owner moves are not switched on yet)" : ""}. Ask James to move it.` }
+            : { tone: "good", text: `Moved. ${first} will see it on their board within a minute.` }
+        );
       }
     } catch {
       setNote({ tone: "bad", text: "That did not save. Try again in a minute." });

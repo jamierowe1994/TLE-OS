@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireCapability } from "@/lib/admin";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { publicOrigin } from "@/lib/origin";
 import { MAIL_IMG_PREFIX, MAIL_IMG_TYPES } from "@/lib/mail-images";
 
@@ -26,15 +27,18 @@ export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No picture came through." }, { status: 400 });
-  const ext = MAIL_IMG_TYPES[file.type];
-  if (!ext) return NextResponse.json({ ok: false, error: "That needs to be a JPG, PNG, GIF or WebP picture." }, { status: 400 });
-  if (file.size > MAX) return NextResponse.json({ ok: false, error: "That picture is over 5MB. Emails load slowly with big pictures; try a smaller one." }, { status: 400 });
+  /* One judge for every upload route (lib/upload-rules): the refusal names
+     the file and what would be taken, and a picture the browser gave no type
+     goes by its extension. */
+  const judged = judgeFile(file, { types: Object.keys(MAIL_IMG_TYPES), maxBytes: MAX });
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.status === 413 ? `${judged.error} Emails load slowly with big pictures.` : judged.error }, { status: 400 });
+  const ext = MAIL_IMG_TYPES[judged.type];
 
   const name = `${randomUUID()}.${ext}`;
   const body = new Uint8Array(await file.arrayBuffer());
   try {
     await withR2((client) =>
-      client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: `${MAIL_IMG_PREFIX}/${name}`, Body: body, ContentType: file.type }))
+      client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: `${MAIL_IMG_PREFIX}/${name}`, Body: body, ContentType: judged.type }))
     );
   } catch (e) {
     console.error("Newsletter image upload failed", publicError(e));

@@ -4,7 +4,8 @@ import { hasDb, q } from "@/lib/db";
 import { DOC_KINDS } from "@/lib/landlord-account";
 import { readable, readsFor, REGISTERS, type RegisterRead } from "@/lib/cert-register";
 import { heldComplianceBook } from "@/lib/compliance-cache";
-import { fileCertificate, PLAUSIBLE, REAL_DAY, releaseHeldCertificate, shareOnceChecked } from "@/lib/certificate-intake";
+import { certificateExpiry, fileCertificate, PLAUSIBLE, REAL_DAY, releaseHeldCertificate, shareOnceChecked } from "@/lib/certificate-intake";
+import { certFilesAs, FIRE_KINDS, kindFilesOnIssueDate } from "@/lib/cert-kinds";
 import { pendingKeyFor } from "@/lib/property-match";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { documentQueriedEmail, queryReplyEmail } from "@/lib/email/agent-emails";
@@ -312,7 +313,8 @@ const LANDLORD_CERT_TYPES: Record<string, { id: string; label: string }[]> = {
     { id: "additional_hmo_license", label: "Additional HMO licence" },
     { id: "selective_hmo_license", label: "Selective licence" },
   ],
-  fire: [{ id: "emergency_lighting_fire_exit", label: "Fire safety" }],
+  /* Offered by name; all three file as REX's one fire type (lib/cert-kinds). */
+  fire: FIRE_KINDS.map((k) => ({ id: k.id, label: k.label })),
   pat: [{ id: "portable_appliance_testing", label: "PAT" }],
   alarms: [
     { id: "smoke_alarms", label: "Smoke alarms" },
@@ -679,10 +681,20 @@ export async function answer(p: {
     const types = LANDLORD_CERT_TYPES[kinds[0]?.kind ?? ""];
     if (types) {
       const f = p.fileAs;
-      if (!f?.expiry || !PLAUSIBLE(f.expiry)) throw new Error("Put the date it runs out in first, so it can be filed as a certificate.");
-      if (f.issue && !REAL_DAY(f.issue)) throw new Error("The issue date needs to be a date.");
-      const type = types.some((t) => t.id === f.type) ? f.type : types[0].id;
-      const said = await fileLandlordCertificate({ id: p.id, type, expiry: f.expiry, issue: f.issue ?? null, by: p.by });
+      const type = f && types.some((t) => t.id === f.type) ? f.type : types[0].id;
+      if (f?.issue && !REAL_DAY(f.issue)) throw new Error("The issue date needs to be a date.");
+      /* A PAT report or a fire safety certificate has no expiry, only the day
+         it was done: that day is enough (lib/certificate-intake
+         certificateExpiry), as it is on every other door since 10 Nov 2026. */
+      const expiry = certificateExpiry(certFilesAs(type), f?.expiry, f?.issue);
+      if (!expiry || !PLAUSIBLE(expiry)) {
+        throw new Error(
+          kindFilesOnIssueDate(type) && !f?.expiry
+            ? "Put the date it was done in as Issued first, so it can be filed as a certificate. It has no expiry date."
+            : "Put the date it runs out in first, so it can be filed as a certificate."
+        );
+      }
+      const said = await fileLandlordCertificate({ id: p.id, type, expiry, issue: f?.issue ?? null, by: p.by });
       await recordCheck(p);
       return said;
     }

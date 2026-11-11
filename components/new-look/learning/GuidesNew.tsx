@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Mast } from "@/components/new-look/Parts";
-import { BookMotif, coverPattern, TleMark } from "./Covers";
+import { TleMark } from "./Covers";
+import { TilePicture, guideMotif, seedScheme } from "./TileArt";
 import { Back } from "./LearningHub";
 
 /**
@@ -63,7 +64,7 @@ export default function GuidesNew() {
   const filtering = who !== "all" || where !== "all" || q.trim() !== "";
 
   return (
-    <div data-look="new" className="nl-page nl-rise nl-lr">
+    <div data-look="new" className="nl-page nl-rise nl-lr nl-edge">
       <Back href="/tools/learning" label="Learning" />
       <Mast title="Guides" blurb="Every guide, checklist and playbook we have, in one place. Open one to read it, or save it to send on." />
 
@@ -130,10 +131,10 @@ export default function GuidesNew() {
                 {shown.map((g, i) => (
                   <article key={g.id} className={`nl-lr-book is-${g.audience}`} style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }}>
                     <a className="nl-lr-book-main" href={`/api/tools/learning/open?id=${g.id}`} target="_blank" rel="noreferrer">
-                      <span className={`nl-lr-cover is-pat${coverPattern(g.id)}`} aria-hidden>
+                      <span className={`nl-lr-cover nl-ta is-s${seedScheme(g.id)}`} aria-hidden>
                         <TleMark />
                         <span className="nl-lr-cover-art">
-                          <BookMotif audience={g.audience} />
+                          <TilePicture id={guideMotif(g.title, g.audience)} kind="page" />
                         </span>
                       </span>
                       <span className="nl-lr-tags">

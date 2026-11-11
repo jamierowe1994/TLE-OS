@@ -604,7 +604,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   const barSeries = [
     {
       name: "Combined GCI (exc VAT)",
-      color: "#cfa096",
+      color: "#c4a092",
       values: monthKeys.map((k) => cell(gciRow, k)),
     },
     {
@@ -817,7 +817,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
             {live ? (
               <Donut
                 segments={[
-                  { label: "TLE net", value: Math.round(live.agencyIncome), color: "#cfa096" },
+                  { label: "TLE net", value: Math.round(live.agencyIncome), color: "#c4a092" },
                   { label: "Associates", value: Math.round(live.paidToBeneficiaries), color: "#56423e" },
                 ]}
                 centerLabel={gbp(live.combinedGci)}

@@ -986,7 +986,19 @@ export function ComplianceSide({
             className="mt-3 w-full rounded-xl border border-line/70 bg-white px-4 py-3 text-[13.5px] outline-none transition focus:border-ink/40"
           />
           <div className="mt-3 flex flex-wrap gap-3">
-            <Btn onClick={() => act("check", { note })} busy={busy === "check"} tone="primary" disabled={!canCheck}>
+            {/* Josel Banagua, ticket 8eb6adce (8 Nov 2026): straight to Susan
+                from the first check, without a second press on the next step. */}
+            {data.me?.finalAsk?.canSend && data.me.finalAsk.approver ? (
+              <Btn onClick={() => act("check", { note, sendToFinal: true })} busy={busy === "check"} tone="primary" disabled={!canCheck}>
+                Checked, Send to {data.me.finalAsk.approver.firstName}
+              </Btn>
+            ) : null}
+            <Btn
+              onClick={() => act("check", { note })}
+              busy={busy === "check"}
+              tone={data.me?.finalAsk?.canSend ? "plain" : "primary"}
+              disabled={!canCheck}
+            >
               Checked, pass for approval
             </Btn>
             <Btn onClick={() => act("decide", { decision: "deferred", note })} busy={busy === "decide"} disabled={!canCheck}>

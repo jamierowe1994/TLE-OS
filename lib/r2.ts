@@ -1,4 +1,5 @@
 import { CopyObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { fileType, storedName } from "@/lib/upload-rules";
 
 /**
  * Cloudflare R2, spoken to over the S3 protocol.
@@ -268,9 +269,21 @@ export function safeName(name: string): string {
   return (cleaned || "file").slice(-120);
 }
 
+/**
+ * A key that could climb out of its folder: a "." or ".." standing on its own
+ * between the slashes, or a backslash. A double dot inside a name is not one
+ * (Rhiannon Dodge, ticket dd725a83, 9 Nov 2026): Propoly's move-in pack sends
+ * "Electrical installation condition report..pdf", it was kept under that
+ * name before the 2 Nov tidy below, and every check that refused any ".."
+ * showed it on the home's Documents tab as "Not a valid file reference."
+ */
+export function keyClimbs(key: string): boolean {
+  return key.includes("\\") || key.split("/").some((part) => part === "." || part === "..");
+}
+
 /** A key is only ours if it sits under a prefix we issued. */
 export function keyIsOurs(key: string): boolean {
-  if (!key || key.includes("..") || key.startsWith("/")) return false;
+  if (!key || keyClimbs(key) || key.startsWith("/")) return false;
   return Object.values(SCOPES).some((s) => key.startsWith(`${s.prefix}/`));
 }
 
@@ -289,13 +302,15 @@ export function keyIsOurs(key: string): boolean {
 const JPEG_ALIAS = /\.(jfif|jpe|pjpeg|pjp)$/i;
 
 /** "GSR 24.07.2027.jfif" -> "GSR 24.07.2027.jpg"; anything else as it was. */
-export function jpegName(name: string): string {
-  return name.replace(JPEG_ALIAS, ".jpg");
-}
+export const jpegName = storedName;
 
-/** The content type to keep a file under: a JPEG alias is image/jpeg whatever the browser said. */
+/**
+ * The content type to keep a file under: a JPEG alias is image/jpeg whatever
+ * the browser said, and a file the browser gave no type goes by its extension
+ * (lib/upload-rules fileType, the one place that decides).
+ */
 export function keptType(name: string, type: string | null | undefined): string {
-  return JPEG_ALIAS.test(name) || /^image\/(pjpeg|jfif)$/i.test(type ?? "") ? "image/jpeg" : type || "";
+  return fileType(name, type);
 }
 
 /**

@@ -59,11 +59,11 @@ export default function StatTile({
   );
   const cls = `fade-up block w-full rounded-2xl border p-5 text-left transition-colors ${fill} ${ring}`;
   return onClick ? (
-    <button type="button" onClick={onClick} className={cls}>
+    <button type="button" onClick={onClick} className={cls} data-stat-tile={tone ?? ""}>
       {body}
     </button>
   ) : (
-    <div className={cls}>{body}</div>
+    <div className={cls} data-stat-tile={tone ?? ""}>{body}</div>
   );
 }
 

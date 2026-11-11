@@ -162,7 +162,13 @@ export async function POST(req: NextRequest) {
     if (skipped.length) await logEvent(order.id, by, "note", `Raised with ${skipped.map((x) => x.toLowerCase()).join(" and ")} skipped for now. Check ${skipped.length === 1 ? "it" : "them"} on the job.`);
     /* The step emails, after the job is safe. Each outcome goes on the
        timeline so the sheet says who was told. */
-    const emails = await emailsForMove(order, "raised", subject ?? actor).catch(() => []);
+    /* The works order in the agent's own words, when they changed it on the last screen (James, 8 Nov 2026). */
+    const ce = (b as { contractorEdit?: { subject?: unknown; body?: unknown } }).contractorEdit;
+    const contractorEdit = ce && typeof ce === "object"
+      ? { subject: typeof ce.subject === "string" ? ce.subject.slice(0, 200) : null, body: typeof ce.body === "string" ? ce.body.slice(0, 6000) : null }
+      : null;
+    const emails = await emailsForMove(order, "raised", subject ?? actor, { contractorEdit }).catch(() => []);
+    if (contractorEdit?.body?.trim() && order.contractorContactedAt) await logEvent(order.id, by, "note", "The works order was reworded before it went.");
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
     /* Quote first (Sean, 20 Oct 2026): the contractor is asked for a price,
        and no works order goes until it is approved. */

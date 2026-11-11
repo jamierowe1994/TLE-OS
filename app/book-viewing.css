@@ -294,3 +294,48 @@
 .bvw .code { border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 10px; background: #fff; width: 100%; }
 .bvw .agents button .av .ic { width: 14px; height: 14px; }
 .bvw .rcp .who > span:not(.av) { min-width: 0; }
+
+/* ===========================================================================
+   THE FINAL PALETTE AND THE WEBSITE'S EDGE (James, 8 Nov 2026: "redo these
+   processes with the new styling in place"). Same window, same steps: the
+   colours become the house's, corners go square, titles take the condensed
+   capitals, and the window is one solid panel over a lighter dim.
+=========================================================================== */
+.bvw {
+  --coral: #a85a51; --coral-soft: #f5efe6; --clay: #8a463f; --sage: #56634a; --sage-soft: #f1f4ec;
+  --manilla: #f5efe6; --oat: #e8ddcd; --forest: #56423e; --grey: #f8f7f4; --well: #efece6;
+  --brown: #56423e;
+  --f-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+}
+.bvw *:not(.radio):not(.av):not(.here):not([class*="spin"]) { border-radius: 0 !important; }
+.bvw .now-ln::before, .bvw .radio, .bvw .day .here { border-radius: 50% !important; }
+.bvw .bv-scrim { background: rgba(20, 20, 19, .34); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.bvw .bv-box { border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); }
+/* Titles in the condensed capitals. */
+.bvw .bv-head h2, .bvw .feature b, .bvw .find h3, .bvw .strip-h b, .bvw .dayhead b, .bvw .tk-home b {
+  font-family: var(--f-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .03em;
+}
+.bvw .bv-head h2 { font-size: 30px; }
+.bvw .bv-head h2 span { color: var(--muted); }
+.bvw .k { font-family: var(--f-cond); font-stretch: 75%; font-weight: 500; font-size: 11px; letter-spacing: .14em; color: var(--muted); }
+/* Buttons: brown for the main one, square, small capitals. */
+.bvw .btn { font-family: var(--f-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .12em; font-size: 12.5px; }
+.bvw .btn.primary { background: var(--brown); border-color: var(--brown); color: #fff; }
+.bvw .btn.primary:hover { background: color-mix(in srgb, var(--brown) 84%, #000); border-color: color-mix(in srgb, var(--brown) 84%, #000); color: #fff; }
+.bvw .btn:not(.primary):hover { background: var(--ink); border-color: var(--ink); color: #fff; }
+/* The steps across the top: square, terracotta for where you are. */
+.bvw .steps button { padding: 7px 12px 7px 7px; border: 1px solid transparent; }
+.bvw .steps button.on { background: var(--coral-soft); color: var(--ink); border-color: var(--line-2); }
+.bvw .steps button.on i { background: var(--coral); color: #fff; }
+.bvw .steps button.done i { background: var(--sage); color: #fff; }
+.bvw .x { border-color: var(--line-2); }
+/* The booked block and its ghost in terracotta, with white words. */
+.bvw .bk { background: var(--coral); color: #fff; box-shadow: 0 6px 16px rgba(168, 90, 81, .25); }
+.bvw .bk span { color: rgba(255, 255, 255, .9); }
+.bvw .bk .grip { background: rgba(255, 255, 255, .5); }
+.bvw .tl-ghost { border-color: var(--coral); color: var(--clay); background: rgba(168, 90, 81, .06); }
+.bvw .day .cap i { background: var(--sage); }
+.bvw :focus-visible { outline-color: var(--coral); }
+/* Days, homes and suggestions: hairlines, a dark edge when picked. */
+.bvw .day, .bvw .hm, .bvw .sug { border-color: var(--line-2); }
+.bvw .tk-home, .bvw .tk-rows, .bvw .tk-who { border: 1px solid var(--line); }

@@ -339,7 +339,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
 
     return (
       <SaveScopeProvider scope={saves}>
-        <div data-look="new" className="nl-page nl-rise nl-appr">
+        <div data-look="new" className="nl-page nl-rise nl-appr nl-edge">
           <div className="nl-crumbs">
             <Link href="/market-appraisals" className="nl-crumb">
               <Ico name="back" size={14} /> Market Appraisals
@@ -472,60 +472,60 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           <div key={nlTab} className="nl-pane">
             {nlTab === "overview" && (
               <div className="nl-bento">
-                {/* The stages opened out, with the small ticks read from the record. */}
-                <section className="nl-cell span2">
-                  <div className="nl-cell-head">
-                    <h3 className="nl-block-title">Where It&apos;s Up To</h3>
-                    <span className="nl-meta">Stage {at + 1} of {spine.length}</span>
-                  </div>
-                  <ol className="nl-appr-stages">
-                    {spine.map((s, i) => {
-                      const here = s.id === live;
-                      const done = i < at || (live === "won" && here);
-                      const ticks = (ma.ticks ?? []).filter((t) => t.stage === s.id);
-                      const ticked = ticks.filter((t) => t.done).length;
-                      const isOpen = openIdx === i;
-                      return (
-                        <li key={s.id} className={`nl-appr-stage ${done ? "is-done" : here ? "is-now" : "is-next"}${isOpen ? " is-open" : ""}`}>
-                          <button type="button" className="nl-appr-stage-head" aria-expanded={isOpen} onClick={() => setOpenStage(isOpen ? -1 : i)}>
-                            <span className="nl-appr-dot">{done ? <Ico name="check" size={12} /> : i + 1}</span>
-                            <span className="nl-appr-stage-name">{s.label}</span>
-                            <span className="nl-meta">{done ? "Done" : here ? (ticks.length ? `${ticked} of ${ticks.length}` : "Now") : ticks.length && ticked ? `${ticked} of ${ticks.length}` : "Not yet"}</span>
-                            <svg className="nl-appr-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                              <path d="M6 9l6 6 6-6" />
-                            </svg>
-                          </button>
-                          <div className={`nl-collapse${isOpen ? " is-open" : ""}`}>
-                            <div>
-                              <div className="nl-appr-stage-body">
-                                {here && <p className="nl-meta">{s.blurb.replace(/\s*—\s*/g, " - ")}</p>}
-                                {ticks.length > 0 ? (
-                                  <ul className="nl-appr-ticks">
-                                    {ticks.map((t) => (
-                                      <li key={t.id} title={t.at ? new Date(t.at).toLocaleString("en-GB") : undefined}>
-                                        <span className={`nl-appr-check${t.done ? " on" : ""}`} aria-label={t.done ? "Done" : "Not done"}>
-                                          {t.done && <Ico name="check" size={11} />}
-                                        </span>
-                                        <span className={t.done ? "" : "nl-appr-tick-todo"}>{t.label}</span>
-                                        {t.detail ? <span className="nl-meta">{t.detail}</span> : t.done && t.at ? <span className="nl-mono">{day(t.at)}</span> : null}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : (
-                                  !here && <p className="nl-meta">Nothing to tick at this stage.</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                  <p className="nl-appr-foot">
-                    <Ico name="arrow" size={14} />
-                    Once terms are signed this stops being an appraisal and becomes a listing.
-                  </p>
-                </section>
+                {/* What happened last and what's next (James, 8 Nov 2026): the
+                    spine above already says where it's up to, so this box
+                    doesn't list the stages a second time. */}
+                {(() => {
+                  const all = spine.flatMap((st) => (ma.ticks ?? []).filter((t) => t.stage === st.id).map((t) => ({ ...t, stageLabel: st.label })));
+                  const doneTicks = all.filter((t) => t.done).sort((x, y) => (y.at ?? "").localeCompare(x.at ?? ""));
+                  const last = doneTicks[0] ?? null;
+                  const hereTicks = all.filter((t) => t.stage === live);
+                  const next = hereTicks.find((t) => !t.done) ?? all.find((t) => !t.done) ?? null;
+                  const recent = doneTicks.slice(1, 4);
+                  return (
+                    <section className="nl-cell span2 nl-appr-latest">
+                      <div className="nl-cell-head">
+                        <h3 className="nl-block-title">Latest and Next</h3>
+                        <span className="nl-meta">{spine[at]?.label ?? ""}</span>
+                      </div>
+                      <div className="nl-appr-ln">
+                        <div className="nl-appr-ln-box is-last">
+                          <span className="nl-appr-ln-k">Latest</span>
+                          {last ? (
+                            <>
+                              <b>{last.label}</b>
+                              <span className="nl-meta">{[last.detail, last.at ? day(last.at) : null].filter(Boolean).join(" · ")}</span>
+                            </>
+                          ) : (
+                            <b className="nl-meta">Nothing done yet</b>
+                          )}
+                        </div>
+                        <div className="nl-appr-ln-box is-next">
+                          <span className="nl-appr-ln-k">Next</span>
+                          {next ? (
+                            <>
+                              <b>{next.label}</b>
+                              <span className="nl-meta">{next.stageLabel}</span>
+                            </>
+                          ) : (
+                            <b>{live === "won" ? "All done" : spine[at]?.blurb?.replace(/\s*—\s*/g, " - ") ?? "Nothing waiting"}</b>
+                          )}
+                        </div>
+                      </div>
+                      {recent.length > 0 && (
+                        <ul className="nl-appr-ln-recent">
+                          {recent.map((t) => (
+                            <li key={t.id}>
+                              <span className="nl-appr-check on" aria-hidden><Ico name="check" size={11} /></span>
+                              <span>{t.label}</span>
+                              <span className="nl-mono">{t.at ? day(t.at) : ""}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  );
+                })()}
 
                 {/* The landlord, fixed until the pencil (James, 24 Oct 2026): no
                     add buttons under it; the pencil opens the changes, the

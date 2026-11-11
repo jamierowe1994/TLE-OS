@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -129,7 +130,7 @@ export default function PersonalCompliance({ look }: { look?: "new" } = {}) {
               )}
               <input
                 type="file"
-                accept="application/pdf,image/*"
+                accept={ACCEPT_EVIDENCE}
                 className="hidden"
                 disabled={uploading}
                 onChange={async (e) => {

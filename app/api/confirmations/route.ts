@@ -13,6 +13,7 @@ import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view
 import { getUpdate, settleRecipient } from "@/lib/customer-updates";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
+import { loadAttachments } from "@/lib/email-attach";
 import { logSystemEvent } from "@/lib/business/deal-store";
 import { logToPortal, portalText } from "@/lib/portal-log";
 import { withBodyHtml } from "@/lib/customer-update-copy";
@@ -163,7 +164,10 @@ export async function POST(req: NextRequest) {
            (lib/mail-threads, 21 Oct 2026). */
         const plcCase = u.key.startsWith("plc:") ? u.key.split(":")[1] : null;
         const marker = plcCase ? newMarker() : null;
-        const r = await sendAsAgent({ me: actor, to: who.email, toName: who.name, subject, html, ...(marker ? { headers: { [THREAD_HEADER]: marker } } : {}) });
+        /* Attachments from the file or the agent's computer (8 Nov 2026). */
+        const att = await loadAttachments((body as Record<string, unknown>).attachments);
+        if (!att.ok) return NextResponse.json({ sent: false, detail: att.error });
+        const r = await sendAsAgent({ me: actor, to: who.email, toName: who.name, subject, html, ...(att.files.length ? { attachments: att.files } : {}), ...(marker ? { headers: { [THREAD_HEADER]: marker } } : {}) });
         if (r.sent && plcCase && marker && r.via === "mailbox") {
           await threadStarted({ caseId: plcCase, userId: actor.id, marker, subject, to: who.email, what: `PLC decision to the ${who.role}`, by: actor.name || actor.email });
         }

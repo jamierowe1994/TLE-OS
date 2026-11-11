@@ -710,7 +710,7 @@ async function marketStages(o: {
     beds: 2,
     baths: 1,
     propertyType: "Terraced house",
-    images: ["/brand/photo/property.jpg", "/brand/photo/cover-terrace.webp", "/brand/photo/marketing.jpg", "/brand/photo/property-sample.webp"],
+    images: ["/brand/photo/property-real.jpg", "/brand/photo/cover-terrace.webp", "/brand/photo/marketing-real.jpg", "/brand/photo/property-sample-real.webp"],
     heading: `Two bedroom terrace, ${o.name.replace(/^\d+\s+/, "")}, Didsbury`,
     body: "A bright two bedroom terrace a short walk from Didsbury village and the tram. Two doubles, a newly fitted kitchen, a south-facing garden and gas central heating. Available now, unfurnished. (A test listing - it is not really on the portals.)",
     publishedAt: new Date(Date.now() - 6 * 86400000).toISOString(),

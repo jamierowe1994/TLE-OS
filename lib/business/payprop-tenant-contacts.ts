@@ -273,3 +273,274 @@ export function homeTenancies(
   }
   return { theirs, next: people.length ? { startDate: start, people } : null };
 }
+
+/**
+ * THE HOME'S LAST TENANCY, WHEN NOBODY IS IN IT NOW (Sean McMahon, 6 Nov
+ * 2026). From PayProp's tenant records on one home, joined by its address as
+ * homeTenancies is: the start and end of the tenancy that ended last, or null
+ * while any tenancy on the home is current, or when PayProp holds none there
+ * with an end date. A record PayProp holds as Inactive with no end date is
+ * over, but says nothing about when, so it is not the last.
+ */
+export function homeLastTenancy(
+  rows: Array<Record<string, unknown>>,
+  home: { address?: string | null; name: string; postcode?: string | null },
+  today = londonToday()
+): { startDate: string | null; endDate: string } | null {
+  const key = rentKey(home.address || home.name, home.postcode);
+  if (!key) return null;
+  let last: { startDate: string | null; endDate: string } | null = null;
+  for (const t of rows) {
+    for (const pr of (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>) {
+      const addr = pr.address as Record<string, unknown> | undefined;
+      const keys = [rentKey(str(pr.property_name), str(addr?.postal_code)), rentKey(str(addr?.first_line), str(addr?.postal_code))];
+      if (!keys.includes(key)) continue;
+      const tn = (pr.tenant ?? {}) as Record<string, unknown>;
+      if (payPropTenancyCurrent(t.status, tn.end_date, today)) return null;
+      const end = str(tn.end_date).slice(0, 10);
+      if (end && (!last || end > last.endDate)) last = { startDate: str(tn.start_date).slice(0, 10) || null, endDate: end };
+    }
+  }
+  return last;
+}
+
+const TITLES = new Set(["mr", "mrs", "ms", "miss", "dr", "prof", "mx"]);
+/** "HSmith" is "H Smith"; titles and hyphens are not names. */
+const nameWords = (s: string) =>
+  words(s.replace(/\b([A-Z])([A-Z][a-z])/g, "$1 $2").replace(/-/g, " ")).filter((w) => !TITLES.has(w.replace(/\.$/, "")));
+/** One letter out, for a surname of five letters or more. */
+function nearly(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.min(a.length, b.length) < 5 || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+/**
+ * Two spellings of one person: "K Smith" is "Kate Smith", "R Ward-Hall" is
+ * "Rob Ward Hall", "Dr Hall" is "Ann Hall", "Ward-Hall Rob" is "Rob Ward-Hall",
+ * "Rob" is "Rob Hall", "Mitchel" is "Mitchell".
+ */
+export function samePerson(a: string, b: string): boolean {
+  const wa = nameWords(a);
+  const wb = nameWords(b);
+  if (!wa.length || !wb.length) return false;
+  if (wa.length === 1 || wb.length === 1) {
+    const [one, other] = wa.length === 1 ? [wa[0], wb] : [wb[0], wa];
+    return other.some((w) => w === one || (one.length >= 3 && w.startsWith(one)) || nearly(w, one));
+  }
+  /* Every word of one is in the other: "Rory Power", "Rory Brian Power". */
+  if (wa.every((w) => wb.includes(w)) || wb.every((w) => wa.includes(w))) return true;
+  const la = wa[wa.length - 1];
+  const lb = wb[wb.length - 1];
+  if (wa[0] === lb && wb[0] === la) return true;
+  if (!nearly(la, lb) && !wa.includes(lb) && !wb.includes(la)) return false;
+  return wa[0][0] === wb[0][0];
+}
+
+/** Every name PayProp holds on one of its properties, past or present: each part of a joint record and its lead. */
+export function namesOnPayPropHome(rows: Array<Record<string, unknown>>, payPropId: string): string[] {
+  const out: string[] = [];
+  for (const t of rows) {
+    const props = (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>;
+    if (!props.some((pr) => str(pr.id) === payPropId)) continue;
+    out.push(...partsOf(str(t.display_name) || str(t.business_name)));
+    const lead = leadOf(t);
+    if (lead?.first) out.push(tidy(`${lead.first} ${lead.last}`));
+  }
+  return out;
+}
+
+/**
+ * THE WHOLE NAME WHERE THE RECORD HAS ONLY AN INITIAL (Lianna Denholm, 10 Nov
+ * 2026, ticket 74b80147: "tenants full names still not appearing"). The
+ * tenancy record holds many tenants as "J Smith"; 9 Nov let an agent type the
+ * whole name in, but the OS never used the whole name it already had. Given a
+ * name that is initials and a surname, the one fuller spelling with the same
+ * first initial and the same surname among `candidates` (names held on the
+ * same home), else the tenant's own email where it spells first.last. More
+ * than one fit, or none: null, and the record's spelling stands.
+ */
+export function spelledOut(name: string, candidates: string[], email?: string | null): string | null {
+  const w = nameWords(name);
+  if (w.length < 2 || w.slice(0, -1).some((x) => x.length > 1)) return null;
+  const last = w[w.length - 1];
+  const cased = (s: string) => (s === s.toUpperCase() || s === s.toLowerCase() ? s.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (_, a, b) => a + b.toUpperCase()) : s);
+  const fits = (c: string) => {
+    const cw = nameWords(c);
+    return cw.length >= 2 && cw[0].length > 1 && cw[0][0] === w[0] && cw[cw.length - 1] === last && !/\d/.test(c);
+  };
+  const hits = new Map<string, string>();
+  for (const c of candidates.map(tidy).filter(fits)) hits.set(nameWords(c).join(" "), cased(c));
+  if (hits.size === 1) return [...hits.values()][0];
+  if (hits.size > 1) return null;
+  const m = /^([a-z]{2,})[._]([a-z'-]{2,})$/.exec((email ?? "").split("@")[0].toLowerCase());
+  if (m && m[1][0] === w[0] && m[2] === last) return `${m[1][0].toUpperCase()}${m[1].slice(1)} ${tidy(name).split(/\s+/).pop()}`;
+  return null;
+}
+
+/** A shown tenant can be a pair in one name: "Ann Hall & Rob Ward", "Ann & Rob Hall". */
+const partsOf = (s: string) => s.split(/\s*(?:,|&|\band\b)\s*/i).map(tidy).filter(Boolean);
+const isShownAs = (shownName: string, n: string) => partsOf(shownName).some((part) => samePerson(part, n));
+const surnamesOf = (s: string) => partsOf(s).map((x) => nameWords(x).pop() ?? "").filter((x) => x.length > 1);
+
+export type SittingPerson = { name: string; email: string | null; phone: string | null; contactId?: string };
+export type Sitting = { tenants: SittingPerson[]; added: string[]; dropped: string[]; replaced: boolean; startDate: string | null; endDate: string | null; depositId: string | null };
+
+/**
+ * WHO LIVES THERE, AS PAYPROP HAS IT TODAY (Lianna Denholm, 9 Nov 2026,
+ * tickets 1851a5b1, 4f9b7b74, bde77666).
+ *
+ * Three of her homes showed the wrong people. Two shared flats began new
+ * joint tenancies on 1 Oct with one flatmate changed; the book named them
+ * from REX PM's record, last read 2 Oct and never updated, so the new
+ * flatmate was missing and the one who left in June was still there. The
+ * third showed two people REX put on the listing when it was marked let in
+ * September; PayProp, which takes the rent, has had somebody else there since
+ * June and never heard of them.
+ *
+ * PayProp takes the rent from whoever lives there, so its tenancy running
+ * today is who lives there. Joined by PayProp's own property id (the home's
+ * sure address match, lib/rent-status matchHome), never by the loose address
+ * key: "Flat 5, 50 X Road" and PayProp's "X Road, 50/5" key apart.
+ *
+ *   - Someone on the same running tenancy as a shown tenant, and not shown,
+ *     is added.
+ *   - A shown tenant PayProp holds on this home only on a tenancy that has
+ *     ended or been replaced is taken off. Never on absence alone: PayProp's
+ *     joint record can name the lead only.
+ *   - Where nobody shown is on the running tenancy, its people replace them -
+ *     unless the let began in the last six weeks and before PayProp's
+ *     tenancy, which is PayProp not caught up with a new let yet.
+ *
+ * Measured on the live book, 9 Nov 2026: 34 of 533 current lets change.
+ * Null when PayProp has no running tenancy on the home (a let only home after
+ * its first month) or nothing changes.
+ */
+export function sittingFromPayProp(
+  rows: Array<Record<string, unknown>>,
+  payPropId: string,
+  shown: SittingPerson[],
+  letSince: string | null | undefined,
+  today = londonToday(),
+  livingElsewhere?: (name: string) => boolean
+): Sitting | null {
+  type Entry = { names: string[]; lead: string | null; email: string | null; phone: string | null; start: string; end: string; deposit: string; current: boolean; business: boolean };
+  const entries: Entry[] = [];
+  for (const t of rows) {
+    for (const pr of (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>) {
+      if (str(pr.id) !== payPropId) continue;
+      const tn = (pr.tenant ?? {}) as Record<string, unknown>;
+      const lead = leadOf(t);
+      const display = tidy(str(t.display_name) || str(t.business_name));
+      const names = display.split(/\s*(?:,|&|\band\b)\s*/i).map(tidy).filter(Boolean);
+      entries.push({
+        names: names.length ? names : lead ? [tidy(`${lead.first} ${lead.last}`)] : [],
+        lead: lead ? tidy(`${lead.first} ${lead.last}`) : names.length === 1 ? names[0] : null,
+        email: str(t.email_address) ? str(t.email_address).toLowerCase() : null,
+        phone: ukPhone(t.mobile_number),
+        start: str(tn.start_date).slice(0, 10),
+        end: str(tn.end_date).slice(0, 10),
+        deposit: str(tn.deposit_id),
+        current: payPropTenancyCurrent(t.status, tn.end_date, today),
+        /* A company paying the rent - a rent-to-rent firm, a housing provider -
+           is not who lives there; nor is one record renting several homes at
+           once (one couple held as renting four homes, 9 Nov 2026). Not PayProp's business_name:
+           it is filled for most people. */
+        business:
+          /\b(ltd|limited|group|plc|llp|housing|council|network|services|suites)\b/i.test(display) ||
+          ((Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>).filter((x) =>
+            payPropTenancyCurrent(t.status, ((x.tenant ?? {}) as Record<string, unknown>).end_date, today)).length > 1,
+      });
+    }
+  }
+  /* Running today: begun, not ended, and not one on its way out once a newer one has begun. */
+  const begun = entries.filter((e) => e.current && (!e.start || e.start <= today));
+  const latest = begun.map((e) => e.start).sort().pop() ?? "";
+  const running = begun.filter((e) => !e.end || e.start === latest);
+  if (!running.length) return null;
+  const over = entries.filter((e) => !running.includes(e));
+
+  /* A joint record with no lead named ("S Hall, K Ward & J Lee") is its
+     email's owner's: the one whose surname the email carries, where only one
+     does - sam.hall@ is S Hall. And "S Hall" is "Sam Hall" when the email
+     spells it out first.last. */
+  const local = (e: Entry) => (e.email ?? "").split("@")[0].toLowerCase();
+  const ownerOf = (e: Entry): string | null => {
+    if (e.lead) return e.lead;
+    if (e.names.length === 1) return e.names[0];
+    const hits = e.names.filter((n) => { const last = nameWords(n).pop() ?? ""; return last.length > 2 && local(e).replace(/[^a-z]/g, "").includes(last.replace(/[^a-z]/g, "")); });
+    return hits.length === 1 ? hits[0] : null;
+  };
+  const personOf = (e: Entry, name: string): SittingPerson => {
+    /* A joint record's email and mobile are its lead's, never a co-tenant's. */
+    const owner = ownerOf(e);
+    const own = owner != null && samePerson(owner, name);
+    const w = nameWords(name);
+    const m = /^([a-z]{2,})[._]([a-z'-]{2,})$/.exec(local(e));
+    const full = own && w.length === 2 && w[0].length === 1 && m && m[1][0] === w[0] && m[2] === w[1]
+      ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${name.split(/\s+/).pop()}`
+      : name;
+    return { name: full, email: own ? e.email : null, phone: own ? e.phone : null };
+  };
+  if (running.some((e) => e.business)) return null;
+  const people: SittingPerson[] = [];
+  for (const e of running) for (const n of e.names) if (!people.some((p) => samePerson(p.name, n))) people.push(personOf(e, n));
+  const first = [...running].sort((a, b) => (a.start || "9").localeCompare(b.start || "9"))[0];
+  const dates = { startDate: first.start || null, endDate: first.end || null, depositId: first.deposit || null };
+  const shownHas = (n: string) => shown.some((s) => isShownAs(s.name, n));
+  const onRunning = (s: SittingPerson) => people.some((p) => isShownAs(s.name, p.name));
+
+  /* The same family counts as the same household: a parent on the tenancy beside their child adds, never replaces. */
+  const shownSurnames = new Set(shown.flatMap((s) => surnamesOf(s.name)));
+  const kin = people.some((p) => surnamesOf(p.name).some((x) => shownSurnames.has(x)));
+  if (shown.some(onRunning) || kin) {
+    const theirs = running.filter((e) => e.names.some((n) => shownHas(n) || surnamesOf(n).some((x) => shownSurnames.has(x))));
+    const added: SittingPerson[] = [];
+    for (const e of theirs) {
+      for (const n of e.names) {
+        if (shownHas(n) || added.some((a) => samePerson(a.name, n))) continue;
+        added.push(personOf(e, n));
+      }
+    }
+    const gone = shown.filter((s) => !onRunning(s) && over.some((e) => e.names.some((n) => isShownAs(s.name, n))));
+    if (!added.length && !gone.length) return null;
+    return {
+      tenants: [...shown.filter((s) => !gone.includes(s)), ...added],
+      added: added.map((a) => a.name),
+      dropped: gone.map((g) => g.name),
+      replaced: false,
+      ...dates,
+    };
+  }
+
+  /* Nobody shown is on it. REX marked a let PayProp never took rent on, or PayProp has a newer tenancy than the let REX knows. Not in a
+     new let's first six weeks while PayProp's tenancy is the older one: that
+     is PayProp not set up for the new tenants yet. Not where PayProp holds a
+     shown tenant as living anywhere today - they are somebody's real tenant. */
+  const since = new Date(Date.parse(`${today}T12:00:00Z`) - SIX_WEEKS).toISOString().slice(0, 10);
+  if (shown.length && letSince && letSince.slice(0, 10) > since && latest < letSince.slice(0, 10)) return null;
+  if (shown.some((s) => livingElsewhere?.(s.name))) return null;
+  return { tenants: people, added: people.map((p) => p.name), dropped: shown.map((s) => s.name), replaced: true, ...dates };
+}
+
+/** Everybody on a PayProp tenancy running today, with the PayProp property it is on. */
+export function livingNow(rows: Array<Record<string, unknown>>, today = londonToday()): Array<{ name: string; propertyId: string }> {
+  const out: Array<{ name: string; propertyId: string }> = [];
+  for (const t of rows) {
+    const display = tidy(str(t.display_name) || str(t.business_name));
+    for (const pr of (Array.isArray(t.properties) ? t.properties : []) as Array<Record<string, unknown>>) {
+      const tn = (pr.tenant ?? {}) as Record<string, unknown>;
+      if (!payPropTenancyCurrent(t.status, tn.end_date, today) || str(tn.start_date).slice(0, 10) > today) continue;
+      for (const name of partsOf(display)) out.push({ name, propertyId: str(pr.id) });
+    }
+  }
+  return out;
+}

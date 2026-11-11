@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchMe } from "@/lib/me";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNewLook } from "@/lib/use-new-look";
 
@@ -26,7 +28,7 @@ import { useNewLook } from "@/lib/use-new-look";
 
 /** James's own paintings (13 Sep 2026), not the stock line drawings. */
 const ART = [
-  "/brand/art/sign-in.webp",
+  "/brand/art/sign-in-real.webp",
   "/brand/art/lead-house.webp",
   "/brand/art/lead-building.webp",
   "/brand/art/appraisal-house.webp",
@@ -77,7 +79,7 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
       /* The page underneath pops in as the cover fades (app/globals.css). */
       const root = document.documentElement;
       root.dataset.entrance = "pop";
-      window.setTimeout(() => setShow(false), 650);
+      window.setTimeout(() => setShow(false), 900);
       window.setTimeout(() => { if (root.dataset.entrance === "pop") delete root.dataset.entrance; }, 1800);
     },
     []
@@ -118,16 +120,16 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
       {show && look !== false && (
         <div
           onClick={dismiss}
-          className={`fixed inset-0 z-[250] cursor-pointer bg-page transition-opacity duration-700 ${fading ? "pointer-events-none opacity-0" : "opacity-100"}`}
+          className={look === true ? `ent-cover${fading ? " is-leaving" : ""}` : `fixed inset-0 z-[250] cursor-pointer bg-page transition-opacity duration-700 ${fading ? "pointer-events-none opacity-0" : "opacity-100"}`}
         >
           <h1 className="sr-only">Welcome to TLE OS</h1>
-          {look === true && <EntranceMark onDone={dismiss} />}
+          {look === true && <EntranceFilm onDone={dismiss} />}
           <button
             type="button"
             onClick={dismiss}
-            className="absolute bottom-8 right-8 text-xs font-semibold text-muted transition-colors hover:text-ink"
+            className={look === true ? "ent-skip" : "absolute bottom-8 right-8 text-xs font-semibold text-muted transition-colors hover:text-ink"}
           >
-            Skip →
+            Skip
           </button>
         </div>
       )}
@@ -184,6 +186,62 @@ function EntranceMark({ onDone }: { onDone: () => void }) {
         ))}
       </div>
       <i className="entrance-rule" />
+    </div>
+  );
+}
+
+/**
+ * THE ENTRANCE, IN THE WEBSITE'S LANGUAGE (James, 8 Nov 2026: "warm and
+ * authentic ... something that feels different as they're going in").
+ *
+ * About four seconds, any key, scroll or click goes straight in:
+ *   1. On linen, "Good morning, James" rises in the condensed capitals.
+ *   2. The two lines spring apart and a window pops open in the gap on a
+ *      quick run of real moments (James, 8 Nov: "a different video ... a
+ *      little bit more lively"): a girl in a moving box, a kitten, a
+ *      birthday, then a family photo in the garden.
+ *   3. The window grows past the words to fill the screen, turning them
+ *      white, and they snap back together with today's date under them.
+ *   4. The whole cover lifts like a blind and the OS comes up underneath.
+ * The film is public/entrance/home.mp4, four shots cut from the website's
+ * fireside.mp4. It waits to play until the window opens, so the first shot
+ * is seen from its start.
+ */
+function EntranceFilm({ onDone }: { onDone: () => void }) {
+  const [first, setFirst] = useState<string | null>(null);
+  const film = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchMe().then((m) => {
+      const n = (m?.actor?.name || m?.user?.name || "").trim().split(/\s+/)[0];
+      if (live && n) setFirst(n);
+    }).catch(() => undefined);
+    const t = window.setTimeout(onDone, 4400);
+    const play = window.setTimeout(() => { void film.current?.play().catch(() => undefined); }, 900);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+      window.clearTimeout(play);
+    };
+  }, [onDone]);
+  const h = new Date().getHours();
+  const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  return (
+    <div className="ent" aria-hidden>
+      <div className="ent-window">
+        <video ref={film} className="ent-film" src="/entrance/home.mp4" poster="/entrance/home.jpg" muted playsInline preload="auto" />
+        <span className="ent-tint" />
+      </div>
+      <div className="ent-words">
+        <p className="ent-eyebrow"><span>The Letting Experts</span></p>
+        <h2 className="ent-hello">
+          <span className="ent-line"><span>{part},</span></span>
+          <span className="ent-line"><span>{first ?? "welcome back"}</span></span>
+        </h2>
+        <i className="ent-rule" />
+        <p className="ent-date"><span>{today}</span></p>
+      </div>
     </div>
   );
 }

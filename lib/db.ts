@@ -376,6 +376,9 @@ CREATE TABLE IF NOT EXISTS os_bug_media (
 );
 CREATE INDEX IF NOT EXISTS os_bug_media_bug ON os_bug_media (bug_id);
 CREATE INDEX IF NOT EXISTS os_bug_media_at ON os_bug_media (created_at);
+-- Claude's own pictures of a fix, apart from what the person who reported it
+-- added (Send to Claude, 5 Nov 2026): 'reporter' or 'claude'.
+ALTER TABLE os_bug_media ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'reporter';
 
 -- EMAIL FOOTERS - the signature each person's own Outlook puts under a mail,
 -- kept here so the mail the OS sends from their mailbox ends the same way
@@ -637,6 +640,10 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_told_booked_at  TIM
 -- 10 Oct 2026: optional, a tick on Plan a certificate). Its own column, off
 -- by default, so no planned job raised before it starts emailing tenants.
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_access_notice   BOOLEAN NOT NULL DEFAULT false;
+-- When the tenants were told who will ring about access from the job's page,
+-- after it was raised (Lianna Denholm, 9 Nov 2026: a certificate job had no
+-- way to tell them, as a repair does).
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_access_told_at  TIMESTAMPTZ;
 -- Steps the agent skipped for now (Howard, 15 Oct 2026): only the ones
 -- lib/works-steps SKIPPABLE allows, so the job moves on without a landlord
 -- told or a tenant happy being written down that never happened.
@@ -3228,6 +3235,21 @@ CREATE TABLE IF NOT EXISTS os_landlord_addresses (
 );
 CREATE INDEX IF NOT EXISTS os_landlord_addresses_email ON os_landlord_addresses (email);
 CREATE INDEX IF NOT EXISTS os_landlord_addresses_ref ON os_landlord_addresses (person_ref);
+-- The account a landlord's rent goes to, as they gave it on their Terms of
+-- Business (5 Nov 2026, lib/landlord-bank). One row a landlord, by email. The
+-- account number is sealed (lib/bank-vault) and never sent to a browser; the
+-- last four are kept beside it for screens. The next contract offers it back.
+CREATE TABLE IF NOT EXISTS os_landlord_bank (
+  email           TEXT PRIMARY KEY,
+  name            TEXT NOT NULL DEFAULT '',
+  bank_name       TEXT NOT NULL DEFAULT '',
+  account_name    TEXT NOT NULL DEFAULT '',
+  sort_code       TEXT NOT NULL DEFAULT '',
+  account_number  TEXT NOT NULL DEFAULT '',
+  account_last4   TEXT NOT NULL DEFAULT '',
+  terms_id        TEXT NOT NULL DEFAULT '',
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 -- A landlord who opted out of Flatfair's zero deposit (21 Oct 2026, the "PLC
 -- Checks and OS Updates" call). Every landlord is opted in under the terms of
 -- business and the tenant chooses; the few who say no are recorded here by the
@@ -3247,6 +3269,23 @@ CREATE TABLE IF NOT EXISTS os_zero_deposit_optouts (
 );
 CREATE INDEX IF NOT EXISTS os_zero_deposit_optouts_email ON os_zero_deposit_optouts (email);
 CREATE INDEX IF NOT EXISTS os_zero_deposit_optouts_ref ON os_zero_deposit_optouts (person_ref);
+-- A landlord's other email addresses (Dan Richards, ticket 190230a3; James,
+-- 10 Nov 2026: "add a second email ... work or personal"). lib/landlord-emails:
+-- one row a person, found like os_landlord_addresses by email or contact ref.
+-- main_kind is the type of the REX email; extras is [{ email, kind }]. OS only,
+-- never written to REX, and no automatic send reads it.
+CREATE TABLE IF NOT EXISTS os_landlord_emails (
+  id          TEXT PRIMARY KEY,
+  email       TEXT NOT NULL DEFAULT '',
+  person_ref  TEXT NOT NULL DEFAULT '',
+  name        TEXT NOT NULL DEFAULT '',
+  main_kind   TEXT NOT NULL DEFAULT 'personal',
+  extras      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  set_by      TEXT NOT NULL DEFAULT '',
+  set_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_landlord_emails_email ON os_landlord_emails (email);
+CREATE INDEX IF NOT EXISTS os_landlord_emails_ref ON os_landlord_emails (person_ref);
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
 -- The tenants in residence, from the same sheet (24 Sep 2026), where REX CRM holds none.

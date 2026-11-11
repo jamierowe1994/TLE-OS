@@ -6,16 +6,16 @@
 <title>TLE Landlord File</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap">
 <style>
 /* Layout: the landlord's own file. A light header with the agent always one tap away, four views
    (Overview, Documents, Messages, Journey) in one page, and the letting plan as a page-turn booklet
    that opens over everything. TLE OS tokens: white, greys, sage, manilla, oat, coral, ink.
    Single light look by choice, to match the presentations the landlord has already seen. */
 :root {
-  --paper: #ffffff; --grey: #f6f6f5; --well: #f0f0ee; --ink: #141413; --muted: #63625b; --faint: #8f8e87;
+  --paper: #ffffff; --grey: #f6f6f5; --well: #f0f0ee; --ink: #231d1b; --muted: #63625b; --faint: #8f8e87;
   --line: rgba(20, 20, 19, .1); --line-2: rgba(20, 20, 19, .2);
-  --coral: #eb8c6d; --clay: #aa4a2b; --sage: #66785b; --sage-soft: #e3e3d3; --manilla: #f5e3c7; --oat: #e3dacc; --forest: #2e3829;
+  --coral: #a85a51; --clay: #8e4a42; --sage: #66785b; --sage-soft: #e3e3d3; --manilla: #f5e3c7; --oat: #e3dacc; --forest: #56423e;
   --f-title: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
   --f-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
@@ -583,6 +583,48 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .av.ph { overflow: hidden; padding: 0; } .av.ph img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; display: block; }
 .say { margin: 10px 0 0; font-size: 13px; color: var(--muted); } .say.err { color: var(--clay); }
 .rbars .bar0 { fill: var(--sage-soft); } .rbars .bar0.mine { fill: var(--coral); } .rbars text { font-family: var(--f-ui); fill: var(--muted); font-size: 12px; } .rbars text.v { fill: var(--ink); font-size: 13px; }
+
+/* ===================================================================================================
+   THE FINAL PALETTE (James, 8 Nov 2026: "Feel free to start the landlord file next"), the same as the two
+   decks the landlord has already seen: brown for the action and the dark panel, terracotta to point,
+   olive for go, clay and linen behind; condensed Bricolage capitals for the titles; square edges.
+   Written last so it wins; the layout above is untouched.
+   =================================================================================================== */
+:root {
+  --paper: #ffffff; --grey: #f5efe6; --well: #efe8df; --ink: #231d1b; --muted: #6b5f5a; --faint: #9a8d86;
+  --line: rgba(35, 29, 27, .1); --line-2: rgba(35, 29, 27, .22);
+  --coral: #a85a51; --clay: #8e4a42; --sage: #56634a; --sage-soft: #eef1e8; --manilla: #f1e4dc; --oat: #ddd3c7; --forest: #56423e;
+  --brown: #56423e; --linen: #f5efe6;
+  --r: 0px;
+}
+:focus-visible { outline-color: var(--brown); }
+
+/* Type: titles and card heads in the condensed capitals; the line over a title in terracotta. */
+.title, .card h3, .bookcard h3, .sec-h h2, .jl-card h4, .next b, .prop-foot b, .tc-head b, .fc-row b, .note b, .toc b {
+  font-weight: 500; font-stretch: 75%; text-transform: uppercase; letter-spacing: .02em;
+}
+.title { line-height: .95; letter-spacing: .005em; }
+.title .soft, .title span[style*="faint"] { color: var(--coral); }
+.eyebrow { font-family: var(--f-title); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .2em; font-size: 12px; color: var(--coral); }
+.prop-foot .rent, .fees b, .ring b, .big-pct, .temp, .note .num { font-stretch: 75%; font-weight: 500; letter-spacing: 0; }
+.brand, .logo { font-family: var(--f-title); font-stretch: 75%; letter-spacing: .1em; text-transform: uppercase; }
+
+/* Square edges everywhere but the circles. */
+.btn, .btn.sm, .card, .bookcard, .next, .afterlet, .fees, .fees > *, .steps7, .tabs a, .tabs a b, .ptag, .pill, .chip, .tag,
+.jl-card, .tcard, .rcpt, .bsq, .zbtn, .note, .stk, .mini-book, .prop, .prop-foot, .agent, .who, [class*="card"] { border-radius: 0 !important; }
+
+/* Buttons: brown carries the action, an outline the rest; nothing orange. */
+.btn { font-family: var(--f-title); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 13px; }
+.btn.primary { background: var(--brown); border-color: var(--brown); color: #fff; }
+.btn.primary:hover { background: #3f302d; border-color: #3f302d; color: #fff; }
+.btn:not(.primary):hover { background: var(--ink); border-color: var(--ink); color: #fff; }
+.next-ic, .zbtn { background: var(--brown); color: #fff; }
+.tabs a b { background: var(--coral); color: #fff; }
+
+/* The dark panel in brown, its tiles a shade lighter. */
+.afterlet { background: var(--brown); }
+.afterlet .card, .afterlet [class*="tile"], .afterlet > div > div { background: rgba(255, 255, 255, .07); }
+.afterlet * { border-radius: 0 !important; }
 </style>
 </head>
 <body>
@@ -635,9 +677,9 @@ const SAMPLE_SAYS = 'This is the sample landlord, so nothing is sent or saved. A
 function doorArt() {
   const L = '#faf9f5';
   const bricks = Array.from({ length: 15 }, (_, k) => `<line x1="270" x2="600" y1="${70 + k * 26}" y2="${70 + k * 26}" stroke="${L}" stroke-opacity=".07"/>`).join('');
-  const rays = [-60, -30, 0, 30, 60].map(a => { const r = a * Math.PI / 180; return `<line x1="380" y1="150" x2="${380 + Math.sin(r) * 46}" y2="${150 - Math.cos(r) * 46}" stroke="#2e3829" stroke-width="2"/>`; }).join('');
+  const rays = [-60, -30, 0, 30, 60].map(a => { const r = a * Math.PI / 180; return `<line x1="380" y1="150" x2="${380 + Math.sin(r) * 46}" y2="${150 - Math.cos(r) * 46}" stroke="#56423e" stroke-width="2"/>`; }).join('');
   return `<svg class="door-art" viewBox="0 0 600 420" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
-    <defs><linearGradient id="da-wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d4a36"/><stop offset="1" stop-color="#2e3829"/></linearGradient>
+    <defs><linearGradient id="da-wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d4a36"/><stop offset="1" stop-color="#56423e"/></linearGradient>
     <linearGradient id="da-door" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f09a7c"/><stop offset="1" stop-color="#d97455"/></linearGradient></defs>
     <rect x="270" y="40" width="330" height="380" fill="url(#da-wall)"/>${bricks}
     <rect x="262" y="40" width="346" height="12" rx="3" fill="${L}" fill-opacity=".14"/>
@@ -645,17 +687,17 @@ function doorArt() {
     <path d="M318 400 V150 a62 62 0 0 1 124 0 V400" fill="none" stroke="${L}" stroke-width="2" stroke-opacity=".55"/>
     <path d="M330 150 a50 50 0 0 1 100 0 Z" fill="#f5e3c7"/>${rays}
     <rect x="330" y="156" width="100" height="244" rx="3" fill="url(#da-door)"/>
-    <rect x="344" y="172" width="31" height="74" rx="3" fill="none" stroke="#141413" stroke-opacity=".22" stroke-width="2"/><rect x="385" y="172" width="31" height="74" rx="3" fill="none" stroke="#141413" stroke-opacity=".22" stroke-width="2"/>
-    <rect x="344" y="262" width="31" height="90" rx="3" fill="none" stroke="#141413" stroke-opacity=".22" stroke-width="2"/><rect x="385" y="262" width="31" height="90" rx="3" fill="none" stroke="#141413" stroke-opacity=".22" stroke-width="2"/>
-    <circle cx="380" cy="214" r="7" fill="none" stroke="#141413" stroke-width="2.5"/><circle cx="412" cy="300" r="3.5" fill="#141413"/>
-    <rect x="364" y="254" width="32" height="5" rx="2.5" fill="#141413" fill-opacity=".7"/>
-    ${P.no ? '<rect x="286" y="122" width="28" height="30" rx="5" fill="#eb8c6d"/>' : ''}<text x="300" y="144" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="19" fill="#2e3829">${esc(P.no)}</text>
+    <rect x="344" y="172" width="31" height="74" rx="3" fill="none" stroke="#231d1b" stroke-opacity=".22" stroke-width="2"/><rect x="385" y="172" width="31" height="74" rx="3" fill="none" stroke="#231d1b" stroke-opacity=".22" stroke-width="2"/>
+    <rect x="344" y="262" width="31" height="90" rx="3" fill="none" stroke="#231d1b" stroke-opacity=".22" stroke-width="2"/><rect x="385" y="262" width="31" height="90" rx="3" fill="none" stroke="#231d1b" stroke-opacity=".22" stroke-width="2"/>
+    <circle cx="380" cy="214" r="7" fill="none" stroke="#231d1b" stroke-width="2.5"/><circle cx="412" cy="300" r="3.5" fill="#231d1b"/>
+    <rect x="364" y="254" width="32" height="5" rx="2.5" fill="#231d1b" fill-opacity=".7"/>
+    ${P.no ? '<rect x="286" y="122" width="28" height="30" rx="5" fill="#a85a51"/>' : ''}<text x="300" y="144" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="19" fill="#56423e">${esc(P.no)}</text>
     <!-- wall lamp -->
     <line x1="300" y1="168" x2="300" y2="182" stroke="${L}" stroke-width="2" stroke-opacity=".6"/><path d="M290 182 h20 l-4 22 h-12 Z" fill="#f5e3c7" fill-opacity=".95"/><circle cx="300" cy="196" r="26" fill="#f5e3c7" fill-opacity=".1"/>
     <!-- bay window -->
     <rect x="468" y="134" width="104" height="150" rx="4" fill="none" stroke="${L}" stroke-width="2" stroke-opacity=".55"/>
     <rect x="478" y="144" width="38" height="130" rx="2" fill="#f5e3c7" fill-opacity=".9"/><rect x="524" y="144" width="38" height="130" rx="2" fill="#f5e3c7" fill-opacity=".9"/>
-    <line x1="478" x2="562" y1="194" y2="194" stroke="#2e3829" stroke-width="3"/>
+    <line x1="478" x2="562" y1="194" y2="194" stroke="#56423e" stroke-width="3"/>
     <path d="M478 144 q19 22 38 0" fill="#66785b" fill-opacity=".55"/><path d="M524 144 q19 22 38 0" fill="#66785b" fill-opacity=".55"/>
     <rect x="460" y="284" width="120" height="9" rx="2" fill="${L}" fill-opacity=".5"/>
     <!-- plant -->
@@ -663,11 +705,11 @@ function doorArt() {
     <path d="M266 350 h44 l-6 50 h-32 Z" fill="#e3dacc"/>
     <!-- to let board -->
     <line x1="140" y1="168" x2="140" y2="420" stroke="${L}" stroke-width="5" stroke-linecap="round"/>
-    <g transform="rotate(-4 140 200)"><rect x="70" y="150" width="140" height="92" rx="8" fill="${L}"/><rect x="70" y="150" width="140" height="14" rx="7" fill="#eb8c6d"/><rect x="70" y="157" width="140" height="7" fill="#eb8c6d"/>
-    <text x="140" y="203" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-weight="400" font-size="30" letter-spacing="-1" fill="#141413">To let</text>
+    <g transform="rotate(-4 140 200)"><rect x="70" y="150" width="140" height="92" rx="8" fill="${L}"/><rect x="70" y="150" width="140" height="14" rx="7" fill="#a85a51"/><rect x="70" y="157" width="140" height="7" fill="#a85a51"/>
+    <text x="140" y="203" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-weight="400" font-size="30" letter-spacing="-1" fill="#231d1b">To let</text>
     <text x="140" y="226" text-anchor="middle" font-family="Inter, sans-serif" font-size="9.5" letter-spacing="1.6" fill="#63625b">THE LETTING EXPERTS</text></g>
     <!-- leaves drifting -->
-    <circle cx="232" cy="104" r="3" fill="#eb8c6d" fill-opacity=".7"/><circle cx="200" cy="80" r="2" fill="${L}" fill-opacity=".4"/><circle cx="60" cy="110" r="2.5" fill="${L}" fill-opacity=".3"/>
+    <circle cx="232" cy="104" r="3" fill="#a85a51" fill-opacity=".7"/><circle cx="200" cy="80" r="2" fill="${L}" fill-opacity=".4"/><circle cx="60" cy="110" r="2.5" fill="${L}" fill-opacity=".3"/>
   </svg>`;
 }
 function house(sun, cls) {
@@ -821,39 +863,39 @@ document.addEventListener('click', e => {
 /* ---------- The Plan: drawings ---------- */
 function barcode(seed, n) {
   let s = seed, x = 0, out = ''; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
-  for (let k = 0; k < n; k++) { const w = 1 + Math.floor(r() * 3), g = 1 + Math.floor(r() * 2.4); out += `<rect x="${x}" y="0" width="${w}" height="40" fill="#141413"/>`; x += w + g; }
+  for (let k = 0; k < n; k++) { const w = 1 + Math.floor(r() * 3), g = 1 + Math.floor(r() * 2.4); out += `<rect x="${x}" y="0" width="${w}" height="40" fill="#231d1b"/>`; x += w + g; }
   return `<svg viewBox="0 0 ${x} 40" preserveAspectRatio="none" aria-hidden="true">${out}</svg>`;
 }
 function keySvg() {
   return `<svg class="key" viewBox="0 0 460 300" aria-hidden="true">
     <defs><mask id="kh"><rect width="460" height="300" fill="#fff"/><circle cx="118" cy="136" r="30" fill="#000"/></mask></defs>
-    <path d="M70 170 C 40 210, 40 240, 64 252" fill="none" stroke="#141413" stroke-width="1.6"/>
+    <path d="M70 170 C 40 210, 40 240, 64 252" fill="none" stroke="#231d1b" stroke-width="1.6"/>
     <g transform="rotate(-14 230 150)">
-      <circle cx="96" cy="160" r="34" fill="none" stroke="#eb8c6d" stroke-width="7"/>
-      <g mask="url(#kh)"><circle cx="118" cy="136" r="70" fill="#2e3829"/></g>
+      <circle cx="96" cy="160" r="34" fill="none" stroke="#a85a51" stroke-width="7"/>
+      <g mask="url(#kh)"><circle cx="118" cy="136" r="70" fill="#56423e"/></g>
       <path d="M80 98 a56 56 0 0 1 44 -24" fill="none" stroke="#faf9f5" stroke-opacity=".28" stroke-width="7" stroke-linecap="round"/>
-      <rect x="176" y="122" width="236" height="28" rx="7" fill="#2e3829"/>
+      <rect x="176" y="122" width="236" height="28" rx="7" fill="#56423e"/>
       <rect x="176" y="122" width="236" height="7" rx="3" fill="#faf9f5" fill-opacity=".14"/>
-      <path d="M318 150 h22 v30 h-22z M352 150 h16 v44 h-16z M378 150 h12 v22 h-12z" fill="#2e3829"/>
-      <rect x="186" y="128" width="8" height="16" rx="2" fill="#eb8c6d"/>
-      <path d="M96 194 a34 34 0 0 1 -30 -20" fill="none" stroke="#eb8c6d" stroke-width="7" stroke-linecap="round"/>
+      <path d="M318 150 h22 v30 h-22z M352 150 h16 v44 h-16z M378 150 h12 v22 h-12z" fill="#56423e"/>
+      <rect x="186" y="128" width="8" height="16" rx="2" fill="#a85a51"/>
+      <path d="M96 194 a34 34 0 0 1 -30 -20" fill="none" stroke="#a85a51" stroke-width="7" stroke-linecap="round"/>
     </g>
     <g transform="rotate(10 70 262)"><rect x="12" y="232" width="128" height="62" rx="10" fill="#f5e3c7"/><circle cx="30" cy="263" r="6" fill="#e3e3d3"/>
-      <text x="86" y="270" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="30" letter-spacing="-1.2" fill="#141413">${P.no ? 'No. ' + esc(P.no) : 'Yours'}</text></g>
+      <text x="86" y="270" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="30" letter-spacing="-1.2" fill="#231d1b">${P.no ? 'No. ' + esc(P.no) : 'Yours'}</text></g>
   </svg>`;
 }
 function cardHouse() {
   return `<svg viewBox="0 0 320 190" aria-hidden="true">
-    <circle cx="256" cy="52" r="26" fill="#eb8c6d"/>
+    <circle cx="256" cy="52" r="26" fill="#a85a51"/>
     <path d="M0 150 h320 v40 H0z" fill="#66785b"/>
     <path d="M14 150 V86 l40 -32 40 32 v64z" fill="#c9bfae"/><path d="M226 150 V86 l40 -32 40 32 v64z" fill="#c9bfae"/>
-    <rect x="138" y="30" width="16" height="30" fill="#2e3829"/><path d="M146 22 q8 -8 0 -14 q-8 -6 2 -12" fill="none" stroke="#faf9f5" stroke-width="2.4" stroke-linecap="round"/>
-    <path d="M92 150 V84 l68 -52 68 52 v66z" fill="#faf9f5"/><path d="M84 88 l76 -60 76 60" fill="none" stroke="#2e3829" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/>
-    <path d="M144 150 v-40 a16 16 0 0 1 32 0 v40z" fill="#eb8c6d"/><circle cx="170" cy="132" r="2.4" fill="#141413"/>
-    <rect x="106" y="94" width="26" height="30" rx="13" fill="#2e3829"/><rect x="188" y="94" width="26" height="30" rx="13" fill="#2e3829"/>
+    <rect x="138" y="30" width="16" height="30" fill="#56423e"/><path d="M146 22 q8 -8 0 -14 q-8 -6 2 -12" fill="none" stroke="#faf9f5" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M92 150 V84 l68 -52 68 52 v66z" fill="#faf9f5"/><path d="M84 88 l76 -60 76 60" fill="none" stroke="#56423e" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M144 150 v-40 a16 16 0 0 1 32 0 v40z" fill="#a85a51"/><circle cx="170" cy="132" r="2.4" fill="#231d1b"/>
+    <rect x="106" y="94" width="26" height="30" rx="13" fill="#56423e"/><rect x="188" y="94" width="26" height="30" rx="13" fill="#56423e"/>
     <rect x="109" y="97" width="20" height="10" rx="5" fill="#f5e3c7" opacity=".9"/>
-    <text x="160" y="80" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="15" fill="#2e3829">${esc(P.no)}</text>
-    <path d="M60 150 q-10 -26 4 -40 q10 20 0 40z M262 150 q14 -22 2 -38 q-12 18 -2 38z" fill="#2e3829"/>
+    <text x="160" y="80" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="15" fill="#56423e">${esc(P.no)}</text>
+    <path d="M60 150 q-10 -26 4 -40 q10 20 0 40z M262 150 q14 -22 2 -38 q-12 18 -2 38z" fill="#56423e"/>
   </svg>`;
 }
 /* Asking rent by bedrooms, nearby (TLE OS: we hold no twelve-month trend, so the chart is the market as it stands). */
@@ -863,14 +905,14 @@ function rentChart() {
   const top = Math.max(...RB.map(r => r.rent)) * 1.12, slot = (W - 12) / RB.length, bw = Math.min(56, slot * .56);
   const y = v => t + (top - v) * (H - t - b) / top;
   return `<svg class="rbars" viewBox="0 0 ${W} ${H}" role="img" aria-label="Typical asking rent by bedrooms nearby: ${RB.map(r => r.label + ' ' + money(r.rent)).join(', ')}">
-    <line x1="6" x2="${W - 6}" y1="${H - b}" y2="${H - b}" stroke="#141413" stroke-opacity=".2"/>
+    <line x1="6" x2="${W - 6}" y1="${H - b}" y2="${H - b}" stroke="#231d1b" stroke-opacity=".2"/>
     ${RB.map((r, k) => { const cx = 6 + slot * k + slot / 2, me = MK.mine && r.label === MK.mine.label; return `<rect class="bar0${me ? ' mine' : ''}" x="${(cx - bw / 2).toFixed(1)}" y="${y(r.rent).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - b - y(r.rent)).toFixed(1)}" rx="5"/>
       <text class="v" x="${cx.toFixed(1)}" y="${(y(r.rent) - 7).toFixed(1)}" text-anchor="middle">${money(r.rent)}</text><text x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle">${esc(r.label)}</text>`; }).join('')}</svg>`;
 }
 const SIGN = '<svg viewBox="0 0 220 70" aria-hidden="true"><path d="M8 48 C 18 10, 40 8, 30 40 S 22 60, 44 46 S 64 18, 70 30 S 70 52, 84 40 S 100 24, 104 36 S 112 50, 124 34 C 132 24, 140 30, 146 40 S 168 30, 176 24"/><path d="M40 60 C 90 52, 150 52, 212 46"/></svg>';
-const PAWN = '<svg class="pawn" viewBox="0 0 40 56" aria-hidden="true"><circle cx="20" cy="11" r="9" fill="#141413"/><path d="M13 22 h14 l3 18 h-20z" fill="#141413"/><rect x="5" y="40" width="30" height="9" rx="4" fill="#141413"/><circle cx="17" cy="8" r="2.4" fill="#fff" opacity=".5"/></svg>';
-const KEYS = '<svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="22" cy="22" r="13" fill="none" stroke="#eb8c6d" stroke-width="5"/><path d="M31 31 l20 20 M44 44 l-5 5 M50 50 l-5 5" stroke="#eb8c6d" stroke-width="5" stroke-linecap="round"/><circle cx="22" cy="22" r="4" fill="#f5e3c7"/></svg>';
-const KETTLE = '<svg viewBox="0 0 48 48" fill="none" stroke="#141413" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 40h24l-2-20a10 10 0 0 0-20 0z"/><path d="M34 24l6-4v8l-4 4M18 12h12M24 12V8"/><path d="M20 4q2 -2 0 -4M28 4q2 -2 0 -4" stroke="#eb8c6d"/></svg>';
+const PAWN = '<svg class="pawn" viewBox="0 0 40 56" aria-hidden="true"><circle cx="20" cy="11" r="9" fill="#231d1b"/><path d="M13 22 h14 l3 18 h-20z" fill="#231d1b"/><rect x="5" y="40" width="30" height="9" rx="4" fill="#231d1b"/><circle cx="17" cy="8" r="2.4" fill="#fff" opacity=".5"/></svg>';
+const KEYS = '<svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="22" cy="22" r="13" fill="none" stroke="#a85a51" stroke-width="5"/><path d="M31 31 l20 20 M44 44 l-5 5 M50 50 l-5 5" stroke="#a85a51" stroke-width="5" stroke-linecap="round"/><circle cx="22" cy="22" r="4" fill="#f5e3c7"/></svg>';
+const KETTLE = '<svg viewBox="0 0 48 48" fill="none" stroke="#231d1b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 40h24l-2-20a10 10 0 0 0-20 0z"/><path d="M34 24l6-4v8l-4 4M18 12h12M24 12V8"/><path d="M20 4q2 -2 0 -4M28 4q2 -2 0 -4" stroke="#a85a51"/></svg>';
 const SCISSORS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.6 20 18M8.6 16.4 20 6"/></svg>';
 const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M14 6l6 6-6 6"/></svg>';
 
@@ -890,7 +932,7 @@ const DEM = (() => {
 })();
 function wxSvg(k) {
   const rays = Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<line x1="${100 + Math.cos(a) * 62}" y1="${100 + Math.sin(a) * 62}" x2="${100 + Math.cos(a) * (i % 2 ? 76 : 86)}" y2="${100 + Math.sin(a) * (i % 2 ? 76 : 86)}"/>`; }).join('');
-  const sun = (o) => `<g style="opacity:${o}"><g class="rays" stroke="#eb8c6d" stroke-width="6" stroke-linecap="round">${rays}</g><circle cx="100" cy="100" r="48" fill="#eb8c6d"/></g>`;
+  const sun = (o) => `<g style="opacity:${o}"><g class="rays" stroke="#a85a51" stroke-width="6" stroke-linecap="round">${rays}</g><circle cx="100" cy="100" r="48" fill="#a85a51"/></g>`;
   const cloud = (x, y, c) => `<path transform="translate(${x} ${y})" d="M30 90 a28 28 0 0 1 6 -55 a40 40 0 0 1 76 8 a26 26 0 0 1 8 51 z" fill="${c}"/>`;
   return `<svg class="wx" viewBox="0 0 200 200" aria-hidden="true">${k === 'sun' ? sun(1) : k === 'part' ? sun(1) + cloud(40, 70, '#fff') : sun(.35) + cloud(30, 50, '#fff') + cloud(70, 92, '#e3dacc')}</svg>`;
 }

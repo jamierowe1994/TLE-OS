@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import ApplicationDrawer from "@/components/ApplicationDrawer";
 import HandoffPanel from "@/components/HandoffPanel";
 import { peekJson, readJson } from "@/lib/page-cache";
+import { APPS_BOARD_URL as APPS_URL, APPS_FRESH_URL, readFreshBoard } from "@/lib/applications-read";
+import BoardUpdating, { type BoardUpdate } from "@/components/BoardUpdating";
 import { applicationOrder } from "@/lib/application-order";
 import { checksFor, isLet, toAppRecord } from "@/lib/application-record";
 import { sameHome } from "@/lib/address-parse";
@@ -25,8 +27,7 @@ import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
  * the board matches its cards, and arrives after (Propoly is the slow read).
  */
 
-type AppsAnswer = { applications?: Application[]; error?: string };
-const APPS_URL = "/api/applications?limit=200";
+type AppsAnswer = { applications?: Application[]; error?: string; stale?: boolean; pulledAt?: string };
 type Loaded<T> = { state: "loading" } | { state: "ready"; data: T } | { state: "failed"; error: string };
 
 /** The board's own match, from the other side: this application's deal. */
@@ -64,22 +65,51 @@ export default function LetPage() {
   const [order, setOrder] = useState<string[]>([]);
   useEffect(() => setOrder(applicationOrder()), []);
 
+  /* The board's last read on screen while a fresh one loads (James, 9 Nov
+     2026, lib/applications-read): the marker, and the time of the one shown. */
+  const [update, setUpdate] = useState<BoardUpdate>(null);
+  const [asAt, setAsAt] = useState<string | null>(() => peekJson<AppsAnswer>(APPS_URL)?.pulledAt ?? null);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
     let live = true;
+    /* Asked for by name but not on the board (a let whose move-in has
+       passed is cut from it): fetch that one too, read the same way. */
+    const withThis = async (j: AppsAnswer, url: string) => {
+      let list = j.applications ?? [];
+      if (!list.some((a) => String(a.id) === id)) {
+        const more = await fetch(`${url}&include=${encodeURIComponent(id)}&tests=0`, { cache: "no-store" })
+          .then((r) => r.json() as Promise<AppsAnswer>)
+          .catch(() => null);
+        const hit = more?.applications?.find((a) => String(a.id) === id);
+        if (hit) list = [...list, hit];
+      }
+      return list;
+    };
     (async () => {
       try {
         const j = await readJson<AppsAnswer>(APPS_URL, (r) => !r.error && Array.isArray(r.applications));
-        let list = j.applications ?? [];
-        /* Asked for by name but not on the board (a let whose move-in has
-           passed is cut from it): fetch that one too. */
-        if (!list.some((a) => String(a.id) === id)) {
-          const more = await fetch(`${APPS_URL}&include=${encodeURIComponent(id)}&tests=0`, { cache: "no-store" })
-            .then((r) => r.json() as Promise<AppsAnswer>)
-            .catch(() => null);
-          const hit = more?.applications?.find((a) => String(a.id) === id);
-          if (hit) list = [...list, hit];
+        const list = await withThis(j, APPS_URL);
+        if (!live) return;
+        setApps(j.error && !list.length ? { state: "failed", error: j.error } : { state: "ready", data: list });
+        setAsAt(j.pulledAt ?? null);
+        if (!j.stale || j.error) {
+          setUpdate(null);
+          return;
         }
-        if (live) setApps(j.error && !list.length ? { state: "failed", error: j.error } : { state: "ready", data: list });
+        /* The last board, answered at once while it is rebuilt: say so, and
+           take the rebuilt one the moment it is ready. */
+        setUpdate("updating");
+        const k = await readFreshBoard<AppsAnswer>().catch(() => null);
+        if (!live) return;
+        if (!k || k.error || !Array.isArray(k.applications)) {
+          setUpdate("failed");
+          return;
+        }
+        const fresh = await withThis(k, APPS_FRESH_URL);
+        if (!live) return;
+        setApps({ state: "ready", data: fresh });
+        setAsAt(k.pulledAt ?? null);
+        setUpdate(null);
       } catch {
         if (live) setApps((cur) => (cur.state === "ready" ? cur : { state: "failed", error: "The applications didn't load. Try again in a minute." }));
       }
@@ -87,7 +117,7 @@ export default function LetPage() {
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, tries]);
 
   /* Kirstie's deals, as the board reads them. A cold Propoly cache answers
      null: ask again rather than say there is no deal. */
@@ -147,7 +177,7 @@ export default function LetPage() {
   }
   if (!app && !deal && look) {
     return (
-      <div data-look="new" className="nl-page py-16">
+      <div data-look="new" className="nl-page nl-edge py-16">
         <h1 className="nl-section-title">This Let Isn&apos;t on Your Book</h1>
         <p className="nl-meta mt-2">{apps.state === "failed" ? apps.error : "It may belong to another agent, or the link is wrong."}</p>
         <Link href="/applications" className="nl-btn nl-btn--secondary nl-btn--sm mt-5">Back to Applications</Link>
@@ -167,16 +197,20 @@ export default function LetPage() {
   }
 
   return (
-    <ApplicationDrawer
-      key={id}
-      app={app}
-      deal={deal}
-      checklist={checklist}
-      /* Only once the offer is accepted - in REX or here. Before that there
-         is nothing to push, and offering it invites somebody to jump the gun. */
-      aside={appRaw && isLet(appRaw) ? <HandoffPanel applicationId={String(appRaw.id)} /> : undefined}
-      initialTab={initialTab}
-      newLook={look}
-    />
+    <div className="relative">
+      <BoardUpdating corner state={update} asAt={asAt} onRetry={() => setTries((t) => t + 1)} />
+      <ApplicationDrawer
+        key={id}
+        app={app}
+        deal={deal}
+        checklist={checklist}
+        /* Only once the offer is accepted - in REX or here. Before that there
+           is nothing to push, and offering it invites somebody to jump the gun. */
+        /* "What Goes to Propoly" folded into the Push to Propoly pop-out (8 Nov 2026). */
+        aside={look ? undefined : appRaw && isLet(appRaw) ? <HandoffPanel applicationId={String(appRaw.id)} /> : undefined}
+        initialTab={initialTab}
+        newLook={look}
+      />
+    </div>
   );
 }

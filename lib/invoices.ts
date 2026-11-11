@@ -267,9 +267,12 @@ export async function createInvoice(input: { orderId?: string | null; propertyId
     const { feeBasis } = await import("@/lib/finance-forecast");
     const [{ book }, basis] = await Promise.all([managedBookFor(null), feeBasis()]);
     const p = book.properties.find((x) => x.propertyId === input.propertyId || x.listingId === input.propertyId);
+    /* Joint landlords are billed together, as the home's page names them
+       ("A & B Surname"), not the first of them alone. */
+    const together = (names: (string | null | undefined)[]) => [...new Set(names.map((n) => (n ?? "").trim()).filter(Boolean))].join(" & ");
     if (p) {
       property = property || [p.name, p.locality].filter(Boolean).join(", ");
-      toName = toName || p.landlord?.name || "";
+      toName = toName || together([p.landlord?.name, ...(p.otherLandlords ?? []).map((l) => l.name)]);
       toEmail = toEmail || p.landlord?.email || "";
       reference = reference || `${p.name}${p.service ? ` · ${p.service}` : ""}`;
       const rentPence = Math.round((p.rentMonthly ?? 0) * 100);
@@ -283,6 +286,35 @@ export async function createInvoice(input: { orderId?: string | null; propertyId
           vatRate: settings.defaultVatRate,
         });
       }
+    } else {
+      /* A home that is not a let yet (Lianna Denholm, 10 Nov 2026: an
+         inventory fee on a home that was still a listing in REX on the
+         day its tenant moved in). The managed book is lets only, so this used
+         to draft a blank invoice with no home and nobody on it, without a
+         word. The landlord is read off the home's own record instead
+         (lib/home-people asks REX for that one property), the address comes
+         from the listing, and there are no fee lines because nothing is let
+         to charge a percentage of. */
+      const [{ bookFor }, { homePeople }, { peopleOnHome }, { getComplianceBook }] = await Promise.all([
+        import("@/lib/listings-cache"), import("@/lib/home-people"), import("@/lib/home-aliases"), import("@/lib/compliance-cache"),
+      ]);
+      const [listings, people, compliance] = await Promise.all([
+        bookFor(null).catch(() => null),
+        homePeople(input.propertyId).catch(() => null),
+        getComplianceBook().then((c) => c.book).catch(() => null),
+      ]);
+      const l = listings?.listings.find((x) => x.propertyId === input.propertyId || String(x.id) === input.propertyId);
+      const c = compliance?.properties.find((x) => String(x.id) === input.propertyId || (l?.propertyId && String(x.id) === l.propertyId));
+      if (l) property = property || [l.name, l.locality].filter(Boolean).join(", ");
+      else if (c) property = property || [c.name, c.locality].filter(Boolean).join(", ");
+      /* The landlord as the home's record has them, the joint landlords kept
+         on the home with them; the compliance list's name where the record
+         could not be read just now. */
+      const joint = await peopleOnHome(people?.homeId ?? input.propertyId, l ? `listing:${l.id}` : null).catch(() => []);
+      toName = toName || together([people?.landlord?.name, ...(people?.otherLandlords ?? []).map((x) => x.name), ...joint.filter((x) => x.kind === "joint_landlord").map((x) => x.name)]) || (c?.landlord ?? "").trim();
+      toEmail = toEmail || people?.landlord?.email || "";
+      reference = reference || (l?.name ?? property.split(",")[0] ?? "");
+      if (!property) throw new Error("That home couldn't be found among the listings or homes. Start a new invoice and type the address in.");
     }
   }
 

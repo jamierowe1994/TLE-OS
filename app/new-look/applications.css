@@ -208,3 +208,241 @@
 [data-look="new"] .nl-fact .nl-fact-differs a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 /* The move-in date takes the whole row in Edit, so the day is never cut short. */
 [data-look="new"] .nl-facts-grid > .nl-fact--wide { grid-column: 1 / -1; }
+
+/* ── the website's edge (James, 8 Nov 2026) ──────────────────────────────
+   The page itself is on nl-edge (app/new-look.css). These are the pieces
+   only Applications has: the counted stage strip and the progress marks. */
+[data-look="new"].nl-edge .nl-apps-stage-n { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; font-size: 36px; letter-spacing: 0.02em; }
+[data-look="new"].nl-edge .nl-apps-stage-name { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; font-size: 11px; line-height: 14px; letter-spacing: 0.14em; }
+[data-look="new"].nl-edge .nl-apps-stage-ind { background: var(--accent); }
+[data-look="new"].nl-edge .nl-apps-stage:focus-visible { border-radius: 0; }
+[data-look="new"].nl-edge .nl-apps-age { font-family: var(--font-inter), sans-serif; font-variant-numeric: tabular-nums; }
+[data-look="new"].nl-edge .nl-apps-pips i.done { background: var(--primary); }
+[data-look="new"].nl-edge .nl-apps-pips i.now { background: var(--accent); }
+[data-look="new"].nl-edge .nl-apps-more > p:not(.nl-apps-flagline) { font-family: var(--font-inter), sans-serif; font-size: 15px; line-height: 22px; }
+[data-look="new"].nl-edge .nl-apps-journey li { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; font-size: 10.5px; line-height: 14px; letter-spacing: 0.12em; }
+[data-look="new"].nl-edge .nl-apps-journey li.done i, [data-look="new"].nl-edge .nl-apps-journey li.done::after { background: var(--primary); border-color: var(--primary); }
+[data-look="new"].nl-edge .nl-apps-journey li.now i { background: var(--accent); border-color: var(--accent); }
+@media (max-width: 760px) {
+  [data-look="new"].nl-edge .nl-apps-stage-n { font-size: 30px; }
+}
+
+/* ── People on a let: three columns, one person each (James, 8 Nov 2026) ──
+   The lead applicant, the guarantor and the landlord side by side; anyone
+   else waits as card edges behind the first and fans out in a pop-up. */
+[data-look="new"] .nl-people3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start; margin-top: 18px; }
+@media (max-width: 1100px) { [data-look="new"] .nl-people3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { [data-look="new"] .nl-people3 { grid-template-columns: minmax(0, 1fr); } }
+[data-look="new"] .nl-pdeck { min-width: 0; }
+[data-look="new"] .nl-pdeck-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line-strong); }
+[data-look="new"] .nl-pdeck-head .nl-block-title { margin: 0; }
+[data-look="new"] .nl-pdeck-stack { position: relative; }
+/* The cards behind: two edges at most, stepping down and in. */
+[data-look="new"] .nl-pdeck-stack[data-behind="1"], [data-look="new"] .nl-pdeck-stack[data-behind="2"] { padding-bottom: 8px; }
+[data-look="new"] .nl-pdeck-stack[data-behind="2"] { padding-bottom: 16px; }
+[data-look="new"] .nl-pdeck-stack[data-behind="1"]::before, [data-look="new"] .nl-pdeck-stack[data-behind="2"]::before,
+[data-look="new"] .nl-pdeck-stack[data-behind="2"]::after {
+  content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 24px; border: 1px solid var(--line-strong); background: var(--card); z-index: 0;
+}
+[data-look="new"] .nl-pdeck-stack[data-behind="1"]::before { left: 10px; right: 10px; }
+[data-look="new"] .nl-pdeck-stack[data-behind="2"]::before { left: 8px; right: 8px; bottom: 8px; }
+[data-look="new"] .nl-pdeck-stack[data-behind="2"]::after { left: 18px; right: 18px; bottom: 0; background: color-mix(in srgb, var(--card) 70%, var(--line)); }
+[data-look="new"] .nl-pdeck-stack > .nl-pdeck-card { position: relative; z-index: 1; }
+[data-look="new"] .nl-pdeck-more {
+  position: relative; z-index: 1; display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 10px;
+  margin-top: -1px; padding: 9px 14px; font: inherit; font-size: 12.5px; color: var(--muted); background: var(--accent-soft);
+  border: 1px solid var(--line-strong); cursor: pointer; transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-pdeck-more:hover { background: var(--primary); color: var(--on-primary); }
+[data-look="new"] .nl-pdeck-more-go { font-family: var(--edge-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; color: inherit; }
+[data-look="new"] .nl-pdeck-empty { padding: 16px; border: 1px dashed var(--line-strong); font-size: 13px; line-height: 19px; color: var(--muted); }
+[data-look="new"] .nl-pdeck-acts { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+[data-look="new"] .nl-pdeck-add {
+  font: inherit; cursor: pointer; padding: 7px 12px; background: transparent; color: var(--accent-dark);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  font-family: var(--edge-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; font-size: 11px;
+  transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-pdeck-add:hover:not(:disabled) { background: var(--accent); color: #fff; }
+[data-look="new"] .nl-pdeck-add.is-quiet { color: var(--ink); border-color: var(--line-strong); }
+[data-look="new"] .nl-pdeck-add.is-quiet:hover:not(:disabled) { background: var(--ink); color: var(--page); }
+[data-look="new"] .nl-pdeck-add:disabled { opacity: 0.5; cursor: default; }
+/* "Someone else moving in?" under the applicant, as one quiet line. */
+[data-look="new"] .nl-pdeck-tenants { width: 100%; }
+[data-look="new"] .nl-pdeck-tenants > div:first-child > p { font-size: 12.5px; letter-spacing: 0; text-transform: none; font-weight: 400; }
+
+/* A person's card: name, then their lines, nothing crowding it. */
+[data-look="new"] .nl-pcard { background: var(--card); border: 1px solid var(--line-strong); padding: 16px 18px; min-width: 0; }
+[data-look="new"] .nl-pcard-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; min-height: 40px; }
+[data-look="new"] .nl-pcard-name { font-size: 16px; line-height: 22px; font-weight: 600; margin: 0; }
+[data-look="new"] .nl-pcard-role, [data-look="new"] .nl-pcard-tag, [data-look="new"] .nl-pcard-label {
+  display: block; margin: 2px 0 0; font-family: var(--edge-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 10.5px; color: var(--accent-dark);
+}
+[data-look="new"] .nl-pcard-tag { margin: 0 0 6px; color: var(--sage-deep); }
+[data-look="new"] .nl-pcard-label { color: var(--muted); margin-bottom: 4px; }
+[data-look="new"] .nl-pcard-tools { display: flex; gap: 4px; flex: none; }
+[data-look="new"] .nl-pcard-edit, [data-look="new"] .nl-pcard-quiet {
+  display: inline-flex; align-items: center; gap: 5px; font: inherit; cursor: pointer; padding: 4px 9px;
+  font-family: var(--edge-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; font-size: 10.5px;
+  color: var(--sage-deep); background: var(--sage-soft); border: 1px solid color-mix(in srgb, var(--sage-deep) 28%, transparent); transition: background-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-pcard-edit:hover { background: var(--sage-deep); color: #fff; }
+[data-look="new"] .nl-pcard-quiet { color: var(--muted); background: transparent; border-color: transparent; }
+[data-look="new"] .nl-pcard-quiet:hover { color: var(--ink); }
+[data-look="new"] .nl-pcard-lines { display: grid; gap: 6px; margin-top: 8px; font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-pcard-lines > * { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--ink); }
+[data-look="new"] .nl-pcard-lines svg { flex: none; color: var(--muted); }
+[data-look="new"] .nl-pcard-rtr { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+/* The tenant card's Edit, up by the name. */
+[data-look="new"] .nl-ltc { position: relative; }
+[data-look="new"] .nl-pcard .nl-ltc-edit { position: absolute; top: -46px; right: 0; }
+/* Contact rows in a narrow card: the number and its buttons on one line,
+   the copy button only on hover. */
+[data-look="new"] .nl-pcard .group\/row { flex-wrap: nowrap; min-height: 38px; padding: 6px 0; }
+[data-look="new"] .nl-pcard .group\/row > span.flex-1 { min-width: 0; }
+[data-look="new"] .nl-pcard .group\/row a, [data-look="new"] .nl-pcard .group\/row button { flex: none; }
+[data-look="new"] .nl-pcard .group\/row > :last-child:is(button) { opacity: 0; transition: opacity 0.15s; }
+[data-look="new"] .nl-pcard .group\/row:hover > :last-child:is(button), [data-look="new"] .nl-pcard .group\/row > :last-child:is(button):focus-visible { opacity: 1; }
+/* The pop-up: every card fans out from the left. */
+[data-look="new"] .nl-pdeck-fan { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+[data-look="new"] .nl-pdeck-fan > .nl-pdeck-card { animation: nl-pdeck-fan 0.5s var(--nl-ease) backwards; animation-delay: calc(var(--i, 0) * 70ms + 80ms); }
+@keyframes nl-pdeck-fan { from { opacity: 0; transform: translateX(calc(var(--i, 0) * -60px - 20px)) rotate(-1.5deg); } }
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-pdeck-fan > .nl-pdeck-card { animation: none; } }
+[data-look="new"] .nl-pcard .group\/row > a, [data-look="new"] .nl-pcard .group\/row > button:not(:last-child), [data-look="new"] .nl-pcard .group\/row > span > button {
+  padding: 3px 8px; min-height: 26px; font-size: 11.5px; gap: 5px;
+}
+[data-look="new"] .nl-pcard .group\/row { gap: 6px; }
+[data-look="new"] .nl-pcard .group\/row > span.flex-1 { font-size: 13.5px; }
+/* A number is never cut short: it keeps its width and the buttons move under
+   it on a narrow card. The copy button is the long-press of a desktop - not
+   needed on a card this tight, where the text can be selected. */
+[data-look="new"] .nl-pcard .group\/row { flex-wrap: wrap; }
+[data-look="new"] .nl-pcard .group\/row > span.flex-1 { flex: 1 1 auto; min-width: min(100%, 9.5em); }
+[data-look="new"] .nl-pcard .group\/row > :last-child:is(button) { display: none; }
+/* Every box the same size, always (James, 8 Nov 2026): the applicant's box
+   sets it, a touch bigger than its content, and the guarantor and landlord
+   match it however little they hold. Anything longer scrolls inside. */
+@media (min-width: 761px) {
+  [data-look="new"] .nl-people3 .nl-pdeck-card > .nl-pcard,
+  [data-look="new"] .nl-people3 .nl-pdeck-stack > .nl-pdeck-card > *,
+  [data-look="new"] .nl-people3 .nl-pdeck-empty { height: 420px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+}
+[data-look="new"] .nl-pdeck-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; background: var(--card); border-style: solid; }
+[data-look="new"] .nl-pdeck-empty-t { font-size: 15px; font-weight: 600; color: var(--ink); }
+/* What the step you're on means, under the line (8 Nov 2026). */
+[data-look="new"] .nl-apps-track-about { margin: 6px 0 0; max-width: 760px; font-size: 13.5px; line-height: 20px; color: var(--ink); padding-left: 12px; border-left: 2px solid var(--accent); }
+/* Tighter, and the same type on every card (8 Nov 2026: "a little bit too
+   big", "the landlord's text much smaller than the tenant's"). */
+@media (min-width: 761px) {
+  [data-look="new"] .nl-people3 .nl-pdeck-card > .nl-pcard,
+  [data-look="new"] .nl-people3 .nl-pdeck-stack > .nl-pdeck-card > *,
+  [data-look="new"] .nl-people3 .nl-pdeck-empty { height: 300px; }
+}
+[data-look="new"] .nl-people3 { gap: 20px; }
+[data-look="new"] .nl-pcard { position: relative; padding: 18px 20px; }
+[data-look="new"] .nl-pcard .group\/row > span.flex-1,
+[data-look="new"] .nl-pcard .group\/row > span.flex-1 *,
+[data-look="new"] .nl-pcard .nl-pcard-lines { font-size: 14px; line-height: 20px; }
+[data-look="new"] .nl-pcard--landlord > div > p.leading-snug:first-child,
+[data-look="new"] .nl-pcard--landlord > div > p.leading-snug:first-child * { font-size: 16px; line-height: 22px; font-weight: 600; }
+[data-look="new"] .nl-pcard--landlord > div > p.leading-snug:first-child { margin-bottom: 8px; padding-right: 72px; }
+[data-look="new"] .nl-pcard-corner { position: absolute; top: 16px; right: 18px; z-index: 1; }
+[data-look="new"] .nl-pcard-hint { margin: 0 0 10px; padding-right: 72px; font-size: 12.5px; line-height: 18px; color: var(--sage-deep); }
+/* Editing: every detail shows as a box to click. */
+[data-look="new"] .nl-pcard.is-editing .group\/row > span.flex-1 > button,
+[data-look="new"] .nl-pcard.is-editing p.leading-snug > button,
+[data-look="new"] .nl-pcard.is-editing .text-\[11\.5px\] button { outline: 1px dashed color-mix(in srgb, var(--sage-deep) 60%, transparent); outline-offset: 2px; background: #fff; }
+
+/* ── Push to Propoly, the pop-out (components/propoly/PushToPropoly, 8 Nov 2026) ── */
+[data-look="new"] .nl-ptp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 36px; align-items: start; }
+[data-look="new"] .nl-ptp-info, [data-look="new"] .nl-ptp-act { min-width: 0; display: grid; gap: 14px; align-content: start; }
+[data-look="new"] .nl-ptp-act { position: sticky; top: 0; }
+@media (max-width: 960px) { [data-look="new"] .nl-ptp { grid-template-columns: 1fr; } [data-look="new"] .nl-ptp-act { position: static; } }
+[data-look="new"] .nl-ptp-lines { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-ptp-lines li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-ptp-lines li:first-child { border-top: 0; padding-top: 2px; }
+[data-look="new"] .nl-ptp-lines b { display: block; font-size: 14.5px; font-weight: 600; }
+[data-look="new"] .nl-ptp-lines small { display: block; font-size: 12.5px; color: var(--muted); }
+[data-look="new"] .nl-ptp-ok { flex: none; display: grid; place-items: center; width: 24px; height: 24px; background: var(--sage-deep); color: #fff; }
+[data-look="new"] .nl-ptp-warn { flex: none; padding: 3px 9px; font-size: 11.5px; font-weight: 600; color: var(--bad-ink); background: var(--bad-soft); white-space: nowrap; }
+[data-look="new"] .nl-ptp-none { margin: 0; font-size: 13.5px; color: var(--muted); }
+[data-look="new"] .nl-ptp-todo { margin: 0; padding: 0 0 0 18px; display: grid; gap: 6px; font-size: 14px; line-height: 20px; color: var(--bad-ink); }
+[data-look="new"] .nl-ptp-ready { margin: 0; font-size: 14px; line-height: 20px; color: var(--sage-deep); }
+[data-look="new"] .nl-ptp-go { margin-top: 16px; }
+[data-look="new"] .nl-ptp-why { margin: 0; font-size: 14px; line-height: 21px; }
+/* The deal form, inside the pop-out: square and on the panel. */
+[data-look="new"] .nl-ptp-act [data-steve="application.deal-terms"] { margin: 0 !important; background: var(--card) !important; border: 1px solid var(--line-strong) !important; padding: 18px 20px !important; }
+[data-look="new"] .nl-ptp-act [data-steve="application.deal-terms"] > p:first-child { font-family: var(--fs-cond, var(--font-bricolage)); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 13px; }
+[data-look="new"] .nl-ptp-act input, [data-look="new"] .nl-ptp-act select { height: 38px; font-size: 14px; background: #fff; border-color: var(--line-strong) !important; }
+/* It's in Propoly: the big moment. */
+[data-look="new"] .nl-ptp--landed { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+[data-look="new"] .nl-ptp-landed { display: grid; justify-items: start; gap: 10px; padding: 28px 0; }
+[data-look="new"] .nl-ptp-burst { display: grid; place-items: center; width: 84px; height: 84px; background: var(--sage-deep); color: #fff; animation: nl-ptp-pop 0.6s var(--nl-ease) backwards, nl-ptp-ring 1.6s ease-out 0.3s 2; }
+@keyframes nl-ptp-pop { from { transform: scale(0.3) rotate(-12deg); opacity: 0; } 60% { transform: scale(1.08) rotate(3deg); } }
+@keyframes nl-ptp-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sage-deep) 45%, transparent); } 100% { box-shadow: 0 0 0 28px transparent; } }
+[data-look="new"] .nl-ptp-landed-t { margin: 8px 0 0; font-size: 18px; font-weight: 600; }
+[data-look="new"] .nl-ptp-landed-s { margin: 0; font-size: 14px; color: var(--muted); max-width: 46ch; }
+[data-look="new"] .nl-ptp-landed-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+[data-look="new"] .nl-ptp-check { list-style: none; margin: 0; padding: 0; }
+[data-look="new"] .nl-ptp-check li + li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-ptp-check label { display: flex; gap: 12px; align-items: flex-start; padding: 11px 0; cursor: pointer; }
+[data-look="new"] .nl-ptp-check input { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--sage-deep); flex: none; }
+[data-look="new"] .nl-ptp-check b { display: block; font-size: 14.5px; font-weight: 600; }
+[data-look="new"] .nl-ptp-check small { display: block; margin-top: 2px; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-ptp-check input:checked + span b { text-decoration: line-through; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-ptp-burst { animation: none; } }
+[data-look="new"] .nl-ptp-todo.is-soft { color: var(--ink); }
+[data-look="new"] .nl-ptp-note { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* ── Customer update, the stepped pop-out (components/updates/CustomerUpdateSheet, 8 Nov 2026) ── */
+[data-look="new"] .nl-cu-call { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+[data-look="new"] .nl-cu-text { font-family: var(--font-inter), sans-serif !important; font-size: 15px !important; line-height: 1.55 !important; min-height: 120px; }
+[data-look="new"] .nl-cu-portal { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 14px 16px; border: 1px solid var(--line-strong); cursor: pointer; }
+[data-look="new"] .nl-cu-portal input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--sage-deep); }
+[data-look="new"] .nl-cu-portal b { display: block; font-size: 14px; font-weight: 600; }
+[data-look="new"] .nl-cu-portal small { display: block; font-size: 12.5px; color: var(--muted); }
+[data-look="new"] .nl-cu-bodyhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 16px 0 6px; }
+[data-look="new"] .nl-cu-fills { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-cu-fills button { padding: 3px 9px; font: inherit; font-size: 12px; cursor: pointer; color: var(--sage-deep); background: var(--sage-soft); border: 1px solid color-mix(in srgb, var(--sage-deep) 30%, transparent); }
+[data-look="new"] .nl-cu-fills button:hover { background: var(--sage-deep); color: #fff; }
+[data-look="new"] .nl-cu-save { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+[data-look="new"] .nl-cu-save .nl-fs-input { flex: 1 1 240px; }
+[data-look="new"] .nl-cu-saved { margin: 0; font-size: 14px; color: var(--sage-deep); }
+/* Attachments on a custom update. */
+[data-look="new"] .nl-cu-attach { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-cu-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; font-size: 13px; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-cu-chip button { padding: 0 6px; font: inherit; font-size: 15px; line-height: 1; color: var(--muted); background: none; border: 0; cursor: pointer; }
+[data-look="new"] .nl-cu-chip button:hover { color: var(--ink); }
+[data-look="new"] .nl-cu-attach-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; background: transparent; border: 1px dashed var(--line-strong); color: var(--ink); }
+[data-look="new"] .nl-cu-attach-btn:hover { border-style: solid; border-color: var(--ink); }
+[data-look="new"] .nl-cu-attach-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+[data-look="new"] .nl-cu-attach-pick button { display: grid; gap: 3px; text-align: left; padding: 12px 14px; font: inherit; cursor: pointer; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-cu-attach-pick button:hover { border-color: var(--ink); }
+[data-look="new"] .nl-cu-attach-pick b { font-size: 14px; font-weight: 600; }
+[data-look="new"] .nl-cu-attach-pick span { font-size: 12.5px; color: var(--muted); }
+[data-look="new"] .nl-cu-filelist { margin-top: 10px; padding: 10px 14px; background: #fff; border: 1px solid var(--line-strong); display: grid; gap: 10px; justify-items: start; }
+[data-look="new"] .nl-cu-filelist ul { list-style: none; margin: 0; padding: 0; width: 100%; max-height: 220px; overflow-y: auto; }
+[data-look="new"] .nl-cu-filelist li + li { border-top: 1px solid var(--line); }
+[data-look="new"] .nl-cu-filelist label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+[data-look="new"] .nl-cu-filelist input { margin-top: 3px; accent-color: var(--sage-deep); }
+[data-look="new"] .nl-cu-filelist b { display: block; font-size: 13.5px; font-weight: 600; }
+[data-look="new"] .nl-cu-filelist small { display: block; font-size: 12px; color: var(--muted); }
+[data-look="new"] .nl-advert-chip { display: inline-flex; align-items: center; height: 40px; padding: 0 12px; font-size: 12px; color: var(--muted); border: 1px dashed var(--line-strong); white-space: nowrap; }
+/* Profile > Automations: when to take adverts offline. */
+[data-look="new"] .nl-auto-advert { margin-bottom: 32px; padding-bottom: 28px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+[data-look="new"] .nl-auto-advert .nl-choice-row { margin-top: 8px; }
+/* Several people at once. */
+[data-look="new"] .nl-cu-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+[data-look="new"] .nl-cu-quick button { padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; background: #fff; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-cu-quick button:hover { border-color: var(--ink); }
+[data-look="new"] .nl-cu-tabs { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: -4px 0 16px; border-bottom: 1px solid var(--line-strong); }
+[data-look="new"] .nl-cu-tabs [role="tab"] { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font: inherit; font-size: 14px; cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); }
+[data-look="new"] .nl-cu-tabs [role="tab"].is-on { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+[data-look="new"] .nl-cu-tabs [role="tab"] i { font-style: normal; font-size: 12px; color: var(--sage-deep); }
+[data-look="new"] .nl-cu-same { margin-left: auto; padding: 0 4px; font: inherit; font-size: 12.5px; color: var(--muted); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+[data-look="new"] .nl-cu-same:hover { color: var(--ink); }
+[data-look="new"] .nl-cu-to { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+/* See all: every card the same size, whatever's on it (8 Nov 2026). */
+[data-look="new"] .nl-pdeck-fan { align-items: stretch; grid-auto-rows: 1fr; }
+[data-look="new"] .nl-pdeck-fan > .nl-pdeck-card { display: flex; }
+[data-look="new"] .nl-pdeck-fan > .nl-pdeck-card > * { flex: 1 1 auto; min-height: 300px; }

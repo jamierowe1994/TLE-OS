@@ -53,7 +53,7 @@ function Check() {
   }
 
   return (
-    <DoorFrame art="house">
+    <DoorFrame art="house" title={["Quick", "Check."]} line="Just to be sure it's you.">
       <h1 className="hand text-[26px] leading-tight">Check It&apos;s You</h1>
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
         Every few days we send a code to your work email, so only you can use your account.

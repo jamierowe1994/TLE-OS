@@ -3,7 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { offerListingIds } from "@/lib/offer-access";
 import { hasDb, q } from "@/lib/db";
 import { scopeForWho } from "@/lib/scope";
-import { assembled } from "@/lib/applications-board";
+import { QUICK_MS, assembled, type BoardRead } from "@/lib/applications-board";
 import { rexConfigured } from "@/lib/rex";
 import { testApplicationsFor } from "@/lib/test-overlay";
 import { decisionsFor } from "@/lib/offer-decisions";
@@ -74,6 +74,13 @@ export async function GET(req: NextRequest) {
   const actor = who?.actor ?? null;
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
+  /* ?quick=1 from the Applications screen (9 Nov 2026): the agent's
+     applications as the board reads them - the last board at once, up to an
+     hour old, while it is rebuilt; the screen asks again once the board's
+     fresh read lands. Everyone else, the ten-minute rule. */
+  const sp = req.nextUrl.searchParams;
+  const read: BoardRead = sp.get("fresh") === "1" ? { fresh: true } : sp.get("quick") === "1" ? { upToMs: QUICK_MS } : {};
+
   const byListing: Record<string, number> = {};
   const add = (id: unknown) => {
     const k = String(id ?? "");
@@ -86,7 +93,7 @@ export async function GET(req: NextRequest) {
         if (!rexConfigured()) return [];
         const scope = await scopeForWho(req, who);
         if (scope.unlinked) return [];
-        const { held } = await assembled(scope.rexUserId);
+        const { held } = await assembled(scope.rexUserId, read);
         const { applications, closed } = held.value;
         return applications.filter((a) => (a.status === "received" || a.status === "communicated" || a.status === "accepted") && !closed.get(a.id));
       })().catch(() => []),
@@ -101,7 +108,7 @@ export async function GET(req: NextRequest) {
     ]);
     /* An agent counts only the offers saved on their own listings; the REX
        half is scoped already, and test offers are their own. */
-    const mine = await offerListingIds(req, who);
+    const mine = await offerListingIds(req, who, read);
     const decided = await decisionsFor(rex.map((a) => `rex:${a.id}`));
     const isOpen = (s: string) => s === "received" || s === "communicated";
     const rows: Omit<OpenOfferRow, "held" | "landlordSent" | "countered">[] = [];

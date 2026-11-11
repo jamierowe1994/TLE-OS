@@ -391,7 +391,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
               labels={series.rows.map((r) => monthLabel(r.month).slice(0, 3))}
               series={[
                 { name: "Susan", color: "#56423e", values: series.rows.map((r) => r.susan) },
-                { name: "Partners", color: "#cfa096", values: series.rows.map((r) => r.partners) },
+                { name: "Partners", color: "#c4a092", values: series.rows.map((r) => r.partners) },
                 { name: "Actual", color: "#8d9b78", values: series.rows.map((r) => r.actual) },
               ]}
               format={(n) => `£${Math.round(n / 1000)}k`}

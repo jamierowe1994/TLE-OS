@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
 import AdvertOffline from "@/components/listing/AdvertOffline";
 import DoodleIcon from "@/components/DoodleIcon";
+import { isWatched, PORTAL_SENT_EVENT, PORTAL_WATCH_EVENT, portalList, TAKING_A_WHILE, watchPortalSend } from "@/lib/portal-watch";
 import SignInAgain from "@/components/SignInAgain";
 import WithdrawnBox from "@/components/listing/WithdrawnBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -45,6 +46,7 @@ import { searchMatches } from "@/lib/search-match";
  */
 const LISTING_OFFERS_LIVE = false;
 import type { Landlord } from "@/lib/rex-landlord";
+import type { HomeLandlord as FoundLandlord } from "@/lib/landlords-for-home";
 import { DIARY, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { setOpenListing } from "@/lib/open-record";
@@ -67,6 +69,7 @@ import HomeKeys from "@/components/portfolio/HomeKeys";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import ListingOwner from "@/components/listing/ListingOwner";
 import ListingCompliance, { useListingHome } from "@/components/listing/ListingCompliance";
+import ListingAppraisal, { useListingAppraisal } from "@/components/listing/ListingAppraisal";
 import LandlordRegistration from "@/components/listing/LandlordRegistration";
 import FieldSelect from "@/components/FieldSelect";
 import { LET_TYPES, type LetType } from "@/lib/let-type";
@@ -81,6 +84,7 @@ import BookSlot from "@/components/viewings/BookSlot";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
 import ChangeViewing, { apptFromViewing, apptStartIso } from "@/components/viewings/ChangeViewing";
 import HomeSwitch from "@/components/HomeSwitch";
+import ActivityList, { exactWhen } from "@/components/new-look/ActivityList";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -137,10 +141,14 @@ export type Listing = {
 type PortalLink = { portal: string; url: string; remoteId: string | null };
 
 /** The landlord lookup. "REX didn't answer" is kept apart from "no landlord". */
+/** Marks a listing fact taken from the appraisal (components/listing/ListingAppraisal). */
+const MA_SUFFIX = " (from the appraisal)";
+
 type LandlordState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "known"; landlord: Landlord }
+  /* `landlords`: everybody the one reader finds (lib/landlords-for-home), `landlord` the first of them. */
+  | { status: "known"; landlord: Landlord; landlords: FoundLandlord[] }
   | { status: "none" }
   | { status: "problem"; says: string };
 
@@ -438,6 +446,14 @@ function ListingDrawerBody({
    * it is (88% of rentals).
    */
   const [landlord, setLandlord] = useState<LandlordState>({ status: "idle" });
+  /* What the market appraisal behind this home learned (10 Nov 2026): its
+     section on the home, and its papers on Compliance. */
+  const appraisal = useListingAppraisal(listing?.id ?? null);
+  /* A fact the listing has not got yet, as the appraisal recorded it, said as such. */
+  const maFact = (label: string): string | null => {
+    const v = appraisal.status === "known" ? appraisal.appraisal.facts.find((f) => f.label === label)?.value ?? null : null;
+    return v ? `${v}${MA_SUFFIX}` : null;
+  };
   /* A landlord changed in the OS asks again (Dan Richards, 17 Oct 2026). */
   const [landlordRev, setLandlordRev] = useState(0);
   /* The photo set popped out full size; null when closed. */
@@ -475,6 +491,12 @@ function ListingDrawerBody({
   const [pushError, setPushError] = useState<string | null>(null);
   /* The push was refused only because their sign-in ran out: the card asks for it. */
   const [pushSignIn, setPushSignIn] = useState(false);
+  /* Published, but the portals hadn't got it yet when the card finished
+     (James, 6 Nov 2026): not a failure, so no "it hasn't gone live" - the
+     card says it is taking longer than normal and the watcher takes over. */
+  const [pushSending, setPushSending] = useState(false);
+  /* Published and sent, but a portal turned it down (its own words). */
+  const [pushRefused, setPushRefused] = useState<string | null>(null);
   useEffect(() => {
     if (pushing == null || pushing < 0 || pushing >= 3 || pushError) return;
     if (pushing === 2 && !pushOk) return;
@@ -484,7 +506,7 @@ function ListingDrawerBody({
 
   /* Where it really is, live from REX. The book is cached for minutes, and
      straight after a push it would still say draft. */
-  const [pub, setPub] = useState<{ status: string | null; onPortals: boolean; blockers: string[] } | null>(null);
+  const [pub, setPub] = useState<{ status: string | null; onPortals: boolean; blockers: string[]; sending?: boolean } | null>(null);
   /* Read again after a withdrawn listing is relisted or taken off (WithdrawnBox). */
   const [pubKey, setPubKey] = useState(0);
   const reloadPub = () => setPubKey((k) => k + 1);
@@ -495,14 +517,31 @@ function ListingDrawerBody({
     let live = true;
     fetch(`/api/listings/publish?id=${encodeURIComponent(String(listing.id))}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; status?: string | null; onPortals?: boolean; blockers?: string[] }) => {
-        if (live && j.ok) setPub({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: j.blockers ?? [] });
+      .then((j: { ok?: boolean; status?: string | null; onPortals?: boolean; blockers?: string[]; sending?: boolean }) => {
+        if (live && j.ok) setPub({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: j.blockers ?? [], sending: Boolean(j.sending) });
       })
       .catch(() => {});
     return () => {
       live = false;
     };
   }, [listing?.id, pubKey]);
+  /* Still on its way to the portals, from this browser's watcher (lib/portal-watch). */
+  const [watching, setWatching] = useState(false);
+  useEffect(() => {
+    if (!listing?.id) return;
+    const id = String(listing.id);
+    const read = () => setWatching(isWatched(id));
+    const sent = (e: Event) => {
+      if ((e as CustomEvent<{ id?: string }>).detail?.id === id) setPubKey((k) => k + 1);
+    };
+    read();
+    window.addEventListener(PORTAL_WATCH_EVENT, read);
+    window.addEventListener(PORTAL_SENT_EVENT, sent);
+    return () => {
+      window.removeEventListener(PORTAL_WATCH_EVENT, read);
+      window.removeEventListener(PORTAL_SENT_EVENT, sent);
+    };
+  }, [listing?.id]);
 
   /* The listing as REX holds it now - rooms, type, deposit, dates - read once
      per listing and shared with the Marketing tab. The book never carried
@@ -580,7 +619,7 @@ function ListingDrawerBody({
   const [quietBusy, setQuietBusy] = useState(false);
   const [quietNote, setQuietNote] = useState<{ ok: boolean; text: string } | null>(null);
 
-  async function portalCall(action: "publish" | "quiet" | "off" | "on"): Promise<{ ok: boolean; error?: string; signIn?: boolean }> {
+  async function portalCall(action: "publish" | "quiet" | "off" | "on"): Promise<{ ok: boolean; error?: string; signIn?: boolean; sending?: boolean; portals?: string[]; refused?: string | null }> {
     if (!listing) return { ok: false, error: "No listing open." };
     try {
       const r = await fetch("/api/listings/publish", {
@@ -588,10 +627,13 @@ function ListingDrawerBody({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: listing.id, action }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string | null; onPortals?: boolean; signIn?: boolean };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string | null; onPortals?: boolean; signIn?: boolean; sending?: boolean; since?: number; portals?: string[]; refused?: { portal: string; why: string }[] };
       if (!j.ok) return { ok: false, error: j.error ?? "The portals did not take it.", signIn: j.signIn };
-      setPub((cur) => ({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: cur?.blockers ?? [] }));
-      return { ok: true };
+      setPub((cur) => ({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: cur?.blockers ?? [], sending: Boolean(j.sending) }));
+      /* Not through yet: the watcher on every page follows it and says when it is. */
+      if (j.sending && j.since) watchPortalSend({ id: listing.id, name: listing.name, since: j.since });
+      const first = j.refused?.[0];
+      return { ok: true, sending: Boolean(j.sending), portals: j.portals ?? [], refused: first ? `${first.portal} turned it down: ${first.why}` : null };
     } catch {
       return { ok: false, error: "The connection dropped. Check the listing before trying again." };
     }
@@ -601,9 +643,13 @@ function ListingDrawerBody({
     setPushOk(false);
     setPushError(null);
     setPushSignIn(false);
+    setPushSending(false);
+    setPushRefused(null);
     setPushing(0);
     const res = await portalCall("publish");
     if (res.ok) {
+      setPushSending(Boolean(res.sending));
+      setPushRefused(res.refused ?? null);
       setPushOk(true);
       setActivityKey((k) => k + 1);
     }
@@ -654,6 +700,22 @@ function ListingDrawerBody({
     };
   }, [tickFor]);
 
+  /* PRINT BROCHURE (Erleta Vathej, ticket 47b2389c; James, 10 Nov 2026: an A4
+     sheet to hand out at viewings, no landlord details). Behind its own switch
+     (lib/switches listing_brochure), asked once; the sheet is app/brochure. */
+  const [brochureArmed, setBrochureArmed] = useState(false);
+  useEffect(() => {
+    if (!newLook) return;
+    let off = false;
+    fetch("/api/listings/brochure", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; armed?: boolean }) => !off && setBrochureArmed(Boolean(j.ok && j.armed)))
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [newLook]);
+
   async function markLet(action: "let_agreed" | "available") {
     if (!listing) return;
     setLetBusy(true);
@@ -664,7 +726,8 @@ function ListingDrawerBody({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: listing.id, action }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; letAgreed?: boolean; onPortals?: boolean; rehearsed?: boolean; portalsTold?: boolean | null };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; letAgreed?: boolean; onPortals?: boolean; rehearsed?: boolean; portalsTold?: boolean | null; sending?: boolean; since?: number };
+      if (j.ok && j.sending && j.since) watchPortalSend({ id: listing.id, name: listing.name, since: j.since });
       setLetAsk(false);
       if (!j.ok) {
         setLetNote({ ok: false, text: j.error ?? "That did not go through. Try again in a minute." });
@@ -681,7 +744,9 @@ function ListingDrawerBody({
             ? la ? "Marked Let Agreed. It is off the portals, so it shows there if you put it back on the market." : "Back to available. It is off the portals, so nothing changes there until you put it back on the market."
             : j.portalsTold === false
               ? la ? "Marked Let Agreed. The portals pick it up on their next upload, usually within the hour." : "Back to available. The portals pick it up on their next upload, usually within the hour."
-              : la ? "Marked Let Agreed. Rightmove, OnTheMarket and Zoopla show the Let Agreed banner within about 10 minutes." : "Back to available. The Let Agreed banner comes off Rightmove, OnTheMarket and Zoopla within about 10 minutes.",
+              : j.sending
+                ? `${la ? "Marked Let Agreed" : "Back to available"}. ${TAKING_A_WHILE}`
+                : la ? "Marked Let Agreed. Rightmove, OnTheMarket and Zoopla show the Let Agreed banner within a few minutes." : "Back to available. The Let Agreed banner comes off Rightmove, OnTheMarket and Zoopla within a few minutes.",
         });
       }
     } catch {
@@ -703,7 +768,11 @@ function ListingDrawerBody({
       res.ok
         ? action === "off"
           ? "Taken off. It leaves Rightmove, OnTheMarket and Zoopla within about 10 minutes."
-          : "Back on. It shows on Rightmove, OnTheMarket and Zoopla within about 10 minutes."
+          : res.refused
+            ? `Back on the market, but ${res.refused}. Fix that and put it back on again.`
+            : res.sending
+              ? TAKING_A_WHILE
+              : `Back on ${portalList(res.portals)}. It shows on their sites within a few minutes.`
         : res.error ?? "The portals did not take it."
     );
   }
@@ -805,10 +874,10 @@ function ListingDrawerBody({
     setLandlord({ status: "loading" });
     fetch(`/api/listings/landlord?id=${encodeURIComponent(listing.id)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; landlord?: Landlord | null; problem?: string }) => {
+      .then((j: { ok?: boolean; landlord?: Landlord | null; landlords?: FoundLandlord[]; problem?: string }) => {
         if (gone) return;
         if (!j.ok) setLandlord({ status: "problem", says: j.problem ?? "We could not look the landlord up just now." });
-        else if (j.landlord) setLandlord({ status: "known", landlord: j.landlord });
+        else if (j.landlord) setLandlord({ status: "known", landlord: j.landlord, landlords: j.landlords ?? [] });
         else setLandlord({ status: "none" });
       })
       .catch(() => {
@@ -1413,6 +1482,11 @@ function ListingDrawerBody({
     ? { label: "Let agreed", tone: "neutral" as const }
     : withdrawnHere
       ? { label: pub?.status === "withdrawn" ? "Withdrawn" : pub?.status === "leased" ? "Let" : "Sold", tone: "neutral" as const }
+      : isLive && pub && !pub.onPortals
+      /* Published in the listings system but taken off the portals: it is
+         not available to anybody looking, so the badge stops saying so
+         (Lorna Fieldson, 28 Oct 2026; 10 Nov 2026). */
+      ? { label: "Off the market", tone: "neutral" as const }
       : isLive
       ? { label: "Available", tone: "good" as const }
       : { label: "Draft", tone: "accent" as const };
@@ -1502,9 +1576,9 @@ function ListingDrawerBody({
     const availableFrom = live ? live.availableFrom : listing.availableFrom;
     const epc = live?.epc.expiry ?? listing.epcExpiry;
     return [
-      { icon: "home", label: "Type", text: set(live?.propertyType) },
-      { icon: "bed.png", label: "Bedrooms", text: set(live?.beds) },
-      { icon: "pack/house", label: "Bathrooms", text: set(live?.baths) },
+      { icon: "home", label: "Type", text: set(live?.propertyType || maFact("Property type")) },
+      { icon: "bed.png", label: "Bedrooms", text: set(live?.beds ?? maFact("Bedrooms")) },
+      { icon: "pack/house", label: "Bathrooms", text: set(live?.baths ?? maFact("Bathrooms")) },
       { icon: "coin", label: "Deposit", text: set(live?.deposit != null ? `£${live.deposit.toLocaleString("en-GB")}` : null) },
       { icon: "calendar", label: "Available from", text: availableFrom ? dayOf(availableFrom) : "Now" },
       { icon: "shield", label: "EPC expires", text: epc ? dayOf(epc) : "Not recorded" },
@@ -1512,7 +1586,7 @@ function ListingDrawerBody({
       { icon: "pack/photo", label: "Photos", text: `${photos.length} on file` },
       { icon: "home", label: "Type of let", text: home ? LET_TYPES.find((t) => t.value === home.letType)?.label ?? "Not set" : homeProblem ? "Did not load" : "Reading…" },
       /* Intro only is chosen here (16 Oct 2026, lib/intro-only); the rest is the listing's own. */
-      { icon: "home", label: "Service", text: home?.introOnly ? "Marketing only" : live ? (live.serviceOnRecord ?? live.service ?? "Not set") : wait ?? "Not set" },
+      { icon: "home", label: "Service", text: home?.introOnly ? "Marketing only" : live ? (live.serviceOnRecord ?? live.service ?? (appraisal.status === "known" && appraisal.appraisal.serviceLevel ? `${appraisal.appraisal.serviceLevel} (from the appraisal)` : "Not set")) : wait ?? "Not set" },
     ];
   })();
 
@@ -1904,6 +1978,8 @@ function ListingDrawerBody({
                     email: landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined,
                     phone: landlord.status === "known" ? (landlord.landlord.phone ?? undefined) : undefined,
                   }}
+                  otherLandlords={landlord.status === "known" ? landlord.landlords.slice(1) : []}
+                  appraisalPapers={appraisal.status === "known" ? appraisal.appraisal.papers : []}
                   agentLarn={live?.agentLarn ?? null}
                   service={live?.service ?? null}
                   homeProblem={homeProblem}
@@ -2375,6 +2451,8 @@ function ListingDrawerBody({
           address={listing.name}
           error={pushError}
           signIn={pushSignIn}
+          sending={pushSending}
+          refused={pushRefused}
           onStart={() => void startPush()}
           onCancel={() => {
             setPushing(null);
@@ -2406,20 +2484,34 @@ function ListingDrawerBody({
   const l = landlord.status === "known" ? landlord.landlord : null;
   const lHomeKey = testListing ? null : listing.propertyId ?? `listing:${listing.id}`;
   const lReadOnly = testListing ? "A test listing keeps its own landlord." : null;
+  /* EVERY OWNER, NOT THE FIRST (10 Nov 2026): the listing's second owner was
+     never shown here. The joint landlords kept on the home are listed by
+     HomeLandlords itself, and a landlord changed in the OS has its own card,
+     so neither is repeated. */
+  const lOwners = landlord.status === "known" ? landlord.landlords.filter((x) => x.from === "listing" || x.from === "appraisal" || x.from === "property" || x.from === "record") : [];
   const lMain = (
                       landlord.status === "loading" || landlord.status === "idle"
                         ? null
-                        : l && l.from !== "os"
-                          ? [{
-                              key: l.contactId ?? `record:${l.name}`,
-                              name: l.name,
-                              email: l.email,
-                              phone: l.phone,
+                        : lOwners.length
+                          ? lOwners.map((x) => ({
+                              key: x.key,
+                              name: x.name,
+                              email: x.email,
+                              phone: x.phone,
                               /* REX's owner changes in REX; the home's own record on the record. */
-                              personRef: l.contactId && l.from !== "record" ? `rex:${l.contactId}` : listing.propertyId ? `home:${listing.propertyId}` : null,
-                              note: l.from === "record" ? "From the home's record in the OS. Not on this listing in REX yet." : null,
-                            }]
-                          : []
+                              personRef: x.from === "listing" && x.contactId ? `rex:${x.contactId}` : x.from === "appraisal" ? x.ref ?? null : x.from === "record" && listing.propertyId ? `home:${listing.propertyId}` : null,
+                              note: x.from === "appraisal"
+                                ? "From the market appraisal this home came from. Not on this listing in REX yet."
+                                : x.from === "record"
+                                ? "From the home's record in the OS. Not on this listing in REX yet."
+                                : x.from === "property"
+                                  ? "The property's owner in the listings system, not on this listing yet. Check they are still the landlord."
+                                  : null,
+                            }))
+                          : l && l.from !== "os" && l.from !== "joint" && landlord.status === "known" && !landlord.landlords.length
+                            /* A test listing answers with its one landlord and no list. */
+                            ? [{ key: l.contactId ?? `record:${l.name}`, name: l.name, email: l.email, phone: l.phone, personRef: null, note: null }]
+                            : []
   );
   const lMainSlot = (
                       l && l.from === "os" ? (
@@ -2678,10 +2770,13 @@ function ListingDrawerBody({
         setDescSave("error");
       }
     };
-    const tone = listing.letAgreed ? "accent" : isLive ? "good" : "neutral";
+    const tone = listing.letAgreed ? "accent" : isLive && pub && !pub.onPortals ? "neutral" : isLive ? "good" : "neutral";
     const onPortals = isLive && (pub ? pub.onPortals : true);
     /* Mark as Let Agreed / Back to available: its own switch, then the same people as Take off the market. */
-    const letShown = Boolean(isLive && !publishHidden && letTick && (letTick.armed || letTick.rehearse));
+    /* Back to available whenever the tick is on, switch or no switch (James, 6
+       Nov 2026): a re-let keeps the last let's tick, and without this the
+       agent had no way to put it up as available. */
+    const letShown = Boolean(isLive && !publishHidden && letTick && (letTick.armed || letTick.rehearse || letTick.letAgreed));
     const askLet = () => (publishCanPress ? (setLetNote(null), setPortalConfirm(false), setLetAsk(true)) : setPortalNote(lockedSentence(publishArea, publishLevel)));
     const notesN = listingNotes?.length ?? 0;
     const nlTabs: { id: NlTab; label: string; count?: number | null }[] = [
@@ -2725,9 +2820,9 @@ function ListingDrawerBody({
       { label: "Rent", text: listing.rent == null ? "Not set" : `£${listing.rent.toLocaleString("en-GB")} ${per}` },
       { label: "Deposit", text: wait ?? money(live?.deposit) },
       { label: "Available", text: availableShown },
-      { label: "Bedrooms", text: wait ?? (live?.beds != null ? String(live.beds) : "Not set") },
-      { label: "EPC", text: epcShown ?? (epcExpiry ? `Until ${dayOf(epcExpiry)}` : "Not recorded") },
-      { label: "Council tax", text: wait ?? (live?.facts.councilTaxBand ? (live.facts.councilTaxBand === "Exempt" ? "Exempt" : `Band ${live.facts.councilTaxBand}`) : "Not set") },
+      { label: "Bedrooms", text: wait ?? (live?.beds != null ? String(live.beds) : maFact("Bedrooms") ?? "Not set") },
+      { label: "EPC", text: epcShown ?? (epcExpiry ? `Until ${dayOf(epcExpiry)}` : maFact("EPC rating") ?? "Not recorded") },
+      { label: "Council tax", text: wait ?? (live?.facts.councilTaxBand ? (live.facts.councilTaxBand === "Exempt" ? "Exempt" : `Band ${live.facts.councilTaxBand}`) : maFact("Council tax band") ?? "Not set") },
     ];
     const fd = factsDraft;
     const setF = (k: keyof FactsDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFactsDraft((d) => (d ? { ...d, [k]: e.target.value } : d));
@@ -2759,9 +2854,20 @@ function ListingDrawerBody({
     const linkFor = (n: string) => portals.find((p) => p.portal.toLowerCase().replace(/\s/g, "") === n.toLowerCase());
 
     /* ── Activity: what has happened here, newest first ── */
-    const happened: { at: string; text: string; to?: NlTab }[] = [
-      ...latest.map((a) => ({ at: a.at, text: a.title.replace(" · ", ": "), to: a.to as NlTab })),
-      ...(listingNotes ?? []).map((n) => ({ at: n.at ?? "", text: `${n.author ?? "Someone"} added a note`, to: "notes" as NlTab })),
+    /* Every line opens with what's behind it (James, 8 Nov 2026). */
+    const viewingsAll = [...(viewings?.upcoming ?? []), ...(viewings?.past ?? [])];
+    const happened: { at: string; text: string; to?: NlTab; by?: string; body?: string; rows?: [string, string][] }[] = [
+      ...latest.map((a) => {
+        const enq = a.key.startsWith("enq-") ? (enquiries ?? []).find((e) => `enq-${e.id}` === a.key) : null;
+        const vw = a.key.startsWith("view-") ? viewingsAll.find((v) => `view-${v.id}` === a.key) : null;
+        const rows: [string, string][] = enq
+          ? ([["Who", enq.name], ["Came from", enq.source || "The portals"], ["Email", enq.email], ["Mobile", enq.phone]] as [string, string][]).filter(([, v]) => v)
+          : vw
+            ? ([["Who", vw.contacts.map((c) => c.name).join(", ") || vw.title || ""], ["When", a.sub], ["Status", vw.cancelled ? "Cancelled" : vw.status ?? (new Date(vw.startsAt).getTime() < Date.now() ? "Viewed" : "Booked")]] as [string, string][]).filter(([, v]) => v)
+            : [];
+        return { at: a.at, text: a.title.replace(" · ", ": "), to: a.to as NlTab, body: enq?.message || undefined, rows };
+      }),
+      ...(listingNotes ?? []).map((n) => ({ at: n.at ?? "", text: `${n.author ?? "Someone"} added a note`, to: "notes" as NlTab, by: n.author ?? undefined, body: n.text })),
       ...(listing.publishedAt ? [{ at: listing.publishedAt, text: "Went live on Rightmove, Zoopla and OnTheMarket" }] : []),
     ]
       .filter((h) => h.at)
@@ -2824,7 +2930,7 @@ function ListingDrawerBody({
     };
 
     return (
-      <div data-look="new" data-steve="listing.drawer" className="nl-page nl-rise">
+      <div data-look="new" data-steve="listing.drawer" className="nl-page nl-rise nl-edge">
         {/* Crumb, the save chip, and ‹ › through the board. */}
         <div className="nl-crumbs">
           <Link href={backHref} className="nl-crumb">
@@ -2846,13 +2952,17 @@ function ListingDrawerBody({
           <div className="nl-rhead-text">
             <div className="nl-rhead-meta">
               <Badge tone={tone}>{status.label}</Badge>
-              {onPortals && (
+              {onPortals && (pub?.sending || watching) ? (
+                <span className="nl-live nl-live-sending" title="It hasn't failed - it's taking longer than normal to reach the portals. You'll be told when it's live.">
+                  <i /> Going onto the portals
+                </span>
+              ) : onPortals && (
                 <span className="nl-live">
                   <i /> {letTick?.letAgreed ? "Showing Let Agreed" : "On the market"}
                 </span>
               )}
               {isLive && pub && !publishHidden && (
-                <button type="button" data-steve-never className="nl-market-btn" aria-expanded={portalConfirm} onClick={() => (publishCanPress ? setPortalConfirm((o) => !o) : setPortalNote(lockedSentence(publishArea, publishLevel)))}>
+                <button type="button" data-steve-never data-steve="listing.market" className="nl-market-btn" aria-expanded={portalConfirm} onClick={() => (publishCanPress ? setPortalConfirm((o) => !o) : setPortalNote(lockedSentence(publishArea, publishLevel)))}>
                   {pub.onPortals ? "Take off the market" : "Put back on the market"}
                 </button>
               )}
@@ -2879,6 +2989,12 @@ function ListingDrawerBody({
             <button type="button" data-steve="listing.tab.marketing" onClick={() => pickTab("marketing")} className="nl-btn nl-btn--secondary">
               <Ico name="pen" /> Edit the advert
             </button>
+            {/* Only a live listing prints (lib/viewing-brochure). */}
+            {brochureArmed && isLive && Number(listing.id) > 0 && (
+              <a href={`/brochure/${encodeURIComponent(String(listing.id))}`} target="_blank" rel="noopener" data-steve-never className="nl-btn nl-btn--secondary" title="An A4 sheet to hand out at viewings. No landlord details are on it.">
+                <Ico name="print" /> Print Brochure
+              </a>
+            )}
             {mainJob}
             <Menu
               items={[
@@ -2917,7 +3033,7 @@ function ListingDrawerBody({
           <div className="nl-confirm" data-steve-never>
             <p>
               {letTick.letAgreed
-                ? `Put ${listing.name} back to available? The Let Agreed banner comes off Rightmove, OnTheMarket and Zoopla and it shows as available to let again.`
+                ? `Is ${listing.name} back on the market? Rightmove, OnTheMarket and Zoopla show it as Let Agreed. Back to available takes that off and it shows as available to let again.`
                 : letTick.onPortals
                   ? `Show ${listing.name} as Let Agreed? The advert stays on Rightmove, OnTheMarket and Zoopla with their Let Agreed banner, so people can still see it, and you can take it off the market whenever you choose. If the let falls through, Back to available undoes it.`
                   : `Mark ${listing.name} as Let Agreed? It is off the portals just now, so it shows as Let Agreed there if you put it back on the market. Back to available undoes it.`}
@@ -3017,12 +3133,17 @@ function ListingDrawerBody({
             </div>
             {!factsEdit || !fd ? (
               <div className="nl-facts-grid">
-                {view.map((f) => (
-                  <div key={f.label} className="nl-fact">
-                    <span>{f.label}</span>
-                    <b className={quietFact(f.text) ? "is-quiet" : ""}>{f.text}</b>
-                  </div>
-                ))}
+                {view.map((f) => {
+                  /* A fact only the appraisal holds says so beside its label, not in the value. */
+                  const fromMa = f.text.endsWith(MA_SUFFIX);
+                  const text = fromMa ? f.text.slice(0, -MA_SUFFIX.length) : f.text;
+                  return (
+                    <div key={f.label} className="nl-fact">
+                      <span>{f.label}{fromMa && <em> · from the appraisal</em>}</span>
+                      <b className={quietFact(text) ? "is-quiet" : ""}>{text}</b>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <>
@@ -3178,6 +3299,22 @@ function ListingDrawerBody({
                       {ll.phone ? <a href={`tel:${ll.phone.replace(/\s/g, "")}`}><Ico name="phone" size={14} />{ll.phone}</a> : <span className="text-muted"><Ico name="phone" size={14} />No mobile on file</span>}
                       {ll.email ? <a href={`mailto:${ll.email}`}><Ico name="mail" size={14} />{ll.email}</a> : <span className="text-muted"><Ico name="mail" size={14} />No email on file</span>}
                     </div>
+                    {/* Every other landlord of the home, named with how to reach them (10 Nov 2026). */}
+                    {landlord.status === "known" && landlord.landlords.slice(1).map((x) => (
+                      <div key={x.key} className="mt-2 flex flex-col gap-2" data-landlord-also>
+                        <div className="nl-person">
+                          <span className="nl-avatar">{initialsOf(x.name || "?")}</span>
+                          <span className="min-w-0">
+                            <span className="nl-strong block truncate">{x.name}</span>
+                            <span className="nl-meta block">{x.from === "joint" ? "Joint landlord" : "Landlord"}</span>
+                          </span>
+                        </div>
+                        <div className="nl-contact">
+                          {x.phone ? <a href={`tel:${x.phone.replace(/\s/g, "")}`}><Ico name="phone" size={14} />{x.phone}</a> : <span className="text-muted"><Ico name="phone" size={14} />No mobile on file</span>}
+                          {x.email ? <a href={`mailto:${x.email}`}><Ico name="mail" size={14} />{x.email}</a> : <span className="text-muted"><Ico name="mail" size={14} />No email on file</span>}
+                        </div>
+                      </div>
+                    ))}
                     <div className="mt-1 flex flex-wrap items-center gap-3">
                       {ll.phone && <a href={`tel:${ll.phone.replace(/\s/g, "")}`} className="nl-btn nl-btn--secondary nl-btn--sm"><Ico name="phone" size={14} /> Call</a>}
                       <button type="button" className="nl-link" onClick={() => setPanelTab("messages")}>Send update</button>
@@ -3185,11 +3322,11 @@ function ListingDrawerBody({
                   </>
                 ) : (
                   <>
-                    <p className="nl-meta">{landlord.status === "problem" ? landlord.says : "No landlord on this listing yet."}</p>
+                    <p className="nl-meta">{landlord.status === "problem" ? landlord.says : "No landlord is held for this home yet: not on the listing, the property or the home's record. Add them here so the terms, the let and the PLC check have somebody to name."}</p>
                     {!testListing && <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" data-steve="listing.edit-landlord" onClick={() => setLandlordOpen(true)}>Add the landlord</button>}
                   </>
                 )}
-                <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} look="new" onSaved={setLive} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
+                <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} look="new" onSaved={(s) => s.details && setLive(s.details)} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
               </section>
 
               {/* Steve, looking for the handy next thing on this home. */}
@@ -3228,6 +3365,13 @@ function ListingDrawerBody({
                   )}
                 </div>
               </section>
+
+              {/* What the appraisal learned, brought forward (James, 10 Nov 2026). */}
+              {!testListing && (
+                <section className="nl-cell span3">
+                  <ListingAppraisal state={appraisal} look="new" />
+                </section>
+              )}
 
               {(here.id === "accepted" || here.id === "handover") && link && (
                 <section className="nl-cell span3">
@@ -3350,6 +3494,8 @@ function ListingDrawerBody({
                 email: landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined,
                 phone: landlord.status === "known" ? (landlord.landlord.phone ?? undefined) : undefined,
               }}
+              otherLandlords={landlord.status === "known" ? landlord.landlords.slice(1) : []}
+              appraisalPapers={appraisal.status === "known" ? appraisal.appraisal.papers : []}
               agentLarn={live?.agentLarn ?? null}
               service={live?.service ?? null}
                   homeProblem={homeProblem}
@@ -3402,19 +3548,22 @@ function ListingDrawerBody({
           )}
 
           {tabIs === "activity" && (
-            happened.length ? (
-              <ul className="nl-timeline">
-                {happened.slice(0, 40).map((h, i) => (
-                  <li key={`${h.at}${i}`}>
-                    <span className="nl-mono">{whenOf(h.at)}</span>
-                    {h.to ? <button type="button" onClick={() => pickNl(h.to!)}>{h.text}</button> : <span>{h.text}</span>}
-                  </li>
-                ))}
-              </ul>
-            ) : reading ? (
+            !happened.length && reading ? (
               <p className="nl-meta">Reading what has happened here…</p>
             ) : (
-              <p className="nl-empty">Nothing has happened on this home yet.</p>
+              <ActivityList
+                empty="Nothing has happened on this home yet."
+                items={happened.slice(0, 40).map((h, i) => ({
+                  key: `${h.at}${i}`,
+                  when: whenOf(h.at),
+                  exact: exactWhen(h.at),
+                  text: h.text,
+                  by: null,
+                  body: h.body ?? null,
+                  rows: h.rows,
+                  go: h.to ? { label: `Go to ${nlTabs.find((t) => t.id === h.to)?.label ?? "it"}`, onClick: () => pickNl(h.to!) } : null,
+                }))}
+              />
             )
           )}
         </div>
@@ -3738,7 +3887,7 @@ function ListingDrawerBody({
                   the landlord, every field changeable, plus additional
                   landlords and points of contact kept on the home. */}
               {landlordBlock}
-              <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} onSaved={setLive} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
+              <LandlordRegistration listingId={String(listing.id)} record={live?.record} canEdit={editCanPress && !testListing} onSaved={(s) => s.details && setLive(s.details)} landlordName={landlord.status === "known" ? landlord.landlord.name : null} homeKey={testListing ? null : listing.propertyId ?? `listing:${listing.id}`} rev={landlordRev} />
             </div>
 
             {/* How we get in - and, when it is through the tenant, the tenant. */}
@@ -3746,6 +3895,12 @@ function ListingDrawerBody({
               {accessBlock}
             </div>
           </div>
+          {/* What the appraisal learned, brought forward (James, 10 Nov 2026). */}
+          {!testListing && (
+            <div className="mb-4 border-t border-line/50 pt-4">
+              <ListingAppraisal state={appraisal} look="classic" />
+            </div>
+          )}
           {/* Where it's up to, underneath, across the box (James, 12 Oct 2026:
               "bundling two sections into one"). Click a step to move it. */}
           <div className="mt-auto border-t border-line/50 pt-3.5">
@@ -3985,7 +4140,7 @@ const PORTALS = ["Rightmove", "OnTheMarket", "Zoopla"];
  * steps run while it answers, and the last one holds until REX has said
  * yes. If REX says no, the card says why instead of celebrating.
  */
-function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, onDone }: { at: number; address: string; error: string | null; signIn?: boolean; onStart: () => void; onCancel: () => void; onDone: () => void }) {
+function PushCeremony({ at, address, error, signIn = false, sending = false, refused = null, onStart, onCancel, onDone }: { at: number; address: string; error: string | null; signIn?: boolean; sending?: boolean; refused?: string | null; onStart: () => void; onCancel: () => void; onDone: () => void }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -4013,7 +4168,7 @@ function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, o
       delay: Math.random() * 0.45,
       dur: 1.5 + Math.random() * 1.1,
       size: 6 + Math.random() * 8,
-      color: ["#de968f", "#a85a51", "#b3bea5", "#56634a", "#fdefec", "#56423e"][i % 6],
+      color: ["#a85a51", "#c4a092", "#56634a", "#f5efe6", "#56423e", "#f1f4ec"][i % 6],
       round: i % 3 === 0,
       sway: (Math.random() - 0.5) * 120,
     }))
@@ -4035,7 +4190,7 @@ function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, o
       ) : (
         <span aria-hidden className={`absolute inset-0 bg-ink/50 transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`} />
       )}
-      {done && (
+      {done && !sending && !refused && (
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
           {pieces.map((p) => (
             <span
@@ -4136,6 +4291,28 @@ function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, o
               <div className="h-full rounded-full transition-[width] duration-1000 ease-out" style={{ width: `${((at + 0.6) / 3) * 100}%`, background: "#56634a" }} />
             </div>
           </>
+        ) : sending || refused ? (
+          <>
+            {/* Published, not yet through (or a portal said no): no confetti,
+                and never "it hasn't gone live" - it has, and it's on its way. */}
+            <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full" style={{ background: refused ? "#fdefec" : "#f1f4ec", animation: "tle-pop 700ms cubic-bezier(0.18, 1.35, 0.32, 1) both" }}>
+              <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke={refused ? "#a85a51" : "#56634a"} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="24" cy="24" r="17" />
+                {refused ? <path d="M24 15 V26 M24 32 V32.5" /> : <path d="M24 14 V24 L31 28" />}
+              </svg>
+            </span>
+            <h2 className="hand mt-5 text-[25px] leading-tight">{refused ? "Live, With One to Fix" : "Nearly There"}</h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+              {refused ? `${address} is live, but ${refused}. Open the Marketing tab, fix it, then put it back on the market.` : `${address} is live. ${TAKING_A_WHILE}`}
+            </p>
+            <button
+              type="button"
+              onClick={onDone}
+              className="mt-7 rounded-full bg-[var(--brown)] px-6 py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              {refused ? "Got It" : "Carry On"}
+            </button>
+          </>
         ) : (
           <>
             <span className="mx-auto flex h-24 w-24 items-center justify-center rounded-full" style={{ background: "#f1f4ec", animation: "tle-pop 700ms cubic-bezier(0.18, 1.35, 0.32, 1) both" }}>
@@ -4145,7 +4322,7 @@ function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, o
             </span>
             <h2 className="hand mt-6 text-[26px] leading-tight">Congratulations</h2>
             <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
-              Your listing will be live within the next 5 to 10 minutes. {address}, on Rightmove, OnTheMarket and Zoopla.
+              {address} is live on Rightmove, OnTheMarket and Zoopla. It shows on their sites within a few minutes.
             </p>
             <button
               type="button"

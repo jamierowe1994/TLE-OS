@@ -113,6 +113,29 @@ export default function Viewings() {
 
   const { appts: DIARY, loading, everything, error } = useDiary();
 
+  /* Print Brochure on each viewing (Erleta Vathej, ticket 47b2389c; James,
+     10 Nov 2026: "so we can hand out at viewings"). New look only, behind its
+     own switch (lib/switches listing_brochure). A viewing still to come, on a
+     listing, gets one; the sheet (app/brochure) prints live listings only. */
+  const [brochureArmed, setBrochureArmed] = useState(false);
+  useEffect(() => {
+    if (!look) return;
+    let off = false;
+    fetch("/api/listings/brochure", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; armed?: boolean }) => !off && setBrochureArmed(Boolean(j.ok && j.armed)))
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [look]);
+  const brochureListing = (a: Appt): string | null =>
+    brochureArmed && a.kind === "viewing" && !a.fromPersonal && a.day >= 0 && a.listingId && /^\d{1,9}$/.test(a.listingId) ? a.listingId : null;
+  const brochureHref = (a: Appt): string | null => {
+    const id = brochureListing(a);
+    return id ? `/brochure/${id}` : null;
+  };
+
   /* Who is looking. The owner's own entries are the default, matched on the
      mailbox rather than the name - see Appt.agentEmail. */
   const [me, setMe] = useState<{ name: string; email: string } | null>(null);
@@ -297,9 +320,14 @@ export default function Viewings() {
     const showDay = (offset: number) => {
       pickDay(offset);
       setNlTab("month");
-      window.setTimeout(() => dayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+      /* The day sits beside the month on a wide screen (James, 7 Nov 2026,
+         "the month with the day beside it"); only a narrow one, where it
+         falls under the month, is scrolled to it. */
+      if (window.matchMedia("(max-width: 1099px)").matches) window.setTimeout(() => dayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     };
     const dayList = byDay.get(selected) ?? [];
+    /* The day's homes, one brochure each, in one print (ticket 47b2389c). */
+    const dayHomes = [...new Set(dayList.map(brochureListing).filter((x): x is string => Boolean(x)))];
     const dayCount = counted(dayList);
     const weekCount = counted(week);
     const n = (x: number) => (sure ? x : null);
@@ -308,7 +336,7 @@ export default function Viewings() {
       { id: "week", label: "Next 7 days", count: n(weekCount) },
     ];
     const blurbs: Record<NlTab, string> = {
-      month: "Pick a day and it opens below. Open anything on it to see the details, change it or confirm it.",
+      month: "Pick a day to see what's on it. Open anything there to see the details, change it or confirm it.",
       week: "Today and the six days after it, hour by hour. Pick one to open it under the month.",
     };
     const whose = fAgent ? (fAgent === me?.name ? "in your diary" : `in ${fAgent}'s diary`) : everything ? "across the team" : "";
@@ -326,7 +354,7 @@ export default function Viewings() {
     );
     return (
       <>
-        <div data-look="new" className="nl-page nl-rise nl-diary">
+        <div data-look="new" className="nl-page nl-rise nl-diary nl-edge">
           <Mast
             title="Diary"
             blurb={blurb}
@@ -418,8 +446,17 @@ export default function Viewings() {
 
           <div className="nl-diary-body" key={nlTab}>
             {nlTab === "month" && (
-              <>
-                <MonthGrid byDay={byDay} selected={selected} monthShift={monthShift} onMonthShift={setMonthShift} onPick={(d) => showDay(d)} />
+              <div className="nl-diary-split">
+                <div className="nl-diary-split-month">
+                  <MonthGrid byDay={byDay} selected={selected} monthShift={monthShift} onMonthShift={setMonthShift} onPick={(d) => showDay(d)} />
+                  <p className="nl-diary-key" aria-label="What the colours mean">
+                    <span><i className="nl-diary-dot is-k-viewing" />Viewing</span>
+                    <span><i className="nl-diary-dot is-k-appraisal" />Appraisal</span>
+                    <span><i className="nl-diary-dot is-k-takeon" />Take-on</span>
+                    <span><i className="nl-diary-dot is-k-inspection" />Inspection or move-in</span>
+                    <span><i className="nl-diary-dot is-k-other" />Anything else</span>
+                  </p>
+                </div>
                 <div ref={dayRef} className="nl-diary-under">
                   <div className="nl-diary-dayhead">
                     <h2 className="nl-section-title">{dayLabel(selected)}</h2>
@@ -428,19 +465,24 @@ export default function Viewings() {
                       {nearLabel(selected) && sure && dayCount ? " · " : ""}
                       {sure && dayCount ? `${dayCount} ${dayCount === 1 ? "appointment" : "appointments"}` : ""}
                     </span>
-                    <button type="button" className="nl-link ml-auto" onClick={() => window.print()}>
+                    {dayHomes.length > 1 && (
+                      <a href={`/brochure/${dayHomes.join(",")}`} target="_blank" rel="noopener" className="nl-link ml-auto" title="Print one A4 brochure for each home on this day's viewings. No landlord details are on them.">
+                        {dayHomes.length} Brochures
+                      </a>
+                    )}
+                    <button type="button" className={`nl-link${dayHomes.length > 1 ? "" : " ml-auto"}`} onClick={() => window.print()}>
                       Print
                     </button>
                   </div>
                   {loading && !dayList.length ? (
                     loadingLine
                   ) : dayList.length ? (
-                    <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} />
+                    <DiaryRows key={selected} list={dayList} resetKey={`day:${selected}`} sentExtra={sentExtra} onOpen={(a) => setQuickId(a.id)} brochure={brochureHref} />
                   ) : (
                     <p className="nl-empty">{selected < 0 ? "Nothing was booked that day." : "A clear day. Rare. Enjoy it."}</p>
                   )}
                 </div>
-              </>
+              </div>
             )}
 
             {nlTab === "week" && (

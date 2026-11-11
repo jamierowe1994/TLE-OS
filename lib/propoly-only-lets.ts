@@ -1,6 +1,6 @@
 import "server-only";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
-import { getApplications, type Application } from "@/lib/applications";
+import type { Application } from "@/lib/applications";
 import { postcodeOf, sameHome } from "@/lib/address-parse";
 import { hasDb, q } from "@/lib/db";
 
@@ -103,7 +103,11 @@ export function isOwnDeal(d: { managerEmail: string | null; managerName: string 
 
 export async function propolyOnlyLets(
   scope: { rexUserId: string | null; everything: boolean },
-  opts: { canPretenancy: boolean }
+  opts: {
+    canPretenancy: boolean;
+    /** The whole business's book, as the caller reads it. Default: the held board (lib/applications-board). */
+    book?: () => Promise<Application[]>;
+  }
 ): Promise<PropolyOnlyLet[]> {
   if (!scope.everything && !scope.rexUserId) return [];
   const deals = (await getAllPropolyDeals())?.filter(live) ?? [];
@@ -118,7 +122,16 @@ export async function propolyOnlyLets(
 
   /* The whole business's book, not just this agent's: a let whose REX
      application sits under somebody else is still on REX. */
-  const book = await getApplications(300);
+  /* The held board, not a pull of its own (9 Nov 2026). getApplications(300)
+     kept its answer for one minute, so after the minute every Applications
+     read by an owner, or an agent with a Propoly-only let, waited here for
+     REX to send the whole book again - 2-5 s behind a board that had already
+     answered at once. The held board is that same pull, kept and rebuilt
+     behind (lib/applications-board). Imported when needed, as lib/activity
+     does, so the board's module and its imports load only on this path. */
+  const book = opts.book
+    ? await opts.book()
+    : await import("@/lib/applications-board").then(({ assembled }) => assembled(null)).then((b) => b.held.value.applications);
   return mine
     .filter((d) => !onRex(d, book))
     .map((d) => ({

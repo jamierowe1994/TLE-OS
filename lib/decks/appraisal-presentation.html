@@ -6,7 +6,7 @@
 <title>Your Market Appraisal - The Letting Experts</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap">
 <style>
 /* Layout: a full-screen 16:9 stage on white. Two slides split with a grey panel (the cover and the figure);
    the rest change rhythm: centred, side by side, a full-width header row, staggered cards. Cards are TLE OS greys
@@ -468,6 +468,54 @@ body.fields .legend { display: flex; }
   .ring .fg, .gauge .needle, .tl .tl-bar { animation: none !important; transform: none; } .ring .fg { transform: rotate(-90deg); }
   .rail i, .rail .fill { transition: none; }
 }
+
+/* ===================================================================================================
+   THE FINAL PALETTE (James, 8 Nov 2026: "can you do the main presentation now", after the pre-appraisal
+   pack). The same treatment as lib/decks/pre-appraisal-pack.html: brown for the action and the dark
+   cards, terracotta to point, olive for go, clay and linen behind; titles in the condensed Bricolage
+   capitals; square edges. Written last so it wins; the layout above is untouched.
+   =================================================================================================== */
+:root {
+  --paper: #ffffff; --taupe: #f5efe6; --grey: #f5efe6; --card: #ffffff; --card-2: #f8f5f0; --well: #efe8df;
+  --ink: #231d1b; --muted: #6b5f5a; --faint: #9a8d86; --line: rgba(35, 29, 27, .12); --line-2: rgba(35, 29, 27, .24);
+  --coral: #a85a51; --clay: #8e4a42; --sage: #56634a; --sage-soft: #eef1e8; --forest: #56423e; --manilla: #f1e4dc; --gold: #c4a092;
+  --brown: #56423e; --linen: #f5efe6; --manilla-2: #c4a092; --oat: #ddd3c7;
+  --r: 0px; --r-sm: 0px;
+}
+body { background: #ebe5dc; }
+:focus-visible { outline-color: var(--brown); }
+
+/* Type */
+.title { font-weight: 500; font-stretch: 75%; text-transform: uppercase; letter-spacing: .005em; line-height: .95; }
+.title .soft { color: var(--coral); }
+.eyebrow { font-family: var(--f-title); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .2em; font-size: calc(var(--u) * .95); color: var(--coral); }
+.rl li h4, .svc h3, .ts h4, .ag h4, .stop-card h4, .legend-list b, .steps .ui b, .a-contact b, .who-say, .lk-t {
+  font-weight: 500; font-stretch: 75%; text-transform: uppercase; letter-spacing: .04em;
+}
+.val, .t-date b { font-stretch: 75%; font-weight: 500; letter-spacing: 0; }
+.brand { font-family: var(--f-title); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; }
+
+/* Square edges: cards, panels, buttons, tags, toggles' tracks; circles stay circles. */
+.btn, .ui, .ag, .svc, .ts, .stop-card, .lk, .lk-blur, .pill, .badge, .chip, .tag, .sample-tag, .bigvid, .vo-box, .mapcard,
+.seg-ctl, .seg-ctl button, .rangebar, .rangebar .band, .tl .tl-bar, .a-acts span, [class*="card"] { border-radius: 0 !important; }
+.btn { font-family: var(--f-title); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: calc(var(--u) * 1); }
+
+/* Brown where it was black or orange-for-action. */
+.btn.dark, a.btn.dark, .btn.dark:disabled:hover { background: var(--brown); border-color: var(--brown); color: #fff; }
+.btn.dark:hover { background: #3f302d; border-color: #3f302d; color: #fff; }
+.btn:not(.dark):hover { border-color: var(--ink); background: var(--ink); color: #fff; }
+.ui.dark, .ag.dark, .stop.last .stop-card { background: var(--brown); color: #fff; }
+.ag.dark:hover { background: #3f302d; }
+.rail .fill, .pill.on, .toggle, .arrow, .rangebar .band, .tl .tl-bar, .a-acts span:first-child, .tabbar > span.on .me, .homeind { background: var(--brown); }
+.chart .bbar { fill: var(--brown); } .chart .bbar.mine { fill: var(--coral); }
+
+/* Terracotta fills carry white words. */
+.svc.pick, .ui.coral { background: var(--coral); color: #fff; }
+.svc.pick .lab, .svc.pick li, .ui.coral .lab { color: rgba(255, 255, 255, .82); }
+.svc.pick .feats li::before { background: #fff; }
+.ui.coral .pill.w { background: #fff; color: var(--coral); }
+.ui.man, .ag.man { background: var(--linen); } .ag.oat { background: #ece4da; } .ag.sage, .ui.sage { background: var(--sage-soft); }
+.rail i::after, .rangebar .mk.ours, .stop.first i, .ts:first-child::before { background: var(--coral); border-color: var(--coral); }
 </style>
 </head>
 <body>

@@ -1,5 +1,6 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CopyButton } from "@/components/Bits";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -209,7 +210,7 @@ export default function PlcSplitReview({
       <input
         ref={fileInput}
         type="file"
-        accept="application/pdf,image/*"
+        accept={ACCEPT_EVIDENCE}
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];

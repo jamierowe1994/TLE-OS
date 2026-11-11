@@ -49,7 +49,7 @@
  */
 export type ToolStatus = "live" | "building" | "locked";
 export type ToolAccess = "included" | "paid";
-export type ToolGroupKey = "prospecting" | "money" | "learning";
+export type ToolGroupKey = "daily" | "prospecting" | "money" | "learning";
 
 export interface ToolGroup {
   key: ToolGroupKey;
@@ -58,6 +58,11 @@ export interface ToolGroup {
 }
 
 export const TOOL_GROUPS: ToolGroup[] = [
+  {
+    key: "daily",
+    label: "Day to Day",
+    blurb: "The quick answers: a date, a sum, the drive between visits.",
+  },
   {
     key: "money",
     label: "Getting Paid",
@@ -109,12 +114,43 @@ export interface Tool {
 
 export const TOOLS: Tool[] = [
   {
+    key: "notice-dates",
+    name: "Notice Dates",
+    blurb:
+      "The earliest date a rent increase, a landlord's notice or a tenant's notice can take effect, with the working shown.",
+    icon: "calendar",
+    href: "/tools/notice-dates",
+    status: "live",
+    access: "included",
+    group: "daily",
+  },
+  {
+    key: "calculators",
+    name: "Calculators",
+    blurb: "Yield, what a tenant or guarantor needs to earn, stamp duty and the deposit cap. The sums that come up on a call.",
+    icon: "pie",
+    href: "/tools/calculators",
+    status: "live",
+    access: "included",
+    group: "daily",
+  },
+  {
+    key: "route-planner",
+    name: "Route Planner",
+    blurb: "Your visits for the day with the real drive between each one, and whether the gaps leave enough time.",
+    icon: "target",
+    href: "/tools/route-planner",
+    status: "live",
+    access: "included",
+    group: "daily",
+  },
+  {
     key: "invoicing",
     name: "Invoicing",
     blurb:
-      "Raise an invoice against a home and it works the fees out for you, off that home's rent and service. Number it, print it, send it.",
+      "Generate an invoice for a home and it works the fees out for you, off that home's rent and service. Number it, print it, send it.",
     icon: "coin",
-    href: "/maintenance?section=invoices",
+    href: "/tools/invoicing",
     status: "live",
     access: "included",
     group: "money",
@@ -123,9 +159,9 @@ export const TOOLS: Tool[] = [
     key: "forecast",
     name: "Forecast",
     blurb:
-      "What the book earns now, how it has grown, and where the next twelve months land against what you want to hit.",
+      "Where the book lands over the next 12 or 18 months, against what you want to hit. Move the dials and watch it change.",
     icon: "analytics",
-    href: "/finances",
+    href: "/tools/forecast",
     status: "live",
     access: "included",
     group: "money",

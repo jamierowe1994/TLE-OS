@@ -21,6 +21,8 @@ export interface SpineStop {
   sub?: string | null;
   tone?: "ok" | "warn" | "none";
   state: "done" | "current" | "upcoming" | "off";
+  /** What this step means, said plainly (8 Nov 2026). */
+  about?: string;
 }
 
 export default function StageSpine({

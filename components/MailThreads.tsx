@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import TeamEmail from "@/components/TeamEmail";
 
 /**
  * EMAILS ON A PLC (lib/mail-threads, 21 Oct 2026).
@@ -17,6 +18,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 export type Msg = {
   id: string; fromName: string; fromEmail: string; to: { name: string; email: string }[]; cc: { name: string; email: string }[];
   subject: string; preview: string; text: string; at: string; direction: "in" | "out"; ours: boolean; hasAttachments: boolean;
+  /** The OS's own first email in the thread. */
+  origin?: boolean;
 };
 export type Thread = {
   id: string; caseId: string | null; address: string; subject: string; startedHow: "os" | "linked"; startedWhat: string; startedBy: string;
@@ -118,6 +121,8 @@ export function PlcEmails({ caseId }: { caseId: string }) {
   const [search, setSearch] = useState("");
   const [cands, setCands] = useState<Candidate[] | "loading" | null>(null);
   const [candErr, setCandErr] = useState<string | null>(null);
+  /* Email the Team (James, 6 Nov 2026): the pack's reasons to tick, and the thread followed here. */
+  const [writing, setWriting] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/mail-threads?case=${encodeURIComponent(caseId)}`, { cache: "no-store" })
@@ -172,7 +177,7 @@ export function PlcEmails({ caseId }: { caseId: string }) {
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-[15px] font-normal"><DoodleIcon name="mail" size={15} className="text-accent-dark" />Emails on This Pack</h3>
           <p className="mt-1 max-w-[560px] text-[12px] leading-relaxed text-muted">
-            Replies to the pack&apos;s own emails, from the tenant, the landlord, Susan or anyone here, logged every five minutes. Only these threads are read, never anyone&apos;s whole inbox.
+            Every email about this pack sent from the OS, and every reply in those threads, from the tenant, the landlord, Susan or anyone here, saved every five minutes. Only these threads are read: a new email outside them is not, and nobody&apos;s whole inbox is.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -181,11 +186,15 @@ export function PlcEmails({ caseId }: { caseId: string }) {
               {busy === "check" ? "Checking…" : "Check Now"}
             </button>
           )}
-          <button type="button" onClick={() => { setPicking((p) => !p); if (!picking && !cands) void findCandidates(""); }} className="rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page">
+          <button type="button" onClick={() => { setPicking((p) => !p); if (!picking && !cands) void findCandidates(""); }} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold hover:border-ink/40">
             {picking ? "Close" : "Link an Email"}
+          </button>
+          <button type="button" onClick={() => setWriting(true)} className="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page">
+            <DoodleIcon name="mail" size={12} />Email the Team
           </button>
         </div>
       </div>
+      {writing && <TeamEmail caseId={caseId} onClose={() => setWriting(false)} onSent={() => window.setTimeout(load, 1500)} />}
 
       {picking && (
         <div className="mt-3 rounded-2xl border border-line/60 bg-white p-4">

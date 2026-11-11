@@ -238,7 +238,7 @@ export default function RecordsDrawer({ ask, onClose: closeNow }: { ask: RecordA
   const late = got ? got.rows.filter((r) => r.late).length : 0;
 
   return createPortal(
-    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer nl-dash-modal" data-shown={shown} role="dialog" aria-modal="true" aria-label={`${ask.title}, ${ask.range}`}>
+    <div data-look="new" className="nl-drawer-wrap nl-dash-drawer nl-dash-modal nl-edge nl-rec-pop" data-shown={shown} role="dialog" aria-modal="true" aria-label={`${ask.title}, ${ask.range}`}>
       <button type="button" className="nl-drawer-scrim" aria-label="Close" onClick={close} />
       <div className="nl-drawer">
         <div className="nl-drawer-head">

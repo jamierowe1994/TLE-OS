@@ -19,8 +19,8 @@ import MoveOutsBoard from "@/components/portfolio/MoveOutsBoard";
  *
  * Linkable: /overview?panel=inspections opens straight onto it. Opening from a
  * tile adds a history entry, so the browser's Back closes it; so do Esc, the
- * close button and a click on the dimmed page. Full screen on a phone, wide
- * from the right on a desktop.
+ * close button and a click on the dimmed page. Full screen on a phone, a
+ * centred pop-out on a desktop (8 Nov 2026; it was a drawer from the right).
  */
 
 export const PANELS = {
@@ -129,38 +129,32 @@ export default function OverviewPanel({ panel, onClose: closeNow }: { panel: Pan
   if (!id) return null;
   const { title, icon, Board } = PANELS[id];
 
+  /* A pop-out in front of the page, not a drawer from the side (James,
+     8 Nov 2026: "no pull out drawers. Just pop outs"). One solid panel in the
+     house's square, condensed-capitals style; the board inside is the same
+     component as ever, its tabs and figures restyled to match (new-look.css,
+     .nl-ovp). Full screen on a phone. */
   return (
-    <div className="so-root fixed inset-0 z-[130]" data-shown={shown}>
-      <button type="button" aria-label="Close" tabIndex={-1} onClick={close} data-shown={shown} className="so-scrim absolute inset-0 cursor-default bg-ink/35" />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        data-shown={shown}
-        className="so-panel absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] sm:rounded-l-2xl lg:w-[86%] xl:w-[80%]"
-      >
-        <header className="flex shrink-0 items-center gap-3 border-b border-line/60 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-8 sm:pb-4 sm:pt-5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
-            <DoodleIcon name={icon} size={16} />
+    <div data-look="new" className="nl-edge nl-ovp" data-shown={shown}>
+      <button type="button" aria-label="Close" tabIndex={-1} onClick={close} className="nl-ovp-dim" />
+      <section role="dialog" aria-modal="true" aria-label={title} className="nl-ovp-panel">
+        <header className="nl-ovp-head">
+          <span className="nl-ovp-icon" aria-hidden>
+            <DoodleIcon name={icon} size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted">Overview</p>
-            <h2 className="truncate text-[20px] leading-tight sm:text-[24px]">{title}</h2>
+            <p className="nl-ovp-eyebrow">PM Dashboard</p>
+            <h2 className="nl-ovp-title">{title}</h2>
           </div>
-          <button
-            type="button"
-            onClick={close}
-            title="Close (Esc)"
-            aria-label="Close"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:border-ink/40 hover:text-ink"
-          >
+          <button type="button" onClick={close} title="Close (Esc)" className="nl-ovp-close">
+            <span>Close</span>
             <DoodleIcon name="cross" size={14} />
           </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-4 sm:px-8 sm:pt-6">
+        <div className="nl-ovp-body">
           <Board key={id} embedded onInnerOpen={setInner} />
         </div>
-      </aside>
+      </section>
     </div>
   );
 }

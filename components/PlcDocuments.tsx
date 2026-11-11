@@ -1,7 +1,9 @@
 "use client";
 
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import DocViewer from "@/components/plc/DocViewer";
 import { PROPOLY_MAX_BYTES, PROPOLY_NAME_MAX, propolyExtension, propolyFileName, propolyMb, propolyTooBig, propolyTypeFor } from "@/lib/propoly-names";
 import {
   CHECK_GROUPS,
@@ -156,7 +158,13 @@ export default function PlcDocuments({
   context,
   focus,
   demo,
+  only,
+  showUnsorted = true,
 }: {
+  /** Just these checks: the landlord step in two parts (8 Nov 2026). */
+  only?: CheckId[];
+  /** The "couldn't sort" box: shown on one part only. */
+  showUnsorted?: boolean;
   step: "landlord" | "tenant";
   kase: PlcCase;
   onChanged: (c: PlcCase) => void;
@@ -465,8 +473,9 @@ export default function PlcDocuments({
      home with no gas supply she pressed Add, found nothing to add, and was
      stuck. The reason is given here, on the row that asks for it - the same
      waiver the last screen records. */
-  const waive = async (id: CheckId, undo = false) => {
+  const waive = async (id: CheckId, undo = false, given?: string) => {
     setErr(null);
+    const reason = (given ?? why[id] ?? "").trim();
     if (demo) {
       onChanged({
         ...kase,
@@ -474,7 +483,7 @@ export default function PlcDocuments({
           ? (kase.waivers ?? []).filter((w) => w.checkId !== id)
           : [
               ...(kase.waivers ?? []).filter((w) => w.checkId !== id),
-              { checkId: id, reason: (why[id] ?? "").trim(), by: kase.agentName, at: new Date().toISOString() },
+              { checkId: id, reason, by: kase.agentName, at: new Date().toISOString() },
             ],
       });
       setWhyOpen(null);
@@ -484,7 +493,7 @@ export default function PlcDocuments({
     try {
       const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
         method: "POST",
-        body: JSON.stringify(undo ? { action: "unwaive", checkId: id } : { action: "waive", checkId: id, reason: why[id] ?? "" }),
+        body: JSON.stringify(undo ? { action: "unwaive", checkId: id } : { action: "waive", checkId: id, reason }),
       });
       onChanged(res.case);
       setWhyOpen(null);
@@ -505,7 +514,10 @@ export default function PlcDocuments({
   const done = rows.filter((r) => r.state === "done");
   const elsewhere = done.filter((r) => r.filedAs && r.filedAs !== "other" && groupOf(r.filedAs) !== step);
   const unsorted = kase.documents.filter((d) => d.checkId === "other");
-  const checks = PLC_CHECKS.filter((c) => group.checks.includes(c.id));
+  const checks = PLC_CHECKS.filter((c) => group.checks.includes(c.id) && (!only || only.includes(c.id)));
+  /* One document open in front of the check (components/plc/DocViewer). */
+  const [viewing, setViewing] = useState<string | null>(null);
+  const viewed = viewing ? kase.documents.find((d) => d.key === viewing) ?? null : null;
   const otherStep = CHECK_GROUPS.find((g) => g.id !== step)!;
 
   const badge = (id: CheckId) => {
@@ -520,22 +532,20 @@ export default function PlcDocuments({
   const docRow = (d: PlcDocument) => {
     const line = readLine(d, kase.moveInDate);
     return (
-      <li key={d.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line px-3 py-2">
-        <Thumb name={d.name} url={d.url} />
-        <div className="min-w-0 flex-1 basis-40">
-          {d.url && d.url !== "#" ? (
-            <a href={d.url} target="_blank" rel="noreferrer" className="block truncate text-sm text-ink hover:underline">
-              {d.name}
-            </a>
-          ) : (
-            <span className="block truncate text-sm">{d.name}</span>
-          )}
-          {line ? (
-            <span className={`block truncate text-xs ${line.warn ? "text-rose-700" : "text-muted"}`}>{line.text}</span>
-          ) : d.placeholder ? (
-            <span className="block text-xs text-amber-700">Recorded by name only</span>
-          ) : null}
-        </div>
+      <li key={d.key} className="nl-plc-doc flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line px-3 py-2">
+        {/* A small look at it, and the name opens it in front of the check (8 Nov 2026). */}
+        <button type="button" className="nl-plc-doc-open" onClick={() => setViewing(d.key)} title="Open it here">
+          <MiniThumb name={d.name} url={d.url} />
+          <span className="min-w-0 flex-1">
+            <span className="nl-plc-doc-name">{d.name}</span>
+            {line ? (
+              <span className={`nl-plc-doc-line${line.warn ? " is-warn" : ""}`}>{line.text}</span>
+            ) : d.placeholder ? (
+              <span className="nl-plc-doc-line is-warn">Recorded by name only</span>
+            ) : null}
+          </span>
+          {d.agentChecked ? <span className="nl-plc-doc-ok" title={`Checked by ${d.agentChecked.by}`}>✓ Checked</span> : <span className="nl-plc-doc-look">Check it</span>}
+        </button>
         {(COVERABLE[d.checkId] ?? []).length > 0 && (
           <div className="order-last flex w-full flex-wrap gap-x-4 gap-y-1 pl-[3.25rem]">
             {(COVERABLE[d.checkId] ?? []).map((other) => {
@@ -633,7 +643,7 @@ export default function PlcDocuments({
           ref={filesInput}
           type="file"
           multiple
-          accept="application/pdf,image/*"
+          accept={ACCEPT_EVIDENCE}
           className="hidden"
           onChange={(e) => {
             take(Array.from(e.target.files ?? []));
@@ -655,7 +665,7 @@ export default function PlcDocuments({
           ref={addInput}
           type="file"
           multiple
-          accept="application/pdf,image/*"
+          accept={ACCEPT_EVIDENCE}
           className="hidden"
           onChange={(e) => {
             take(Array.from(e.target.files ?? []), forceNext.current);
@@ -715,7 +725,18 @@ export default function PlcDocuments({
         <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</p>
       )}
 
-      {step === "landlord" && unsorted.length > 0 && (
+      {viewed && (
+        <DocViewer
+          kase={kase}
+          doc={viewed}
+          onChanged={onChanged}
+          onMove={(d, to) => move(d, to)}
+          onRemove={(d) => remove(d)}
+          onClose={() => setViewing(null)}
+        />
+      )}
+
+      {step === "landlord" && showUnsorted && unsorted.length > 0 && (
         <div id="check-other" className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-sm text-amber-900">
             {unsorted.length === 1 ? "One file" : `${unsorted.length} files`} we could not sort. Pick where each one goes,
@@ -754,38 +775,47 @@ export default function PlcDocuments({
                         : b.text}
                 </span>
                 <span className="ml-auto flex items-center gap-3">
-                  {conditional && !has && !waiver && whyOpen !== c.id && (
-                    <button
-                      type="button"
-                      onClick={() => setWhyOpen(c.id)}
-                      className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
-                    >
-                      Not needed?
-                    </button>
+                  {/* "Not needed" is a tick (James, 8 Nov 2026): ticked, it saves at
+                      once with a ready-made reason, and Edit puts the reason right. */}
+                  {conditional && !has && (
+                    <label className={`nl-plc-notneeded${waiver ? " is-on" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(waiver)}
+                        disabled={waiving === c.id}
+                        onChange={(e) => {
+                          if (e.target.checked) void waive(c.id, false, defaultReason(c.id));
+                          else void waive(c.id, true);
+                        }}
+                      />
+                      Not needed
+                    </label>
                   )}
-                  <button
+                  {!waiver && <button
                     type="button"
                     onClick={() => addTo(c.id)}
                     className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
                   >
                     Add
-                  </button>
+                  </button>}
                 </span>
               </div>
-              {waiver && (
-                <p className="mt-1 flex items-start gap-2 pl-5 text-xs text-muted">
-                  <span className="min-w-0">&ldquo;{waiver.reason}&rdquo;</span>
+              {waiver && whyOpen !== c.id && (
+                <p className="nl-plc-waiver">
+                  <span className="min-w-0">{waiver.reason}</span>
                   <button
                     type="button"
-                    onClick={() => void waive(c.id, true)}
+                    onClick={() => {
+                      setWhy((w) => ({ ...w, [c.id]: waiver.reason }));
+                      setWhyOpen(c.id);
+                    }}
                     disabled={waiving === c.id}
-                    className="shrink-0 underline hover:text-ink disabled:opacity-40"
                   >
-                    undo
+                    Edit
                   </button>
                 </p>
               )}
-              {whyOpen === c.id && !has && !waiver && (
+              {whyOpen === c.id && !has && (
                 <form
                   className="mt-2 flex flex-wrap items-center gap-2 pl-5"
                   onSubmit={(e) => {
@@ -805,7 +835,7 @@ export default function PlcDocuments({
                     disabled={(why[c.id] ?? "").trim().length < 8 || waiving === c.id}
                     className="rounded-lg border border-line px-3 py-1.5 text-xs transition hover:bg-box disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {waiving === c.id ? "Saving…" : "Not needed"}
+                    {waiving === c.id ? "Saving…" : "Save the reason"}
                   </button>
                   <button
                     type="button"
@@ -850,6 +880,10 @@ const RED_BOX = "rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text
 
 function PropolyNameNote({ doc }: { doc: PlcDocument }) {
   if (doc.placeholder || !propolyTypeFor(doc.checkId, doc.name)) return null;
+  /* Only the size now (James, 8 Nov 2026: "don't worry about the 40
+     characters ... I'd rather just hide it"). The push shortens a long name
+     itself, so that box only ever worried people. */
+  const HIDE_NAME_LENGTH = true;
   const big = propolyTooBig(doc.size);
   const sizeBox = big ? (
     <div className="order-last w-full pl-[3.25rem]">
@@ -870,7 +904,7 @@ function PropolyNameNote({ doc }: { doc: PlcDocument }) {
       </div>
     );
   }
-  if (name.length <= PROPOLY_NAME_MAX) return sizeBox;
+  if (HIDE_NAME_LENGTH || name.length <= PROPOLY_NAME_MAX) return sizeBox;
   return (
     <>
       {sizeBox}
@@ -915,9 +949,28 @@ function OtherLabel({ doc, busy, onSave }: { doc: PlcDocument; busy: boolean; on
         className="min-w-0 flex-1 basis-48 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs text-ink outline-none focus:border-amber-500 disabled:opacity-60"
       />
       {doc.label && draft.trim() === doc.label && <span className="text-xs text-emerald-700">Saved</span>}
-      {draft.trim().length > PROPOLY_NAME_MAX && (
-        <LongNameBox length={draft.trim().length} sent={propolyFileName(draft.trim(), "Document")} what="name" fix="Shorten it" inset={false} />
-      )}
+      {/* No 40-character warning (8 Nov 2026): the push shortens the name itself. */}
     </label>
+  );
+}
+
+/** The reason a "Not needed" tick saves with, from the example the box
+ *  always showed (lib/plc whyPlaceholder). Edit puts it right. */
+function defaultReason(id: CheckId): string {
+  const ex = whyPlaceholder(id).replace(/^Why not needed\?\s*(e\.g\.)?\s*/i, "").trim();
+  return ex.length >= 8 ? ex : "Not needed for this let";
+}
+
+/** A small look at the file: the picture itself for a photo, a page mark for anything else. */
+function MiniThumb({ name, url }: { name: string; url?: string }) {
+  const img = url && url !== "#" && isImageName(name);
+  if (img) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt="" loading="lazy" className="nl-plc-mini" />;
+  }
+  return (
+    <span className="nl-plc-mini is-page" aria-hidden>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6" /></svg>
+    </span>
   );
 }

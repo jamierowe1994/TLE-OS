@@ -38,24 +38,20 @@ Source of truth: `TLE Branding 3.pdf` ("Branding Update").
 
 ### 2.1 Palette
 
-**Primary**
+**The final palette (James, 7 November 2026).** It replaces everything before it: Expert Red,
+Expert Grey, Anti Flash White, Warm Clay `#DE968F`, Mist `#FFE4DF`, Pink Wash `#FDEFEC` and the
+pale sage `#B3BEA5` are all gone. The TLE OS runs the same seven colours, so the site and the
+system read as one family.
 
 | Token | Name | Hex | Use |
 |---|---|---|---|
-| `--expert-red` | Expert Red | `#E31F36` | Sparingly. Live/urgent states, the logo pin, one accent per screen at most. |
-| `--expert-grey` | Expert Grey | `#3B3B3C` | Deep text, dark surfaces, footer. |
-| `--anti-flash` | Anti Flash White | `#F1F1F1` | Quiet surface. |
-
-**Secondary**
-
-| Token | Name | Hex | Use |
-|---|---|---|---|
-| `--clay` | Warm Clay | `#DE968F` | The web accent. James's pick for banners. |
-| `--clay-deep` | Clay Deep | `#A85A51` | Small text and links on a tint, where raw clay fails contrast. |
-| `--mist` | Mist | `#FFE4DF` | Washes, hover fills, tag backgrounds. |
-| `--pink-wash` | Pink Wash | `#FDEFEC` | The faintest tint, for a panel that must not become a band. |
-| `--sage` | Sage | `#B3BEA5` | Balance. The pink and clay alone read "very girly", sage fixes it. |
 | `--brown` | Brown | `#56423E` | Buttons and calls to action. The contrast colour. |
+| `--terracotta` | Terracotta | `#A85A51` | The accent: links, highlights, what wants attention. 5.3:1 on white. |
+| `--olive` | Olive | `#56634A` | The balancing third: "done", "verified", calm good news. |
+| `--clay` | Clay | `#C4A092` | Supporting colour: charts, illustration, quiet marks. Not for small text. |
+| `--linen` | Linen | `#F5EFE6` | Washes, hover fills, tag backgrounds. |
+| `--cream` | Cream | `#F8F7F4` | The warm off-white for a quiet surface or panel. |
+| `--sage-wash` | Sage Wash | `#F1F4EC` | The olive's own wash. |
 
 **Surface and ink (carried straight from the portals, so the website reads as the same family)**
 
@@ -69,14 +65,13 @@ Source of truth: `TLE Branding 3.pdf` ("Branding Update").
 --radius-card: 16px;
 ```
 
-**Sanctioned colourways:** Expert Red x White, Expert Grey x Expert Red, Warm Clay x Anti
-Flash White, Mist x Expert Red.
+**Pairings:** Brown x White, Terracotta x Linen, Olive x Sage Wash, Brown x Cream.
 
 **Colour rules**
 - The page background is **white and stays white, top to bottom, every page**. Sections are
   separated by type, space, scale and motion, never by a band of colour. See section 4.
-- Expert Red is an event, not a theme. One per viewport, maximum.
-- Buttons are Brown. Accents and washes are Clay and Mist. Sage is the balancing third.
+- Terracotta is an accent, not a theme. One terracotta moment per viewport.
+- Buttons are Brown. The accent is Terracotta, washes are Linen. Olive is the balancing third.
 - No per-page brand colours, no coloured pills, no gradients on text.
 - Light theme only. There is no dark mode on the public site.
 
@@ -249,7 +244,7 @@ luxury.** We want fun, honest and trustworthy.
   photographed honestly is on-brand. A marble island is not.
 - **Real photographs of real people.** The agents' own headshots, already on a public CDN.
   Where an agent has no photo, do not substitute a stock person: use an illustrated placeholder
-  tile (initials over a Mist wash with a doodle house) and the line "Photo coming soon".
+  tile (initials over a Linen wash with a doodle house) and the line "Photo coming soon".
 - **Illustration carries the fun**, not photography. The licensed Notioly line-art scenes and
   the doodle/Icons sets do the playful work. Line art over white, ink colour, one accent.
 - **Animated transparent GIFs** (the square figurative set, 480x480, 2-3s loops, real
@@ -544,8 +539,8 @@ literals. If a source is unreachable, render an honest error state. Never show a
 
 WCAG 2.2 AA, and treat it as a design constraint rather than a test at the end.
 
-- Contrast 4.5:1 for body, 3:1 for large text. **Warm Clay on white fails for small text** -
-  that is why Clay Deep exists. Check every pairing.
+- Contrast 4.5:1 for body, 3:1 for large text. **Clay on white fails for small text** -
+  use Terracotta or Brown for words. Check every pairing.
 - Visible focus on everything interactive, in Brown, 2px with a 2px offset. Never `outline:
   none` without a replacement.
 - Full keyboard path through search, filters, gallery, map and forms.

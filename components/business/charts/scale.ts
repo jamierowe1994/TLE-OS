@@ -1,6 +1,6 @@
 // Shared chart internals for the hand-rolled SVG charts (PRESENT+CHARTS lane).
 
-export const CHART_COLORS = ["#cfa096", "#56423e", "#b3bea5", "#9b9b9f"]; // clay, brown, sage, grey - the house palette (17 Sep 2026)
+export const CHART_COLORS = ["#c4a092", "#56423e", "#b3bea5", "#9b9b9f"]; // clay, brown, sage, grey - the house palette (17 Sep 2026; clay is the final #c4a092 from 7 Nov)
 
 export const CHART_INK = "#101014";
 export const CHART_MUTED = "#6B6B76";

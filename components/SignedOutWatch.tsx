@@ -2,6 +2,12 @@
 
 import { useEffect } from "react";
 import { toast } from "@/lib/toast";
+import { installFetchDedupe } from "@/lib/fetch-dedupe";
+
+/* At import, before any screen's first effect asks for anything: two parts
+   of a page asking for the same data at once share one request
+   (lib/fetch-dedupe, 9 Nov 2026). */
+installFetchDedupe();
 
 /**
  * When a session ends, go and sign in (Rig run 4, P-054, 10 Oct 2026).

@@ -111,7 +111,10 @@ const rowTo = (r: Row): OsProperty => ({
   serviceLevel: r.service_level === "managed" || r.service_level === "market_only" || r.service_level === "rent_collect" ? r.service_level : null,
 });
 
-export const isOsPropertyId = (id: string | null | undefined): boolean => /^pm-(test-)?[0-9a-f-]+$/i.test(String(id ?? ""));
+/* A home taken on from another agent (mt-, lib/take-ons createTakeOn) is the
+   OS's own record too (Kirstie Mulholland, 4 Nov 2026: its certificates would
+   not file and its compliance tab could not load). */
+export const isOsPropertyId = (id: string | null | undefined): boolean => /^(pm-(test-)?[0-9a-f-]+|mt-[a-z0-9]+)$/i.test(String(id ?? ""));
 
 export async function listOsProperties(): Promise<OsProperty[]> {
   if (!hasDb()) return [];

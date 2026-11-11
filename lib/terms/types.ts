@@ -45,7 +45,19 @@ export interface LandlordDetails {
   bankAccountName: string;
   bankName: string;
   sortCode: string;
+  /** Sealed at rest (lib/bank-vault); a browser only ever gets the last four. */
   accountNumber: string;
+  /**
+   * England's PRS Database rental property number (November 2026): the
+   * property's own, so asked of the first landlord only.
+   */
+  rentalPropertyNumber: string;
+  /** The Landlord Declarations (November 2026), each "yes" or "no". */
+  noGas: string;
+  /** Their own usual home is outside the UK: asked of each landlord about themselves. */
+  nonUk: string;
+  /** Selective, additional or mandatory licensing, or an HMO licence (Scotland: an HMO licence). */
+  licensing: string;
 }
 
 /** The detail boxes a contract asks each landlord for, in the order asked. */
@@ -55,9 +67,31 @@ export interface DetailField {
   /** Shown under the box while they fill it in. */
   hint?: string;
   required: boolean;
-  kind?: "text" | "email" | "tel" | "date" | "sortcode" | "account";
+  kind?: "text" | "email" | "tel" | "date" | "sortcode" | "account" | "yesno";
   /** The step of the form it belongs to. */
-  step: "you" | "registration" | "bank";
+  step: "you" | "registration" | "bank" | "declarations";
+  /**
+   * The home's, not the person's (the bank account rent goes to, no gas, the
+   * licence): asked of the first landlord only and printed once, as the
+   * contract prints it (November 2026 editions).
+   */
+  firstOnly?: boolean;
+  /**
+   * Only ever the landlord's to give (James, 5 Nov 2026: "we need a
+   * confirmation if there is no gas... always has to be the landlord"). The
+   * agent's screen shows it as theirs and never offers to fill it in.
+   */
+  landlordOnly?: boolean;
+  /** kind "yesno": the question as asked, and what each answer prints on the contract. */
+  ask?: string;
+  printYes?: string;
+  printNo?: string;
+  /**
+   * Not asked as a detail: it follows an answer about the home
+   * (lib/property-questions), "yes" when that answer is one of `yes`. No gas
+   * at the property is the landlord's answer on the Gas screen, asked once.
+   */
+  fromAnswer?: { id: string; yes: string[] };
 }
 
 export type Block =
@@ -69,8 +103,12 @@ export type Block =
   | { kind: "h"; text: string }
   /** Label and value rows, values from TermsValues: the agreement's front page. */
   | { kind: "facts"; rows: Array<{ label: string; value: string }> }
-  /** Each landlord's own details, one card per landlord, from LandlordDetails. */
-  | { kind: "landlords"; fields: Array<keyof LandlordDetails> }
+  /**
+   * Each landlord's own details, one card per landlord, from LandlordDetails.
+   * `first`: the home's details the first landlord gives (the bank account,
+   * the declarations), printed once.
+   */
+  | { kind: "landlords"; fields: Array<keyof LandlordDetails>; first?: boolean }
   /** The service and fees chosen for this home. */
   | { kind: "fees" }
   /** A table of what each service level includes. */
@@ -99,5 +137,11 @@ export interface TermsDoc {
   edition: string;
   /** The detail boxes this contract asks each landlord to fill in. */
   details: DetailField[];
+  /**
+   * The questions about the home come before the contract (James, 5 Nov 2026:
+   * "these pre-populated questions should always go before the contract").
+   * November 2026 on; earlier editions go straight to the contract.
+   */
+  asksFirst?: boolean;
   sections: Section[];
 }

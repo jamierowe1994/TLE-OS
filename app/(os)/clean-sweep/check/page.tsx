@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import DoodleIcon from "@/components/DoodleIcon";
 import { searchMatches } from "@/lib/search-match";
+import { ACCEPT_EVIDENCE, EVIDENCE_TYPES, fileRefusal } from "@/lib/upload-rules";
+import { CERT_KINDS, certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
 
 /**
  * THE SECOND PASS (James, 25 Sep 2026).
@@ -61,6 +63,15 @@ type Detail = {
 };
 
 const CERT_TYPE: Record<string, string> = { gas: "gas_safety", eicr: "eicr", epc: "epc" };
+/** What a paper on a column may be: the document scope's rule (lib/r2 SCOPES.document), asked before it is sent. */
+const PAPER_RULE = { types: EVIDENCE_TYPES, maxBytes: 50 * 1024 * 1024 };
+/** A problem on the row it belongs to. */
+const RowProblem = ({ text, onHide }: { text: string; onHide: () => void }) => (
+  <p role="alert" className="col-span-full mt-1 flex items-start gap-2 rounded-lg bg-[#f6e1dd] px-3 py-1.5 text-[12px] leading-snug text-[#9d4340]">
+    <span className="min-w-0 flex-1">{text}</span>
+    <button type="button" onClick={onHide} className="shrink-0 font-semibold underline">Hide</button>
+  </p>
+);
 const fmtDate = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? new Date(`${d.slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : d);
 const fileHref = (u: string) => (/^(https?:)?\//.test(u) ? u : `/api/r2/file?key=${encodeURIComponent(u)}`);
 const typing = () => { const t = document.activeElement?.tagName; return t === "INPUT" || t === "TEXTAREA" || t === "SELECT"; };
@@ -330,6 +341,12 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
   const [val, setVal] = useState("");
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
+  /* What went wrong, on this row (10 Nov 2026). It used to go into the one
+     message above the whole table, which on a long home is off the top of the
+     screen: the person pressed Upload, saw nothing change, and reported
+     "nothing is happening". `sending` is the file on its way, said by name. */
+  const [problem, setProblem] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputType = f.kind === "date" ? "date" : f.kind === "number" ? "number" : "text";
   const differs = /differs/i.test(f.checkedAgainst ?? "");
@@ -342,21 +359,26 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
   }
   async function remove(x: { key: string; name: string }) {
     if (!window.confirm(`Delete ${x.name} from this home? This cannot be undone.`)) return;
-    setBusy(true); setMsg(null);
+    setBusy(true); setMsg(null); setProblem(null);
     try {
       const r = await fetch(`/api/clean-sweep/${encodeURIComponent(homeId)}/file`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: x.key }) });
       const j = await r.json();
-      if (!j.ok) setMsg(j.error || "That did not delete."); else onSaved(j);
-    } catch { setMsg("That did not delete - the OS could not be reached."); } finally { setBusy(false); }
+      if (!j.ok) setProblem(j.error || `${x.name} was not deleted. Nothing changed.`); else onSaved(j);
+    } catch { setProblem(`${x.name} was not deleted: the OS could not be reached. Nothing changed.`); } finally { setBusy(false); }
   }
   async function upload(file: File) {
-    setBusy(true); setMsg(null);
+    setMsg(null);
+    /* The same rule the server keeps (lib/upload-rules), asked first: a file
+       it will not take is said here, by name, without the wait. */
+    const refused = fileRefusal(file, PAPER_RULE);
+    if (refused) { setProblem(refused); return; }
+    setBusy(true); setProblem(null); setSending(file.name);
     const fd = new FormData(); fd.append("file", file); fd.append("field", f.key);
     try {
       const r = await fetch(`/api/clean-sweep/${encodeURIComponent(homeId)}/file`, { method: "POST", body: fd });
-      const j = await r.json();
-      if (!j.ok) setMsg(j.error || "That did not upload."); else onSaved(j);
-    } catch { setMsg("That did not upload - the OS could not be reached."); } finally { setBusy(false); }
+      const j = await r.json().catch(() => null);
+      if (!j?.ok) setProblem(j?.error || `${file.name} did not upload (the OS answered ${r.status}). It was not kept; try it again.`); else onSaved(j);
+    } catch { setProblem(`${file.name} did not upload: the OS could not be reached. It was not kept; try it again.`); } finally { setBusy(false); setSending(null); }
   }
 
   return (
@@ -413,9 +435,16 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
         {f.kind !== "file" && !editing && !f.choices?.length && <button onClick={() => { setVal(f.kind === "date" ? (f.value && /^\d{4}-\d{2}-\d{2}/.test(f.value) ? f.value.slice(0, 10) : "") : f.value ?? ""); setEditing(true); }} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{f.value ? "Edit" : "Add"}</button>}
         {f.quick && !editing && f.value !== f.quick.value && <button onClick={() => void save(false, f.quick!.value)} disabled={busy} title={f.quick.hint} className="whitespace-nowrap rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{f.quick.label}</button>}
         {!editing && <button onClick={() => void save(true)} disabled={busy} className="rounded-full border border-line px-2.5 py-1 text-[12px] text-muted hover:border-ink" title="This column does not apply to this home">N/A</button>}
-        <button onClick={() => fileRef.current?.click()} disabled={busy} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{busy ? "…" : "Upload"}</button>
-        <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
+        <button onClick={() => fileRef.current?.click()} disabled={busy} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{sending ? "Uploading" : busy ? "…" : "Upload"}</button>
+        <input ref={fileRef} type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
       </div>
+      {sending && (
+        <p className="col-span-full mt-1 flex items-center gap-2 text-[12px] text-muted">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+          Uploading {sending}…
+        </p>
+      )}
+      {problem && <RowProblem text={problem} onHide={() => setProblem(null)} />}
     </div>
   );
 }
@@ -425,22 +454,44 @@ function CertRow({ c, ticked, onTick, home, onSaved, setMsg }: {
 }) {
   const [open, setOpen] = useState(false);
   const [expiry, setExpiry] = useState("");
+  const [issue, setIssue] = useState("");
+  /* What the newer one is. It starts as this row's certificate and can be any
+     of them (10 Nov 2026): a PAT report or a fire risk assessment found while
+     checking a home had nowhere to go but one of three rows. */
+  const [type, setType] = useState(CERT_TYPE[c.key]);
   const [busy, setBusy] = useState(false);
+  /* On this row, not above the table (see FactRow). */
+  const [problem, setProblem] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
+  const [filed, setFiled] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const expired = c.days != null && c.days < 0;
+  /* A PAT report or a fire safety certificate has no expiry: the day it was done is enough (lib/cert-kinds). */
+  const onIssue = kindFilesOnIssueDate(type);
+  const notReady = certNotReadyBecause({ type, expiry, issue });
 
   /* A newer certificate goes through the compliance desk's own route, so it counts everywhere. */
   async function file(f: File) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry)) { setMsg("Put the certificate's expiry date in first."); return; }
-    setBusy(true); setMsg(null);
+    setMsg(null); setFiled(null);
+    if (notReady) { setProblem(notReady.replace(" to file it", " first, then choose the file")); return; }
+    setBusy(true); setProblem(null); setSending(f.name);
     const fd = new FormData();
     fd.append("file", f); fd.append("propertyId", home.rexPropertyId || home.id); fd.append("propertyName", home.address);
-    fd.append("type", CERT_TYPE[c.key]); fd.append("expiry", expiry); fd.append("source", "Clean sweep check");
+    fd.append("type", type); if (expiry) fd.append("expiry", expiry);
+    /* The day it was done goes only with a kind that asks for it: the box is hidden for the others, and a date left in it from the last one must not ride along. */
+    if (onIssue && issue) fd.append("issue", issue);
+    fd.append("source", "Clean sweep check");
     try {
       const r = await fetch("/api/compliance/certificates", { method: "POST", body: fd });
-      const j = await r.json();
-      if (!j.ok) setMsg(j.error || "That certificate did not file."); else { setOpen(false); await onSaved(); }
-    } catch { setMsg("That certificate did not file - the OS could not be reached."); } finally { setBusy(false); }
+      const j = await r.json().catch(() => null);
+      if (!j?.ok) setProblem(j?.error || `${f.name} did not file (the OS answered ${r.status}). It was not kept; try it again.`);
+      else {
+        setOpen(false); setExpiry(""); setIssue("");
+        /* Filed as another kind, it will not show on this row: say where it went. */
+        if (type !== CERT_TYPE[c.key]) setFiled(`${f.name} is filed on this home as ${CERT_KINDS.find((k) => k.id === type)?.label ?? "a certificate"}.`);
+        await onSaved();
+      }
+    } catch { setProblem(`${f.name} did not file: the OS could not be reached. It was not kept; try it again.`); } finally { setBusy(false); setSending(null); }
   }
 
   return (
@@ -454,17 +505,37 @@ function CertRow({ c, ticked, onTick, home, onSaved, setMsg }: {
         {c.fileUrl && <a href={fileHref(c.fileUrl)} target="tle-sweep-file" rel="noopener" className="ml-2 text-[12px] underline">Open</a>}
         {c.checkedBy && <span className="ml-2 text-[11px] text-[#56634a]">checked by {c.checkedBy}</span>}
         {open && (
-          <div className="mt-2 flex items-center gap-2">
-            <label className="text-[12px] text-muted">Expires</label>
-            <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className="rounded-lg border border-line px-2 py-1 text-[13px]" />
-            <button onClick={() => fileRef.current?.click()} disabled={busy} className="rounded-full bg-ink px-3 py-1 text-[12px] font-semibold text-white">{busy ? "Filing" : "Choose the file"}</button>
-            <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void file(f); e.target.value = ""; }} />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label className="text-[12px] text-muted" htmlFor={`sweep-type-${c.key}`}>It is</label>
+            <select id={`sweep-type-${c.key}`} value={type} onChange={(e) => { setType(e.target.value); setProblem(null); }} className="rounded-lg border border-line px-2 py-1 text-[13px]">
+              {CERT_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+            </select>
+            {onIssue && (
+              <>
+                <label className="text-[12px] text-muted" htmlFor={`sweep-issue-${c.key}`}>{type === "portable_appliance_testing" ? "Tested" : "Checked"}</label>
+                <input id={`sweep-issue-${c.key}`} type="date" value={issue} onChange={(e) => { setIssue(e.target.value); setProblem(null); }} className="rounded-lg border border-line px-2 py-1 text-[13px]" />
+              </>
+            )}
+            <label className="text-[12px] text-muted" htmlFor={`sweep-expiry-${c.key}`}>{onIssue ? "Expires (optional)" : "Expires"}</label>
+            <input id={`sweep-expiry-${c.key}`} type="date" value={expiry} onChange={(e) => { setExpiry(e.target.value); setProblem(null); }} className="rounded-lg border border-line px-2 py-1 text-[13px]" />
+            <button onClick={() => fileRef.current?.click()} disabled={busy || Boolean(notReady)} className="rounded-full bg-ink px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50">{busy ? "Filing" : "Choose the file"}</button>
+            <input ref={fileRef} type="file" accept={ACCEPT_EVIDENCE} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void file(f); e.target.value = ""; }} />
+            {notReady && !busy && <p className="w-full text-[11.5px] text-muted">{notReady.replace(" to file it", ", then choose the file")}</p>}
+            {noExpiryNote(type, issue, expiry, (d) => fmtDate(d) ?? d) && <p className="w-full text-[11.5px] text-muted">{noExpiryNote(type, issue, expiry, (d) => fmtDate(d) ?? d)}</p>}
           </div>
         )}
       </div>
       <div className="flex justify-end">
-        <button onClick={() => setOpen((o) => !o)} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{open ? "Cancel" : "Newer one"}</button>
+        <button onClick={() => { setOpen((o) => !o); setProblem(null); }} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{open ? "Cancel" : "Newer one"}</button>
       </div>
+      {sending && (
+        <p className="col-span-full mt-1 flex items-center gap-2 text-[12px] text-muted">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+          Filing {sending}…
+        </p>
+      )}
+      {filed && <p className="col-span-full mt-1 text-[12px] text-[#56634a]">{filed}</p>}
+      {problem && <RowProblem text={problem} onHide={() => setProblem(null)} />}
     </div>
   );
 }

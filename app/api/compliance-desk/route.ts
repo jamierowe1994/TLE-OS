@@ -90,7 +90,8 @@ export async function POST(req: NextRequest) {
       state: b.state,
       note: b.note || (number && b.state === "verified" ? `Engineer ${number} checked on the register.` : undefined),
       by: me.name || me.email,
-      fileAs: b.fileAs?.expiry ? { type: String(b.fileAs.type ?? ""), expiry: String(b.fileAs.expiry), issue: b.fileAs.issue ? String(b.fileAs.issue) : null } : null,
+      /* With an expiry, or with the issue date alone: a PAT report or a fire safety certificate has no expiry (lib/cert-kinds). */
+      fileAs: b.fileAs?.expiry || b.fileAs?.issue ? { type: String(b.fileAs.type ?? ""), expiry: String(b.fileAs.expiry ?? ""), issue: b.fileAs.issue ? String(b.fileAs.issue) : null } : null,
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That did not save.") }, { status: 400 });

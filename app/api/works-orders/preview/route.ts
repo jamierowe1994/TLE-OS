@@ -3,7 +3,7 @@ import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { dueFor, getContractor, getOrder, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
-import { previewJobEmail } from "@/lib/works-emails";
+import { editableJobEmail, previewJobEmail, type ContractorEdit } from "@/lib/works-emails";
 
 /**
  * The works order a job would send, rendered from the form as it stands and
@@ -19,6 +19,10 @@ type Draft = {
   propertyName?: string; locality?: string; contractorId?: string | null; tenants?: JobTenant[];
   /** A job already on the board: its quote request as this contractor will get it (Ask for quotes, 21 Oct 2026). */
   orderId?: string; template?: "quote";
+  /** The home it's on, so the key numbers and access the real email reads are in the preview too. */
+  propertyId?: string | null;
+  /** The agent's own words for the works order (James, 8 Nov 2026), and whether to send back the words to edit. */
+  edit?: ContractorEdit | null; editable?: boolean;
 };
 
 export async function POST(req: NextRequest) {
@@ -48,13 +52,18 @@ export async function POST(req: NextRequest) {
     id: "preview", ref: Number(seq?.n ?? 0), kind: repair ? "repair" : "planned", title: (b.title ?? "").trim() || "The job", description: (b.description ?? "").trim(),
     category: b.category ?? "", urgency, dueAt: repair ? dueFor("repair", urgency, null) : b.dueAt ? new Date(b.dueAt).toISOString() : null,
     scheduledAt: b.scheduledAt ? new Date(b.scheduledAt).toISOString() : null, access: (b.access ?? "").trim(),
+    propertyId: typeof b.propertyId === "string" && b.propertyId ? b.propertyId : null,
     propertyName: (b.propertyName ?? "").trim(), locality: (b.locality ?? "").trim(), contractorId: c.id, contractorName: c.name,
     tenants, tenant: tenants[0]?.name ?? "", tenantPhone: tenants[0]?.phone ?? "", tenantEmail: tenants[0]?.email ?? "",
     landlord: "", quotePence: null, authorityPence: 0, completionNote: "", contractorToken: "…", tenantToken: null,
   } as unknown as WorksOrder;
   try {
-    const mail = await previewJobEmail(draft, repair ? "works-contractor-order" : "works-contractor-planned", subject ?? actor, seq?.n ? {} : { ref: "(new)" });
-    return NextResponse.json({ ok: true, ...mail });
+    const id = repair ? "works-contractor-order" : "works-contractor-planned";
+    const over: Record<string, string> = seq?.n ? {} : { ref: "(new)" };
+    const change = b.edit && typeof b.edit === "object" ? { subject: typeof b.edit.subject === "string" ? b.edit.subject.slice(0, 200) : null, body: typeof b.edit.body === "string" ? b.edit.body.slice(0, 6000) : null } : null;
+    const mail = await previewJobEmail(draft, id, subject ?? actor, over, change);
+    const words = b.editable ? await editableJobEmail(draft, id, subject ?? actor, over) : null;
+    return NextResponse.json({ ok: true, ...mail, ...(words ? { text: words.text, fields: words.fields } : {}) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "The preview could not be written.") }, { status: 400 });
   }

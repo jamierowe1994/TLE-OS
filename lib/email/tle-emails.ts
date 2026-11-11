@@ -108,6 +108,8 @@ import {
   TENANT_PORTAL_LOGIN,
   TENANT_DOCUMENTS,
   LANDLORD_DOCUMENTS,
+  TENANT_MOVE_IN_WELCOME,
+  LANDLORD_MOVE_IN_WELCOME,
   TENANT_PASSPORT_NUDGE_1,
   TENANT_PASSPORT_NUDGE_2,
   TENANT_PASSPORT_REMINDER,
@@ -314,7 +316,42 @@ function fillFor(vars: Record<string, string>, html: boolean) {
  * moved every time an email was added. The send paths call THIS, so what
  * Francesca changed is what goes out.
  */
-export async function renderTleEmailLive(id: string, vars: Record<string, string>): Promise<{ subject: string; html: string }> {
+/**
+ * The words an agent can change before one email goes (James, 8 Nov 2026,
+ * the works order: "they should be able to click into the email and edit
+ * it"). A run of the document's blocks, from one id through another, is
+ * swapped for the agent's own plain text; the heading, the button, the
+ * invoice line, the sign-off and the footer stay as the builder has them,
+ * so the link still works and the letterhead stays ours.
+ */
+export type EmailEdit = { from: string; through: string; subject?: string | null; body?: string | null };
+
+/** The block run an edit replaces, or null when the builder's version no longer has both ends. */
+function editRange(doc: EmailDoc, from: string, through: string): [number, number] | null {
+  const ids = doc.blocks.map((b) => (b as unknown as { id?: string }).id);
+  const a = ids.indexOf(from);
+  const z = ids.indexOf(through);
+  return a >= 0 && z >= a ? [a, z] : null;
+}
+
+/* Plain text to text blocks: a blank line starts a new paragraph, a line
+   break stays a line break, and a paragraph whose first line is short and
+   unpunctuated with more under it ("Tenants to arrange access with") has
+   that line in bold, as the template had it. */
+function textToBlocks(body: string, prefix: string): EmailDoc["blocks"] {
+  return body
+    .replace(/\r\n?/g, "\n")
+    .split(/\n\s*\n/)
+    .map((para) => para.split("\n").map((l) => l.trimEnd()))
+    .filter((lines) => lines.some((l) => l.trim()))
+    .map((lines, i) => {
+      const head = lines.length > 1 && lines[0].length <= 60 && !/[.,;:!?]$/.test(lines[0].trim());
+      const html = lines.map((l, j) => (j === 0 && head ? `<strong>${escapeHtml(l)}</strong>` : escapeHtml(l))).join("<br>");
+      return { type: "text", id: `${prefix}-edit-${i}`, text: html, bg: "" } as unknown as EmailDoc["blocks"][number];
+    });
+}
+
+async function liveDoc(id: string): Promise<{ doc: EmailDoc; audience?: EmailAudience }> {
   const entry = TLE_EMAILS.find((e) => e.id === id);
   if (!entry?.doc) throw new Error(`No email document for ${id}.`);
   let doc: EmailDoc = entry.doc;
@@ -330,6 +367,49 @@ export async function renderTleEmailLive(id: string, vars: Record<string, string
   } catch {
     /* the words in code, then */
   }
+  return { doc, audience: entry.audience };
+}
+
+/**
+ * What the agent starts from when they edit: the subject and the editable
+ * run as plain text, filled from the job. Null when the builder's version
+ * of the email no longer has the run's two ends.
+ */
+export async function editableEmailText(id: string, vars: Record<string, string>, from: string, through: string): Promise<{ subject: string; body: string } | null> {
+  const { doc } = await liveDoc(id);
+  const range = editRange(doc, from, through);
+  if (!range) return null;
+  const fillText = fillFor(vars, false);
+  const plain = (t: string) =>
+    t
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&");
+  const body = doc.blocks
+    .slice(range[0], range[1] + 1)
+    .map((b) => (b as unknown as { text?: string }).text)
+    .filter((t): t is string => typeof t === "string")
+    .map((t) => plain(fillText(t)).trim())
+    /* An empty field leaves "Access notes:" with nothing after it: drop it. */
+    .filter((t) => t && !/^[^\n]{1,40}:$/.test(t))
+    .join("\n\n");
+  return { subject: fillText(doc.subject), body };
+}
+
+export async function renderTleEmailLive(id: string, vars: Record<string, string>, edit?: EmailEdit | null): Promise<{ subject: string; html: string }> {
+  const entry = TLE_EMAILS.find((e) => e.id === id);
+  if (!entry?.doc) throw new Error(`No email document for ${id}.`);
+  let { doc } = await liveDoc(id);
+  if (edit?.body?.trim()) {
+    const range = editRange(doc, edit.from, edit.through);
+    if (range) doc = { ...doc, blocks: [...doc.blocks.slice(0, range[0]), ...textToBlocks(edit.body, edit.from), ...doc.blocks.slice(range[1] + 1)] };
+  }
+  if (edit?.subject?.trim()) doc = { ...doc, subject: edit.subject.trim().replace(/[\r\n]+/g, " ").slice(0, 200) };
   const fill = fillFor(vars, true);
   const fillText = fillFor(vars, false);
   const filled: EmailDoc = {
@@ -1378,7 +1458,7 @@ TLE_EMAILS.push(
   worksEntry("works-contractor-quote-closed", "Gone Elsewhere to the Contractor", "contractor", "When another contractor's quote is taken on a job they were asked to price", "Every contractor still in the running", "Thanks for their time, we've gone with another quote, nothing more to do.", WORKS_CONTRACTOR_QUOTE_CLOSED as unknown as EmailDoc),
   worksEntry("works-contractor-report", "Can You Take This? to the Contractor", "contractor", "Step 4: when the agent contacts a contractor about a job", "The contractor", "The job in brief and a yes-or-no. The works order follows once they say yes.", WORKS_CONTRACTOR_REPORT as unknown as EmailDoc),
   worksEntry("works-tenant-notice", "A Contractor Will Be in Touch to the Tenants", "tenant", "When a repair goes to a contractor and Let the tenants know is ticked", "Every tenant on the job", "Who is coming and that they'll ring to arrange a time - never the works order or its notes.", WORKS_TENANT_NOTICE as unknown as EmailDoc),
-  worksEntry("works-tenant-planned-notice", "Arranging Access to the Tenants", "tenant", "When a planned job goes to a contractor and Let the tenants know is ticked on Plan a certificate", "Every tenant on the job", "Who will be in touch to arrange access for the check, and a number to ring if unsure - never the works order.", WORKS_TENANT_PLANNED_NOTICE as unknown as EmailDoc),
+  worksEntry("works-tenant-planned-notice", "Arranging Access to the Tenants", "tenant", "When a planned job goes to a contractor and Let the tenants know is ticked on Plan a certificate, or Tell the Tenants is pressed on the job's date step", "Every tenant on the job", "Who will be in touch to arrange access for the check, and a number to ring if unsure - never the works order.", WORKS_TENANT_PLANNED_NOTICE as unknown as EmailDoc),
   worksEntry("works-tenant-found", "We've Found Someone to the Tenant", "tenant", "Step 5: the moment a contractor confirms, alongside the works order", "The tenant", "Who's coming, that they'll be in touch to arrange access, and what to do if they aren't.", WORKS_TENANT_FOUND as unknown as EmailDoc),
   worksEntry("works-landlord-arranged", "Arranged to the Landlord", "landlord", "Step 6: once a date is set", "The landlord", "Who's booked and when, and that nothing is needed from them.", WORKS_LANDLORD_ARRANGED as unknown as EmailDoc),
   worksEntry("works-contractor-done-request", "All Done? to the Contractor", "contractor", "Step 7: the day after the booked date", "The contractor", "One page to mark it done, add photos and drop in the invoice, which goes straight to accounts.", WORKS_CONTRACTOR_DONE_REQUEST as unknown as EmailDoc),
@@ -1903,4 +1983,55 @@ TLE_EMAILS.push(
     REFERENCING_CHASE,
     { link: `${SITE}/tenant/tenancy` }
   )
+);
+
+/* The move-in welcomes (Kirstie Mulholland, ticket f180d1eb; James, 10 Nov
+   2026: "Feel free to make those automatic welcome emails after moving in").
+   lib/move-in-welcome sends both, behind their own switch. */
+const MOVE_IN_SAMPLE: Record<string, string> = {
+  address: "Flat 2, 14 Ruskin Place, Glasgow",
+  agentName: "Sam Whitaker",
+  agentFirst: "Sam",
+  agentPhone: "0115 123 4567",
+  agentEmail: "sam@thelettingexperts.co.uk",
+};
+
+TLE_EMAILS.push(
+  tenantEntry(
+    "tenant-move-in-welcome",
+    "Welcome to Your New Home",
+    "The morning after a managed let's move-in date",
+    "Wired 10 Nov 2026. lib/move-in-welcome, on the hourly tenant reminders run, 9am to 6pm: each tenant with an email on a Managed or Fully Managed let whose move-in was yesterday (up to 7 days back, and never before the switch went on, bar 3 days' grace). Once per tenant per let. From the home's agent. Makes their tenant account and a 14-day sign-in link, as Send out logins does. Needs its own switch, Move-in welcome emails, and customer email.",
+    "Each tenant on the let with an email",
+    "Welcome, who their property manager is and how to reach them, report a repair through the tenant account (the button signs them in), pay the rent by standing order with the reference in their paperwork, and what to do in an emergency, gas first.",
+    TENANT_MOVE_IN_WELCOME,
+    {
+      ...MOVE_IN_SAMPLE,
+      link: `${SITE}/tenant/enter?token=sample&next=/tenant/maintenance`,
+      signInLink: `${SITE.replace(/^https?:\/\//, "")}/tenant/sign-in`,
+      signInHref: `${SITE}/tenant/sign-in?link=1`,
+    }
+  ),
+  {
+    id: "landlord-move-in-welcome",
+    group: "Doorways",
+    name: "Welcome to Fully Managed (landlord)",
+    audience: "landlord",
+    trigger: "The morning after a managed let's move-in date",
+    fires: "Wired 10 Nov 2026. lib/move-in-welcome, on the hourly tenant reminders run, with the tenants' welcome. Each landlord with an email on a Managed or Fully Managed let, once per landlord per home, and not when we have let that home for them before (a re-let is not a welcome). From the home's agent. The visit cadence is read from the inspection rules. Needs its own switch, Move-in welcome emails, and customer email.",
+    to: "Every landlord on the home with an email",
+    summary: "The tenants are in and we are managing it now, who their property manager is, then what happens next: rent paid on with a PayProp statement, certificates tracked and renewed, the inspection cadence, repairs asked about first where they need a say, and a button to their property file.",
+    doc: LANDLORD_MOVE_IN_WELCOME,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_MOVE_IN_WELCOME, {
+          ...MOVE_IN_SAMPLE,
+          firstName: "David",
+          moveInPretty: "Monday 9 November 2026",
+          firstVisit: "three months",
+          everyVisit: "six months",
+          link: `${SITE}/landlord/sign-in`,
+        })
+      )(),
+  }
 );

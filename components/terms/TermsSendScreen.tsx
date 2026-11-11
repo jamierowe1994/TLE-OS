@@ -9,6 +9,8 @@ import { edition, editionFor } from "@/lib/terms/catalogue";
 import { guessService, servicesFor } from "@/lib/terms/services";
 import type { Country, LandlordDetails, TermsValues } from "@/lib/terms/types";
 import { regForLandlords, type HomeReg } from "@/lib/reg-numbers";
+import QuestionField from "@/components/terms/QuestionField";
+import { PROPERTY_QUESTIONS, stepDone, wants, type Answers, type QuestionStep } from "@/lib/property-questions";
 
 /**
  * SEND THE TERMS, ON ONE PAGE (James, 24 Oct 2026).
@@ -136,6 +138,7 @@ const PATHS = {
   pen: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   up: "M12 15V4M7.5 8.5L12 4l4.5 4.5M5 15v5h14v-5",
   link: "M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1",
+  lock: "M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3",
 } as const;
 const Ic = ({ k, w = 1.7 }: { k: keyof typeof PATHS; w?: number }) => (
   <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -221,10 +224,18 @@ export default function TermsSendScreen({
   scottish,
   editions,
   registration = null,
+  asks = false,
   preview,
   onClose,
   onSent,
 }: {
+  /**
+   * The November terms with the questions before the contract (switch termsqs, James, 5 Nov
+   * 2026): a step before signing where the agent sees what the landlord will be asked and
+   * answers what they know. Never the Gas screen or the bank details: "always has to be the
+   * landlord".
+   */
+  asks?: boolean;
   /** A service just chosen on the home's page ("Managed", "Let Only", "Rent Collect"): it wins over the record's and the set being adjusted. */
   serviceWanted?: string | null;
   /** Adjust contract: the set out now, whose answers the screen starts from and which the new one replaces. */
@@ -367,8 +378,11 @@ export default function TermsSendScreen({
   /* The contract's own name where it is made already; otherwise the person signed in, as lib/terms/flow names them. */
   const agentName = signing?.agentName || me?.name || "";
 
-  /* ── The steps ── */
-  const [step, setStep] = useState<0 | 1 | 2>(signing ? 1 : 0);
+  /* ── The steps: with the questions on, "Before they sign" comes between the details and signing ── */
+  const pre = Boolean(asks && !signing);
+  const S = { details: 0, pre: pre ? 1 : -1, sign: pre ? 2 : 1, send: pre ? 3 : 2 };
+  const [step, setStep] = useState<number>(signing ? S.sign : 0);
+  const [okPre, setOkPre] = useState(!pre);
   const [okDetails, setOkDetails] = useState(Boolean(signing));
   /* The contract made on the way, when signing then failed: kept so trying again signs that one rather than making a second. */
   const [made, setMade] = useState<StaffTerms | null>(null);
@@ -443,7 +457,7 @@ export default function TermsSendScreen({
   }, []);
   /* After the portal is in (mounted): "Sign your part" opens straight on this step, and the canvas isn't there on the first pass. */
   useEffect(() => {
-    if (mounted && step === 1 && mode === "draw" && !sig) mountPad();
+    if (mounted && step === S.sign && mode === "draw" && !sig) mountPad();
   }, [mounted, step, mode, sig, mountPad]);
 
   const at = (e: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
@@ -541,7 +555,7 @@ export default function TermsSendScreen({
     if (!img) return setSignProblem("That signature couldn't be made here. Try drawing it instead.");
     setSig(img);
     setKeepUsed((mode === "draw" || mode === "upload") && keep);
-    setStep(2);
+    setStep(S.send);
     flash("ts-sig-agent");
   }
 
@@ -597,21 +611,127 @@ export default function TermsSendScreen({
     }
     setEditing(null);
     setOkDetails(true);
-    setStep(sig ? 2 : 1);
+    if (pre && !okPre) {
+      setStep(S.pre);
+      return;
+    }
+    setStep(sig ? S.send : S.sign);
     flash(sig ? "ts-sign" : "ts-sig-agent");
   }
 
-  function openStep(k: 0 | 1 | 2) {
-    const can = [true, okDetails, okDetails && !!sig][k];
+  function openStep(k: number) {
+    const can = k === S.details ? true : k === S.pre ? okDetails : k === S.sign ? okDetails && okPre : okDetails && okPre && !!sig;
     if (!can || phase === "sending") return;
     setStep(k);
     /* Reopening a finished step undoes it, as the design does: the details are checked again, the signature signed again. */
-    if (k === 0 && !fixed) setOkDetails(false);
-    if (k === 1 && sig) setSig(null);
+    if (k === S.details && !fixed) setOkDetails(false);
+    if (k === S.pre) setOkPre(false);
+    if (k === S.sign && sig) setSig(null);
+  }
+
+  /* ── Before they sign (James, 5 Nov 2026): what the landlord will be asked, and the agent's answers ── */
+  const [preAnswers, setPreAnswers] = useState<Answers>({});
+  const [preWho, setPreWho] = useState<Record<string, { by: string; at: string }>>({});
+  const [preTouched, setPreTouched] = useState<Answers>({});
+  const [preLoaded, setPreLoaded] = useState(!pre);
+  const [preOpen, setPreOpen] = useState<string | null>(null);
+  const [preBank, setPreBank] = useState<{ last4: string } | null>(null);
+  const [preSaving, setPreSaving] = useState(false);
+  const [preProblem, setPreProblem] = useState<string | null>(null);
+  /* PULLED THROUGH (James, 5 Nov 2026): what the OS already knows about the home, each subject for the agent to
+     confirm ("Yes, still correct"), change, or send to the landlord to check anyway. Nothing goes unchecked. */
+  type Pulled = { answers: Answers; from: Record<string, string>; relist: boolean; relistWhy: string | null; licensing: { value: "yes" | "no"; from: string } | null };
+  const [pulled, setPulled] = useState<Pulled | null>(null);
+  const [pulledSteps, setPulledSteps] = useState<Set<string>>(new Set());
+  const [choice, setChoice] = useState<Record<string, "ok" | "change" | "ask">>({});
+  const [rentalNo, setRentalNo] = useState("");
+  const leadEmail = people[0]?.email.trim() ?? "";
+  useEffect(() => {
+    if (!pre) return;
+    let live = true;
+    const u = new URLSearchParams();
+    if (listingId) u.set("listingId", listingId);
+    if (propertyId) u.set("propertyId", propertyId);
+    if (appraisalId) u.set("appraisalId", appraisalId);
+    if (EMAIL.test(leadEmail)) u.set("email", leadEmail);
+    if (address.trim()) u.set("address", address.trim());
+    if (![...u.keys()].some((k) => k !== "email")) {
+      setPreLoaded(true);
+      return;
+    }
+    fetch(`/api/terms/answers?${u}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!live || !j?.ok) return;
+        setPreAnswers(j.answers ?? {});
+        setPreWho(j.who ?? {});
+        setPreBank(j.bankOnFile ?? null);
+        const pl: Pulled | null = j.pulled ?? null;
+        setPulled(pl);
+        /* A subject is pulled through when anything on it is already known: kept before, or found on the file. */
+        const known = { ...(pl?.answers ?? {}), ...(j.answers ?? {}) };
+        setPulledSteps(new Set(PROPERTY_QUESTIONS.filter((st) => st.id !== "gas" && st.questions.some((q) => String(known[q.id] ?? "").trim())).map((st) => st.id)));
+      })
+      .catch(() => {})
+      .finally(() => live && setPreLoaded(true));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pre, listingId, propertyId, appraisalId, leadEmail]);
+  const preAnswer = (id: string, v: string) => {
+    setPreProblem(null);
+    setPreAnswers((a) => ({ ...a, [id]: v }));
+    setPreTouched((t) => ({ ...t, [id]: v }));
+    /* Changing a pulled-through answer is the agent saying what it is now. */
+    const st = PROPERTY_QUESTIONS.find((s) => s.questions.some((q) => q.id === id || `${q.id}-card` === id));
+    if (st && pulledSteps.has(st.id)) setChoice((c) => ({ ...c, [st.id]: c[st.id] === "ask" ? "ask" : "change" }));
+  };
+  /* What each question shows: kept answers first, then what the file says. */
+  const shown: Answers = { ...(pulled?.answers ?? {}), ...preAnswers };
+  const askSteps = ["gas", ...Object.entries(choice).filter(([, c]) => c === "ask").map(([k]) => k)];
+  async function preRight() {
+    if (preSaving) return;
+    /* Every subject pulled through has been looked at (James, 5 Nov 2026: "make sure they are covering it all off"). */
+    const unchecked = PROPERTY_QUESTIONS.filter((st) => pulledSteps.has(st.id) && !choice[st.id]);
+    if (unchecked.length) {
+      setPreOpen(unchecked[0].id);
+      return setPreProblem(`Check each subject we pulled through: Still correct, No, change it, or Ask ${firstOf(people[0]?.name ?? "") || "them"} anyway.`);
+    }
+    /* Confirmed or changed: what the agent saw on those subjects is kept as theirs. Sent to check: nothing kept. */
+    const save: Answers = { ...preTouched };
+    for (const st of PROPERTY_QUESTIONS) {
+      const c = choice[st.id];
+      if (c !== "ok" && c !== "change") continue;
+      for (const q of st.questions) {
+        if (q.who === "landlord" || q.secret) continue;
+        for (const k of [q.id, `${q.id}-card`]) if (pulled?.answers[k] != null && preAnswers[k] == null) save[k] = shown[k];
+      }
+    }
+    for (const st of PROPERTY_QUESTIONS) if (choice[st.id] === "ask") for (const q of st.questions) { delete save[q.id]; delete save[`${q.id}-card`]; }
+    if (Object.keys(save).length) {
+      setPreSaving(true);
+      const r = await fetch("/api/terms/answers", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ listingId, propertyId, appraisalId, answers: save }),
+      })
+        .then((x) => x.json())
+        .catch(() => null);
+      setPreSaving(false);
+      if (!r?.ok) return setPreProblem(r?.error ?? "Your answers didn't save. Try again in a moment.");
+      setPreAnswers(r.answers ?? preAnswers);
+      setPreWho(r.who ?? preWho);
+      setPreTouched({});
+    }
+    setPreOpen(null);
+    setOkPre(true);
+    setStep(sig ? S.send : S.sign);
+    flash(sig ? "ts-sign" : "ts-sig-agent");
   }
 
   /* ── The paper ── */
-  const doc = signing ? edition(signing.version) : editionFor(country);
+  const doc = signing ? edition(signing.version) : editionFor(country, asks);
   const values: TermsValues = signing
     ? signing.values
     : {
@@ -636,6 +756,8 @@ export default function TermsSendScreen({
       phone: p.phone.trim(),
       address: p.homeIs === "set" ? p.home : "",
       ...(regs[i] ? { registrationNumber: regs[i]!.number, registrationExpiry: regs[i]!.expiry } : {}),
+      /* What the agent answered for the first landlord's part goes on as it will go. */
+      ...(i === 0 && pre && rentalNo.trim() ? { rentalPropertyNumber: rentalNo.trim() } : {}),
     },
   }));
   const feesAt = doc ? doc.sections.findIndex((s) => s.blocks.some((b) => b.kind === "fees")) : -1;
@@ -645,7 +767,11 @@ export default function TermsSendScreen({
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const drawDetail = (p: PaperPerson, k: keyof LandlordDetails, v: string): React.ReactNode => {
-    if (k !== "address") return v ? (k === "accountNumber" ? `•••• ${v.slice(-4)}` : k === "registrationExpiry" ? longDay(v) : v) : <Blank>They add this when they sign</Blank>;
+    if (k !== "address") {
+      const f = doc?.details.find((d) => d.key === k);
+      if (!v) return <Blank>{f && !f.required ? "Not given" : "They add this when they sign"}</Blank>;
+      return k === "accountNumber" ? `•••• ${v.slice(-4)}` : k === "registrationExpiry" ? longDay(v) : f?.kind === "yesno" ? (v === "yes" ? f.printYes ?? "Yes" : f.printNo ?? "No") : v;
+    }
     const i = Number(p.key.slice(1)) - 1;
     const who = people[i];
     const id = `ts-home-${p.key}`;
@@ -667,7 +793,7 @@ export default function TermsSendScreen({
 
   const firstNames = listOf(people.map((p) => firstOf(p.name)).filter(Boolean)) || "the landlord";
   const fullNames = people.length > 1 ? firstNames : people[0]?.name.trim() || "the landlord";
-  const ready = okDetails && !!sig;
+  const ready = okDetails && okPre && !!sig;
 
   async function send() {
     if (!ready || !sig || phase === "sending") return;
@@ -700,6 +826,27 @@ export default function TermsSendScreen({
         additionalFees: additional,
         people: people.map((p) => ({ name: p.name, email: p.email, phone: p.phone, address: p.homeIs === "set" ? p.home : "" })),
         replaces: from?.id ?? null,
+        next: asks,
+        prefill: pre ? { rentalPropertyNumber: rentalNo.trim() || undefined } : undefined,
+        /* Gas always, and every subject sent to check anyway, filled in with what the file says. */
+        askAgain: pre
+          ? {
+              steps: askSteps,
+              answers: Object.fromEntries(
+                PROPERTY_QUESTIONS.filter((st) => askSteps.includes(st.id))
+                  .flatMap((st) => st.questions.flatMap((q) => [q.id, `${q.id}-card`]))
+                  .filter((k) => k !== "gas-supply" && !PROPERTY_QUESTIONS.some((st) => st.questions.some((q) => q.id === k && q.secret)) && String(shown[k] ?? "").trim())
+                  .map((k) => [k, shown[k]])
+              ),
+              /* Their declarations are never filled in for them: what the file shows is only said beside the question. */
+              hints: {
+                ...(String(shown["gas-supply"] ?? "").trim()
+                  ? { "gas-supply": `${shown["gas-supply"] === "no" ? "no gas" : "a gas supply"} (from ${pulled?.from["gas-supply"] ?? "the home's file"})` }
+                  : {}),
+                ...(pulled?.licensing ? { licensing: `${pulled.licensing.value === "yes" ? "Yes" : "No"} (from ${pulled.licensing.from})` } : {}),
+              },
+            }
+          : undefined,
       });
       if (!j?.ok || !j.terms) {
         tick(0, "warn");
@@ -1113,40 +1260,252 @@ export default function TermsSendScreen({
     </div>
   );
 
-  const sum = [
-    okDetails ? `${people.map((p) => p.name.trim()).join(", ")} · ${serviceLabel}` : "The names, the home and the fees",
-    sig ? `Signed as ${agentName}, ${today}` : "Your name and today's date go in for you",
-    `To ${people.map((p) => p.email.trim()).filter(Boolean).join(", ") || "the landlord"}`,
+  /* ── Step "Before they sign": what the landlord is asked before the contract opens ── */
+  const leadFirst = firstOf(people[0]?.name ?? "") || "the landlord";
+  const firstName0 = firstOf(people[0]?.name ?? "") || "They";
+  const landlordOnlyStep = (st: QuestionStep) => st.questions.every((q) => q.who === "landlord");
+  const byWhom = (st: QuestionStep) => {
+    const bys = st.questions.map((q) => preWho[q.id]?.by).filter(Boolean);
+    return bys.includes("landlord") ? `${leadFirst} answered` : bys.length ? "You answered" : "Answered";
+  };
+  /* As the landlord's own screens are planned (components/terms/BeforeYouSign): a subject with something still to
+     answer, or a subject of optional questions nobody has touched, asked once. */
+  const untouched = (st: QuestionStep) => st.questions.every((q) => q.optional) && st.questions.every((q) => !String(preAnswers[q.id] ?? "").trim());
+  const homeLeft = PROPERTY_QUESTIONS.filter((st) => !stepDone(st, preAnswers) || untouched(st) || askSteps.includes(st.id));
+  const ownFields = doc ? doc.details.filter((f) => !f.fromAnswer && (f.step === "declarations" || f.step === "registration" || f.step === "bank")) : [];
+  const theirScreens =
+    homeLeft.length +
+    (ownFields.some((f) => f.step === "declarations") ? 1 : 0) +
+    (ownFields.some((f) => f.step === "registration") ? 1 : 0) +
+    (ownFields.some((f) => f.step === "bank") ? 1 : 0);
+  const stepPre = (
+    <div className="body pre">
+      <p className="pre-lead">
+        Before the contract opens, {people.length > 1 ? "each landlord is" : `${firstName0} is`} asked these, a few at a time. Answer what you already know and{" "}
+        {people.length > 1 ? "they" : firstName0} won&apos;t be asked it again. Gas and bank details are always theirs.
+      </p>
+      {!preLoaded ? (
+        <p className="pre-wait"><i className="up-spin" aria-hidden /> Looking up what we already know…</p>
+      ) : (
+        <>
+          {pulled?.relist && (
+            <p className="pre-relist">
+              <b>A re-list.</b> {pulled.relistWhy} We&apos;ve pulled through what we already know: check each one before it goes.
+            </p>
+          )}
+          <p className="pre-count">
+            <b>{theirScreens} short {theirScreens === 1 ? "screen" : "screens"}</b> for {people.length > 1 ? "them" : firstName0}, about {Math.max(2, Math.round(theirScreens * 0.6))} minutes
+          </p>
+          <ul className="pre-groups">
+            {PROPERTY_QUESTIONS.map((st) => {
+              const theirs = landlordOnlyStep(st);
+              const isPulled = pulledSteps.has(st.id);
+              const c = choice[st.id];
+              const gasKnown = theirs && st.questions.some((q) => String(shown[q.id] ?? "").trim());
+              const done2 = isPulled ? c === "ok" || c === "change" : stepDone(st, preAnswers);
+              const left = st.questions.filter((q) => wants(q, preAnswers) && q.who !== "landlord").length;
+              const open = preOpen === st.id;
+              const pulledSay = (() => {
+                const v = shown[st.questions[0].id];
+                const lab = st.questions[0].options?.find((o) => o.id === v)?.label ?? (typeof v === "string" ? v : "");
+                return lab ? `: ${lab}` : "";
+              })();
+              const status = gasKnown
+                ? `Pulled through${pulledSay}. ${firstName0} confirms it`
+                : isPulled
+                  ? c === "ok"
+                    ? "Pulled through, still correct"
+                    : c === "change"
+                      ? "Pulled through, changed by you"
+                      : c === "ask"
+                        ? `Pulled through, ${firstName0} checks it`
+                        : "Pulled through: check it"
+                  : untouched(st)
+                ? `Optional, ${firstName0} can fill these in`
+                : done2
+                  ? byWhom(st)
+                  : theirs
+                    ? "Always the landlord"
+                    : left
+                      ? `${left} to answer, or leave for ${firstName0}`
+                      : "Left for the landlord";
+              return (
+                <li key={st.id} className={`${done2 && !untouched(st) ? "ok" : ""}${theirs ? " theirs" : ""}${open ? " open" : ""}${isPulled && !c ? " pull" : ""}${c === "ask" ? " ask" : ""}`}>
+                  <button type="button" className="pre-row" aria-expanded={open} disabled={theirs && !gasKnown} onClick={() => setPreOpen(open ? null : st.id)}>
+                    <i aria-hidden>{done2 && !untouched(st) ? <Ic k="check" w={2.6} /> : theirs ? <Ic k="lock" w={1.8} /> : isPulled ? <Ic k="link" w={1.8} /> : null}</i>
+                    <span>
+                      <b>{st.title}</b>
+                      <span>{status}</span>
+                    </span>
+                    {!(theirs && !gasKnown) && <em>{open ? "Close" : isPulled && !c ? "Check" : gasKnown || (done2 && !untouched(st)) || c === "ask" ? "View" : "Answer now"}</em>}
+                  </button>
+                  {open && (
+                    <div className="tq pre-q">
+                      {isPulled && (
+                        <div className="pre-choice" role="radiogroup" aria-label={`${st.title}: pulled through`}>
+                          <span>We pulled these through. Are they still right?</span>
+                          <div className="tq-opts sm">
+                            <button type="button" role="radio" aria-checked={c === "ok"} className={c === "ok" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, [st.id]: "ok" })); setPreOpen(null); }}>Yes, still correct</button>
+                            <button type="button" role="radio" aria-checked={c === "change"} className={c === "change" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, [st.id]: "change" })); }}>No, change it</button>
+                            <button type="button" role="radio" aria-checked={c === "ask"} className={c === "ask" ? "on" : ""} onClick={() => { setPreProblem(null); setChoice((x) => ({ ...x, [st.id]: "ask" })); setPreOpen(null); }}>Ask {firstName0} anyway</button>
+                          </div>
+                        </div>
+                      )}
+                      {st.questions.map((q) => (
+                        <QuestionField
+                          key={q.id}
+                          q={q}
+                          answers={shown}
+                          onChange={preAnswer}
+                          locked={q.who === "landlord" ? (String(shown[q.id] ?? "").trim() ? `Pulled through: ${q.options?.find((o) => o.id === shown[q.id])?.label ?? shown[q.id]}. ${firstName0} confirms it.` : `${firstName0} answers this one. You can't fill it in for them.`) : null}
+                          by={
+                            pulled?.from[q.id] && preAnswers[q.id] == null
+                              ? `From ${pulled.from[q.id]}`
+                              : preWho[q.id]
+                                ? `From ${preWho[q.id].by === "landlord" ? "the landlord" : "an agent"}, ${new Date(preWho[q.id].at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
+                                : null
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+            {ownFields.some((f) => f.step === "declarations") && (
+              /* The declarations are the landlord's own, signed as part of the contract (James, 5 Nov 2026):
+                 never filled in by the agent. What the file shows goes beside the question for them. */
+              <li className="theirs">
+                <div className="pre-row static">
+                  <i aria-hidden><Ic k="lock" w={1.8} /></i>
+                  <span>
+                    <b>Their Declarations</b>
+                    <span>
+                      Always {people.length > 1 ? "the landlords'" : `${firstName0}'s`}: no gas, living outside the UK, and licensing or HMO. Signed as part of the contract.
+                      {pulled?.licensing ? ` Our file shows licensing: ${pulled.licensing.value === "yes" ? "Yes" : "No"}, and they're told so.` : ""}
+                    </span>
+                  </span>
+                </div>
+              </li>
+            )}
+            {ownFields.some((f) => f.step === "registration") && (
+              <li className={`${preOpen === "reg" ? "open" : ""}${registration?.numbers?.length ? " ok" : ""}`}>
+                <button type="button" className="pre-row" aria-expanded={preOpen === "reg"} onClick={() => setPreOpen(preOpen === "reg" ? null : "reg")}>
+                  <i aria-hidden>{registration?.numbers?.length ? <Ic k="check" w={2.6} /> : null}</i>
+                  <span>
+                    <b>Registration</b>
+                    <span>
+                      {country === "scotland"
+                        ? registration?.numbers?.length
+                          ? "From the home's file, for them to check"
+                          : "Their council registration number and expiry"
+                        : rentalNo.trim()
+                          ? `Rental property number ${rentalNo.trim()}`
+                          : "PRS Database numbers, if they have them yet"}
+                    </span>
+                  </span>
+                  {country !== "scotland" && <em>{preOpen === "reg" ? "Close" : "Answer now"}</em>}
+                </button>
+                {preOpen === "reg" && country !== "scotland" && (
+                  <div className="tq pre-q">
+                    <div className="tq-q">
+                      <label className="tq-l" htmlFor="pre-rpn">
+                        PRS Database rental property number<span className="tq-opt">Optional</span>
+                      </label>
+                      <p className="tq-help">The number the PRS Database gives this home, once its region is open. Their own landlord number they add themselves.</p>
+                      <input id="pre-rpn" type="text" value={rentalNo} onChange={(e) => setRentalNo(e.target.value)} autoComplete="off" />
+                    </div>
+                  </div>
+                )}
+              </li>
+            )}
+            {ownFields.some((f) => f.step === "bank") && (
+              <li className="theirs">
+                <div className="pre-row static">
+                  <i aria-hidden><Ic k="lock" w={1.8} /></i>
+                  <span>
+                    <b>Bank Details</b>
+                    <span>{preBank ? `Always ${firstName0}'s. They have an account ending ${preBank.last4} on file to use again` : `Always ${firstName0}'s, last of all. Kept encrypted`}</span>
+                  </span>
+                </div>
+              </li>
+            )}
+          </ul>
+        </>
+      )}
+      {preProblem && <p className="err">{preProblem}</p>}
+      <button type="button" className="btn primary wide go" disabled={!preLoaded || preSaving} onClick={() => void preRight()}>
+        {preSaving ? "Saving…" : "That's what I know"} <Ic k="arrow" />
+      </button>
+    </div>
+  );
+
+  /* The steps in order: the check before sending sits between the details and signing when the questions are on. */
+  const steps: Array<{ k: number; title: string; body: React.ReactNode; sum: string; can: boolean; done: boolean }> = [
+    {
+      k: S.details,
+      title: "Check the details",
+      body: stepOne,
+      sum: okDetails ? `${people.map((p) => p.name.trim()).join(", ")} · ${serviceLabel}` : "The names, the home and the fees",
+      can: true,
+      done: okDetails,
+    },
+    ...(pre
+      ? [
+          {
+            k: S.pre,
+            title: "Before they sign",
+            body: stepPre,
+            sum: okPre ? `${theirScreens} short ${theirScreens === 1 ? "screen" : "screens"} for ${firstName0} before the contract` : "What they'll be asked, and what you can answer now",
+            can: okDetails,
+            done: okPre,
+          },
+        ]
+      : []),
+    {
+      k: S.sign,
+      title: "Sign your half",
+      body: stepTwo,
+      sum: sig ? `Signed as ${agentName}, ${today}` : "Your name and today's date go in for you",
+      can: okDetails && okPre,
+      done: Boolean(sig),
+    },
+    {
+      k: S.send,
+      title: `Send to ${firstNames}`,
+      body: stepThree,
+      sum: `To ${people.map((p) => p.email.trim()).filter(Boolean).join(", ") || "the landlord"}`,
+      can: okDetails && okPre && !!sig,
+      done: false,
+    },
   ];
-  const can = [true, okDetails, okDetails && !!sig];
-  const done = [okDetails, Boolean(sig), false];
-  const stp = (k: 0 | 1 | 2, title: string, body: React.ReactNode) => (
-    <section className={`stp${step === k ? " on" : ""}${done[k] ? " ok" : ""}${!can[k] ? " lock" : ""}`}>
+  const stp = (st: (typeof steps)[number], n: number) => (
+    <section key={st.k} className={`stp${step === st.k ? " on" : ""}${st.done ? " ok" : ""}${!st.can ? " lock" : ""}`}>
       <header
         role="button"
-        tabIndex={can[k] ? 0 : -1}
-        aria-expanded={step === k}
-        aria-disabled={!can[k]}
-        onClick={() => openStep(k)}
+        tabIndex={st.can ? 0 : -1}
+        aria-expanded={step === st.k}
+        aria-disabled={!st.can}
+        onClick={() => openStep(st.k)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            openStep(k);
+            openStep(st.k);
           }
         }}
       >
-        <i>{done[k] ? <Ic k="check" w={3} /> : k + 1}</i>
+        <i>{st.done ? <Ic k="check" w={3} /> : n + 1}</i>
         <span>
-          <b>{title}</b>
-          <span>{sum[k]}</span>
+          <b>{st.title}</b>
+          <span>{st.sum}</span>
         </span>
-        <span className="edit">{k === 0 && locked ? "View" : "Change"}</span>
+        <span className="edit">{st.k === 0 && locked ? "View" : "Change"}</span>
       </header>
-      {body}
+      {st.body}
     </section>
   );
 
-  const todo = [!okDetails && "check the details", !sig && "sign your half"].filter(Boolean) as string[];
+  const todo = [!okDetails && "check the details", !okPre && "check what they'll be asked", !sig && "sign your half"].filter(Boolean) as string[];
   const lead = signing ? "Sign your part" : from ? "Adjust the terms" : "Send the terms";
   const leadTo = signing || from ? "for" : "to";
 
@@ -1276,13 +1635,11 @@ export default function TermsSendScreen({
                 ? `Made, but nothing has gone yet. Sign and it goes straight to ${firstNames}.`
                 : from
                   ? `Change what you need and sign again. Everyone gets a fresh link, and the contract sent ${day(from.sentAt)} is withdrawn at the same moment.`
-                  : `Straight to ${firstNames}, without a presentation. Three steps and it's gone.`}
+                  : `Straight to ${firstNames}, without a presentation. ${pre ? "Four" : "Three"} steps and it's gone.`}
             </p>
           </div>
           <div className="p-body">
-            {stp(0, "Check the details", stepOne)}
-            {stp(1, "Sign your half", stepTwo)}
-            {stp(2, `Send to ${firstNames}`, stepThree)}
+            {steps.map((st, n) => stp(st, n))}
           </div>
           <div className="p-foot">
             <button type="button" className="btn primary wide" disabled={!ready || phase === "sending"} onClick={() => void send()}>

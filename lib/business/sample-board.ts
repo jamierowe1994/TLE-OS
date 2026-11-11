@@ -12,7 +12,7 @@
 const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 const ago = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 
-const PHOTOS = ["/brand/photo/property.jpg", "/brand/living-room.jpg", "/brand/photo/welcome.jpg", "/brand/photo/marketing.jpg", null, "/brand/photo/welcome-door.webp"];
+const PHOTOS = ["/brand/photo/property-real.jpg", "/brand/living-room.jpg", "/brand/photo/welcome.jpg", "/brand/photo/marketing-real.jpg", null, "/brand/photo/welcome-door-real.webp"];
 
 type Loose = Record<string, unknown>;
 

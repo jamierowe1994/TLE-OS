@@ -6,6 +6,7 @@ import { can } from "@/lib/roles";
 import { DOC_MIME } from "@/lib/doc-types";
 import { isScottish } from "@/lib/property-flags";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { isStandingKind, STANDING_KINDS } from "@/lib/standing-document-kinds";
 import { setStandingDoc, standingDocs } from "@/lib/standing-documents";
 
@@ -63,24 +64,22 @@ export async function POST(req: NextRequest) {
   const file = form.get("file");
   if (!isStandingKind(kind)) return NextResponse.json({ ok: false, error: "Which document is this?" }, { status: 400 });
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
-  if (file.size === 0) return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
-  /* It goes out by email (Email docs) and into a Propoly deal, so the email cap, not storage's. */
-  const max = 12 * 1024 * 1024;
-  if (file.size > max) {
-    return NextResponse.json({ ok: false, error: `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB - the limit is 12MB, so it can still be emailed.` }, { status: 413 });
-  }
-  const word = /\.(docx?)$/i.test(file.name);
-  if (!DOC_MIME.includes(file.type) && !word) {
-    return NextResponse.json({ ok: false, error: "Only a PDF, a photo or a Word document can go here. A PDF is best: Propoly only takes PDF, JPG or PNG." }, { status: 415 });
+  /* It goes out by email (Email docs) and into a Propoly deal, so the email
+     cap (12MB), not storage's. One judge for every upload route
+     (lib/upload-rules): the refusal names the file and what would be taken. */
+  const judged = judgeFile(file, { types: DOC_MIME, maxBytes: 12 * 1024 * 1024 });
+  if (!judged.ok) {
+    const why = judged.status === 413 ? " It has to be small enough to email." : judged.status === 415 ? " A PDF is best: Propoly only takes PDF, JPG or PNG." : "";
+    return NextResponse.json({ ok: false, error: `${judged.error}${why}` }, { status: judged.status });
   }
 
-  const key = `${SCOPES.document.prefix}/standing-${kind}/${Date.now()}-${safeName(file.name)}`;
+  const key = `${SCOPES.document.prefix}/standing-${kind}/${Date.now()}-${safeName(judged.name)}`;
   try {
     const body = new Uint8Array(await file.arrayBuffer());
     await withR2((client) =>
       client.send(
         new PutObjectCommand({
-          Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream",
+          Bucket: R2_BUCKET, Key: key, Body: body, ContentType: judged.type,
           Metadata: { "original-name": encodeURIComponent(file.name) },
         })
       )
@@ -89,6 +88,6 @@ export async function POST(req: NextRequest) {
     console.error("[standing-documents] R2 upload failed", (e as Error)?.message);
     return NextResponse.json({ ok: false, error: "Upload failed. The file wasn't stored." }, { status: 502 });
   }
-  await setStandingDoc({ kind, fileName: file.name, r2Key: key, mime: file.type, sizeBytes: file.size, by: { id: me.id, name: me.name || me.email } });
+  await setStandingDoc({ kind, fileName: judged.name, r2Key: key, mime: judged.type, sizeBytes: file.size, by: { id: me.id, name: me.name || me.email } });
   return NextResponse.json({ ok: true, kinds: await listing() });
 }

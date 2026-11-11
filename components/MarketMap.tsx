@@ -280,7 +280,7 @@ export default function MarketMap({
     circle.current?.setMap(null);
     circle.current = null;
     if (!centre || radiusMiles <= 0) return;
-    const ink = look === "builder" ? "#eb8c6d" : "#56423e";
+    const ink = look === "builder" ? "#a85a51" : "#56423e";
     circle.current = new google.maps.Circle({
       map: map.current,
       center: { lat: centre.lat, lng: centre.lon },

@@ -15,7 +15,7 @@ import { SOPHIE_PASSPORT } from "@/lib/tenant-sample";
  * without signing in.
  */
 
-const HOME: OfferHome = { id: "sample", address: "8 Recreation Terrace", locality: "Nottingham NG2", askingPcm: 850, beds: 2, photo: "/brand/photo/property.jpg" };
+const HOME: OfferHome = { id: "sample", address: "8 Recreation Terrace", locality: "Nottingham NG2", askingPcm: 850, beds: 2, photo: "/brand/photo/property-real.jpg" };
 const TENANTS: OfferTenant[] = [
   { id: "sophie", name: "Sophie Turner", email: "sophie.sample@example.com", passport: SOPHIE_PASSPORT, passportDoneOn: "28 Sept 2026" },
   { id: "tom", name: "Tom Bradley", email: "tom.sample@example.com", passport: null, passportDoneOn: null },

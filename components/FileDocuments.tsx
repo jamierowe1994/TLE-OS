@@ -164,7 +164,7 @@ export default function FileDocuments({
 
   const held = new Set((docs ?? []).map((d) => d.type));
   const guarantor = hasGuarantorPapers(held);
-  const missing = DOC_TYPES.filter((t) => !t.standing && sides.includes(t.side) && !held.has(t.key) && (!t.guarantor || guarantor));
+  const missing = DOC_TYPES.filter((t) => !t.standing && !t.optional && sides.includes(t.side) && !held.has(t.key) && (!t.guarantor || guarantor));
 
   return (
     <div>

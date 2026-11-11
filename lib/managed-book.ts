@@ -4,9 +4,9 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { isFresh, matchHome, payPropRent, rentBook } from "@/lib/rent-status";
-import { attach, homeTenancies, payPropPeople, payPropTenantRows, personKey } from "@/lib/business/payprop-tenant-contacts";
+import { attach, homeLastTenancy, homeTenancies, payPropPeople, payPropTenantRows, livingNow, namesOnPayPropHome, personKey, spelledOut, samePerson, sittingFromPayProp } from "@/lib/business/payprop-tenant-contacts";
 import { londonToday } from "@/lib/london-clock";
-import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
+import { nameKey, tenantContacts, type TenantContact } from "@/lib/tenant-contacts";
 import { acceptedLetsByProperty, sittingTenantsByProperty, type AcceptedLet } from "@/lib/rex-tenants";
 import { addrOf, parseAddress, postcodeOf, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
 import { q } from "@/lib/db";
@@ -337,34 +337,81 @@ function toProperty(r: Row): ManagedProperty {
   };
 }
 
-/** Group the book by owner contact. Biggest landlord first. */
+/**
+ * The book by landlord, every landlord on each home (James, 6 Nov 2026): the
+ * first, then the others the row names (`otherLandlords` - REX's other owners
+ * and the joint landlords kept on the home in the OS). The Landlords tab and
+ * its count read the first alone, so a joint landlord was on the home's page
+ * and the Propoly push but on no list, and wasn't counted.
+ *
+ * One person each. A REX contact is its REX id, as it always was, so two REX
+ * contacts stay two, as REX has them. Anybody else - a joint landlord, the
+ * record's landlord, one changed in the OS - joins the landlord with the same
+ * email, else the same name where one of them has no email: a joint landlord
+ * who is REX's owner of another home is one landlord with both homes, and a
+ * joint landlord on two homes (a row each in the OS) is one too. A home
+ * counts once for each of its landlords, with its whole rent. Biggest first.
+ */
 export function landlordsOf(properties: ManagedProperty[]): ManagedLandlord[] {
-  const by = new Map<string, ManagedLandlord>();
-  for (const p of properties) {
-    if (!p.landlord) continue;
-    const l = p.landlord;
-    const held = by.get(l.contactId) ?? {
-      contactId: l.contactId,
-      name: l.name,
-      email: l.email,
-      phone: l.phone,
-      listingIds: [],
-      rentRoll: 0,
-      services: {},
-    };
-    held.listingIds.push(p.listingId);
-    held.rentRoll += p.rentMonthly ?? 0;
-    const s = p.service ?? "Not set";
-    held.services[s] = (held.services[s] ?? 0) + 1;
+  const out: ManagedLandlord[] = [];
+  const homes = new Map<ManagedLandlord, Set<string>>();
+  const byId = new Map<string, ManagedLandlord>();
+  const byEmail = new Map<string, ManagedLandlord>();
+  const byName = new Map<string, ManagedLandlord>();
+  const key = (v: string | null | undefined) => (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const fromRex = (l: Party) => /^\d+$/.test(l.contactId);
+  const find = (l: Party): ManagedLandlord | undefined => {
+    const held = byId.get(l.contactId);
+    if (held || fromRex(l)) return held;
+    const e = key(l.email);
+    const named = byName.get(key(l.name));
+    return (e ? byEmail.get(e) : undefined) ?? (named && (!e || !named.email) ? named : undefined);
+  };
+  const add = (p: ManagedProperty, l: Party) => {
+    let held = find(l);
+    if (!held) {
+      held = { contactId: l.contactId, name: l.name, email: l.email, phone: l.phone, listingIds: [], rentRoll: 0, services: {} };
+      out.push(held);
+      homes.set(held, new Set());
+    }
     /* A contact can carry an email on one listing and not another; keep the
        first non-empty one seen. */
     held.email = held.email ?? l.email;
     held.phone = held.phone ?? l.phone;
-    by.set(l.contactId, held);
+    for (const [by, k] of [[byId, l.contactId], [byEmail, key(l.email)], [byName, key(l.name)]] as const) {
+      if (k && !by.has(k)) by.set(k, held);
+    }
+    const mine = homes.get(held) as Set<string>;
+    if (mine.has(p.listingId)) return;
+    mine.add(p.listingId);
+    held.listingIds.push(p.listingId);
+    held.rentRoll += p.rentMonthly ?? 0;
+    const s = p.service ?? "Not set";
+    held.services[s] = (held.services[s] ?? 0) + 1;
+  };
+  /* REX's contacts first, so who joins whom doesn't hang on the book's order. */
+  for (const rex of [true, false]) {
+    for (const p of properties) {
+      for (const l of [p.landlord, ...(p.otherLandlords ?? [])]) if (l && fromRex(l) === rex) add(p, l);
+    }
   }
-  return [...by.values()].sort(
+  return out.sort(
     (a, b) => b.listingIds.length - a.listingIds.length || b.rentRoll - a.rentRoll || a.name.localeCompare(b.name, "en-GB")
   );
+}
+
+/**
+ * The Landlords list and its counts taken last, over the book as every layer
+ * left it (lib/managed-book-cache, 6 Nov 2026). Each layer that names a
+ * landlord took the list again when it thought it had to, and not all of
+ * them did: joint landlords alone left it as it was, and management
+ * transfers took it over every let a home ever had. Each home's current let
+ * only, as everywhere else on Portfolio. In memory: nothing else moves.
+ */
+export function withLandlordList(book: ManagedBook): ManagedBook {
+  const homes = currentLets(book.properties);
+  const landlords = landlordsOf(homes);
+  return { ...book, landlords, counts: { ...book.counts, landlords: landlords.length, withoutLandlord: homes.filter((p) => !p.landlord).length } };
 }
 
 /**
@@ -764,7 +811,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      itself shows as vacant. Names only: there is no REX contact behind them. */
   /* Their email and mobile from REX PM's Tenancies report, imported into
      os_tenant_contacts on 9 Oct 2026 (lib/tenant-contacts). */
-  const held = await tenantContacts().catch(() => new Map<string, Map<string, { email: string | null; phone: string | null }>>());
+  const held = await tenantContacts().catch(() => new Map<string, Map<string, TenantContact>>());
   /* Not caught past here: no PayProp read means nothing is set aside. */
   const people = await payPropPeople().catch(() => null);
   const ppRows = people ? await payPropTenantRows().catch(() => null) : null;
@@ -810,6 +857,33 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       return { contactId: `rexpm:${o.id}:${i}`, name, email: c?.email ?? null, phone: c?.phone ?? null };
     });
   }
+  /* WHO PAYPROP SAYS LIVES THERE TODAY (Lianna Denholm, 9 Nov 2026): a new
+     flatmate on a renewed joint tenancy added, one PayProp holds as gone taken
+     off, and a let whose shown people aren't on PayProp's running tenancy at
+     all given its people (lib/business/payprop-tenant-contacts
+     sittingFromPayProp). Over REX's listing and REX PM's record alike. A
+     person added keeps an editable card where the home has an OS record. */
+  if (ppRows?.length && ppBook) {
+    const living = livingNow(ppRows, today);
+    for (const p of currentLets(properties)) {
+      if (p.test) continue;
+      const hit = matchHome(ppBook, p);
+      if (typeof hit !== "object") continue;
+      const elsewhere = (name: string) => living.some((x) => x.propertyId !== hit.id && samePerson(x.name, name));
+      const now = sittingFromPayProp(ppRows, hit.id, p.tenants, p.letSince, today, elsewhere);
+      if (!now) continue;
+      const o = p.propertyId ? pmFor.get(p.propertyId) : undefined;
+      const kept = new Set(p.tenants);
+      const base = p.tenants.length;
+      let n = 0;
+      p.tenants = now.tenants.map((t) =>
+        kept.has(t as (typeof p.tenants)[number])
+          ? (t as (typeof p.tenants)[number])
+          : { contactId: o ? `rexpm:${o.id}:${base + n++}` : `payprop:${hit.id}:${n++}`, name: t.name, email: t.email, phone: t.phone }
+      );
+      p.tenantsFromPayProp = { added: now.added, dropped: now.dropped, replaced: now.replaced, startDate: now.startDate, endDate: now.endDate, depositId: now.depositId };
+    }
+  }
   /* Email and mobile from PayProp where the book has neither (9 Oct 2026):
      REX PM gives names only. Joined by the home's address, and given only to
      the tenant PayProp names as the lead (lib/business/payprop-tenant-contacts). */
@@ -839,7 +913,40 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       return c ? { ...t, email: t.email || c.email, phone: t.phone || c.phone } : t;
     });
   }
+  if (ppRows?.length) markEmptyHomes(properties, ppRows, pmFor, today);
   if (applied) withLetPages(properties, applied);
+  /* A NAME PUT RIGHT IN THE OS (Lianna Denholm, 9 Nov 2026, ticket 00f77ec4):
+     the tenancy record holds many tenants as an initial and a surname, and an
+     agent can now give the whole name on the home's page. Laid on last, after
+     every match above has used the record's own spelling. */
+  for (const p of properties) {
+    p.tenants = p.tenants.map((t) => {
+      const home = /^rexpm:([^:]+):\d+$/.exec(String(t.contactId ?? ""))?.[1];
+      const shownAs = home ? held.get(home)?.get(nameKey(t.name))?.shownAs : null;
+      return shownAs ? { ...t, name: shownAs, recordName: t.name } : t;
+    });
+  }
+  /* THE WHOLE NAME THE OS ALREADY HOLDS (Lianna Denholm, 10 Nov 2026, ticket
+     74b80147: "tenants full names still not appearing"). An initial and a
+     surname from the record became the whole name only when an agent typed it
+     in. PayProp holds most of these tenants in full on the same home, and
+     their own email often spells first.last: where exactly one fuller
+     spelling fits (same initial, same surname), it is shown. A name an agent
+     put right above is never touched; the record's spelling is kept as
+     recordName, which still keys their email and mobile. */
+  for (const p of properties) {
+    if (p.test || !p.tenants.length) continue;
+    const hit = ppBook && ppRows?.length ? matchHome(ppBook, p) : null;
+    const onHome = hit && typeof hit === "object" ? namesOnPayPropHome(ppRows!, hit.id) : [];
+    const contacts = (ppContacts?.get(rentKey(p.address || p.name, p.postcode)) ?? []).flatMap((c) =>
+      [c.display, c.lead?.first ? `${c.lead.first} ${c.lead.last}` : ""].filter(Boolean));
+    const candidates = [...onHome, ...contacts];
+    p.tenants = p.tenants.map((t) => {
+      if (t.recordName) return t;
+      const full = spelledOut(t.name, candidates, t.email);
+      return full ? { ...t, name: full, recordName: t.name } : t;
+    });
+  }
   /* THE RENT (rewritten 22 Oct 2026, Lianna Denholm's missing rents).
      PayProp's rent invoice billed today is the rent: what the tenant is
      charged now. REX's figure is the rent agreed when the home was let, and
@@ -920,6 +1027,41 @@ export function withLetPages(properties: ManagedProperty[], applied: Map<string,
     p.letRefs = mine.map((a) => a.id);
     const start = mine.find((a) => a.startDate)?.startDate;
     if (start) p.letStart = start.slice(0, 10);
+  }
+}
+
+/**
+ * NOBODY LIVES THERE NOW (Sean McMahon, 6 Nov 2026). A home's tenancy ended
+ * on 22 Oct and it stood empty with its keys in the office, but REX's let
+ * still named a tenant - one PayProp had never held - so a contractor's
+ * email gave that tenant's mobile, and they were rung and texted about a
+ * home they weren't in. PayProp holds the tenancies: where none on the home
+ * is current and the one that ended last was this let's, nobody lives there
+ * from the day it ended (vacantSince), until the next let or until PayProp
+ * holds a tenancy there again. Every screen and email that reads the book
+ * follows. Edit on the home's page names the household over it
+ * (lib/home-overrides).
+ *
+ * "This let's": it began no more than a month before REX marked the home
+ * let, and ended after. One that began long before is the last let's,
+ * ending in the days after REX marked the new one let - the new tenants may
+ * not be in PayProp yet. Never on a Let Only home: PayProp ends a tenant
+ * find after the first month, so every tenancy there reads as over. PayProp
+ * unread changes nothing.
+ */
+export function markEmptyHomes(properties: ManagedProperty[], ppRows: Array<Record<string, unknown>>, pmFor: Map<string, OsProperty>, today: string): void {
+  for (const p of currentLets(properties)) {
+    if (p.test || !p.letSince) continue;
+    const o = p.propertyId ? pmFor.get(p.propertyId) : undefined;
+    if (p.service === "Let Only" || /tenant find/i.test((o && "pmService" in o && (o as PmHome).pmService) || "")) continue;
+    const last = homeLastTenancy(ppRows, p, today);
+    const letDay = p.letSince.slice(0, 10);
+    if (!last?.startDate || last.endDate < letDay) continue;
+    const from = new Date(`${letDay}T12:00:00Z`);
+    from.setUTCDate(from.getUTCDate() - 31);
+    if (last.startDate < from.toISOString().slice(0, 10)) continue;
+    p.tenants = [];
+    p.vacantSince = last.endDate;
   }
 }
 

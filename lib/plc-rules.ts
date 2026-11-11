@@ -64,7 +64,15 @@ export type DocFacts = {
   /** Everybody the document names, for the checks that are about people. */
   peopleNamed: string[];
   /** A referencing report only: its overall recommendation, as printed. */
-  referenceRecommendation: "accept" | "accept_with_guarantor" | "decline" | "other" | "not stated";
+  referenceRecommendation: "accept" | "conditional_accept" | "accept_with_guarantor" | "decline" | "other" | "not stated";
+  /** A referencing report only: the conditions or comments printed with a Conditional Accept, a guarantor or a decline. */
+  referenceConditions: string[];
+  /** A referencing report only: which kind of reference it is (Legal for Landlords' names). */
+  referenceType: "smart" | "complete" | "fast_track" | "student" | "guarantor" | "other" | "not stated";
+  /** A referencing report only: the yearly income it records for the person, in pounds. */
+  annualIncome: number | null;
+  /** A referencing report only: the monthly rent it was assessed against, in pounds. */
+  monthlyRent: number | null;
 };
 
 export const EMPTY_FACTS: DocFacts = {
@@ -81,6 +89,10 @@ export const EMPTY_FACTS: DocFacts = {
   signed: "unclear",
   peopleNamed: [],
   referenceRecommendation: "not stated",
+  referenceConditions: [],
+  referenceType: "not stated",
+  annualIncome: null,
+  monthlyRent: null,
 };
 
 /**
@@ -372,6 +384,86 @@ function withGuarantorRules(f: DocFacts, pack: PackContext): RuleResult["reasons
   return [head, ...outcomeRules(rest, "reference")];
 }
 
+/**
+ * LEGAL FOR LANDLORDS' OWN ANSWER, READ AS THEY MEAN IT (James, 6 Nov 2026,
+ * from their Tenant Referencing Guidelines, September 2025: "we want to
+ * replicate the Legal for Landlords PLC process ... we don't want the AI
+ * search to be too harsh but still need it to go through everything ... just
+ * looking to cover off the basics").
+ *
+ * The check does not redo their referencing - their CCJ, bankruptcy, income
+ * type and fraud rules are theirs and already applied. It reads their verdict
+ * and makes sure we did what it asks. Only a Decline stops the pack; the rest
+ * are questions for whoever does the first check.
+ *
+ *   Decline              stop: "not recommended to proceed"
+ *   Conditional Accept   the conditions, as a question; rent paid in advance
+ *                        means whoever pays it needs their own AML sanctions
+ *                        check (Proceeds of Crime Act 2002, their page 17)
+ *   affordability        tenants 2.5 times the annual rent, guarantors 3
+ *                        times (their page 12) - asked only where both
+ *                        figures are printed and the reference still says
+ *                        a plain Accept
+ *   SMART only           no employment or landlord reference in it: a note,
+ *                        as a SMART reference can be what was meant
+ */
+const IN_ADVANCE = /in\s+advance|up\s*front|upfront|advance\s+(rent|payment)|pay(ing)?\s+.{0,20}months?\s+(rent\s+)?(in\s+advance|up\s*front)/i;
+const RATIO = { tenant: 2.5, guarantor: 3 } as const;
+const pounds = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+
+/** The report's own decision stands in for its "outcome" wherever it was read. */
+const asDecided = (f: DocFacts): DocFacts =>
+  f.referenceRecommendation === "decline" || (f.referenceRecommendation !== "not stated" && f.outcome === "not stated") ? { ...f, outcome: "other" } : f;
+
+function lflRules(f: DocFacts, role: "tenant" | "guarantor"): RuleResult["reasons"] {
+  const out: RuleResult["reasons"] = [];
+  const who = role === "guarantor" ? "guarantor" : "tenant";
+  const said = f.referenceConditions.filter(Boolean);
+  if (f.referenceRecommendation === "decline") {
+    out.push({
+      verdict: "fail",
+      rule: role === "guarantor" ? "Guarantor declined" : "Reference declined",
+      because: `the ${role === "guarantor" ? "guarantor's " : ""}reference says Decline, so the let can't go ahead on it${said.length ? `: ${said.join("; ")}` : ""}.`,
+    });
+    return out;
+  }
+  if (f.referenceRecommendation === "conditional_accept") {
+    out.push({
+      verdict: "review",
+      rule: "Conditional accept",
+      because: said.length ? `accepted on conditions - check they are met: ${said.join("; ")}.` : "accepted on conditions, but none could be read off it - check what they are.",
+    });
+  }
+  if (said.some((x) => IN_ADVANCE.test(x))) {
+    out.push({
+      verdict: "review",
+      rule: "Rent paid in advance",
+      because: "rent is being paid in advance - whoever pays it needs their own AML sanctions check. Is it in the pack?",
+    });
+  }
+  if (f.annualIncome && f.monthlyRent && f.annualIncome > 0 && f.monthlyRent > 0) {
+    const yearly = f.monthlyRent * 12;
+    const times = f.annualIncome / yearly;
+    const need = RATIO[role];
+    const plainAccept = f.referenceRecommendation === "accept" || f.referenceRecommendation === "not stated";
+    if (times < need && (role === "guarantor" || plainAccept)) {
+      out.push({
+        verdict: "review",
+        rule: "Affordability",
+        because: `the ${who}'s income of ${pounds(f.annualIncome)} is ${times.toFixed(1)} times the annual rent of ${pounds(yearly)}; Legal for Landlords look for ${need} times. Worth checking why it passed.`,
+      });
+    }
+  }
+  if (role === "tenant" && f.referenceType === "smart") {
+    out.push({
+      verdict: "review",
+      rule: "SMART reference only",
+      because: "a SMART reference has no employment or landlord reference in it. Fine if that was the plan; a let normally has a Complete reference.",
+    });
+  }
+  return out;
+}
+
 /** The landlord's ID, AML and ownership papers: names read, never verified. */
 function landlordNames(f: DocFacts): RuleResult["reasons"] {
   const out: RuleResult["reasons"] = [];
@@ -443,7 +535,10 @@ const CHECK_RULES: Partial<
   "landlord-id-aml": (f) => landlordNames(f),
 
   "tenant-checks": (f, _moveIn, pack) => [
-    ...withGuarantorRules(f, pack),
+    /* A decision read off the report is its result: a Decline is said once, as
+       Legal for Landlords say it, and a Conditional Accept is not "no result". */
+    ...withGuarantorRules(asDecided(f), pack),
+    ...lflRules(f, "tenant"),
     {
       verdict: "review",
       rule: "Affordability is a judgement",
@@ -452,7 +547,8 @@ const CHECK_RULES: Partial<
   ],
 
   "guarantor-checks": (f, _moveIn, pack) => [
-    ...outcomeRules(f, "guarantee"),
+    ...outcomeRules(asDecided(f), "guarantee"),
+    ...lflRules(f, "guarantor"),
     /* Kirstie, 21 Oct 2026: guarantor AML checks belong in the pack. A
        question rather than a stop (James, 22 Oct): the guarantor may have
        been checked another way, and the checker can say so. */

@@ -1,0 +1,88 @@
+/*
+ * The Learning centre's pictures (10 Nov 2026). James: "add some pop and
+ * flair to it rather than it being very generic ... custom tiles for each
+ * one". Every file, folder and cover is a flat poster in the final palette:
+ * the shapes are in components/new-look/learning/TilePrims + TileArt, and
+ * this file says what their colour classes mean.
+ *
+ * A scheme is a field and four inks. .nl-ta sets them; anything drawn inside
+ * reads them, so a poster can sit inside another drawing and keep its own.
+ */
+[data-look="new"] .nl-ta, [data-look="new"] .nl-ta.is-s1 { --ta-bg: #f5efe6; --ta-a: #56423e; --ta-b: #c4a092; --ta-c: #a85a51; --ta-i: #f5efe6; }
+[data-look="new"] .nl-ta.is-s0 { --ta-bg: #a85a51; --ta-a: #f5efe6; --ta-b: #dba79d; --ta-c: #56423e; --ta-i: #f5efe6; }
+[data-look="new"] .nl-ta.is-s2 { --ta-bg: #56634a; --ta-a: #f1f4ec; --ta-b: #b9bea6; --ta-c: #c4a092; --ta-i: #56423e; }
+[data-look="new"] .nl-ta.is-s3 { --ta-bg: #c4a092; --ta-a: #56423e; --ta-b: #f8f7f4; --ta-c: #a85a51; --ta-i: #f8f7f4; }
+[data-look="new"] .nl-ta.is-s4 { --ta-bg: #56423e; --ta-a: #f5efe6; --ta-b: #c4a092; --ta-c: #a85a51; --ta-i: #f5efe6; }
+[data-look="new"] .nl-ta.is-s5 { --ta-bg: #b9bea6; --ta-a: #56634a; --ta-b: #f1f4ec; --ta-c: #a85a51; --ta-i: #f5efe6; }
+
+[data-look="new"] .nl-ta .a { fill: var(--ta-a); }
+[data-look="new"] .nl-ta .b { fill: var(--ta-b); }
+[data-look="new"] .nl-ta .c { fill: var(--ta-c); }
+[data-look="new"] .nl-ta .i { fill: var(--ta-i); }
+[data-look="new"] .nl-ta .k, [data-look="new"] .nl-ta .bg { fill: var(--ta-bg); }
+[data-look="new"] .nl-ta .sh { fill: #141413; opacity: .2; }
+[data-look="new"] .nl-ta .sa { stroke: var(--ta-a); }
+[data-look="new"] .nl-ta .sb { stroke: var(--ta-b); }
+[data-look="new"] .nl-ta .sc { stroke: var(--ta-c); }
+[data-look="new"] .nl-ta .si { stroke: var(--ta-i); }
+[data-look="new"] .nl-ta .sk { stroke: var(--ta-bg); }
+[data-look="new"] .nl-ta .tx { font-family: var(--nl-cond, var(--font-bricolage), "Helvetica Neue", Arial, sans-serif); font-stretch: 75%; font-weight: 700; }
+
+/* ── a file's tile ── */
+[data-look="new"] .nl-sx-tile-art.nl-ta { display: block; height: 150px; background: var(--ta-bg); color: var(--ta-a); }
+[data-look="new"] .nl-sx-tile-art .nl-ta-svg { position: absolute; z-index: 1; top: 6%; right: 5%; width: auto; height: 88%; aspect-ratio: 1; transition: transform .5s var(--nl-ease); }
+[data-look="new"] .nl-sx-tile:hover .nl-sx-tile-art .nl-ta-svg { transform: translateY(-3px) rotate(-3deg) scale(1.06); }
+[data-look="new"] .nl-sx-tile-art.nl-ta em { z-index: 2; color: var(--ta-a); font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; opacity: .9; }
+[data-look="new"] .nl-ta-n { position: absolute; z-index: 0; left: 12px; bottom: 0; font-family: var(--nl-cond, var(--font-bricolage), sans-serif); font-stretch: 75%; font-size: 68px; font-style: normal; font-weight: 700; line-height: 1; color: transparent; -webkit-text-stroke: 1.4px var(--ta-a); opacity: .5; }
+/* What kind of file it is, said quietly: a screen has window dots, an email an airmail edge, a job in the OS a dotted desk. */
+[data-look="new"] .nl-sx-tile-art.nl-ta::after { content: ""; position: absolute; pointer-events: none; }
+[data-look="new"] .is-page > .nl-sx-tile-art.nl-ta::after { top: 14px; right: 14px; z-index: 2; width: 32px; height: 8px; background: radial-gradient(circle at 4px 4px, var(--ta-a) 3px, transparent 3.6px) 0 0 / 12px 8px repeat-x; opacity: .75; }
+[data-look="new"] .is-email > .nl-sx-tile-art.nl-ta::after { left: 0; right: 0; bottom: 0; z-index: 2; height: 7px; background: repeating-linear-gradient(-45deg, var(--ta-c) 0 9px, var(--ta-bg) 9px 18px, var(--ta-a) 18px 27px, var(--ta-bg) 27px 36px); }
+[data-look="new"] .is-process > .nl-sx-tile-art.nl-ta::after { inset: 0; z-index: 0; background: radial-gradient(circle at 2px 2px, var(--ta-a) 1.1px, transparent 1.6px) 0 0 / 14px 14px; opacity: .2; }
+
+/* ── the open file's header, and the summary card ── */
+[data-look="new"] .nl-sx-file-art.nl-ta, [data-look="new"] .nl-sx-card-art.nl-ta { background: var(--ta-bg); color: var(--ta-a); }
+[data-look="new"] .nl-sx-file-art .nl-ta-svg { width: 46px; height: 46px; }
+[data-look="new"] .nl-sx-card-art.nl-ta { width: 88px; height: 88px; }
+[data-look="new"] .nl-sx-card-art .nl-ta-svg { width: 76px; height: 76px; }
+
+/* ── a folder: its first three files, fanned ── */
+[data-look="new"] .nl-sx-fold-art.nl-ta { position: relative; overflow: hidden; background: var(--ta-bg); }
+[data-look="new"] .nl-ta-fan { width: auto; max-width: 100%; height: 100%; overflow: visible; }
+[data-look="new"] .nl-ta-card { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .5s var(--nl-ease); }
+[data-look="new"] .nl-sx-fold:hover .nl-ta-card.is-0 { transform: translate(-7px, -3px) rotate(-4deg); }
+[data-look="new"] .nl-sx-fold:hover .nl-ta-card.is-1 { transform: translateY(-8px); }
+[data-look="new"] .nl-sx-fold:hover .nl-ta-card.is-2 { transform: translate(7px, -3px) rotate(4deg); }
+
+@media (max-width: 760px) {
+  [data-look="new"] .nl-sx-tile-art.nl-ta { height: auto; }
+  [data-look="new"] .nl-sx-tile-art .nl-ta-svg { top: 50%; right: auto; left: 50%; width: 78px; height: 78px; margin: -39px 0 0 -39px; }
+  [data-look="new"] .nl-ta-n, [data-look="new"] .is-page > .nl-sx-tile-art.nl-ta::after { display: none; }
+  [data-look="new"] .nl-sx-file-art .nl-ta-svg { width: 38px; height: 38px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-sx-tile-art .nl-ta-svg, [data-look="new"] .nl-ta-card { transition: none; }
+  [data-look="new"] .nl-sx-tile:hover .nl-sx-tile-art .nl-ta-svg, [data-look="new"] .nl-sx-fold:hover .nl-ta-card { transform: none; }
+}
+
+/* A screen's window dots sit before its label, like the corner of a window. */
+[data-look="new"] .is-page > .nl-sx-tile-art.nl-ta::after { top: 16px; left: 14px; right: auto; }
+[data-look="new"] .is-page > .nl-sx-tile-art.nl-ta em { left: 56px; }
+
+/* ── the big covers: the hub's two doors, the three journeys ── */
+[data-look="new"] .nl-lr-door .nl-lr-door-art.nl-ta, [data-look="new"] .nl-lr-journey .nl-lr-journey-art.nl-ta { background: var(--ta-bg); color: var(--ta-a); }
+[data-look="new"] .nl-pc { display: block; width: 100%; height: 100%; overflow: visible; }
+[data-look="new"] .nl-pc .pc-1, [data-look="new"] .nl-pc .pc-2, [data-look="new"] .nl-pc .pc-3 { transition: transform .7s var(--nl-ease); }
+[data-look="new"] :is(.nl-lr-door, .nl-lr-journey):hover .nl-pc .pc-1 { transform: translateY(-3px); }
+[data-look="new"] :is(.nl-lr-door, .nl-lr-journey):hover .nl-pc .pc-2 { transform: translateY(-7px); }
+[data-look="new"] :is(.nl-lr-door, .nl-lr-journey):hover .nl-pc .pc-3 { transform: translateY(-11px); }
+[data-look="new"] .nl-lr-journey .nl-lr-journey-art.nl-ta b { background: var(--ta-a); color: var(--ta-bg); border-radius: 0; }
+
+/* ── a guide's cover: its own field, its own picture ── */
+[data-look="new"] .nl-lr-book .nl-lr-cover.nl-ta { --cv-bg: var(--ta-bg); --cv-ink: var(--ta-a); --cv-tint: color-mix(in srgb, var(--ta-a) 18%, transparent); }
+[data-look="new"] .nl-lr-cover-art .nl-ta-svg { display: block; width: 100%; height: 100%; transition: transform .5s var(--nl-ease); }
+[data-look="new"] .nl-lr-book:hover .nl-lr-cover-art .nl-ta-svg { transform: translateY(-3px) rotate(-3deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-look="new"] .nl-pc .pc-1, [data-look="new"] .nl-pc .pc-2, [data-look="new"] .nl-pc .pc-3, [data-look="new"] .nl-lr-cover-art .nl-ta-svg { transition: none; transform: none !important; }
+}

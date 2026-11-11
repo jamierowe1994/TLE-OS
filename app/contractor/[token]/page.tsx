@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { JOB_CERT_TYPES } from "@/lib/works-catalogue";
+import { certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
+import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 
 /**
  * The contractor's page for one job. No sign-in: the link in their works
@@ -31,6 +33,7 @@ type Job = {
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "");
 
 const CERT_TYPES = JOB_CERT_TYPES;
+const sayYmd = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 export default function ContractorPage() {
   const { token } = useParams<{ token: string }>();
@@ -42,6 +45,14 @@ export default function ContractorPage() {
   const [ref, setRef] = useState("");
   const [certType, setCertType] = useState("");
   const [certExpiry, setCertExpiry] = useState("");
+  const [certIssue, setCertIssue] = useState("");
+  /* Which box an upload's problem belongs to, so it is said in that box and
+     not at the top of a long page on a phone (10 Nov 2026). */
+  const [errAt, setErrAt] = useState<"photo" | "invoice" | "certificate" | null>(null);
+  /* A PAT report or a fire safety certificate prints the day it was done and
+     no expiry, so that day is what is asked for (lib/cert-kinds). */
+  const certOnIssue = kindFilesOnIssueDate(certType);
+  const certNotReady = certNotReadyBecause({ type: certType, expiry: certOnIssue ? "" : certExpiry, issue: certOnIssue ? certIssue : "" });
   const [busy, setBusy] = useState<string | null>(null);
   const [quote, setQuote] = useState("");
   const [quoteNote, setQuoteNote] = useState("");
@@ -61,22 +72,26 @@ export default function ContractorPage() {
     setBusy(null);
     if (!r?.ok) return setErr(r?.error ?? "That didn't work.");
     setJob(r.job);
-    setFlash(label === "date" ? (r.job?.kind === "planned" ? "Thanks - the date's on the job." : "Thanks - the date's on the job and the tenant and landlord have been told.") : "Thanks - marked done.");
+    /* The tenant agreed the date with them, so we don't email it to the tenant again (ticket 8db317c4). */
+    setFlash(label === "date" ? "Thanks - the date's on the job." : "Thanks - marked done.");
   }
   async function upload(file: File, kind: "photo" | "invoice" | "certificate") {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("kind", kind);
     if (kind === "invoice") { fd.append("amount", amount); fd.append("ref", ref); fd.append("note", note); }
-    if (kind === "certificate") { fd.append("type", certType); fd.append("expiry", certExpiry); }
+    if (kind === "certificate") { fd.append("type", certType); if (certOnIssue) fd.append("issue", certIssue); else fd.append("expiry", certExpiry); }
     setBusy(kind);
     setErr(null);
+    setErrAt(null);
+    /* The last upload's thanks comes down too, or it sits above this one's problem. */
+    setFlash(null);
     const r = await fetch(`/api/contractor/${token}`, { method: "POST", body: fd }).then((x) => x.json()).catch(() => null);
     setBusy(null);
-    if (!r?.ok) return setErr(r?.error ?? "The file did not upload.");
+    if (!r?.ok) { setErrAt(kind); return setErr(r?.error ?? `${file.name} did not upload: the page could not reach us. Check your signal and try it again.`); }
     setJob(r.job);
     if (kind === "certificate") {
-      setCertType(""); setCertExpiry("");
+      setCertType(""); setCertExpiry(""); setCertIssue("");
       /* What actually happened, not "thanks": a contractor who has just
          handed over a legal document wants to know it landed somewhere. */
       if (r.certificate?.rehearsal) return setFlash("Rehearsal - on a real job the certificate would now be filed on the property's record. Nothing was filed.");
@@ -145,7 +160,7 @@ export default function ContractorPage() {
               {job.quoteStage !== "closed" && job.quoteStage !== "declined" && <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.access || (job.quoteStage ? "reply to our email and we'll arrange a look" : "none recorded")}<br /><strong>{job.tenant.includes(";") ? "Tenants" : "Tenant"}:</strong> {job.tenant ? job.tenant.split("; ").map((t, i) => <span key={i}>{i ? <br /> : null}{t}</span>) : job.quoteStage ? "none on the job yet - reply and we'll arrange access" : "on the works order"}</p>}
             </div>
             {flash && <p style={{ ...box, borderColor: "#3f8f5f", color: "#3f8f5f", fontSize: 14 }}>{flash}</p>}
-            {err && job && <p style={{ color: "#a85a51", marginTop: 12, fontSize: 13 }}>{err}</p>}
+            {err && job && !errAt && <p style={{ color: "#a85a51", marginTop: 12, fontSize: 13 }}>{err}</p>}
 
             {job.quoteStage === "asked" && (
               <div style={box}>
@@ -156,7 +171,7 @@ export default function ContractorPage() {
                 <label style={{ ...field, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", color: quoteFile ? "#101014" : "#6b6b70" }}>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{quoteFile ? quoteFile.name : "Attach your quote (optional)"}</span>
                   <span style={{ fontSize: 12, textDecoration: "underline", flexShrink: 0, marginLeft: 8 }}>{quoteFile ? "Change" : "Choose"}</span>
-                  <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { setQuoteFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+                  <input type="file" accept={ACCEPT_EVIDENCE} style={{ display: "none" }} onChange={(e) => { setQuoteFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
                 </label>
                 <button type="button" disabled={!quote || busy === "quote"} onClick={() => void sendQuote()} style={{ ...btn, marginTop: 10, opacity: quote ? 1 : 0.5 }}>{busy === "quote" ? "Sending…" : "Send the quote"}</button>
               </div>
@@ -231,23 +246,32 @@ export default function ContractorPage() {
                   <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "photo"); e.target.value = ""; }} disabled={busy === "photo"} />
                 </label>
                 {job.files.length > 0 && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#6b6b70" }}>{job.files.length} file{job.files.length === 1 ? "" : "s"} on the job.</p>}
+                {err && errAt === "photo" && <p style={{ margin: "8px 0 0", fontSize: 13, color: "#a85a51" }}>{err}</p>}
               </div>
 
               <div style={box}>
                 <span style={label}>A certificate from the visit</span>
-                <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Gas, electrical, PAT, anything with an expiry date. It goes on the property&apos;s record, and once our compliance team has checked it we send a copy to the landlord and the tenant.</p>
+                <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Gas, electrical, PAT, fire safety: any certificate from the visit. It goes on the property&apos;s record, and once our compliance team has checked it we send a copy to the landlord and the tenant.</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <select value={certType} onChange={(e) => setCertType(e.target.value)} style={field}>
+                  <select value={certType} onChange={(e) => { setCertType(e.target.value); if (errAt === "certificate") setErrAt(null); }} style={field}>
                     <option value="">What is it?</option>
                     {CERT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                   </select>
-                  <input type="date" value={certExpiry} onChange={(e) => setCertExpiry(e.target.value)} style={field} aria-label="The date it runs out" />
+                  {certOnIssue
+                    ? <input type="date" value={certIssue} onChange={(e) => setCertIssue(e.target.value)} style={field} aria-label={`The date it was ${certType === "portable_appliance_testing" ? "tested" : "checked"}`} />
+                    : <input type="date" value={certExpiry} onChange={(e) => setCertExpiry(e.target.value)} style={field} aria-label="The date it runs out" />}
                 </div>
-                <label style={{ ...btn, display: "inline-block", marginTop: 10, opacity: certType && certExpiry ? 1 : 0.5 }}>
+                {certType && !certNotReady && (
+                  <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>
+                    {noExpiryNote(certType, certIssue, "", sayYmd) ?? "The date above is the day it runs out."}
+                  </p>
+                )}
+                <label style={{ ...btn, display: "inline-block", marginTop: 10, opacity: certNotReady ? 0.5 : 1 }}>
                   {busy === "certificate" ? "Filing…" : "Choose the certificate"}
-                  <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "certificate"); e.target.value = ""; }} disabled={busy === "certificate" || !certType || !certExpiry} />
+                  <input type="file" accept={ACCEPT_EVIDENCE} style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "certificate"); e.target.value = ""; }} disabled={busy === "certificate" || Boolean(certNotReady)} />
                 </label>
-                {!(certType && certExpiry) && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>Say what it is and when it runs out, then choose the file.</p>}
+                {certNotReady && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>{certNotReady.replace(" to file it", ", then choose the file")}</p>}
+                {err && errAt === "certificate" && <p style={{ margin: "8px 0 0", fontSize: 13, color: "#a85a51" }}>{err}</p>}
               </div>
 
               {job.invoicePence == null ? (
@@ -260,9 +284,10 @@ export default function ContractorPage() {
                   </div>
                   <label style={{ ...btn, display: "inline-block", marginTop: 10, opacity: amount ? 1 : 0.5 }}>
                     {busy === "invoice" ? "Uploading…" : "Choose the invoice file"}
-                    <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "invoice"); e.target.value = ""; }} disabled={busy === "invoice" || !amount} />
+                    <input type="file" accept={ACCEPT_EVIDENCE} style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "invoice"); e.target.value = ""; }} disabled={busy === "invoice" || !amount} />
                   </label>
                   {!amount && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>Put the total in first, then choose the file.</p>}
+                  {err && errAt === "invoice" && <p style={{ margin: "8px 0 0", fontSize: 13, color: "#a85a51" }}>{err}</p>}
                 </div>
               ) : (
                 <div style={box}>

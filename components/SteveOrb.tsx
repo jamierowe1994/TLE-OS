@@ -116,8 +116,8 @@ export default function SteveOrb({
       onType(() => {
         if (still()) return;
         ref.current?.animate(
-          [{ transform: "scale(1)", filter: "brightness(1)" }, { transform: "scale(1.09)", filter: "brightness(1.12)" }, { transform: "scale(0.98)" }, { transform: "scale(1)", filter: "brightness(1)" }],
-          { duration: 340, easing: "cubic-bezier(.3,1.4,.5,1)" },
+          [{ transform: "scale(1)" }, { transform: "scale(1.03)" }, { transform: "scale(1)" }],
+          { duration: 320, easing: "ease-out" },
         );
       }),
     [],
@@ -133,42 +133,37 @@ export default function SteveOrb({
       const dx = x - (r.left + r.width / 2);
       const dy = y - (r.top + r.height / 2);
       const d = Math.max(r.width * 1.5, Math.hypot(dx, dy));
-      g.style.transform = `translate(${((dx / d) * r.width * 0.09).toFixed(2)}px, ${((dy / d) * r.width * 0.07).toFixed(2)}px)`;
+      g.style.transform = `translate(${((dx / d) * r.width * 0.05).toFixed(2)}px, ${((dy / d) * r.width * 0.04).toFixed(2)}px)`;
     });
   }, [track]);
 
-  /* Arriving under the pointer: a bounce. */
+  /* Arriving under the pointer: a small lift (a bounce until 7 Nov 2026 -
+     James: calmer, "warm and grounded" rather than playful). */
   const arrive = () => {
     setHover(true);
     if (still()) return;
     ball.current?.animate(
-      [{ transform: "scale(1) translateY(0)" }, { transform: "scale(1.12) translateY(-6%)" }, { transform: "scale(0.97) translateY(1%)" }, { transform: "scale(1.03) translateY(-1%)" }, { transform: "scale(1) translateY(0)" }],
-      { duration: 650, easing: "cubic-bezier(.3,1.5,.5,1)" },
+      [{ transform: "scale(1) translateY(0)" }, { transform: "scale(1.04) translateY(-2%)" }, { transform: "scale(1) translateY(0)" }],
+      { duration: 460, easing: "ease-out" },
     );
   };
 
   /* Surprised: one pop as it arrives. */
   useEffect(() => {
     if (mood !== "surprised" || still()) return;
-    ref.current?.animate([{ transform: "scale(1)" }, { transform: "scale(1.14)" }, { transform: "scale(0.96)" }, { transform: "scale(1)" }], { duration: 520, easing: "ease-out" });
+    ref.current?.animate([{ transform: "scale(1)" }, { transform: "scale(1.05)" }, { transform: "scale(1)" }], { duration: 420, easing: "ease-out" });
   }, [mood]);
 
-  /* A press: squash, wobble out of round, settle back. */
+  /* A press: a small give and back (the squash-and-wobble went on 7 Nov 2026). */
   const poke = () => {
     if (still()) return;
     ball.current?.animate(
-      [
-        { borderRadius: "50%", transform: "scale(1, 1) rotate(0deg)" },
-        { borderRadius: "54% 46% 50% 50% / 46% 54% 46% 54%", transform: "scale(1.12, 0.86) rotate(-4deg)" },
-        { borderRadius: "44% 56% 58% 42% / 56% 42% 58% 44%", transform: "scale(0.9, 1.1) rotate(5deg)" },
-        { borderRadius: "52% 48% 45% 55% / 48% 55% 45% 52%", transform: "scale(1.05, 0.96) rotate(-2deg)" },
-        { borderRadius: "50%", transform: "scale(1, 1) rotate(0deg)" },
-      ],
-      { duration: 900, easing: "cubic-bezier(.3,1.4,.5,1)" },
+      [{ transform: "scale(1)" }, { transform: "scale(0.95)" }, { transform: "scale(1)" }],
+      { duration: 320, easing: "ease-out" },
     );
     ball.current?.getAnimations({ subtree: true }).forEach((a) => {
       if (!swirls(a)) return;
-      a.updatePlaybackRate(4);
+      a.updatePlaybackRate(2);
       window.setTimeout(() => a.updatePlaybackRate(SPEED[mood]), 700);
     });
   };

@@ -7,6 +7,7 @@ import { DOC_MIME, DOC_TYPES, isDocType, OTHER, docTypeLabel } from "@/lib/doc-t
 import { LET_KINDS } from "@/lib/standing-document-kinds";
 import { addFileDoc, docsForHome, isFromKind, removeFileDoc } from "@/lib/file-documents";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { judgeFile } from "@/lib/upload-rules";
 import { isTestId } from "@/lib/test-overlay";
 import { isTestFile, TEST_STREET } from "@/lib/test-guard";
 
@@ -79,29 +80,22 @@ export async function POST(req: NextRequest) {
   /* "propoly" is the move-in pack's own filing (lib/propoly-mail), never an upload. */
   if (!isFromKind(fromKind) || fromKind === "propoly" || !fromId) return NextResponse.json({ ok: false, error: "Which file is this for?" }, { status: 400 });
   if (!address && !propertyId) return NextResponse.json({ ok: false, error: "This file has no address, so there is nowhere to keep it." }, { status: 400 });
-  if (file.size === 0) return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
   /* The document scope's own cap (50MB); next.config lets middleware pass a
-     body that size through whole. */
-  const max = SCOPES.document.maxBytes;
-  if (file.size > max) {
-    return NextResponse.json(
-      { ok: false, error: `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB - the limit is ${max / 1024 / 1024}MB.` },
-      { status: 413 }
-    );
-  }
-  const word = /\.(docx?)$/i.test(file.name);
-  if (!DOC_MIME.includes(file.type) && !word) {
-    return NextResponse.json({ ok: false, error: "Only a PDF, a photo or a Word document can go here." }, { status: 415 });
-  }
+     body that size through whole. One judge for every upload route
+     (lib/upload-rules): a .jfif is kept as the JPEG it is, or REX refuses it
+     later; a file the browser gave no type goes by its extension; and a
+     refusal names the file and what would be taken. */
+  const judged = judgeFile(file, { types: DOC_MIME, maxBytes: SCOPES.document.maxBytes });
+  if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: judged.status });
 
   const slug = safeName(address || `property-${propertyId}`).slice(0, 60) || "unfiled";
-  const key = `${SCOPES.document.prefix}/file-${slug}/${Date.now()}-${safeName(file.name)}`;
+  const key = `${SCOPES.document.prefix}/file-${slug}/${Date.now()}-${safeName(judged.name)}`;
   try {
     const body = new Uint8Array(await file.arrayBuffer());
     await withR2((client) =>
       client.send(
         new PutObjectCommand({
-          Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream",
+          Bucket: R2_BUCKET, Key: key, Body: body, ContentType: judged.type,
           Metadata: { "original-name": encodeURIComponent(file.name) },
         })
       )
@@ -117,9 +111,9 @@ export async function POST(req: NextRequest) {
     from: { kind: fromKind, id: fromId },
     type,
     name: type === OTHER ? ownName : who ? `${docTypeLabel(type)} - ${who}` : docTypeLabel(type),
-    fileName: file.name,
+    fileName: judged.name,
     r2Key: key,
-    mime: file.type,
+    mime: judged.type,
     sizeBytes: file.size,
     by: { id: actor.id, name: actor.name || actor.email },
     isTest,

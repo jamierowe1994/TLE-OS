@@ -474,12 +474,16 @@ const MACHINE_ROUTES = [
      counts only - no names, emails or phones. */
   "/api/marketing/leads-feed",
   "/api/marketing/leads-webhook",     // the new-lead ping: status, test, send (owner or cron key)
+  /* Who is on the OS and how they use it, for the TEG Marketing Hub. Its own
+     key (MARKETING_PEOPLE_KEY) or a signed-in see:people person; read only. */
+  "/api/marketing/people",
   "/api/push/scan",                   // the bell to the iPhone app, every five minutes (cron key)
   "/api/bugs/bot",                    // the bug bot: takes bugs, records its fixes (cron key)
   /* Send to Claude (lib/claude-tickets): the claude.ai session reads its one
      ticket and reports back with a token signed for that ticket alone (403
      without it); James's press is a POST the route checks for an owner. */
   "/api/bugs/claude",
+  "/api/bugs/claude/shot", // its pictures of a fix, same ticket token
   "/api/landlord/property-answers/chase", // signed but questions unfinished: 2, 5, 9 days
   "/api/viewings/sweep",              // the viewings ledger, nightly
   "/api/rex/snapshot",                // REX down: take the copy before it goes (cron key)

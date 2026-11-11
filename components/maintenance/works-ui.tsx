@@ -106,7 +106,33 @@ export function PayrunTrack({ o }: { o: Pick<WorksOrder, "status" | "invoicePenc
   );
 }
 
-export type Property = { id: string; name: string; locality: string; landlord?: string; tenant?: string | null; certs?: Record<string, { expires: number | null }> };
+export type Property = { id: string; name: string; locality: string; landlord?: string; tenant?: string | null; certs?: Record<string, { expires: number | null }>; /** Where it stands: On the market, Let agreed, Let... */ stage?: string; listingId?: string | null };
+
+/**
+ * The homes a job or an invoice can be put on: every home this person may
+ * act on, from the one list the server keeps (/api/homes, lib/homes-to-pick).
+ *
+ * Lianna, 6 Nov 2026 (ticket cbb2e646) and again by email on 10 Nov: a home
+ * of hers could not be found to log an invoice against. This used to
+ * read the compliance book (the office only) and Portfolio, and Portfolio is
+ * lets only - so an agent's home that was still a listing, or let agreed and
+ * waiting on its move-in, was on neither. Listings are in the list now, for
+ * everyone, with where each home stands said beside it.
+ *
+ * `note` is said on the picker when a list could not be read, so "nothing
+ * matches" is never the answer to a book that failed to load. The address
+ * can always be typed in by hand.
+ */
+export async function readHomes(): Promise<{ homes: Property[]; note: string | null }> {
+  const j = await fetch("/api/homes", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+  if (!j) return { homes: [], note: "The list of homes couldn't be read just now. Try again in a minute, or enter the address manually." };
+  const homes: Property[] = Array.isArray(j.homes) ? j.homes : [];
+  return { homes, note: typeof j.note === "string" ? j.note : !j.ok && typeof j.error === "string" ? j.error : null };
+}
+
+export async function homesToSearch(): Promise<Property[]> {
+  return (await readHomes()).homes;
+}
 
 /** Which certificate on the compliance book a planned category is about. */
 export const CATEGORY_CERT: Record<string, string> = {

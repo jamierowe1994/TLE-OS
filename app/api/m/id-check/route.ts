@@ -6,6 +6,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
+import { fileType, judgeFile, storedName } from "@/lib/upload-rules";
 import { bindPages, canBind } from "@/lib/doc-pages";
 import { followUpFor } from "@/lib/id-checks";
 import { leadIdsByContact } from "@/lib/rex-viewings";
@@ -116,7 +117,15 @@ export async function POST(req: NextRequest) {
   const likeness = form.get("likeness") === "yes";
   const docType = String(form.get("docType") ?? "");
   const seen = form.get("seenInPerson") === "yes";
-  const files = form.getAll("pages").filter((f): f is File => f instanceof File && f.size > 0);
+  /* A photo the phone gave no type, or a JPEG under another name, is put
+     under the type it really is before anything looks at it (lib/upload-rules). */
+  const files = form
+    .getAll("pages")
+    .filter((f): f is File => f instanceof File && f.size > 0)
+    .map((f) => {
+      const type = fileType(f.name, f.type, IMAGE_TYPES);
+      return type && type !== f.type ? new File([f], storedName(f.name), { type }) : f;
+    });
   /* How long they may rent for (4 Oct 2026): "none" for no time limit, or a
      date. Asked on every check, because a time-limited right owes a follow-up. */
   const lasts = String(form.get("lasts") ?? "");
@@ -143,8 +152,8 @@ export async function POST(req: NextRequest) {
   if (files.length === 0) return NextResponse.json({ ok: false, error: "Take a photo of the document first." }, { status: 400 });
   if (files.length > MAX_PAGES) return NextResponse.json({ ok: false, error: `Up to ${MAX_PAGES} photos at a time.` }, { status: 400 });
   for (const f of files) {
-    if (!IMAGE_TYPES.includes(f.type)) return NextResponse.json({ ok: false, error: "Only photos can be sent here." }, { status: 415 });
-    if (f.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "One of the photos is too large to send." }, { status: 413 });
+    const judged = judgeFile(f, { types: IMAGE_TYPES, maxBytes: MAX_BYTES });
+    if (!judged.ok) return NextResponse.json({ ok: false, error: judged.error }, { status: judged.status });
   }
 
   /* Nothing is kept when there is nowhere safe to keep it - see the note on

@@ -1223,15 +1223,15 @@ function ClassicViewingBooker({
   // Portaled: this opens from inside drawers whose slide transition leaves a
   // transform on the aside — which would anchor `fixed` to the drawer.
   return createPortal(
-    <div className={`fixed inset-0 ${above ? "z-[155]" : "z-[140]"} flex items-center justify-center p-4`}>
+    <div data-look="new" className={`nl-vbk fixed inset-0 ${above ? "z-[155]" : "z-[140]"} flex items-center justify-center p-4`}>
       <button
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-ink/45"
+        className="nl-vbk-dim absolute inset-0 cursor-default bg-ink/45"
       />
 
       <div
-        className={`fade-up relative flex w-full flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)] transition-[max-width] duration-300 ${
+        className={`nl-vbk-panel fade-up relative flex w-full flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)] transition-[max-width] duration-300 ${
           stage === "when" || (flow && stage === "email")
             ? `h-[94vh] ${wide ? "max-w-[calc(100vw-1rem)]" : "max-w-[1440px]"}`
             : flow && (stage === "done" || stage === "landlord" || stage === "access")
@@ -1239,9 +1239,9 @@ function ClassicViewingBooker({
             : `max-h-[92vh] ${toLandlord ? "max-w-5xl" : "max-w-4xl"}`
         }`}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
+        <div className="nl-vbk-head flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
           <div className="min-w-0">
-            <h2 className="text-[19px] leading-tight">
+            <h2 className="nl-vbk-title text-[19px] leading-tight">
               {stage === "email"
                 ? "What We'll Send"
                 : stage === "landlord"
@@ -1279,7 +1279,7 @@ function ClassicViewingBooker({
           <div className="flex shrink-0 items-center gap-2">
             {/* Where they are in it: five steps, the current one filled. */}
             {flow && FLOW_STEPS.some((f) => f.stage === stage) && (
-              <ol className="hidden items-center gap-1.5 md:flex" aria-label="Steps">
+              <ol className="nl-vbk-steps hidden items-center gap-1.5 md:flex" aria-label="Steps">
                 {FLOW_STEPS.map((f, i) => {
                   const at = FLOW_STEPS.findIndex((x) => x.stage === stage);
                   const state = i < at ? "done" : i === at ? "now" : "next";

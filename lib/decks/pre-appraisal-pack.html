@@ -6,7 +6,7 @@
 <title>Your Pre-Appraisal Pack - The Letting Experts</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap">
 <style>
 /* Layout: a full-screen 16:9 stage on white. Two slides split with a grey panel (the cover and the figure);
    the rest change rhythm: centred, side by side, a full-width header row, staggered cards. Cards are TLE OS greys
@@ -635,6 +635,87 @@ body.fields .legend { display: flex; }
   .ring .fg, .gauge .needle, .tl .tl-bar { animation: none !important; transform: none; } .ring .fg { transform: rotate(-90deg); }
   .rail i, .rail .fill { transition: none; }
 }
+
+/* ===================================================================================================
+   THE FINAL PALETTE (James, 8 Nov 2026: "bring it in line with the rest of it ... cleaner and a little
+   more interesting ... a visual illustration of what we are like as a business"). The website and the
+   OS: brown for the action, terracotta to point, olive for go, clay and linen behind; titles in the
+   condensed Bricolage capitals; square edges. Written last so it wins; the layout above is untouched.
+   =================================================================================================== */
+:root {
+  --paper: #ffffff; --taupe: #f5efe6; --grey: #f5efe6; --card: #ffffff; --card-2: #f8f5f0; --well: #efe8df;
+  --ink: #231d1b; --muted: #6b5f5a; --faint: #9a8d86; --line: rgba(35, 29, 27, .12); --line-2: rgba(35, 29, 27, .24);
+  --coral: #a85a51; --clay: #8e4a42; --sage: #56634a; --sage-soft: #eef1e8; --forest: #56423e; --manilla: #f1e4dc; --gold: #c4a092;
+  --brown: #56423e; --linen: #f5efe6; --manilla-2: #c4a092; --oat: #ddd3c7;
+  --r: 0px; --r-sm: 0px;
+}
+body { background: #ebe5dc; }
+:focus-visible { outline-color: var(--brown); }
+
+/* Type: the website's condensed capitals for every title, the tracked small capitals for the line over it. */
+.title { font-weight: 500; font-stretch: 75%; text-transform: uppercase; letter-spacing: .005em; line-height: .95; }
+.title em, .title i, .title .soft, .title span[style*="faint"] { font-style: normal; }
+.eyebrow { font-family: var(--f-title); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .2em; font-size: calc(var(--u) * .95); color: var(--coral); }
+.rl li h4, .svc h3, .ts h4, .ag h4, .stop-card h4, .legend-list b, .prep b, .steps .ui b, .a-contact b, .bv-cap b, .vid-txt b {
+  font-weight: 500; font-stretch: 75%; text-transform: uppercase; letter-spacing: .04em;
+}
+.val, .ring-mid b, .legend-list .mins, .t-date b, .note-text { font-stretch: 75%; }
+.ring-mid b, .t-date b, .val { font-weight: 500; letter-spacing: 0; }
+.brand { font-family: var(--f-title); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; }
+
+/* Square edges, as the OS and the website: cards, panels, buttons, the ticket, the map. Circles stay circles. */
+.btn, .bigvid, .bw-back, .frame-ui, .frame-ui button, .vo-box, .bv-playc, .bv-len, .vid-len, .chip, .tag, .pill,
+[class*="card"], .ticket2, .tk-back, .tk-stage, .prep, .svc, .ts, .ag, .stop-card, .phone, .iphone .screen { border-radius: 0 !important; }
+
+/* Buttons: brown carries the one action, an outline the rest; nothing orange. */
+.btn.dark, .btn.dark:disabled:hover { background: var(--brown); border-color: var(--brown); color: #fff; }
+.btn.dark:hover { background: #3f302d; border-color: #3f302d; color: #fff; }
+.btn:not(.dark):hover { border-color: var(--ink); background: var(--ink); color: #fff; }
+.btn { font-family: var(--f-title); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: calc(var(--u) * 1); }
+.bv-playc, .vid-play, .bv-play, .vo-big, .frame-ui button { background: var(--brown); color: #fff; }
+.ag.dark .ag-go { background: var(--coral); color: #fff; }
+
+/* Dark panels in brown, not black. */
+.ag.dark, .dark-card, [style*="background:#141413"], [style*="background: #141413"] { background: var(--brown) !important; }
+
+/* The agent's photo, zoomed out (James, 8 Nov 2026: "the photo seems to zoom in massively, which just shows
+   people's foreheads"). A headshot is a portrait, so it sits in a portrait frame - head and shoulders, whole -
+   with the olive card turned behind it, instead of being cut to a letterbox. A video keeps its wide box. */
+.bigwrap:has(.bigvid.photo), .bigwrap:has(.bigvid.hs) { justify-self: center; width: auto; height: calc(var(--u) * 38); aspect-ratio: 4 / 5; max-width: 100%; }
+.bigwrap .bigvid.photo, .bigwrap .bigvid.hs { width: 100%; height: 100%; aspect-ratio: 4 / 5; background: var(--linen); }
+.bigvid.photo img.bv-img, .bigvid.hs img.bv-img { object-fit: cover; object-position: 50% 12%; }
+.bigvid.photo::after, .bigvid.hs::after { background: none; }
+.bw-back { background: var(--sage); opacity: .14; }
+.bigwrap:has(.bigvid.photo)::before { content: ""; position: absolute; inset: 0; background: var(--sage-soft); transform: rotate(-3deg) translate(calc(var(--u) * -1.2), calc(var(--u) * .8)); }
+.bigwrap:has(.bigvid.photo) .bigvid { position: relative; z-index: 1; }
+@media (max-width: 760px), (orientation: portrait) and (max-width: 1024px) {
+  .bigwrap:has(.bigvid.photo), .bigwrap:has(.bigvid.hs) { height: auto; width: min(78vw, 360px); }
+}
+
+/* The rail and the page numbers in terracotta and olive. */
+.rail i::after { background: var(--coral); }
+
+/* Second pass (8 Nov): the portrait sits at the top of its frame, no strip above it; the agent's note in the
+   normal width; the locked cards and the answer pills square; the dark card brown; the ring in the palette. */
+.bigvid.hs img.bv-img, .bigvid.photo img.bv-img { transform: none; object-position: 50% clamp(0%, calc(8% + var(--py, 0%)), 100%); }
+.note-text { font-stretch: 100%; }
+.lk, .lk-blur, .lk-tag, .seg-ctl, .seg-ctl button, .qcard, .q, .mapcard, .map, .ready > *, .locks > * { border-radius: 0 !important; }
+.lk.dark { background: var(--brown); } .lk.dark .lk-blur { background: #4a3935; }
+.lk-rows i { background: #6b5a55; }
+.lk-t { font-family: var(--f-title); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
+.seg-ctl button[aria-checked="true"] { background: var(--brown); color: #fff; box-shadow: none; }
+.title .soft { color: var(--coral); }
+.bar { border-radius: 0 !important; }
+
+/* The agent's bio, 10 Nov 2026 (Dan Richards: "doesn't look good at all"): its own paragraphs with a gap between,
+   a calmer size, and smaller steps as it gets longer so the whole of it fits the slide. */
+.note-text p { margin: 0; } .note-text p + p { margin-top: .75em; }
+.note-text.fit-2 { font-size: calc(var(--u) * 1.4); line-height: 1.5; letter-spacing: -.005em; }
+.note-text.fit-3 { font-size: calc(var(--u) * 1.18); line-height: 1.55; letter-spacing: 0; font-weight: 350; max-width: 34em; }
+.note-text.fit-4 { font-size: calc(var(--u) * 1.04); line-height: 1.55; letter-spacing: 0; font-weight: 350; max-width: 36em; }
+@media (max-aspect-ratio: 4/5), (max-width: 700px) {
+  .note-text, .note-text.fit-2, .note-text.fit-3, .note-text.fit-4 { font-size: 16px; line-height: 1.55; max-width: none; }
+}
 </style>
 </head>
 <body>
@@ -746,6 +827,9 @@ const VID = A.video && (A.video.src || A.video.link) ? A.video : null;
    'headshot' always puts the agent's headshot there and the video behind a button. */
 const MEET = D.meet === 'headshot' ? 'headshot' : 'video';
 const BOXVID = MEET === 'video' && VID;
+/* The bio comes in its own paragraphs (lib/pre-pack) and steps down a size as it gets longer, so a full bio sits
+   on the slide with the greeting and the name, not off the top and bottom of it (Dan Richards, 10 Nov 2026). */
+const NOTE_FIT = A.note.length > 820 ? 'fit-4' : A.note.length > 520 ? 'fit-3' : A.note.length > 260 ? 'fit-2' : 'fit-1';
 n = 0; slide('Meet ' + A.first, `
   <div class="cols" style="grid-template-columns:1.25fr 1fr">
     <div class="bigwrap in" ${i()}>${MEET === 'headshot' ? '<span class="bw-back" aria-hidden="true"></span>' : ''}<button class="bigvid${BOXVID ? '' : ' photo'}${MEET === 'headshot' ? ' hs' : ''}" ${BOXVID ? 'data-video' : 'tabindex="-1"'} aria-label="${BOXVID ? 'Play the video from ' + esc(A.name) : esc(A.name)}">
@@ -755,7 +839,7 @@ n = 0; slide('Meet ' + A.first, `
     <div>
       <p class="eyebrow in" ${i()}>Meet your expert</p>
       <h2 class="title in" ${i()}>Hi ${v('landlord.first')}, I’m ${v('agent.first')}.</h2>
-      <p class="note-text in" ${i()}>${v('agent.note')}</p>
+      <div class="note-text ${NOTE_FIT} in" ${i()}>${A.note.split(/\n{2,}/).map(p => `<p>${v('agent.note', p)}</p>`).join('')}</div>
       ${VID && !BOXVID ? `<div class="btns in" ${i('margin-top:calc(var(--u)*2.6)')}><button class="btn dark" data-video>${ic('play', '')}<span>Watch my video</span></button></div>` : ''}
       <div class="sign in${BOXVID ? '' : ' plain'}" ${i()}>${BOXVID ? face('sm') : ''}<div><b>${v('agent.name')}</b><span class="lab">${v('agent.role')}, The Letting Experts</span></div></div>
     </div>

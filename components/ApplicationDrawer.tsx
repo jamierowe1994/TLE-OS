@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import ListingAppraisal, { useListingAppraisal } from "@/components/listing/ListingAppraisal";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import { dropJson } from "@/lib/page-cache";
+import { APPS_BOARD_URL } from "@/lib/applications-read";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
 import { MoveInPackCard } from "@/components/MoveInPack";
 import CustomerUpdates from "@/components/CustomerUpdates";
@@ -19,6 +21,11 @@ import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-ev
 import ContactBlock from "@/components/ContactBlock";
 import RightToRentField, { suggestedFor, type RtrShown, type RtrSuggested } from "@/components/RightToRentField";
 import Guarantors from "@/components/Guarantors";
+import PeopleDeck from "@/components/new-look/PeopleDeck";
+import PlcOverlay from "@/components/plc/PlcOverlay";
+import PushToPropoly from "@/components/propoly/PushToPropoly";
+import CustomerUpdateSheet from "@/components/updates/CustomerUpdateSheet";
+import ActivityList, { exactWhen } from "@/components/new-look/ActivityList";
 import { GuarantorsToPropoly } from "@/components/LetPropoly";
 import LetTenants from "@/components/LetTenants";
 import { AddLandlord, LandlordsBox, PartyContact, PropolyLine, PropolySummary, sourceWords, type Party, type PeopleAnswer, type Picture } from "@/components/LetPeople";
@@ -39,6 +46,7 @@ import { AMBER_PILL, GREEN_PILL, RED_PILL } from "@/components/applications/Lets
 import { applicantKey } from "@/lib/lead-tenant-key";
 import FieldDate from "@/components/FieldDate";
 import LetTenantCard from "@/components/new-look/LetTenantCard";
+import HouseholdOnHome, { type Household } from "@/components/HouseholdOnHome";
 import { isLetField, LET_FIELD_KIND, LET_FIELD_LABEL, sameLetValue, sayLetValue, type LetEditEvent, type LetEditNow, type LetField } from "@/lib/let-edit-fields";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
@@ -302,7 +310,10 @@ function dealStops(d: PreTenancyDeal): SpineStop[] {
     const st = i <= at ? stageStatus(d, s.key) : null;
     return {
       id: s.key,
-      label: s.label,
+      /* "Deal started" read as a separate job (8 Nov 2026): on a let that is
+         only in Propoly it is simply that - it's in Propoly. */
+      label: s.key === "deal_started" ? "In Propoly" : s.label,
+      about: s.blurb,
       state: i < at ? "done" : i === at ? "current" : "upcoming",
       sub: st?.text,
       tone: st ? (/f1f4ec/.test(st.tone) ? "ok" : /fdefec|amber/.test(st.tone) ? "warn" : undefined) : undefined,
@@ -393,23 +404,8 @@ function BottomSheet({ open, title, onClose, children }: { open: boolean; title:
 
 /* ── the email builder: customer updates and reminders ────────────────── */
 
-type Template = { kind: string; label: string; what: string; to: Array<"tenant" | "landlord"> };
-/* The written emails (lib/customer-update-copy), each read and changed before
-   it goes. Failed referencing asks about a guarantor, as James put it. */
-const UPDATES: Template[] = [
-  { kind: "general", label: "A quick update", what: "A short note in your own words", to: ["tenant", "landlord"] },
-  { kind: "reference_failed", label: "References not accepted", what: "Sorry, and do they have a guarantor? If not the let may not go ahead", to: ["tenant", "landlord"] },
-  { kind: "guarantor_needed", label: "A guarantor is needed", what: "References passed, but a guarantor is needed", to: ["tenant"] },
-  { kind: "agreement_out", label: "Agreement on its way", what: "The tenancy agreement is out for signing", to: ["tenant", "landlord"] },
-  { kind: "cancelled", label: "The let won't go ahead", what: "Sorry it isn't going ahead, and what happens next", to: ["tenant", "landlord"] },
-];
-const REMINDERS: Template[] = [
-  { kind: "nudge_holding_fee", label: "Pay the holding deposit", what: "The home stays on the market until it's paid", to: ["tenant"] },
-  { kind: "nudge_referencing", label: "Finish the references", what: "Fill in the referencing form", to: ["tenant"] },
-  { kind: "nudge_sign_agreement", label: "Sign the agreement", what: "The tenancy agreement is waiting for a signature", to: ["tenant", "landlord"] },
-  { kind: "nudge_move_in_money", label: "Send the move-in money", what: "Deposit and first month's rent before the keys", to: ["tenant"] },
-  { kind: "nudge_documents", label: "Documents we still need", what: "Send them over or upload them in the portal", to: ["tenant", "landlord"] },
-];
+/* The customer update and reminder lists live with the pop-out now
+   (components/updates/CustomerUpdateSheet, 8 Nov 2026). */
 
 type LetPerson = { name: string; email: string | null; phone: string | null; contactId: string | null; isPrimary: boolean };
 type LetLandlord = { name: string; email: string | null; phone: string | null; contactId: string | null; from?: "rex" | "record" };
@@ -417,7 +413,7 @@ type LetLandlord = { name: string; email: string | null; phone: string | null; c
    same as "no landlord": 12 South Chesters Lane's page and Steve both said
    there was none, and asked Lianna to add one, when the read had been
    refused - her landlord was on the listing all along. */
-type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string; failed?: string };
+type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null; people?: Party[]; homeKey?: string; household?: Household | null; failed?: string };
 type Cancellation = { reason: string; note: string; by: string; at: string };
 type LetDetails = { canEdit: boolean; dealId: string | null; edits: Partial<Record<LetField, LetEditNow>>; history: LetEditEvent[] };
 
@@ -433,178 +429,6 @@ function dealFigure(d: PreTenancyDeal, f: LetField): string | null {
     case "holdingFee": return s(d.app.propoly?.holdingFee);
     case "termMonths": return s(d.app.agreementMonths);
   }
-}
-
-function EmailBuilder({ letId, mode, people, start, scotland, onClose }: {
-  letId: string;
-  mode: "update" | "reminder";
-  people: LetInfo | null;
-  /** Arriving with a message and a person already picked (after a cancel). */
-  start?: { kind: string; to: string } | null;
-  /** Scotland takes no holding fee, so there's nothing to remind anyone to pay. */
-  scotland?: boolean;
-  onClose: () => void;
-}) {
-  const list = mode === "update" ? UPDATES : scotland ? REMINDERS.filter((t) => t.kind !== "nudge_holding_fee") : REMINDERS;
-  const parties = [
-    ...(people?.tenants ?? []).map((t, i) => ({ key: `tenant:${i}`, role: "tenant" as const, index: i, name: t.name, email: t.email, tag: t.isPrimary ? "Lead tenant" : "Tenant" })),
-    /* Every landlord on the let (20 Oct 2026), each by their place in the list. */
-    ...(() => {
-      const all = (people?.people ?? []).filter((p) => p.role === "landlord");
-      if (!all.length) return people?.landlord ? [{ key: "landlord", role: "landlord" as const, index: 0, name: people.landlord.name, email: people.landlord.email, tag: "Landlord" }] : [];
-      return all.map((l, i) => ({ key: i ? `landlord:${i}` : "landlord", role: "landlord" as const, index: i, name: l.name, email: l.email, tag: "Landlord" }));
-    })(),
-  ];
-  const [to, setTo] = useState<string>(start?.to ?? parties[0]?.key ?? "");
-  const [kind, setKind] = useState<string>(start?.kind ?? list[0].kind);
-  const [portal, setPortal] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<{ id: number; index: number; portal: boolean } | null>(null);
-  const sent = useRef(false);
-  const [done, setDone] = useState<{ to: string; what: string; detail: string }[]>([]);
-  useEffect(() => { if (!to && parties[0]) setTo(parties[0].key); }, [parties, to]);
-
-  const party = parties.find((p) => p.key === to) ?? null;
-  const tpl = list.find((t) => t.kind === kind) ?? list[0];
-  const fits = party ? tpl.to.includes(party.role) : false;
-
-  async function write() {
-    if (!party || busy) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const r = await fetch(`/api/applications/${encodeURIComponent(letId)}/message`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ kind: tpl.kind, role: party.role, index: party.index }),
-      });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; update?: { id: number }; index?: number };
-      if (!j.ok || !j.update) throw new Error(j.error ?? "The email couldn't be written.");
-      sent.current = false;
-      setSheet({ id: j.update.id, index: j.index ?? 0, portal });
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "The email couldn't be written.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /* Closed without sending: the update is settled as not sent, so it never
-     sits open nagging the agent and then Kirstie about an email nobody meant
-     to send. */
-  function sheetClosed() {
-    const s = sheet;
-    setSheet(null);
-    if (s && !sent.current) {
-      void fetch("/api/customer-updates", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: s.id, index: s.index, action: "skip", note: "Written on the let's page and not sent." }),
-      }).catch(() => null);
-    }
-  }
-
-  return (
-    <>
-      <DrawerHead
-        icon={mode === "update" ? "mail" : "clock"}
-        title={mode === "update" ? "Customer update" : "Send a reminder"}
-        sub="Pick who and what. The email is written for you to read and change before it goes, from your own address. Nothing is sent until you press Send."
-        onClose={onClose}
-      />
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
-        <section>
-          <p className={`${eyebrow} mb-2`}>Who to</p>
-          {people === null ? (
-            <p className="text-[12.5px] text-muted">Reading who is on the let…</p>
-          ) : parties.length ? (
-            <div className="flex flex-wrap gap-2">
-              {parties.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => setTo(p.key)}
-                  aria-pressed={to === p.key}
-                  className={`rounded-xl border px-3.5 py-2 text-left text-[12.5px] transition-colors ${to === p.key ? "border-accent-dark bg-accent-soft/60" : "border-line/70 bg-white hover:border-ink/40"}`}
-                >
-                  <span className="block font-semibold">{p.name}</span>
-                  <span className="block text-[11px] text-muted">{p.tag}{p.email ? "" : " · no email"}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[12.5px] text-muted">Nobody with contact details is held on this let.</p>
-          )}
-          {people?.landlordProblem && <p className="mt-2 text-[11.5px] text-muted">{people.landlordProblem}</p>}
-        </section>
-
-        <section>
-          <p className={`${eyebrow} mb-2`}>{mode === "update" ? "What it's about" : "The reminder"}</p>
-          <div className="grid gap-2">
-            {list.map((t) => {
-              const ok = party ? t.to.includes(party.role) : true;
-              return (
-                <button
-                  key={t.kind}
-                  type="button"
-                  disabled={!ok}
-                  onClick={() => setKind(t.kind)}
-                  aria-pressed={kind === t.kind}
-                  className={`rounded-xl border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${kind === t.kind ? "border-accent-dark bg-accent-soft/60" : "border-line/70 bg-white hover:border-ink/40"}`}
-                >
-                  <span className="block text-[13px] font-semibold">{t.label}</span>
-                  <span className="block text-[11.5px] text-muted">{ok ? t.what : `For the ${t.to.join(" or ")} only`}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Send to portal (James, 12 Oct 2026): the copy under Messages in
-            their portal, where they have one. */}
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line/70 bg-white px-4 py-3">
-          <input type="checkbox" checked={portal} onChange={(e) => setPortal(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--accent-dark)]" />
-          <span>
-            <span className="block text-[13px] font-semibold">Also put it in their portal</span>
-            <span className="block text-[11.5px] text-muted">A copy under Messages, if they have a portal account. It is in their email either way.</span>
-          </span>
-        </label>
-
-        {err && <p className="text-[12px] text-accent-dark">{err}</p>}
-        {done.length > 0 && (
-          <ul className="space-y-1.5 rounded-xl bg-[#f1f4ec] px-4 py-3 text-[12px] text-[#56634a]">
-            {done.map((d, i) => (
-              <li key={i}>✓ {d.what} to {d.to}. {d.detail}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-5 py-4 sm:px-6">
-        <p className="text-[11.5px] text-muted">{party && !party.email ? `There's no email for ${party.name}. Ring them instead.` : "You'll see it before it goes."}</p>
-        <button
-          type="button"
-          onClick={() => void write()}
-          disabled={!party || !fits || busy || !party.email}
-          className="press-ring inline-flex shrink-0 items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-40"
-        >
-          <DoodleIcon name="mail" size={13} />
-          {busy ? "Writing it…" : "Write the email"}
-        </button>
-      </div>
-      {sheet && (
-        <ConfirmSheet
-          target={{ kind: "update", id: sheet.id, index: sheet.index, portal: sheet.portal }}
-          title={tpl.label}
-          onSent={(detail) => {
-            sent.current = true;
-            setDone((cur) => [...cur, { to: party?.name ?? "them", what: tpl.label, detail }]);
-          }}
-          onClose={sheetClosed}
-        />
-      )}
-    </>
-  );
 }
 
 /* ── cancel the deal ──────────────────────────────────────────────────── */
@@ -774,6 +598,8 @@ export default function ApplicationDrawer({
   /* Who is on the let, as the server holds it (lib/let-people), and whether
      it was cancelled - for the drawers, the email builder and Cancel deal. */
   const [info, setInfo] = useState<LetInfo | null>(null);
+  /* What the market appraisal behind the home learned, on the let too (James, 10 Nov 2026). */
+  const letAppraisal = useListingAppraisal(info?.listingId ?? null);
   const [cancelled, setCancelled] = useState<Cancellation | null>(null);
   /* Each person against the let's Propoly deal (lib/let-propoly-sync, 20 Oct 2026). */
   const [picture, setPicture] = useState<Picture | null>(null);
@@ -1069,6 +895,10 @@ export default function ApplicationDrawer({
      Propoly alone, agreed before the OS (Joe Patten's 340 Four Chimneys
      Crescent, 2 Nov 2026) - from the deal itself: a deal is an accepted let. */
   const plcStartHref = app ? `/plc/start?application=${encodeURIComponent(app.id)}` : deal ? `/plc/start?application=${encodeURIComponent(deal.app.id)}` : null;
+  /* The PLC check opens over the let (James, 8 Nov 2026), not on a page of its own. */
+  const [plcOpen, setPlcOpen] = useState(false);
+  /* Push to Propoly as one pop-out (8 Nov 2026), from Next Up and the "Not in Propoly yet" chip. */
+  const [pushOpen, setPushOpen] = useState(false);
   const plcReady = app ? offerIn : Boolean(deal);
   const lead = people.find((p) => p.isPrimary) ?? people[0];
   const name = app?.property ?? deal?.app.propertyName ?? "This let";
@@ -1521,10 +1351,30 @@ export default function ApplicationDrawer({
         </div>
       </BottomSheet>
 
-      {/* Customer update and Send a reminder: the email builder. */}
-      <Drawer open={Boolean(builder)} label={builder?.mode === "reminder" ? "Send a reminder" : "Customer update"} onClose={closeBuilder}>
-        {builder && <EmailBuilder key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`} letId={letId} mode={builder.mode} people={info} start={builder.start} scotland={scottishLet} onClose={closeBuilder} />}
-      </Drawer>
+      {/* Customer update and Send a reminder: a pop-out in steps (James, 8 Nov
+          2026: the drawer from the side ran into Steve). */}
+      {builder && (
+        <CustomerUpdateSheet
+          key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`}
+          letId={letId}
+          mode={builder.mode}
+          loading={info === null}
+          address={[name, locality].filter(Boolean).join(", ")}
+          start={builder.start}
+          scotland={scottishLet}
+          landlordProblem={info?.landlordProblem ?? null}
+          parties={[
+            ...(info?.tenants ?? []).map((t, i) => ({ key: `tenant:${i}`, role: "tenant" as const, index: i, name: t.name, email: t.email, phone: t.phone, tag: t.isPrimary ? "Lead tenant" : "Tenant" })),
+            ...(() => {
+              const all = (info?.people ?? []).filter((p) => p.role === "landlord");
+              if (!all.length) return info?.landlord ? [{ key: "landlord", role: "landlord" as const, index: 0, name: info.landlord.name, email: info.landlord.email, phone: info.landlord.phone, tag: "Landlord" }] : [];
+              return all.map((l, i) => ({ key: i ? `landlord:${i}` : "landlord", role: "landlord" as const, index: i, name: l.name, email: l.email, phone: l.phone, tag: "Landlord" }));
+            })(),
+          ]}
+          onClose={closeBuilder}
+          onLog={addComment}
+        />
+      )}
 
       {!newLook && lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={name} onClose={() => setLightbox(null)} />}
 
@@ -1536,7 +1386,7 @@ export default function ApplicationDrawer({
           onCancelled={(c) => {
             setCancelled(c);
             /* The board's held read is out of date the moment this lands. */
-            dropJson("/api/applications?limit=200");
+            dropJson(APPS_BOARD_URL);
           }}
           onTell={(role) => {
             setCancelOpen(false);
@@ -1575,14 +1425,10 @@ export default function ApplicationDrawer({
       <button type="button" className="nl-btn nl-btn--primary" onClick={() => setBuilder({ mode: "update", start: { kind: "cancelled", to: "tenant:0" } })}>
         <Ico name="mail" /> Update the tenant
       </button>
-    ) : !intro && app && propoly.state === "push" ? (
-      <button type="button" className="nl-btn nl-btn--primary" onClick={() => setPropolyOpen(true)}>
-        <Ico name="arrow" /> Push to Propoly
-      </button>
-    ) : plcCan && plcHref ? (
-      <Link href={plcHref} className="nl-btn nl-btn--primary">
+    ) : plcCan && plcHref && !(!intro && app && propoly.state === "push") ? (
+      <button type="button" className="nl-btn nl-btn--primary" onClick={() => setPlcOpen(true)}>
         <Ico name="arrow" /> {plcLabel}
-      </Link>
+      </button>
     ) : !app && deal ? (
       <a href={propolyDealUrl(deal.app.id)} target="_blank" rel="noopener noreferrer" className="nl-btn nl-btn--primary">
         Open in Propoly <Ico name="arrow" />
@@ -1598,7 +1444,7 @@ export default function ApplicationDrawer({
       "rule",
       ...(people.length ? [{ label: people.length > 1 ? "The tenants" : "The tenant", onClick: () => setPerson({ role: "tenant", index: 0 }) }] : []),
       { label: noLandlord ? "Add the landlord" : landlordsAll.length > 1 ? "The landlords" : "The landlord", onClick: () => (noLandlord ? setAddLandlordOpen(true) : setPerson({ role: "landlord", index: 0 })) },
-      ...(plcHref && plcCan && !(mainJob && propoly.state !== "push") ? [{ label: plcLabel, href: plcHref }] : []),
+      ...(plcHref && plcCan && !(mainJob && propoly.state !== "push") ? [{ label: plcLabel, onClick: () => setPlcOpen(true) }] : []),
       ...(app && !intro && (propoly.state === "early" || (propoly.state === "in" && !propoly.url)) ? [{ label: propoly.state === "in" ? "In Propoly" : "Not in Propoly yet", sub: propoly.sub ?? undefined, onClick: () => setPropolyOpen(true) }] : []),
       ...(app && !intro && propoly.state === "push" && cancelled ? [{ label: "Push to Propoly", onClick: () => setPropolyOpen(true) }] : []),
       ...(propoly.state === "in" && propoly.url ? [{ label: "Open in Propoly", sub: propoly.sub ?? undefined, href: propoly.url }] : []),
@@ -1627,8 +1473,8 @@ export default function ApplicationDrawer({
         </button>
       )
     ) : propoly.state === "push" || propoly.state === "early" ? (
-      <button type="button" onClick={() => setPropolyOpen(true)} className="nl-market-btn nl-apps-notin">
-        {propoly.state === "push" ? "Not in Propoly - push it" : "Not in Propoly"}
+      <button type="button" onClick={() => (app && propoly.state === "push" ? setPushOpen(true) : setPropolyOpen(true))} className="nl-market-btn nl-apps-notin">
+        Not in Propoly yet
       </button>
     ) : null;
 
@@ -1637,7 +1483,9 @@ export default function ApplicationDrawer({
     const ideas: { says: string; act: string; go: () => void }[] = cancelled
       ? []
       : [
-          ...(app && !intro && propoly.state === "push" ? [{ says: "It's accepted and not in Propoly yet. Push it across and Kirstie can take it from there.", act: "Push to Propoly", go: () => setPropolyOpen(true) }] : []),
+          /* No third Push to Propoly here (8 Nov 2026): it lives once, in
+             Next Up, and Steve points at it rather than doubling it. */
+          ...(app && !intro && propoly.state === "push" ? [{ says: "The one thing waiting is in Next Up: push it to Propoly. It's still your let after that - you stay the tenant's and the landlord's contact.", act: "Show me", go: () => document.querySelector("[data-next-up]")?.scrollIntoView({ behavior: "smooth", block: "center" }) }] : []),
           ...(dealStatus?.text === "Move-in slipped" ? [{ says: `The move-in date has been and gone. Agree a new one with ${leadFirst} and the landlord.`, act: "Send a customer update", go: () => setBuilder({ mode: "update" }) }] : []),
           ...(noLandlord ? [{ says: "There's no landlord on this let yet. Every let needs one.", act: "Add the landlord", go: () => setAddLandlordOpen(true) }] : []),
           ...(flags.length ? [{ says: `Kirstie's side has flagged this one: ${flags[0]}.`, act: "Add a comment", go: () => setNlTab("notes") }] : []),
@@ -1785,7 +1633,7 @@ export default function ApplicationDrawer({
         if (!r.ok || !j.ok) throw new Error(j.error ?? "The figures didn't save. Try again.");
         setDetails({ canEdit: Boolean(j.canEdit), dealId: j.dealId ?? null, edits: j.edits ?? {}, history: j.history ?? [] });
         /* The board reads them again rather than show its held copy. */
-        dropJson("/api/applications?limit=200");
+        dropJson(APPS_BOARD_URL);
         settle({ ok: true });
         setFigSave("done");
         window.setTimeout(() => { setFigEdit(false); setFigSave("idle"); }, 1700);
@@ -1836,7 +1684,32 @@ export default function ApplicationDrawer({
 
     return (
       <SaveScopeProvider scope={saves}>
-        <div data-look="new" data-steve="application.drawer" className="nl-page nl-rise nl-app">
+        <div data-look="new" data-steve="application.drawer" className="nl-page nl-rise nl-app nl-edge">
+          {pushOpen && app && (
+            <PushToPropoly
+              applicationId={app.id}
+              address={[name, locality].filter(Boolean).join(", ")}
+              onClose={() => setPushOpen(false)}
+              onChanged={() => setJourneyTick((n) => n + 1)}
+              onEdit={(what, index) => {
+                setPushOpen(false);
+                if (what === "landlord") setPerson({ role: "landlord", index: index ?? 0 });
+                else if (what === "tenant") setPerson({ role: "tenant", index: index ?? 0 });
+                else if (what === "documents") setNlTab("documents");
+                else setFigEdit(true);
+              }}
+            />
+          )}
+          {plcOpen && (app || deal) && (
+            <PlcOverlay
+              applicationId={app?.id ?? deal!.app.id}
+              address={[name, locality].filter(Boolean).join(", ")}
+              onClose={() => {
+                setPlcOpen(false);
+                setDetailsTick((n) => n + 1);
+              }}
+            />
+          )}
           <div className="nl-crumbs">
             <Link href={backHref} className="nl-crumb">
               <Ico name="back" size={14} /> Applications
@@ -1881,6 +1754,10 @@ export default function ApplicationDrawer({
                 <button type="button" className="nl-btn nl-btn--secondary" onClick={() => setBuilder({ mode: "update" })}>
                   <Ico name="mail" /> Customer update
                 </button>
+              )}
+              {/* Take offline, beside Customer update (James, 8 Nov 2026). */}
+              {app?.listingId && !app.swapKind && !cancelled && !intro && (propoly.state === "in" || propoly.state === "push") && (
+                <AdvertOffline compact listingId={String(app.listingId)} applicationId={app.id} propertyId={app.propertyId ?? null} address={[app.property, app.locality].filter(Boolean).join(", ")} />
               )}
               {mainJob}
               <Menu items={menu} />
@@ -1993,7 +1870,7 @@ export default function ApplicationDrawer({
             <div className="nl-apps-track">
               <div className="nl-progress" style={{ "--nl-steps": stops.length } as React.CSSProperties} aria-label="Where it's up to">
                 {stops.map((st) => (
-                  <div key={st.id} title={st.sub ?? undefined} className={`nl-step${st.state === "done" ? " done" : st.state === "current" ? " now" : ""}${st.state === "off" ? " is-off" : ""}`}>
+                  <div key={st.id} title={[st.sub, st.about].filter(Boolean).join(" - ") || undefined} className={`nl-step${st.state === "done" ? " done" : st.state === "current" ? " now" : ""}${st.state === "off" ? " is-off" : ""}`}>
                     <i />
                     <span>{st.label}</span>
                   </div>
@@ -2004,6 +1881,7 @@ export default function ApplicationDrawer({
                 {here?.sub ? ` · ${here.sub}` : ""}
                 {intro ? " · Marketing only: the offer, and that's the end of it." : ""}
               </p>
+              {here?.about && !intro && <p className="nl-apps-track-about">{here.about}</p>}
             </div>
           ) : (
             <p className="nl-meta nl-apps-track-wait">
@@ -2023,7 +1901,7 @@ export default function ApplicationDrawer({
             {nlTab === "overview" && (
               <div className="nl-bento">
                 {/* ── Next Up ── */}
-                <section className="nl-cell span2 nl-apps-nextup">
+                <section className="nl-cell span2 nl-apps-nextup" data-next-up>
                   <div className="nl-cell-head">
                     <h3 className="nl-block-title">Next Up</h3>
                     <Badge tone={cancelled ? "accent" : "info"}>{stageLabel}</Badge>
@@ -2070,6 +1948,7 @@ export default function ApplicationDrawer({
                           playing={playing}
                           confirming={confirming}
                           onChanged={() => setJourneyTick((n) => n + 1)}
+                          onPush={() => setPushOpen(true)}
                         />
                       </div>
                       {journey?.ok && (journey.actions ?? []).some((a) => a.test || a.decide) && (
@@ -2107,9 +1986,9 @@ export default function ApplicationDrawer({
                           moveIn={moveIn}
                         />
                       )}
-                      {app.listingId && !app.swapKind && (propoly.state === "in" || propoly.state === "push") && (
-                        <AdvertOffline listingId={String(app.listingId)} applicationId={app.id} propertyId={app.propertyId ?? null} address={[app.property, app.locality].filter(Boolean).join(", ")} />
-                      )}
+                      {/* The advert box left Next Up (James, 8 Nov 2026): Take offline is a
+                          button beside Customer update, and when to be asked lives in
+                          Profile > Automations. */}
                     </div>
                   ) : (
                     <>
@@ -2126,6 +2005,8 @@ export default function ApplicationDrawer({
                     <h3 className="nl-block-title">{people.length > 1 ? "The Applicants" : "The Applicant"}</h3>
                     {people.length > 0 && <button type="button" className="nl-link" onClick={() => setPerson({ role: "tenant", index: 0 })}>Open</button>}
                   </div>
+                  {/* The tenants set with Edit on the home's page, where they were (4 Nov 2026). */}
+                  {info?.household && <p className="nl-meta">Living there now, as set on the home&apos;s page: {info.household.tenants.map((t) => t.name).join(", ")}.</p>}
                   {leadShown ? (
                     <>
                       <div className="nl-person">
@@ -2156,7 +2037,7 @@ export default function ApplicationDrawer({
                 <section className="nl-cell">
                   <h3 className="nl-block-title">Things to Do</h3>
                   <ul className="nl-apps-todos">
-                    {!intro && thingLine(plcLabel, plcSub, null, plcCan ? plcHref : null, plcDone)}
+                    {!intro && thingLine(plcLabel, plcSub, plcCan ? () => setPlcOpen(true) : null, null, plcDone)}
                     {thingLine("Send a reminder", intro ? "Marketing only - nothing to chase" : "Sign, pay, references", cancelled || intro ? null : () => setBuilder({ mode: "reminder" }))}
                     {thingLine("Customer update", "Email tenant or landlord", () => setBuilder({ mode: "update" }))}
                     {thingLine("Add a document", "ID, payslips, receipts", () => setNlTab("documents"))}
@@ -2224,88 +2105,104 @@ export default function ApplicationDrawer({
             {nlTab === "people" && (
               <div className="nl-holder">
                 {picture?.deal && <PropolySummary picture={picture} people={info?.people ?? []} />}
-                <div className="nl-listbar">
-                  <h3 className="nl-block-title">{people.length === 1 ? "The Applicant" : `The Applicants`}</h3>
-                  {people.length > 1 && <span className="nl-count">{people.length}</span>}
-                </div>
-                {people.length ? (
-                  <div className="nl-apps-people">
-                    {people.map((p, i) => {
-                      const party = partyFor(p);
-                      const shown = shownPerson(p);
-                      return (
-                        <section key={(p.contactId ?? "") + i} className="nl-cell nl-apps-personcard">
-                          <div className="nl-cell-head">
-                            <button type="button" onClick={() => setPerson({ role: "tenant", index: i })} className="nl-person min-w-0 text-left">
-                              <span className="nl-avatar">{initialsOf(shown.name)}</span>
-                              <span className="min-w-0">
-                                <span className="nl-strong block truncate hover:underline">{shown.name}</span>
-                                <span className="nl-meta block">{p.isPrimary ? "Lead applicant" : "Applicant"}</span>
-                              </span>
-                            </button>
-                            {p.isPrimary ? (
-                              <Badge tone="accent">Lead</Badge>
-                            ) : canChangeLead ? (
-                              <button type="button" onClick={() => makeLead(p)} disabled={Boolean(leadBusy)} data-steve="application.make-lead" className="nl-btn nl-btn--secondary nl-btn--sm">
-                                {leadBusy === applicantKey(p) ? "Saving…" : "Make lead tenant"}
-                              </button>
-                            ) : null}
-                          </div>
-                          {party && letId ? (
-                            /* Fixed until Edit, saved on the let (1 Nov 2026). */
-                            <LetTenantCard
-                              letId={letId}
-                              party={{ ...party, isPrimary: p.isPrimary }}
-                              about={name}
-                              canEdit={Boolean(details?.canEdit)}
-                              onAnswer={(j) => { takePeople(j); setDetailsTick((n) => n + 1); }}
-                              after={<PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />}
-                            />
-                          ) : (
-                            <ContactBlock
-                              showName={false}
-                              role={p.isPrimary ? "lead applicant" : "applicant"}
-                              person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
-                              personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
-                            />
-                          )}
-                          {/* Their right to rent expiry on the card, not only behind
-                              their name (Kirstie Mulholland, 3 Nov 2026, ticket 494b1e2e). */}
-                          {!scottishLet && letId && (
-                            <div className="mt-3 border-t border-line/60 pt-2.5" data-steve="application.rtr-expiry-card">
-                              <p className="nl-meta mb-1">Right to rent expiry</p>
-                              <RightToRentField
-                                key={`${p.name}-${rtrOf(p)?.id ?? "none"}`}
-                                record={rtrOf(p)}
-                                suggested={suggestedFor(rtrPack, p.name)}
-                                save={(until, noTimeLimit) => saveRtr(p.name, until, noTimeLimit)}
-                                canVerify={rtrCanVerify}
-                                onVerified={rtrKeep}
-                              />
+                {info?.household && <HouseholdOnHome household={info.household} listingId={info.listingId} newLook />}
+                {/* Three columns, one person each (James, 8 Nov 2026): the lead
+                    applicant, the guarantor and the landlord side by side, and
+                    anyone else stacked behind them, a click away. */}
+                <div className="nl-people3">
+                  <PeopleDeck
+                    title="Applicant"
+                    many="Applicants"
+                    steve="application.applicants"
+                    cards={[...people.map((p, i) => ({ p, i }))]
+                      .sort((a, b) => Number(b.p.isPrimary) - Number(a.p.isPrimary))
+                      .map(({ p, i }) => {
+                        const party = partyFor(p);
+                        const shown = shownPerson(p);
+                        return {
+                          key: `${p.contactId ?? ""}-${i}`,
+                          node: (
+                            <div className="nl-pcard">
+                              <div className="nl-pcard-head">
+                                <button type="button" onClick={() => setPerson({ role: "tenant", index: i })} className="min-w-0 text-left">
+                                  <span className="nl-pcard-name block truncate hover:underline">{shown.name}</span>
+                                  <span className="nl-pcard-role">{p.isPrimary ? "Lead applicant" : "Applicant"}</span>
+                                </button>
+                              </div>
+                              {party && letId ? (
+                                /* Fixed until Edit, saved on the let (1 Nov 2026). */
+                                <LetTenantCard
+                                  letId={letId}
+                                  party={{ ...party, isPrimary: p.isPrimary }}
+                                  about={name}
+                                  canEdit={Boolean(details?.canEdit)}
+                                  onAnswer={(j) => { takePeople(j); setDetailsTick((n) => n + 1); }}
+                                  after={<PropolyLine letId={letId} party={party} picture={picture} onAnswer={takePeople} />}
+                                />
+                              ) : (
+                                <ContactBlock
+                                  showName={false}
+                                  role={p.isPrimary ? "lead applicant" : "applicant"}
+                                  person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
+                                  personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
+                                />
+                              )}
+                              {/* Their right to rent expiry on the card, not only behind
+                                  their name (Kirstie Mulholland, 3 Nov 2026, ticket 494b1e2e). */}
+                              {/* Only once there's something to say (8 Nov 2026): "no expiry
+                                  recorded" on every card was noise. Added from their details. */}
+                              {!scottishLet && letId && (rtrOf(p) || suggestedFor(rtrPack, p.name)) && (
+                                <div className="nl-pcard-rtr" data-steve="application.rtr-expiry-card">
+                                  <p className="nl-pcard-label">Right to rent expiry</p>
+                                  <RightToRentField
+                                    key={`${p.name}-${rtrOf(p)?.id ?? "none"}`}
+                                    record={rtrOf(p)}
+                                    suggested={suggestedFor(rtrPack, p.name)}
+                                    save={(until, noTimeLimit) => saveRtr(p.name, until, noTimeLimit)}
+                                    canVerify={rtrCanVerify}
+                                    onVerified={rtrKeep}
+                                  />
+                                </div>
+                              )}
+                              {!p.isPrimary && canChangeLead && (
+                                <button type="button" onClick={() => makeLead(p)} disabled={Boolean(leadBusy)} data-steve="application.make-lead" className="nl-pdeck-add is-quiet mt-3">
+                                  {leadBusy === applicantKey(p) ? "Saving…" : "Make lead tenant"}
+                                </button>
+                              )}
                             </div>
-                          )}
-                        </section>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="nl-empty">No tenant recorded on this let yet.</p>
-                )}
-                {letId && people.length > 0 && <Guarantors source={{ let: letId }} onChange={setGuarantorSig} />}
-                {letId && <GuarantorsToPropoly letId={letId} tick={`${guarantorSig}:${picture ? "p" : ""}`} />}
-                {letId && <LetTenants letId={letId} onChange={reloadPeople} picture={picture} people={info?.people ?? null} />}
-                {letId && (
-                  <LandlordsBox
-                    letId={letId}
-                    people={info === null ? null : info.people ?? []}
-                    picture={picture}
-                    problem={info?.landlordProblem ?? null}
-                    propertyAddress={[name, locality].filter(Boolean).join(", ")}
-                    onAnswer={takePeople}
-                    homeKey={info?.homeKey ?? null}
-                    reload={reloadPeople}
+                          ),
+                        };
+                      })}
+                    empty="No tenant recorded on this let yet."
+                    actions={letId ? <LetTenants letId={letId} onChange={reloadPeople} picture={picture} people={info?.people ?? null} className="nl-pdeck-tenants" /> : undefined}
                   />
-                )}
+                  <div>
+                    {letId && people.length > 0 ? (
+                      <Guarantors source={{ let: letId }} onChange={setGuarantorSig} deck />
+                    ) : (
+                      <PeopleDeck title="Guarantor" many="Guarantors" cards={[]} empty="Add the applicant first, then their guarantor." />
+                    )}
+                    {letId && <GuarantorsToPropoly letId={letId} tick={`${guarantorSig}:${picture ? "p" : ""}`} className="mt-3" />}
+                  </div>
+                  {letId && (
+                    <LandlordsBox
+                      deck
+                      letId={letId}
+                      people={info === null ? null : info.people ?? []}
+                      picture={picture}
+                      problem={info?.landlordProblem ?? null}
+                      propertyAddress={[name, locality].filter(Boolean).join(", ")}
+                      onAnswer={takePeople}
+                      homeKey={info?.homeKey ?? null}
+                      reload={reloadPeople}
+                    />
+                  )}
+                  {Number(info?.listingId) > 0 && (
+                    <section className="nl-cell mt-4">
+                      <ListingAppraisal state={letAppraisal} look="new" />
+                    </section>
+                  )}
+                </div>
               </div>
             )}
 
@@ -2332,7 +2229,7 @@ export default function ApplicationDrawer({
                   }}
                 >
                   <textarea rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a note - chased the tenant, spoke to the landlord…" aria-label="Add a note" data-steve="application.add-comment" />
-                  <button type="submit" className="nl-send" disabled={!draft.trim() || noteBusy} aria-label="Save the note">
+                  <button type="submit" className="nl-send" disabled={!draft.trim() || noteBusy} aria-label="Save the note" data-steve="application.save-note">
                     <Ico name="arrow" size={16} />
                   </button>
                 </form>
@@ -2366,32 +2263,50 @@ export default function ApplicationDrawer({
               <div>
                 {app && journey === null ? (
                   <p className="nl-meta flex items-center gap-2 py-6"><span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-ink" />Reading what moved…</p>
-                ) : edits.length + history.length + recordLog.length ? (
-                  <ul className="nl-timeline">
-                    {/* Changed on the let in the OS: who, from what, to what, when. */}
-                    {edits.map((e) => (
-                      <li key={e.id}>
-                        <span className="nl-mono">{whenWords(e.at)}</span>
-                        <span>{editWords(e)} <span className="nl-meta">Kept on the let</span></span>
-                      </li>
-                    ))}
-                    {history.map((e) => (
-                      <li key={e.id}>
-                        <span className="nl-mono">{whenWords(e.at)}</span>
-                        <span>{eventSentence(e)}</span>
-                      </li>
-                    ))}
-                    {recordLog.map((a, i) => (
-                      <li key={`r${i}`}>
-                        <span className="nl-mono">{/^\d{4}-\d{2}-\d{2}/.test(a.when) ? niceDate(a.when.slice(0, 10)) : a.when}</span>
-                        <span>
-                          {a.what} <span className="nl-meta">{a.by}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
                 ) : (
-                  <p className="nl-empty">Nothing has moved on the deal yet.</p>
+                  /* Every line opens with what's behind it (James, 8 Nov 2026). */
+                  <ActivityList
+                    empty="Nothing has moved on the deal yet."
+                    items={[
+                      ...edits.map((e) => ({
+                        key: `e${e.id}`,
+                        at: e.at,
+                        when: whenWords(e.at),
+                        exact: exactWhen(e.at),
+                        text: editWords(e),
+                        by: e.by,
+                        rows: [["Was", e.was ?? "Nothing"], ["Now", e.value ?? "Nothing"], ["Kept", "On the let in the OS"]] as [string, string][],
+                      })),
+                      ...history.map((e) => ({
+                        key: `h${e.id}`,
+                        at: e.at,
+                        when: whenWords(e.at),
+                        exact: exactWhen(e.at),
+                        text: eventSentence(e),
+                        by: e.agentName,
+                        body: e.toldNote,
+                        rows: ([
+                          ["From", e.fromStatus ?? ""],
+                          ["To", e.toStatus ?? ""],
+                          ["Amount", e.amount != null ? `£${e.amount.toLocaleString("en-GB")}` : ""],
+                          ["Told", [e.toldTo, e.toldAt ? whenWords(e.toldAt) : ""].filter(Boolean).join(", ")],
+                        ] as [string, string][]).filter(([, v]) => v),
+                      })),
+                      ...(app?.activity ?? []).map((a, i) => {
+                        const note = (a as { note?: unknown }).note;
+                        return {
+                          key: `r${i}`,
+                          at: /^\d{4}-\d{2}-\d{2}/.test(a.when) ? a.when : "",
+                          when: /^\d{4}-\d{2}-\d{2}/.test(a.when) ? niceDate(a.when.slice(0, 10)) : a.when,
+                          exact: exactWhen(a.when),
+                          text: note ? `${a.by || "Someone"} added a note` : a.what,
+                          by: note ? null : a.by,
+                          body: typeof note === "string" && note.trim() ? note : note ? a.what : null,
+                          go: note ? { label: "Go to Notes", onClick: () => setNlTab("notes") } : null,
+                        };
+                      }),
+                    ].sort((x, y) => (y.at || "").localeCompare(x.at || ""))}
+                  />
                 )}
               </div>
             )}
@@ -2624,6 +2539,8 @@ export default function ApplicationDrawer({
             )}
             {/* The let's Propoly deal, and who on it differs (20 Oct 2026). */}
             {picture?.deal && <div className="mt-5"><PropolySummary picture={picture} people={info?.people ?? []} /></div>}
+            {/* The tenants set with Edit on the home's page, where they were (4 Nov 2026). */}
+            {info?.household && <HouseholdOnHome household={info.household} listingId={info.listingId} className="mt-5" />}
             <p className={`${eyebrow} mb-3 mt-5`}>{people.length === 1 ? "The applicant" : `The applicants · ${people.length}`}</p>
             {people.length ? (
               <ul className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
@@ -2688,6 +2605,12 @@ export default function ApplicationDrawer({
                 homeKey={info?.homeKey ?? null}
                 reload={reloadPeople}
               />
+            )}
+            {/* What the market appraisal behind the home learned (James, 10 Nov 2026). */}
+            {Number(info?.listingId) > 0 && (
+              <div className="mt-5 border-t border-line/50 pt-4">
+                <ListingAppraisal state={letAppraisal} look="classic" />
+              </div>
             )}
 
             {/* Where it's up to, across the box underneath (as on a listing). */}

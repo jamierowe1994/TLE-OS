@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { payloadSignatureOk, signPayload } from "@/lib/auth";
 import { bugShot } from "@/lib/pilot";
 import { mediaFor } from "@/lib/bug-media";
+import { GithubRefused, getPr, githubConfigured, markReady, mergePr, prNumberFrom } from "@/lib/github-pr";
 
 /**
  * SEND TO CLAUDE (James, 4 Nov 2026): "When I click Send to Claude, it will
@@ -23,7 +24,8 @@ import { mediaFor } from "@/lib/bug-media";
  *      request, and says how it went (POST /api/bugs/claude): fix ready with
  *      the pull request, or a question for James, or "not a fault" with the
  *      answer for the person who asked.
- *   3. James merges. When the deploy carrying the fix boots, lib/ticket-sweep
+ *   3. James presses Push It Live on the ticket (pushClaudeFix, below), or
+ *      merges on GitHub. When the deploy carrying the fix boots, lib/ticket-sweep
  *      marks the ticket Fixed and the reporter gets the usual email. Nobody
  *      ticks it.
  *
@@ -102,7 +104,8 @@ export async function ticketForClaude(id: string): Promise<TicketForClaude | nul
     occurrences: b.occurrences ?? 1,
     context: b.context ?? {},
     shot: await bugShot(id),
-    media: await mediaFor(id).catch(() => []),
+    /* Only what they added: Claude's own pictures of a fix are its, not evidence. */
+    media: await mediaFor(id, "reporter").catch(() => []),
     previousNote: b.bot_note,
     sameReporterRecent: recent.map((r) => ({ id: r.id, at: new Date(r.created_at).toISOString(), state: r.state, body: r.body })),
   };
@@ -162,6 +165,35 @@ export function briefFor(t: { id: string; body: string; path: string; reporter: 
     `Raised by ${t.reporter || "the OS itself"}${t.path ? ` on ${t.path}` : ""} (${t.kind}):`,
     said,
   ].join("\n");
+}
+
+/* ── Do It: the button Claude's answer is about ─────────────────────────── */
+
+/**
+ * When Claude's answer is a button to press, not code (James, 4 Nov 2026:
+ * three of the first four tickets were "press Take Offline", "press Send to
+ * Propoly", a decision), it names the screen and the button. The ticket's
+ * Do It opens that screen with Steve's guide on the button (lib/steve-guide
+ * pointTarget), and Send Claude's Answer gives the person the same link.
+ * It only ever points: the press is the person's own.
+ */
+export type ClaudeDo = { path: string; point: string; label: string };
+
+export function claudeDoFrom(v: unknown): ClaudeDo | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const path = typeof o.path === "string" ? o.path.trim() : "";
+  const point = typeof o.point === "string" ? o.point.trim() : "";
+  const label = typeof o.label === "string" ? o.label.replace(/\s+/g, " ").trim().slice(0, 60) : "";
+  /* A path in this OS and nothing else: no host, no scheme, no "//". */
+  if (!/^\/(?!\/)[A-Za-z0-9\-._~/?=&%:+]{0,300}$/.test(path)) return null;
+  if (point && !/^[a-z0-9][a-z0-9.-]{0,79}$/i.test(point)) return null;
+  return { path, point, label };
+}
+
+/** Where Do It goes: the screen, with the guide on the button when Claude named one. */
+export function claudeDoHref(d: ClaudeDo): string {
+  return d.point ? `${d.path}${d.path.includes("?") ? "&" : "?"}steve=point:${d.point}` : d.path;
 }
 
 /* ── Pressing it ───────────────────────────────────────────────────────── */
@@ -233,7 +265,7 @@ export async function sendToClaude(id: string, by: string, origin: string): Prom
  * presses Send Claude's Answer on Tickets: from the OS, to the person who
  * asked, once, and the ticket is closed. Staff only (lib/email-policy).
  */
-export async function sendClaudeReply(id: string): Promise<boolean> {
+export async function sendClaudeReply(id: string, origin = ""): Promise<boolean> {
   if (!hasDb()) return false;
   const rows = await q<{ reporter_email: string; body: string; path: string; kind: string; context: Record<string, unknown> | null }>(
     `SELECT reporter_email, body, path, kind, context FROM os_bugs WHERE id = $1`,
@@ -248,11 +280,67 @@ export async function sendClaudeReply(id: string): Promise<boolean> {
   const { renderPlain } = await import("@/lib/campaign-mail");
   const said = b.body.length > 400 ? `${b.body.slice(0, 400)}…` : b.body;
   const subject = "About what you reported in TLE OS";
-  const text = [reply, "", "You said:", said, "", "Still not right? Tell Steve in the bottom-right corner and it comes straight back."].join("\n");
+  /* The button Claude's answer is about, one tap away: the screen opens with Steve's guide on it. */
+  const doIt = claudeDoFrom(b.context?.claudeDo);
+  const showMe = doIt && origin ? ["", `Show me where: ${origin}${claudeDoHref(doIt)}`] : [];
+  const text = [reply, ...showMe, "", "You said:", said, "", "Still not right? Tell Steve in the bottom-right corner and it comes straight back."].join("\n");
   await sendEmail({ to: b.reporter_email, subject, html: renderPlain(subject, text).html, text });
   await q(
     `UPDATE os_bugs SET state = 'wontfix', context = coalesce(context, '{}'::jsonb) || jsonb_build_object('replySentAt', NOW()) WHERE id = $1`,
     [id]
   );
   return true;
+}
+
+/* ── Pushing a fix ────────────────────────────────────────────────────────── */
+
+/**
+ * Push It Live (James, 4 Nov 2026: "an option to push or to open it, so it
+ * almost kind of bypasses the need to go into Claude"). Merges the pull
+ * request Claude opened for this ticket; Railway deploys main, and when it
+ * boots the shipped file in the change closes the ticket and tells whoever
+ * reported it (lib/ticket-sweep).
+ *
+ * Only that ticket's own fix: the branch Claude named for it,
+ * claude/ticket-<first 8 of the id>, into main, in this repository. A second
+ * press finds it already pushed, and a fix merged on GitHub by hand is
+ * recorded as pushed without merging anything.
+ */
+export async function pushClaudeFix(id: string, by: string): Promise<{ sha: string }> {
+  if (!hasDb()) throw new ClaudeRefused("No database here.");
+  if (!githubConfigured()) throw new ClaudeRefused("Push isn't connected yet: GitHub's key goes on Railway. See the Change opens it on GitHub meanwhile.");
+  const rows = await q<{ state: string; bot_state: string; bot_pr: string; bot_branch: string; context: Record<string, unknown> | null }>(
+    `SELECT state, bot_state, bot_pr, bot_branch, context FROM os_bugs WHERE id = $1`,
+    [id]
+  );
+  const t = rows[0];
+  if (!t) throw new ClaudeRefused("No such ticket.");
+  if (t.context?.pushedAt) throw new ClaudeRefused("Already pushed. It closes itself when the deploy is live.");
+  if (t.state === "fixed" || t.state === "wontfix") throw new ClaudeRefused("That ticket is already closed.");
+  if (t.bot_state !== "fix_ready") throw new ClaudeRefused("There's no fix from Claude on this one to push.");
+  const n = prNumberFrom(t.bot_pr);
+  if (!n) throw new ClaudeRefused("Claude left a link to the change rather than a pull request, so it can't be pushed from here. See the Change opens it on GitHub.");
+  if (!t.bot_branch.startsWith(`claude/ticket-${id.slice(0, 8)}`)) {
+    throw new ClaudeRefused("That fix isn't on this ticket's own branch, so it isn't pushed from here. See the Change opens it on GitHub.");
+  }
+  try {
+    const pr = await getPr(n);
+    if (!pr) throw new ClaudeRefused("GitHub has no such change any more. Send it to Claude again.");
+    let sha = "";
+    if (!pr.merged) {
+      if (pr.state !== "open") throw new ClaudeRefused("That change was closed on GitHub without going in. Send it to Claude again.");
+      if (pr.base !== "main" || pr.head !== t.bot_branch) throw new ClaudeRefused("That change isn't this ticket's fix into main, so it isn't pushed from here.");
+      if (pr.mergeable === false) throw new ClaudeRefused("It clashes with a newer change. Open it in Claude to bring it up to date.");
+      if (pr.draft) await markReady(pr);
+      sha = await mergePr(pr);
+    }
+    await q(
+      `UPDATE os_bugs SET context = coalesce(context, '{}'::jsonb) || jsonb_build_object('pushedAt', NOW(), 'pushedBy', $2::text, 'pushedSha', $3::text) WHERE id = $1`,
+      [id, by, sha]
+    );
+    return { sha };
+  } catch (e) {
+    if (e instanceof GithubRefused) throw new ClaudeRefused(e.message);
+    throw e;
+  }
 }

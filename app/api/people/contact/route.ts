@@ -8,7 +8,7 @@ import { record } from "@/lib/audit";
 import { recordLandlordFor, recordRowsFor, saveRecordLandlord } from "@/lib/record-landlords";
 import { forgetRecord } from "@/lib/listing-record";
 import { publicError } from "@/lib/public-error";
-import { nameKey, saveTenantContact, tenantContacts } from "@/lib/tenant-contacts";
+import { nameKey, saveTenantContact, saveTenantName, tenantContacts } from "@/lib/tenant-contacts";
 import { forgetBooks } from "@/lib/managed-book-cache";
 
 /**
@@ -104,9 +104,26 @@ export async function PATCH(req: NextRequest) {
     const pm = /^rexpm:([^:]+):\d+$/.exec(ref);
     if (pm) {
       if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here." }, { status: 503 });
-      if (name !== undefined) return NextResponse.json({ ok: false, error: "Their name comes from the tenancy record, so it can't be changed here. The email and number can." }, { status: 400 });
       const tenantName = clean(body?.tenantName, 200);
       if (!tenantName) return NextResponse.json({ ok: false, error: "Which tenant?" }, { status: 400 });
+      /* Their name, put right (Lianna Denholm, 9 Nov 2026, ticket 00f77ec4):
+         the record holds many as "A Clark". Kept in the OS beside the record's
+         spelling (tenantName), which still keys the row; never written back. */
+      if (name !== undefined) {
+        const shownAs = String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+        if (!shownAs) return NextResponse.json({ ok: false, error: "The tenant needs a name." }, { status: 400 });
+        const before = (await tenantContacts().catch(() => new Map())).get(pm[1])?.get(nameKey(tenantName)) ?? null;
+        const held = (body?.keep ?? {}) as { email?: unknown; phone?: unknown };
+        await saveTenantName(pm[1], tenantName, shownAs, actor.email, { email: clean(held.email, 200)?.toLowerCase() || null, phone: clean(held.phone, 40) || null });
+        await forgetBooks();
+        await record({
+          kind: "tenant_contact_saved",
+          actorId: actor.id,
+          actorEmail: actor.email,
+          detail: `Home ${pm[1]}, tenant "${tenantName}": name shown as "${before?.shownAs ?? tenantName}" -> "${shownAs}". OS only, not REX.`,
+        }).catch(() => undefined);
+        return NextResponse.json({ ok: true, person: { name: shownAs }, sync: { ok: true, detail: "Saved on the home's record." } });
+      }
       const keep = (body?.keep ?? {}) as { email?: unknown; phone?: unknown };
       const next = {
         email: (email !== undefined ? email : clean(keep.email, 200)?.toLowerCase()) || null,

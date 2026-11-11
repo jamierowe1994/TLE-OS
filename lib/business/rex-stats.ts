@@ -5,6 +5,7 @@ import { rexCall, rexRows, rexConfigured, rexLettingsAgents } from "./rex";
 import { readCache, writeCache } from "./integration-cache";
 import { withoutRemoved } from "@/lib/certificate-remove";
 import { relnKind } from "@/lib/rex-reln";
+import { expiryFromIssue } from "@/lib/cert-life";
 
 // Per-agent funnel stats from REX — live pulls confirmed against the live
 // account (3517, "The Property Experts" — Property + Lettings share it) via the
@@ -1129,7 +1130,7 @@ export interface PropertyCompliance {
   unmapped: string[];
 }
 
-const EXPIRING_DAYS = 60;
+export const EXPIRING_DAYS = 60;
 
 /**
  * What a rented property is expected to hold, so the page can report what ISN'T
@@ -1409,18 +1410,32 @@ function complianceStateOf(
   return { state: "missing", days: null, unparsed: false };
 }
 
+/**
+ * The date a certificate runs to: REX's expiry, else its issue date plus the
+ * type's usual life (lib/cert-life). Rhiannon Dodge, 9 Nov 2026: a PAT test
+ * and an emergency lighting check on an HMO carry only the day they were done,
+ * so the home's page called them in date for ever and they never came up when
+ * due, while the book (lib/rex-compliance) already counts them for a year.
+ * Same months as the book, so both say the same.
+ */
+function runsTo(raw: { type: string; expiry: string | null; issued: string | null }): string | null {
+  if (raw.expiry) return raw.expiry;
+  return raw.issued ? expiryFromIssue(raw.type, raw.issued.slice(0, 10)) : null;
+}
+
 function toComplianceItem(entry: Record<string, unknown>): ComplianceItem | null {
   const raw = readComplianceEntry(entry);
   const name = PROPERTY_COMPLIANCE[raw.type];
   if (!name) return null; // unrecognised type — the caller records it, see below
 
-  const { state, unparsed } = complianceStateOf(raw.expiry, raw.issued, raw.notRequired);
+  const expiry = runsTo(raw);
+  const { state, unparsed } = complianceStateOf(expiry, raw.issued, raw.notRequired);
   return {
     type: raw.type,
     label: name,
     state,
     issued: raw.issued,
-    expiry: raw.expiry,
+    expiry,
     notes: raw.notes,
     ...(unparsed ? { dateUnparsed: true } : {}),
     ...(raw.id ? { entryId: raw.id } : {}),
@@ -1477,14 +1492,36 @@ interface ComplianceFetch {
  * expected to say so on screen. Losing items is survivable; claiming a property
  * is compliant because we didn't finish reading it is not.
  */
-async function fetchComplianceByParent(ids: string[]): Promise<ComplianceFetch> {
+/* ONE HOME'S ROWS, KEPT FOR A MINUTE (9 Nov 2026). Opening a home's page asks
+   ComplianceEntries about that one home - REX's slowest service, 1.5 s at the
+   median last week and the longest wait on the page - and agents go back and
+   forth between the same few homes. A home's rows are kept for a minute and
+   shared while they are on their way, but only until anything is written to
+   REX (the write count lib/rex keeps), so a certificate filed from here is on
+   the next open. Only the home's own page asks this way (`hold`): the
+   book's sweeps want REX's answer as it is now. The OS's own removals are
+   laid on after, on every read (withoutRemoved), so they are never held. */
+const HOME_ROWS_HOLD_MS = 60_000;
+type HomeRows = { at: number; gen: number; rows: Array<Record<string, unknown>> };
+const homeRows: Map<string, HomeRows> = ((globalThis as { __osHomeComplianceRows?: Map<string, HomeRows> }).__osHomeComplianceRows ??= new Map());
+const homeRowsInFlight: Map<string, Promise<{ chunk: string[]; rows: Array<Record<string, unknown>>; complete: boolean }>> = ((globalThis as { __osHomeComplianceInFlight?: Map<string, Promise<{ chunk: string[]; rows: Array<Record<string, unknown>>; complete: boolean }>> }).__osHomeComplianceInFlight ??= new Map());
+/** How many writes REX has had from here; null if lib/rex has not been loaded, and nothing is then held. */
+const rexWriteCount = (): number | null => (globalThis as { __osRexSharedReads?: { gen: number } }).__osRexSharedReads?.gen ?? null;
+const copyRows = <T,>(rows: T): T => {
+  try {
+    return structuredClone(rows);
+  } catch {
+    return JSON.parse(JSON.stringify(rows)) as T;
+  }
+};
+
+async function fetchComplianceByParent(ids: string[], opts?: { hold?: boolean }): Promise<ComplianceFetch> {
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += COMPLIANCE_CHUNK) {
     chunks.push(ids.slice(i, i + COMPLIANCE_CHUNK));
   }
 
-  const results = await Promise.all(
-    chunks.map(async (chunk) => {
+  const pull = async (chunk: string[]) => {
       const rows: Array<Record<string, unknown>> = [];
       for (let page = 0; page < COMPLIANCE_MAX_PAGES; page++) {
         const res = await rexCall(
@@ -1504,8 +1541,35 @@ async function fetchComplianceByParent(ids: string[]): Promise<ComplianceFetch> 
         if (batch.length < COUNT_LIMIT) return { chunk, rows, complete: true };
       }
       return { chunk, rows, complete: false }; // still full at the ceiling
-    })
-  );
+  };
+  const held = async (chunk: string[]) => {
+    const home = opts?.hold && chunk.length === 1 ? chunk[0] : null;
+    const gen = rexWriteCount();
+    if (!home || gen == null) return pull(chunk);
+    const hit = homeRows.get(home);
+    if (hit && hit.gen === gen && Date.now() - hit.at < HOME_ROWS_HOLD_MS) return { chunk, rows: copyRows(hit.rows), complete: true };
+    const flight = `${gen}|${home}`;
+    let p = homeRowsInFlight.get(flight);
+    if (!p) {
+      const started = pull(chunk).then((r) => {
+        if (r.complete) {
+          if (homeRows.size > 500) for (const [k, v] of homeRows) if (Date.now() - v.at >= HOME_ROWS_HOLD_MS) homeRows.delete(k);
+          homeRows.set(home, { at: Date.now(), gen, rows: copyRows(r.rows) });
+        }
+        return r;
+      });
+      p = started;
+      homeRowsInFlight.set(flight, started);
+      const done = () => {
+        if (homeRowsInFlight.get(flight) === started) homeRowsInFlight.delete(flight);
+      };
+      started.then(done, done);
+    }
+    const r = await p;
+    return { chunk, rows: copyRows(r.rows), complete: r.complete };
+  };
+
+  const results = await Promise.all(chunks.map(held));
 
   const byParent = new Map<string, ComplianceItem[]>();
   const unchecked = new Set<string>();
@@ -1622,7 +1686,7 @@ export interface DealCompliance {
  */
 export async function getComplianceItemsFor(propertyId: string): Promise<{ items: ComplianceItem[]; checked: boolean }> {
   if (!rexConfigured() || !propertyId) return { items: [], checked: false };
-  const { byParent, unchecked } = await fetchComplianceByParent([String(propertyId)]);
+  const { byParent, unchecked } = await fetchComplianceByParent([String(propertyId)], { hold: true });
   const checked = !unchecked.has(String(propertyId));
   return { items: addMissingRequired(byParent.get(String(propertyId)) ?? [], checked), checked };
 }
@@ -1880,7 +1944,7 @@ const PROBE_CONCURRENCY = 6;
 
 function toProbeRow(entry: Record<string, unknown>): ComplianceProbeRow {
   const raw = readComplianceEntry(entry);
-  const { state, days, unparsed } = complianceStateOf(raw.expiry, raw.issued, raw.notRequired);
+  const { state, days, unparsed } = complianceStateOf(runsTo(raw), raw.issued, raw.notRequired);
   return {
     id: String(entry.id ?? ""),
     parentObjectId: String(entry.parent_object_id ?? ""),
