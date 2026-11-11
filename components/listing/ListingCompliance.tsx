@@ -659,7 +659,13 @@ const CERT_NAME: Record<string, string> = {
   co_alarms: "CO alarms",
   emergency_lighting_fire_exit: "Fire safety",
 };
-const certName = (r: CertRow) => (r.type === "eicr" && /\(EIC\)/.test(r.label) ? "Electrical safety (EIC)" : CERT_NAME[r.type] ?? r.label);
+/* A fire row is named by the property file (ticket 24053535, 11 Nov 2026):
+   "Fire risk assessment" or "Emergency lighting" where the record says which,
+   "Fire safety" where it does not - never REX's "Emergency lighting / fire exit". */
+const certName = (r: CertRow) =>
+  r.type === "eicr" && /\(EIC\)/.test(r.label) ? "Electrical safety (EIC)"
+  : r.type === "emergency_lighting_fire_exit" && !/\//.test(r.label) ? r.label
+  : CERT_NAME[r.type] ?? r.label;
 const CADENCE: Record<string, string> = { gas_safety: "Renewed every 12 months", eicr: "Every 5 years", epc: "Every 10 years" };
 
 const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"]);

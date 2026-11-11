@@ -67,6 +67,55 @@ export const certFilesAs = (id: string): string => BY_ID.get(id)?.filesAs ?? id;
 /** The name to keep on the record when the pick was one of ours ("Fire risk assessment"), else null. */
 export const certNamedAs = (id: string): string | null => (BY_ID.get(id)?.filesAs ? BY_ID.get(id)!.label : null);
 
+/**
+ * WHICH FIRE CERTIFICATE IT IS, READ BACK (11 Nov 2026, Lianna Denholm,
+ * ticket 24053535: "I have uploaded a Fire risk assessment ... the system
+ * thinks its an emergency lighting/fire extinguisher"). The name was kept on
+ * the record when it was filed, but no screen read it back: they read REX's
+ * type, so a fire risk assessment came back as "Emergency lighting / fire
+ * exit". Every screen that names a fire certificate asks here now.
+ *
+ * Where the name lives, best first:
+ *   - the source line, "Fire risk assessment, we uploaded it, ..." - the
+ *     kind picked by name since 10 Nov (fileCertificate in lib/certificate-intake)
+ *   - REX's note on the entry, which the OS writes as "Written by TLE OS from
+ *     <source> (<file name>)." - so it carries both
+ *   - the file's own name, for what was filed before the name was kept: the
+ *     fire slot on the live book is almost all "FRA 16062025.pdf" and
+ *     "Fire Risk Assessment ... .pdf" (30 of 32 OS records, 11 Nov 2026)
+ * A picked name wins over a guess from a file name. A file name that says
+ * both, or neither, names nothing, and the screen says "Fire safety" - never
+ * one it cannot stand behind. Naming only: what an HMO owes and what counts
+ * as outstanding are untouched (one fire duty, as before).
+ */
+export const FIRE_TYPE = "emergency_lighting_fire_exit";
+export const FIRE_SAFETY = "Fire safety";
+const FRA_LABEL = BY_ID.get("fire_risk_assessment")!.label;
+const EL_LABEL = BY_ID.get("emergency_lighting")!.label;
+const PICKED = [FRA_LABEL, EL_LABEL];
+const SAYS_FRA = /fire[\s_.-]*risk|fire[\s_.-]*assess|(?:^|[^a-z])fra(?:[^a-z]|$)/i;
+const SAYS_EL = /emergency[\s_.-]*light/i;
+
+/** "Fire risk assessment", "Emergency lighting", or null when nothing given says which. */
+export function fireKindIn(...texts: (string | null | undefined)[]): string | null {
+  const given = texts.map((t) => (t ?? "").trim()).filter(Boolean);
+  /* The kind somebody picked: the source line starts with it, and REX's note carries it after "from ". */
+  for (const t of given) {
+    const picked = PICKED.find((label) => t.startsWith(`${label},`) || t.includes(`from ${label},`));
+    if (picked) return picked;
+  }
+  for (const t of given) {
+    const fra = SAYS_FRA.test(t);
+    const el = SAYS_EL.test(t);
+    if (fra !== el) return fra ? FRA_LABEL : EL_LABEL;
+  }
+  return null;
+}
+
+/** What to call one certificate: its fire kind where the record says, else `fallback`. */
+export const certNameFor = (type: string, fallback: string, ...texts: (string | null | undefined)[]): string =>
+  type === FIRE_TYPE ? fireKindIn(...texts) ?? FIRE_SAFETY : fallback;
+
 /** Filed on the day it was tested or checked, with no expiry of its own: PAT and the fire family. */
 export const kindFilesOnIssueDate = (id: string): boolean => filesOnIssueDate(certFilesAs(id));
 
@@ -101,6 +150,7 @@ export function noExpiryNote(type: string, issue: string, expiry: string, day: (
   if (!kindFilesOnIssueDate(type) || expiry) return null;
   const filesAs = certFilesAs(type);
   const until = issue ? expiryFromIssue(filesAs, issue) : null;
-  const what = filesAs === "portable_appliance_testing" ? "A PAT report" : "A fire safety certificate";
+  /* Called by its own name when one was picked (11 Nov 2026, ticket 24053535). */
+  const what = filesAs === "portable_appliance_testing" ? "A PAT report" : type === "fire_risk_assessment" ? "A fire risk assessment" : type === "emergency_lighting" ? "An emergency lighting certificate" : "A fire safety certificate";
   return `${what} has no expiry date, so it is filed on the day it was ${doneWord(type)} and counts for ${lifeInWords(filesAs) ?? "a year"}${until ? `, to ${day(until)}` : ""}.`;
 }

@@ -12,6 +12,7 @@ import { heldComplianceBook } from "@/lib/compliance-cache";
 import { invoiceSettings } from "@/lib/invoices";
 import { switchOn } from "@/lib/switches";
 import { VAULT_LABEL } from "@/lib/vault";
+import { certNameFor } from "@/lib/cert-kinds";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import type { CertKey } from "@/lib/compliance";
 
@@ -150,7 +151,9 @@ const MAX_ATTACH_BYTES = 12 * 1024 * 1024;
 
 const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
-const labelFor = (typeId: string) => VAULT_LABEL[CERT_KEY[typeId] ?? ""] ?? typeId.replace(/_/g, " ");
+/* A fire certificate by its own kind, "Fire risk assessment", where the record says (ticket 24053535, 11 Nov 2026). */
+const labelFor = (cert: Pick<ShareCertificate, "typeId" | "source" | "name">) =>
+  certNameFor(cert.typeId, VAULT_LABEL[CERT_KEY[cert.typeId] ?? ""] ?? cert.typeId.replace(/_/g, " "), cert.source, cert.name);
 const pretty = (ymd: string) => {
   const d = new Date(`${String(ymd).slice(0, 10)}T00:00:00`);
   return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : ymd;
@@ -292,7 +295,7 @@ async function sendTo(cert: ShareCertificate, person: SharePerson, alsoLine: str
   try {
     ({ subject, html } = await renderTleEmailLive(id, {
       firstName: first(person.name),
-      certLabel: labelFor(cert.typeId),
+      certLabel: labelFor(cert),
       address: cert.propertyName || "your property",
       expires: pretty(cert.expiry),
       alsoLine,
@@ -329,7 +332,7 @@ async function sendTo(cert: ShareCertificate, person: SharePerson, alsoLine: str
  * an email bounced, so every failure becomes a row and a sentence.
  */
 export async function shareCertificate(cert: ShareCertificate, extra: SharePerson[] = []): Promise<ShareResult> {
-  const label = labelFor(cert.typeId);
+  const label = labelFor(cert);
   const stop = (skipped: string): ShareResult => ({ armed: false, skipped, outcomes: [], line: `${label} not sent on: ${skipped}.` });
 
   if (!hasDb()) return stop("there is no database on this environment");

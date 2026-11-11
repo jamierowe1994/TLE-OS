@@ -1,6 +1,7 @@
 import "server-only";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
+import { FIRE_SAFETY, fireKindIn } from "@/lib/cert-kinds";
 
 /**
  * Every certificate the OS holds for one property (or for an address still
@@ -45,7 +46,10 @@ export async function listVault(property: string): Promise<VaultFile[]> {
       return {
         key,
         certKey,
-        label: VAULT_LABEL[certKey] ?? certKey,
+        /* A fire certificate by its own kind where its name says (ticket
+           24053535, 11 Nov 2026): "FRA 16062025.pdf" is a fire risk
+           assessment. The property file also reads the source line. */
+        label: certKey === "fire" ? fireKindIn(name) ?? FIRE_SAFETY : VAULT_LABEL[certKey] ?? certKey,
         name,
         size: o.Size ?? 0,
         uploadedAt: o.LastModified ? new Date(o.LastModified).toISOString() : null,

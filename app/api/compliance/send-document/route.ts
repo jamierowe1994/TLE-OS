@@ -7,6 +7,7 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { keyIsOurs, R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { VAULT_LABEL } from "@/lib/vault";
+import { FIRE_SAFETY, fireKindIn } from "@/lib/cert-kinds";
 import { proseEmail } from "@/lib/email/prose";
 
 /**
@@ -38,7 +39,8 @@ export async function POST(req: NextRequest) {
   const m = key.match(/^documents\/compliance-([^/]+?)-([a-z]+)\/\d+-(.+)$/i);
   if (!m) return NextResponse.json({ ok: false, error: "That file is not a certificate in the vault." }, { status: 400 });
   const [, propertyId, certKey, fileName] = m;
-  const label = VAULT_LABEL[certKey] ?? certKey;
+  /* A fire certificate by its own kind where its file name says (ticket 24053535). */
+  const label = certKey === "fire" ? fireKindIn(fileName) ?? FIRE_SAFETY : VAULT_LABEL[certKey] ?? certKey;
 
   let to = String(body.email ?? "").trim();
   let propertyName = "";

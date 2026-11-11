@@ -5,7 +5,7 @@ import { DOC_KINDS } from "@/lib/landlord-account";
 import { readable, readsFor, REGISTERS, type RegisterRead } from "@/lib/cert-register";
 import { heldComplianceBook } from "@/lib/compliance-cache";
 import { certificateExpiry, fileCertificate, PLAUSIBLE, REAL_DAY, releaseHeldCertificate, shareOnceChecked } from "@/lib/certificate-intake";
-import { certFilesAs, FIRE_KINDS, kindFilesOnIssueDate } from "@/lib/cert-kinds";
+import { certFilesAs, certNameFor, FIRE_KINDS, kindFilesOnIssueDate } from "@/lib/cert-kinds";
 import { pendingKeyFor } from "@/lib/property-match";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { documentQueriedEmail, queryReplyEmail } from "@/lib/email/agent-emails";
@@ -80,6 +80,14 @@ const TYPE_WORDS: Record<string, string> = {
   smoke_alarms: "Smoke alarms",
   co_alarms: "CO alarms",
   emergency_lighting_fire_exit: "Fire safety",
+};
+
+/* What to call one certificate on the desk: a fire certificate by its own
+   kind - "Fire risk assessment" - where its source line or file name says
+   (Lianna Denholm, ticket 24053535, 11 Nov 2026), else the type's words. */
+const whatOf = (typeId: unknown, ...texts: unknown[]): string => {
+  const t = String(typeId ?? "");
+  return certNameFor(t, TYPE_WORDS[t] ?? (t || "certificate"), ...texts.map((v) => (v == null ? null : String(v))));
 };
 
 /** Identity and ownership are the agent's take-on checks, not a certificate. */
@@ -190,7 +198,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
         [homeOf(r)?.name, homeOf(r)?.locality].map((v) => (v ?? "").trim()).filter(Boolean).join(", ") ||
         String(r.op_address ?? "").trim() ||
         "A property with no name on the record",
-      what: TYPE_WORDS[String(r.type_id)] ?? String(r.type_id),
+      what: whatOf(r.type_id, r.source, r.name),
       expiry: ymd(r.expiry),
       fileName: String(r.name ?? ""),
       fileKey: String(r.r2_key ?? ""),
@@ -402,7 +410,7 @@ async function agentFor(kind: "certificate" | "landlord_document", id: string): 
     return rows[0] ?? null;
   };
   if (kind === "certificate") {
-    const rows = await q<Record<string, unknown>>(`SELECT property_id, property_name, type_id, name, added_by FROM os_certificates WHERE id = $1`, [id]);
+    const rows = await q<Record<string, unknown>>(`SELECT property_id, property_name, type_id, name, source, added_by FROM os_certificates WHERE id = $1`, [id]);
     const c = rows[0] ?? {};
     const propertyId = String(c.property_id ?? "");
     const held = await heldComplianceBook().catch(() => null);
@@ -413,7 +421,7 @@ async function agentFor(kind: "certificate" | "landlord_document", id: string): 
       agent,
       agentName: agentName ?? (String(c.added_by ?? "") || null),
       property: String(c.property_name ?? "") || "a property",
-      what: TYPE_WORDS[String(c.type_id)] ?? String(c.type_id ?? "certificate"),
+      what: whatOf(c.type_id, c.source, c.name),
       fileName: String(c.name ?? ""),
       /* ?answer= opens the answer box under the query (components/QueryThread). */
       link: /^\d+$/.test(propertyId) || /^pm-/i.test(propertyId) ? `${ORIGIN}/compliance?open=${encodeURIComponent(propertyId)}&answer=${encodeURIComponent(id)}` : `${ORIGIN}/compliance`,
@@ -533,6 +541,7 @@ export async function queriesFor(userId: string): Promise<{ kind: string; id: st
             COALESCE(NULLIF(c.property_name, ''), NULLIF(rm.row->>'property_name', ''), op.address) AS property_name,
             COALESCE(c.property_id, rm.property_id) AS property_id,
             COALESCE(c.type_id, rm.type_id) AS type_id,
+            COALESCE(c.name, rm.row->>'name') AS cert_name, COALESCE(c.source, rm.row->>'source') AS cert_source,
             (k.kind = 'certificate' AND c.id IS NULL) AS gone,
             d.kind AS doc_kind, d.appraisal_id, m.address
        FROM os_compliance_checks k
@@ -564,7 +573,7 @@ export async function queriesFor(userId: string): Promise<{ kind: string; id: st
       at: isoOf(r.told_at),
       property: String(r.property_name ?? r.address ?? "").trim() || "A property",
       propertyId,
-      what: r.kind === "certificate" ? TYPE_WORDS[String(r.type_id)] ?? (String(r.type_id ?? "") || "certificate") : DOC_KINDS.find((k) => k.id === r.doc_kind)?.label ?? "Document",
+      what: r.kind === "certificate" ? whatOf(r.type_id, r.cert_source, r.cert_name) : DOC_KINDS.find((k) => k.id === r.doc_kind)?.label ?? "Document",
       gone: r.gone === true,
       link:
         r.kind === "certificate"
@@ -592,7 +601,7 @@ async function noteOnHome(certificateId: string, say: (what: string, fileName: s
     [certificateId]
   );
   if (!c?.property_id) return;
-  const what = TYPE_WORDS[c.type_id] ?? (c.type_id || "certificate");
+  const what = whatOf(c.type_id, c.name);
   const body = say(what, c.name ?? "").trim().slice(0, 5000);
   if (!body) return;
   await q(`INSERT INTO os_notes (id, record_type, record_id, body, author_id, author_name, created_at) VALUES ($1, 'property', $2, $3, $4, $5, NOW())`, [
@@ -650,7 +659,7 @@ export async function carryQueryToReplacement(p: { oldId: string; newId: string;
     firstName: asker.name.split(/\s+/)[0] || "there",
     agentName: byName,
     property: fresh.property_name?.trim() || [home?.name, home?.locality].map((v) => (v ?? "").trim()).filter(Boolean).join(", ") || "a property",
-    what: TYPE_WORDS[fresh.type_id] ?? (fresh.type_id || "certificate"),
+    what: whatOf(fresh.type_id, fresh.name),
     query: check.note || "Compliance had a question about it.",
     reply: said,
     link: `${ORIGIN}/compliance-desk/verify`,
@@ -780,7 +789,7 @@ export async function verifiedToSend(): Promise<VerifiedItem[]> {
   await ensureSendRecord();
   const today = londonToday();
   const rows = await q<Record<string, unknown>>(
-    `SELECT c.id, c.property_id, c.property_name, c.type_id, c.expiry::text AS expiry, c.issue::text AS issue, c.name, c.r2_key,
+    `SELECT c.id, c.property_id, c.property_name, c.type_id, c.expiry::text AS expiry, c.issue::text AS issue, c.name, c.source, c.r2_key,
             (c.added_at AT TIME ZONE 'Europe/London')::date::text AS came_in, k.by_name, k.at AS verified_at,
             h.at AS home_at, h.by AS home_by, h.send_id, h.names, a.at AS auto_at, a.names AS auto_names, op.address AS op_address
        FROM os_certificates c
@@ -826,7 +835,7 @@ export async function verifiedToSend(): Promise<VerifiedItem[]> {
         [home?.name, home?.locality].map((v) => (v ?? "").trim()).filter(Boolean).join(", ") ||
         String(r.op_address ?? "").trim() ||
         "A property with no name on the record",
-      what: TYPE_WORDS[String(r.type_id)] ?? String(r.type_id),
+      what: whatOf(r.type_id, r.source, r.name),
       expiry: String(r.expiry),
       fileName: String(r.name ?? ""),
       fileKey: String(r.r2_key ?? ""),

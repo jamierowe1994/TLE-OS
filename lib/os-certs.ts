@@ -30,6 +30,8 @@ export type OsCertRow = {
   issue: string | null;
   name: string;
   r2_key: string;
+  /** Where it came from, and the kind picked by name: "Fire risk assessment, we uploaded it, ..." (lib/cert-kinds fireKindIn). */
+  source: string;
 };
 
 function daysUntil(iso: string): number | null {
@@ -49,7 +51,7 @@ function daysUntil(iso: string): number | null {
 export async function osCertRows(propertyIds: string[]): Promise<OsCertRow[]> {
   if (!hasDb() || !propertyIds.length) return [];
   return q<OsCertRow>(
-    `SELECT property_id, type_id, expiry::text AS expiry, issue::text AS issue, name, r2_key
+    `SELECT property_id, type_id, expiry::text AS expiry, issue::text AS issue, name, r2_key, source
        FROM os_certificates WHERE property_id = ANY($1) AND NOT awaiting_check ORDER BY expiry DESC`,
     [propertyIds]
   ).catch(() => []);

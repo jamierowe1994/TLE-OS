@@ -19,6 +19,7 @@ import { bookScope } from "@/lib/scope";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 import { homeFactsFor } from "@/lib/home-facts";
 import { removedFor } from "@/lib/certificate-remove";
+import { FIRE_SAFETY, FIRE_TYPE, certNameFor, fireKindIn } from "@/lib/cert-kinds";
 
 /**
  * GET /api/property-file?property=<REX property id>
@@ -90,7 +91,7 @@ const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license"
 /** The duties only an HMO carries (lib/compliance HMO_SET plus alarms). */
 const HMO_ONLY = new Set<string>([...HMO_SET, "alarms"]);
 
-type HouseSibling = { name: string; rex: { items: ComplianceItem[]; checked: boolean }; files: VaultFile[] };
+type HouseSibling = { id: string; name: string; rex: { items: ComplianceItem[]; checked: boolean }; files: VaultFile[] };
 
 /* The other doors of a shared house and what each holds, read side by side
    (9 Nov 2026: the rooms were read one after another). Started as soon as
@@ -121,20 +122,21 @@ async function houseSiblingsFor(req: NextRequest, propertyId: string): Promise<H
           : getComplianceItemsFor(sibId).catch(() => ({ items: [] as ComplianceItem[], checked: false })),
         listVault(sibId).catch(() => [] as VaultFile[]),
       ]);
-      return { name: sib.name, rex, files };
+      return { id: sibId, name: sib.name, rex, files };
     })
   );
 }
 
 /* The OS's own certificates as rows: the latest expiry per type, named as
-   REX names the type ("Emergency lighting / fire exit", not "FIRE"). */
-function osItemsFrom(certs: { type_id: string; expiry: string; issue: string | null }[]): ComplianceItem[] {
+   REX names the type ("Gas safety", not "GAS") - and a fire certificate by
+   its own kind, off its source line and file name (ticket 24053535). */
+function osItemsFrom(certs: { type_id: string; expiry: string; issue: string | null; name?: string; source?: string }[]): ComplianceItem[] {
   const today = londonToday();
-  const latest = new Map<string, { expiry: string; issue: string | null }>();
-  for (const r of certs) if (!latest.has(r.type_id)) latest.set(r.type_id, { expiry: r.expiry, issue: r.issue });
+  const latest = new Map<string, { expiry: string; issue: string | null; name?: string; source?: string }>();
+  for (const r of certs) if (!latest.has(r.type_id)) latest.set(r.type_id, r);
   return [...latest].map(([type, v]) => ({
     type,
-    label: PROPERTY_COMPLIANCE[type] ?? Object.entries(INTAKE_TYPE).find(([, t]) => t === type)?.[0]?.toUpperCase() ?? type,
+    label: certNameFor(type, PROPERTY_COMPLIANCE[type] ?? Object.entries(INTAKE_TYPE).find(([, t]) => t === type)?.[0]?.toUpperCase() ?? type, v.source, v.name),
     state: v.expiry < today ? ("expired" as const) : ("valid" as const),
     expiry: v.expiry,
     issued: v.issue,
@@ -155,7 +157,7 @@ function houseRowsFrom(siblings: HouseSibling[], seen: Set<string>): FileRow[] {
       if (NOT_A_CERTIFICATE.has(it.type) || held.has(it.type) || it.state === "missing") continue;
       held.add(it.type);
       const vk = VAULT_KEY[it.type];
-      out.push({ type: it.type, label: it.label, state: it.state, expiry: it.expiry, issued: it.issued, inRex: Boolean(it.entryId), fileInRex: Boolean(it.hasDocument), files: vk ? byVaultKey.get(vk) ?? [] : [], fromHouse: sib.name });
+      out.push({ type: it.type, label: certNameFor(it.type, it.label, it.notes), state: it.state, expiry: it.expiry, issued: it.issued, inRex: Boolean(it.entryId), fileInRex: Boolean(it.hasDocument), files: vk ? byVaultKey.get(vk) ?? [] : [], fromHouse: sib.name });
     }
   }
   return out;
@@ -231,7 +233,8 @@ export async function GET(req: NextRequest) {
     const vk = VAULT_KEY[it.type];
     const own = vk && !seenVault.has(vk) ? byVaultKey.get(vk) ?? [] : [];
     if (vk) seenVault.add(vk);
-    rows.push({ type: it.type, label: it.label, state: it.state, expiry: it.expiry, issued: it.issued, inRex: Boolean(it.entryId), fileInRex: Boolean(it.hasDocument), files: own });
+    /* REX's note on a fire entry says which certificate it is (ticket 24053535). */
+    rows.push({ type: it.type, label: certNameFor(it.type, it.label, it.notes), state: it.state, expiry: it.expiry, issued: it.issued, inRex: Boolean(it.entryId), fileInRex: Boolean(it.hasDocument), files: own });
   }
   /* Files the OS holds that REX has no row for (an address still waiting on
      its property, or a type REX does not track here). */
@@ -338,6 +341,30 @@ export async function GET(req: NextRequest) {
     for (const r of rows) {
       const g = gone.find((x) => x.type === r.type);
       if (g) r.removed = { name: g.name, reason: g.reason, by: g.by, at: g.at };
+    }
+  }
+  /* WHICH FIRE CERTIFICATE (Lianna Denholm, ticket 24053535, 11 Nov 2026):
+     a fire risk assessment was shown as REX's type, "Emergency lighting /
+     fire exit". REX's note named most rows above; where it did not (an entry
+     made before the OS wrote one, a home REX does not hold), the OS's own
+     record with the same date names it, then the files on the row if they
+     all agree. Each file is named for itself too. Labels only: the row, its
+     state and the outstanding count are as they were. */
+  const fireRows = rows.filter((r) => r.type === FIRE_TYPE);
+  if (propertyId && fireRows.length) {
+    const ids = [propertyId, ...(await houseP.catch(() => [] as HouseSibling[])).map((s) => s.id)];
+    const own = await q<{ expiry: string; name: string; source: string; r2_key: string }>(
+      `SELECT expiry::text AS expiry, name, source, r2_key FROM os_certificates
+        WHERE property_id = ANY($1) AND type_id = $2 AND NOT awaiting_check ORDER BY added_at DESC`,
+      [ids, FIRE_TYPE]
+    ).catch(() => []);
+    const byKey = new Map(own.map((c) => [c.r2_key, c]));
+    for (const r of fireRows) {
+      for (const f of r.files) f.label = fireKindIn(byKey.get(f.key)?.source, f.name) ?? FIRE_SAFETY;
+      if (r.label !== FIRE_SAFETY) continue;
+      const sameDay = own.filter((c) => r.expiry && c.expiry.slice(0, 10) === r.expiry.slice(0, 10));
+      const fromFiles = [...new Set(r.files.map((f) => f.label).filter((l) => l !== FIRE_SAFETY))];
+      r.label = fireKindIn(...sameDay.flatMap((c) => [c.source, c.name])) ?? (fromFiles.length === 1 ? fromFiles[0] : FIRE_SAFETY);
     }
   }
   rows.sort((a, b) => (ORDER.indexOf(a.type) + 1 || 99) - (ORDER.indexOf(b.type) + 1 || 99));
