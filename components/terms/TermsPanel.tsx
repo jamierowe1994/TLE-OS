@@ -2,6 +2,7 @@
 
 import { useNewLook } from "@/lib/use-new-look";
 import TermsPanelClassic from "@/components/terms/TermsPanelClassic";
+import SignedTermsTabs from "@/components/terms/SignedTermsTabs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import TermsSendScreen, { type Editions, type StaffParty, type StaffTerms } from "@/components/terms/TermsSendScreen";
 import { Badge, Ico } from "@/components/new-look/Parts";
@@ -268,6 +269,9 @@ function OnPagePanel({
       )}
 
       {(said ?? sentLine) && <p className={`nl-meta ${unsent.length && !said ? "text-[var(--accent-dark)]" : "text-[var(--sage-ink)]"}`}>{said ?? sentLine}</p>}
+
+      {/* Signed: the contract and what they gave with it, a tab each (James, 11 Nov 2026). */}
+      {!hideBanner && live?.status === "signed" && <SignedTermsTabs terms={live} />}
 
       {live && live.status !== "signed" && live.status !== "agent" && (
         <ul className="nl-terms-people">

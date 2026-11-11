@@ -1,6 +1,6 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { q } from "@/lib/db";
 import { addFileDoc } from "@/lib/file-documents";
@@ -170,12 +170,16 @@ export async function answersRecordPdf(t: TermsRow, contract: Uint8Array | null)
         w.row(f.label, v || "Not given", f.ask);
       }
     });
+    /* Said, not left out (Flat 6 Grand Banks, 11 Nov 2026): a contract on the October wording has no bank account behind it. */
+    if (!doc.details.some((f) => f.key === "accountNumber")) w.row("Bank account", "Not asked", `The ${doc.edition} terms did not take bank details.`);
   }
 
   w.heading("What They Told Us About the Home");
+  let told = 0;
   for (const st of PROPERTY_QUESTIONS) {
     const qs = st.questions.filter((q) => asked(q, home.answers) && String(home.answers[q.id] ?? "").trim());
     if (!qs.length) continue;
+    told += qs.length;
     w.need(40);
     w.text(st.title, { bold: true, gap: 4 });
     for (const q of qs) {
@@ -185,6 +189,14 @@ export async function answersRecordPdf(t: TermsRow, contract: Uint8Array | null)
       const who = home.who[q.id];
       w.row(q.label, val, who ? `${giver(who.by, t)}, ${when(who.at)}` : "Given before this contract");
     }
+  }
+  if (!told) {
+    w.text(
+      doc?.asksFirst
+        ? "No answers about the home were on file when this was made."
+        : `No answers about the home were on file when this was made. The ${doc?.edition ?? "earlier"} terms did not ask the questions about the home before signing.`,
+      { size: 9, color: MUTED }
+    );
   }
 
   w.heading("Signatures");
@@ -227,15 +239,35 @@ export async function answersRecordPdf(t: TermsRow, contract: Uint8Array | null)
   return pdf.save();
 }
 
-/** Made and filed once, when the contract completes. Safe to call twice; never throws. */
-export async function fileAnswersRecord(t: TermsRow, contract: Uint8Array | null): Promise<string | null> {
+/** The signed contract as the OS holds it, to put behind the answers. Null when there is none to read. */
+export async function signedContractBytes(t: TermsRow): Promise<Uint8Array | null> {
+  if (!t.signedR2Key || !r2Configured) return null;
   try {
-    const doc = edition(t.version);
-    if (!doc?.asksFirst || !r2Configured) return null;
+    const obj = await withR2((c) => c.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: t.signedR2Key! })));
+    return (await obj.Body?.transformToByteArray()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Made and filed once, when the contract completes. Safe to call twice; never throws.
+ *
+ * Every wording, not only the ones that ask the questions first (James, 11 Nov
+ * 2026: "they should automatically save as a backup onto the file as a separate
+ * section, so they can download them anytime"): a contract on the October terms
+ * still has who signed, their details and their signatures to keep. `made`: the
+ * pages already drawn, when the caller has them (the download on the
+ * Questionnaire tab), so one that was signed before this is filed the first
+ * time somebody opens it.
+ */
+export async function fileAnswersRecord(t: TermsRow, contract: Uint8Array | null, made?: Uint8Array): Promise<string | null> {
+  try {
+    if (!edition(t.version) || !r2Configured) return null;
     const key = `documents/signed/terms-${t.id}/landlord-answers-and-declarations.pdf`;
     const had = await q<{ id: string }>(`SELECT id FROM os_file_documents WHERE r2_key = $1 AND removed_at IS NULL`, [key]).catch(() => []);
     if (had.length) return key;
-    const bytes = await answersRecordPdf(t, contract);
+    const bytes = made ?? (await answersRecordPdf(t, contract));
     await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: bytes, ContentType: "application/pdf" })));
     const from = t.appraisalId ? { kind: "appraisal" as const, id: t.appraisalId } : t.listingId ? { kind: "listing" as const, id: t.listingId } : null;
     if (from) {

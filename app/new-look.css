@@ -877,6 +877,33 @@
 .nl-ct-signed { color: var(--sage-ink); font-weight: 500; font-size: 13px; }
 .nl-ct-waiver { margin: 8px 0 16px; padding: 16px 18px; border-radius: 16px; background: var(--panel); }
 .nl-terms-wrap { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; }
+/* Under signed terms: Terms of Business and Questionnaire (components/terms/SignedTermsTabs, 11 Nov 2026). */
+.nl-tq { display: flex; flex-direction: column; gap: 14px; margin: 0 0 30px; padding: 6px 24px 20px; border: 1px solid var(--line); border-radius: 24px; background: var(--card); min-width: 0; }
+.nl-terms-wrap > .nl-tq { margin-bottom: 0; }
+.nl-tq-pane { display: flex; flex-direction: column; gap: 16px; min-width: 0; animation: nl-fade .3s var(--nl-ease) both; }
+/* Two columns that pack, so a short block (Codes and Alarm) leaves no hole beside a long one (Gas). */
+.nl-tq-grid { columns: 2; column-gap: 32px; }
+.nl-tq-block { display: flex; flex-direction: column; gap: 8px; min-width: 0; break-inside: avoid; margin: 0 0 22px; }
+.nl-tq-title { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 15px; line-height: 20px; letter-spacing: 0; color: var(--ink); }
+.nl-tq-rows { margin: 0; border-top: 1px solid var(--line); }
+.nl-tq-rows > div { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 4px 16px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; line-height: 19px; }
+.nl-tq-rows dt { color: var(--muted); }
+.nl-tq-rows dd { margin: 0; color: var(--ink); font-weight: 500; overflow-wrap: anywhere; }
+.nl-tq-rows dd small { display: block; font-size: 11.5px; line-height: 16px; font-weight: 400; color: var(--muted); }
+.nl-tq-note { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 16px; border-radius: 16px; background: var(--accent-soft); color: var(--ink); font-size: 13.5px; line-height: 20px; }
+.nl-tq-note > svg { flex: none; margin-top: 2px; color: var(--accent-dark); }
+.nl-tq-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.nl-tq-acts .nl-meta { flex: 1 1 260px; }
+.nl-tq-bad { color: var(--accent-dark); }
+.nl-tq-wait { display: inline-flex; align-items: center; gap: 10px; }
+.nl-tq-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--ink); animation: nl-tq-spin .8s linear infinite; }
+@keyframes nl-tq-spin { to { transform: rotate(360deg); } }
+@media (max-width: 760px) {
+  .nl-tq { padding: 4px 16px 16px; border-radius: 20px; }
+  .nl-tq-grid { columns: 1; }
+  .nl-tq-rows > div { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+}
+@media (prefers-reduced-motion: reduce) { .nl-tq-spin { animation-duration: 2.4s; } .nl-tq-pane { animation: none; } }
 .nl-terms-people { margin: 0; }
 .nl-field > small.is-bad { color: var(--accent-dark); }
 .nl-ct p, .nl-ct li { overflow-wrap: anywhere; }

@@ -6,6 +6,7 @@ import { isScottish } from "@/lib/property-flags";
 import { guessService, servicesFor } from "@/lib/terms/services";
 import type { Country } from "@/lib/terms/types";
 import TermsSignSheet from "@/components/terms/TermsSignSheet";
+import SignedTermsTabs from "@/components/terms/SignedTermsTabs";
 import { Badge, Ico } from "@/components/new-look/Parts";
 
 /**
@@ -88,7 +89,10 @@ export default function TermsPanelClassic({
   feesOnRecord = null,
   onChanged,
   more,
+  quiet = false,
 }: {
+  /** Under a banner that already carries the signed tabs (the listing's own): this one leaves them out. */
+  quiet?: boolean;
   listingId?: string | null;
   propertyId?: string | null;
   appraisalId?: string | null;
@@ -258,6 +262,9 @@ export default function TermsPanelClassic({
       </section>
 
       {(said ?? sentLine) && <p className={`nl-meta ${unsent.length && !said ? "text-[var(--accent-dark)]" : "text-[var(--sage-ink)]"}`}>{said ?? sentLine}</p>}
+
+      {/* Signed: the contract and what they gave with it, a tab each (James, 11 Nov 2026). */}
+      {!quiet && live?.status === "signed" && <SignedTermsTabs terms={live} />}
 
       {live && live.status !== "signed" && live.status !== "agent" && (
         <ul className="nl-terms-people">

@@ -6,6 +6,7 @@ import PropertyFile, { type LooseDoc } from "@/components/PropertyFile";
 import FileDocuments, { UploadForm, type Doc } from "@/components/FileDocuments";
 import SendTermsPopout from "@/components/SendTermsPopout";
 import TermsPanel from "@/components/terms/TermsPanel";
+import SignedTermsTabs from "@/components/terms/SignedTermsTabs";
 import HomeFacts from "@/components/HomeFacts";
 import { filesOnIssueDate } from "@/lib/cert-life";
 import { CERT_KINDS, CERT_KIND_LABEL, certFilesAs, certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
@@ -376,6 +377,7 @@ export default function ListingCompliance({
           onChanged={terms.reload}
         />
       )}
+      {!termsReading && termsHeld && <SignedTermsTabs listingId={listingId} propertyId={propertyId} />}
       {/* Let only (Sean, 15 Oct 2026): "Certificates to add" read as our job on
           a home where it is the landlord's (Michael's rule). Said once, here. */}
       {introOnly && (
@@ -1364,6 +1366,9 @@ function NewLookCompliance({
         </div>
       </section>
       )}
+      {/* Signed through the OS: the contract and what the landlord gave with it, a tab each
+          (James, 11 Nov 2026). Draws nothing for terms held only as a filed copy. */}
+      {(tobState === "signed" || tobState === "record") && <SignedTermsTabs listingId={listingId} propertyId={propertyId} />}
       {/* A new set going out over signed (or waiting) terms: the same send screen, and its
           progress under the banner until it is signed. Draws nothing until then. */}
       {tobState !== "unsigned" && tobState !== "loading" && (
