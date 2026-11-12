@@ -291,7 +291,10 @@ export async function movedInListings(rexUserId: string | null, today = londonTo
       .filter((d) => d.statusKey !== "cancelled" && (d.app.propoly?.holdingPaid?.status === "paid" || PAST_FEE.has(d.statusKey)))
       .filter((d) => sameHome(address, [d.app.propertyName, d.app.locality].filter(Boolean).join(", ")))
       .sort((x, y) => String(y.app.startDate ?? "").localeCompare(String(x.app.startDate ?? "")))[0];
-    return named(deal?.app);
+    /* A Propoly deal holds its people as `tenants`, not `applicants` (12 Nov 2026: read as
+       applicants, Room 4, 17 St Martins Street still named nobody - Alfie Morley-Smith is on its deal). */
+    return named(deal ? { id: deal.app.id, applicants: deal.app.tenants } : undefined)
+      .map((t) => (t.contactId.startsWith("app:") ? { ...t, contactId: t.contactId.replace(/^app:/, "propoly:") } : t));
   };
   return new Map(homes.map((h) => [h.listingId, { moveIn: h.moveIn, source: h.source, tenants: peopleOf(h.listingId) }]));
 }
