@@ -246,6 +246,21 @@ export async function setBugPriority(id: string, priority: "A" | "B" | "C" | nul
   await q(`update os_bugs set priority = $1 where id = $2`, [priority, id]);
 }
 
+/**
+ * REVIEW LATER (James, 12 Nov 2026: "click Review later and put a date where I
+ * can review it, and then it will disappear for now"). The day sits on the
+ * ticket's context as reviewAt (YYYY-MM-DD); Tickets keeps it under Later until
+ * that day, then it is back in Open by itself. Null brings it back now.
+ */
+export async function setBugReviewAt(id: string, day: string | null): Promise<void> {
+  if (!hasDb()) return;
+  if (day) {
+    await q(`update os_bugs set context = coalesce(context, '{}'::jsonb) || jsonb_build_object('reviewAt', $1::text) where id = $2`, [day, id]);
+  } else {
+    await q(`update os_bugs set context = coalesce(context, '{}'::jsonb) - 'reviewAt' where id = $1`, [id]);
+  }
+}
+
 export async function logBug(p: {
   reporterId?: string | null; reporterEmail?: string;
   body: string; path?: string; kind?: string; context?: Record<string, unknown>;

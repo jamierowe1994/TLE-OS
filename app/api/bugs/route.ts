@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { asText, jsonObject } from "@/lib/json-body";
 import { whoIs } from "@/lib/admin";
 import { requireOwner } from "@/lib/admin";
-import { logBug, bugs, setBugState, attachShot, myReports, setBugPriority } from "@/lib/pilot";
+import { logBug, bugs, setBugState, attachShot, myReports, setBugPriority, setBugReviewAt } from "@/lib/pilot";
 import { tellReporter } from "@/lib/bug-bot";
 import { publicOrigin } from "@/lib/origin";
 import { claudeConfigured, maySendToClaude, sendClaudeReply } from "@/lib/claude-tickets";
@@ -113,8 +113,14 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
-  const { id, state, priority, sendReply, story } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null; sendReply?: boolean; story?: string };
+  const { id, state, priority, sendReply, story, reviewAt } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null; sendReply?: boolean; story?: string; reviewAt?: string | null };
   if (!id) return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
+  /* Review Later: out of Open until the day given, or back now with null (lib/pilot setBugReviewAt). */
+  if (reviewAt !== undefined) {
+    if (reviewAt !== null && !/^\d{4}-\d{2}-\d{2}$/.test(reviewAt)) return NextResponse.json({ ok: false, error: "A date, please." }, { status: 400 });
+    await setBugReviewAt(id, reviewAt);
+    return NextResponse.json({ ok: true });
+  }
   /* Send Claude's Answer: the reply Claude wrote for somebody who asked how
      to do something goes to them, and the ticket closes. */
   if (sendReply === true) {

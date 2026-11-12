@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FloatSheet, { FloatCard, FloatFoot } from "@/components/new-look/FloatSheet";
 import { Badge, type Tone } from "@/components/new-look/Parts";
 import { ErrorLine, Loading, Section, Tab, nd, when } from "@/components/new-look/admin/bits";
@@ -49,8 +49,10 @@ type Ready = {
   auto: Bug[];
   pick: (list: Bug[]) => Bug[];
   counts: Record<"A" | "B" | "C" | "none", number>;
-  show: "open" | "all";
-  setShow: (v: "open" | "all") => void;
+  /** Tickets put off with Review Later whose day has not come. */
+  laterCount: number;
+  show: "open" | "later" | "all";
+  setShow: (v: "open" | "later" | "all") => void;
   letter: Letter;
   setLetter: (v: Letter) => void;
   shots: Record<string, string | null>;
@@ -130,12 +132,52 @@ const STATE_WORD: Record<string, { word: string; tone: Tone }> = {
 
 const ACTION: Record<string, string> = { open: "Reopen", ack: "Acknowledge", fixed: "Fixed, Tell Them", wontfix: "Won't Fix" };
 
+/* Review Later (James, 12 Nov 2026). Days are London days, YYYY-MM-DD. */
+const reviewAtOf = (b: Bug): string | null => {
+  const d = b.context?.reviewAt;
+  return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
+};
+const londonDay = (plusDays = 0) => {
+  const t = new Date(Date.now() + plusDays * 86_400_000);
+  return t.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+};
+/** "2026-11-19" to "Thu 19 Nov". */
+const dayWords = (d: string) =>
+  new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" });
+const QUICK: Array<{ label: string; days: number }> = [
+  { label: "Tomorrow", days: 1 },
+  { label: "Next Week", days: 7 },
+  { label: "In a Month", days: 30 },
+];
+const FOLD_KEY = "os-tickets-answered-folded";
+
 export default function TicketsNew({ state }: { state: "loading" | { err: string; retry: () => void } | Ready }) {
   /* Fixed, Tell Them asks for "how we fixed it" first (9 Nov 2026, lib/ticket-fixed). */
   const [telling, setTelling] = useState<Bug | null>(null);
   /* Which ticket is asking "Push it live?", and whose own recordings are open. */
   const [confirming, setConfirming] = useState<string | null>(null);
   const [watching, setWatching] = useState<Record<string, true>>({});
+  /* Which ticket has its Review Later picker open, and the day typed into it. */
+  const [picking, setPicking] = useState<string | null>(null);
+  const [pickDay, setPickDay] = useState("");
+  /* Answered by Claude folded away (James, 12 Nov 2026: "I should be able to
+     collapse the replies from Claude"), remembered on this browser. */
+  const [folded, setFolded] = useState(false);
+  useEffect(() => {
+    try {
+      setFolded(window.localStorage.getItem(FOLD_KEY) === "1");
+    } catch {
+      /* private window: open by default */
+    }
+  }, []);
+  const fold = (v: boolean) => {
+    setFolded(v);
+    try {
+      window.localStorage.setItem(FOLD_KEY, v ? "1" : "0");
+    } catch {
+      /* not remembered, still folded for now */
+    }
+  };
   if (state === "loading") {
     return (
       <Tab>
@@ -150,7 +192,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
       </Tab>
     );
   }
-  const { people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude } = state;
+  const { people, auto, pick, counts, laterCount, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude } = state;
   const open = (b: Bug) => b.state === "open" || b.state === "ack";
   const withClaude = (b: Bug) => open(b) && b.botState === "with_claude";
   /* Back from Claude with something for James: a fix to push, a question, or
@@ -337,6 +379,28 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
                 </button>
               ))}
             </div>
+            {open(b) && !reviewAtOf(b) && picking !== b.id && (
+              <button
+                type="button"
+                title="Out of Open until the day you pick, then back by itself"
+                onClick={() => { setPicking(b.id); setPickDay(londonDay(7)); }}
+                className="nl-btn nl-btn--secondary nl-btn--sm"
+              >
+                Review Later
+              </button>
+            )}
+            {open(b) && reviewAtOf(b) && reviewAtOf(b)! > londonDay() && (
+              <>
+                <button type="button" onClick={() => void patch(b.id, { reviewAt: null })} className="nl-btn nl-btn--secondary nl-btn--sm">
+                  Bring Back Now
+                </button>
+                {picking !== b.id && (
+                  <button type="button" onClick={() => { setPicking(b.id); setPickDay(reviewAtOf(b)!); }} className="nl-btn nl-btn--quiet nl-btn--sm">
+                    Change Date
+                  </button>
+                )}
+              </>
+            )}
             {(["open", "ack", "fixed", "wontfix"] as const)
               .filter((x) => x !== b.state)
               .map((x) => (
@@ -362,6 +426,38 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
               </button>
             )}
           </div>
+          {picking === b.id && (
+            <div className="nl-adm-later" role="group" aria-label="Review this ticket later">
+              <span className="nl-meta nl-strong">Review on</span>
+              {QUICK.map((q) => (
+                <button key={q.label} type="button" onClick={() => { setPicking(null); void patch(b.id, { reviewAt: londonDay(q.days) }); }} className="nl-btn nl-btn--quiet nl-btn--sm">
+                  {q.label}
+                </button>
+              ))}
+              <input
+                type="date"
+                aria-label="Pick a day"
+                min={londonDay(1)}
+                value={pickDay}
+                onChange={(e) => setPickDay(e.target.value)}
+                className="nl-adm-later-date"
+              />
+              <button
+                type="button"
+                disabled={!/^\d{4}-\d{2}-\d{2}$/.test(pickDay) || pickDay <= londonDay()}
+                onClick={() => { setPicking(null); void patch(b.id, { reviewAt: pickDay }); }}
+                className="nl-btn nl-btn--primary nl-btn--sm"
+              >
+                Move to Later
+              </button>
+              <button type="button" onClick={() => setPicking(null)} className="nl-link">
+                Cancel
+              </button>
+            </div>
+          )}
+          {open(b) && reviewAtOf(b) && reviewAtOf(b)! > londonDay() && (
+            <p className="nl-meta">Back in Open on {dayWords(reviewAtOf(b)!)}.</p>
+          )}
           {claudeSaid[b.id] && claudeSaid[b.id] !== "Sending…" && <p className="nl-meta nl-adm-warn">{claudeSaid[b.id]}</p>}
           {b.id in shots &&
             (shots[b.id] ? (
@@ -400,12 +496,20 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
   /* Sent to Claude: out of the way until Claude has something (James, 4 Nov
      2026: "automatically get rid of that ticket for me"). Back from Claude:
      above everything, because each one is a single press for James. */
-  const everyOpen = [...people, ...auto];
-  const ready = show === "open" ? everyOpen.filter(backFromClaude) : [];
-  const working = show === "open" ? everyOpen.filter(withClaude) : [];
+  /* New ones first (James, 12 Nov 2026: "the new incoming ones are the most
+     important"). Anything Claude, or the old bot, has answered goes in its own
+     section under them, and can be folded away; anything still with Claude
+     waits at the bottom. Later is its own list, soonest first. */
+  const answered = (b: Bug) => open(b) && (backFromClaude(b) || ["fix_ready", "needs_you", "not_a_bug", "to_fix"].includes(b.botState ?? ""));
+  const listed = [...pick(people), ...pick(auto)];
+  const ready = show === "open" ? listed.filter((b) => answered(b) && !withClaude(b)) : [];
+  const working = show === "open" ? listed.filter(withClaude) : [];
   const parked = new Set([...ready, ...working].map((b) => b.id));
-  const mine = pick(people).filter((b) => !parked.has(b.id));
-  const os = pick(auto).filter((b) => !parked.has(b.id));
+  const mine = show === "later" ? [] : pick(people).filter((b) => !parked.has(b.id));
+  const os = show === "later" ? [] : pick(auto).filter((b) => !parked.has(b.id));
+  const later = show === "later" ? [...listed].sort((a, b) => (reviewAtOf(a) ?? "").localeCompare(reviewAtOf(b) ?? "")) : [];
+  /* A link to one answered ticket (?open=) opens the section it is in. */
+  const showReady = !folded || ready.some((b) => b.id === openId);
 
   return (
     <Tab>
@@ -427,6 +531,9 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
           <button type="button" role="radio" aria-checked={show === "open"} onClick={() => setShow("open")} className={show === "open" ? "is-on" : undefined}>
             Open
           </button>
+          <button type="button" role="radio" aria-checked={show === "later"} onClick={() => setShow("later")} className={show === "later" ? "is-on" : undefined}>
+            Later{laterCount ? ` (${laterCount})` : ""}
+          </button>
           <button type="button" role="radio" aria-checked={show === "all"} onClick={() => setShow("all")} className={show === "all" ? "is-on" : undefined}>
             Everything
           </button>
@@ -442,19 +549,42 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
         <p className="nl-meta nl-adm-warn">Send to Claude is built but not connected yet: the routine&apos;s address and key go on Railway.</p>
       )}
 
-      {ready.length > 0 && (
-        <Section title={<>Back From Claude <span className="nl-count">{ready.length}</span></>}>
-          <ul className="nl-adm-rows">{ready.map(row)}</ul>
+      {show === "later" ? (
+        <Section title={<>Review Later <span className="nl-count">{later.length}</span></>}>
+          {later.length === 0 ? (
+            <p className="nl-empty">Nothing put off. Review Later on a ticket moves it here until the day you pick, then it is back in Open by itself.</p>
+          ) : (
+            <ul className="nl-adm-rows">{later.map(row)}</ul>
+          )}
         </Section>
+      ) : (
+        <>
+          <Section title={<>Raised by People <span className="nl-count">{mine.length}</span></>}>
+            {mine.length === 0 ? <p className="nl-empty">Nothing new. Steve sits in the bottom right of every screen; what people report through him lands here.</p> : <ul className="nl-adm-rows">{mine.map(row)}</ul>}
+          </Section>
+
+          {ready.length > 0 && (
+            <Section
+              title={<>Answered by Claude <span className="nl-count">{ready.length}</span></>}
+              aside={
+                <button type="button" className="nl-link" aria-expanded={showReady} onClick={() => fold(showReady)}>
+                  {showReady ? "Hide" : "Show"}
+                </button>
+              }
+            >
+              {showReady ? (
+                <ul className="nl-adm-rows">{ready.map(row)}</ul>
+              ) : (
+                <p className="nl-empty">{ready.length === 1 ? "One ticket" : `${ready.length} tickets`} with a fix, a question or an answer waiting for you. Show to open them.</p>
+              )}
+            </Section>
+          )}
+
+          <Section title={<>Logged by the OS Itself <span className="nl-count">{os.length}</span></>}>
+            {os.length === 0 ? <p className="nl-empty">Nothing open.</p> : <ul className="nl-adm-rows">{os.map(row)}</ul>}
+          </Section>
+        </>
       )}
-
-      <Section title={<>Raised by People <span className="nl-count">{mine.length}</span></>}>
-        {mine.length === 0 ? <p className="nl-empty">Nothing here. Steve sits in the bottom right of every screen; what people report through him lands here.</p> : <ul className="nl-adm-rows">{mine.map(row)}</ul>}
-      </Section>
-
-      <Section title={<>Logged by the OS Itself <span className="nl-count">{os.length}</span></>}>
-        {os.length === 0 ? <p className="nl-empty">Nothing open.</p> : <ul className="nl-adm-rows">{os.map(row)}</ul>}
-      </Section>
 
       {working.length > 0 && (
         /* Opened for a link to one of them (?open=), so the row it lands on shows. */

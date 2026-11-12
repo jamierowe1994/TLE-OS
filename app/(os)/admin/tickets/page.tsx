@@ -45,6 +45,18 @@ const verdict = (b: Bug) => {
    or the top of Tickets until the bot had looked at it. */
 const TICKET_RANK: Record<string, number> = { A: 0, none: 1, B: 2, C: 3 };
 
+/* Review Later (James, 12 Nov 2026): a ticket given a day sits under Later
+   until that day (London), then it is back in Open by itself. */
+const londonDay = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+const reviewAtOf = (b: Bug): string | null => {
+  const d = b.context?.reviewAt;
+  return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
+};
+const isLater = (b: Bug, today = londonDay()) => {
+  const d = reviewAtOf(b);
+  return Boolean(d && d > today) && (b.state === "open" || b.state === "ack");
+};
+
 export default function Tickets() {
   const [bugs, setBugs] = useState<Bug[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -54,7 +66,7 @@ export default function Tickets() {
   const [claude, setClaude] = useState<{ canSend: boolean; ready: boolean; canPush: boolean }>({ canSend: false, ready: false, canPush: false });
   const [claudeSaid, setClaudeSaid] = useState<Record<string, string>>({});
   const [pushSaid, setPushSaid] = useState<Record<string, string>>({});
-  const [show, setShow] = useState<"open" | "all">("open");
+  const [show, setShow] = useState<"open" | "later" | "all">("open");
   const [letter, setLetter] = useState<"A" | "B" | "C" | "none" | "all">("all");
 
   const load = () =>
@@ -102,6 +114,7 @@ export default function Tickets() {
     const b = bugs.find((x) => x.id === openId);
     if (!b) return;
     if (b.state === "fixed" || b.state === "wontfix") setShow("all");
+    else if (isLater(b)) setShow("later");
     void loadShot(openId);
     window.setTimeout(() => document.getElementById(`ticket-${openId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -157,20 +170,24 @@ export default function Tickets() {
   /* People first, then what the OS logged about itself. */
   const people = bugs.filter((b) => b.kind !== "auto");
   const auto = bugs.filter((b) => b.kind === "auto");
+  const today = londonDay();
   const pick = (list: Bug[]) =>
     list
-      .filter((b) => (show === "all" ? true : b.state === "open" || b.state === "ack"))
+      .filter((b) => (show === "all" ? true : show === "later" ? isLater(b, today) : (b.state === "open" || b.state === "ack") && !isLater(b, today)))
       .filter((b) => (letter === "all" ? true : letter === "none" ? !b.priority : b.priority === letter))
       .sort((a, b) => TICKET_RANK[a.priority ?? "none"] - TICKET_RANK[b.priority ?? "none"] || b.createdAt.localeCompare(a.createdAt));
-  const counts = { A: people.filter((b) => b.priority === "A" && b.state !== "fixed" && b.state !== "wontfix").length,
-                   B: people.filter((b) => b.priority === "B" && b.state !== "fixed" && b.state !== "wontfix").length,
-                   C: people.filter((b) => b.priority === "C" && b.state !== "fixed" && b.state !== "wontfix").length,
-                   none: people.filter((b) => !b.priority && b.state !== "fixed" && b.state !== "wontfix").length };
+  /* The counts are what is in front of James now: not what he put off till later. */
+  const now = people.filter((b) => b.state !== "fixed" && b.state !== "wontfix" && !isLater(b, today));
+  const counts = { A: now.filter((b) => b.priority === "A").length,
+                   B: now.filter((b) => b.priority === "B").length,
+                   C: now.filter((b) => b.priority === "C").length,
+                   none: now.filter((b) => !b.priority).length };
+  const laterCount = bugs.filter((b) => isLater(b, today)).length;
 
   if (look) {
     return (
       <TicketsNew
-        state={{ people, auto, pick, counts, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude }}
+        state={{ people, auto, pick, counts, laterCount, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude }}
       />
     );
   }
@@ -277,6 +294,7 @@ export default function Tickets() {
 
       <div className="mt-4 flex items-center gap-2 text-[12px]">
         <button type="button" onClick={() => setShow("open")} className={`rounded-full border px-3 py-1 ${show === "open" ? "border-ink bg-ink text-page" : "border-line/80"}`}>Open</button>
+        <button type="button" onClick={() => setShow("later")} className={`rounded-full border px-3 py-1 ${show === "later" ? "border-ink bg-ink text-page" : "border-line/80"}`}>Later ({laterCount})</button>
         <button type="button" onClick={() => setShow("all")} className={`rounded-full border px-3 py-1 ${show === "all" ? "border-ink bg-ink text-page" : "border-line/80"}`}>Everything</button>
       </div>
 

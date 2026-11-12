@@ -24,7 +24,7 @@ import LeadsNotBackedUp from "@/components/LeadsNotBackedUp";
 
 const card = "rounded-[22px] border border-line/50 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
-type Ticket = { id: string; body: string; kind: string; state: string; reporterEmail: string; createdAt: string; priority: "A" | "B" | "C" | null };
+type Ticket = { id: string; body: string; kind: string; state: string; reporterEmail: string; createdAt: string; priority: "A" | "B" | "C" | null; context?: { reviewAt?: unknown } | null };
 
 /** The open tickets people raised, A first, for the card beside the activity.
     null while loading, undefined when this person cannot see tickets. */
@@ -36,7 +36,9 @@ function useOpenTickets(): Ticket[] | null | undefined {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: { bugs?: Ticket[] }) => {
         if (gone) return;
-        const open = (j.bugs ?? []).filter((b) => b.kind !== "auto" && (b.state === "open" || b.state === "ack"));
+        /* Not one James put off till later (Tickets, Review Later, 12 Nov 2026). */
+        const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+        const open = (j.bugs ?? []).filter((b) => b.kind !== "auto" && (b.state === "open" || b.state === "ack") && !(typeof b.context?.reviewAt === "string" && b.context.reviewAt > today));
         open.sort((a, b) => TICKET_RANK[a.priority ?? "none"] - TICKET_RANK[b.priority ?? "none"] || b.createdAt.localeCompare(a.createdAt));
         setT(open);
       })
