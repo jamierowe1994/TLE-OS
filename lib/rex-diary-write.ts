@@ -61,17 +61,62 @@ async function storedEvent(appraisalId: string): Promise<{ eventId: string; star
   return p?.eventId ? { eventId: p.eventId, startsAt: p.startsAt ?? "" } : null;
 }
 
+/* The calendar is remembered once found (Chris Gurney, ticket f8500475,
+   12 Nov 2026: booking a viewing took 33s). Every booking searched REX's
+   calendars afresh, a page at a time at ~15s a REX call, before it could
+   write the entry. An agent's calendar does not move, so it is kept here and
+   in os_case_state across deploys; forgetCalendarFor drops it when REX
+   refuses an entry, and the next booking searches again. */
+const CALENDAR_KIND = "rex-calendar";
+declare global {
+  // eslint-disable-next-line no-var
+  var __osRexCalendars: Map<string, string> | undefined;
+}
+const calendars: Map<string, string> = (globalThis.__osRexCalendars ??= new Map());
+
+export async function forgetCalendarFor(rexEmail: string): Promise<void> {
+  const want = rexEmail.trim().toLowerCase();
+  if (!want) return;
+  calendars.delete(want);
+  if (hasDb()) await q(`DELETE FROM os_case_state WHERE kind = $1 AND record_id = $2`, [CALENDAR_KIND, want]).catch(() => null);
+}
+
 /** The agent's own default calendar, by the email they sign in to REX with. */
 export async function calendarFor(rexEmail: string, token: string | null): Promise<string | null> {
   const want = rexEmail.trim().toLowerCase();
   if (!want) return null;
+  const known = calendars.get(want);
+  if (known) return known;
+  if (hasDb()) {
+    const rows = await q<{ payload: { calendarId?: string } }>(
+      `SELECT payload FROM os_case_state WHERE kind = $1 AND record_id = $2`,
+      [CALENDAR_KIND, want]
+    ).catch(() => []);
+    const kept = rows[0]?.payload?.calendarId;
+    if (kept) {
+      calendars.set(want, kept);
+      return kept;
+    }
+  }
   for (let page = 0; page < 5; page++) {
     const res = await rexCall("Calendars", "search", { limit: 100, offset: page * 100 }, token);
     if (!res.ok) return null;
     const rows = rexRows(res.result) as Array<{ id?: string; is_default?: boolean; owner_user?: { email_address?: string } | null }>;
     const mine = rows.filter((c) => (c.owner_user?.email_address ?? "").toLowerCase() === want);
     const pick = mine.find((c) => c.is_default) ?? mine[0];
-    if (pick?.id) return pick.id;
+    if (pick?.id) {
+      const id = String(pick.id);
+      calendars.set(want, id);
+      if (hasDb()) {
+        await q(
+          `INSERT INTO os_case_state (kind, record_id, payload, updated_at, updated_by)
+           VALUES ($1, $2, $3::jsonb, NOW(), 'rex-calendar')
+           ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
+          [CALENDAR_KIND, want, JSON.stringify({ calendarId: id })]
+        ).catch(() => null);
+      }
+      return id;
+    }
     if (rows.length < 100) break;
   }
   return null;
@@ -176,7 +221,10 @@ export async function putAppraisalInRexDiary(p: {
   } else if (!res.ok && before) {
     noteFailure({ source: "REX", what: "CalendarEvents/update", status: res.status, message: res.error ?? `answered ${res.status}` });
   }
-  if (!res.ok) return { ok: false, reason: "refused", detail: `REX refused the diary entry: ${res.error ?? res.status}` };
+  if (!res.ok) {
+    await forgetCalendarFor(emailRow[0]?.rex_email ?? "");
+    return { ok: false, reason: "refused", detail: `REX refused the diary entry: ${res.error ?? res.status}` };
+  }
 
   const raw = res.result as unknown;
   const eventId = moved && before
@@ -281,7 +329,11 @@ export async function putViewingInRexDiary(p: {
     },
     token
   );
-  if (!res.ok) return { ok: false, reason: "refused", detail: `REX refused the diary entry: ${res.error ?? res.status}` };
+  if (!res.ok) {
+    /* A remembered calendar REX no longer takes is searched for afresh next time. */
+    await forgetCalendarFor(emailRow[0]?.rex_email ?? "");
+    return { ok: false, reason: "refused", detail: `REX refused the diary entry: ${res.error ?? res.status}` };
+  }
   const raw = res.result as unknown;
   const eventId = typeof raw === "string" || typeof raw === "number" ? String(raw) : String((raw as { id?: string } | null)?.id ?? "");
   if (!eventId) return { ok: false, reason: "refused", detail: "REX said yes but did not say which entry it made." };
