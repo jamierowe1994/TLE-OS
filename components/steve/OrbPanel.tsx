@@ -58,6 +58,7 @@ const ICON = {
   flag: <path d="M6 21V4M6 4h11l-2 4 2 4H6" />,
   expand: <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />,
   shrink: <path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7" />,
+  minimise: <path d="M6 12h12" />,
 };
 
 /* The newsroom's kinds, in words: lib/news-store NEWS_KIND_LABEL, copied
@@ -84,6 +85,9 @@ export default function OrbPanel(p: {
   onStart: () => void;
   onOpenThread: (id: string) => void;
   onClose: () => void;
+  /** Tuck the card away without ending anything: pressing him again opens
+   *  it on the same screen and conversation (HelpDock keeps them). */
+  onMinimise: () => void;
   busy: boolean;
   /** The conversation, newest at the bottom, already drawn by HelpDock. */
   conversation: ReactNode;
@@ -152,6 +156,22 @@ export default function OrbPanel(p: {
     window.clearTimeout(moveTimer.current);
     moveTimer.current = window.setTimeout(p.onClose, 400);
   };
+  /* Minimise (Sean McMahon, ticket 82453c27, 12 Nov 2026: "sometimes it is
+     in the way of the screen and I want to minimise it instead of closing
+     it"). The card drops away as it does on Close, but HelpDock keeps the
+     screen and the conversation, so pressing him brings it straight back. */
+  const minimise = () => {
+    p.setMenu(false);
+    if (!motion()) return p.onMinimise();
+    setClosing(true);
+    window.clearTimeout(moveTimer.current);
+    moveTimer.current = window.setTimeout(p.onMinimise, 400);
+  };
+  const minButton = (
+    <button type="button" onClick={minimise} aria-label="Minimise" title="Minimise - press me to come back to this" className="sv-icon">
+      <I d={ICON.minimise} />
+    </button>
+  );
   const leaving = leave ? ` is-leave-${leave}` : "";
 
   const name = p.naming ? (
@@ -208,6 +228,7 @@ export default function OrbPanel(p: {
               </button>
               <h2>News</h2>
               <span className="sv-bar-r">
+                {minButton}
                 <button type="button" onClick={close} aria-label="Close" className="sv-icon">
                   <I d={ICON.close} />
                 </button>
@@ -238,6 +259,7 @@ export default function OrbPanel(p: {
               <span className="sv-mark">TLE OS</span>
               <span className="sv-top-r">
                 {menu}
+                {minButton}
                 <button type="button" onClick={close} aria-label="Close" className="sv-icon">
                   <I d={ICON.close} />
                 </button>
@@ -285,9 +307,12 @@ export default function OrbPanel(p: {
             <div className="sv-wash is-short" aria-hidden />
             <div className="sv-bar is-centred is-on-wash">
               <h2>Messages</h2>
-              <button type="button" onClick={close} aria-label="Close" className="sv-icon sv-bar-x">
-                <I d={ICON.close} />
-              </button>
+              <span className="sv-bar-x">
+                {minButton}
+                <button type="button" onClick={close} aria-label="Close" className="sv-icon">
+                  <I d={ICON.close} />
+                </button>
+              </span>
             </div>
             <div className="sv-body is-cards">
               {p.threadsFailed ? (
@@ -329,6 +354,7 @@ export default function OrbPanel(p: {
               {name}
               <span className="sv-bar-r">
                 {!p.naming && menu}
+                {minButton}
                 <button type="button" onClick={close} aria-label="Close" className="sv-icon">
                   <I d={ICON.close} />
                 </button>
@@ -353,9 +379,12 @@ export default function OrbPanel(p: {
           <div className={`sv-report sv-view${leaving}`}>
             <div className="sv-bar is-centred">
               <h2>Report a Problem</h2>
-              <button type="button" onClick={close} aria-label="Close" className="sv-icon sv-bar-x">
-                <I d={ICON.close} />
-              </button>
+              <span className="sv-bar-x">
+                {minButton}
+                <button type="button" onClick={close} aria-label="Close" className="sv-icon">
+                  <I d={ICON.close} />
+                </button>
+              </span>
             </div>
             <div className="sv-body sv-report-body">{p.report}</div>
           </div>

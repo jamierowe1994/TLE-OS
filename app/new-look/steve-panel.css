@@ -71,7 +71,7 @@
 }
 .sv-bar.is-centred { justify-content: center; }
 .sv-bar h2 { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 17px; line-height: 24px; letter-spacing: 0; }
-.sv-bar-x { position: absolute; right: 12px; top: 50%; translate: 0 -50%; }
+.sv-bar-x { position: absolute; right: 12px; top: 50%; translate: 0 -50%; display: flex; align-items: center; gap: 2px; }
 .sv-bar-r { margin-left: auto; display: flex; align-items: center; gap: 2px; }
 .sv-name {
   font: inherit; font-family: var(--font-heading); font-weight: 500; font-size: 17px; line-height: 22px; letter-spacing: 0;
