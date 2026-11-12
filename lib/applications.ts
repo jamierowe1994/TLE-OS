@@ -770,11 +770,25 @@ async function osAcceptedApplications(rexUserId: string | null, rexApps: Applica
     ).catch(() => []);
     for (const f of found) if (!phones.has(f.email) && f.phone) phones.set(f.email, f.phone);
   }
+  /* REX applications turned down in the OS. A decline here never reaches REX,
+     which goes on calling the application open (Sean McMahon, 12 Nov 2026,
+     18 Wilson Place: he declined the tenant's first offer, accepted their
+     second, and the declined one was taken for the file - so the let he had
+     just accepted was on nobody's book and its page said "This let isn't on
+     your book"). */
+  const declined = new Set(
+    (await q<{ ref: string }>(`SELECT ref FROM os_offer_decisions WHERE decision = 'declined' AND ref LIKE 'rex:%'`).catch(() => [] as { ref: string }[])).map((d) => d.ref)
+  );
   for (const r of rows) {
     const email = (r.email ?? "").trim().toLowerCase();
-    /* Somebody made the REX application by hand: that one is the file. */
+    /* Somebody made the REX application by hand: that one is the file -
+       unless it is the one that was turned down. */
     const twin = rexApps.some(
-      (a) => String(a.listingId ?? "") === String(r.listing_id) && a.status !== "unsuccessful" && a.applicants.some((p) => email && (p.email ?? "").toLowerCase() === email)
+      (a) =>
+        String(a.listingId ?? "") === String(r.listing_id) &&
+        a.status !== "unsuccessful" &&
+        !declined.has(`rex:${a.id}`) &&
+        a.applicants.some((p) => email && (p.email ?? "").toLowerCase() === email)
     );
     if (twin) continue;
     const listing = await listingRow(String(r.listing_id));
