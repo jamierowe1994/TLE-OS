@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { CopyButton } from "@/components/Bits";
 import type { AnswerGroup, TenantAnswers } from "@/lib/plc-tenant-answers";
-import { finalAskNow, finalAskSent, gateOf, plcTurn, sentAnywayNow, type PlcViewer, type Check, type CheckId, type Finding, type PlcAiSummary, type PlcCase, type SentAnyway } from "@/lib/plc";
+import { finalAskNow, finalAskSent, gateOf, plcTurn, resubmittedOf, sentAnywayNow, type PlcViewer, type Check, type CheckId, type Finding, type PlcAiSummary, type PlcCase, type SentAnyway } from "@/lib/plc";
 
 /**
  * The compliance side of a PLC handover, and the pieces it is built from.
@@ -99,6 +99,7 @@ export function Pill({ state }: { state: PlcCase["state"] }) {
     approved: PLC_GREEN,
     deferred: PLC_AMBER,
     declined: PLC_RED,
+    cancelled: "bg-page text-muted",
   };
   const label: Record<PlcCase["state"], string> = {
     assembling: "Assembling",
@@ -109,6 +110,7 @@ export function Pill({ state }: { state: PlcCase["state"] }) {
     approved: "Approved",
     deferred: "Sent back",
     declined: "Declined",
+    cancelled: "Cancelled",
   };
   return (
     <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone[state]}`}>
@@ -214,9 +216,15 @@ function SentAnywayCard({ s, checks }: { s: SentAnyway; checks: Check[] }) {
 }
 
 /** A small tag for the queue: this one was sent past the reader's warnings. */
-export function SentAnywayTag({ c }: { c: Pick<PlcCase, "sentAnyway" | "submittedAt" | "state"> }) {
-  if (!sentAnywayNow(c)) return null;
-  return <span className="shrink-0 whitespace-nowrap rounded-full bg-[#fdefec] px-2.5 py-1 text-[11px] font-semibold text-[#9d4340]">Sent anyway</span>;
+export function SentAnywayTag({ c }: { c: Pick<PlcCase, "sentAnyway" | "submittedAt" | "state" | "agentMoves"> }) {
+  const again = resubmittedOf(c);
+  return (
+    <>
+      {/* Taken back by the agent and sent again (11 Nov 2026): everything on it is to be checked from the start. */}
+      {again && <span className="shrink-0 whitespace-nowrap rounded-full bg-[#f3ead6] px-2.5 py-1 text-[11px] font-semibold text-[#7a5a12]">Resubmitted</span>}
+      {sentAnywayNow(c) && <span className="shrink-0 whitespace-nowrap rounded-full bg-[#fdefec] px-2.5 py-1 text-[11px] font-semibold text-[#9d4340]">Sent anyway</span>}
+    </>
+  );
 }
 
 /** A small tag for the queue: sent to Susan and waiting on her (20 Oct 2026). */
@@ -782,6 +790,16 @@ export function ComplianceSide({
     <div className="space-y-4">
       {split && c.scannedAt && <AiSummaryCard c={c} checks={data.checks} scanLine={data.summary} given={split.summary} />}
       {anyway && <SentAnywayCard s={anyway} checks={data.checks} />}
+      {(() => {
+        /* The agent took it back and sent it again (James, 11 Nov 2026): said at the top, because
+           whatever was ticked before was cleared and the people, documents or dates may have changed. */
+        const again = resubmittedOf(c);
+        return again ? (
+          <p className="rounded-[18px] border border-[#e5d5ad] bg-[#f8f1df] px-5 py-3.5 text-[13px] leading-relaxed text-[#5f4610]">
+            <span className="font-semibold">Resubmitted with new details.</span> {again.by} {again.kind === "restarted" ? "started it again" : "took it back"} on {prettyWhen(again.at)} and has sent it again. The earlier checks were cleared, so check it from the start.
+          </p>
+        ) : null;
+      })()}
       <section className="rounded-[18px] border border-line/70 bg-card p-5">
         <div className="grid gap-4 sm:grid-cols-4">
           <Fact label="From" value={c.agentName} />

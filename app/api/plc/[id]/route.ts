@@ -11,6 +11,9 @@ import {
   recordScan,
   recordSentAnyway,
   reopenCase,
+  takeBackCase,
+  cancelCase,
+  restartCase,
   setClauses,
   setRlpWanted,
   submitCase,
@@ -247,7 +250,8 @@ async function finishSend(
     agentEmail: submitted.agentEmail || null,
     agentName: submitted.agentName,
     event: "plc_submitted",
-    from: current.decidedAt ? "deferred" : null,
+    /* Sent again after the agent took it back or started it again (11 Nov 2026). */
+    from: current.decidedAt ? "deferred" : (current.agentMoves ?? []).some((m) => m.kind !== "cancelled" && (!current.submittedAt || m.at > current.submittedAt)) ? "taken-back" : null,
     to: "submitted",
   });
   /* Fixed and sent again: the "needs more" stops waiting on the agent. */
@@ -603,6 +607,40 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       case "reopen": {
         const reopened = await reopenCase(id);
         return NextResponse.json({ ok: true, ...(await payload(reopened, req)) });
+      }
+
+      /* RESUBMIT WITH NEW DETAILS, AND CANCEL (James, 11 Nov 2026). The pack's own agent, the
+         office or an owner, any time before approval (lib/plc PLC_IN_FLIGHT). Taking it back
+         hands it to the agent to change and send again; cancelling keeps it, with its documents,
+         to start again later. Both wipe what compliance had done and tell them why it left. */
+      case "take-back":
+      case "cancel":
+      case "restart": {
+        const me = await currentUser(req);
+        const current = await getCase(id);
+        if (!current) return NextResponse.json({ ok: false, error: "That handover no longer exists." }, { status: 404 });
+        const mine = Boolean(me?.email && current.agentEmail && me.email.toLowerCase() === current.agentEmail.toLowerCase());
+        const office = Boolean(me && (can(me.role, "work:plc") || can(me.role, "see:everything")));
+        if (process.env.NODE_ENV === "production" && !mine && !office) {
+          return NextResponse.json({ ok: false, error: "Only the agent who sent this pack, or the office, can change it." }, { status: 403 });
+        }
+        const by = { name: await actorName(req), email: me?.email ?? "" };
+        const moved =
+          body.action === "take-back" ? await takeBackCase(id, by)
+          : body.action === "cancel" ? await cancelCase(id, by, String(body.reason ?? ""))
+          : await restartCase(id, by);
+        if (body.action !== "restart" && !isTestCase(moved)) {
+          await recordActivity({
+            id: moved.id,
+            property: moved.address,
+            agentEmail: moved.agentEmail || null,
+            agentName: moved.agentName,
+            event: body.action === "cancel" ? "plc_cancelled" : "plc_taken_back",
+            from: current.state,
+            to: body.action === "cancel" ? String(body.reason ?? "").replace(/\s+/g, " ").trim().slice(0, 200) : "assembling",
+          }).catch(() => undefined);
+        }
+        return NextResponse.json({ ok: true, ...(await payload(moved, req)) });
       }
 
       case "scan": {

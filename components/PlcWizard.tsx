@@ -30,6 +30,8 @@ import { prettyWhen } from "@/components/PlcReview";
 import { unwatchSend, watchSend } from "@/lib/plc-send-watch";
 import { toast } from "@/lib/toast";
 import HomeFilesPanel from "@/components/plc/HomeFilesPanel";
+import PlcInFlight from "@/components/plc/PlcInFlight";
+import PlcPeople from "@/components/plc/PlcPeople";
 
 /**
  * Starting a PLC check.
@@ -239,6 +241,7 @@ export default function PlcWizard({
   useEffect(() => stepTold.current?.(step), [step]);
   /* Start fresh (8 Nov 2026): asked once before the files come off. */
   const [fresh, setFresh] = useState<"ask" | "busy" | null>(null);
+  const [editPeople, setEditPeople] = useState(false);
   const [showAddress, setShowAddress] = useState(false);
   /* The landlord's documents in two parts, so the page fits the screen
      (James, 8 Nov 2026: "people keep missing things by not scrolling"). */
@@ -617,6 +620,25 @@ export default function PlcWizard({
   };
 
   /** Compliance sent it back: make it the agent's again, then show the lot. */
+  /* Resubmit With New Details, Cancel the PLC, and starting a cancelled one again (James,
+     11 Nov 2026): the pack's own moves while it is with compliance (components/plc/PlcInFlight).
+     Taking it back or starting again lands on the first step, with everything still on the pack. */
+  const agentMove = async (action: "take-back" | "cancel" | "restart", reason?: string) => {
+    if (!kase || demo) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, { method: "POST", body: JSON.stringify({ action, reason }) });
+      setKase(res.case);
+      if (action === "cancel") toast("PLC cancelled. Compliance has been told.");
+      else go("details");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't work. Try again in a moment.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const reopen = async () => {
     if (!kase) return;
     setError(null);
@@ -894,6 +916,31 @@ export default function PlcWizard({
                       </div>
                     )}
                   </dl>
+                  {/* The people, changed here and saved on the let (James, 11 Nov 2026): the let's own
+                      editors, opened on a press so the step stays short for a pack that is right. */}
+                  {!demo && prefill.applicationId && (
+                    <div className="mt-3">
+                      <button type="button" className="nl-plc-more" aria-expanded={editPeople} onClick={() => setEditPeople((v) => !v)}>
+                        {editPeople ? "Done changing the people" : "Change the Tenants or Landlord"}
+                      </button>
+                      {editPeople && (
+                        <div className="mt-3 rounded-xl border border-line/60 bg-box p-4">
+                          <PlcPeople
+                            letId={prefill.applicationId}
+                            address={prefill.address}
+                            onPeople={(people) =>
+                              setPrefill((p) => {
+                                if (!p) return p;
+                                const tenants = people.filter((x) => x.role === "tenant").map((x) => ({ name: x.name, email: x.email, isPrimary: x.isPrimary }));
+                                const landlords = [...new Set(people.filter((x) => x.role === "landlord").map((x) => x.name.trim()).filter(Boolean))];
+                                return { ...p, tenants: tenants.length ? tenants : p.tenants, ...(landlords.length ? { landlords, landlordName: landlords[0], landlordNote: null } : {}) };
+                              })
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="nl-plc-settle">
                     <div className="nl-plc-field">
                       <span className="nl-plc-label">Move-in date</span>
@@ -1503,7 +1550,8 @@ export default function PlcWizard({
             agent's to change: sent, sent back, approved or declined. The copy
             matches the agent guide (lib/agent-guides, agent-plc). */}
         {step === "returned" && kase && (
-          <div>
+          /* Clear of the Back button above it: the heading sat under its edge (11 Nov 2026). */
+          <div className="pt-8">
             {kase.state === "deferred" ? (
               <>
                 <h1 className="text-2xl tracking-normal text-ink">Compliance Sent This Back</h1>
@@ -1548,15 +1596,35 @@ export default function PlcWizard({
                   {kase.decisionNote && <p className="mt-1 text-rose-800">{kase.decisionNote}</p>}
                 </div>
               </>
-            ) : (
+            ) : kase.state === "cancelled" ? (
+              <>
+                <h1 className="text-2xl tracking-normal text-ink">This PLC Was Cancelled</h1>
+                <p className="mt-2 text-sm text-muted">{kase.address}</p>
+                {(() => {
+                  const m = [...(kase.agentMoves ?? [])].reverse().find((x) => x.kind === "cancelled");
+                  return (
+                    <div className="mt-6 rounded-xl border border-line bg-box p-4">
+                      <p className="whitespace-pre-wrap text-sm text-ink">{m?.reason || "No reason was written."}</p>
+                      <p className="mt-2 text-xs text-muted">
+                        {m ? `${m.by} · ${prettyWhen(m.at)}` : ""}
+                      </p>
+                    </div>
+                  );
+                })()}
+                <p className="mt-4 text-sm text-muted">
+                  Its documents are still on the pack. Start it again and it comes back to you to check over and send.
+                </p>
+              </>
+            ) : demo ? (
               <>
                 <h1 className="text-2xl tracking-normal text-ink">This Is With the Compliance Team</h1>
                 <p className="mt-2 text-sm text-muted">{kase.address}</p>
                 <p className="mt-6 text-sm text-muted">
-                  Sent {prettyWhen(kase.submittedAt)}. They usually come back within 48 hours, and the
-                  pack stays locked until they do.
+                  Sent {prettyWhen(kase.submittedAt)}. They usually come back within 48 hours.
                 </p>
               </>
+            ) : (
+              <PlcInFlight kase={kase} busy={busy} onTakeBack={() => void agentMove("take-back")} onCancel={(why) => void agentMove("cancel", why)} />
             )}
 
             {error && (
@@ -1574,6 +1642,11 @@ export default function PlcWizard({
                   className={PRIMARY}
                 >
                   {busy ? "One moment…" : "Reopen and fix it"}
+                </button>
+              )}
+              {kase.state === "cancelled" && !demo && (
+                <button type="button" onClick={() => void agentMove("restart")} disabled={busy} className={PRIMARY}>
+                  {busy ? "One moment…" : "Start It Again"}
                 </button>
               )}
               {demo ? (

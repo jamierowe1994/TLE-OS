@@ -34,6 +34,10 @@ export type DealEventKind =
   /* The first check passed (30 Sep 2026): waiting on Kirstie or Michael. */
   | "plc_checked"
   | "plc_decided"
+  /* The agent took a sent pack back to change it, or called it off (James,
+     11 Nov 2026). It leaves compliance's queue, so they are told why. */
+  | "plc_taken_back"
+  | "plc_cancelled"
   /* Opened by the watcher the moment references come back, so the agent's
      application already has a pack waiting rather than a button to press. */
   | "plc_opened"
@@ -146,7 +150,15 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
     case "agent_cancelled":
       return `Cancelled by the agent: ${e.toStatus ?? "no reason given"}. Cancel it in Propoly`;
     case "plc_submitted":
-      return e.fromStatus === "deferred" ? "PLC pack back with you, resubmitted" : "PLC pack sent to you for checking";
+      return e.fromStatus === "deferred"
+        ? "PLC pack back with you, resubmitted"
+        : e.fromStatus === "taken-back"
+          ? "PLC pack resubmitted with new details - check it again from the start"
+          : "PLC pack sent to you for checking";
+    case "plc_taken_back":
+      return "PLC pack taken back by the agent to change - it will come again";
+    case "plc_cancelled":
+      return `PLC pack cancelled by the agent: ${e.toStatus ?? "no reason given"}`;
     case "plc_checked":
       return "PLC pack checked, ready for the final approval";
     case "plc_decided":

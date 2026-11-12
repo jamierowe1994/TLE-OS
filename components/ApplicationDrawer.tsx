@@ -1425,7 +1425,9 @@ export default function ApplicationDrawer({
     const noLandlord = info !== null && !info.failed && !landlordsAll.length && !info.landlord;
     const plcHref = plcStartHref;
     const plcCan = Boolean(plcHref) && !intro && !cancelled && plcReady && !plcDone;
-    const plcLabel = plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check";
+    /* With compliance it opens to show where it has got to, with Resubmit and Cancel (James, 11 Nov 2026). */
+    const plcWithCompliance = plcState === "submitted" || plcState === "scanning" || plcState === "reviewing" || plcState === "checked";
+    const plcLabel = plcState === "cancelled" ? "Start the PLC check again" : plcWithCompliance ? "See the PLC check" : plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check";
     const plcSub = intro ? "Marketing only - the landlord's" : cancelled ? "The deal is cancelled" : !plcHref ? "Needs an application in the OS" : plcDone ? "PLC check done" : plcReady ? "Before the tenancy starts" : "Once the offer is accepted";
     const telOf = (p: string) => `tel:${p.replace(/\s/g, "")}`;
 
@@ -2509,7 +2511,7 @@ export default function ApplicationDrawer({
               <Tile
                 icon="shield"
                 dark
-                label={plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check"}
+                label={plcState === "cancelled" ? "Start the PLC check again" : plcState === "submitted" || plcState === "scanning" || plcState === "reviewing" || plcState === "checked" ? "See the PLC check" : plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check"}
                 sub={cancelled ? "The deal is cancelled" : !plcStartHref ? "Needs an application in the OS" : plcDone ? "PLC check done" : plcReady ? "Before the tenancy starts" : "Once the offer is accepted"}
                 done={plcDone}
                 off={!plcDone && (Boolean(cancelled) || !plcStartHref || !plcReady)}

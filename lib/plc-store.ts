@@ -6,6 +6,9 @@ import { hasDb, q } from "@/lib/db";
 import { DATA_DIR } from "@/lib/business/data-dir";
 import {
   canMove,
+  PLC_IN_FLIGHT,
+  PLC_STATES,
+  type AgentMove,
   caseIdFor,
   checkById,
   noteAsSent,
@@ -80,6 +83,7 @@ interface Row extends Record<string, unknown> {
   let_type: string | null;
   file_keys: string[] | null;
   sent_anyway: SentAnyway[] | null;
+  agent_moves: AgentMove[] | null;
   final_asks: FinalAsk[] | null;
   ticks: Partial<Record<CheckId, PlcTick>> | null;
   ai_summary: PlcAiSummary | null;
@@ -123,6 +127,7 @@ function rowTo(r: Row): PlcCase {
     findings: Array.isArray(r.findings) ? r.findings : [],
     waivers: Array.isArray(r.waivers) ? r.waivers : [],
     sentAnyway: Array.isArray(r.sent_anyway) ? r.sent_anyway : [],
+    agentMoves: Array.isArray(r.agent_moves) ? r.agent_moves : [],
     finalAsks: Array.isArray(r.final_asks) ? r.final_asks : [],
     ticks: r.ticks && typeof r.ticks === "object" ? r.ticks : {},
     aiSummary: r.ai_summary ?? null,
@@ -147,7 +152,7 @@ function rowTo(r: Row): PlcCase {
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at,
-              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks, clauses, ticks, ai_summary`;
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks, clauses, ticks, ai_summary, agent_moves`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -911,10 +916,86 @@ export async function recordPreflight(id: string, findings: Finding[]): Promise<
   });
 }
 
+/**
+ * THE AGENT TAKES A SENT PACK BACK, CANCELS IT, OR STARTS IT AGAIN (James,
+ * 11 Nov 2026). One statement each, so two presses or a press against
+ * compliance's own move cannot both win: it only lands while the pack is where
+ * the caller saw it.
+ *
+ * Everything compliance had done goes (James: "clear and check again"): the
+ * findings, the first check, their ticks, the summary and the ask of the final
+ * approver. Those are of a pack that is about to change, and are never written
+ * by the general save (mutate), hence the statement of its own. The documents,
+ * the waivers and the agent's own notes stay. The move is written down on the
+ * pack (agent_moves), which is how compliance's screen can say "Resubmitted".
+ */
+const WIPE_COMPLIANCE = `findings = '[]'::jsonb, scanned_at = NULL, checked_at = NULL, checked_by = NULL, checked_by_email = NULL,
+              check_note = '', ticks = '{}'::jsonb, ai_summary = NULL, final_asks = '[]'::jsonb, final_ask_lock = NULL`;
+
+async function agentMove(id: string, to: "assembling" | "cancelled", from: PlcState[], move: Omit<AgentMove, "at" | "from">, refused: string): Promise<PlcCase> {
+  const at = new Date().toISOString();
+  if (hasDb()) {
+    const rows = await q<Row>(
+      `UPDATE os_plc_cases c
+          SET state = $2, ${WIPE_COMPLIANCE},
+              agent_moves = coalesce(agent_moves, '[]'::jsonb) || jsonb_build_array($3::jsonb || jsonb_build_object('from', c.state)),
+              updated_at = NOW()
+        WHERE id = $1 AND state = ANY($4::text[])
+        RETURNING ${COLS}`,
+      [id, to, JSON.stringify({ ...move, at }), from]
+    );
+    if (!rows[0]) {
+      const now = await getCase(id);
+      if (!now) throw new PlcRefused("That handover no longer exists.");
+      throw new PlcRefused(refused.replace("{state}", PLC_STATES.find((s) => s.id === now.state)?.label.toLowerCase() ?? now.state));
+    }
+    return rowTo(rows[0]);
+  }
+  return mutate(id, (c) => {
+    if (!from.includes(c.state)) throw new PlcRefused(refused.replace("{state}", PLC_STATES.find((s) => s.id === c.state)?.label.toLowerCase() ?? c.state));
+    return {
+      ...c,
+      state: to,
+      findings: [],
+      scannedAt: null,
+      checkedAt: null,
+      checkedBy: null,
+      checkedByEmail: null,
+      checkNote: "",
+      ticks: {},
+      aiSummary: null,
+      finalAsks: [],
+      agentMoves: [...(c.agentMoves ?? []), { ...move, at, from: c.state } as AgentMove],
+    };
+  });
+}
+
+/** Back from compliance to the agent, to change it and send it again. Any time before approval. */
+export function takeBackCase(id: string, by: { name: string; email: string }): Promise<PlcCase> {
+  return agentMove(id, "assembling", PLC_IN_FLIGHT, { kind: "taken-back", by: by.name, byEmail: by.email },
+    "This pack is {state} now, so it can't be taken back. Only one that is with compliance and not yet approved can.");
+}
+
+/** Called off by the agent while it was with compliance. Its documents are kept. */
+export function cancelCase(id: string, by: { name: string; email: string }, reason: string): Promise<PlcCase> {
+  const why = reason.replace(/\s+/g, " ").trim().slice(0, 500);
+  if (why.length < 3) throw new PlcRefused("Say why it is being cancelled, so compliance and the file both know.");
+  return agentMove(id, "cancelled", PLC_IN_FLIGHT, { kind: "cancelled", by: by.name, byEmail: by.email, reason: why },
+    "This pack is {state} now, so it can't be cancelled here. Only one that is with compliance and not yet approved can.");
+}
+
+/** A cancelled pack, started again: back to the agent with every document it had. */
+export function restartCase(id: string, by: { name: string; email: string }): Promise<PlcCase> {
+  return agentMove(id, "assembling", ["cancelled"], { kind: "restarted", by: by.name, byEmail: by.email },
+    "Only a cancelled pack can be started again.");
+}
+
 /** Deferred back to the agent, and they have picked it up again. */
 export async function reopenCase(id: string): Promise<PlcCase> {
   return mutate(id, (c) => {
-    if (!canMove(c.state, "assembling")) {
+    /* Named, not read off the table: since 11 Nov 2026 a pack with compliance can also return to
+       assembling, but only through takeBackCase, which wipes their work as well. */
+    if (c.state !== "deferred") {
       throw new PlcRefused("Only a deferred pack can be reopened.");
     }
     /* Findings are cleared on reopen. They describe documents that are about

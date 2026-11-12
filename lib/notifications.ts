@@ -94,7 +94,7 @@ import { maySendToClaude } from "@/lib/claude-tickets";
 const WANTS_VIEWING = /\b(arrange|book|request|requesting|organise|schedule)\s+(a\s+)?view(ing)?\b|\binterested in viewing\b|\b(like|love|want|keen) to (view|see)\b|\bcan i (view|see)\b|\bavailable (for|to) (a )?view|\bbook a viewing\b/i;
 
 const MONEY: DealEventKind[] = ["holding_in", "holding_reconciled", "deposit_in", "deposit_reconciled", "deposit_registered", "rent_in"];
-const PLC: DealEventKind[] = ["plc_submitted", "plc_checked", "plc_decided", "plc_opened", "move_in_ready"];
+const PLC: DealEventKind[] = ["plc_submitted", "plc_checked", "plc_decided", "plc_opened", "move_in_ready", "plc_taken_back", "plc_cancelled"];
 
 function kindOf(e: DealEventKind): Notice["kind"] {
   if (MONEY.includes(e)) return "money";

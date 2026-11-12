@@ -399,7 +399,9 @@ export type PlcState =
   | "approved"
   /** Something is missing or wrong; it goes back to the agent to fix. */
   | "deferred"
-  | "declined";
+  | "declined"
+  /** The agent called it off while it was with compliance. Kept, with its documents, to start again. */
+  | "cancelled";
 
 export const PLC_STATES: { id: PlcState; label: string; who: string; blurb: string }[] = [
   { id: "assembling", label: "Assembling", who: "Agent",
@@ -420,6 +422,8 @@ export const PLC_STATES: { id: PlcState; label: string; who: string; blurb: stri
     blurb: "Something is missing. Back to the agent, with the reason." },
   { id: "declined", label: "Declined", who: "Agent",
     blurb: "Not proceeding on this pack." },
+  { id: "cancelled", label: "Cancelled", who: "Agent",
+    blurb: "Called off by the agent. The documents are kept, to start it again." },
 ];
 
 /**
@@ -433,20 +437,36 @@ export const PLC_STATES: { id: PlcState; label: string; who: string; blurb: stri
  * `deferred` returns to `assembling` on purpose. A deferral is not an ending,
  * it is the agent's turn again, and giving it its own dead-end state would
  * leave real cases stranded with nowhere to go.
+ *
+ * THE AGENT CAN TAKE A PACK BACK, OR CALL IT OFF (James, 11 Nov 2026: "when a
+ * plc is going can we have two buttons - the ability to resubmit a plc with
+ * new details ... then give them the ability to cancel the plc"). Until then a
+ * sent pack was locked, and a wrong move-in date or a missing tenant meant
+ * asking compliance to defer it. Any time before approval (his call) the
+ * pack's agent may take it back to `assembling`, or cancel it. Both wipe what
+ * compliance had done on it (his call too: "clear and check again"), so what
+ * they sign off is always the pack that was last sent - the rule this table
+ * exists for still holds. Approved is final: approval writes to REX and
+ * Propoly. `cancelled` keeps its documents and returns to `assembling` when
+ * the agent starts it again.
  */
+/** With compliance, and not yet approved: where the agent may take it back or cancel it. */
+export const PLC_IN_FLIGHT: PlcState[] = ["submitted", "scanning", "reviewing", "checked"];
+export const inFlight = (s: PlcState) => PLC_IN_FLIGHT.includes(s);
 export const PLC_TRANSITIONS: Record<PlcState, PlcState[]> = {
   assembling: ["submitted"],
-  submitted: ["scanning", "reviewing"], // scanning is skippable when there is no key
-  scanning: ["reviewing"],
+  submitted: ["scanning", "reviewing", "assembling", "cancelled"], // scanning is skippable when there is no key
+  scanning: ["reviewing", "assembling", "cancelled"],
   /* Two people, in order (James, 30 Sep 2026): the first check reads every
      document, then Kirstie or Michael signs it off. Approval straight from
      reviewing is not in the table, so it cannot happen. Either of them can
      still send it back or decline it at their step. */
-  reviewing: ["checked", "deferred", "declined"],
-  checked: ["approved", "deferred", "declined"],
+  reviewing: ["checked", "deferred", "declined", "assembling", "cancelled"],
+  checked: ["approved", "deferred", "declined", "assembling", "cancelled"],
   approved: [],
   deferred: ["assembling"],
   declined: [],
+  cancelled: ["assembling"],
 };
 
 export const canMove = (from: PlcState, to: PlcState) =>
@@ -791,6 +811,27 @@ export type RlpRequest = {
   files: string[];
 };
 
+/**
+ * The agent taking a sent pack back to change it, calling it off, or starting
+ * a cancelled one again (11 Nov 2026). `from` is where it was with compliance,
+ * so their screen can say "taken back from first check"; `reason` is asked for
+ * on a cancel.
+ */
+export type AgentMove = {
+  kind: "taken-back" | "cancelled" | "restarted";
+  at: string;
+  by: string;
+  byEmail: string;
+  from: PlcState;
+  reason?: string;
+};
+
+/** The last time the agent took it back, when it has been sent again since: "Resubmitted" on compliance's screen. */
+export function resubmittedOf(c: Pick<PlcCase, "agentMoves" | "submittedAt" | "state">): AgentMove | null {
+  const last = [...(c.agentMoves ?? [])].reverse().find((m) => m.kind === "taken-back" || m.kind === "restarted") ?? null;
+  return last && c.submittedAt && c.submittedAt > last.at && c.state !== "assembling" && c.state !== "cancelled" ? last : null;
+}
+
 export type PlcCase = {
   id: string;
   /** The application this came from. */
@@ -817,6 +858,8 @@ export type PlcCase = {
   waivers: Waiver[];
   /** Every Send anyway on this pack, oldest first. Kept when it comes back: it is the record. */
   sentAnyway?: SentAnyway[];
+  /** Each time the agent took the pack back, cancelled it or started it again, oldest first. */
+  agentMoves?: AgentMove[];
   /** The last push of the approved pack into Propoly. Null until one runs. */
   propolyPush?: PropolyPush | null;
   rexPush?: RexPush | null;

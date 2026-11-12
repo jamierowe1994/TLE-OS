@@ -3021,6 +3021,9 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS reread_at TIMESTAMPTZ;
 -- store's general save, so a tick never races a decision.
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS ticks JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS ai_summary JSONB;
+-- The agent taking a sent pack back, cancelling it or starting it again
+-- (James, 11 Nov 2026), oldest first: [{ kind, at, by, byEmail, from, reason }].
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS agent_moves JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
 -- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the

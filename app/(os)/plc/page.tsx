@@ -558,6 +558,7 @@ const STATE: Record<PlcCase["state"], { label: string; tone: Tone }> = {
   approved: { label: "Approved", tone: "good" },
   deferred: { label: "Deferred", tone: "warning" },
   declined: { label: "Declined", tone: "accent" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
 };
 const WITH_COMPLIANCE: PlcCase["state"][] = ["submitted", "scanning", "reviewing", "checked"];
 
