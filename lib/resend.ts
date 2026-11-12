@@ -41,6 +41,18 @@ const API = "https://api.resend.com/emails";
 
 export class ResendBlocked extends Error {}
 
+/**
+ * A subject is one line. Resend turns down any subject with a line break in it
+ * (422, "The `\\n` is not allowed in the `subject` field"), and a subject built
+ * from something somebody typed - a message, a note, a home's name pasted from
+ * a document - can carry one. Folded to single spaces at the places mail
+ * leaves (here, lib/microsoft and lib/rex-mailmerge) rather than at each call
+ * site, which multiply. Auto-raised ticket 080328c4, 12 Nov 2026.
+ */
+export function oneLineSubject(subject: string): string {
+  return String(subject ?? "").replace(/\s+/g, " ").trim();
+}
+
 export function resendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && fromAddress());
 }
@@ -169,6 +181,7 @@ export async function sendEmail(msg: {
   headers?: Record<string, string>;
 }): Promise<SendResult> {
   const audience: Audience = msg.audience ?? "internal";
+  msg = { ...msg, subject: oneLineSubject(msg.subject) };
   if (!process.env.RESEND_API_KEY) {
     throw new ResendBlocked("Resend isn't connected — RESEND_API_KEY isn't set.");
   }
