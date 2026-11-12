@@ -121,19 +121,24 @@ export async function POST(req: NextRequest) {
 
   /* What the agent's diary entry says (lib/viewing-brief, 6 Oct 2026): the
      address with its postcode, the applicant's number and email, the access. */
-  address = await fullAddressFor(listingId, address);
+  /* The listing and the applicant are read side by side, not one after the
+     other (Chris Gurney, ticket f8500475, 12 Nov 2026: a booking took 33s,
+     each REX read ~15s in turn). fullAddressFor shares the same listing read. */
   let applicantPhone: string | null = null;
   let applicantEmail = (b.applicantEmail ?? "").trim() || null;
-  if (contactId) {
-    const d = await rexContactDetails(contactId).catch(() => ({ phone: null, email: null }));
-    applicantPhone = d.phone;
-    applicantEmail = applicantEmail ?? d.email;
-  } else if (isOsLead(String(b.leadId))) {
-    const c = await getContact(osContactIdFrom(String(b.leadId))).catch(() => null);
-    applicantPhone = c?.mobile?.trim() || null;
-  }
   const { readListingDetails } = await import("@/lib/listing-details");
-  const listingDetails = listingId ? await readListingDetails(Number(listingId), { cached: true }).catch(() => null) : null;
+  const [fullAddress, who, listingDetails] = await Promise.all([
+    fullAddressFor(listingId, address),
+    contactId
+      ? rexContactDetails(contactId).catch(() => ({ phone: null, email: null }))
+      : isOsLead(String(b.leadId))
+        ? getContact(osContactIdFrom(String(b.leadId))).then((c) => ({ phone: c?.mobile?.trim() || null, email: null }), () => ({ phone: null, email: null }))
+        : Promise.resolve({ phone: null, email: null }),
+    listingId ? readListingDetails(Number(listingId), { cached: true }).catch(() => null) : Promise.resolve(null),
+  ]);
+  address = fullAddress;
+  applicantPhone = who.phone;
+  if (contactId) applicantEmail = applicantEmail ?? who.email;
   const access = await accessLineFor(listingId, listingDetails?.propertyId ?? null).catch(() => null);
   const brief = viewingBrief({ address, applicantName, phone: applicantPhone, email: applicantEmail, access, unaccompanied, agentName: actor.name });
 
