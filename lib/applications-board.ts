@@ -179,6 +179,21 @@ export async function assembled(rexUserId: string | null, read: BoardRead = {}):
   return { held: await assemble(rexUserId), stale: false };
 }
 
+/**
+ * THE LAST COPY HELD, WHATEVER ITS AGE, AND NOTHING READ (12 Nov 2026).
+ *
+ * For a reader that only needs who is on an accepted let, and would rather
+ * have this morning's copy than none: the managed book gave the board six
+ * seconds, the day's first read took longer, and 12 South Chesters Lane went
+ * onto Portfolio with no tenants (lib/listings-moved-in). Never for a screen:
+ * it can be older than the last application filed.
+ */
+export async function heldCopy(rexUserId: string | null): Promise<Assembled | null> {
+  const key = cacheKeyFor(rexUserId);
+  const h = board.held.get(key) ?? (await readStored(key));
+  return h?.value ?? null;
+}
+
 /** An application has just been filed: nothing held before now may be shown. */
 export function markApplicationsFiled(): void {
   board.held.clear();

@@ -1,7 +1,7 @@
 import "server-only";
 import { sameHome } from "@/lib/address-parse";
 import { stillOnPortalFeeds } from "@/lib/advert-offline";
-import { assembled, type Assembled } from "@/lib/applications-board";
+import { assembled, heldCopy, type Assembled } from "@/lib/applications-board";
 import { getAllPropolyDeals, getPropolyCompletes, type BusinessDeal, type CompletedDeal } from "@/lib/business/propoly-deals";
 import { listingRead } from "@/lib/listing-details";
 import { bookFor } from "@/lib/listings-cache";
@@ -225,7 +225,11 @@ async function agentsOf(ids: string[]): Promise<Map<string, string>> {
 /** The applications board's held copy, if it comes within a few seconds (as lib/listings-taken). */
 async function applications() {
   const timeout = new Promise<null>((r) => setTimeout(() => r(null), 6000));
-  return Promise.race([assembled(null).then((x) => x.held.value).catch(() => null), timeout]);
+  const now = await Promise.race([assembled(null).then((x) => x.held.value).catch(() => null), timeout]);
+  /* Too slow (the day's first read of the board takes longer than that): the copy last held,
+     rather than none. With none, 12 South Chesters Lane was on Portfolio from Propoly's
+     move-in alone, and nobody was named on it (12 Nov 2026). */
+  return now ?? (await heldCopy(null).catch(() => null));
 }
 
 /**
@@ -272,9 +276,22 @@ export async function movedInListings(rexUserId: string | null, today = londonTo
       .filter((a) => { const closed = apps?.closed.get(a.id); return !closed || closed === "Moved in"; })
       .sort((a, b) => String(b.startDate ?? b.dateAccepted ?? "").localeCompare(String(a.startDate ?? a.dateAccepted ?? "")));
     const a = mine[0];
-    return (a?.applicants ?? [])
-      .filter((x) => x.name.trim())
-      .map((x, i) => ({ contactId: x.contactId ? String(x.contactId) : `app:${a!.id}:${i}`, name: x.name.trim(), email: x.email ?? null, phone: x.phone ?? null }));
+    const named = (from: { id: string; applicants?: { contactId?: string | number | null; name: string; email?: string | null; phone?: string | null }[] } | undefined) =>
+      (from?.applicants ?? [])
+        .filter((x) => String(x.name ?? "").trim())
+        .map((x, i) => ({ contactId: x.contactId ? String(x.contactId) : `app:${from!.id}:${i}`, name: x.name.trim(), email: x.email ?? null, phone: x.phone ?? null }));
+    const fromLet = named(a);
+    if (fromLet.length) return fromLet;
+    /* No accepted let on the listing itself (a room let straight into Propoly): the people on
+       Propoly's own deal for this home, the newest that got as far as the holding fee. */
+    const l = live.find((x) => String(x.id) === listingId);
+    const address = l ? [l.name, l.locality].filter(Boolean).join(", ") : "";
+    if (!address) return [];
+    const deal = (deals ?? [])
+      .filter((d) => d.statusKey !== "cancelled" && (d.app.propoly?.holdingPaid?.status === "paid" || PAST_FEE.has(d.statusKey)))
+      .filter((d) => sameHome(address, [d.app.propertyName, d.app.locality].filter(Boolean).join(", ")))
+      .sort((x, y) => String(y.app.startDate ?? "").localeCompare(String(x.app.startDate ?? "")))[0];
+    return named(deal?.app);
   };
   return new Map(homes.map((h) => [h.listingId, { moveIn: h.moveIn, source: h.source, tenants: peopleOf(h.listingId) }]));
 }
