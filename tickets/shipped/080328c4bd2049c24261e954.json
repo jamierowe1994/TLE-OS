@@ -1,0 +1,1 @@
+{ "id": "080328c4bd2049c24261e954", "summary": "Emails whose subject line had a line break in it were being turned down by the mail service; subjects are now folded onto one line before sending, so they go." }

@@ -4,6 +4,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:
 import { hasDb, q } from "@/lib/db";
 import { rexCall, rexConfigured } from "@/lib/rex";
 import { assertMaySendAs } from "@/lib/not-a-sender";
+import { oneLineSubject } from "@/lib/resend";
 
 /**
  * MICROSOFT 365, PER AGENT — so an email to a landlord is genuinely from them.
@@ -410,7 +411,8 @@ export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       message: {
-        subject: msg.subject,
+        /* One line, as Resend insists (ticket 080328c4, lib/resend). */
+        subject: oneLineSubject(msg.subject),
         body: { contentType: "HTML", content },
         toRecipients: [{ emailAddress: { address: msg.to.email, name: msg.to.name } }],
         ...(msg.cc?.length ? { ccRecipients: msg.cc.map((c) => ({ emailAddress: { address: c.email, name: c.name } })) } : {}),

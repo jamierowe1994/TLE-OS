@@ -1,5 +1,6 @@
 import "server-only";
 import { rexCall } from "@/lib/rex";
+import { oneLineSubject } from "@/lib/resend";
 
 /**
  * SENDING EMAIL THROUGH REX, IN THE SHAPE REX ACTUALLY HAS.
@@ -66,7 +67,7 @@ function mergeObject(target: MergeTarget, content?: MergeContent) {
     /* Per-object, not top-level: `custom_template` is a valid argument on
        queueMergeUsingObjects but NOT on getMergedStringSet, so putting the
        content on the object is the one form both accept. */
-    ...(content ? { custom: { subject: content.subject, body: content.body } } : {}),
+    ...(content ? { custom: { subject: oneLineSubject(content.subject), body: content.body } } : {}),
   };
 }
 
