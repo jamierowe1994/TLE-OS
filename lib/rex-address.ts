@@ -24,19 +24,29 @@ type Fields = { adr_unit_number: string | null; adr_street_number: string | null
 /**
  * "3f1 44 South Bridge", "Flat 2, 5 Canter Close", "12a High Street" into
  * REX's fields. REX keeps the flat (unit) apart from the number and street,
- * and makes the name "unit number street". A line with no house number
- * ("Rose Cottage, Main Street") goes whole into the street name.
+ * and makes the name "unit number street".
+ *
+ * A home with a name and no number ("Rose Cottage, Main Street") puts the
+ * name where REX keeps the number, which REX calls "Street No/House Name"
+ * (ticket 6ed7e115, 12 Nov 2026: the whole line went into the street name
+ * with the number blank, and REX refused every such change with "You cannot
+ * save a property without specifying a Street No/House Name"). Null when
+ * there is neither a number nor a part before the street to call its name:
+ * REX would refuse it, so it is not sent.
  */
-export function rexAddressFields(parts: AddressParts): Fields {
+const UNIT = /^(?:flat|apartment|apt|unit|room)\.?\s*\S+$/i;
+
+export function rexAddressFields(parts: AddressParts): Fields | null {
   const line = parts.name.replace(/\s*,\s*/g, " ").replace(/\s+/g, " ").trim();
   const m = line.match(/^(?:((?:flat|apartment|apt|unit|room)\.?\s*\S+|\S*\d\S*[a-z]\S*|\S+\/\S+)\s+)?(\d+[a-z]?(?:-\d+[a-z]?)?)\s+(.+)$/i);
-  return {
-    adr_unit_number: m?.[1]?.trim() || null,
-    adr_street_number: m ? m[2] : null,
-    adr_street_name: m ? m[3].trim() : parts.name.trim(),
-    adr_suburb_or_town: parts.town,
-    adr_postcode: parts.postcode,
-  };
+  const place = { adr_suburb_or_town: parts.town, adr_postcode: parts.postcode };
+  if (m) return { adr_unit_number: m[1]?.trim() || null, adr_street_number: m[2], adr_street_name: m[3].trim(), ...place };
+  /* No number: the comma parts say which is the name. "Flat 3, The Willows,
+     Main Road" is unit, house name, street. */
+  const bits = parts.name.split(",").map((b) => b.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const unit = bits.length >= 3 && UNIT.test(bits[0]) ? bits.shift()! : null;
+  if (bits.length < 2) return null;
+  return { adr_unit_number: unit, adr_street_number: bits[0], adr_street_name: bits.slice(1).join(" "), ...place };
 }
 
 const same = (a: unknown, b: unknown) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
@@ -58,6 +68,7 @@ export async function pushAddressToRex(rexPropertyId: string, parts: AddressPart
   const cur = (read.ok ? (read.result as Record<string, unknown> | null) : null) ?? null;
   if (!cur) return { ok: false, why: "Saved in the OS. The listing couldn't be read just now, so it still shows the old address. Try again in a minute." };
   const want = rexAddressFields(parts);
+  if (!want) return { ok: false, why: "Saved in the OS. The listing needs a house number or name before the street, e.g. 5 Canter Close or Rose Cottage, Main Street, so it still shows the old address." };
   const data: Record<string, unknown> = { id: Number(rexPropertyId) };
   for (const [k, v] of Object.entries(want)) if (!same(cur[k], v)) data[k] = v;
   if (Object.keys(data).length === 1) return { ok: true, name: typeof cur.system_search_key === "string" ? cur.system_search_key : null, unchanged: true };
