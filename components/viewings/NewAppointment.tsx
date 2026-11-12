@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
 import { DateField } from "@/components/offers/OfferParts";
 import { refreshDiary } from "@/lib/diary-store";
+import DayInDiary from "@/components/inspections/DayInDiary";
 
 /**
  * A GENERAL APPOINTMENT, NOT TIED TO A HOME OR A PERSON (Richard Callow
@@ -206,6 +207,8 @@ export default function NewAppointment({
                 <button key={l.mins} type="button" aria-pressed={mins === l.mins} className={mins === l.mins ? "is-on" : ""} onClick={() => setMins(l.mins)}>{l.label}</button>
               ))}
             </div>
+            {/* Your diary for the day picked, so nothing is double booked (Rhiannon Dodge, ticket 400c4216). */}
+            {date && <div className="mt-4"><DayInDiary date={date} time={time} mins={mins} /></div>}
           </FloatCard>
           <FloatCard>
             <FloatCardHead title="Where" aside="Optional" />

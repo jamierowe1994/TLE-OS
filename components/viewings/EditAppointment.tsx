@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Appt } from "@/lib/diary";
 import { refreshDiary } from "@/lib/diary-store";
+import DayInDiary from "@/components/inspections/DayInDiary";
 import { canCancelGeneral } from "@/components/CancelAppointment";
 import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
@@ -199,6 +200,8 @@ function EditSheet({ appt, onClose, onDone }: { appt: Appt; onClose: () => void;
                 <FieldSelect className="mt-1" value={String(mins)} onChange={(v) => setMins(Number(v))} options={lengths.map((l) => ({ value: String(l.mins), label: l.label }))} />
               </div>
             </div>
+            {/* Your diary for the day picked, this entry left out (Rhiannon Dodge, ticket 400c4216). */}
+            {day && <div className="mt-4"><DayInDiary date={day} time={time} mins={mins} skipId={appt.id} /></div>}
           </FloatCard>
 
           <FloatCard>

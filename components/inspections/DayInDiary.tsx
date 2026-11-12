@@ -15,6 +15,11 @@ import type { Appt } from "@/lib/diary";
  * that overlaps the time being booked said in words. Your own diary only:
  * everybody sees their own (James, 24 Sep 2026), so when somebody else is
  * going it says theirs is not shown rather than passing yours off as theirs.
+ *
+ * New Appointment and Change Appointment on the Diary show it too (Rhiannon
+ * Dodge, ticket 400c4216, 12 Nov 2026: her screen recording books a meeting
+ * at 09:00 on a day that already had two things at 09:00, with nothing on the
+ * form to say so). `skipId` is the entry being changed, so it is not its own clash.
  */
 
 const toMins = (hhmm: string) => {
@@ -32,16 +37,18 @@ function offsetOf(ymd: string): number | null {
   return Math.round((d.getTime() - t.getTime()) / 86_400_000);
 }
 
-export default function DayInDiary({ date, time, mins, goingName, goingIsMe, already }: {
+export default function DayInDiary({ date, time, mins, goingName = null, goingIsMe = true, already, skipId }: {
   /** "2026-11-13" */
   date: string;
   /** "10:00" */
   time: string;
   mins: number;
-  goingName: string | null;
-  goingIsMe: boolean;
+  goingName?: string | null;
+  goingIsMe?: boolean;
   /** When this visit is already booked ("2026-11-13", "10:00"): its own entry is moving, not a clash. */
   already?: { date: string; time: string } | null;
+  /** The diary entry being changed, left out so it is not counted as a clash with itself. */
+  skipId?: string | null;
 }) {
   const diary = useMyDiary();
   const offset = offsetOf(date);
@@ -57,6 +64,7 @@ export default function DayInDiary({ date, time, mins, goingName, goingIsMe, alr
       ? []
       : diary.appts
           .filter((a) => a.day === offset && a.kind !== "slot")
+          .filter((a) => !(skipId && a.id === skipId))
           .filter((a) => !(already && already.date === date && a.kind === "inspection" && a.start === already.time))
           .sort((a, b) => a.start.localeCompare(b.start));
   const clashes = items.filter((a) => {
