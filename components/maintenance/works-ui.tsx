@@ -134,12 +134,36 @@ export async function homesToSearch(): Promise<Property[]> {
   return (await readHomes()).homes;
 }
 
-/** Which certificate on the compliance book a planned category is about. */
+/** Which certificate on the compliance book a planned category is about.
+ *  PAT, legionella, alarms and fire were missing, so planning a PAT test
+ *  never filled its expiry date (Lianna Denholm, 12 Nov 2026, ticket
+ *  f8a39d4f). */
 export const CATEGORY_CERT: Record<string, string> = {
   "Gas safety (CP12)": "gas",
   "EICR": "eicr",
   "EPC": "epc",
   "HMO licence inspection": "licence",
+  "PAT test": "pat",
+  "Legionella risk assessment": "legionella",
+  "Smoke & CO alarms": "alarms",
+  "Fire risk assessment": "fire",
+};
+
+/** The same keys from a REX certificate type, as the home's own file reads
+ *  them (app/api/property-file VAULT_KEY), so a planned job's expiry date is
+ *  the one the home's Compliance tab shows. */
+export const CERT_TYPE_KEY: Record<string, string> = {
+  gas_safety: "gas",
+  eicr: "eicr",
+  epc: "epc",
+  mandatory_hmo_license: "licence",
+  additional_hmo_license: "licence",
+  selective_hmo_license: "licence",
+  legionella_risk_assessment: "legionella",
+  portable_appliance_testing: "pat",
+  smoke_alarms: "alarms",
+  co_alarms: "alarms",
+  emergency_lighting_fire_exit: "fire",
 };
 
 /** `wrap` for a value that must be read whole - a planned job's several categories. */

@@ -9,7 +9,7 @@ import FieldDate, { sayDate } from "@/components/FieldDate";
 import { ContractorForm } from "@/components/WorksNow";
 import type { Contractor, JobTenant, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
 import { CATEGORY_TRADE, PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES, categoriesOf, joinCategories } from "@/lib/works-catalogue";
-import { CATEGORY_CERT, ContractorPick, REPORTED_BY, readHomes, type Property } from "@/components/maintenance/works-ui";
+import { CATEGORY_CERT, CERT_TYPE_KEY, ContractorPick, REPORTED_BY, readHomes, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import DoodleIcon from "@/components/DoodleIcon";
 import FloatSheet, { FloatChoice, FloatDone, FloatFoot } from "@/components/new-look/FloatSheet";
@@ -219,20 +219,53 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
      more than one is ticked. Only while the date is untouched - a date typed
      by hand always wins. */
   const [dueTouched, setDueTouched] = useState(Boolean(draft?.dueAt));
-  const certDays = useMemo(() => {
-    let soonest: number | null = null;
+  /* The home's own certificates, read as its Compliance tab reads them
+     (Lianna Denholm, 12 Nov 2026, ticket f8a39d4f: planning a PAT test and a
+     gas safety on a home, no date came through). Opened from the home's own
+     page the home carried no certificates at all, and an agent's list of
+     homes never does (only the office reads the compliance book), so the
+     date was only ever filled for the office, from Contractors. Each
+     certificate's latest expiry, in days from today. */
+  const [ownCerts, setOwnCerts] = useState<{ id: string; certs: Record<string, number> } | null>(null);
+  useEffect(() => {
+    const id = picked?.id;
+    if (!planned || !id || !/^\d+$/.test(id)) return;
+    let live = true;
+    fetch(`/api/property-file?property=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; rows?: { type: string; expiry: string | null }[] }) => {
+        if (!live || !j?.ok) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const certs: Record<string, number> = {};
+        for (const r of j.rows ?? []) {
+          const key = CERT_TYPE_KEY[r.type];
+          if (!key || !r.expiry) continue;
+          const days = Math.round((new Date(`${r.expiry.slice(0, 10)}T12:00:00Z`).getTime() - new Date(`${today}T12:00:00Z`).getTime()) / 86400000);
+          if (certs[key] == null || days > certs[key]) certs[key] = days;
+        }
+        setOwnCerts({ id, certs });
+      })
+      .catch(() => null);
+    return () => { live = false; };
+  }, [planned, picked?.id]);
+  /* Each ticked certificate's date, so a visit for two (PAT and gas safety)
+     shows both, and the job is chased against the sooner. */
+  const certDates = useMemo(() => {
+    const out: { label: string; days: number }[] = [];
     for (const c of picks) {
       const key = CATEGORY_CERT[c];
-      const days = key ? picked?.certs?.[key]?.expires : null;
-      if (days != null && (soonest == null || days < soonest)) soonest = days;
+      if (!key) continue;
+      const own = ownCerts && ownCerts.id === picked?.id ? ownCerts.certs[key] : undefined;
+      const days = own ?? picked?.certs?.[key]?.expires ?? null;
+      if (days != null) out.push({ label: c.replace(/ \(.*\)$/, ""), days });
     }
-    return soonest;
-  }, [picks, picked]);
+    return out;
+  }, [picks, picked, ownCerts]);
+  const certDays = certDates.length ? Math.min(...certDates.map((d) => d.days)) : null;
+  const dayFrom = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
   useEffect(() => {
     if (!planned || dueTouched || !picked || certDays == null) return;
-    const d = new Date();
-    d.setDate(d.getDate() + certDays);
-    setDueAt(d.toISOString().slice(0, 10));
+    setDueAt(dayFrom(certDays));
   }, [planned, picked, certDays, dueTouched]);
 
   const hits = useMemo(() => {
@@ -687,9 +720,14 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                 {picked && certDays != null && !dueTouched
                   ? certDays < 0
                     ? "Overdue - the certificate we hold ran out on this date."
-                    : picks.filter((c) => CATEGORY_CERT[c]).length > 1 ? "From the soonest of the certificates we hold on this home." : "From the certificate we hold on this home."
+                    : certDates.length > 1 ? "From the sooner of the certificates we hold on this home." : "From the certificate we hold on this home."
                   : "When the current certificate runs out. It's on the works order so the contractor knows."}
               </p>
+              {certDates.length > 1 && (
+                <ul className={hint}>
+                  {certDates.map((d) => <li key={d.label}>{d.label} {d.days < 0 ? "ran out" : "runs out"} {sayDate(dayFrom(d.days))}</li>)}
+                </ul>
+              )}
             </div>
           )}
 
