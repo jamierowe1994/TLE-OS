@@ -598,9 +598,18 @@ function Dock() {
   const linesRef = useRef<Line[]>([]);
   linesRef.current = lines;
   const revealing = useRef(false);
+  /* Minimised rather than closed (Sean McMahon, ticket 82453c27, 12 Nov
+     2026): the next opening carries on where he was put away - same screen,
+     same conversation on show - instead of starting fresh. */
+  const minimised = useRef(false);
+  const [tucked, setTucked] = useState(false);
   useEffect(() => {
-    if (open && !revealing.current) setMark(linesRef.current.length);
+    if (open && !revealing.current && !minimised.current) setMark(linesRef.current.length);
     revealing.current = false;
+    if (open) {
+      minimised.current = false;
+      setTucked(false);
+    }
   }, [open]);
   /* Whether the server has said if he can answer on his own yet: until it
      has, the "I can't answer" line is not said. */
@@ -990,11 +999,25 @@ function Dock() {
 
   if (!signedIn) return null;
 
+  /** Put him away without closing: see `minimised`. */
+  function minimise() {
+    timers.current.forEach(clearTimeout);
+    setOpen(false);
+    setMood("idle");
+    rest();
+    minimised.current = true;
+    setTucked(true);
+  }
+
   async function toggle() {
     timers.current.forEach(clearTimeout);
     const next = !open;
     setOpen(next);
-    if (next && orb) {
+    if (next && orb && minimised.current) {
+      setOrbMenu(false);
+      setOpening(true);
+      window.setTimeout(() => setOpening(false), 1200);
+    } else if (next && orb) {
       /* He floats up, then the card grows out of him (steve-panel.css). */
       setOrbView("home");
       setOrbMenu(false);
@@ -1003,6 +1026,8 @@ function Dock() {
       void loadThreads();
     }
     if (!next) {
+      minimised.current = false;
+      setTucked(false);
       setMood("idle");
       rest();
       return;
@@ -2473,6 +2498,7 @@ function Dock() {
       onStart={startChat}
       onOpenThread={(id) => void openThread(id)}
       onClose={() => void toggle()}
+      onMinimise={minimise}
       busy={busy}
       greeting={greeting}
       conversation={
@@ -2530,8 +2556,8 @@ function Dock() {
         onPointerLeave={() => setDockHover(false)}
         onFocus={() => setDockHover(true)}
         onBlur={() => setDockHover(false)}
-        title={lookNew ? `${aName} - ask me anything` : `${aName} - help, guides and news`}
-        aria-label={lookNew ? `${aName} - ask me anything` : `${aName} - help, guides and news`}
+        title={tucked ? `${aName} - back to where you were` : lookNew ? `${aName} - ask me anything` : `${aName} - help, guides and news`}
+        aria-label={tucked ? `${aName} - back to where you were` : lookNew ? `${aName} - ask me anything` : `${aName} - help, guides and news`}
         aria-expanded={open}
         data-hide-from-shot
         data-os-steve
@@ -2638,6 +2664,11 @@ function Dock() {
                       {tab === "feedback" ? "Back to chat" : "Report"}
                     </button>
                   )}
+                  <button type="button" onClick={minimise} aria-label="Minimise" title="Minimise - press me to come back to this" className="nl-st-x is-min">
+                    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" aria-hidden>
+                      <path d="M6 12h12" />
+                    </svg>
+                  </button>
                   <button type="button" onClick={toggle} aria-label="Close" className="nl-st-x">
                     <Ico name="plus" size={18} />
                   </button>

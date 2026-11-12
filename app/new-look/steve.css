@@ -29,6 +29,7 @@
   background: transparent; color: var(--muted); cursor: pointer; transition: background-color 0.2s, color 0.2s;
 }
 [data-look="new"] .nl-st-x svg { transform: rotate(45deg); }
+[data-look="new"] .nl-st-x.is-min svg { transform: none; }
 [data-look="new"] .nl-st-x:hover { background: var(--box); color: var(--ink); }
 [data-look="new"] .nl-st-x:focus-visible,
 [data-look="new"] .nl-st-clear:focus-visible,
