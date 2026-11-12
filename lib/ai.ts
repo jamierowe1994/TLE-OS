@@ -63,7 +63,8 @@ export type AiFeature =
   | "bond-ask"
   | "planning-reader"
   | "translate"
-  | "automation-builder";
+  | "automation-builder"
+  | "visit-report";
 
 type Spec = {
   label: string;
@@ -107,6 +108,12 @@ export const AI_FEATURES: Record<AiFeature, Spec> = {
      from a short menu, and the agent checks every part before it runs. No
      head-to-head yet; AI_MODEL_AUTOMATION_BUILDER switches it. */
   "automation-builder": { label: "Automation builder (Steve)", key: "AUTOMATION_BUILDER", model: "claude-opus-5-5", effort: "low", voice: "steve" },
+  /* A visit report made in Inventory Base, read into the visit's own boxes
+     (12 Nov 2026). Sixty pages of photographs is ordinary, so the price of
+     the pages is most of the cost: Haiku 5.5, as the certificate reader, and
+     a person checks every box beside the report before anything is saved.
+     AI_MODEL_VISIT_REPORT switches it. */
+  "visit-report": { label: "Visit report reader", key: "VISIT_REPORT", model: "claude-haiku-5-5", effort: "low" },
 };
 
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];

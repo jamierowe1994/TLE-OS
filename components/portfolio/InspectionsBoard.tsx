@@ -18,6 +18,8 @@ import ReportSheet from "@/components/inspections/ReportSheet";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
 import SentEmails, { emailWent } from "@/components/inspections/SentEmails";
 import RecordVisit from "@/components/inspections/RecordVisit";
+import ReportFromUpload from "@/components/inspections/ReportFromUpload";
+import { canRead } from "@/lib/visit-report";
 import { asChecks, checkLines, checksDone, CHECKS } from "@/lib/inspection-checks";
 import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
@@ -771,6 +773,8 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
   const [busy, setBusy] = useState(false);
   /* The full-screen visit record, and where it opens. */
   const [recording, setRecording] = useState<null | "checks" | "rooms" | "writeup">(null);
+  /* The uploaded report beside our boxes (12 Nov 2026), and which file. */
+  const [fromReport, setFromReport] = useState<null | { key: string | null }>(null);
   const [err, setErr] = useState<string | null>(null);
   /* The Auto save chip in the header (components/SaveChip), 23 Sep 2026:
      every step, finding, photo and note on the visit says whether it landed. */
@@ -861,7 +865,7 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
               <h3 className="hand mt-1 text-[18px]">{STEPS.find((x) => x.id === step)?.label}</h3>
               <p className="mt-1 text-[12px] text-muted">{STEPS.find((x) => x.id === step)?.blurb}</p>
               <div className="mt-4">
-                <Now key={`${step}-${i.bookedAt ?? ""}`} step={step!} inspection={i} team={team} me={me} busy={busy} onMove={move} onRecord={setRecording} />
+                <Now key={`${step}-${i.bookedAt ?? ""}`} step={step!} inspection={i} team={team} me={me} busy={busy} onMove={move} onRecord={setRecording} onFromReport={(key) => setFromReport({ key })} />
               </div>
             </section>
 
@@ -926,7 +930,7 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
             </section>
 
             {/* ── The report and anything else filed on the visit. ── */}
-            <VisitFiles inspection={i} busy={busy} onMove={move} />
+            <VisitFiles inspection={i} busy={busy} onMove={move} onFromReport={(key) => setFromReport({ key })} said={step === "report"} />
 
             {/* ── What was found. ── */}
             <Findings inspection={i} findings={held.findings} busy={busy} onMove={move} onRecord={setRecording} />
@@ -960,6 +964,17 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
         startAt={recording === "rooms" ? undefined : recording}
       />
     )}
+    {i && held && fromReport && (
+      <ReportFromUpload
+        inspection={i}
+        findings={held.findings}
+        fileKey={fromReport.key}
+        me={me?.name ?? ""}
+        busy={busy}
+        onMove={move}
+        onClose={() => setFromReport(null)}
+      />
+    )}
     </SaveScopeProvider>
   );
 }
@@ -969,10 +984,13 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
  * with its report, recorded from the home's page; this is where it is seen,
  * and where one is added afterwards. Filed under the visit's own ref.
  */
-function VisitFiles({ inspection: i, busy, onMove }: { inspection: Inspection; busy: boolean; onMove: Move }) {
+function VisitFiles({ inspection: i, busy, onMove, onFromReport, said }: { inspection: Inspection; busy: boolean; onMove: Move; onFromReport: (key: string | null) => void; /** The Now card already offers the two ways. */ said?: boolean }) {
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const files = i.files ?? [];
+  /* A report made somewhere else can be read into the visit, or stand as the
+     report as it is - until the landlord has been sent one, or it is over. */
+  const open = !i.reportSentAt && i.status !== "closed" && i.status !== "cancelled";
 
   async function add(list: File[]) {
     if (list.length === 0) return;
@@ -1019,8 +1037,59 @@ function VisitFiles({ inspection: i, busy, onMove }: { inspection: Inspection; b
       ) : (
         <p className="mt-2 text-[12px] text-muted">None yet. A report made somewhere else, such as Inventory Base, can go here.</p>
       )}
+      {files.length > 0 && open && !said && <UploadedReport inspection={i} busy={busy || uploading} onMove={onMove} onFromReport={onFromReport} />}
       {err && <p className="mt-2 text-[11.5px] text-accent-dark">{err}</p>}
     </section>
+  );
+}
+
+/**
+ * THE REPORT WAS MADE SOMEWHERE ELSE (12 Nov 2026).
+ *
+ * Dan Richards, 11 Nov: "I've uploaded the property visit report that was
+ * completed using Inventory Base but OS still asks me to continue producing a
+ * report in OS. We need an 'I've uploaded a report, I don't need to complete
+ * one here' type button." And James the next morning: read the upload into
+ * our boxes, side by side, to check and fill in.
+ *
+ * So, wherever a visit has a file on it and its report has not gone out:
+ *
+ *   Fill it in from the report   their report beside our boxes, read for us
+ *   The report stands            written up and sent are both marked, the
+ *                                visit is closed, and nobody is emailed
+ */
+function UploadedReport({ inspection: i, busy, onMove, onFromReport, lead }: { inspection: Inspection; busy: boolean; onMove: Move; onFromReport: (key: string | null) => void; lead?: boolean }) {
+  const [asking, setAsking] = useState(false);
+  const files = i.files ?? [];
+  const report = files.find((f) => canRead(f.type, f.name)) ?? files[0];
+  if (!report) return null;
+  const stands = async () => {
+    if (!(await onMove({ action: "report_stands", file: report.key }, "Report"))) return;
+    setAsking(false);
+    await onMove({ action: "close" }, "Close");
+  };
+  return (
+    <div className={lead ? "" : "mt-4 border-t border-line/50 pt-4"}>
+      <p className="text-[12px] text-muted">
+        <span className="font-semibold text-ink">{report.name}</span> is on this visit. It can fill the boxes in here, or stand as the report as it is.
+      </p>
+      {asking ? (
+        <div className="mt-3 rounded-xl border border-line/70 bg-page p-3">
+          <p className="text-[12.5px]">
+            The uploaded report becomes this visit&apos;s report and the visit is closed. Nothing is written up here, and <b className="font-semibold">the landlord is not emailed from here</b>.
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <PressButton disabled={busy} onClick={() => void stands()} className="rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page disabled:opacity-40">Yes, the report stands</PressButton>
+            <button type="button" onClick={() => setAsking(false)} className="px-2 text-[12px] text-muted underline">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <PressButton disabled={busy} onClick={() => onFromReport(report.key)} className="rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page disabled:opacity-40">Fill it in from the report</PressButton>
+          <PressButton disabled={busy} onClick={() => setAsking(true)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold disabled:opacity-40">The report stands, nothing to write here</PressButton>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1079,6 +1148,7 @@ function Now({
   busy,
   onMove,
   onRecord,
+  onFromReport,
 }: {
   step: StepId;
   inspection: Inspection;
@@ -1087,6 +1157,8 @@ function Now({
   busy: boolean;
   onMove: Move;
   onRecord: (at: "checks" | "rooms" | "writeup") => void;
+  /** Open the uploaded report beside our boxes. */
+  onFromReport: (key: string | null) => void;
 }) {
   const soon = (days: number, hour: number) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(hour, 0, 0, 0); return forInput(d); };
   const [slots, setSlots] = useState<string[]>([soon(3, 10), soon(4, 14), soon(5, 9)]);
@@ -1277,6 +1349,17 @@ function Now({
       );
     }
     case "report":
+      /* A report made somewhere else is already on the visit (Dan Richards,
+         11 Nov 2026): that comes first, and writing it up here is the other way. */
+      if ((inspection.files ?? []).length > 0) {
+        return (
+          <>
+            <p className="mb-2 text-[12px] text-muted">Visited {day(inspection.visitedAt)}.</p>
+            <UploadedReport inspection={inspection} busy={busy} onMove={onMove} onFromReport={onFromReport} lead />
+            <button type="button" disabled={busy} onClick={() => onRecord("checks")} className="mt-3 text-[11.5px] text-muted underline">Or go through the checks and rooms here</button>
+          </>
+        );
+      }
       return (
         <>
           <p className="text-[12px] text-muted">Visited {day(inspection.visitedAt)}. Go through the checks and each room, then write it up for the landlord.</p>
@@ -1284,6 +1367,7 @@ function Now({
             <PressButton disabled={busy} onClick={() => onRecord("checks")} className={btn}>Carry on recording</PressButton>
             <PressButton disabled={busy} onClick={() => onRecord("writeup")} className={ghost}>Write it up</PressButton>
           </div>
+          <p className="mt-3 text-[11.5px] text-muted">Report made somewhere else, such as Inventory Base? Add it under Report and files below and it can fill this in.</p>
         </>
       );
     case "send_report":

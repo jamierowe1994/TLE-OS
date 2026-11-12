@@ -510,6 +510,11 @@ export type Move =
   | { action: "no_access"; reason: string }
   | { action: "report"; condition: Condition; summary: string }
   | { action: "report_sent" }
+  /* The report made somewhere else IS the report (Dan Richards, 11 Nov 2026:
+     "I've uploaded a report, I don't need to complete one here"). Written up
+     and sent are both marked, nothing is emailed, and the file is named on
+     the timeline. A visit not yet marked done is marked done with it. */
+  | { action: "report_stands"; file: string }
   | { action: "close" }
   | { action: "cancel"; reason: string }
   | { action: "reopen" }
@@ -644,6 +649,20 @@ export async function moveInspection(id: string, move: Move, by: string): Promis
       args = [id];
       line = `Report marked as sent to ${found.inspection.landlord || "the landlord"}.`;
       break;
+    case "report_stands": {
+      const name = (move.file ?? "").trim();
+      const held = found.inspection.files.find((f) => f.name === name || f.key === name);
+      if (!held) throw new Error("Put the report on the visit first, then say it stands.");
+      if (found.inspection.reportSentAt) throw new Error("This visit's report has already gone to the landlord.");
+      sql = `UPDATE os_inspections SET status = $2,
+               visited_at = COALESCE(visited_at, NOW()), no_access_at = NULL,
+               summary = CASE WHEN summary = '' THEN $3 ELSE summary END,
+               reported_at = COALESCE(reported_at, NOW()), report_sent_at = NOW(), updated_at = NOW()
+             WHERE id = $1 RETURNING *`;
+      args = [id, setStatus("reported"), `The full report is on the visit: ${held.name}.`];
+      line = `${held.name} stands as the report. Nothing was written up here and nothing was emailed.`;
+      break;
+    }
     case "close":
       sql = `UPDATE os_inspections SET status = $2, closed_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`;
       args = [id, setStatus("closed")];

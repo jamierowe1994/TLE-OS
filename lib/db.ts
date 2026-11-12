@@ -776,6 +776,14 @@ ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS tenant_ack_at TIMESTAMPTZ;
 ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS tenant_ack_note TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS checks JSONB NOT NULL DEFAULT '{}';
 ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS appointment_id TEXT;
+-- A report made somewhere else (Inventory Base), read into the visit's boxes
+-- (12 Nov 2026): what the reader found, kept apart from the visit itself so
+-- the board's lists never carry it. One per visit; a new read replaces it.
+CREATE TABLE IF NOT EXISTS os_inspection_reads (
+  inspection_id TEXT PRIMARY KEY,
+  state         JSONB NOT NULL,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 -- The REX PM maintenance task a works order was taken on from (1 Oct 2026).
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rexpm_task_id TEXT;
 -- When the contractor was asked for a quote before any works order (Sean, 20 Oct 2026).
