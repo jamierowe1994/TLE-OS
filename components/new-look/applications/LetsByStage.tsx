@@ -75,7 +75,10 @@ export default function LetsByStage({
   waiting,
   waitingReady,
   extra,
+  whenNone,
 }: {
+  /** Said in place of "No lets in progress" when there is a reason there are none (not connected to REX). */
+  whenNone?: React.ReactNode;
   everything: boolean;
   /** The application for this let, if there is one, to open its page. */
   matchApplication: (d: Deal) => string | null;
@@ -401,7 +404,9 @@ export default function LetsByStage({
               {g.deals.map(row)}
             </section>
           ))
-        ) : stage === "handover" && showWaiting ? null : (
+        ) : stage === "handover" && showWaiting ? null : whenNone && stage === "all" && !q.trim() ? (
+          whenNone
+        ) : (
           <div className="nl-empty">
             <SteveFace size={34} mood={q.trim() ? "surprised" : "happy"} />
             <span>

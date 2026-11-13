@@ -22,6 +22,7 @@ import type { Application } from "@/lib/applications";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Ico, Mast, Tabs, type Tone } from "@/components/new-look/Parts";
 import LetsByStage from "@/components/new-look/applications/LetsByStage";
+import ConnectRex from "@/components/ConnectRex";
 
 /* The appraisal file's grammar, so the two boards read as one product. */
 const card = "rounded-[22px] border border-line/50 bg-white";
@@ -144,7 +145,7 @@ const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en
 type OsAccepted = { id: string; name: string; address: string; listingId: string | null; amount: number | null; moveIn: string | null; by: string; at: string };
 /* A let only Propoly knows about (lib/propoly-only-lets, 9 Oct 2026). */
 type PropolyOnly = { id: string; address: string; locality: string; tenants: string; status: string; stage: string; offer: number | null; moveIn: string | null; received: string | null; agentName: string | null; href: string; external: boolean };
-type AppsAnswer = { applications?: Application[]; osAccepted?: OsAccepted[]; propolyOnly?: PropolyOnly[]; error?: string; scope?: string; everything?: boolean; stale?: boolean; pulledAt?: string };
+type AppsAnswer = { applications?: Application[]; osAccepted?: OsAccepted[]; propolyOnly?: PropolyOnly[]; error?: string; unlinked?: boolean; scope?: string; everything?: boolean; stale?: boolean; pulledAt?: string };
 
 /**
  * One fetch, however many times this mounts - lib/page-cache shares the read
@@ -179,6 +180,8 @@ export default function Applications() {
   }, []);
   useEffect(() => readOffers(true), [readOffers]);
   const [error, setError] = useState<string | null>(null);
+  /* Not connected to REX: the board offers the way in (components/ConnectRex). */
+  const [unlinked, setUnlinked] = useState(false);
   /* Customer updates still to tell, for the header link. */
   const [updatesOpen, setUpdatesOpen] = useState(0);
   useEffect(() => {
@@ -236,6 +239,7 @@ export default function Applications() {
   }, []);
   const take = useCallback((d: AppsAnswer) => {
     if (d.error) setError(d.error);
+    setUnlinked(Boolean(d.unlinked));
     if (d.scope) setScope({ label: d.scope, everything: Boolean(d.everything) });
     setApps(d.applications ?? []);
     setOsAccepted(d.osAccepted ?? []);
@@ -434,6 +438,7 @@ export default function Applications() {
 
         {view === "board" ? (
           <LetsByStage
+            whenNone={unlinked ? <ConnectRex what="applications" /> : undefined}
             everything={Boolean(scope?.everything)}
             matchApplication={(d) => {
               const lid = d.app.listingId ? Number(d.app.listingId) : null;
@@ -538,6 +543,8 @@ export default function Applications() {
                   <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" />
                   Reading the applications…
                 </p>
+              ) : unlinked ? (
+                <ConnectRex what="applications" />
               ) : error ? (
                 <div className="nl-apps-problem" role="alert">
                   <p className="nl-block-title">The applications didn&apos;t load</p>
@@ -914,6 +921,8 @@ export default function Applications() {
 
           {apps === null ? (
             <BoardSkeleton label="Loading applications…" count={6} />
+          ) : unlinked ? (
+            <ConnectRex what="applications" look={false} center />
           ) : error ? (
             <p className="py-10 text-center text-[12.5px] text-muted">{error}</p>
           ) : rows.length === 0 && !(stage === "open" && propolyMine.length) ? (

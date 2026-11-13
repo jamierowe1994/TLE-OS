@@ -32,6 +32,7 @@ import { useNewLook } from "@/lib/use-new-look";
 import { Mast, Badge, Tabs, Ico, type Tone } from "@/components/new-look/Parts";
 import { initialOnly } from "@/lib/first-names";
 import { BoardSkeleton } from "@/components/Skeleton";
+import ConnectRex, { NOT_CONNECTED } from "@/components/ConnectRex";
 
 /**
  * Portfolio — the managed book. Every property the business looks after,
@@ -476,7 +477,7 @@ export default function Portfolio() {
     const certTone: Record<CertStatus, Tone> = { expired: "accent", urgent: "warning", missing: "neutral", watch: "neutral", ok: "good" };
     const nlBlurb =
       state.status === "loading" ? "Fetching the managed book…"
-      : state.status === "failed" ? (state.unlinked ? "We can't show you a portfolio yet." : "The book couldn't be read.")
+      : state.status === "failed" ? (state.unlinked ? NOT_CONNECTED : "The book couldn't be read.")
       : `${(state.book.counts.homes ?? state.book.counts.properties).toLocaleString("en-GB")} homes under management across ${state.book.counts.towns} towns, for ${state.book.counts.landlords} landlords${state.everything ? "" : ` (${state.scope}'s book)`}.${state.ageMs != null ? ` Figures ${asOf(state.ageMs).text}.` : state.stale ? " Refreshing behind." : ""}`;
     const nlCertsHint =
       certs.status === "checking" ? "Checking the certificates…"
@@ -587,7 +588,9 @@ export default function Portfolio() {
           </p>
         )}
 
-        {state.status === "failed" ? (
+        {state.status === "failed" && state.unlinked ? (
+          <ConnectRex what="homes" />
+        ) : state.status === "failed" ? (
           <div className="py-6" role="alert">
             <p className="nl-block-title">{state.unlinked ? "We can't show you a portfolio yet" : "The book couldn't be read"}</p>
             <p className="nl-meta mt-1.5 max-w-xl">{state.error}</p>
@@ -918,7 +921,9 @@ export default function Portfolio() {
         search={false}
       />
 
-      {state.status === "failed" ? (
+      {state.status === "failed" && state.unlinked ? (
+        <ConnectRex what="homes" look={false} />
+      ) : state.status === "failed" ? (
         <div className="fade-up mt-8 rounded-[22px] border border-dashed border-accent-dark/50 bg-white p-6">
           <p className="text-[14px]">{state.unlinked ? "We can't show you a portfolio yet" : "The book couldn't be read"}</p>
           <p className="mt-1 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">{state.error}</p>

@@ -23,6 +23,7 @@ import { Readiness, Tag, boardGaps, readiness, statusOf, type PublishCheck } fro
 import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
 import rexSample from "@/lib/rex-sample.json";
 import { useNewLook } from "@/lib/use-new-look";
+import ConnectRex, { NOT_CONNECTED } from "@/components/ConnectRex";
 import { Badge, Ico, Mast, Tabs } from "@/components/new-look/Parts";
 
 /**
@@ -515,6 +516,8 @@ export default function Listings() {
     live: boolean;
     loading: boolean;
     failed?: boolean;
+    /** Not connected to REX: the board offers the way in (components/ConnectRex). */
+    unlinked?: boolean;
     reason?: string;
   }>(() => {
     /* The last good read paints at once (lib/page-cache); loadBook corrects it. */
@@ -546,7 +549,8 @@ export default function Listings() {
         live: false,
         loading: false,
         failed: !j.unlinked,
-        reason: j.reason ?? "We couldn't read your listings just now. Nothing is lost - try again in a minute.",
+        unlinked: Boolean(j.unlinked),
+        reason: j.unlinked ? NOT_CONNECTED : j.reason ?? "We couldn't read your listings just now. Nothing is lost - try again in a minute.",
       });
     } catch {
       /* A book already on the screen stays: a refresh that fails after a save
@@ -993,7 +997,8 @@ export default function Listings() {
           )}
           {archiveNote && <p className="mb-4 rounded-xl bg-accent-soft px-4 py-3 text-[13px] font-medium text-accent-dark">{archiveNote}</p>}
           {!eachOffer && book.loading && <BoardSkeleton kind="cards" label="Fetching your listings…" count={6} />}
-          {!eachOffer && !book.loading && !book.live && book.listings.length === 0 && (
+          {!eachOffer && !book.loading && !book.live && book.listings.length === 0 && book.unlinked && <ConnectRex what="listings" />}
+          {!eachOffer && !book.loading && !book.live && book.listings.length === 0 && !book.unlinked && (
             <div className="py-10" role={book.failed ? "alert" : "status"}>
               <p className="nl-block-title">{book.failed ? "Your listings didn't load" : "No listings to show yet"}</p>
               <p className="nl-meta mt-1.5 max-w-md">{book.reason}</p>
@@ -1323,7 +1328,8 @@ export default function Listings() {
           <p className="py-6 text-[12.5px] text-accent-dark">{archive.error}</p>
         )}
         {!eachOffer && book.loading && <BoardSkeleton kind="cards" label="Fetching your listings…" count={6} />}
-        {!eachOffer && !book.loading && !book.live && book.listings.length === 0 && (
+        {!eachOffer && !book.loading && !book.live && book.listings.length === 0 && book.unlinked && <ConnectRex what="listings" look={false} center />}
+        {!eachOffer && !book.loading && !book.live && book.listings.length === 0 && !book.unlinked && (
           <div className="py-8 text-center" role={book.failed ? "alert" : "status"}>
             <p className="text-[13px] font-semibold text-ink">{book.failed ? "Your listings didn't load" : "No listings to show yet"}</p>
             <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-muted">{book.reason}</p>

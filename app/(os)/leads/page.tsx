@@ -38,6 +38,7 @@ import { PASSPORT_LABEL, type PassportState, type PassportStateRow } from "@/lib
 import type { LeadViewingRow } from "@/lib/lead-viewings-shape";
 import { SAGE_INK, SAGE_WASH } from "@/components/ListingTags";
 import { useNewLook } from "@/lib/use-new-look";
+import ConnectRex, { NOT_CONNECTED } from "@/components/ConnectRex";
 import { Badge, Ico, Mast, Tabs, type Tone } from "@/components/new-look/Parts";
 import { LIco, Person } from "@/components/new-look/leads/LeadBits";
 
@@ -60,6 +61,8 @@ interface LeadSource {
   /** The read failed. The board says so rather than showing an empty list as
    *  if it were true. */
   failed?: boolean;
+  /** Not connected to REX: the board offers the way in (components/ConnectRex). */
+  unlinked?: boolean;
   scanned?: number;
   setAside?: { sales: number; unclear: number; blank: number };
   total?: number | null;
@@ -96,7 +99,8 @@ function sourceFrom(j: LeadsAnswer): LeadSource {
     live: false,
     loading: false,
     failed: !j.unlinked,
-    reason: j.reason ?? "We couldn't read your leads just now. Nothing is lost - try again in a minute.",
+    unlinked: Boolean(j.unlinked),
+    reason: j.unlinked ? NOT_CONNECTED : j.reason ?? "We couldn't read your leads just now. Nothing is lost - try again in a minute.",
   };
 }
 
@@ -1085,6 +1089,8 @@ export default function Leads() {
         <div className="mt-6">
           {!source.live && ALL.length === 0 && source.loading ? (
             <BoardSkeleton label="Fetching your leads…" count={7} />
+          ) : !source.live && ALL.length === 0 && source.unlinked ? (
+            <ConnectRex what="leads" />
           ) : !source.live && ALL.length === 0 ? (
             <div className="py-10" role={source.failed ? "alert" : "status"}>
               <p className="nl-block-title">{source.failed ? "Your leads didn't load" : "No leads to show yet"}</p>
@@ -1325,7 +1331,9 @@ export default function Leads() {
           <BoardSkeleton label="Fetching your leads…" count={7} />
         ) : !source.live && ALL.length === 0 ? (
           <div className="fade-up rounded-[22px] border border-line/50 bg-white px-5 py-10 text-center" role="status">
-            {source.loading ? null : (
+            {source.loading ? null : source.unlinked ? (
+              <ConnectRex what="leads" look={false} center />
+            ) : (
               <>
                 <p className="text-[13px] font-semibold text-ink">{source.failed ? "Your leads didn't load" : "No leads to show yet"}</p>
                 <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-muted">{source.reason}</p>
