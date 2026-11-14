@@ -3,7 +3,7 @@ import { assistantNameFor } from "@/lib/assistant-name";
 import { publicError } from "@/lib/public-error";
 import type { OpenSurface } from "@/lib/open-record";
 import { sealPayload, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { scopeFor } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { memoryFor } from "@/lib/assistant-steve-more";
 import { findUserById } from "@/lib/users";
 import {
@@ -222,7 +222,12 @@ export async function POST(req: NextRequest) {
   /* WHOSE data may his tools read. Resolved here, from the request, and
      handed down — a tool that decided its own scope would be one forgotten
      import away from answering across the whole group. */
-  const scope = await scopeFor(req);
+  /* The book their screens show (14 Nov 2026): the office - pre-tenancy,
+     compliance, super admins - sees the whole business on Portfolio, and was
+     told by Steve that a home outside their own REX book "isn't in your book"
+     (Kirstie on five homes, Lorna on two, Sean on one). Same rule as the
+     screens, lib/scope bookScope; an agent is still their own book. */
+  const scope = await bookScope(req);
 
   let answer;
   try {

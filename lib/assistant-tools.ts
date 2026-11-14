@@ -669,7 +669,7 @@ const proposeWriteUp: AssistantTool = {
 const proposeEmail: AssistantTool = {
   name: "propose_email",
   description:
-    "Compose an email to a property's landlord or tenant. Call this when somebody wants to write to either. You do not choose the address — name the property and the role, and the real contact is looked up. Shows them the finished message; it is NOT sent by you. Sending through REX is not wired yet, so tell them it is ready to copy rather than that it has gone.",
+    "Compose an email to a property's landlord or tenant. Call this when somebody wants to write to either. You do not choose the address — name the property and the role, and the real contact is looked up. Shows them the finished message as a card; it is NOT sent by you. When they press Send it goes from their own Outlook mailbox and is copied onto the contact's record, as long as the Admin switches allow it; the card says plainly if sending is switched off, and then it is ready to copy.",
   input_schema: {
     type: "object",
     properties: {
