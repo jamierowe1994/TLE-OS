@@ -270,8 +270,12 @@ export async function isOnboarded(userId: string): Promise<boolean> {
   if (!hasDb()) return false;
   try {
     const rows = await q<{ n: string }>(
+      /* Or has asked him a real question (14 Nov 2026, ticket 8642ebc6):
+         five people had chatted to him without ever finishing the
+         introduction, so every fresh copy of the panel started it again on
+         them, in the middle of whatever they were doing. */
       `SELECT COUNT(*)::text AS n FROM os_assistant_log
-       WHERE user_id = $1 AND kind = 'onboarding-help'`,
+       WHERE user_id = $1 AND (kind = 'onboarding-help' OR (role = 'agent' AND kind = 'ask'))`,
       [userId]
     );
     return Number(rows[0]?.n ?? 0) > 0;

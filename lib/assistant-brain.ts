@@ -722,6 +722,7 @@ export async function ask(
   let outTokens = 0;
   let spent = 0;
   let spoken = "";
+  let nudgedForCard = false;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     /* The ceiling, re-read every round against what THIS turn has already
@@ -761,6 +762,22 @@ export async function ask(
       .join("\n")
       .trim();
     if (saidNow) spoken = saidNow;
+    /* ASKED FOR A YES WITH NOTHING TO SAY YES TO (Erleta Vathej, ticket
+       8642ebc6; James, 14 Nov 2026: "fix Steve"). He laid out an address
+       change, "Shall I change it?", without the propose_ call that puts the
+       button under it, so her "yes" had nothing to press and the next reply
+       had to apologise that it "only described the change". Once a turn: he
+       is sent back to make the card, or to say plainly that he can't. */
+    if ((!calls.length || res.stop_reason !== "tool_use") && !proposal && !screenPlan && !nudgedForCard && asksForAYes(spoken)) {
+      nudgedForCard = true;
+      messages.push({ role: "assistant", content: res.content });
+      messages.push({
+        role: "user",
+        content:
+          "[System, not the person: your reply asks them to confirm a change, but you made no propose_ card this turn, so there is no button for them to press and a typed yes changes nothing. Call the right propose_ tool now and keep your words to what the card will do. If no tool can make this change, say so plainly and tell them who can, without asking them to confirm.]",
+      });
+      continue;
+    }
     if (!calls.length || res.stop_reason !== "tool_use") {
       const text = houseStyle(spoken);
       /* EVERY PROPERTY HE FINDS IS OFFERED (James, 2 Oct 2026: "say that
@@ -875,4 +892,18 @@ export async function ask(
     proposal,
     guide,
   };
+}
+
+/**
+ * Does this reply end by asking them to say yes to a change? "Shall I change
+ * it?", "Press Change it under this message, or type yes." Not an offer to
+ * open or show something, which has its own button (offer_to_open) or none.
+ */
+export function asksForAYes(text: string): boolean {
+  const tail = text.trim().split(/\n+/).slice(-2).join(" ");
+  if (/\b(press|tap|click)\b[^.?!]*\b(under|below)\b[^.?!]*\bmessage\b/i.test(tail) || /\b(type|say|reply)\s+["'“]?yes\b/i.test(tail)) return true;
+  const q = /[^.?!]*\?\s*$/.exec(tail)?.[0] ?? "";
+  if (!/\b(shall i|should i|do you want me to|want me to|would you like me to|ok(ay)? to|go ahead)\b/i.test(q)) return false;
+  if (/\b(open|show|take you|walk you|look|find|check|read|explain)\b/i.test(q)) return false;
+  return /\b(change|update|send|save|set|move|add|write|rename|put|book|create|make|log|record|replace|edit|post|publish|push)\b/i.test(q);
 }
