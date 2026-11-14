@@ -17,6 +17,7 @@ export default function Emails() {
   const router = useRouter();
   const [list, setList] = useState<Newsletter[] | null>(null);
   const [armed, setArmed] = useState(true);
+  const [mailoutsArmed, setMailoutsArmed] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
   const [creating, setCreating] = useState<NewsletterKind | null>(null);
@@ -28,6 +29,7 @@ export default function Emails() {
         if (!j.ok) throw new Error(j.error || "Couldn't load the emails.");
         setList(j.newsletters);
         setArmed(Boolean(j.armed));
+        setMailoutsArmed(Boolean(j.mailoutsArmed));
       })
       .catch((e) => setErr(e.message));
   }, []);
@@ -63,7 +65,7 @@ export default function Emails() {
     <div className="px-4 md:px-0">
       <PageHeader
         title="Emails & Events"
-        blurb="Design a newsletter or an event invite, pick who gets it, and send it now or at a time you choose."
+        blurb="Design a newsletter or an event invite, pick who gets it - the team, or landlords and tenants by list - and send it now or at a time you choose."
       />
 
       <div className="fade-up mt-6 flex flex-wrap items-center gap-3">
@@ -127,7 +129,8 @@ export default function Emails() {
         ) : (
           <ul className="space-y-2">
             {list?.map((n) => {
-              const s = statusLine(n, armed);
+              const customers = n.audience === "customers";
+              const s = statusLine(n, customers ? mailoutsArmed : armed);
               return (
                 <li key={n.id} className="flex items-stretch gap-2">
                   <Link
@@ -139,7 +142,11 @@ export default function Emails() {
                       <span className="block truncate text-[11.5px] text-muted">{n.subject || "No subject yet"}</span>
                     </span>
                     <Pill tone="neutral">{n.kind === "event" ? "Event" : "Newsletter"}</Pill>
-                    <span className="text-[11.5px] text-muted">{n.recipients.length} {n.recipients.length === 1 ? "person" : "people"}</span>
+                    <span className="text-[11.5px] text-muted">
+                      {customers
+                        ? `Landlords and tenants, ${n.lists.length} ${n.lists.length === 1 ? "list" : "lists"}`
+                        : `${n.recipients.length} ${n.recipients.length === 1 ? "person" : "people"}`}
+                    </span>
                     <Pill tone={s.tone}>{s.text}</Pill>
                   </Link>
                   <button

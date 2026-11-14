@@ -488,6 +488,21 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /* Marketing mail-outs to landlords and tenants (James, 14 Nov 2026,
+       lib/mail-lists). Its own switch, apart from the team newsletter one
+       and apart from "Email to landlords and tenants": a mail-out is one
+       press to hundreds of customers, so it is armed by itself, and it needs
+       the customer switch on as well. Off, a published mail-out sits Held.
+       No old variable ever decided this, so it is off until armed here. */
+    key: "marketing_mailouts",
+    label: "Marketing mail-outs to landlords and tenants",
+    what: "Lets Marketing's published mail-outs go to the landlord and tenant lists they pick, at their scheduled time, a paced number each day. Every copy carries an unsubscribe link, and anyone who has unsubscribed is left out.",
+    who: "LANDLORDS AND TENANTS on the lists Marketing picks, from the marketing address set under Emails & events. Needs Email to landlords and tenants on as well.",
+    confirm: "SEND MAIL-OUTS",
+    legacyEnv: "MARKETING_MAILOUTS",
+    legacyOn: "on",
+  },
+  {
     /* The iPhone app's alerts (2 Oct 2026, lib/push). Staff only, and only
        what their own bell already shows - but it buzzes a pocket, so James
        arms it. A test to your own phone works with it off. */

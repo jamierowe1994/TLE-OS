@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Studio from "@/components/email-studio/Studio";
 import Results from "@/components/newsletter/Results";
+import { MailoutLists, SenderBox, paceLine, type MailoutInfo } from "@/components/newsletter/Mailout";
 import type { Block } from "@/components/email-studio/tree";
 import { renderNewsletter } from "@/lib/newsletter-render";
 import { Pill } from "@/components/Wire";
@@ -20,7 +21,9 @@ import { searchMatches } from "@/lib/search-match";
  *
  *   1  Design   the drag-and-drop builder, full screen, opened straight away
  *               for a new email (?design=1)
- *   2  Who      everybody who could get it, signed up to the OS or not
+ *   2  Who      the team (everybody who could get it, signed up or not), or
+ *               landlords and tenants by live list (14 Nov 2026), which adds
+ *               a step for the address it comes from
  *   3  When     now, or a London date and time
  *
  * then Send me a test, and Publish. Once published it is read-only; Unpublish
@@ -51,7 +54,10 @@ function EmailPage() {
   const search = useSearchParams();
   const [data, setData] = useState<Loaded | null>(null);
   const [armed, setArmed] = useState(true);
+  const [mailoutsArmed, setMailoutsArmed] = useState(true);
   const [people, setPeople] = useState<Person[] | null>(null);
+  const [mail, setMail] = useState<MailoutInfo | null>(null);
+  const [mailErr, setMailErr] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [designing, setDesigning] = useState(search.get("design") === "1");
@@ -66,15 +72,47 @@ function EmailPage() {
     if (!one.ok) throw new Error(one.error || "Couldn't open that email.");
     setData({ newsletter: one.newsletter, preview: one.preview });
     setArmed(Boolean(all.armed));
+    setMailoutsArmed(Boolean(all.mailoutsArmed));
   }, [id]);
 
   useEffect(() => {
     load().catch((e) => setErr(e.message));
+  }, [load]);
+
+  /* A mail-out's lists, counted live: asked again whenever the lists picked change. */
+  const customers = data?.newsletter.audience === "customers";
+  const pickedKey = (data?.newsletter.lists ?? []).join(",");
+  const loadMail = useCallback(() => {
+    fetch(`/api/newsletters/lists?picked=${encodeURIComponent(pickedKey)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.ok) {
+          setMail(j);
+          setMailErr(null);
+        } else {
+          setMail(null);
+          setMailErr(j.error || "The lists could not be read just now.");
+        }
+      })
+      .catch(() => {
+        setMail(null);
+        setMailErr("The OS could not be reached.");
+      });
+  }, [pickedKey]);
+  useEffect(() => {
+    if (customers) loadMail();
+  }, [customers, loadMail]);
+  /* The team list is read the first time a team email needs it, not for a mail-out. */
+  const audienceKnown = data ? data.newsletter.audience : null;
+  const askedTeam = useRef(false);
+  useEffect(() => {
+    if (audienceKnown !== "team" || askedTeam.current) return;
+    askedTeam.current = true;
     fetch("/api/newsletters/audience", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setPeople(j.ok ? j.people : []))
       .catch(() => setPeople([]));
-  }, [load]);
+  }, [audienceKnown]);
 
   /* While it sends, keep the numbers moving. */
   const status = data?.newsletter.status;
@@ -114,7 +152,8 @@ function EmailPage() {
 
   const n = data.newsletter;
   const draft = n.status === "draft";
-  const s = statusLine(n, armed);
+  const isArmed = n.audience === "customers" ? mailoutsArmed : armed;
+  const s = statusLine(n, isArmed);
 
   async function act(label: string, fn: () => Promise<Response>, done?: (j: { ok: boolean; message?: string; error?: string; newsletter?: { id: string } }) => void) {
     setBusy(label);
@@ -168,7 +207,7 @@ function EmailPage() {
       {err && <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px]">{err}</p>}
       {flash && <p className="mt-4 rounded-xl border border-line bg-panel p-3 text-[12.5px]">{flash}</p>}
 
-      {!draft && <Published n={n} armed={armed} busy={busy} onUnpublish={() => act("unpublish", () => fetch(`/api/newsletters/${id}/publish`, { method: "DELETE" }), () => setFlash("Back to a draft. Nothing was sent."))} />}
+      {!draft && <Published n={n} armed={isArmed} mail={mail} busy={busy} onUnpublish={() => act("unpublish", () => fetch(`/api/newsletters/${id}/publish`, { method: "DELETE" }), () => setFlash("Back to a draft. Nothing was sent."))} />}
 
       {(n.status === "sent" || n.status === "sending") && <Results id={id} live={n.status === "sending"} />}
 
@@ -203,15 +242,46 @@ function EmailPage() {
 
       {/* ── 2 Who ── */}
       <Step n={2} title="Who Gets It">
-        <Audience people={people} chosen={n.recipients} disabled={!draft} onChange={(recipients) => save({ recipients })} />
+        <div className="mb-4 flex flex-wrap gap-2">
+          {(
+            [
+              { v: "team", label: "The Team" },
+              { v: "customers", label: "Landlords and Tenants" },
+            ] as const
+          ).map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              disabled={!draft}
+              aria-pressed={n.audience === o.v}
+              onClick={() => n.audience !== o.v && save({ audience: o.v })}
+              className={`rounded-full border px-4 py-1.5 text-[12.5px] disabled:opacity-60 ${n.audience === o.v ? "border-ink bg-ink font-semibold text-page" : "border-line/80 hover:border-ink/40"}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {n.audience === "customers" ? (
+          <MailoutLists info={mail} error={mailErr} picked={n.lists} disabled={!draft} onChange={(lists) => save({ lists })} />
+        ) : (
+          <Audience people={people} chosen={n.recipients} disabled={!draft} onChange={(recipients) => save({ recipients })} />
+        )}
       </Step>
 
-      {/* ── 3 When ── */}
+      {/* ── 3 Who it comes from (a mail-out only) ── */}
+      {n.audience === "customers" && (
+        <Step n={3} title="Who It Comes From">
+          {mailErr ? <p className="text-[12.5px] text-accent-dark">{mailErr}</p> : <SenderBox info={mail} disabled={!draft} onSaved={loadMail} />}
+        </Step>
+      )}
+
+      {/* ── When ── */}
       {draft && (
-        <Step n={3} title="When It Goes">
+        <Step n={n.audience === "customers" ? 4 : 3} title="When It Goes">
           <SendPanel
             n={n}
-            armed={armed}
+            armed={isArmed}
+            mail={n.audience === "customers" ? mail : null}
             busy={busy}
             onTest={() => act("test", () => fetch(`/api/newsletters/${id}/test`, { method: "POST" }), (j) => setFlash(j.message ?? "Test sent."))}
             onPublish={(sendAt) =>
@@ -234,7 +304,7 @@ function EmailPage() {
           title={n.name || "Untitled"}
           kindLabel={n.kind === "event" ? "Event email" : "Newsletter"}
           initial={{ subject: n.subject, preheader: n.preheader, blocks: n.blocks as Block[] }}
-          brand={{ ...tleBrand("internal"), ...tleSocial() }}
+          brand={{ ...tleBrand(n.audience === "customers" ? "landlord" : "internal"), ...tleSocial() }}
           uploadImage={async (file) => {
             const fd = new FormData();
             fd.append("file", file);
@@ -242,7 +312,7 @@ function EmailPage() {
             if (!j.ok) throw new Error(j.error || "That didn't upload.");
             return j.url as string;
           }}
-          previewHtml={(copy) => renderNewsletter(copy, { email: "", name: "Sam Example" }).html}
+          previewHtml={(copy) => renderNewsletter({ ...copy, audience: n.audience }, { email: "", name: "Sam Example" }).html}
           onSave={async (copy) => {
             const j = await (await fetch(`/api/newsletters/${id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(copy) })).json().catch(() => ({ ok: false }));
             if (j.ok) void load().catch(() => null);
@@ -408,6 +478,7 @@ function tomorrowNine(): { date: string; time: string } {
 function SendPanel({
   n,
   armed,
+  mail,
   busy,
   onTest,
   onPublish,
@@ -415,6 +486,8 @@ function SendPanel({
 }: {
   n: Newsletter;
   armed: boolean;
+  /** A mail-out's live lists and sending address; null for a team email. */
+  mail: MailoutInfo | null;
   busy: string | null;
   onTest: () => void;
   onPublish: (sendAt: string | null) => void;
@@ -431,14 +504,21 @@ function SendPanel({
     return londonTime(y, m, d, hh, mm).toISOString();
   }, [mode, date, time]);
 
-  const count = n.recipients.length;
+  const customers = n.audience === "customers";
+  const count = customers ? (mail?.pickedTotal ?? 0) : n.recipients.length;
   const problem = !n.subject.trim()
     ? "Give it a subject line in the designer."
     : !n.blocks.length
       ? "The email is empty. Open the designer."
-      : !count
-        ? "Pick who it goes to in step 2."
-        : sendAt === undefined
+      : customers && !n.lists.length
+        ? "Pick at least one list in step 2."
+        : customers && !mail
+          ? "Still counting who is on the lists."
+          : customers && !mail?.sender
+            ? "Set the address it comes from in step 3."
+            : !count
+              ? customers ? "Nobody is on the lists picked." : "Pick who it goes to in step 2."
+              : sendAt === undefined
           ? "That date or time isn't complete."
           : sendAt && Date.parse(sendAt) < Date.now()
             ? "That time has already passed."
@@ -446,7 +526,8 @@ function SendPanel({
 
   const publish = () => {
     const when = sendAt ? whenText(sendAt) : "now";
-    if (!window.confirm(`Send "${n.subject}" to ${count} ${count === 1 ? "person" : "people"} ${sendAt ? "at " + when : "now"}?`)) return;
+    const who = customers ? `about ${count.toLocaleString("en-GB")} landlords and tenants` : `${count} ${count === 1 ? "person" : "people"}`;
+    if (!window.confirm(`Send "${n.subject}" to ${who} ${sendAt ? "at " + when : "now"}?`)) return;
     onPublish(sendAt ?? null);
   };
 
@@ -478,8 +559,18 @@ function SendPanel({
         </div>
       )}
       <p className="mt-2 text-[11.5px] text-muted">
-        {mode === "now" ? "It goes out within five minutes of publishing." : "It goes out within five minutes of that time."} From the TLE OS address.
-        {!armed && " Sending is switched off for now, so it will wait, marked Held, until James switches it on."}
+        {customers ? (
+          <>
+            {mode === "now" ? "It starts within five minutes of publishing." : "It starts within five minutes of that time."} {mail ? paceLine(mail) : ""} Everybody on the lists at that moment
+            gets it, each with an unsubscribe link.
+            {!armed && " Mail-outs to landlords and tenants are switched off for now, so it will wait, marked Held, until James switches them on."}
+          </>
+        ) : (
+          <>
+            {mode === "now" ? "It goes out within five minutes of publishing." : "It goes out within five minutes of that time."} From the TLE OS address.
+            {!armed && " Sending is switched off for now, so it will wait, marked Held, until James switches it on."}
+          </>
+        )}
       </p>
 
       {problem && <p className="mt-4 text-[12.5px] text-accent-dark">{problem}</p>}
@@ -494,7 +585,7 @@ function SendPanel({
           onClick={publish}
           className="rounded-full bg-[#56423e] px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
         >
-          {busy === "publish" ? "Publishing…" : `Publish to ${count} ${count === 1 ? "person" : "people"}`}
+          {busy === "publish" ? "Publishing…" : `Publish to ${count.toLocaleString("en-GB")} ${count === 1 ? "person" : "people"}`}
         </button>
         <button type="button" disabled={busy !== null} onClick={onDelete} className="ml-auto text-[12px] font-semibold text-muted hover:text-ink disabled:opacity-40">
           Delete draft
@@ -506,21 +597,27 @@ function SendPanel({
 
 /* ── After publishing ────────────────────────────────────────────────────── */
 
-function Published({ n, armed, busy, onUnpublish }: { n: Newsletter; armed: boolean; busy: string | null; onUnpublish: () => void }) {
+function Published({ n, armed, mail, busy, onUnpublish }: { n: Newsletter; armed: boolean; mail: MailoutInfo | null; busy: string | null; onUnpublish: () => void }) {
   const p = n.progress;
+  const customers = n.audience === "customers";
   const total = p ? p.sent + p.failed + p.queued : n.recipients.length;
   const canUnpublish = n.status === "scheduled" || n.status === "missed";
   return (
     <section className="mt-5 rounded-[22px] border border-line/60 bg-panel p-5">
       {n.status === "scheduled" && (
         <p className="text-[14px]">
-          <b>Published.</b> It goes to {n.recipients.length} {n.recipients.length === 1 ? "person" : "people"} {n.sendAt ? whenText(n.sendAt) : "shortly"}.
-          {!armed && " Sending is switched off, so it will wait, marked Held, until James switches it on."}
+          <b>Published.</b>{" "}
+          {customers
+            ? `It goes to everybody on the ${n.lists.length === 1 ? "list" : `${n.lists.length} lists`} picked${mail ? ` (${mail.pickedTotal.toLocaleString("en-GB")} today)` : ""}`
+            : `It goes to ${n.recipients.length} ${n.recipients.length === 1 ? "person" : "people"}`}{" "}
+          {n.sendAt ? whenText(n.sendAt) : "shortly"}.
+          {!armed && (customers ? " Mail-outs to landlords and tenants are switched off, so it will wait, marked Held, until James switches them on." : " Sending is switched off, so it will wait, marked Held, until James switches it on.")}
         </p>
       )}
       {n.status === "sending" && (
         <p className="text-[14px]">
-          <b>Sending.</b> {p?.sent ?? 0} of {total} sent{p?.failed ? `, ${p.failed} failed` : ""}. It sends a few dozen at a time, every five minutes.
+          <b>Sending.</b> {p?.sent ?? 0} of {total} sent{p?.failed ? `, ${p.failed} failed` : ""}.{" "}
+          {customers ? `It goes a few at a time between 8am and 8pm${mail ? `, up to ${mail.pace.cap.toLocaleString("en-GB")} a day` : ""}, and carries on each day until it is done.` : "It sends a few dozen at a time, every five minutes."}
         </p>
       )}
       {n.status === "sent" && (

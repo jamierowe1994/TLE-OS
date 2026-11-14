@@ -20,11 +20,26 @@
  *
  * ── The guards, all of them deliberate ────────────────────────────────────
  *
- *   - STAFF ONLY. Sent with audience "internal", so lib/resend refuses any
- *     address outside our own domains. A newsletter can never reach a
- *     landlord, whatever ends up on the list.
+ *   - A TEAM EMAIL IS STAFF ONLY. Sent with audience "internal", so
+ *     lib/resend refuses any address outside our own domains. It can never
+ *     reach a landlord, whatever ends up on the list.
  *   - HELD until the `newsletter_sending` switch is armed (James's, in
  *     Admin > Switches). Published emails wait at their time, marked Held.
+ *
+ * ── Mail-outs to landlords and tenants (James, 14 Nov 2026) ───────────────
+ *
+ * The same email with `audience` "customers". It names live lists
+ * (lib/mail-lists) instead of people, and the people are worked out the
+ * moment it starts to send. It goes from the address Marketing set
+ * (lib/mail-sender), in the customer look, with an unsubscribe nobody can
+ * remove, and it has guards of its own:
+ *
+ *   - HELD until BOTH `customer_email` and `marketing_mailouts` are armed.
+ *   - PACED: a set number a day, climbing over the first week of sending
+ *     (lib/mail-sender), so a big list goes over a few days.
+ *   - DAYTIME ONLY: copies leave between 8am and 8pm, UK time.
+ *   - Anybody who has unsubscribed, bounced or complained is left out when
+ *     the list is worked out and again as their copy would leave.
  *   - NOT STALE. An email held more than a day past its time is marked
  *     Missed rather than sent late - "Tomorrow at 9" arriving on Friday is
  *     worse than not arriving.
@@ -41,10 +56,16 @@ import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
 import { newTrackToken, trackHtml } from "@/lib/newsletter-track";
 import { assetOrigin } from "@/lib/campaign-mail";
+import { isListId, peopleOn, type ListId } from "@/lib/mail-lists";
+import { fromLine, getMailSender, mailoutPace } from "@/lib/mail-sender";
+import { isOptedOut, unsubscribeUrl } from "@/lib/mail-optout";
+import { londonParts } from "@/lib/london-time";
 
 export type NewsletterKind = "newsletter" | "event";
 export type NewsletterStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled" | "missed";
 export type Recipient = { email: string; name: string };
+/** "team" is a staff newsletter; "customers" is a mail-out to landlord and tenant lists. */
+export type NewsletterAudience = "team" | "customers";
 
 export type Newsletter = {
   id: string;
@@ -54,6 +75,9 @@ export type Newsletter = {
   preheader: string;
   blocks: Record<string, unknown>[];
   recipients: Recipient[];
+  audience: NewsletterAudience;
+  /** The live lists a mail-out goes to (lib/mail-lists). Empty for a team email. */
+  lists: ListId[];
   sendAt: string | null;
   status: NewsletterStatus;
   createdBy: string;
@@ -73,6 +97,12 @@ const STALE_MS = 24 * 60 * 60 * 1000;
    or three runs rather than one long request. */
 const PER_RUN = 40;
 const GAP_MS = 550;
+/* A mail-out goes slower: 20 every five minutes is 240 an hour, inside what
+   the sending service suggests for a domain that is still warming up. */
+const PER_RUN_CUSTOMERS = 20;
+/* Marketing email at 3am reads as spam. UK hours, 8am up to 8pm. */
+const DAY_STARTS = 8;
+const DAY_ENDS = 20;
 
 let seq = 0;
 const bid = () => `nl_${Date.now().toString(36)}_${(seq++).toString(36)}`;
@@ -161,7 +191,7 @@ export async function audience(): Promise<Person[]> {
 
 type Row = {
   id: string; kind: string; name: string; subject: string; preheader: string;
-  blocks: unknown; recipients: unknown; send_at: Date | null; status: string;
+  blocks: unknown; recipients: unknown; audience: string | null; lists: unknown; send_at: Date | null; status: string;
   created_by: string; created_at: Date; updated_at: Date;
   published_by: string | null; published_at: Date | null; finished_at: Date | null;
 };
@@ -177,6 +207,8 @@ function fromRow(r: Row): Newsletter {
     preheader: r.preheader,
     blocks: Array.isArray(r.blocks) ? (r.blocks as Record<string, unknown>[]) : [],
     recipients: Array.isArray(r.recipients) ? (r.recipients as Recipient[]) : [],
+    audience: r.audience === "customers" ? "customers" : "team",
+    lists: Array.isArray(r.lists) ? (r.lists as unknown[]).filter(isListId) : [],
     sendAt: iso(r.send_at),
     status: r.status as NewsletterStatus,
     createdBy: r.created_by,
@@ -200,7 +232,7 @@ async function progressFor(ids: string[]): Promise<Map<string, { sent: number; f
     const p = out.get(r.newsletter_id) ?? { sent: 0, failed: 0, queued: 0 };
     if (r.state === "sent") p.sent += Number(r.n);
     else if (r.state === "failed") p.failed += Number(r.n);
-    else p.queued += Number(r.n);
+    else if (r.state === "queued") p.queued += Number(r.n);
     out.set(r.newsletter_id, p);
   }
   return out;
@@ -243,9 +275,9 @@ export async function duplicateNewsletter(id: string, by: string): Promise<Newsl
   if (!n) throw new NewsletterError("That email no longer exists.");
   const copy = randomUUID();
   await q(
-    `insert into os_newsletters (id, kind, name, subject, preheader, blocks, recipients, created_by)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`,
-    [copy, n.kind, `${n.name || "Untitled"} (copy)`.slice(0, 200), n.subject, n.preheader, JSON.stringify(n.blocks), JSON.stringify(n.recipients), by]
+    `insert into os_newsletters (id, kind, name, subject, preheader, blocks, recipients, created_by, audience, lists)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10::jsonb)`,
+    [copy, n.kind, `${n.name || "Untitled"} (copy)`.slice(0, 200), n.subject, n.preheader, JSON.stringify(n.blocks), JSON.stringify(n.recipients), by, n.audience, JSON.stringify(n.lists)]
   );
   return (await getNewsletter(copy)) as Newsletter;
 }
@@ -253,7 +285,7 @@ export async function duplicateNewsletter(id: string, by: string): Promise<Newsl
 /** Anything still editable. Once it is sending or sent, it is history. */
 export async function updateNewsletter(
   id: string,
-  patch: Partial<Pick<Newsletter, "name" | "subject" | "preheader" | "blocks" | "recipients" | "sendAt">>
+  patch: Partial<Pick<Newsletter, "name" | "subject" | "preheader" | "blocks" | "recipients" | "sendAt" | "audience" | "lists">>
 ): Promise<Newsletter> {
   const n = await getNewsletter(id);
   if (!n) throw new NewsletterError("That email no longer exists.");
@@ -264,6 +296,7 @@ export async function updateNewsletter(
         name = coalesce($2, name), subject = coalesce($3, subject), preheader = coalesce($4, preheader),
         blocks = coalesce($5::jsonb, blocks), recipients = coalesce($6::jsonb, recipients),
         send_at = case when $7::boolean then $8::timestamptz else send_at end,
+        audience = coalesce($9, audience), lists = coalesce($10::jsonb, lists),
         updated_at = now()
       where id = $1`,
     [
@@ -275,6 +308,8 @@ export async function updateNewsletter(
       recipients ? JSON.stringify(recipients) : null,
       patch.sendAt !== undefined,
       patch.sendAt ?? null,
+      patch.audience === "customers" || patch.audience === "team" ? patch.audience : null,
+      patch.lists ? JSON.stringify(patch.lists.filter(isListId)) : null,
     ]
   );
   return (await getNewsletter(id)) as Newsletter;
@@ -297,8 +332,15 @@ export async function publishNewsletter(id: string, sendAt: Date, by: string): P
   if (n.status !== "draft") throw new NewsletterError("It is already published.");
   if (!n.subject.trim()) throw new NewsletterError("Give it a subject line first.");
   if (!n.blocks.length) throw new NewsletterError("The email is empty. Design it first.");
-  const valid = n.recipients.filter((r) => isInternalAddress(r.email));
-  if (!valid.length) throw new NewsletterError("Pick who it goes to first.");
+  /* A mail-out names lists, not people: who is on them is worked out when it
+     sends. Checked now that there is somebody, and an address to send from. */
+  if (n.audience === "customers") {
+    if (!n.lists.length) throw new NewsletterError("Pick at least one list first.");
+    if (!(await getMailSender())) throw new NewsletterError("Set the address it comes from first.");
+    if (!(await peopleOn(n.lists)).length) throw new NewsletterError("Nobody is on the lists picked.");
+  }
+  const valid = n.audience === "customers" ? [] : n.recipients.filter((r) => isInternalAddress(r.email));
+  if (n.audience !== "customers" && !valid.length) throw new NewsletterError("Pick who it goes to first.");
   if (Number.isNaN(sendAt.getTime())) throw new NewsletterError("That send time is not a real date.");
   if (sendAt.getTime() < Date.now() - 5 * 60 * 1000) throw new NewsletterError("That time has already passed. Pick a later one, or Send now.");
   await q(
@@ -324,6 +366,22 @@ export async function unpublishNewsletter(id: string): Promise<Newsletter> {
 export async function sendTest(id: string, to: Recipient): Promise<void> {
   const n = await getNewsletter(id);
   if (!n) throw new NewsletterError("That email no longer exists.");
+  if (n.audience === "customers") {
+    /* As a landlord or tenant would get it: the customer look, the marketing
+       address, and a working unsubscribe link for the tester's own address. */
+    const sender = await getMailSender();
+    if (!sender) throw new NewsletterError("Set the address it comes from first, then send the test.");
+    const unsub = unsubscribeUrl(assetOrigin(), to.email, n.id);
+    const mail = renderNewsletter(n, to, { unsubscribeUrl: unsub });
+    await sendEmail({
+      to: to.email,
+      subject: `[Test] ${mail.subject}`,
+      html: mail.html,
+      ...(sender.replyTo ? { replyTo: sender.replyTo } : {}),
+      mailout: { from: fromLine(sender), unsubscribeUrl: unsub },
+    });
+    return;
+  }
   const mail = renderNewsletter(n, to);
   await sendEmail({ to: to.email, subject: `[Test] ${mail.subject}`, html: mail.html, audience: "internal" });
 }
@@ -340,23 +398,54 @@ export async function runNewsletters(): Promise<{ held: number; missed: number; 
   const out = { held: 0, missed: 0, sent: 0, failed: 0, finished: 0 };
   if (!hasDb()) return out;
 
-  const due = await q<{ id: string; send_at: Date; status: string }>(
-    `select id, send_at, status from os_newsletters
+  const due = await q<{ id: string; send_at: Date; status: string; audience: string | null }>(
+    `select id, send_at, status, audience from os_newsletters
       where status in ('scheduled','sending') and send_at <= now() order by send_at limit 10`
   );
   if (!due.length) return out;
 
-  const armed = await switchOn("newsletter_sending");
+  const teamArmed = await switchOn("newsletter_sending");
+  /* Looked up once, and only if a mail-out is due. */
+  const anyMailout = due.some((d) => d.audience === "customers");
+  const mailoutArmed = anyMailout ? await mailoutsArmed() : false;
+  const sender = anyMailout ? await getMailSender() : null;
+  const hour = londonParts(Date.now()).hour;
+  const daytime = hour >= DAY_STARTS && hour < DAY_ENDS;
+  /* Today's allowance, shared by every mail-out due and counted down as copies go. */
+  let allowance = anyMailout ? (await mailoutPace()).left : 0;
+
   for (const d of due) {
+    const customers = d.audience === "customers";
+    const armed = customers ? mailoutArmed && Boolean(sender) : teamArmed;
     if (d.status === "scheduled") {
       if (Date.now() - new Date(d.send_at).getTime() > STALE_MS) {
         await q(`update os_newsletters set status = 'missed', updated_at = now() where id = $1 and status = 'scheduled'`, [d.id]);
         out.missed += 1;
         continue;
       }
-      if (!armed) {
+      /* A mail-out due at night starts in the morning: it is not late, so it
+         is not Missed, as long as that is within the day it was meant for. */
+      if (!armed || (customers && !daytime)) {
         out.held += 1;
         continue;
+      }
+      /* The lists are read before it is claimed: if the book cannot be read
+         right now it stays scheduled and the next run tries again, rather
+         than going out to nobody and calling itself sent. */
+      let onLists: Array<{ email: string; name: string; list: string }> = [];
+      if (customers) {
+        const listIds = await q<{ lists: unknown }>(`select lists from os_newsletters where id = $1`, [d.id]);
+        const ids = Array.isArray(listIds[0]?.lists) ? (listIds[0].lists as unknown[]).filter(isListId) : [];
+        try {
+          onLists = await peopleOn(ids, true);
+        } catch {
+          out.held += 1;
+          continue;
+        }
+        if (!onLists.length) {
+          out.held += 1;
+          continue;
+        }
       }
       /* Claimed, and the list frozen into rows, in one go: a second runner
          arriving now finds it already 'sending'. */
@@ -365,28 +454,50 @@ export async function runNewsletters(): Promise<{ held: number; missed: number; 
         [d.id]
       );
       if (!claimed.length) continue;
-      await q(
-        `insert into os_newsletter_sends (newsletter_id, email, name)
-         select $1, lower(r->>'email'), coalesce(r->>'name','') from os_newsletters n, jsonb_array_elements(n.recipients) r
-          where n.id = $1
-         on conflict do nothing`,
-        [d.id]
-      );
-    } else if (!armed) {
-      /* Switched off half way: the rest waits, nothing is lost. */
+      if (customers) {
+        /* Who is on the lists NOW - the point of a live list. */
+        await q(
+          `insert into os_newsletter_sends (newsletter_id, email, name, list)
+           select $1, r->>'email', coalesce(r->>'name',''), r->>'list' from jsonb_array_elements($2::jsonb) r
+           on conflict do nothing`,
+          [d.id, JSON.stringify(onLists.map((p) => ({ email: p.email, name: p.name, list: p.list })))]
+        );
+      } else {
+        await q(
+          `insert into os_newsletter_sends (newsletter_id, email, name)
+           select $1, lower(r->>'email'), coalesce(r->>'name','') from os_newsletters n, jsonb_array_elements(n.recipients) r
+            where n.id = $1
+           on conflict do nothing`,
+          [d.id]
+        );
+      }
+    } else if (!armed || (customers && !daytime)) {
+      /* Switched off half way, or the evening has come: the rest waits, nothing is lost. */
       out.held += 1;
       continue;
     }
 
     const n = await getNewsletter(d.id);
     if (!n) continue;
+    const limit = customers ? Math.min(PER_RUN_CUSTOMERS, allowance) : PER_RUN;
+    if (limit <= 0) {
+      /* Today's allowance has gone. It carries on tomorrow morning. */
+      out.held += 1;
+      continue;
+    }
     const batch = await q<{ email: string; name: string }>(
       `select email, name from os_newsletter_sends where newsletter_id = $1 and state = 'queued' order by email limit $2`,
-      [d.id, PER_RUN]
+      [d.id, limit]
     );
     for (const r of batch) {
       try {
-        const mail = renderNewsletter(n, r);
+        /* Unsubscribed since the list was read: left out, and recorded as such. */
+        if (customers && (await isOptedOut(r.email))) {
+          await q(`update os_newsletter_sends set state = 'skipped', error = 'Unsubscribed' where newsletter_id = $1 and email = $2`, [d.id, r.email]);
+          continue;
+        }
+        const unsub = customers ? unsubscribeUrl(assetOrigin(), r.email, d.id) : "";
+        const mail = renderNewsletter(n, r, customers ? { unsubscribeUrl: unsub } : {});
         /* Each copy gets its own token for the open pixel and the links
            (lib/newsletter-track), kept if a retry comes round again. */
         const tok = await q<{ token: string }>(
@@ -394,17 +505,31 @@ export async function runNewsletters(): Promise<{ held: number; missed: number; 
           [d.id, r.email, newTrackToken()]
         );
         const html = tok[0]?.token ? trackHtml(mail.html, tok[0].token, assetOrigin()) : mail.html;
-        const res = await sendEmail({ to: r.email, subject: mail.subject, html, audience: "internal" });
+        const res =
+          customers && sender
+            ? await sendEmail({
+                to: r.email,
+                subject: mail.subject,
+                html,
+                ...(sender.replyTo ? { replyTo: sender.replyTo } : {}),
+                mailout: { from: fromLine(sender), unsubscribeUrl: unsub },
+              })
+            : await sendEmail({ to: r.email, subject: mail.subject, html, audience: "internal" });
         await q(
           `update os_newsletter_sends set state = 'sent', sent_at = now(), error = null, resend_id = $3 where newsletter_id = $1 and email = $2`,
           [d.id, r.email, res?.id ?? null]
         );
         out.sent += 1;
+        if (customers) allowance -= 1;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         /* Not sendable right now (unlocked or throttled): stop, and the next
            run carries on. Anything else is about this one address. */
-        if (e instanceof ResendBlocked || /429|rate/i.test(msg)) {
+        /* One address the sending service turns down (400, 422) is about that
+           address: it fails by itself and the rest carry on, or one mistyped
+           email at the top of a list of thousands would hold it for ever. */
+        const oneAddress = /^Resend said 4(00|22)\b/.test(msg) && !/429|rate/i.test(msg);
+        if ((e instanceof ResendBlocked && !oneAddress) || /429|rate/i.test(msg)) {
           out.held += 1;
           break;
         }
@@ -420,6 +545,11 @@ export async function runNewsletters(): Promise<{ held: number; missed: number; 
     }
   }
   return out;
+}
+
+/** Both switches a mail-out needs: email to customers at all, and mail-outs themselves. */
+export async function mailoutsArmed(): Promise<boolean> {
+  return (await switchOn("customer_email")) && (await switchOn("marketing_mailouts"));
 }
 
 /** Whether a published email will actually go, for the screen. */

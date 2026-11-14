@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
+import { isListId } from "@/lib/mail-lists";
 import { deleteNewsletter, getNewsletter, NewsletterError, renderNewsletter, updateNewsletter } from "@/lib/newsletters";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,9 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
             .filter((r) => typeof r?.email === "string")
             .map((r) => ({ email: String(r.email), name: typeof r.name === "string" ? r.name : "" }))
         : undefined,
+      /* Team email or a mail-out to landlord and tenant lists (lib/mail-lists). */
+      audience: body.audience === "customers" || body.audience === "team" ? body.audience : undefined,
+      lists: Array.isArray(body.lists) ? (body.lists as unknown[]).filter(isListId) : undefined,
     });
     return NextResponse.json({ ok: true, newsletter: n });
   } catch (e) {

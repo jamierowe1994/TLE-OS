@@ -89,6 +89,36 @@ export function publicFromAddress(): string | null {
 
 export type Audience = "internal" | "customer";
 
+const domainOfAddress = (from: string): string => {
+  const m = from.match(/<([^>]+)>/);
+  const addr = (m ? m[1] : from).trim().toLowerCase();
+  return addr.includes("@") ? addr.slice(addr.lastIndexOf("@") + 1) : "";
+};
+
+/**
+ * The domains a marketing mail-out may come from (James, 14 Nov 2026).
+ *
+ * Marketing picks the address themselves (lib/mail-sender), but Resend only
+ * sends from a domain that has been verified with it, and verifying one means
+ * adding DNS records - James's job, not a box on a screen. So the choice is
+ * any address on a domain that is already verified: the public sender's own
+ * domain, plus any listed in RESEND_MARKETING_DOMAINS (a subdomain kept for
+ * mail-outs, say, once James has verified it).
+ */
+export function mailoutDomains(): string[] {
+  const own = domainOfAddress(publicFromAddress() ?? "");
+  const extra = (process.env.RESEND_MARKETING_DOMAINS ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
+    .filter(Boolean);
+  return [...new Set([own, ...extra].filter(Boolean))];
+}
+
+export function mailoutFromAllowed(from: string): boolean {
+  const d = domainOfAddress(from);
+  return Boolean(d) && mailoutDomains().includes(d);
+}
+
 /**
  * Sends James has ordered by name that must go while the customer_email switch
  * stays off for the pilot. Each is one statutory mailing, not a flow: turning
@@ -179,8 +209,16 @@ export async function sendEmail(msg: {
   oneOff?: OneOffSend;
   /** Extra headers, "X-" ones only: a send's own record id (lib/home-send), so the copy can be matched to it later. */
   headers?: Record<string, string>;
+  /**
+   * One copy of a marketing mail-out (lib/newsletters, audience "customers").
+   * It goes on the customer road with two things of its own: the From that
+   * Marketing chose, which must be on a verified domain (mailoutDomains), and
+   * the unsubscribe headers that let a mail app show its own Unsubscribe
+   * button. Behind the marketing_mailouts switch as well as customer_email.
+   */
+  mailout?: { from: string; unsubscribeUrl: string };
 }): Promise<SendResult> {
-  const audience: Audience = msg.audience ?? "internal";
+  const audience: Audience = msg.mailout ? "customer" : (msg.audience ?? "internal");
   msg = { ...msg, subject: oneLineSubject(msg.subject) };
   if (!process.env.RESEND_API_KEY) {
     throw new ResendBlocked("Resend isn't connected — RESEND_API_KEY isn't set.");
@@ -202,7 +240,18 @@ export async function sendEmail(msg: {
       "Email to landlords and tenants is switched off on Admin → Switches. Turn it on there to send this."
     );
   }
-  const from = audience === "customer" ? publicFromAddress() : fromAddress();
+  /* A mail-out has a second brake of its own, and never borrows a one-off's
+     pass: both switches, or it waits. Our own people get it regardless, the
+     same way a test of any customer email reaches the tester. */
+  if (msg.mailout && !toStaff && !(await switchOn("marketing_mailouts"))) {
+    throw new ResendBlocked("Marketing mail-outs are switched off on Admin → Switches. Turn them on there to send this.");
+  }
+  if (msg.mailout && !mailoutFromAllowed(msg.mailout.from)) {
+    throw new ResendBlocked(
+      `Mail-outs can only come from an address on ${mailoutDomains().map((d) => `@${d}`).join(" or ") || "a domain verified in Resend"}. Change the sending address under Emails & events.`
+    );
+  }
+  const from = msg.mailout ? msg.mailout.from : audience === "customer" ? publicFromAddress() : fromAddress();
   if (!from) {
     throw new ResendBlocked(
       audience === "customer"
@@ -239,6 +288,16 @@ export async function sendEmail(msg: {
 
   const cc = (msg.cc ?? []).map((a) => a.trim()).filter((a) => a.includes("@") && isInternalAddress(a) && a.toLowerCase() !== to.toLowerCase());
 
+  /* The caller's own headers are "X-" only. A mail-out adds the two that make
+     Gmail, Outlook and Apple Mail show their own Unsubscribe button, which
+     Google and Yahoo require of anyone sending in bulk. */
+  const safeHeaders = Object.fromEntries(Object.entries(msg.headers ?? {}).filter(([k]) => /^x-/i.test(k)));
+  if (msg.mailout?.unsubscribeUrl) {
+    safeHeaders["List-Unsubscribe"] = `<${msg.mailout.unsubscribeUrl}>`;
+    safeHeaders["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
+  }
+  const extraHeaders = Object.keys(safeHeaders).length ? safeHeaders : null;
+
   const res = await fetch(API, {
     method: "POST",
     headers: {
@@ -254,7 +313,7 @@ export async function sendEmail(msg: {
       ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),
       ...(cc.length ? { cc } : {}),
       ...(msg.attachments?.length ? { attachments: msg.attachments } : {}),
-      ...(msg.headers && Object.keys(msg.headers).length ? { headers: Object.fromEntries(Object.entries(msg.headers).filter(([k]) => /^x-/i.test(k))) } : {}),
+      ...(extraHeaders ? { headers: extraHeaders } : {}),
     }),
     signal: AbortSignal.timeout(20_000),
   });

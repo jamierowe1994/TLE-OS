@@ -205,7 +205,23 @@ export async function recordDelivery(resendId: string, event: string, reason?: s
   }
   if (event === "email.bounced" || event === "email.complained") {
     const why = event === "email.complained" ? "Marked as spam" : reason || "Bounced";
-    const r = await q(`update os_newsletter_sends set bounced_at = coalesce(bounced_at, now()), bounce_reason = $2 where resend_id = $1 returning 1`, [resendId, why.slice(0, 300)]);
+    const r = await q<{ newsletter_id: string; email: string }>(
+      `update os_newsletter_sends set bounced_at = coalesce(bounced_at, now()), bounce_reason = $2 where resend_id = $1 returning newsletter_id, email`,
+      [resendId, why.slice(0, 300)]
+    );
+    /* A mail-out to landlords and tenants (14 Nov 2026): an address that
+       bounced or called us spam comes off every future mail-out, the same as
+       an unsubscribe. Sending to it again is what gets a sender blocked. A
+       team newsletter is left alone - a colleague's full inbox is not a no. */
+    if (r[0]) {
+      const kind = await q<{ audience: string | null }>(`select audience from os_newsletters where id = $1`, [r[0].newsletter_id]).catch(() => []);
+      if (kind[0]?.audience === "customers") {
+        await q(
+          `insert into os_mail_optouts (email, how, newsletter_id) values ($1, $2, $3) on conflict (email) do nothing`,
+          [r[0].email.toLowerCase(), event === "email.complained" ? "complaint" : "bounce", r[0].newsletter_id]
+        ).catch(() => null);
+      }
+    }
     return r.length > 0;
   }
   return false;

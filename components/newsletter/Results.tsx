@@ -155,7 +155,7 @@ export default function Results({ id, live }: { id: string; live: boolean }) {
                       <span className="font-medium">{p.name || p.email}</span>
                       {p.name && <span className="block text-[11px] text-muted">{p.email}</span>}
                     </td>
-                    <td className="px-4 py-2">{p.state === "sent" ? when(p.sentAt) : p.state === "failed" ? <span className="text-[#9d4340]" title={p.error ?? ""}>Couldn&apos;t send</span> : "Waiting"}</td>
+                    <td className="px-4 py-2">{p.state === "sent" ? when(p.sentAt) : p.state === "failed" ? <span className="text-[#9d4340]" title={p.error ?? ""}>Couldn&apos;t send</span> : p.state === "skipped" ? <span className="text-muted">Unsubscribed, not sent</span> : "Waiting"}</td>
                     <td className="px-4 py-2">{p.bounced ? <span className="text-[#9d4340]">{p.bounced}</span> : p.delivered ? "Yes" : r.deliveryLinked ? "Not yet" : "-"}</td>
                     <td className="px-4 py-2">{r.tracked ? (p.openedAt ? `${when(p.openedAt)}${p.opens > 1 ? ` · ${p.opens}×` : ""}` : "Not yet") : "-"}</td>
                     <td className="px-4 py-2">{r.tracked ? (p.clickedAt ? `${when(p.clickedAt)}${p.clicks > 1 ? ` · ${p.clicks}×` : ""}` : "No") : "-"}</td>

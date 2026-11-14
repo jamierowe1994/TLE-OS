@@ -4647,6 +4647,25 @@ CREATE TABLE IF NOT EXISTS os_newsletter_clicks (
   at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS os_newsletter_clicks_by ON os_newsletter_clicks (newsletter_id, url);
+-- Mail-outs to landlords and tenants (James, 14 Nov 2026; Francesca's ticket).
+-- audience 'team' is the staff newsletter as it always was; 'customers' goes
+-- to live lists (lib/mail-lists), named on the email and worked out when it
+-- sends, so someone who signed yesterday is on it and someone who left is not.
+-- list on each copy says which list put that person on it.
+ALTER TABLE os_newsletters ADD COLUMN IF NOT EXISTS audience TEXT NOT NULL DEFAULT 'team';
+ALTER TABLE os_newsletters ADD COLUMN IF NOT EXISTS lists JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS list TEXT;
+-- Everybody who has asked not to get marketing email, and every address that
+-- bounced for good or marked us as spam. Checked when a list is worked out and
+-- again as each copy leaves. Never deleted by a send: only a person takes
+-- someone off it.
+CREATE TABLE IF NOT EXISTS os_mail_optouts (
+  email         TEXT PRIMARY KEY,
+  at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  how           TEXT NOT NULL DEFAULT 'link',
+  newsletter_id TEXT,
+  by_name       TEXT
+);
 
 -- The agents' phones (2 Oct 2026): one row per iPhone app install, so the
 -- bell can reach a pocket. env is "sandbox" for a build run from Xcode and

@@ -26,17 +26,45 @@ function footer(): Record<string, unknown> {
 }
 
 /**
- * One recipient's copy. The team's letterhead (tleBrand "internal": the red
- * off the logo, as every staff email has had since 16 Sep 2026).
+ * The footer of a mail-out to landlords and tenants (James, 14 Nov 2026): who
+ * it is from, why they got it, and the unsubscribe. Always this one - a footer
+ * placed in the designer is replaced, so the unsubscribe can be moved by
+ * nobody and forgotten by nobody.
+ */
+function customerFooter(): Record<string, unknown> {
+  return {
+    type: "footer",
+    id: fid(),
+    note: "You are getting this because you are a landlord or tenant with The Letting Experts, or have been in touch with us about a home.",
+    address: "The Letting Experts",
+    showSocial: true,
+    unsubscribe: true,
+  };
+}
+
+/** What stands in for the real link in a preview, where there is nobody to unsubscribe. */
+export const PREVIEW_UNSUBSCRIBE = "https://thelettingexperts.co.uk/#unsubscribe-link-goes-here";
+
+/**
+ * One recipient's copy. The team's letterhead (tleBrand "internal") for a
+ * staff newsletter; the customer look and the unsubscribe footer for a
+ * mail-out (`customers`), with that person's own unsubscribe link.
  */
 export function renderNewsletter(
-  n: { subject: string; preheader: string; blocks: Record<string, unknown>[] },
-  to: Recipient
+  n: { subject: string; preheader: string; blocks: Record<string, unknown>[]; audience?: "team" | "customers" },
+  to: Recipient,
+  opts: { unsubscribeUrl?: string } = {}
 ): { subject: string; html: string } {
-  /* The team letterhead, with the company's social links so a Social block works. */
-  const brand = { ...tleBrand("internal"), ...tleSocial() };
-  const blocks = n.blocks.some((b) => b?.type === "footer") ? [...n.blocks] : [...n.blocks, footer()];
-  const ctx = mergeContextFor({ name: to.name, email: to.email }, brand) as Record<string, unknown>;
+  const customers = n.audience === "customers";
+  /* The letterhead, with the company's social links so a Social block works. */
+  const brand = { ...tleBrand(customers ? "landlord" : "internal"), ...tleSocial() };
+  const blocks = customers
+    ? [...n.blocks.filter((b) => b?.type !== "footer"), customerFooter()]
+    : n.blocks.some((b) => b?.type === "footer") ? [...n.blocks] : [...n.blocks, footer()];
+  const ctx = mergeContextFor(
+    { name: to.name, email: to.email, ...(customers ? { unsubscribeUrl: opts.unsubscribeUrl || PREVIEW_UNSUBSCRIBE } : {}) },
+    brand
+  ) as Record<string, unknown>;
   const mergeCtx = { ...ctx, firstName: (ctx.firstName as string) || "there" };
   const subjectLine = n.subject.trim() || "A message from The Letting Experts";
   const out = renderTemplate({ name: subjectLine, subject: subjectLine, preheader: n.preheader, blocks }, { brand, mergeCtx });
