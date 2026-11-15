@@ -1395,7 +1395,10 @@ function Dock() {
     if (felt) react(felt, 2800);
     else react("talking", 1400);
 
-    setStage(stage === "onboarding-name" ? "onboarding-help" : "ask");
+    /* The server has the last word on whether this was the introduction
+       (14 Nov 2026, ticket 8642ebc6): when it took the message as a question,
+       the panel stops introducing itself. */
+    setStage(r?.kind === "ask" || stage !== "onboarding-name" ? "ask" : "onboarding-help");
   }
 
   /**

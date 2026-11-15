@@ -142,21 +142,22 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "The kit that sits alongside your book, grouped by the job it does. The first group is Prospecting — the doors nobody has knocked on yet.",
     does: [
       "See every tool, what it is for, and whether it comes with your package or is bought separately.",
-      "Open Bond, the prospecting workspace: every property in NN, MK and Bedford whose landlord looks ready to move agent, scored off the daily market sweep. Today shows the figures and what colleagues have done; Map and Prospects are the same book two ways, searchable around an address; open a property to see why it is flagged, pin it to one front door, set its stage, write a note, or book an appraisal.",
+      "Day to Day: Notice Dates (the earliest date a rent increase, a landlord's notice or a tenant's notice can take effect, with the working shown), Calculators, and the Route Planner (your visits for the day, the real drive between each and whether the gaps leave time).",
+      "Getting paid: Forecast (where the book lands over the next 12 or 18 months, with dials to try changes) and Generate an Invoice (the fee is worked out from the home's rent and service; check it, produce it with its number, then send it).",
+      "Marketing Pack: social posts, carousels, guides and artwork from marketing, ready to post or send on. Learning: the Guides (how each process works, with pictures) and Systems.",
       "Open Launch Pad to read the leads from your ads and where each one has got to.",
     ],
     /* Partial rather than shell since 2 Sep: Landlord Radar opens and is
        live off the capture. Launch Pad opens too, but only as a list. */
     wiring: "partial",
     caveats: [
-      "Bond names properties, not people. Find the owner and Send a postcard exist on screen but say 'not connected' until the Land Registry route and the print house are set up; nothing is ordered or sent.",
+      "Bond, the prospecting workspace, is locked for agents for now; only the owners can open a preview of it.",
       /* Was "as fresh as the morning sweep", which describes a schedule that
          does not exist. Checked against Railway and against os_radar_runs on
          14 Sep 2026: no cron service calls /api/radar/run, and the 16 runs on
          record are at 08:29, 11:14, 13:00, 16:48, 20:25 - scattered by up to
          nine hours, twice on some days. A cron is exact to the minute. Those
          are somebody remembering. Reword again the day a cron lands. */
-      "Bond is only as fresh as its last sweep, and nothing schedules that sweep yet - it is run by hand. A property that let this afternoon shows until somebody runs it again.",
       "Launch Pad here is the list only. Working a lead - logging a call, booking, marking it lost - still happens in Launch Pad itself.",
       "The Paid badge describes the tool, not you. Nothing here knows what you have bought, so it will not tell you whether a tool is yours.",
     ],
@@ -204,7 +205,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Book an appraisal here when there is no landlord lead behind it yet: the landlord, then the property, then the time, and they become a lead on the way. If they are already a lead it points you to book from that lead instead, so the lead and the appraisal stay one record.",
       "Stages move on their own, read from the record: the deck sent, the visit passed, the figure recorded, the terms signed, the landlord's documents, the REX listing. Won and Lost are the only moves made by hand.",
       "Booking sends the landlord their confirmation with a calendar file attached, from the public sender with you as reply-to, as long as their record has an email address and Email to customers is on. The file says whether it went.",
-      "The appointment does not reach REX's diary yet. Put it in REX yourself until that write is unlocked.",
+      "The appointment goes into your own diary and Outlook. Rearrange or Cancel on the appraisal moves or removes it there too, and Send Again resends the landlord's confirmation.",
+      "Won and Lost are their own tabs. A won appraisal's listing carries its landlord, notes, fees and papers across.",
     ],
     next: "A won appraisal becomes a listing.",
   },
@@ -265,7 +267,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   },
 
   "/showroom": {
-    purpose: "Every journey from the other side of the glass: what the tenant sees at each step, every email that goes out to them, and a place to say what is not right. Landlord and agent tabs come next.",
+    purpose: "Every journey from the other side of the glass: what the tenant sees at each step, every email that goes out to them, and a place to say what is not right. ",
     does: [
       "Pick Tenant, Landlord or Agent across the top, and a step down the side.",
       "Look at the tenant's own screen for that step, on a computer or a phone - it is the sample tenant, Sophie, and nothing is saved.",
@@ -275,13 +277,12 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
     wiring: "live",
     caveats: [
-      "Only the Tenant tab is filled in so far.",
       "Email it to me sends the sample version, with Sophie's details, to your own address only.",
     ],
   },
 
   "/applications": {
-    purpose: "Every application on REX's four statuses, live, with the pre-tenancy stages once one is accepted.",
+    purpose: "Every let in progress: applications on REX's statuses, offers accepted in the OS, and lets that only exist in Propoly, with the pre-tenancy stages once one is accepted.",
     does: [
       "Read the four-tile pipeline across REX's statuses.",
       "Show or hide unsuccessful applications.",
@@ -291,7 +292,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
     wiring: "live",
     caveats: [
-      "Referencing has no source in any system we connect to, so it is not shown. The screen says so.",
+      "Referencing is done in Propoly: the deal's stage there says when it is at referencing, and references coming back opens the PLC pack automatically.",
+      "Start the PLC check is the brown button on the let's file once the application is with the landlord or accepted. The how-to guide on handing over the PLC pack has the steps; a pack sent back arrives as a notification with the checker's note.",
       "The right-to-rent gap warning is real — it is counting applications with nothing recorded.",
       "A tenant's right to rent expiry date (or no time limit) is recorded by asking Steve - he puts it on the let after a yes, and it shows on the tenant's Their application card as Right to rent expiry. The office's bell reminds them when the follow-up check is due. A Scottish let has no right to rent, so it shows none and takes none.",
     ],
@@ -322,7 +324,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   "/inspections": {
     purpose: "Every visit we owe the managed book, the tenant's permission to make it, and what was found. Opened from the Inspections tile on Overview (it is not on the menu).",
     does: [
-      "Read the Due list, which is worked out from the cadence against today - not a stored schedule.",
+      "Read the Due list: homes the cadence says are owed a visit, alongside the visits brought across from the old property management system's task list.",
       "Press Book it on a due home to open the visit on the booking form.",
       "Book a day, time, length and who is going: it goes in their diary and Outlook, and the tenant is emailed the time with a button to say it works or ask for another. Or offer a few dates and let the tenant choose on their own link.",
       "See on the visit whether the tenant has confirmed, change the time, or send the confirmation again.",
@@ -393,19 +395,28 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   },
 
   "/portfolio": {
-    purpose: "The whole managed book — properties, landlords, and where they are.",
+    /* Rewritten 14 Nov 2026 (James: "make sure he is up to date"). It still
+       said "Nothing on this screen writes to REX" and that PayProp's rent was
+       not read, so Steve sent agents to REX for changes the home's page makes. */
+    purpose: "The whole managed book - every home we manage or collect rent on, its landlord, who lives there and what is due. A home joins at move-in.",
     does: [
-      "Search the managed book by address, landlord, tenant or agent, and filter it by service level, agent, town or certificates needing a look.",
-      "Open a property to see its rent, service, let date, agent, landlord, sitting tenant, photographs and certificates, and open the same record in REX.",
-      "Switch to Landlords to see each landlord with their properties and rent roll, and to Map to see the book on a map with the properties needing attention picked out.",
-      "On a home's page, the Tenants box shows the tenants' guarantors, the ones added on their lead or let, matched by the tenant's email.",
+      "Search the book by address, landlord, tenant or agent, and filter it by service level, agent, town or certificates needing a look. Office staff see the whole business; an agent sees their own homes.",
+      "Open a home for its full page, with the tabs Overview, Tenancy, Compliance, Maintenance, Inspections, Documents and Notes.",
+      "The Rent box shows the rent PayProp is billing now and whether it has been paid. Who lives there follows PayProp's tenancy running today, so a new flatmate on a renewal shows and somebody who has left drops off.",
+      "Edit on a tenant changes their name, mobile and email. Edit on The Details changes the service, let type, tenancy dates, gas and who lives there.",
+      "The landlord card: Edit their details, add their home address, a second email marked Work or Personal, joint landlords and points of contact, their zero deposit opt-out and which job emails they get. A Scottish home also takes the landlord registration numbers there.",
+      "Rent review (a Section 13 rent increase) and Serve notice (Section 8) are on the home's page; Tenant gave notice starts the move-out.",
+      "Book a property visit, or Record a past visit, for the home's inspections. Report a repair raises a job on Maintenance and ends on its works order.",
+      "Email sends the tenants, the landlord or both an email from the home, with any of its certificates or documents attached. Send out logins gives tenants their own account.",
+      "Move a home to another agent, Use as a case study, and (compliance and owners) Archive this home once we no longer look after it.",
+      "Take on a home brings in one we are taking over from another agent, with its sitting tenants.",
+      "The three charts of the book (service, town, rent) are on the PM Dashboard (/overview); pressing a slice opens Portfolio filtered to it.",
     ],
-    wiring: "partial",
+    wiring: "live",
     caveats: [
-      "Live from REX's leased rental book. The rent roll is REX's agreed rent, not money received. PayProp is connected, but the rent roll does not read from it yet.",
+      "Let Only homes are not on Portfolio: we let them and the landlord looks after them. A Let Only let's details, right to rent included, go on the let's own page in Applications.",
+      "A tenant who came over from the old property management system with no contact behind them is kept in the OS: changing their name or email there is saved on the home, not sent anywhere else. A landlord's contact changes are saved back to their main record.",
       "Certificates take a few minutes to read the first time each day and fill in behind the list. Until then the certificate column says it is checking.",
-      "About a quarter of the book has no landlord on the REX record. Those properties say so rather than guessing.",
-      "Nothing on this screen writes to REX.",
     ],
   },
 
@@ -433,7 +444,9 @@ if (mismatch.length) {
 
 /** The rail's own label for a route, so the assistant calls screens what the rail calls them. */
 export function labelFor(route: AgentRoute): string {
-  return AGENT_NAV.find((n) => n.href === route)?.label ?? route;
+  /* Off the rail (Compliance, Inspections, Move-outs ...) it read "/compliance - /compliance" to him (14 Nov 2026). */
+  const named: Record<string, string> = { "/overview": "PM Dashboard", "/case-studies": "Case Studies", "/tenancy-reviews": "Tenancy Reviews", "/move-outs": "Move-outs" };
+  return AGENT_NAV.find((n) => n.href === route)?.label ?? named[route] ?? route.slice(1).replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**

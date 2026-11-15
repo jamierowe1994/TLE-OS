@@ -3,7 +3,7 @@ import { assistantNameFor } from "@/lib/assistant-name";
 import { publicError } from "@/lib/public-error";
 import type { OpenSurface } from "@/lib/open-record";
 import { sealPayload, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { scopeFor } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { memoryFor } from "@/lib/assistant-steve-more";
 import { findUserById } from "@/lib/users";
 import {
@@ -153,8 +153,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Say something first." }, { status: 400 });
   }
 
+  /* THE INTRODUCTION ONLY WHERE IT BELONGS (Erleta Vathej, ticket 8642ebc6;
+     James, 14 Nov 2026: "fix Steve"). Steve was open twice for her; the
+     second copy had never seen her finish the introduction, asked her name
+     mid-way through an address change, and took the new address as it:
+     "Good to meet you, Flat". Her next "yes" became her answer to what she'd
+     need help with. The screen's word for which step this is is not enough:
+     somebody who has already asked him something real has met him, and a
+     "name" that is a sentence, an address or has a number in it is a
+     question. Either way it goes to him as one. */
+  const askedFor = b.kind === "onboarding-name" || b.kind === "onboarding-help" ? b.kind : "ask";
+  const looksLikeAName = (t: string) => t.length <= 40 && t.split(/\s+/).length <= 3 && !/[\d,@?/]/.test(t);
   const kind: LogKind =
-    b.kind === "onboarding-name" || b.kind === "onboarding-help" ? b.kind : "ask";
+    askedFor === "ask" || (await isOnboarded(userId).catch(() => false)) || (askedFor === "onboarding-name" && !looksLikeAName(text))
+      ? "ask"
+      : askedFor;
   const thread = (b.thread ?? "").slice(0, 64) || "t";
   const path = (b.path ?? "").slice(0, 200);
   /* The record open in front of them. It is what turns "how many bedrooms is
@@ -209,7 +222,12 @@ export async function POST(req: NextRequest) {
   /* WHOSE data may his tools read. Resolved here, from the request, and
      handed down — a tool that decided its own scope would be one forgotten
      import away from answering across the whole group. */
-  const scope = await scopeFor(req);
+  /* The book their screens show (14 Nov 2026): the office - pre-tenancy,
+     compliance, super admins - sees the whole business on Portfolio, and was
+     told by Steve that a home outside their own REX book "isn't in your book"
+     (Kirstie on five homes, Lorna on two, Sean on one). Same rule as the
+     screens, lib/scope bookScope; an agent is still their own book. */
+  const scope = await bookScope(req);
 
   let answer;
   try {

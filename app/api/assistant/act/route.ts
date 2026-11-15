@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { openPayload, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
-import { scopeFor } from "@/lib/scope";
+import { bookScope } from "@/lib/scope";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { perform, type ActionProposal } from "@/lib/assistant-actions";
 import { logLine } from "@/lib/assistant-log";
@@ -53,7 +53,12 @@ export async function POST(req: NextRequest) {
 
   /* Re-checked here, not carried on the proposal. A sealed action is not a
      capability somebody else can spend. */
-  const scope = await scopeFor(req);
+  /* The book their screens show (14 Nov 2026): the office - pre-tenancy,
+     compliance, super admins - sees the whole business on Portfolio, and was
+     told by Steve that a home outside their own REX book "isn't in your book"
+     (Kirstie on five homes, Lorna on two, Sean on one). Same rule as the
+     screens, lib/scope bookScope; an agent is still their own book. */
+  const scope = await bookScope(req);
 
   let outcome;
   try {
