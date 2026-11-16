@@ -3,7 +3,7 @@ import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { dueFor, getContractor, getOrder, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
-import { editableJobEmail, previewJobEmail, type ContractorEdit } from "@/lib/works-emails";
+import { editableJobEmail, previewJobEmail, tenantEmailOnRaise, type ContractorEdit } from "@/lib/works-emails";
 
 /**
  * The works order a job would send, rendered from the form as it stands and
@@ -23,6 +23,8 @@ type Draft = {
   propertyId?: string | null;
   /** The agent's own words for the works order (James, 8 Nov 2026), and whether to send back the words to edit. */
   edit?: ContractorEdit | null; editable?: boolean;
+  /** The tenants' email instead of the works order (Lianna Denholm, 16 Nov 2026), and whether Let the tenants know is ticked. */
+  audience?: "contractor" | "tenant"; tellTenants?: boolean;
 };
 
 export async function POST(req: NextRequest) {
@@ -58,12 +60,14 @@ export async function POST(req: NextRequest) {
     landlord: "", quotePence: null, authorityPence: 0, completionNote: "", contractorToken: "…", tenantToken: null,
   } as unknown as WorksOrder;
   try {
-    const id = repair ? "works-contractor-order" : "works-contractor-planned";
+    const tenantId = b.audience === "tenant" ? tenantEmailOnRaise({ kind: draft.kind, scheduledAt: draft.scheduledAt, quietTenants: b.tellTenants === false, accessNotice: b.tellTenants === true }) : null;
+    if (b.audience === "tenant" && !tenantId) return NextResponse.json({ ok: true, none: true });
+    const id = tenantId ?? (repair ? "works-contractor-order" : "works-contractor-planned");
     const over: Record<string, string> = seq?.n ? {} : { ref: "(new)" };
     const change = b.edit && typeof b.edit === "object" ? { subject: typeof b.edit.subject === "string" ? b.edit.subject.slice(0, 200) : null, body: typeof b.edit.body === "string" ? b.edit.body.slice(0, 6000) : null } : null;
     const mail = await previewJobEmail(draft, id, subject ?? actor, over, change);
     const words = b.editable ? await editableJobEmail(draft, id, subject ?? actor, over) : null;
-    return NextResponse.json({ ok: true, ...mail, ...(words ? { text: words.text, fields: words.fields } : {}) });
+    return NextResponse.json({ ok: true, ...mail, template: id, ...(words ? { text: words.text, fields: words.fields } : {}) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "The preview could not be written.") }, { status: 400 });
   }

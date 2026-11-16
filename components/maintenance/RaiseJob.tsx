@@ -8,7 +8,7 @@ import FieldMultiSelect from "@/components/FieldMultiSelect";
 import FieldDate, { sayDate } from "@/components/FieldDate";
 import { ContractorForm } from "@/components/WorksNow";
 import type { Contractor, JobTenant, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
-import { CATEGORY_TRADE, PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES, categoriesOf, joinCategories } from "@/lib/works-catalogue";
+import { CATEGORY_TRADE, PLANNED_CATEGORIES, REPAIR_CATEGORIES, TENANT_FIRST_NAME as FIRST_NAME, URGENCIES, categoriesOf, joinCategories } from "@/lib/works-catalogue";
 import { CATEGORY_CERT, CERT_TYPE_KEY, ContractorPick, REPORTED_BY, readHomes, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -307,6 +307,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
         tenants: onJob, landlordSkipped, send, askQuote, quoteFrom: askQuote ? askIds : undefined,
         contractorEdit: send && mailEdited ? mail : undefined,
+        tenantEdit: send && tenantMailEdited ? tenantMail : undefined,
         tellTenants,
         skipped: steps.filter((x) => skipped.has(x.id)).map((x) => x.title),
       }),
@@ -463,6 +464,38 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     return () => { live = false; };
   }, [here.id, contractorId, previewKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* The email the tenants get as it goes, written in place like the works
+     order (Lianna Denholm, 16 Nov 2026: "Tenant confirmation on maintenance,
+     I cannot amend this before sending"). Read alongside it; none when the
+     tenants aren't being told. */
+  type TenantPreview = { key: string; none: true } | { key: string; error: string } | { key: string; subject: string; html: string; text: (MailWords & { heading?: string }) | null; fields: MailField[] };
+  const [tenantPreview, setTenantPreview] = useState<TenantPreview | null>(null);
+  const tenantPreviewKey = JSON.stringify([previewKey, tellTenants]);
+  const [tenantMail, setTenantMail] = useState<MailWords | null>(null);
+  const [tenantMailKey, setTenantMailKey] = useState<string | null>(null);
+  /* Who gets it: a booked repair goes to the lead tenant, every other notice to each tenant with an email. */
+  const tenantTo = (scheduledAt && kind === "repair" ? onJob.slice(0, 1) : onJob).filter((t) => t.email?.includes("@"));
+  const tellsTenants = tellTenants && tenantTo.length > 0;
+  useEffect(() => {
+    if (here.id !== "check" || !contractorId || !tellsTenants || tenantPreview?.key === tenantPreviewKey) return;
+    let live = true;
+    fetch("/api/works-orders/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...previewBody(), audience: "tenant", tellTenants, editable: true }),
+    }).then((r) => r.json()).then((j) => {
+      if (!live) return;
+      setTenantPreview(
+        !j?.ok ? { key: tenantPreviewKey, error: j?.error ?? "The email to the tenants could not be written." }
+          : j.none ? { key: tenantPreviewKey, none: true }
+          : { key: tenantPreviewKey, subject: j.subject, html: j.html, text: j.text ?? null, fields: Array.isArray(j.fields) ? j.fields : [] }
+      );
+    }).catch(() => { if (live) setTenantPreview({ key: tenantPreviewKey, error: "The email to the tenants could not be written." }); });
+    return () => { live = false; };
+  }, [here.id, contractorId, tellsTenants, tenantPreviewKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tenantOriginal = tenantPreview && "html" in tenantPreview ? tenantPreview.text : null;
+  const tenantMailEdited = tellsTenants && !!tenantMail && !!tenantOriginal && (tenantMail.body !== tenantOriginal.body || tenantMail.subject !== tenantOriginal.subject);
+
   const cats = kind === "repair" ? REPAIR_CATEGORIES : PLANNED_CATEGORIES;
   /* The floating boxes (look="float", the new-look Contractors page, 25 Oct
      2026): the same screens, questions, checks and buttons, drawn as separate
@@ -549,6 +582,34 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                   }}
                 />
               )}
+            </div>
+          );
+  /* The tenants' email under the works order, in the new look. */
+  const tenantNames = tenantTo.map((t) => (t.name ?? "").trim().split(/\s+/)[0] || "the tenant");
+  const checkTenantMail = stepped && at("check") && canSend && F && contractorHasEmail && tellsTenants && !(tenantPreview && "none" in tenantPreview && tenantPreview.key === tenantPreviewKey) && (
+            <div className="sm:col-span-2 mt-4">
+              <p className="nl-wo-k mb-2">And to the {tenantTo.length > 1 ? "tenants" : "tenant"} <em>Goes with the works order when you press Send</em></p>
+              <WorksOrderEmail
+                contractor={{ name: tenantNames.length > 1 ? `${tenantNames.slice(0, -1).join(", ")} and ${tenantNames[tenantNames.length - 1]}` : tenantNames[0], email: tenantTo.map((t) => t.email).join(", ") }}
+                heading={tenantPreview && "html" in tenantPreview ? tenantPreview.text?.heading ?? "" : ""}
+                what="The email to the tenants"
+                loadingText="Writing the email to the tenants…"
+                fixedNote={`Then, as always: the box with who's coming, the job and the address, and your name.${tenantTo.length > 1 ? ` ${FIRST_NAME} becomes each tenant's own first name, and each gets their own copy.` : ` ${FIRST_NAME} becomes ${tenantNames[0]}.`}`}
+                state={
+                  !tenantPreview || tenantPreview.key !== tenantPreviewKey
+                    ? tenantMail && tenantPreview && "html" in tenantPreview ? { kind: "ready", original: tenantPreview.text, fields: tenantPreview.fields, html: tenantPreview.html } : { kind: "loading" }
+                    : "error" in tenantPreview ? { kind: "error", error: tenantPreview.error }
+                    : "html" in tenantPreview ? { kind: "ready", original: tenantPreview.text, fields: tenantPreview.fields, html: tenantPreview.html } : { kind: "loading" }
+                }
+                words={tenantMail}
+                onWords={(w) => { setTenantMail(w); if (!tenantMailKey) setTenantMailKey(tenantPreviewKey); }}
+                dirtyDetails={!!tenantMailKey && tenantMailKey !== tenantPreviewKey}
+                onReset={() => { setTenantMail(null); setTenantMailKey(null); }}
+                renderAs={async (w) => {
+                  const j = await fetch("/api/works-orders/preview", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...previewBody(), audience: "tenant", tellTenants, edit: w }) }).then((r) => r.json()).catch(() => null);
+                  return j?.ok && j.html ? (j.html as string) : null;
+                }}
+              />
             </div>
           );
   const checkOrder = stepped && at("check") && canSend && !F && (
@@ -975,7 +1036,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             canSend ? (
               /* Just the email (James, 8 Nov 2026): the steps beside it are where anything else changes. */
               <div className="nl-rj-check is-solo sm:col-span-2">
-                <div>{checkSkipped}{checkMail}</div>
+                <div>{checkSkipped}{checkMail}{checkTenantMail}</div>
               </div>
             ) : (
               <div className="nl-rj-check is-solo sm:col-span-2">

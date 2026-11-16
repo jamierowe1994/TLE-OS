@@ -167,8 +167,14 @@ export async function POST(req: NextRequest) {
     const contractorEdit = ce && typeof ce === "object"
       ? { subject: typeof ce.subject === "string" ? ce.subject.slice(0, 200) : null, body: typeof ce.body === "string" ? ce.body.slice(0, 6000) : null }
       : null;
-    const emails = await emailsForMove(order, "raised", subject ?? actor, { contractorEdit }).catch(() => []);
+    /* The tenants' email in the agent's own words (Lianna Denholm, 16 Nov 2026). */
+    const te = (b as { tenantEdit?: { subject?: unknown; body?: unknown } }).tenantEdit;
+    const tenantEdit = te && typeof te === "object"
+      ? { subject: typeof te.subject === "string" ? te.subject.slice(0, 200) : null, body: typeof te.body === "string" ? te.body.slice(0, 6000) : null }
+      : null;
+    const emails = await emailsForMove(order, "raised", subject ?? actor, { contractorEdit, tenantEdit }).catch(() => []);
     if (contractorEdit?.body?.trim() && order.contractorContactedAt) await logEvent(order.id, by, "note", "The works order was reworded before it went.");
+    if ((tenantEdit?.body?.trim() || tenantEdit?.subject?.trim()) && emails.some((e) => e.to === "tenant" && e.sent)) await logEvent(order.id, by, "note", "The email to the tenants was reworded before it went.");
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
     /* Quote first (Sean, 20 Oct 2026): the contractor is asked for a price,
        and no works order goes until it is approved. */

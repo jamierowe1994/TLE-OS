@@ -95,3 +95,6 @@ export const CATEGORY_TRADE: Record<string, string> = {
   "Inventory & check-in": "Inventory clerk",
   "Check-out": "Inventory clerk",
 };
+
+/** Stands for each tenant's own first name in a tenant email the agent rewords (Lianna Denholm, 16 Nov 2026). */
+export const TENANT_FIRST_NAME = "[first name]";

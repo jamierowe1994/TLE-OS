@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { editableEmailText, renderTleEmailLive, type EmailEdit } from "@/lib/email/tle-emails";
+import { TENANT_FIRST_NAME } from "@/lib/works-catalogue";
 import { accountsInvoiceEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import { bankForInvoice } from "@/lib/contractor-bank";
 import { recentBankChanges } from "@/lib/bank-vault";
@@ -229,13 +230,36 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
 const EDITABLE: Record<string, [string, string]> = {
   "works-contractor-order": ["wc2", "wc5a"],
   "works-contractor-planned": ["wp2", "wp6"],
+  /* The tenants' email too (Lianna Denholm, 16 Nov 2026: "Tenant
+     confirmation on maintenance, I cannot amend this before sending"). The
+     greeting through the last paragraph; the box of who, what and where
+     stays, and so do the sign-off and the footer. */
+  "works-tenant-notice": ["wtn2", "wtn3"],
+  "works-tenant-booked": ["wtb2", "wtb3"],
+  "works-tenant-planned-notice": ["wtp2", "wtp4"],
 };
-/** What the agent typed on the last screen, for the works order only. */
+/** Stands for each tenant's own first name in the words the agent edits, since one edit goes to every tenant. */
+const FIRST_NAME = TENANT_FIRST_NAME;
+const TENANT_EMAILS = new Set(["works-tenant-notice", "works-tenant-booked", "works-tenant-planned-notice"]);
+/** What the agent typed on the last screen: the works order, or the tenants' email. */
 export type ContractorEdit = { subject?: string | null; body?: string | null };
 function editFor(id: string, e?: ContractorEdit | null): EmailEdit | null {
   const r = EDITABLE[id];
   if (!r || !e || (!e.body?.trim() && !e.subject?.trim())) return null;
-  return { from: r[0], through: r[1], subject: e.subject ?? null, body: e.body ?? null };
+  /* Each tenant greeted by their own name, as the email always did. */
+  const named = (t: string | null | undefined) => (t && TENANT_EMAILS.has(id) ? t.split(FIRST_NAME).join("{{tenantName}}") : t ?? null);
+  return { from: r[0], through: r[1], subject: named(e.subject), body: named(e.body) };
+}
+
+/**
+ * The email the tenants get when the job is raised and sent, or null when
+ * they get none: a discreet repair, a planned job without the tick, or no
+ * contractor. Mirrors the "raised" branch of emailsForMove.
+ */
+export function tenantEmailOnRaise(o: Pick<WorksOrder, "kind" | "scheduledAt" | "quietTenants" | "accessNotice">): string | null {
+  if (o.kind === "planned") return o.accessNotice && !o.scheduledAt ? "works-tenant-planned-notice" : null;
+  if (o.quietTenants) return null;
+  return o.scheduledAt ? "works-tenant-booked" : "works-tenant-notice";
 }
 
 async function send(o: WorksOrder, id: string, to: string, vars: Record<string, string>, me: OsUser, who: SendOutcome["to"], edit?: EmailEdit | null): Promise<SendOutcome> {
@@ -488,7 +512,7 @@ function chaseVars(o: WorksOrder, remindedAt: string | null | undefined): Record
 }
 
 /** Which emails a move sets off. Returns every outcome, for the timeline. */
-export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request" | "chase_reminder" | "chase_final", me: OsUser, detail: { how?: string; quiet?: boolean; remindedAt?: string | null; contractorEdit?: ContractorEdit | null; byContractor?: boolean } & MoveOut = {}): Promise<SendOutcome[]> {
+export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request" | "chase_reminder" | "chase_final", me: OsUser, detail: { how?: string; quiet?: boolean; remindedAt?: string | null; contractorEdit?: ContractorEdit | null; tenantEdit?: ContractorEdit | null; byContractor?: boolean } & MoveOut = {}): Promise<SendOutcome[]> {
   const out: SendOutcome[] = [];
   const vars = await varsFor(o, me);
   const contractor = await contractorOf(o.contractorId);
@@ -505,6 +529,8 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     if (sent.sent && o.contractorId) await markOrderSent(o.id, o.contractorId, contractor.name);
     out.push(sent);
   };
+  /* The tenants' email in the agent's own words, only as the job is raised. */
+  const tenantEdit = (id: string) => (action === "raised" ? editFor(id, detail.tenantEdit) : null);
   const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor")); };
   /* A discreet repair (Let the tenants know unticked, Lianna 9 Oct 2026):
      nothing automatic goes to any tenant on it. */
@@ -515,7 +541,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     const live = await jobTenants(o);
     const to = o.tenantEmail.trim().toLowerCase();
     if (to && tenantsOf(o).some((t) => t.email.toLowerCase() === to && !live.some((l) => l.name === t.name && l.email === t.email))) return;
-    const sent = await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant");
+    const sent = await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant", tenantEdit("works-tenant-booked"));
     /* Said on the job page ("Booking sent to the tenants"), so nobody sends it twice. */
     if (sent.sent) await markTenantsToldBooked(o.id);
     out.push(sent);
@@ -525,7 +551,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   const tenantNotice = async () => {
     if (planned || quiet || !contractor) return;
     for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {
-      out.push(await send(o, "works-tenant-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
+      out.push(await send(o, "works-tenant-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant", tenantEdit("works-tenant-notice")));
     }
   };
   /* A planned job with the tick on (James, 10 Oct 2026): every tenant with an
@@ -534,7 +560,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   const accessNotice = async () => {
     if (!planned || !o.accessNotice || !contractor || o.scheduledAt) return;
     for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {
-      out.push(await send(o, "works-tenant-planned-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
+      out.push(await send(o, "works-tenant-planned-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant", tenantEdit("works-tenant-planned-notice")));
     }
   };
   /* The landlord's choice, read once and only when a landlord email is due.
@@ -693,10 +719,23 @@ export async function previewJobEmail(o: WorksOrder, id: string, me: OsUser, ove
  * in where the cursor is ("add tenant number"), each already filled from
  * the job. Null `text` when the builder's version has lost the run's ends.
  */
-export async function editableJobEmail(o: WorksOrder, id: string, me: OsUser, over: Record<string, string> = {}): Promise<{ text: { subject: string; body: string } | null; fields: { label: string; value: string }[] }> {
+export async function editableJobEmail(o: WorksOrder, id: string, me: OsUser, over: Record<string, string> = {}): Promise<{ text: { subject: string; body: string; heading?: string } | null; fields: { label: string; value: string }[] }> {
   const r = EDITABLE[id];
-  const vars = { ...(await varsFor(o, me)), ...over };
+  const forTenants = TENANT_EMAILS.has(id);
+  const vars: Record<string, string> = { ...(await varsFor(o, me)), ...over, ...(forTenants ? { tenantName: FIRST_NAME } : {}) };
   const text = r ? await editableEmailText(id, vars, r[0], r[1]).catch(() => null) : null;
+  /* What a tenant may be told: never the works order's notes or the key number. */
+  if (forTenants) {
+    const fields: { label: string; value: string }[] = [];
+    const add = (label: string, value: string | null | undefined) => { const v = (value ?? "").trim(); if (v) fields.push({ label, value: v }); };
+    add("Their first name", FIRST_NAME);
+    add("Contractor", vars.contractorName);
+    add("Address", vars.address);
+    if (o.scheduledAt) add("Booked for", vars.scheduledAt);
+    add("Your number", vars.agentPhone);
+    add("Your email", vars.agentEmail);
+    return { text, fields };
+  }
   const own = await jobTenants(o).catch(() => [] as JobTenant[]);
   const home = own.length ? null : await homeAccessFor(o, own).catch(() => null);
   const tenants = own.length ? own : home?.tenants ?? [];

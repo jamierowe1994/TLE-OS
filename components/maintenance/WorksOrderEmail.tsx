@@ -22,8 +22,17 @@ export type MailField = { label: string; value: string };
 
 export default function WorksOrderEmail({
   contractor, heading, state, words, onWords, dirtyDetails, onReset, renderAs,
+  loadingText = "Writing the works order…",
+  fixedNote = "Then, as always: the button to tell us the date and time, the line about quoting the works order number on the invoice, and your name and number.",
+  what = "The works order",
 }: {
+  /** Who it goes to: the contractor, or the tenants (Lianna Denholm, 16 Nov 2026). */
   contractor: { name: string; email: string };
+  loadingText?: string;
+  /** What the email adds after the words, which can't be changed here. */
+  fixedNote?: string;
+  /** "The works order" / "The email to the tenants", for the frame titles. */
+  what?: string;
   /** "Works order #1001", fixed above the words. */
   heading: string;
   state: { kind: "loading" } | { kind: "error"; error: string } | { kind: "ready"; original: MailWords | null; fields: MailField[]; html: string };
@@ -66,7 +75,7 @@ export default function WorksOrderEmail({
   if (state.kind === "loading") {
     return (
       <div className="nl-wo-mail is-wait">
-        <span className="nl-dash-spin" aria-hidden /> Writing the works order…
+        <span className="nl-dash-spin" aria-hidden /> {loadingText}
       </div>
     );
   }
@@ -82,7 +91,7 @@ export default function WorksOrderEmail({
         <div className="nl-wo-head">
           <p><span>To</span><b>{contractor.name}</b><em>{contractor.email}</em></p>
         </div>
-        <iframe title="The works order" srcDoc={state.html} sandbox="" className="nl-wo-frame" />
+        <iframe title={what} srcDoc={state.html} sandbox="" className="nl-wo-frame" />
       </div>
     );
   }
@@ -139,7 +148,7 @@ export default function WorksOrderEmail({
           aria-label="The email"
           className="nl-wo-body"
         />
-        <p className="nl-wo-fixed">Then, as always: the button to tell us the date and time, the line about quoting the works order number on the invoice, and your name and number.</p>
+        <p className="nl-wo-fixed">{fixedNote}</p>
       </div>
 
       {state.fields.length > 0 && (
@@ -173,7 +182,7 @@ export default function WorksOrderEmail({
           {asSent === "loading" ? (
             <div className="nl-wo-mail is-wait"><span className="nl-dash-spin" aria-hidden /> Drawing it…</div>
           ) : (
-            <iframe title="The works order as it will go" srcDoc={asSent} sandbox="" className="nl-wo-frame" />
+            <iframe title={`${what} as it will go`} srcDoc={asSent} sandbox="" className="nl-wo-frame" />
           )}
         </div>
       )}

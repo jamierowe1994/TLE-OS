@@ -375,7 +375,7 @@ async function liveDoc(id: string): Promise<{ doc: EmailDoc; audience?: EmailAud
  * run as plain text, filled from the job. Null when the builder's version
  * of the email no longer has the run's two ends.
  */
-export async function editableEmailText(id: string, vars: Record<string, string>, from: string, through: string): Promise<{ subject: string; body: string } | null> {
+export async function editableEmailText(id: string, vars: Record<string, string>, from: string, through: string): Promise<{ subject: string; body: string; heading?: string } | null> {
   const { doc } = await liveDoc(id);
   const range = editRange(doc, from, through);
   if (!range) return null;
@@ -392,13 +392,18 @@ export async function editableEmailText(id: string, vars: Record<string, string>
       .replace(/&amp;/g, "&");
   const body = doc.blocks
     .slice(range[0], range[1] + 1)
+    /* Words only: a facts box inside the run (the tenant emails) stays as
+       it is and is not offered for editing. */
+    .filter((b) => (b as unknown as { type?: string }).type === "text")
     .map((b) => (b as unknown as { text?: string }).text)
     .filter((t): t is string => typeof t === "string")
     .map((t) => plain(fillText(t)).trim())
     /* An empty field leaves "Access notes:" with nothing after it: drop it. */
     .filter((t) => t && !/^[^\n]{1,40}:$/.test(t))
     .join("\n\n");
-  return { subject: fillText(doc.subject), body };
+  /* The heading over the words, so the editor reads like the email. */
+  const head = doc.blocks.slice(0, range[0]).filter((b) => (b as unknown as { type?: string }).type === "heading").pop() as unknown as { text?: string } | undefined;
+  return { subject: fillText(doc.subject), body, ...(head?.text ? { heading: plain(fillText(head.text)).trim() } : {}) };
 }
 
 export async function renderTleEmailLive(id: string, vars: Record<string, string>, edit?: EmailEdit | null): Promise<{ subject: string; html: string }> {
@@ -407,7 +412,10 @@ export async function renderTleEmailLive(id: string, vars: Record<string, string
   let { doc } = await liveDoc(id);
   if (edit?.body?.trim()) {
     const range = editRange(doc, edit.from, edit.through);
-    if (range) doc = { ...doc, blocks: [...doc.blocks.slice(0, range[0]), ...textToBlocks(edit.body, edit.from), ...doc.blocks.slice(range[1] + 1)] };
+    /* Anything in the run that isn't words - the tenant emails' box of who,
+       what and where - stays, after the agent's words and before the sign-off. */
+    const kept = range ? doc.blocks.slice(range[0], range[1] + 1).filter((b) => (b as unknown as { type?: string }).type !== "text") : [];
+    if (range) doc = { ...doc, blocks: [...doc.blocks.slice(0, range[0]), ...textToBlocks(edit.body, edit.from), ...kept, ...doc.blocks.slice(range[1] + 1)] };
   }
   if (edit?.subject?.trim()) doc = { ...doc, subject: edit.subject.trim().replace(/[\r\n]+/g, " ").slice(0, 200) };
   const fill = fillFor(vars, true);
