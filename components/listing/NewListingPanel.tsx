@@ -73,6 +73,14 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
   const [needsSignIn, setNeedsSignIn] = useState(false);
   /* The home already has a current listing: that one is opened, not a second made. */
   const [existing, setExisting] = useState<string | null>(null);
+  /* HOW THE LANDLORD CAME TO US, ASKED HERE (James, 16 Nov 2026: "We need to
+     allow the agent to pick the source"). A listing can't be made on a home
+     with no Source, and the agent was sent off to find a picker on the home's
+     page that some homes never show. Read when a known home is picked; with
+     none on it, a pick is asked for here and saved before the listing is
+     made. "unknown" (couldn't read it) does not stop them. */
+  const [homeSource, setHomeSource] = useState<{ state: "idle" | "none" | "has" | "unknown"; options: string[] }>({ state: "idle", options: [] });
+  const [sourcePick, setSourcePick] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -140,7 +148,26 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
   useEffect(() => {
     if (!depositByHand) setDeposit(suggested == null ? "" : String(suggested));
   }, [suggested, depositByHand]);
-  const ready = Boolean((testFile || picked || (fresh?.streetName && fresh.town && fresh.postcode)) && typeId && Number(rent) > 0);
+  const pickedId = !testFile && picked && /^\d+$/.test(picked.id) ? picked.id : null;
+  useEffect(() => {
+    setSourcePick("");
+    if (!pickedId) return setHomeSource({ state: "idle", options: [] });
+    let live = true;
+    fetch(`/api/homes/source?property=${encodeURIComponent(pickedId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; source?: string | null; options?: string[] }) => {
+        if (!live) return;
+        const options = Array.isArray(j.options) ? j.options : [];
+        setHomeSource({ state: !j.ok || j.source == null ? "unknown" : j.source ? "has" : options.length ? "none" : "unknown", options });
+      })
+      .catch(() => live && setHomeSource({ state: "unknown", options: [] }));
+    return () => {
+      live = false;
+    };
+  }, [pickedId]);
+  const ready =
+    Boolean((testFile || picked || (fresh?.streetName && fresh.town && fresh.postcode)) && typeId && Number(rent) > 0) &&
+    (homeSource.state !== "none" || Boolean(sourcePick));
 
   async function create() {
     setSaving(true);
@@ -148,6 +175,16 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
     setNeedsSignIn(false);
     setExisting(null);
     try {
+      if (homeSource.state === "none" && pickedId && sourcePick) {
+        const sr = await fetch("/api/homes/source", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ property: pickedId, source: sourcePick }),
+        });
+        const sj = (await sr.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!sj.ok) throw new Error(sj.error ?? "The Source didn't save, so the listing wasn't made. Try again.");
+        setHomeSource((h) => ({ ...h, state: "has" }));
+      }
       const r = await fetch("/api/listings/create", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -316,6 +353,22 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
               </p>
             )}
           </section>
+
+          {homeSource.state === "none" && (
+            <section className="rounded-2xl border border-accent-dark/30 bg-accent-soft/40 p-4" data-steve="listing.new-source">
+              <label className={label}>
+                <span className="text-[12px] text-accent-dark">This home has no Source yet. Add one - how the landlord came to us.</span>
+                <select value={sourcePick} onChange={(e) => setSourcePick(e.target.value)} className={`${field} mt-1.5`} aria-label="How the landlord came to us">
+                  <option value="">Add a source</option>
+                  {homeSource.options.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </section>
+          )}
 
           {needsSignIn && <SignInAgain doing="create the listing" onDone={() => void create()} />}
           {existing && (
