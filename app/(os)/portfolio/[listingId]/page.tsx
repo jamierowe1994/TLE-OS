@@ -124,6 +124,8 @@ type Loaded<T> = { state: "loading" } | { state: "failed"; error: string } | { s
 /** A tenant swap under way on the home (GET /api/tenant-swaps, 16 Oct 2026). */
 type SwapUnderWay = {
   application: string;
+  /** Its PLC has passed and the move-in day has come: no longer under way. */
+  done?: boolean;
   swap: { kind?: string; label?: string; rereference?: string[]; leaving: string[]; staying: string[]; joining: string[]; moveIn: string; rentPcm: number | null; rentPortion: number | null; by: string; at: string };
   plc: { state: string; label: string; who: string; short: string } | null;
 };
@@ -491,13 +493,19 @@ export default function PropertyPage() {
      home for the swap's PLC check and found no sign of it here, so the
      Tenant swap tile turns into the swap under way, with the way to its PLC. */
   const [swapOn, setSwapOn] = useState<SwapUnderWay | null>(null);
+  /* Still under way, or finished (16 Nov 2026)? A finished swap no longer
+     takes the place of the Tenant Swap button: 44 South Bridge had its second
+     swap to make and the only button opened October's. And a swap under way
+     sits BESIDE Tenant Swap, never instead of it - two sharers can change in
+     the same month. */
+  const swapLive = swapOn && !swapOn.done ? swapOn : null;
   useEffect(() => {
     if (!p?.listingId) return;
     let live = true;
     setSwapOn(null);
     fetch(`/api/tenant-swaps?listingId=${encodeURIComponent(p.listingId)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => { if (live && j?.ok && j.swap) setSwapOn({ application: j.application, swap: j.swap, plc: j.plc ?? null }); })
+      .then((j) => { if (live && j?.ok && j.swap) setSwapOn({ application: j.application, done: Boolean(j.done), swap: j.swap, plc: j.plc ?? null }); })
       .catch(() => { /* no swap shown; making one still works */ });
     return () => { live = false; };
   }, [p?.listingId]);
@@ -1027,7 +1035,7 @@ export default function PropertyPage() {
         </Modal>
       )}
       {action?.kind === "swap" && (
-        <Modal onClose={closeAction} title="Change the tenants">
+        <Modal onClose={closeAction} title="Tenant Swap">
           <TenantChange listingId={String(p.listingId)} tenants={tenants} rent={p.rentMonthly ?? null} onClose={closeAction} />
         </Modal>
       )}
@@ -1055,7 +1063,7 @@ export default function PropertyPage() {
     /* Nobody on the home yet, and a let on its way in: that let stands in for
        Change the tenants, which needs tenants to change. Adding the newcomers
        there would start a second Propoly deal for the same people. */
-    const comingIn = !tenants.length && !swapOn ? incoming[0] ?? null : null;
+    const comingIn = !tenants.length && !swapLive ? incoming[0] ?? null : null;
     const comingNames = comingIn ? (comingIn.tenants.length ? comingIn.tenants.join(" & ") : "The new tenants") : "";
     const comingWhen = comingIn?.moveIn ? `moving in ${day(comingIn.moveIn)}` : "move-in date to set";
     const rentShown = houseView && house && !lets ? houseLine : rentLine;
@@ -1065,11 +1073,12 @@ export default function PropertyPage() {
       { label: "Serve notice", sub: roomsOnly ? "Pick a room first" : "Section 8, checked by compliance", disabled: roomsOnly, onClick: () => act({ kind: "notices", start: "s8" }) },
       { label: "Rent review", sub: roomsOnly ? "Pick a room first" : "Section 13 rent increase", disabled: roomsOnly, onClick: () => act({ kind: "notices", start: "s13" }) },
       { label: "Tenant gave notice", sub: "Starts the move-out", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "tenant-notice" }) },
-      swapOn
-        ? { label: `${swapOn.swap.label ?? "Tenant swap"} under way`, sub: `${(swapOn.swap.joining.length ? swapOn.swap.joining : swapOn.swap.rereference ?? []).join(", ")} from ${day(swapOn.swap.moveIn)} · ${swapOn.plc?.short ?? "PLC check next"}`, onClick: () => act({ kind: "swap-open" }) }
-        : comingIn
-          ? { label: "New tenants on the way", sub: `${comingNames}, ${comingWhen}`, href: comingIn.href }
-          : { label: "Change the tenants", sub: tenants.length ? "Add someone, swap a sharer or re-reference" : "No tenants on this home yet", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "swap" }) },
+      ...(swapLive
+        ? [{ label: `${swapLive.swap.label ?? "Tenant swap"} under way`, sub: `${(swapLive.swap.joining.length ? swapLive.swap.joining : swapLive.swap.rereference ?? []).join(", ")} from ${day(swapLive.swap.moveIn)} · ${swapLive.plc?.short ?? "PLC check next"}`, onClick: () => act({ kind: "swap-open" }) }]
+        : []),
+      comingIn
+        ? { label: "New tenants on the way", sub: `${comingNames}, ${comingWhen}`, href: comingIn.href }
+        : { label: "Tenant Swap", sub: tenants.length ? "Swap a sharer, add someone or re-reference, then the PLC check" : "No tenants on this home yet", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "swap" }) },
       /* Case studies (James, 11 Nov 2026, from Richard): this home's advert and
          photos, written up for the website. */
       ...(!p.test && p.onRex !== false && p.listingId ? [{ label: "Use as a case study", sub: "A page for the website from its photos and advert", onClick: () => void startCaseStudy(p.listingId, (h) => router.push(h)) }] : []),
@@ -1176,11 +1185,10 @@ export default function PropertyPage() {
         acts: (
           <>
             {btn("Tenant gave notice", "logout", () => act({ kind: "tenant-notice" }), { disabled: !canAct || !tenants.length, title: "Starts the move-out" })}
-            {swapOn
-              ? btn(`${swapOn.swap.label ?? "Tenancy swap"} under way`, "key", () => act({ kind: "swap-open" }), { primary: true })
-              : comingIn
-                ? btn("Open their let", "key", () => router.push(comingIn.href), { primary: true, title: `${comingNames}, ${comingWhen}` })
-                : btn("Tenancy swap", "key", () => act({ kind: "swap" }), { primary: true, disabled: !canAct || !tenants.length, title: tenants.length ? "Add someone, swap a sharer or re-reference" : "No tenants on this home yet" })}
+            {swapLive && btn(`${swapLive.swap.label ?? "Tenant swap"} under way`, "key", () => act({ kind: "swap-open" }))}
+            {comingIn
+              ? btn("Open their let", "key", () => router.push(comingIn.href), { primary: true, title: `${comingNames}, ${comingWhen}` })
+              : btn("Tenant Swap", "key", () => act({ kind: "swap" }), { primary: true, disabled: !canAct || !tenants.length, title: tenants.length ? "Swap a sharer, add someone or re-reference, then the PLC check" : "No tenants on this home yet" })}
           </>
         ),
       },
@@ -1579,7 +1587,7 @@ export default function PropertyPage() {
                           : tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} long />
                           : tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}
                       </p>
-                      {!roomsOnly && !swapOn && nextTenancy && <NextTenancyLine next={nextTenancy} />}
+                      {!roomsOnly && !swapLive && nextTenancy && <NextTenancyLine next={nextTenancy} />}
                       {/* Overseas tenants' right to rent expiry (Kirstie, ticket 066bb29e). */}
                       {!roomsOnly && !p.test && (
                         <HomeRightToRent key={String(p.listingId)} listingId={String(p.listingId)} tenants={tenants.map((t) => ({ name: t.name, email: t.email }))} />
@@ -1890,16 +1898,16 @@ export default function PropertyPage() {
                 {/* Lianna, 12 Oct 2026: one sharer out, their replacement in, no
                     viewing or offer. Any home with more than one tenant, or let
                     by the room (44 South Bridge isn't recorded as an HMO). */}
-                {swapOn ? (
+                {swapLive && (
                   <button type="button" onClick={() => act({ kind: "swap-open" })} className={tile}>
                     {tileIcon("user")}
-                    {tileText(`${swapOn.swap.label ?? "Tenant swap"} under way`, `${(swapOn.swap.joining.length ? swapOn.swap.joining : swapOn.swap.rereference ?? []).join(", ")} from ${day(swapOn.swap.moveIn)} · ${swapOn.plc?.short ?? "PLC check next"}`)}
+                    {tileText(`${swapLive.swap.label ?? "Tenant swap"} under way`, `${(swapLive.swap.joining.length ? swapLive.swap.joining : swapLive.swap.rereference ?? []).join(", ")} from ${day(swapLive.swap.moveIn)} · ${swapLive.plc?.short ?? "PLC check next"}`)}
                   </button>
-                ) : (
-                  /* Change the tenants (19 Oct 2026): the swap, plus Kirstie's
-                     add someone and re-reference, behind one button. */
-                  <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("user")}{tileText("Change the tenants", "Add someone, swap a sharer or re-reference")}</button>
                 )}
+                {/* Tenant Swap (19 Oct 2026: the swap, plus Kirstie's add someone
+                    and re-reference, behind one button; 16 Nov: always there,
+                    a swap under way or not). */}
+                <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("user")}{tileText("Tenant Swap", "Swap a sharer, add someone or re-reference")}</button>
                 {/* Management transfer (Dan Richards a9f80822, 19 Oct 2026). */}
                 <TakeOnTile
                   home={{ ref: String(p.listingId), name: p.name, locality: p.locality, landlord: p.landlord, tenants, rent: p.rentMonthly }}
@@ -2751,8 +2759,8 @@ function SwapOpen({ s, onAnother, canAct }: { s: SwapUnderWay; onAnother: () => 
       </dl>
       <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
         {canAct && (
-          <button type="button" onClick={onAnother} className="mr-auto text-[12px] font-semibold text-muted underline-offset-2 hover:text-ink hover:underline">
-            Another change to the tenants
+          <button type="button" onClick={onAnother} className="mr-auto rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-semibold hover:border-ink">
+            Swap Another Tenant
           </button>
         )}
         <Link href={`/applications/${encodeURIComponent(s.application)}`} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-semibold hover:border-ink">

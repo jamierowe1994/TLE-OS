@@ -62,9 +62,18 @@ export async function GET(req: NextRequest) {
   const application = `swap:${swap.id}`;
   const pack = await getCase(caseIdFor(application)).catch(() => null);
   const st = pack ? PLC_STATES.find((x) => x.id === pack.state) : null;
+  /* FINISHED, SO THE HOME IS FREE FOR THE NEXT ONE (Lianna, 16 Nov 2026, 44
+     South Bridge 3f1: "I cannot instruct PLC for Marie the new tenant here").
+     Her October swap had passed its PLC and Artemis Xu had moved in on 1 Nov,
+     yet for 120 days the home's only swap button read "Tenant swap under way"
+     and opened the old one. A swap whose PLC has passed and whose move-in day
+     has come is done: the home offers a new swap again. The day is London's. */
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+  const done = pack?.state === "approved" && swap.moveIn <= today;
   return NextResponse.json({
     ok: true,
     application,
+    done,
     swap: { kind: swap.kind, label: CHANGE_LABEL[swap.kind], rereference: swap.rereference, leaving: swap.leaving.map((x) => x.name), staying: swap.staying.map((x) => x.name), joining: swap.joining.map((x) => x.name), moveIn: swap.moveIn, rentPcm: swap.rentPcm, rentPortion: swap.rentPortion, by: swap.by, at: swap.at },
     plc: pack ? { state: pack.state, label: st?.label ?? pack.state, who: st?.who ?? "", short: PLC_SHORT[pack.state] ?? "PLC under way" } : null,
   });

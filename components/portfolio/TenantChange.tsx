@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import type { Party } from "@/lib/portfolio-types";
@@ -16,15 +17,23 @@ import type { Party } from "@/lib/portfolio-types";
  * Each becomes its own let on Applications, where Push to Propoly starts a
  * new deal with everyone on it and references only the people ticked here.
  * Nothing is sent from this screen.
+ *
+ * STRAIGHT ON TO THE PLC CHECK (James, 16 Nov 2026, 44 South Bridge: "when
+ * we've swapped out the tenant, we would then be able to push them to a PLC
+ * check"). Saving used to drop the agent on Applications to find the PLC step
+ * for themselves. It now says the swap is made, on this screen, with Start
+ * the PLC Check as the one thing to press and the let beside it.
  */
 
 type Kind = "swap" | "add" | "rereference";
 const KINDS: { id: Kind; icon: string; title: string; sub: string }[] = [
-  { id: "add", icon: "user", title: "Add someone to the tenancy", sub: "A partner or a new sharer moves in. Only they are referenced, and everyone gets a new contract." },
   { id: "swap", icon: "logout", title: "Someone leaves, someone moves in", sub: "A sharer goes and their replacement takes their place. No viewing or offer." },
+  { id: "add", icon: "user", title: "Add someone to the tenancy", sub: "A partner or a new sharer moves in. Only they are referenced, and everyone gets a new contract." },
   { id: "rereference", icon: "shield", title: "Re-reference the tenants", sub: "The same tenants, referenced again so they get rent and legal protection and a new contract." },
 ];
 const SAVE: Record<Kind, string> = { swap: "Make the swap", add: "Add them", rereference: "Start re-referencing" };
+const MADE: Record<Kind, string> = { swap: "Swap Made", add: "Tenant Added", rereference: "Re-reference Started" };
+const longDay = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
 export default function TenantChange({ listingId, tenants, rent, onClose }: { listingId: string; tenants: Party[]; rent: number | null; onClose: () => void }) {
   const [kind, setKind] = useState<Kind | null>(null);
@@ -38,6 +47,8 @@ export default function TenantChange({ listingId, tenants, rent, onClose }: { li
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /* Saved: the let it became, kept so this screen can send them on to its PLC check. */
+  const [made, setMade] = useState<{ application: string; out: string[]; into: string[]; again: string[] } | null>(null);
   const field = "mt-1 w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
   const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
   const setJoiner = (i: number, k: "name" | "email" | "phone", v: string) => setJoining((js) => js.map((j, n) => (n === i ? { ...j, [k]: v } : j)));
@@ -106,7 +117,50 @@ export default function TenantChange({ listingId, tenants, rent, onClose }: { li
       setBusy(false);
       return setErr(r?.error ?? "That could not be saved.");
     }
-    window.location.assign(`/applications?open=${encodeURIComponent(r.application)}`);
+    setBusy(false);
+    setMade({
+      application: String(r.application),
+      out: tenants.filter((t) => leaving.has(t.contactId)).map((t) => t.name),
+      into: kind === "rereference" ? [] : people.map((j) => j.name.trim()),
+      again: (r.swap?.rereference as string[] | undefined) ?? [],
+    });
+  }
+
+  if (made && kind) {
+    const rows: Array<[string, string]> = [
+      ...(made.out.length ? [["Leaving", made.out.join(", ")] as [string, string]] : []),
+      ...(made.into.length ? [["Moving in", made.into.join(", ")] as [string, string]] : []),
+      ...(made.again.length ? [["Referenced again", made.again.join(", ")] as [string, string]] : []),
+      [kind === "rereference" ? "New contract from" : "From", longDay(moveIn)],
+    ];
+    return (
+      <div>
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name="check" size={15} /></span>
+          <p className="text-[15px] font-semibold">{MADE[kind]}</p>
+        </div>
+        <dl className="mt-4 grid gap-2.5">
+          {rows.map(([k, v]) => (
+            <div key={k} className="grid grid-cols-[130px_minmax(0,1fr)] gap-3 text-[13px]">
+              <dt className="text-[10px] font-bold uppercase tracking-wider text-muted">{k}</dt>
+              <dd className="min-w-0 break-words">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-4 text-[12.5px] leading-relaxed text-muted">
+          It is on Applications as its own let. Next is the PLC check, which goes to compliance before the lease. Nothing has been sent to anyone yet.
+        </p>
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={onClose} className="mr-auto rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] text-muted hover:text-ink">Close</button>
+          <Link href={`/applications/${encodeURIComponent(made.application)}`} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-semibold hover:border-ink">
+            Open the Let
+          </Link>
+          <Link href={`/plc/start?application=${encodeURIComponent(made.application)}`} className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
+            Start the PLC Check
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   const chosen = KINDS.find((k) => k.id === kind)!;
