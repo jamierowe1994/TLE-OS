@@ -252,6 +252,17 @@ function editFor(id: string, e?: ContractorEdit | null): EmailEdit | null {
 }
 
 /**
+ * The email the tenants get when the contractor is confirmed on the job's
+ * page, or null when they get none. Mirrors the "contractor_confirmed"
+ * branch of emailsForMove.
+ */
+export function tenantEmailOnConfirm(o: Pick<WorksOrder, "kind" | "scheduledAt" | "quietTenants" | "accessNotice" | "contractorId">): string | null {
+  if (!o.contractorId) return null;
+  if (o.kind === "planned") return o.accessNotice && !o.scheduledAt ? "works-tenant-planned-notice" : null;
+  return o.quietTenants ? null : "works-tenant-notice";
+}
+
+/**
  * The email the tenants get when the job is raised and sent, or null when
  * they get none: a discreet repair, a planned job without the tick, or no
  * contractor. Mirrors the "raised" branch of emailsForMove.
@@ -530,7 +541,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     out.push(sent);
   };
   /* The tenants' email in the agent's own words, only as the job is raised. */
-  const tenantEdit = (id: string) => (action === "raised" ? editFor(id, detail.tenantEdit) : null);
+  const tenantEdit = (id: string) => (action === "raised" || action === "contractor_confirmed" ? editFor(id, detail.tenantEdit) : null);
   const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor")); };
   /* A discreet repair (Let the tenants know unticked, Lianna 9 Oct 2026):
      nothing automatic goes to any tenant on it. */

@@ -728,7 +728,8 @@ export type Move =
   | { action: "arranging"; who: "landlord" | "us"; followUpAt?: string | null; note?: string }
   | { action: "landlord_resolved"; note?: string }
   | { action: "contact_contractor"; contractorId: string; note?: string }
-  | { action: "contractor_confirmed"; note?: string }
+  /* tenantEdit: the tenants' email in the agent's own words (Lianna Denholm, 16 Nov 2026). */
+  | { action: "contractor_confirmed"; note?: string; tenantEdit?: { subject?: string | null; body?: string | null } | null }
   | { action: "tenant_happy"; happy: "yes" | "no"; note?: string }
   | { action: "payee"; payee: "contractor" | "agent"; note?: string }
   /* Skip for now (Howard, 15 Oct 2026): only the current step, only a SKIPPABLE one. Sends nothing. */

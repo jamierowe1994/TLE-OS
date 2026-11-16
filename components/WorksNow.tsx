@@ -14,6 +14,8 @@ import { PAYRUN_LABEL, PAYRUN_LINE, PayrunTrack, awaitingPay } from "@/component
 import { AskForQuotes, QuoteBoard } from "@/components/maintenance/QuoteAsks";
 import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
 import { maskedAccount, readBank, sortCodeWords } from "@/lib/bank";
+import TenantJobEmail from "@/components/maintenance/TenantJobEmail";
+import type { MailWords } from "@/components/maintenance/WorksOrderEmail";
 
 /**
  * The Now card on a job: one thing at a time, in the order James and
@@ -412,6 +414,8 @@ function PickContractor({ o, move, busy, canCorporate, given, canAdd }: { o: Wor
 
 function ContractorConfirm({ o, move, busy, canCorporate, given, canAdd }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean; canCorporate: boolean; given?: RankedContractor[] | null; canAdd?: boolean }) {
   const [other, setOther] = useState(false);
+  /* The tenants' email in the agent's words, once they change it (Lianna Denholm, 16 Nov 2026). */
+  const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
   if (other) return (
     <div>
       <p className="mb-2 text-[12.5px] text-muted">{o.contractorName} is off the job once you mark somebody else contacted.</p>
@@ -423,8 +427,9 @@ function ContractorConfirm({ o, move, busy, canCorporate, given, canAdd }: { o: 
     <div>
       <p className="text-[13px]">{o.contractorName} was contacted {stamp(o.contractorContactedAt)}. Have they said yes?</p>
       <p className="mt-1 text-[11.5px] text-muted">Confirming sends them the works order with their page to book the date, and tells the tenant somebody's been found.</p>
+      {o.contractorId && <TenantJobEmail orderId={o.id} contractorId={o.contractorId} onEdit={setTenantEdit} />}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" disabled={busy} onClick={() => void move({ action: "contractor_confirmed" })} className={primary}>They've confirmed</button>
+        <button type="button" disabled={busy} onClick={() => void move({ action: "contractor_confirmed", ...(tenantEdit ? { tenantEdit } : {}) })} className={primary}>They've confirmed</button>
         <button type="button" onClick={() => setOther(true)} className={btn}>Try somebody else</button>
       </div>
     </div>

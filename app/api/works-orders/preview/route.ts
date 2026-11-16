@@ -3,7 +3,7 @@ import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { dueFor, getContractor, getOrder, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
-import { editableJobEmail, previewJobEmail, tenantEmailOnRaise, type ContractorEdit } from "@/lib/works-emails";
+import { editableJobEmail, jobTenants, previewJobEmail, tenantEmailOnConfirm, tenantEmailOnRaise, type ContractorEdit } from "@/lib/works-emails";
 
 /**
  * The works order a job would send, rendered from the form as it stands and
@@ -37,6 +37,22 @@ export async function POST(req: NextRequest) {
   if (b.orderId) {
     const found = await getOrder(b.orderId).catch(() => null);
     if (!found) return NextResponse.json({ ok: false, error: "No such job." }, { status: 404 });
+    /* The tenants' email Confirm the Contractor sends, as it stands or in the agent's words (Lianna Denholm, 16 Nov 2026). */
+    if (b.audience === "tenant") {
+      const o = { ...found.order, contractorId: c.id, contractorName: c.name };
+      const id = tenantEmailOnConfirm(o);
+      if (!id) return NextResponse.json({ ok: true, none: true });
+      try {
+        const to = (await jobTenants(o)).filter((t) => t.email.includes("@")).map((t) => ({ name: t.name, email: t.email }));
+        if (!to.length) return NextResponse.json({ ok: true, none: true });
+        const change = b.edit && typeof b.edit === "object" ? { subject: typeof b.edit.subject === "string" ? b.edit.subject.slice(0, 200) : null, body: typeof b.edit.body === "string" ? b.edit.body.slice(0, 6000) : null } : null;
+        const mail = await previewJobEmail(o, id, subject ?? actor, {}, change);
+        const words = b.editable ? await editableJobEmail(o, id, subject ?? actor) : null;
+        return NextResponse.json({ ok: true, ...mail, to, template: id, ...(words ? { text: words.text, fields: words.fields } : {}) });
+      } catch (e) {
+        return NextResponse.json({ ok: false, error: publicError(e, "The email to the tenants could not be written.") }, { status: 400 });
+      }
+    }
     try {
       const mail = await previewJobEmail({ ...found.order, contractorId: c.id, contractorName: c.name, contractorToken: "…" }, "works-contractor-quote-request", subject ?? actor);
       return NextResponse.json({ ok: true, ...mail });
