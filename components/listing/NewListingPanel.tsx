@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import FloatSheet, { FloatFoot } from "@/components/new-look/FloatSheet";
+import { useNewLook } from "@/lib/use-new-look";
 import SignInAgain from "@/components/SignInAgain";
 import { fiveWeeks, money } from "@/components/listing/listing-draft";
 import { SERVICE_LEVELS } from "@/lib/listing-requirements";
@@ -42,10 +44,22 @@ interface Props {
 type Found = { id: string; address: string };
 type Option = { id: string; label: string };
 
-const field = "w-full rounded-xl border border-line/70 bg-white px-3.5 py-2.5 text-[13.5px] outline-none focus:border-ink";
-const label = "block text-[11px] text-muted";
+const FIELD = "w-full rounded-xl border border-line/70 bg-white px-3.5 py-2.5 text-[13.5px] outline-none focus:border-ink";
+const LABEL = "block text-[11px] text-muted";
+const CARD = "rounded-[20px] border border-line/50 bg-white p-4";
+
+/** "Re-let this home" -> "Re-let This Home": titles in Title Case, small words lower. */
+const SMALL = new Set(["a", "an", "the", "of", "to", "and", "on", "in", "for"]);
+const titleCase = (t: string) => t.split(" ").map((w, i) => (i > 0 && SMALL.has(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
 
 export default function NewListingPanel({ onClose, onCreated, prefill, heading = "Add a new listing" }: Props) {
+  /* The new look draws it on the floating sheet the other new-look pop-ups
+     use (James, 16 Nov 2026: Re-let and taking a home off still showed in the
+     old style). Same fields, same saves; only the frame and the boxes change. */
+  const look = useNewLook("listing") === true;
+  const field = look ? "nl-fs-input" : FIELD;
+  const label = look ? "nl-fs-label block" : LABEL;
+  const card = look ? "nl-fs-card" : CARD;
   const [shown, setShown] = useState(false);
   /* A known home is already picked; an address alone is searched for, so the
      agent still chooses the record rather than us guessing it. */
@@ -232,27 +246,21 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-      <button aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/45 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
-      <div
-        ref={box}
-        className="relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-[26px] border border-line/50 bg-page shadow-[0_40px_90px_-30px_rgba(0,0,0,0.5)] transition-[transform,opacity] duration-300"
-        style={{ transform: shown ? "translateY(0)" : "translateY(12px)", opacity: shown ? 1 : 0 }}
-      >
-        <div className="flex items-start justify-between gap-4 px-6 pt-5">
-          <div>
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">Listings</p>
-            <h2 className="hand mt-1 text-[23px] leading-tight">{heading}</h2>
-          </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/60 text-[13px] text-muted hover:border-ink/40 hover:text-ink" title="Close (Esc)">
-            ✕
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4">
+  const createButton = (
+    !needsSignIn && !existing ? <button
+            type="button"
+            disabled={!ready || saving}
+            onClick={() => void create()}
+            className={look ? "nl-btn nl-btn--primary" : "press-ring flex shrink-0 items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"}
+          >
+            {!look && <DoodleIcon name="home" size={14} />}
+            {saving ? "Creating it…" : look ? "Create the Listing" : "Create the listing"}
+          </button> : null
+  );
+  const content = (
+    <>
           {/* 1. The address */}
-          <section className="rounded-[20px] border border-line/50 bg-white p-4">
+          <section className={card}>
             <p className={label}>The address</p>
             {testFile ? (
               <p className="mt-1.5 text-[13.5px] font-semibold">
@@ -308,7 +316,7 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
           </section>
 
           {/* 2. What it is */}
-          <section className="rounded-[20px] border border-line/50 bg-white p-4">
+          <section className={card}>
             <label className={label}>
               What kind of property is it?
               <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className={`${field} mt-1 ${typeId ? "" : "text-muted"}`}>
@@ -320,20 +328,20 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
           </section>
 
           {/* 3. The let */}
-          <section className="rounded-[20px] border border-line/50 bg-white p-4">
+          <section className={card}>
             <div className="grid grid-cols-2 gap-3">
               <label className={label}>
                 Rent, pcm
                 <div className="relative mt-1">
                   <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[13.5px] text-muted">£</span>
-                  <input type="number" min={0} value={rent} onChange={(e) => setRent(e.target.value)} className={`${field} pl-7`} />
+                  <input type="number" min={0} value={rent} onChange={(e) => setRent(e.target.value)} className={`${field} pl-7`} style={look ? { paddingLeft: 28 } : undefined} />
                 </div>
               </label>
               <label className={label}>
                 Deposit
                 <div className="relative mt-1">
                   <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[13.5px] text-muted">£</span>
-                  <input type="number" min={0} value={deposit} onChange={(e) => { setDepositByHand(true); setDeposit(e.target.value); }} className={`${field} pl-7`} />
+                  <input type="number" min={0} value={deposit} onChange={(e) => { setDepositByHand(true); setDeposit(e.target.value); }} className={`${field} pl-7`} style={look ? { paddingLeft: 28 } : undefined} />
                 </div>
               </label>
               <label className={label}>
@@ -355,7 +363,7 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
           </section>
 
           {homeSource.state === "none" && (
-            <section className="rounded-2xl border border-accent-dark/30 bg-accent-soft/40 p-4" data-steve="listing.new-source">
+            <section className={look ? "nl-fs-card" : "rounded-2xl border border-accent-dark/30 bg-accent-soft/40 p-4"} data-steve="listing.new-source">
               <label className={label}>
                 <span className="text-[12px] text-accent-dark">This home has no Source yet. Add one - how the landlord came to us.</span>
                 <select value={sourcePick} onChange={(e) => setSourcePick(e.target.value)} className={`${field} mt-1.5`} aria-label="How the landlord came to us">
@@ -372,29 +380,57 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
 
           {needsSignIn && <SignInAgain doing="create the listing" onDone={() => void create()} />}
           {existing && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent-soft/60 px-3.5 py-3">
+            <div className={look ? "nl-fs-card flex flex-wrap items-center justify-between gap-3" : "flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent-soft/60 px-3.5 py-3"}>
               <p className="text-[12px] leading-relaxed text-accent-dark">This home is already on Listings, so there is nothing new to make. Carry on with that one.</p>
               <a href={`/listings?open=${encodeURIComponent(existing)}&tab=marketing`} className="shrink-0 rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white hover:opacity-90">
                 Open the listing <span aria-hidden>→</span>
               </a>
             </div>
           )}
-          {error && <p className="rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-dark">{error}</p>}
+          {error && <p className={look ? "nl-fs-card nl-fs-err" : "rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-dark"}>{error}</p>}
+    </>
+  );
+
+  if (look) {
+    return (
+      <FloatSheet
+        title={titleCase(heading)}
+        onClose={onClose}
+        dismissible={!saving}
+        foot={<FloatFoot left={<span className="nl-meta">Photos, the description and the rest come next, on the listing.</span>}>{createButton}</FloatFoot>}
+      >
+        {content}
+      </FloatSheet>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+      <button aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/45 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <div
+        ref={box}
+        className="relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-[26px] border border-line/50 bg-page shadow-[0_40px_90px_-30px_rgba(0,0,0,0.5)] transition-[transform,opacity] duration-300"
+        style={{ transform: shown ? "translateY(0)" : "translateY(12px)", opacity: shown ? 1 : 0 }}
+      >
+        <div className="flex items-start justify-between gap-4 px-6 pt-5">
+          <div>
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">Listings</p>
+            <h2 className="hand mt-1 text-[23px] leading-tight">{heading}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/60 text-[13px] text-muted hover:border-ink/40 hover:text-ink" title="Close (Esc)">
+            ✕
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4">
+          {content}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-line/50 bg-white px-6 py-4">
           <p className="text-[11px] leading-snug text-muted">Photos, the description and the rest come next, on the listing.</p>
           {/* While the sign-in card or the existing listing is showing, that
               card holds the one button to press - never two that both say create. */}
-          {!needsSignIn && !existing && <button
-            type="button"
-            disabled={!ready || saving}
-            onClick={() => void create()}
-            className="press-ring flex shrink-0 items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            <DoodleIcon name="home" size={14} />
-            {saving ? "Creating it…" : "Create the listing"}
-          </button>}
+          {createButton}
         </div>
       </div>
     </div>

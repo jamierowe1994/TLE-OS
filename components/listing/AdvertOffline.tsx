@@ -7,6 +7,8 @@ import { toast } from "@/lib/toast";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
+import FloatSheet, { FloatCard, FloatFoot } from "@/components/new-look/FloatSheet";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * THE ADVERT, ONLINE OR OFFLINE (James, 19 Oct 2026; lib/advert-offline).
@@ -374,6 +376,7 @@ function TakeOfflineSheet({
   onPortals: boolean | null;
   onClose: () => void;
 }) {
+  const look = useNewLook("listing") === true;
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [letId, setLetId] = useState<string | null>(applicationId);
   const [viewings, setViewings] = useState<Viewing[] | null>(null);
@@ -522,38 +525,17 @@ function TakeOfflineSheet({
     setFinished(true);
   }
 
-  const body = (
-    <div role="dialog" aria-modal="true" aria-label="Take the advert offline" className="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
-      <button type="button" aria-label="Close" onClick={close} className="fixed inset-0 cursor-default bg-ink/55 backdrop-blur-[3px]" />
-      <div className="fade-up relative w-full max-w-[560px] overflow-hidden rounded-2xl border border-line/70 bg-page shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)]">
-        <div className="flex items-start justify-between gap-3 px-6 pt-6 sm:px-8 sm:pt-7">
-          <div className="min-w-0">
-            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{address}</p>
-            <h2 className="mt-1 text-[22px] leading-tight">Take It Offline</h2>
-          </div>
-          <button type="button" onClick={close} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">
-            ✕
-          </button>
-        </div>
-
-        {!lines && (
-          <div className="mt-3 flex gap-1.5 px-6 sm:px-8" aria-hidden>
-            {steps.map((s, i) => (
-              <span key={s} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= step ? "bg-accent-dark" : "bg-line/70"}`} />
-            ))}
-          </div>
-        )}
-
-        <div className="px-6 pb-6 pt-5 sm:px-8 sm:pb-8">
-          {loading ? (
+  /* The steps' own words, drawn the same in either look. */
+  const loadingView = (
             <p className="flex items-center gap-2 text-[12.5px] text-muted">
               <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
               Reading the offers and viewings…
             </p>
-          ) : lines ? (
+  );
+  const linesView = (
             <div>
               <ul className="space-y-2">
-                {lines.map((l) => (
+                {(lines ?? []).map((l) => (
                   <li key={l.id} className="flex items-start gap-3 rounded-xl border border-line/60 bg-white px-3.5 py-2.5 text-[12.5px]">
                     <span
                       aria-hidden
@@ -570,14 +552,10 @@ function TakeOfflineSheet({
                   </li>
                 ))}
               </ul>
-              {finished && (
-                <button type="button" onClick={onClose} className={`${primary} mt-5 w-full`}>
-                  Done
-                </button>
-              )}
             </div>
-          ) : (
-            <div key={at} className="fade-up">
+  );
+  const stepView = (
+    <>
               {at === "advert" && (
                 <>
                   <p className="text-[13px] leading-relaxed">
@@ -724,6 +702,96 @@ function TakeOfflineSheet({
                 </>
               )}
 
+    </>
+  );
+
+  /* THE NEW LOOK (James, 16 Nov 2026: taking a home off "still showing in
+     the old style"): the floating sheet the other new-look pop-ups use, one
+     card for the step, Back and Next in its footer. Same steps, same run. */
+  if (look) {
+    const running = Boolean(lines && !finished);
+    return (
+      <FloatSheet
+        title="Take It Offline"
+        label="Take the advert offline"
+        onClose={close}
+        dismissible={!running}
+        step={lines ? undefined : step + 1}
+        steps={lines ? undefined : steps.length}
+        onBack={!lines && step > 0 ? () => setStep((s) => s - 1) : undefined}
+        screenKey={lines ? "run" : at}
+        question={address}
+        foot={
+          <FloatFoot left={<span className="nl-meta">{lines ? (finished ? "Done" : "Working through it…") : "Nothing happens until the last step."}</span>}>
+            {lines ? (
+              finished && (
+                <button type="button" onClick={onClose} className="nl-btn nl-btn--primary">
+                  Done
+                </button>
+              )
+            ) : loading ? null : (
+              <>
+                {step > 0 && (
+                  <button type="button" onClick={() => setStep((s) => s - 1)} className="nl-btn nl-btn--secondary">
+                    Back
+                  </button>
+                )}
+                {at === "check" ? (
+                  <button type="button" onClick={() => void run()} className="nl-btn nl-btn--primary">
+                    Take It Offline
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setStep((s) => s + 1)} className="nl-btn nl-btn--primary">
+                    Next
+                  </button>
+                )}
+              </>
+            )}
+          </FloatFoot>
+        }
+      >
+        <FloatCard className="nl-offline-card">{loading ? loadingView : lines ? linesView : stepView}</FloatCard>
+      </FloatSheet>
+    );
+  }
+
+  const body = (
+    <div role="dialog" aria-modal="true" aria-label="Take the advert offline" className="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+      <button type="button" aria-label="Close" onClick={close} className="fixed inset-0 cursor-default bg-ink/55 backdrop-blur-[3px]" />
+      <div className="fade-up relative w-full max-w-[560px] overflow-hidden rounded-2xl border border-line/70 bg-page shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)]">
+        <div className="flex items-start justify-between gap-3 px-6 pt-6 sm:px-8 sm:pt-7">
+          <div className="min-w-0">
+            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{address}</p>
+            <h2 className="mt-1 text-[22px] leading-tight">Take It Offline</h2>
+          </div>
+          <button type="button" onClick={close} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">
+            ✕
+          </button>
+        </div>
+
+        {!lines && (
+          <div className="mt-3 flex gap-1.5 px-6 sm:px-8" aria-hidden>
+            {steps.map((s, i) => (
+              <span key={s} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= step ? "bg-accent-dark" : "bg-line/70"}`} />
+            ))}
+          </div>
+        )}
+
+        <div className="px-6 pb-6 pt-5 sm:px-8 sm:pb-8">
+          {loading ? (
+            loadingView
+          ) : lines ? (
+            <div>
+              {linesView}
+              {finished && (
+                <button type="button" onClick={onClose} className={`${primary} mt-5 w-full`}>
+                  Done
+                </button>
+              )}
+            </div>
+          ) : (
+            <div key={at} className="fade-up">
+              {stepView}
               <div className="mt-6 flex gap-2">
                 {step > 0 && (
                   <button type="button" onClick={() => setStep((s) => s - 1)} className={quiet}>
