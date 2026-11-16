@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { captureScreen } from "@/lib/screenshot";
 import { note, trail, trailAsText } from "@/lib/trail";
+import { isLostConnection } from "@/lib/lost-connection";
 
 /**
  * What an agent sees when a screen breaks, and the one button that tells us.
@@ -73,6 +74,32 @@ export default function CrashScreen({
   const [extra, setExtra] = useState("");
   const sent = useRef(false);
 
+  /* A dropped connection is not a crash (Stuart Roper, ticket 77d8e8a9, 13 Nov
+     2026: "Load failed" on the phone app's Properties put the whole OS on its
+     crash screen). Said as what it is, with Try Again loading the page afresh
+     - React's reset alone would only redraw the half-arrived page - and the
+     page loads itself again the moment the phone is back online. The report
+     button stays, below, for when it keeps happening. */
+  const lost = isLostConnection(error);
+  const title = lost ? "Lost the Connection" : headline;
+  const say = lost
+    ? "Your phone or computer lost touch with the OS for a moment, so this page could not finish loading. Nothing is broken. Try Again loads it afresh, and it will do that on its own as soon as you are back online."
+    : what;
+  useEffect(() => {
+    if (!lost) return;
+    const back = () => window.location.reload();
+    window.addEventListener("online", back);
+    return () => window.removeEventListener("online", back);
+  }, [lost]);
+
+  /* The phone app's home is /agent; sending an agent there to the desktop
+     dashboard put them in the wrong app. Read after the first paint, so the
+     server's and the browser's first drawing agree. */
+  const [home, setHome] = useState({ href: "/dashboard", label: "Back to the dashboard" });
+  useEffect(() => {
+    if (window.location.pathname.startsWith("/agent")) setHome({ href: "/agent", label: "Back to Home" });
+  }, []);
+
   /* The error itself goes in the trail, so a second crash carries the first. */
   useEffect(() => {
     note("failed", error?.message || "a screen stopped working");
@@ -86,7 +113,7 @@ export default function CrashScreen({
 
     const steps = trailAsText();
     const body = [
-      `${headline.toUpperCase()} - filed by the button on the error screen.`,
+      `${title.toUpperCase()} - filed by the button on the error screen.`,
       error?.message ? `\nWhat the browser said:\n${error.message}` : "",
       extra.trim() ? `\nWhat they were doing:\n${extra.trim()}` : "",
       steps ? `\nThe last few steps:\n${steps}` : "",
@@ -173,8 +200,8 @@ export default function CrashScreen({
         <p style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.22em", textTransform: "uppercase", color: MUTED, margin: 0 }}>
           The Letting Experts OS
         </p>
-        <h1 style={{ fontSize: 30, lineHeight: 1.1, margin: "10px 0 0", fontWeight: 800, letterSpacing: "-0.02em" }}>{headline}</h1>
-        <p style={{ fontSize: 15, lineHeight: 1.6, color: MUTED, margin: "12px 0 0", maxWidth: "48ch" }}>{what}</p>
+        <h1 style={{ fontSize: 30, lineHeight: 1.1, margin: "10px 0 0", fontWeight: 800, letterSpacing: "-0.02em" }}>{title}</h1>
+        <p style={{ fontSize: 15, lineHeight: 1.6, color: MUTED, margin: "12px 0 0", maxWidth: "48ch" }}>{say}</p>
 
         {state === "sent" ? (
           <div
@@ -226,12 +253,21 @@ export default function CrashScreen({
         )}
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
+          {lost && (
+            <button type="button" onClick={() => window.location.reload()} style={{ ...button, background: BROWN, color: "#fff" }}>
+              Try Again
+            </button>
+          )}
           {state !== "sent" && (
-            <button type="button" onClick={() => void send()} style={{ ...button, background: BROWN, color: "#fff" }}>
+            <button
+              type="button"
+              onClick={() => void send()}
+              style={lost ? { ...button, background: "var(--card, #fff)", color: INK, borderColor: LINE } : { ...button, background: BROWN, color: "#fff" }}
+            >
               {state === "sending" ? "Sending…" : "Send the report"}
             </button>
           )}
-          {reset && (
+          {reset && !lost && (
             <button
               type="button"
               onClick={reset}
@@ -240,8 +276,8 @@ export default function CrashScreen({
               Try this screen again
             </button>
           )}
-          <a href="/dashboard" style={{ ...button, background: "var(--card, #fff)", color: INK, borderColor: LINE, textDecoration: "none" }}>
-            Back to the dashboard
+          <a href={home.href} style={{ ...button, background: "var(--card, #fff)", color: INK, borderColor: LINE, textDecoration: "none" }}>
+            {home.label}
           </a>
         </div>
 

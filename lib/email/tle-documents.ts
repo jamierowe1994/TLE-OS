@@ -890,6 +890,7 @@ export const WORKS_TENANT_BOOKED = {
     FACTS("wtb7", [
       ["When", "{{scheduledAt}}"],
       ["Who's coming", "{{contractorName}}"],
+      ["Their number", "{{contractorPhone}}"],
       ["The job", "{{title}} (#{{ref}})"],
       ["Your home", "{{address}}"],
     ]),
@@ -1080,6 +1081,7 @@ export const WORKS_TENANT_NOTICE = {
     T("wtn2", "Hi {{tenantName}},<br><br>We've asked a contractor to sort a repair at your home."),
     FACTS("wtn7", [
       ["Who's coming", "{{contractorName}}"],
+      ["Their number", "{{contractorPhone}}"],
       ["The job", "{{title}} (#{{ref}})"],
       ["Your home", "{{address}}"],
     ]),
@@ -1103,6 +1105,7 @@ export const WORKS_TENANT_PLANNED_NOTICE = {
     FACTS("wtp8", [
       ["The check", "{{title}} (#{{ref}})"],
       ["Who's coming", "{{contractorName}}"],
+      ["Their number", "{{contractorPhone}}"],
       ["Your home", "{{address}}"],
     ]),
     T("wtp3", "They'll contact you directly to arrange a time to get access. It's a routine check that keeps the home safe, so please help them find a time that works for you."),
@@ -1122,6 +1125,7 @@ export const WORKS_TENANT_FOUND = {
     T("wtf2", "Hi {{tenantName}},<br><br>A contractor has said yes to your repair, so it's on its way to being fixed."),
     FACTS("wtf7", [
       ["Who's coming", "{{contractorName}}"],
+      ["Their number", "{{contractorPhone}}"],
       ["The job", "{{title}} (#{{ref}})"],
     ]),
     T("wtf3", "They'll be in touch with you directly to arrange a time that suits you both. If you haven't heard from them within a couple of days, reply to this email or ring {{agentPhone}} and we'll chase."),

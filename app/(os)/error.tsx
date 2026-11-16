@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import CrashScreen from "@/components/CrashScreen";
 import { autoReport } from "@/lib/auto-report";
+import { isLostConnection } from "@/lib/lost-connection";
 
 /**
  * A screen inside the OS threw while rendering.
@@ -23,6 +24,9 @@ export default function OsError({ error, reset }: { error: Error & { digest?: st
   /* Filed the moment it happens (15 Sep 2026), whether or not they press the
      button - most people who hit a crash reload and say nothing. */
   useEffect(() => {
+    /* A dropped connection ("Load failed") is the network, not a fault of
+       ours, and is not filed (ticket 77d8e8a9, 13 Nov 2026). */
+    if (isLostConnection(error)) return;
     autoReport({ what: "screen crashed", message: `${error.message || "unknown"}${error.digest ? ` (digest ${error.digest})` : ""}` });
   }, [error]);
   return <CrashScreen error={error} reset={reset} picture={false} />;
