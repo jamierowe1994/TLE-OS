@@ -3,7 +3,8 @@ import { stillOnPortalFeeds } from "@/lib/advert-offline";
 import { forgetListing } from "@/lib/listing-details";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetMovedIn } from "@/lib/listings-moved-in";
-import { rexCall, type RexResponse } from "@/lib/rex";
+import { rexCall, rexWritesLocked, type RexResponse } from "@/lib/rex";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * TAKING AN ADVERT OFF THE PORTALS, IN ONE PLACE (Susan Liles, 3 Nov 2026).
@@ -56,8 +57,11 @@ export async function queueUpload(id: number, action: "off" | "on", token: strin
   return { ok: (res.ok && r.queued === true) || waiting, res, detail };
 }
 
+/** What happened to the listing's own state on the way off: see withdrawInRex. */
+export type Withdrawal = "withdrawn" | "already" | "locked" | "refused" | "unread";
+
 export type TakeOffOutcome =
-  | { ok: true; was: Where; now: Where }
+  | { ok: true; was: Where; now: Where; withdrawal: Withdrawal }
   /** REX did not say where the listing is. Nothing was changed. */
   | { ok: false; step: "read"; was: null; error: string | null }
   /** Not published, so there is nothing to take off. Nothing was changed. */
@@ -71,7 +75,63 @@ export type TakeOffOutcome =
  * Off the portals, still published in REX. Throws RexWriteBlocked when
  * REX_ALLOW_WRITES does not name the writes, before anything reaches REX.
  */
-export async function takeAdvertOff(id: number, token: string | null): Promise<TakeOffOutcome> {
+/**
+ * OFF THE MARKET MEANS WITHDRAWN IN REX (James, 16 Nov 2026: "properties
+ * aren't coming off the systems or the portals").
+ *
+ * Telling the portals "withdrawn" and dropping the portals channel was not
+ * enough. 18 Wilson Place was taken offline on 13 Nov, REX said the
+ * withdrawal reached Rightmove, OnTheMarket and Zoopla, and three days later
+ * Rightmove and OnTheMarket still showed it live - as did 7 more of the 40
+ * homes marked Offline. All 8 were still "current" in REX. Every home REX
+ * holds as leased or withdrawn was archived on Rightmove (the 40, and 10
+ * withdrawn ones checked the same day). So the listing itself is withdrawn
+ * too: Listings/changeState, which James allowed on 29 Oct for Keep it off
+ * (lib/listing-withdrawn). Put Back Online makes it current again first.
+ *
+ * The answer is kept as that same "off" choice, so the withdrawn-home box
+ * does not then ask the agent what to do about a withdrawal they made.
+ */
+export async function withdrawInRex(id: number, token: string | null, byName: string): Promise<Withdrawal> {
+  const read = await rexCall("Listings", "read", { id });
+  if (!read.ok) return "unread";
+  const state = String((read.result as { system_listing_state?: unknown } | null)?.system_listing_state ?? "");
+  if (state !== "current") return "already";
+  if (rexWritesLocked("Listings", "changeState")) return "locked";
+  const today = new Date().toISOString().slice(0, 10);
+  const res = await rexCall(
+    "Listings",
+    "changeState",
+    { id, state: "withdrawn", details: { date: today, reason_id: "other", reason_note: "Taken off the market from TLE OS" } },
+    token
+  );
+  if (!res.ok) {
+    console.warn(`[listing-take-off] withdrawing ${id} was refused: ${res.error ?? res.status}`);
+    return "refused";
+  }
+  if (hasDb()) {
+    const kept = { choice: "off", event: `listing:${today}`, by: byName, at: new Date().toISOString() };
+    await q(
+      `INSERT INTO os_case_state (kind, record_id, payload, updated_by) VALUES ('withdrawn-choice', $1, $2::jsonb, $3)
+       ON CONFLICT (kind, record_id) DO UPDATE SET payload = $2::jsonb, updated_at = NOW(), updated_by = $3`,
+      [String(id), JSON.stringify(kept), byName]
+    ).catch((e) => console.error("[listing-take-off] withdrawn choice not kept", id, e));
+  }
+  return "withdrawn";
+}
+
+/** Back on the market: a listing withdrawn in REX is made current again before its channels go back on. */
+export async function currentInRex(id: number, token: string | null): Promise<"current" | "already" | "locked" | "refused" | "unread"> {
+  const read = await rexCall("Listings", "read", { id });
+  if (!read.ok) return "unread";
+  const state = String((read.result as { system_listing_state?: unknown } | null)?.system_listing_state ?? "");
+  if (state !== "withdrawn") return "already";
+  if (rexWritesLocked("Listings", "changeState")) return "locked";
+  const res = await rexCall("Listings", "changeState", { id, state: "current", details: { date: new Date().toISOString().slice(0, 10) } }, token);
+  return res.ok ? "current" : "refused";
+}
+
+export async function takeAdvertOff(id: number, token: string | null, byName = "TLE OS"): Promise<TakeOffOutcome> {
   const before = await rexCall("ListingPublication", "getPublicationStatus", { listing_id: id });
   if (!before.ok) return { ok: false, step: "read", was: null, error: before.error ?? null };
   const was = whereFrom(before.result);
@@ -103,9 +163,13 @@ export async function takeAdvertOff(id: number, token: string | null): Promise<T
   ]);
   const now = whereFrom(after.ok ? after.result : res.result, feeds.ok ? feeds.result : undefined);
 
+  /* Then off the market in REX itself (16 Nov 2026, see withdrawInRex). A
+     refusal here leaves the take-off as done and says so in the outcome. */
+  const withdrawal = await withdrawInRex(id, token, byName).catch((): Withdrawal => "refused");
+
   await invalidateListingBook();
   forgetListing(id);
   /* Off the owners' moved-in list at once (lib/listings-moved-in, 3 Nov 2026). */
   forgetMovedIn(String(id));
-  return { ok: true, was, now };
+  return { ok: true, was, now, withdrawal };
 }

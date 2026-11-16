@@ -9,7 +9,7 @@ import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
 import { markOffline, markOnline, stillOnPortalFeeds } from "@/lib/advert-offline";
-import { ALL_CHANNELS, OFF_CHANNELS, queueUpload, takeAdvertOff, whereFrom } from "@/lib/listing-take-off";
+import { ALL_CHANNELS, OFF_CHANNELS, currentInRex, queueUpload, takeAdvertOff, whereFrom } from "@/lib/listing-take-off";
 import { sendFrom, waitForSend } from "@/lib/portal-send";
 import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked, type RexResponse } from "@/lib/rex";
@@ -295,7 +295,7 @@ export async function POST(req: NextRequest) {
     if (action === "off") {
       const token = await rexTokenFor(actor.id);
       const as = { asActor: true, name: actor.name };
-      const done = await takeAdvertOff(id, token);
+      const done = await takeAdvertOff(id, token, actor.name || actor.email);
       if (!done.ok) {
         if (done.step === "read") {
           const plain = "The listings system did not say where the listing is. Try again in a minute.";
@@ -311,7 +311,7 @@ export async function POST(req: NextRequest) {
         kind: "listing_publication",
         actorId: actor.id,
         actorEmail: actor.email,
-        detail: `${id}: off (${done.was.status ?? "?"} [${done.was.channels.join(",")}] -> ${done.now.status ?? "?"} [${done.now.channels.join(",")}])${token ? "" : " as the office account"}`,
+        detail: `${id}: off (${done.was.status ?? "?"} [${done.was.channels.join(",")}] -> ${done.now.status ?? "?"} [${done.now.channels.join(",")}]), listing ${done.withdrawal}${token ? "" : " as the office account"}`,
       });
       /* Read back, and believed only if the channel really went (10 Nov
          2026): this answered ok whatever came back, so a change REX accepted
@@ -422,6 +422,15 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
         }
         return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not close before going live: ${closed.error ?? "REX did not say."}` : "It could not be kept off the portals, so it has not gone live. Try again in a minute." }, { status: 502 });
+      }
+    }
+    /* Back on the market: a listing the take-off withdrew in REX is made
+       current again first (16 Nov 2026, lib/listing-take-off currentInRex),
+       or the portals would be sent a listing REX still calls withdrawn. */
+    if (action === "on") {
+      const back = await currentInRex(id, token).catch(() => "refused" as const);
+      if (back === "refused" || back === "locked") {
+        return NextResponse.json({ ok: false, error: isOwner(actor) ? `The listing is withdrawn in REX and would not go back to current (${back}).` : "It couldn't be put back on the market just now. Try again in a minute." }, { status: 502 });
       }
     }
     let res: RexResponse =
