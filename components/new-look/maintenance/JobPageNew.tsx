@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import SaveChip, { SaveScopeProvider, type SaveScope } from "@/components/SaveChip";
 import PhotoLightbox from "@/components/PhotoLightbox";
@@ -12,7 +12,7 @@ import type { StepId } from "@/lib/works-steps";
 import type { Contractor, JobTenant, Move, WorksEvent, WorksOrder } from "@/lib/works-orders";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { day, stamp, statusLabel } from "@/components/maintenance/works-ui";
-import { titleCase, type Pop, type TabId, type TileGroup } from "@/components/maintenance/job-page";
+import { certDue, titleCase, type Pop, type TabId, type TileGroup } from "@/components/maintenance/job-page";
 import { JobGroups, JobRecord } from "@/components/new-look/maintenance/JobRecord";
 import { JobSheets } from "@/components/new-look/maintenance/JobSheets";
 import { ChaseBar, ChaseSheet, chaseTile } from "@/components/new-look/maintenance/JobChase";
@@ -146,8 +146,13 @@ export default function JobPageNew(v: JobView) {
     ...(o.rehearsal ? [{ text: "Walkthrough" }] : []),
   ].filter((w) => w.text);
 
-  const facts: { k: string; v: string; sub?: string | null; hot?: boolean; quiet?: boolean }[] = [
-    { k: o.kind === "repair" ? "Attend By" : "Due By", v: o.dueAt ? (o.kind === "repair" ? stamp(o.dueAt) : day(o.dueAt)) : "Not set", sub: v.dueIn, hot: v.late, quiet: !o.dueAt },
+  /* Several certificates on one visit: each with its own date under Due By
+     (Lianna Denholm, 17 Nov 2026, ticket 578704cc). One date draws as before. */
+  const certs = certDue(o, v.open);
+  const facts: { k: string; v: string; sub?: string | null; hot?: boolean; quiet?: boolean; lines?: { v: string; sub: string | null; hot: boolean }[] }[] = [
+    certs.lines.length
+      ? { k: "Due By", v: "", sub: certs.chased, lines: certs.lines.map((c) => ({ v: `${c.name} ${c.on}`, sub: c.away, hot: c.late })) }
+      : { k: o.kind === "repair" ? "Attend By" : "Due By", v: o.dueAt ? (o.kind === "repair" ? stamp(o.dueAt) : day(o.dueAt)) : "Not set", sub: v.dueIn, hot: v.late, quiet: !o.dueAt },
     { k: "Contractor", v: o.contractorName || (o.quoteAsks.length ? `${o.quoteAsks.length} asked to quote` : "Not picked yet"), quiet: !o.contractorName },
     { k: "Booked", v: o.scheduledAt ? stamp(o.scheduledAt) : "Not booked yet", quiet: !o.scheduledAt },
     { k: "Arranged By", v: v.arrangedBy, quiet: !o.arranging },
@@ -196,7 +201,12 @@ export default function JobPageNew(v: JobView) {
                 {facts.map((f) => (
                   <div key={f.k} className="nl-jb-fact">
                     <dt>{f.k}</dt>
-                    <dd className={f.hot ? "is-hot" : f.quiet ? "is-quiet" : ""}>{f.v}</dd>
+                    {f.lines?.length ? f.lines.map((l) => (
+                      <Fragment key={l.v}>
+                        <dd className={l.hot ? "is-hot" : ""}>{l.v}</dd>
+                        {l.sub && <dd className="nl-jb-fact-sub">{l.sub}</dd>}
+                      </Fragment>
+                    )) : <dd className={f.hot ? "is-hot" : f.quiet ? "is-quiet" : ""}>{f.v}</dd>}
                     {f.sub && <dd className="nl-jb-fact-sub">{f.sub}</dd>}
                   </div>
                 ))}

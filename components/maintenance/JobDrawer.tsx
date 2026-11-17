@@ -14,6 +14,7 @@ import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip
 import LandlordJobEmails from "@/components/LandlordJobEmails";
 import EmailPerson from "@/components/EmailPerson";
 import { ContractorPick, OPEN, PAID_HOW, PAYRUN_LINE, day, pounds, stamp, statusLabel, toPence } from "@/components/maintenance/works-ui";
+import { certDue } from "@/components/maintenance/job-page";
 import type { Status } from "@/lib/works-orders";
 
 /* ── The job sheet ──────────────────────────────────────────────────────── */
@@ -370,7 +371,10 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                   {o.kind === "repair" ? (
                     <Line icon="clock" k="Attend by" v={stamp(o.dueAt)} hot={late} />
                   ) : (
-                    <Line icon="calendar" k="Due" v={day(o.dueAt)} hot={late} />
+                    /* Several certificates on one visit: each one's own date (17 Nov 2026, ticket 578704cc). */
+                    certDue(o).lines.length
+                      ? <Line icon="calendar" k="Due" v={certDue(o).lines.map((c) => `${c.name} ${c.on}`).join(" · ")} hot={late} />
+                      : <Line icon="calendar" k="Due" v={day(o.dueAt)} hot={late} />
                   )}
                   <Line icon="calendar" k="Reported" v={`${day(o.reportedAt)}${o.reportedBy ? ` by ${o.reportedBy.toLowerCase()}` : ""}`} />
                   {o.raisedBy && <Line icon="user" k="Raised by" v={o.raisedBy} />}

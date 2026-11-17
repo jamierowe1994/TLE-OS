@@ -192,6 +192,8 @@ export function ContractorPick({ contractors, value, onChange, className, styled
           className="mt-1"
           value={value}
           onChange={onChange}
+          /* Type to find, whatever the case (Lianna Denholm, 17 Nov 2026, ticket 578704cc). */
+          searchable
           placeholder="Not yet"
           options={[
             { value: "", label: "Not yet" },

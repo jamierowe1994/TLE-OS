@@ -57,7 +57,7 @@ export type { QuoteAsk };
    component can draw an urgency without keeping its own copy. Imported for use
    in this file AND re-exported, so every existing importer of this module
    carries on unchanged. */
-import { KINDS, URGENCIES, REPAIR_CATEGORIES, PLANNED_CATEGORIES, categoriesOf, type Kind, type Urgency } from "./works-catalogue";
+import { KINDS, URGENCIES, REPAIR_CATEGORIES, PLANNED_CATEGORIES, categoriesOf, cleanCertDates, type CertDate, type Kind, type Urgency } from "./works-catalogue";
 export { KINDS, URGENCIES, REPAIR_CATEGORIES, PLANNED_CATEGORIES };
 export type { Kind, Urgency };
 
@@ -236,6 +236,9 @@ export interface WorksOrder {
   urgency: Urgency | null;
   /** Repairs: attend by. Planned: due by. */
   dueAt: string | null;
+  /** Planned jobs for several certificates: each one's own expiry (lib/works-catalogue
+   *  CertDate, 17 Nov 2026). Empty on older jobs; read with certDatesOf(). */
+  certDates: CertDate[];
   reportedBy: string;
   reportedAt: string;
   raisedBy: string;
@@ -359,6 +362,7 @@ function toOrder(r: Row): WorksOrder {
     category: s(r.category),
     urgency: r.urgency ? (s(r.urgency) as Urgency) : null,
     dueAt: iso(r.due_at),
+    certDates: cleanCertDates(r.cert_dates, s(r.category)),
     reportedBy: s(r.reported_by),
     reportedAt: iso(r.reported_at) ?? new Date().toISOString(),
     raisedBy: s(r.raised_by),
@@ -388,7 +392,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   landlord_told_at, arranging, landlord_follow_up_at, landlord_resolved_at, contractor_contacted_at, contractor_confirmed_at, landlord_arranged_at,
   tenant_happy, tenant_happy_at, tenant_happy_note, payee, contractor_token, tenant_token, property_lat, property_lng, accounts_told_at, compliance_told_at,
   title, description, category, urgency,
-  due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
+  due_at, cert_dates, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
   cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, tenants_access_told_at, skipped_steps, quote_requested_at,
   landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, order_sent_to, order_sent_to_name, created_at, updated_at`;
@@ -427,7 +431,7 @@ export async function setContractorLogo(id: string, logoUrl: string): Promise<vo
 export async function listContractors(forUserId?: string | null): Promise<Contractor[]> {
   if (!hasDb()) return [];
   return (
-    await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal AND deleted_at IS NULL AND (owner_id IS NULL OR owner_id = $1) ORDER BY active DESC, (owner_id IS NULL), trade, name`, [forUserId ?? ""])
+    await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal AND deleted_at IS NULL AND (owner_id IS NULL OR owner_id = $1) ORDER BY active DESC, (owner_id IS NULL), lower(trade), lower(name)`, [forUserId ?? ""])
   ).map(toContractor);
 }
 
@@ -435,7 +439,7 @@ export async function listContractors(forUserId?: string | null): Promise<Contra
  *  so it sees every contractor (James, 19 Oct 2026). */
 export async function listAllContractors(): Promise<Contractor[]> {
   if (!hasDb()) return [];
-  return (await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal AND deleted_at IS NULL ORDER BY active DESC, (owner_id IS NULL), trade, name`)).map(toContractor);
+  return (await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal AND deleted_at IS NULL ORDER BY active DESC, (owner_id IS NULL), lower(trade), lower(name)`)).map(toContractor);
 }
 
 export async function getContractor(id: string): Promise<Contractor | null> {
@@ -564,6 +568,8 @@ export interface NewOrder {
   category: string;
   urgency?: Urgency | null;
   dueAt?: string | null;
+  /** A planned job for several certificates: each one's own expiry date. */
+  certDates?: CertDate[];
   reportedBy?: string;
   access?: string;
   authorityPence?: number;
@@ -614,15 +620,17 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
      is reported and waits. Approval only ever bites on a quote. */
   const status: Status = input.contractorId && input.scheduledAt ? "scheduled" : sent ? "approved" : "reported";
   const tenants = cleanTenants(input.tenants);
+  /* Each certificate's own date, on a planned job only (17 Nov 2026). */
+  const certDates = planned ? cleanCertDates(input.certDates, input.category) : [];
   const now = new Date();
   const [r] = await q<Row>(
     `INSERT INTO os_works_orders
        (id, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency, due_at,
         reported_by, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence,
         landlord_mobile, contractor_token, tenant_token, property_lat, property_lng, rehearsal, tenant_phone,
-        arranging, contractor_contacted_at, contractor_confirmed_at, tenants, landlord_skipped, quiet_tenants, tenants_access_notice)
+        arranging, contractor_contacted_at, contractor_confirmed_at, tenants, landlord_skipped, quiet_tenants, tenants_access_notice, cert_dates)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
-        $30, $31, $32, $33::jsonb, $34, $35, $36)
+        $30, $31, $32, $33::jsonb, $34, $35, $36, $37::jsonb)
      RETURNING ${COLS}`,
     [
       id, kind, status, input.propertyId ?? null, input.propertyName.trim(), (input.locality ?? "").trim(), (input.landlord ?? "").trim(),
@@ -633,6 +641,7 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
       skipped ? "" : (input.landlordMobile ?? "").trim(), randomBytes(16).toString("base64url"), randomBytes(16).toString("base64url"),
       input.propertyLat ?? null, input.propertyLng ?? null, input.rehearsal === true, (input.tenantPhone ?? "").trim(),
       planned || sent ? "us" : null, sent ? now : null, confirmed ? now : null, JSON.stringify(tenants), skipped, quiet, accessNotice,
+      JSON.stringify(certDates),
     ]
   );
   const order = toOrder(r);

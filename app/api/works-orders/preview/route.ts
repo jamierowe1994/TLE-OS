@@ -4,6 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { dueFor, getContractor, getOrder, tenantsOf, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
 import { editableJobEmail, jobTenants, previewJobEmail, tenantEmailOnRaise, tenantEmailOnStep, type ContractorEdit, type TenantStep } from "@/lib/works-emails";
+import { cleanCertDates } from "@/lib/works-catalogue";
 
 /**
  * The works order a job would send, rendered from the form as it stands and
@@ -23,6 +24,8 @@ type Draft = {
   propertyId?: string | null;
   /** The agent's own words for the works order (James, 8 Nov 2026), and whether to send back the words to edit. */
   edit?: ContractorEdit | null; editable?: boolean;
+  /** A planned job for several certificates: each one's own expiry date, as the job will keep them (17 Nov 2026). */
+  certDates?: unknown;
   /** The tenants' email instead of the works order (Lianna Denholm, 16 Nov 2026), and whether Let the tenants know is ticked. */
   audience?: "contractor" | "tenant"; tellTenants?: boolean;
   /** On a job's page: which button the tenants' email goes with, and the date being set (Lianna Denholm, 16 Nov 2026). */
@@ -83,6 +86,7 @@ export async function POST(req: NextRequest) {
   const draft = {
     id: "preview", ref: Number(seq?.n ?? 0), kind: repair ? "repair" : "planned", title: (b.title ?? "").trim() || "The job", description: (b.description ?? "").trim(),
     category: b.category ?? "", urgency, dueAt: repair ? dueFor("repair", urgency, null) : b.dueAt ? new Date(b.dueAt).toISOString() : null,
+    certDates: repair ? [] : cleanCertDates(b.certDates, b.category ?? ""),
     scheduledAt: b.scheduledAt ? new Date(b.scheduledAt).toISOString() : null, access: (b.access ?? "").trim(),
     propertyId: typeof b.propertyId === "string" && b.propertyId ? b.propertyId : null,
     propertyName: (b.propertyName ?? "").trim(), locality: (b.locality ?? "").trim(), contractorId: c.id, contractorName: c.name,

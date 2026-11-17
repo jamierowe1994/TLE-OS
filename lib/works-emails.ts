@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { editableEmailText, renderTleEmailLive, type EmailEdit } from "@/lib/email/tle-emails";
-import { TENANT_FIRST_NAME } from "@/lib/works-catalogue";
+import { TENANT_FIRST_NAME, categoryName, certDatesOf, coversOf, dueDayOf } from "@/lib/works-catalogue";
 import { accountsInvoiceEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import { bankForInvoice } from "@/lib/contractor-bank";
 import { recentBankChanges } from "@/lib/bank-vault";
@@ -166,6 +166,12 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
   const tenants = own.length ? own : home.tenants;
   /* The job's own name and number only while it still names somebody living there. */
   const ownLead = own.length === tenantsOf(o).length;
+  /* A visit for several certificates gives each one's own date (Lianna
+     Denholm, 17 Nov 2026, ticket 578704cc: the works order for a gas safety
+     and a PAT test gave the gas date alone). Only while the job's due date
+     is still the sooner of them: a date typed by hand is said as it is. */
+  const certs = certDatesOf(o);
+  const apart = certs.length && certs[0].expires === dueDayOf(o.dueAt) ? certs : [];
   return {
     ref: String(o.ref),
     title: o.title,
@@ -199,7 +205,11 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     completionNote: o.completionNote || "the work is complete.",
     contractorLink: `${ORIGIN}/contractor/${o.contractorToken ?? ""}`,
     /* The planned works order's own four (works-contractor-planned). */
-    dueDay: day(o.dueAt),
+    dueDay: apart.length ? apart.map((c) => `${day(`${c.expires}T12:00:00Z`)} (${categoryName(c.category)})`).join(" · ") : day(o.dueAt),
+    /* Everything a planned job covers, for the tenants and the landlord
+       (ticket 6537a792, lib/works-catalogue coversOf). Blank on a repair, so
+       the Covering row in the emails a repair shares is left out. */
+    covers: o.kind === "planned" ? coversOf(o) : "",
     tenantsList: tenants.map((t) => [`${esc(t.name || "Tenant")}${t.room ? ` (${esc(t.room)})` : ""}`, esc(t.phone), esc(t.email)].filter(Boolean).join(" · ")).join("<br>") || "None on file - ring us and we'll arrange access.",
     bookingLine: o.scheduledAt
       ? `It's already booked for <strong>${esc(when(o.scheduledAt))}</strong>. If that changes, tell us on the same page.`

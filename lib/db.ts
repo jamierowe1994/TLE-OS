@@ -644,6 +644,13 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_access_notice   BOO
 -- after it was raised (Lianna Denholm, 9 Nov 2026: a certificate job had no
 -- way to tell them, as a repair does).
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_access_told_at  TIMESTAMPTZ;
+-- A planned job for several certificates keeps each one's own expiry date
+-- (Lianna Denholm, 17 Nov 2026, ticket 578704cc: a gas safety and a PAT test
+-- on one visit kept only the gas date). [{ category, expires }], the dates
+-- as YYYY-MM-DD. Empty on every job before it, and on a job with one date:
+-- those are due_at alone, as they always were. due_at stays the sooner, for
+-- sorting and chasing.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS cert_dates              JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Steps the agent skipped for now (Howard, 15 Oct 2026): only the ones
 -- lib/works-steps SKIPPABLE allows, so the job moves on without a landlord
 -- told or a tenant happy being written down that never happened.

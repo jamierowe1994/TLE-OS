@@ -12,6 +12,16 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
  * for "add one", and the keyboard doing what it does in a select - arrows to
  * move, Enter to choose, Escape to close (without closing the pop-up it sits
  * in).
+ *
+ * `searchable` (Lianna Denholm, 17 Nov 2026, ticket 578704cc: "can you
+ * please make the contractors case sensative? I have to manually find on
+ * drop down list"). This list never took typing at all - the browser's own
+ * select did, and that went with it on 7 Oct - so a long book of contractors
+ * could only be scrolled. With it on, a box at the top of the list takes the
+ * letters, as FieldMultiSelect's does, and a letter typed on the closed field
+ * opens it with that letter in. Capitals and stray spaces make no
+ * difference, the words can come in any order, and the second line (the
+ * trade) is searched as well as the name.
  */
 
 export interface SelectOption {
@@ -32,6 +42,7 @@ export default function FieldSelect({
   extra,
   variant = "field",
   onOpen,
+  searchable = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -45,14 +56,25 @@ export default function FieldSelect({
   variant?: "field" | "inline";
   /** Told when the list opens - load the options then, not on every page. */
   onOpen?: () => void;
+  /** Type to find: for a long list, such as the contractors book. */
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
+  const [find, setFind] = useState("");
   const holder = useRef<HTMLDivElement | null>(null);
   const list = useRef<HTMLUListElement | null>(null);
+  const box = useRef<HTMLInputElement | null>(null);
   const id = useId();
   const chosen = options.find((o) => o.value === value) ?? null;
-  const rows = options.length + (extra ? 1 : 0);
+  /* What the typing leaves, in the list's own order so each group stays
+     under its heading. Every word typed has to be in the name or the trade,
+     whatever its case. Without `searchable`, or with nothing typed, all of them. */
+  const words = searchable ? find.trim().toLowerCase().split(/\s+/).filter(Boolean) : [];
+  const shown = words.length
+    ? options.filter((o) => { const hay = `${o.label} ${o.sub ?? ""}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
+    : options;
+  const rows = shown.length + (extra ? 1 : 0);
 
   useEffect(() => {
     if (!open) return;
@@ -69,6 +91,14 @@ export default function FieldSelect({
     if (!open) return;
     setActive(Math.max(0, options.findIndex((o) => o.value === value)));
   }, [open, options.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* The find box is where the typing goes while the list is open, and it
+     empties when the list closes. Typing puts the first match under Enter. */
+  useEffect(() => {
+    if (!searchable) return;
+    if (!open) { setFind(""); return; }
+    box.current?.focus();
+  }, [open, searchable]);
+  useEffect(() => { if (find) setActive(0); }, [find]);
   /* Opens upward when the box it sits in has more room above than below
      (James, 8 Nov 2026: Reported by, the last field on a screen, had its
      list cut off by the sheet's footer). Otherwise the box scrolls just
@@ -99,17 +129,20 @@ export default function FieldSelect({
   }, [open, active]);
 
   const pick = (i: number) => {
-    if (extra && i === options.length) extra.onPick();
-    else if (options[i]) onChange(options[i].value);
+    if (extra && i === shown.length) extra.onPick();
+    else if (shown[i]) onChange(shown[i].value);
     setOpen(false);
   };
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); return; }
+    /* A letter on the closed field opens the list with that letter already in. */
+    if (searchable && !open && e.key.length === 1 && /[a-z0-9]/i.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setFind(e.key); setOpen(true); return; }
     if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.stopPropagation(); setOpen(true); return; }
     if (!open) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(rows - 1, a + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
-    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); pick(active); }
+    /* Space types a space in the find box; Enter chooses the highlighted line. */
+    else if (e.key === "Enter" || (e.key === " " && e.target !== box.current)) { e.preventDefault(); e.stopPropagation(); pick(active); }
     else if (e.key === "Tab") setOpen(false);
   };
 
@@ -140,13 +173,26 @@ export default function FieldSelect({
           role="listbox"
           className={`fade-up absolute left-0 ${up ? "bottom-full mb-1.5" : "top-full mt-1.5"} z-30 max-h-64 ${variant === "inline" ? "w-max min-w-[220px] max-w-[300px]" : "right-0"} overflow-y-auto rounded-xl border border-line/80 bg-white p-1 shadow-[0_14px_34px_-14px_rgba(0,0,0,0.3)]`}
         >
+          {searchable && (
+            <li role="presentation" className="sticky top-0 z-10 bg-white p-1 pb-1.5">
+              <input
+                ref={box}
+                value={find}
+                onChange={(e) => setFind(e.target.value)}
+                placeholder="Type to find"
+                aria-label="Type to find"
+                className="w-full rounded-lg border border-line/80 bg-box px-2.5 py-1.5 text-[12.5px] outline-none focus:border-ink"
+              />
+            </li>
+          )}
           {!options.length && !extra && (
             <li role="presentation" className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-muted">
               <span aria-hidden className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
               Loading…
             </li>
           )}
-          {options.map((o, i) => {
+          {options.length > 0 && shown.length === 0 && <li role="presentation" className="px-3 py-2 text-[12px] text-muted">Nothing called that.</li>}
+          {shown.map((o, i) => {
             const head = o.group && o.group !== lastGroup ? o.group : null;
             lastGroup = o.group;
             const on = o.value === value;
@@ -179,10 +225,10 @@ export default function FieldSelect({
             <li role="presentation" className="mt-1 border-t border-line/50 pt-1">
               <button
                 type="button"
-                data-i={options.length}
-                onMouseEnter={() => setActive(options.length)}
-                onClick={() => pick(options.length)}
-                className={`w-full rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-accent-dark ${active === options.length ? "bg-accent-soft/60" : ""}`}
+                data-i={shown.length}
+                onMouseEnter={() => setActive(shown.length)}
+                onClick={() => pick(shown.length)}
+                className={`w-full rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-accent-dark ${active === shown.length ? "bg-accent-soft/60" : ""}`}
               >
                 {extra.label}
               </button>

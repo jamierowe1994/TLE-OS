@@ -22,7 +22,7 @@ import { answerFlatfair, flatfairBook } from "@/lib/showroom/demo-flatfair";
 import type { Move, WorksOrder, WorksEvent } from "@/lib/works-orders";
 import type { Finding, Inspection } from "@/lib/inspections";
 import { STEPS, stepOf, isSkippable, skippedLine } from "@/lib/works-steps";
-import { URGENCIES } from "@/lib/works-catalogue";
+import { URGENCIES, cleanCertDates } from "@/lib/works-catalogue";
 import { CAST, CONTRACTORS, DEMO_TOKEN, VISIT_ID, rankedFor, stepped, type DemoWorld } from "@/lib/showroom/demo-world";
 
 export interface DemoReply {
@@ -294,6 +294,8 @@ function raise(w: DemoWorld, b: Partial<WorksOrder> & { send?: boolean }, by: st
     tenantHappy: null, tenantHappyAt: null, tenantHappyNote: "", payee: null, contractorToken: null, tenantToken: null, accountsToldAt: null, complianceToldAt: null,
     title: b.title ?? "A repair", description: b.description ?? "", category: b.category ?? "Other", urgency: b.kind === "planned" ? null : (b.urgency ?? "routine"),
     dueAt: b.kind === "planned" ? (b.dueAt ?? null) : new Date(Date.now() + (hours ?? 336) * 3_600_000).toISOString(),
+    /* Each certificate's own date on a planned job, as the real save keeps them (17 Nov 2026). */
+    certDates: b.kind === "planned" ? cleanCertDates(b.certDates, b.category ?? "Other") : [],
     reportedBy: b.reportedBy ?? "Agent", reportedAt: at, raisedBy: by,
     contractorId: b.contractorId ?? null, contractorName: b.contractorId ? CONTRACTORS.find((c) => c.id === b.contractorId)?.name ?? "" : "",
     scheduledAt: b.scheduledAt ?? null, access: b.access ?? "", authorityPence: 15000, quotePence: null, approvedBy: "", approvedAt: null,

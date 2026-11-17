@@ -2,6 +2,7 @@ import type { Contractor, WorksOrder } from "@/lib/works-orders";
 import { stepOf, type StepId } from "@/lib/works-steps";
 import type { FormId } from "@/components/maintenance/JobForms";
 import { day } from "@/components/maintenance/works-ui";
+import { categoryName, certDatesOf, dueDayOf } from "@/lib/works-catalogue";
 
 /**
  * What the job page (app/(os)/maintenance/[id]) hands to whichever look it
@@ -42,6 +43,25 @@ export function daysFrom(iso: string): string {
   const d = (x: Date) => Date.UTC(x.getFullYear(), x.getMonth(), x.getDate());
   const n = Math.round((d(new Date(iso)) - d(new Date())) / 86_400_000);
   return n === 0 ? "today" : n === 1 ? "tomorrow" : n === -1 ? "yesterday" : n > 0 ? `in ${n} days` : `${-n} days ago`;
+}
+
+/**
+ * A PLANNED JOB FOR SEVERAL CERTIFICATES, EACH WITH ITS OWN DATE (Lianna
+ * Denholm, 17 Nov 2026, ticket 578704cc: the job's page said "Due By 30 Dec"
+ * for a gas safety and a PAT test, and nothing of the PAT test's date).
+ * Soonest first, for the job's page and its drawer to draw in place of the
+ * one Due By. Empty for a job with one date, which draws as it always did.
+ * `chased` is said only when the job's own due date was since moved by hand.
+ */
+export function certDue(o: Pick<WorksOrder, "kind" | "category" | "certDates" | "dueAt">, open = true): { lines: { name: string; on: string; away: string | null; late: boolean }[]; chased: string | null } {
+  const certs = certDatesOf(o);
+  if (!certs.length) return { lines: [], chased: null };
+  const today = dueDayOf(new Date().toISOString());
+  const on = (ymd: string) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+  return {
+    lines: certs.map((c) => ({ name: categoryName(c.category), on: on(c.expires), away: open ? daysFrom(`${c.expires}T12:00:00`) : null, late: open && c.expires < today })),
+    chased: o.dueAt && dueDayOf(o.dueAt) !== certs[0].expires ? `Chased against ${day(o.dueAt)}` : null,
+  };
 }
 
 export const tel = (s: string) => s.replace(/[^\d+]/g, "");

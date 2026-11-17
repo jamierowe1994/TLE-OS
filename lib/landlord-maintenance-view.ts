@@ -1,6 +1,7 @@
 import { landlordProperties, type LandlordAccount } from "@/lib/landlord-account";
 import { listInspections, kindLabel as visitLabel } from "@/lib/inspections";
 import { listOrders, pounds, stepOf, URGENCIES, type StepId, type WorksOrder } from "@/lib/works-orders";
+import { categoryName, certDatesOf } from "@/lib/works-catalogue";
 
 /**
  * The Maintenance page's view: every job and every visit on the properties
@@ -101,7 +102,10 @@ export function jobOf(o: WorksOrder): MaintJob {
       : o.scheduledAt
         ? `Booked for ${dayShort(o.scheduledAt)}`
         : o.dueAt && o.kind === "planned"
-          ? `Due by ${day(o.dueAt)}`
+          /* Several certificates on one visit: each one's own date (17 Nov 2026, ticket 578704cc). */
+          ? certDatesOf(o).length
+            ? certDatesOf(o).map((c) => `${categoryName(c.category)} due by ${day(`${c.expires}T12:00:00Z`)}`).join(" · ")
+            : `Due by ${day(o.dueAt)}`
           : null;
   return {
     id: o.id,

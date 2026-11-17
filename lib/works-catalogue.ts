@@ -49,6 +49,68 @@ export const categoriesOf = (category: string | null | undefined): string[] =>
 
 export const joinCategories = (list: readonly string[]): string => [...new Set(list.map((c) => c.trim()).filter(Boolean))].join(", ");
 
+/** A category as it is said in a sentence: "Gas safety (CP12)" is "Gas safety". */
+export const categoryName = (c: string): string => c.replace(/ \(.*\)$/, "");
+
+/** "Gas safety", "Gas safety and PAT test", "Gas safety, Boiler service and PAT test". */
+export const sayList = (list: readonly string[]): string =>
+  list.length < 2 ? list[0] ?? "" : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+
+/**
+ * EVERYTHING A PLANNED JOB COVERS, IN WORDS (Lianna Denholm, 17 Nov 2026,
+ * ticket 6537a792: "the system only tells them a gas safety due, but I chose
+ * gas and PAT"). The tenants' email named the job by what was typed in The
+ * job box, which is the agent's own shorthand for the contractor and said
+ * nothing of the PAT test ticked beside it. Whoever the job is done for is
+ * told every category ticked. "Other" says nothing on its own, so a job that
+ * is only that keeps its typed name.
+ */
+export function coversOf(o: { category?: string | null; title?: string | null }): string {
+  const named = categoriesOf(o.category).filter((c) => c !== "Other").map(categoryName);
+  return named.length ? sayList(named) : (o.title ?? "").trim();
+}
+
+/**
+ * A PLANNED JOB'S CERTIFICATES, EACH WITH THE DAY IT RUNS OUT (Lianna
+ * Denholm, 17 Nov 2026, ticket 578704cc: "if I want to instruct PAT & Gas
+ * safety it only pulls through gas safety expiry date, it should pull
+ * through both"). The form showed both dates since 12 Nov, but the job kept
+ * one - the sooner - so its page, the works order and everything after said
+ * nothing of the other. The job's own due date is still the one it is sorted
+ * and chased by; these say which certificate runs out when. YYYY-MM-DD.
+ */
+export interface CertDate { category: string; expires: string }
+
+/** As saved and as read: the job's own categories only, one real date each, soonest first. */
+export function cleanCertDates(list: unknown, category: string | null | undefined): CertDate[] {
+  const own = categoriesOf(category);
+  const out: CertDate[] = [];
+  for (const x of Array.isArray(list) ? list : []) {
+    const row = x && typeof x === "object" ? (x as Record<string, unknown>) : {};
+    const c = String(row.category ?? "").trim();
+    const d = String(row.expires ?? "").slice(0, 10);
+    if (!own.includes(c) || out.some((o) => o.category === c)) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(`${d}T12:00:00Z`))) continue;
+    out.push({ category: c, expires: d });
+  }
+  return out.sort((a, b) => a.expires.localeCompare(b.expires));
+}
+
+/**
+ * The dates to say apart, soonest first: only when the job holds two or
+ * more. A job with one date or none - every job raised before 17 Nov 2026 -
+ * is its own due date, exactly as it always was.
+ */
+export function certDatesOf(o: { kind?: string | null; category?: string | null; certDates?: CertDate[] | null }): CertDate[] {
+  if (o.kind !== "planned") return [];
+  const list = cleanCertDates(o.certDates, o.category);
+  return list.length > 1 ? list : [];
+}
+
+/** The London day a job is due, as YYYY-MM-DD, to set beside a certificate's date. */
+export const dueDayOf = (iso: string | null | undefined): string =>
+  iso && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toLocaleDateString("en-CA", { timeZone: "Europe/London" }) : "";
+
 /**
  * The certificates a job can bring back, in REX's vocabulary and the words a
  * contractor would use. Gas and electrical first because they are most of

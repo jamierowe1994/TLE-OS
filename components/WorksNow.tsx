@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Contractor, Move, RankedContractor, WorksOrder, PaidHow } from "@/lib/works-orders";
 import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_REQUIRED, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type StepId } from "@/lib/works-steps";
-import { categoriesOf, CATEGORY_CERT_TYPE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
+import { categoriesOf, coversOf, CATEGORY_CERT_TYPE, CATEGORY_TRADE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
 import FieldDate, { sayDate } from "@/components/FieldDate";
 import { certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
 import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
@@ -399,7 +399,8 @@ function RankedList({ o, move, busy, canCorporate, onPicked, given, canAdd = tru
       {!placed && ranked && ranked.length > 0 && <p className="mt-1.5 text-[11px] text-muted">The property has no map position, so this is by trade only.</p>}
       {!canAdd ? null : adding ? (
         <div className="mt-3 rounded-xl border border-line/80 bg-card p-3">
-          <ContractorForm initial={{ trade: categoriesOf(o.category)[0] ?? "" }} canCorporate={canCorporate} compact onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />
+          {/* The trade any of the job's categories wants, as Plan a Certificate starts it - not the first category's own name (17 Nov 2026). */}
+          <ContractorForm initial={{ trade: categoriesOf(o.category).map((c) => CATEGORY_TRADE[c] ?? (o.kind === "planned" ? "" : c)).find(Boolean) ?? "" }} canCorporate={canCorporate} compact onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />
         </div>
       ) : (
         <button type="button" onClick={() => setAdding(true)} className={`mt-2 ${btn}`}>+ Add a contractor</button>
@@ -527,6 +528,9 @@ function TellTenantsAccess({ o, move, busy }: { o: WorksOrder; move: (m: Move) =
       </div>
     </div>
   );
+  /* What the email says is due: everything the visit covers, as the email
+     itself names it (Lianna Denholm, 17 Nov 2026, ticket 6537a792). */
+  const due = categoriesOf(o.category).length > 1 ? `${coversOf(o)} are due` : "the certificate is due";
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/80 bg-card px-3 py-2.5">
       <p className="min-w-0 text-[12.5px]">
@@ -535,7 +539,7 @@ function TellTenantsAccess({ o, move, busy }: { o: WorksOrder; move: (m: Move) =
           : toldAsRaised
             ? `The tenants were told ${who} will be in touch when it went to them.`
             : withEmail.length
-              ? `Optional: tell ${withEmail.length === 1 ? (withEmail[0].name || "the tenant") : `all ${withEmail.length} tenants`} the certificate is due and ${who} will be in touch to arrange access.`
+              ? `Optional: tell ${withEmail.length === 1 ? (withEmail[0].name || "the tenant") : `all ${withEmail.length} tenants`} ${due} and ${who} will be in touch to arrange access.`
               : "No tenant on this job has an email, so they can't be told by email."}
         <span className="block text-[11px] text-muted">A short note by email. They never see the works order.</span>
       </p>

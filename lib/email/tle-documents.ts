@@ -892,6 +892,8 @@ export const WORKS_TENANT_BOOKED = {
       ["Who's coming", "{{contractorName}}"],
       ["Their number", "{{contractorPhone}}"],
       ["The job", "{{title}} (#{{ref}})"],
+      /* A planned job: every certificate the visit covers (17 Nov 2026, ticket 6537a792). Left out on a repair. */
+      ["Covering", "{{covers}}"],
       ["Your home", "{{address}}"],
     ]),
     T("wtb3", "Please make sure somebody can let them in. If that time doesn't work, reply to this email or ring {{agentPhone}} and we'll move it."),
@@ -1095,15 +1097,20 @@ export const WORKS_TENANT_NOTICE = {
 /* Planned work - a gas safety, an EICR - with the tick on Plan a
    certificate (James, 10 Oct 2026): the tenants hear who will ring them to
    arrange access, and that it is a check the law asks for. */
+/* It names everything the visit covers, {{covers}}, not the job's typed name
+   (Lianna Denholm, 17 Nov 2026, ticket 6537a792: "the system only tells them
+   a gas safety due, but I chose gas and PAT"). The name in The job box is the
+   agent's shorthand for the contractor; the categories ticked are what is
+   due. Filled by lib/works-emails from lib/works-catalogue coversOf. */
 export const WORKS_TENANT_PLANNED_NOTICE = {
-  subject: "{{contractorName}} will be in touch to arrange access for {{title}}",
+  subject: "{{contractorName}} will be in touch to arrange access for {{covers}}",
   preheader: "A routine check at {{address}}. It's genuinely us.",
   mode: "blocks",
   blocks: [
     H("wtp1", "Time for a Safety Check"),
-    T("wtp2", "Hi {{tenantName}},<br><br>A routine safety check on your home is due, and we've asked a contractor to carry it out."),
+    T("wtp2", "Hi {{tenantName}},<br><br>Routine safety work on your home is due: <strong>{{covers}}</strong>. We've asked a contractor to carry it out."),
     FACTS("wtp8", [
-      ["The check", "{{title}} (#{{ref}})"],
+      ["What's due", "{{covers}} (#{{ref}})"],
       ["Who's coming", "{{contractorName}}"],
       ["Their number", "{{contractorPhone}}"],
       ["Your home", "{{address}}"],
@@ -1143,7 +1150,8 @@ export const WORKS_LANDLORD_ARRANGED = {
   blocks: [
     H("wla1", "It's Arranged"),
     T("wla2", "Hi {{landlordName}},<br><br>A contractor is booked and the tenant knows to expect them. There's nothing you need to do."),
-    FACTS("wla2a", [["Your property", "{{address}}"], ["The job", "{{title}} (#{{ref}})"], ["Contractor", "{{contractorName}}"], ["Booked for", "{{scheduledAt}}"]]),
+    /* Covering: a planned job's certificates, every one ticked (17 Nov 2026, ticket 6537a792). Left out on a repair. */
+    FACTS("wla2a", [["Your property", "{{address}}"], ["The job", "{{title}} (#{{ref}})"], ["Covering", "{{covers}}"], ["Contractor", "{{contractorName}}"], ["Booked for", "{{scheduledAt}}"]]),
     T("wla3", "We'll let you know when it's done, and send the invoice once we have the contractor's. Anything over your pre-authorised {{authority}} we'd have asked you about first."),
     SP("wla4", 8),
     T("wla5", "Thanks,<br>{{agentName}}"),

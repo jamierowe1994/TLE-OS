@@ -116,6 +116,7 @@ function blankOrder(over: Partial<WorksOrder> & Pick<WorksOrder, "id" | "ref" | 
     landlordEmail: CAST.landlord.email,
     landlordMobile: CAST.landlord.phone,
     tenants: [],
+    certDates: [],
     landlordSkipped: false,
     quietTenants: false,
     skippedSteps: [],

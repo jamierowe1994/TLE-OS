@@ -8,7 +8,7 @@ import FieldMultiSelect from "@/components/FieldMultiSelect";
 import FieldDate, { sayDate } from "@/components/FieldDate";
 import { ContractorForm } from "@/components/WorksNow";
 import type { Contractor, JobTenant, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
-import { CATEGORY_TRADE, PLANNED_CATEGORIES, REPAIR_CATEGORIES, TENANT_FIRST_NAME as FIRST_NAME, URGENCIES, categoriesOf, joinCategories } from "@/lib/works-catalogue";
+import { CATEGORY_TRADE, PLANNED_CATEGORIES, REPAIR_CATEGORIES, TENANT_FIRST_NAME as FIRST_NAME, URGENCIES, categoriesOf, categoryName, joinCategories } from "@/lib/works-catalogue";
 import { CATEGORY_CERT, CERT_TYPE_KEY, ContractorPick, REPORTED_BY, readHomes, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -250,19 +250,34 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   }, [planned, picked?.id]);
   /* Each ticked certificate's date, so a visit for two (PAT and gas safety)
      shows both, and the job is chased against the sooner. */
-  const certDates = useMemo(() => {
-    const out: { label: string; days: number }[] = [];
+  /* `undated`: a certificate ticked with no date on the home's file, said on
+     the screen so a date missing from the list is never read as the form
+     dropping it (Lianna Denholm, 17 Nov 2026, ticket 578704cc). */
+  const { certDates, undated } = useMemo(() => {
+    const out: { category: string; label: string; days: number }[] = [];
+    const none: string[] = [];
     for (const c of picks) {
       const key = CATEGORY_CERT[c];
       if (!key) continue;
       const own = ownCerts && ownCerts.id === picked?.id ? ownCerts.certs[key] : undefined;
       const days = own ?? picked?.certs?.[key]?.expires ?? null;
-      if (days != null) out.push({ label: c.replace(/ \(.*\)$/, ""), days });
+      if (days != null) out.push({ category: c, label: categoryName(c), days });
+      else none.push(categoryName(c));
     }
-    return out;
+    /* Only once the home's certificates have been read: unread is not "none". */
+    const read = !!picked && ((!!ownCerts && ownCerts.id === picked.id) || !!picked.certs);
+    return { certDates: out, undated: read ? none : [] };
   }, [picks, picked, ownCerts]);
   const certDays = certDates.length ? Math.min(...certDates.map((d) => d.days)) : null;
   const dayFrom = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+  /* THE JOB KEEPS EVERY ONE OF THEM (Lianna Denholm, 17 Nov 2026, ticket
+     578704cc: "it only pulls through gas safety expiry date, it should pull
+     through both? I raised this but still not fixed"). The form showed each
+     date since 12 Nov, but only the sooner was saved, so the job's page and
+     the works order still gave one. Each goes with the job now. Only while
+     the expiry date is still the sooner of them: a date typed by hand is the
+     job's one date, as it always was. */
+  const keptCertDates = planned && certDates.length > 1 && certDays != null && dueAt === dayFrom(certDays) ? certDates.map((d) => ({ category: d.category, expires: dayFrom(d.days) })) : [];
   useEffect(() => {
     if (!planned || dueTouched || !picked || certDays == null) return;
     setDueAt(dayFrom(certDays));
@@ -304,6 +319,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         landlordEmail: landlordSkipped ? "" : landlordEmail, landlordMobile: landlordSkipped ? "" : landlordMobile,
         propertyLat: place.lat, propertyLng: place.lng,
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: planned ? new Date(dueAt).toISOString() : null,
+        certDates: keptCertDates,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
         tenants: onJob, landlordSkipped, send, askQuote, quoteFrom: askQuote ? askIds : undefined,
         contractorEdit: send && mailEdited ? mail : undefined,
@@ -439,7 +455,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   /* The works order, as the contractor will get it. Read when the last
      screen opens, and again if anything on it changed since. */
   const [preview, setPreview] = useState<{ key: string; subject: string; html: string; to: string; text: MailWords | null; fields: MailField[] } | { key: string; error: string } | null>(null);
-  const previewKey = JSON.stringify([title, description, category, urgency, dueAt, scheduledAt, access, contractorId, onJob, picked?.id, manual]);
+  const previewKey = JSON.stringify([title, description, category, urgency, dueAt, scheduledAt, access, contractorId, onJob, picked?.id, manual, keptCertDates]);
   /* The works order in the agent's own words (James, 8 Nov 2026): null until
      they type, and the job's details it was written against. */
   const [mail, setMail] = useState<MailWords | null>(null);
@@ -447,7 +463,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const previewBody = () => ({
     kind, urgency: planned ? null : urgency || null,
     title, description, category, access, contractorId, tenants: onJob,
-    dueAt: planned ? dueAt || null : null, scheduledAt: scheduledAt || null,
+    dueAt: planned ? dueAt || null : null, certDates: keptCertDates, scheduledAt: scheduledAt || null,
     propertyId: picked?.id ?? null, propertyName: picked?.name ?? manual.trim(), locality: picked?.locality ?? "",
   });
   useEffect(() => {
@@ -534,7 +550,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                 [steps.find((x) => x.id === "what")!.title, "what", [title || "—", category, description].filter(Boolean).join(" · ")],
                 kind === "repair"
                   ? ["Urgency", "urgency", [URGENCIES.find((u) => u.id === urgency)?.label ?? "urgency not picked", `reported by ${reportedBy.toLowerCase()}`].join(" · ")]
-                  : ["Expiry", "when", dueAt ? `expires ${sayDate(dueAt)}` : "—"],
+                  : ["Expiry", "when", keptCertDates.length ? certDates.map((d) => `${d.label} ${sayDate(dayFrom(d.days))}`).join(" · ") : dueAt ? `expires ${sayDate(dueAt)}` : "—"],
                 ["Contractor", "contractor", [contractor?.name ?? "no contractor yet", scheduledAt ? `booked ${sayDate(scheduledAt, true)}` : null].filter(Boolean).join(" · ")],
                 ["Tenants", "tenant", onJob.length ? onJob.map((t, i) => `${t.name}${t.room ? ` (${t.room})` : ""}${i === 0 && canMarkReporter ? " - reported it" : ""}`).join(", ") : "none on the works order"],
                 ["Access", "access", [
@@ -784,10 +800,14 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                     : certDates.length > 1 ? "From the sooner of the certificates we hold on this home." : "From the certificate we hold on this home."
                   : "When the current certificate runs out. It's on the works order so the contractor knows."}
               </p>
-              {certDates.length > 1 && (
+              {certDates.length + undated.length > 1 && (
                 <ul className={hint}>
                   {certDates.map((d) => <li key={d.label}>{d.label} {d.days < 0 ? "ran out" : "runs out"} {sayDate(dayFrom(d.days))}</li>)}
+                  {undated.map((c) => <li key={c}>{c}: no date on this home&apos;s file</li>)}
                 </ul>
+              )}
+              {certDates.length > 1 && dueAt && (
+                <p className={hint}>{keptCertDates.length ? "The job keeps each date, and is chased against the sooner." : "You've set the date by hand, so the job keeps that one date."}</p>
               )}
             </div>
           )}
@@ -1064,7 +1084,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
       if (id === "property") return picked?.name ?? manual.trim();
       if (id === "what") return [title.trim(), picks.join(", ")].filter(Boolean).join(" · ");
       if (id === "urgency") return URGENCIES.find((u) => u.id === urgency)?.label ?? "";
-      if (id === "when") return dueAt ? `Expires ${sayDate(dueAt)}` : "";
+      if (id === "when") return keptCertDates.length ? certDates.map((d) => `${d.label} ${sayDate(dayFrom(d.days))}`).join(" · ") : dueAt ? `Expires ${sayDate(dueAt)}` : "";
       if (id === "contractor") return contractor?.name ?? (step > steps.findIndex((x) => x.id === "contractor") ? "None yet" : "");
       if (id === "tenant") return rows.length ? `${onJob.length} of ${rows.length} on it` : "";
       if (id === "access") return step > steps.findIndex((x) => x.id === "access") ? (tellTenants ? "Tenants told" : "Tenants not told") : "";

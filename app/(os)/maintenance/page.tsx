@@ -1147,7 +1147,7 @@ function LogDone({ contractors, onClose, onSaved }: { contractors: Contractor[];
         {contractors.length === 0 ? (
           <p className="text-[12.5px] text-muted">There are no contractors in your book yet. Add them under <a href="/contractors" className="underline">Portfolio, Contractors</a> first.</p>
         ) : (
-          <FieldSelect value={id} onChange={setId} placeholder="Who did the work?" options={contractors.map((c) => ({ value: c.id, label: `${c.name} · ${c.trade}` }))} extra={{ label: "+ Someone not in the book", onPick: () => { window.location.href = "/contractors"; } }} />
+          <FieldSelect searchable value={id} onChange={setId} placeholder="Who did the work?" options={contractors.map((c) => ({ value: c.id, label: `${c.name} · ${c.trade}` }))} extra={{ label: "+ Someone not in the book", onPick: () => { window.location.href = "/contractors"; } }} />
         )}
       </div>
       {picked && (

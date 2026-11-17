@@ -19,7 +19,7 @@ import { CertificateUpload, LandlordSaysStep } from "@/components/WorksNow";
 import { OPEN, PAID_HOW, PAYRUN_LABEL, PayrunTrack, awaitingPay, day, pounds, stamp, statusLabel } from "@/components/maintenance/works-ui";
 import { JobForm, FORM_TITLE } from "@/components/maintenance/JobForms";
 import { StagePanel, StageTracker, currentStage, stagesOf } from "@/components/maintenance/JobStages";
-import { TABS, daysFrom, engineerFacts, jobFiles, tel, titleCase, type Pop, type TabId, type Tile } from "@/components/maintenance/job-page";
+import { TABS, certDue, daysFrom, engineerFacts, jobFiles, tel, titleCase, type Pop, type TabId, type Tile } from "@/components/maintenance/job-page";
 import JobPageNew, { JobFailedNew, JobLoadingNew } from "@/components/new-look/maintenance/JobPageNew";
 import { useNewLook } from "@/lib/use-new-look";
 import JobMessage from "@/components/maintenance/JobMessage";
@@ -378,6 +378,7 @@ export default function WorksOrderPage() {
   const shownMeta = stageShown ? STEPS.find((s) => s.id === stageShown) : null;
   const arrangedBy = o.arranging === "us" ? "Us" : o.arranging === "landlord" ? "The landlord" : "Not decided";
   const dueIn = o.dueAt && open ? daysFrom(o.dueAt) : null;
+  const certs = certDue(o, open);
 
   const messageWindow = (
     <JobMessage jobId={o.id} jobTitle={`#${o.ref} ${o.title} - ${o.propertyName}`} open={messaging} onClose={() => setMessaging(false)} onSent={load} />
@@ -497,7 +498,12 @@ export default function WorksOrderPage() {
                 </p>
                 {o.category && <p className="mt-1 text-[12.5px] text-muted">{categoriesOf(o.category).join(", ")}</p>}
                 <dl className="mt-6 grid max-w-[460px] grid-cols-2 gap-x-6 gap-y-4">
-                  <HeroFact icon="calendar" k={o.kind === "repair" ? "Attend By" : "Due By"} v={o.dueAt ? (o.kind === "repair" ? stamp(o.dueAt) : day(o.dueAt)) : "Not set"} sub={dueIn} hot={late} quiet={!o.dueAt} />
+                  {/* Several certificates on one visit: each with its own date (17 Nov 2026, ticket 578704cc). */}
+                  {certs.lines.length ? (
+                    <HeroFact icon="calendar" k="Due By" v="" lines={certs.lines.map((c) => ({ v: `${c.name} ${c.on}`, sub: c.away, hot: c.late }))} sub={certs.chased} />
+                  ) : (
+                    <HeroFact icon="calendar" k={o.kind === "repair" ? "Attend By" : "Due By"} v={o.dueAt ? (o.kind === "repair" ? stamp(o.dueAt) : day(o.dueAt)) : "Not set"} sub={dueIn} hot={late} quiet={!o.dueAt} />
+                  )}
                   <HeroFact icon="setting" k="Contractor" v={o.contractorName || (o.quoteAsks.length ? `${o.quoteAsks.length} asked to quote` : "Not picked yet")} quiet={!o.contractorName} />
                   <HeroFact icon="clock" k="Booked" v={o.scheduledAt ? stamp(o.scheduledAt) : "Not booked yet"} quiet={!o.scheduledAt} />
                   <HeroFact icon="user" k="Arranged By" v={arrangedBy} quiet={!o.arranging} />
@@ -809,13 +815,19 @@ function Fact({ k, v, hot = false, quiet = false }: { k: string; v: string; hot?
   );
 }
 
-function HeroFact({ icon, k, v, sub, hot = false, quiet = false }: { icon: string; k: string; v: string; sub?: string | null; hot?: boolean; quiet?: boolean }) {
+/** `lines`: several values under one heading, each with its own quieter line - a planned job's certificates and the date each runs out. */
+function HeroFact({ icon, k, v, sub, hot = false, quiet = false, lines }: { icon: string; k: string; v: string; sub?: string | null; hot?: boolean; quiet?: boolean; lines?: { v: string; sub?: string | null; hot?: boolean }[] }) {
   return (
     <div className="min-w-0">
       <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{k}</dt>
       <dd className={`mt-1 flex items-start gap-1.5 break-words text-[13px] ${hot ? "font-semibold text-accent-dark" : quiet ? "text-muted" : ""}`}>
         <DoodleIcon name={icon} size={13} className="mt-[2px] shrink-0 text-muted" />
-        <span className="min-w-0">{v}{sub && <span className="block text-[11.5px] font-normal text-muted">{sub}</span>}</span>
+        <span className="min-w-0">
+          {lines?.length ? lines.map((l) => (
+            <span key={l.v} className={`block ${l.hot ? "font-semibold text-accent-dark" : ""}`}>{l.v}{l.sub && <span className="font-normal text-muted">, {l.sub}</span>}</span>
+          )) : v}
+          {sub && <span className="block text-[11.5px] font-normal text-muted">{sub}</span>}
+        </span>
       </dd>
     </div>
   );
