@@ -48,12 +48,18 @@ export async function removeCertificate(input: {
   replacedBy?: string | null;
 }): Promise<{ ok: true; name: string; rexStillHolds: boolean } | { ok: false; error: string }> {
   if (!hasDb()) return { ok: false, error: "No database on this environment." };
-  /* Only a file on this home's own shelf: the key comes from the browser. */
-  if (!input.key.startsWith(shelf(input.propertyId)) || keyClimbs(input.key)) {
-    return { ok: false, error: "That file is not one of this home's certificates." };
-  }
+  if (keyClimbs(input.key)) return { ok: false, error: "That file is not one of this home's certificates." };
   const rows = await q<CertRow>(`SELECT * FROM os_certificates WHERE property_id = $1 AND r2_key = $2`, [input.propertyId, input.key]);
   const row = rows[0] ?? null;
+  /* Only a file on this home's own shelf: the key comes from the browser.
+     Or one a certificate record of this home names (Lianna Denholm, 17 Nov
+     2026, ticket 913fb152): a home linked to its REX property after its
+     certificates were filed keeps them under its old id's folder
+     (lib/vault), and Remove and Replace on those said "not one of this
+     home's certificates". The record is what makes it this home's. */
+  if (!input.key.startsWith(shelf(input.propertyId)) && !row) {
+    return { ok: false, error: "That file is not one of this home's certificates." };
+  }
   const name = row?.name ?? input.key.slice(input.key.lastIndexOf("/") + 1).replace(/^\d+-/, "");
   const typeId = row?.type_id ?? input.key.slice(shelf(input.propertyId).length).split("/")[0];
 

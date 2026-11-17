@@ -9,6 +9,7 @@ import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { VAULT_LABEL } from "@/lib/vault";
 import { FIRE_SAFETY, fireKindIn } from "@/lib/cert-kinds";
 import { proseEmail } from "@/lib/email/prose";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * POST /api/compliance/send-document
@@ -38,7 +39,14 @@ export async function POST(req: NextRequest) {
   /* documents/compliance-<property>-<certKey>/<timestamp>-<name> */
   const m = key.match(/^documents\/compliance-([^/]+?)-([a-z]+)\/\d+-(.+)$/i);
   if (!m) return NextResponse.json({ ok: false, error: "That file is not a certificate in the vault." }, { status: 400 });
-  const [, propertyId, certKey, fileName] = m;
+  const [, filedUnder, certKey, fileName] = m;
+  /* Whose certificate it is comes from its record, not its folder (Lianna
+     Denholm, 17 Nov 2026, ticket 913fb152): a home linked to its REX property
+     after its certificates were filed keeps them under its old id's folder
+     (lib/vault), and the landlord could not be found from that id. */
+  const propertyId = hasDb()
+    ? (await q<{ property_id: string }>(`SELECT property_id FROM os_certificates WHERE r2_key = $1 LIMIT 1`, [key]).catch(() => []))[0]?.property_id ?? filedUnder
+    : filedUnder;
   /* A fire certificate by its own kind where its file name says (ticket 24053535). */
   const label = certKey === "fire" ? fireKindIn(fileName) ?? FIRE_SAFETY : VAULT_LABEL[certKey] ?? certKey;
 

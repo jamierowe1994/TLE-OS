@@ -22,6 +22,8 @@ export interface VaultFile {
   size: number;
   uploadedAt: string | null;
   open: string;
+  /** Not the newest of its kind (lib/vault, a home filed under two ids). */
+  earlier?: boolean;
 }
 
 const days = (iso: string | null) =>
@@ -70,6 +72,7 @@ export default function CertificatesOnFile({
           <span className="text-[11px] text-muted">
             {f.size ? `${(f.size / 1_048_576).toFixed(1)} MB` : ""}
             {f.uploadedAt ? ` · ${since(f.uploadedAt)}` : ""}
+            {f.earlier ? " · earlier certificate" : ""}
           </span>
           <a href={f.open} target="_blank" rel="noreferrer" className="ml-auto rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] hover:border-ink/40">
             Open

@@ -290,7 +290,8 @@ export async function sendableDocs(ctx: HomeContext): Promise<SendDoc[]> {
     if (!blocked) vaultKinds.add(v.certKey);
     out.push({
       id: `vault:${v.key}`, group: "Certificates", label: v.label, name: v.name, expiry, sizeBytes: v.size, room: null, where: null,
-      blocked, suggested: !blocked && Boolean(expiry || NO_EXPIRY_NEEDED.has(v.certKey)), forTenants: true, forLandlord: true, source: { r2: v.key }, certificateId: row?.id ?? null,
+      /* An earlier certificate of the same kind (lib/vault, a home filed under two ids) is listed, not ticked. */
+      blocked, suggested: !blocked && !v.earlier && Boolean(expiry || NO_EXPIRY_NEEDED.has(v.certKey)), forTenants: true, forLandlord: true, source: { r2: v.key }, certificateId: row?.id ?? null,
     });
   }
 

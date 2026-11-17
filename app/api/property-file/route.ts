@@ -191,7 +191,10 @@ export async function GET(req: NextRequest) {
      Room 3 of a shared house showed only its own fire certificate while
      Room 1 showed the gas, EICR, EPC, licence and alarms for the building. */
   const houseP = pid ? houseSiblingsFor(req, pid).catch(() => [] as HouseSibling[]) : nothing([] as HouseSibling[]);
-  const osCertsP = osOnly && pid ? osCertRows([pid]).catch(() => []) : nothing([] as Awaited<ReturnType<typeof osCertRows>>);
+  /* Read for a REX home too (Lianna Denholm, 17 Nov 2026, ticket 913fb152):
+     where a row takes its date from a certificate the OS holds, its issue
+     date is that certificate's (below). */
+  const osCertsP = pid ? osCertRows([pid]).catch(() => []) : nothing([] as Awaited<ReturnType<typeof osCertRows>>);
   const checkingP = pid
     ? Promise.all([
         checkingFor([pid]).catch(() => new Map()),
@@ -313,6 +316,7 @@ export async function GET(req: NextRequest) {
     if (home && held) {
       const today = londonToday();
       const builtOn = londonDay(new Date(held.at).toISOString());
+      const osCerts = await osCertsP;
       for (const r of rows) {
         if (r.state !== "missing" && r.state !== "expired" && r.state !== "expiring") continue;
         const key = VAULT_KEY[r.type];
@@ -328,8 +332,22 @@ export async function GET(req: NextRequest) {
         const expiry = d.toISOString().slice(0, 10);
         if (r.expiry && r.expiry.slice(0, 10) >= expiry) continue;
         const days = Math.round((d.getTime() - new Date(`${today}T12:00:00Z`).getTime()) / 86400000);
+        const was = r.expiry ? new Date(`${r.expiry.slice(0, 10)}T12:00:00Z`).getTime() : null;
         r.expiry = expiry;
         r.state = days < 0 ? "expired" : days <= EXPIRING_DAYS ? "expiring" : "valid";
+        /* The date is now a later certificate's, so the issue date is that
+           certificate's too (Lianna Denholm, 17 Nov 2026, ticket 913fb152:
+           an EICR read "issued 7 Sept 2021" beside "expires 7 Sept 2031" -
+           the issue date of the one REX holds, the expiry of the one filed
+           here since). The OS's own record with that expiry says when it was
+           issued. A later date from anywhere else (the clean sweep) has no
+           issue date on file, and none is better than the old certificate's.
+           A day either side counts as the same date: the book counts days
+           from when it was built. */
+        const DAY = 86400000;
+        const from = osCerts.find((c) => VAULT_KEY[c.type_id] === key && Math.abs(new Date(`${String(c.expiry).slice(0, 10)}T12:00:00Z`).getTime() - d.getTime()) <= DAY);
+        if (from?.issue) r.issued = String(from.issue).slice(0, 10);
+        else if (was != null && d.getTime() - was > DAY) r.issued = null;
       }
     }
   }
