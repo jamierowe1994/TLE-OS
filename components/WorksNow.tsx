@@ -14,7 +14,7 @@ import { PAYRUN_LABEL, PAYRUN_LINE, PayrunTrack, awaitingPay } from "@/component
 import { AskForQuotes, QuoteBoard } from "@/components/maintenance/QuoteAsks";
 import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
 import { maskedAccount, readBank, sortCodeWords } from "@/lib/bank";
-import TenantJobEmail from "@/components/maintenance/TenantJobEmail";
+import TenantJobEmail, { DateEmail, isoOf } from "@/components/maintenance/TenantJobEmail";
 import type { MailWords } from "@/components/maintenance/WorksOrderEmail";
 
 /**
@@ -438,6 +438,7 @@ function ContractorConfirm({ o, move, busy, canCorporate, given, canAdd }: { o: 
 
 function Booking({ o, f, setF, move, busy }: StepProps) {
   const planned = o.kind === "planned";
+  const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
   return (
     <div>
       {o.orderSentTo && o.orderSentTo !== o.contractorId ? (
@@ -455,8 +456,9 @@ function Booking({ o, f, setF, move, busy }: StepProps) {
           <label className="block text-[10px] font-bold uppercase tracking-wider text-muted">Booked for</label>
           <FieldDate className="mt-1" withTime value={f.at ?? ""} onChange={(v) => setF({ ...f, at: v })} placeholder="The date and time agreed" min={localDate(-30)} />
         </div>
-        <button type="button" disabled={busy || !f.at} onClick={() => void move({ action: "schedule", scheduledAt: new Date(f.at).toISOString() })} className={primary}>That's the date</button>
+        <button type="button" disabled={busy || !isoOf(f.at)} onClick={() => void move({ action: "schedule", scheduledAt: isoOf(f.at)!, ...(tenantEdit ? { tenantEdit } : {}) })} className={primary}>That's the date</button>
       </div>
+      <DateEmail o={o} at={f.at} goes="Goes when you press That's the date" onEdit={setTenantEdit} />
       <p className="mt-2 text-[11.5px] text-muted">
         {planned
           ? `Setting it confirms it with ${o.contractorName || "the contractor"}${o.landlordSkipped ? "" : " and lets the landlord know it's arranged"}. The tenants are only sent the booking if you choose to, on the next step.`
@@ -471,6 +473,7 @@ function Visit({ o, f, setF, move, busy, onCertificate }: StepProps & { onCertif
   const past = o.scheduledAt ? new Date(o.scheduledAt).getTime() < Date.now() : false;
   const planned = o.kind === "planned";
   const [moving, setMoving] = useState(false);
+  const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
   return (
     <div className="space-y-3">
       <p className="text-[13px]">{o.contractorName} booked for {stamp(o.scheduledAt)}.{past ? " That's passed - has it been done?" : ""}</p>
@@ -488,10 +491,11 @@ function Visit({ o, f, setF, move, busy, onCertificate }: StepProps & { onCertif
         {moving && (
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <FieldDate className="w-full sm:w-72" withTime value={f.at ?? ""} onChange={(v) => setF({ ...f, at: v })} placeholder="The new date and time" />
-            <button type="button" disabled={busy || !f.at} onClick={() => void move({ action: "schedule", scheduledAt: new Date(f.at).toISOString() })} className={primary}>Move it</button>
+            <button type="button" disabled={busy || !isoOf(f.at)} onClick={() => void move({ action: "schedule", scheduledAt: isoOf(f.at)!, ...(tenantEdit ? { tenantEdit } : {}) })} className={primary}>Move it</button>
             <button type="button" onClick={() => setMoving(false)} className={btn}>Back</button>
           </div>
         )}
+        {moving && <DateEmail o={o} at={f.at} goes="Goes when you press Move it" onEdit={setTenantEdit} />}
       </div>
       <ContractorLink o={o} />
     </div>
@@ -511,6 +515,18 @@ function TellTenantsAccess({ o, move, busy }: { o: WorksOrder; move: (m: Move) =
   const who = o.contractorName || "the contractor";
   const toldAsRaised = o.accessNotice && !!o.contractorContactedAt;
   const told = o.tenantsAccessToldAt ?? null;
+  /* The note shown first, in place, before it goes (Lianna Denholm, 16 Nov 2026). */
+  const [open, setOpen] = useState(false);
+  const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
+  if (open && o.contractorId) return (
+    <div className="mt-3 rounded-xl border border-line/80 bg-card px-3 py-2.5">
+      <TenantJobEmail orderId={o.id} contractorId={o.contractorId} step="access" goes="Goes when you press Send it" onEdit={setTenantEdit} />
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => void move({ action: "tell_tenants_access", ...(tenantEdit ? { tenantEdit } : {}) }).then(() => setOpen(false))} className={primary}>Send it</button>
+        <button type="button" onClick={() => setOpen(false)} className={btn}>Back</button>
+      </div>
+    </div>
+  );
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/80 bg-card px-3 py-2.5">
       <p className="min-w-0 text-[12.5px]">
@@ -524,7 +540,7 @@ function TellTenantsAccess({ o, move, busy }: { o: WorksOrder; move: (m: Move) =
         <span className="block text-[11px] text-muted">A short note by email. They never see the works order.</span>
       </p>
       {withEmail.length > 0 && o.contractorId && (
-        <button type="button" disabled={busy} onClick={() => void move({ action: "tell_tenants_access" })} className={told || toldAsRaised ? btn : primary}>
+        <button type="button" disabled={busy} onClick={() => setOpen(true)} className={told || toldAsRaised ? btn : primary}>
           {told || toldAsRaised ? "Tell them again" : "Tell the tenants"}
         </button>
       )}
@@ -542,6 +558,18 @@ function TellTenantsAccess({ o, move, busy }: { o: WorksOrder; move: (m: Move) =
 function TellTenants({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean }) {
   const all = o.tenants.length ? o.tenants : o.tenant || o.tenantEmail ? [{ name: o.tenant, phone: o.tenantPhone, email: o.tenantEmail }] : [];
   const withEmail = all.filter((t) => t.email.includes("@"));
+  /* The booking shown first, in place, before it goes (Lianna Denholm, 16 Nov 2026). */
+  const [open, setOpen] = useState(false);
+  const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
+  if (open && o.contractorId) return (
+    <div className="rounded-xl border border-line/80 bg-card px-3 py-2.5">
+      <TenantJobEmail orderId={o.id} contractorId={o.contractorId} step="booked" goes="Goes when you press Send it" onEdit={setTenantEdit} />
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => void move({ action: "tell_tenants_booked", ...(tenantEdit ? { tenantEdit } : {}) }).then(() => setOpen(false))} className={primary}>Send it</button>
+        <button type="button" onClick={() => setOpen(false)} className={btn}>Back</button>
+      </div>
+    </div>
+  );
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/80 bg-card px-3 py-2.5">
       <p className="min-w-0 text-[12.5px]">
@@ -553,7 +581,7 @@ function TellTenants({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Prom
         <span className="block text-[11px] text-muted">They agreed the time with the contractor, so this is only if you want it in writing.</span>
       </p>
       {withEmail.length > 0 && (
-        <button type="button" disabled={busy} onClick={() => void move({ action: "tell_tenants_booked" })} className={o.tenantsToldBookedAt ? btn : primary}>
+        <button type="button" disabled={busy} onClick={() => (o.contractorId ? setOpen(true) : void move({ action: "tell_tenants_booked" }))} className={o.tenantsToldBookedAt ? btn : primary}>
           {o.tenantsToldBookedAt ? "Send again" : "Send confirmation to the tenants"}
         </button>
       )}

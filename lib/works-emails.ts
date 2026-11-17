@@ -262,6 +262,24 @@ export function tenantEmailOnConfirm(o: Pick<WorksOrder, "kind" | "scheduledAt" 
   return o.quietTenants ? null : "works-tenant-notice";
 }
 
+/** The moves whose tenant email the agent may reword before it goes. */
+const TENANT_EDIT_ACTIONS = new Set<string>(["raised", "contractor_confirmed", "schedule", "tell_tenants_booked", "tell_tenants_access"]);
+
+/**
+ * The tenants' email a button on the job's page sends, or null when it sends
+ * none (Lianna Denholm, 16 Nov 2026). Mirrors the matching branches of
+ * emailsForMove: "schedule" is the agent setting or moving the date (only the
+ * lead tenant, never on a planned or discreet job); "booked" and "access" are
+ * the Tell the tenants buttons.
+ */
+export type TenantStep = "confirm" | "schedule" | "booked" | "access";
+export function tenantEmailOnStep(o: Pick<WorksOrder, "kind" | "scheduledAt" | "quietTenants" | "accessNotice" | "contractorId">, step: TenantStep): string | null {
+  if (step === "confirm") return tenantEmailOnConfirm(o);
+  if (step === "schedule") return o.kind === "planned" || o.quietTenants || !o.scheduledAt ? null : "works-tenant-booked";
+  if (step === "booked") return "works-tenant-booked";
+  return o.kind === "planned" && o.contractorId && !o.scheduledAt ? "works-tenant-planned-notice" : null;
+}
+
 /**
  * The email the tenants get when the job is raised and sent, or null when
  * they get none: a discreet repair, a planned job without the tick, or no
@@ -540,8 +558,10 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     if (sent.sent && o.contractorId) await markOrderSent(o.id, o.contractorId, contractor.name);
     out.push(sent);
   };
-  /* The tenants' email in the agent's own words, only as the job is raised. */
-  const tenantEdit = (id: string) => (action === "raised" || action === "contractor_confirmed" ? editFor(id, detail.tenantEdit) : null);
+  /* The tenants' email in the agent's own words, from any screen that shows
+     it before it goes (Lianna Denholm, 16 Nov 2026): raising the job,
+     Confirm the Contractor, setting the date, and the Tell the tenants buttons. */
+  const tenantEdit = (id: string) => (TENANT_EDIT_ACTIONS.has(action) ? editFor(id, detail.tenantEdit) : null);
   const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor")); };
   /* A discreet repair (Let the tenants know unticked, Lianna 9 Oct 2026):
      nothing automatic goes to any tenant on it. */
@@ -632,13 +652,13 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
          note the tick sends, to every tenant on the job with an address. */
       if (!planned || !contractor || o.scheduledAt) break;
       for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {
-        out.push(await send(o, "works-tenant-planned-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
+        out.push(await send(o, "works-tenant-planned-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant", tenantEdit("works-tenant-planned-notice")));
       }
       break;
     case "tell_tenants_booked":
       /* Every tenant on the job with an address, each greeted by name. */
       for (const t of (await jobTenants(o)).filter((x) => x.email.includes("@"))) {
-        out.push(await send(o, "works-tenant-booked", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
+        out.push(await send(o, "works-tenant-booked", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant", tenantEdit("works-tenant-booked")));
       }
       break;
     case "assign":

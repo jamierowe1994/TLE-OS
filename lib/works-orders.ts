@@ -717,19 +717,21 @@ export async function worksSummary(): Promise<WorksSummary> {
 
 /* ── moving a job along ─────────────────────────────────────────────────── */
 
+/** The tenants' email in the agent's own words (Lianna Denholm, 16 Nov 2026). */
+export type TenantWords = { subject?: string | null; body?: string | null };
 export type Move =
   /* ── the workflow ── */
   | { action: "tell_landlord"; how: "rang" | "emailed" | "both" | "text"; note?: string }
   /* Planned jobs: the booking goes to the tenants only when the agent says so. */
-  | { action: "tell_tenants_booked"; note?: string }
+  | { action: "tell_tenants_booked"; note?: string; tenantEdit?: TenantWords | null }
   /* Planned jobs, before a date: who will be in touch to arrange access, by
      hand (Lianna Denholm, 9 Nov 2026), when the tick wasn't on as it was raised. */
-  | { action: "tell_tenants_access"; note?: string }
+  | { action: "tell_tenants_access"; note?: string; tenantEdit?: TenantWords | null }
   | { action: "arranging"; who: "landlord" | "us"; followUpAt?: string | null; note?: string }
   | { action: "landlord_resolved"; note?: string }
   | { action: "contact_contractor"; contractorId: string; note?: string }
   /* tenantEdit: the tenants' email in the agent's own words (Lianna Denholm, 16 Nov 2026). */
-  | { action: "contractor_confirmed"; note?: string; tenantEdit?: { subject?: string | null; body?: string | null } | null }
+  | { action: "contractor_confirmed"; note?: string; tenantEdit?: TenantWords | null }
   | { action: "tenant_happy"; happy: "yes" | "no"; note?: string }
   | { action: "payee"; payee: "contractor" | "agent"; note?: string }
   /* Skip for now (Howard, 15 Oct 2026): only the current step, only a SKIPPABLE one. Sends nothing. */
@@ -739,7 +741,7 @@ export type Move =
   | { action: "approve"; approvedBy: string; note?: string }
   /** quiet: set them on the job and send nothing (the job page's Change the Contractor says so); Send again sends it. */
   | { action: "assign"; contractorId: string; scheduledAt?: string | null; note?: string; quiet?: boolean }
-  | { action: "schedule"; scheduledAt: string; note?: string }
+  | { action: "schedule"; scheduledAt: string; note?: string; tenantEdit?: TenantWords | null }
   /** alreadyDone: work finished before it was on the OS - nobody is emailed and the tenant is not asked (Rhiannon, 19 Oct 2026). */
   | { action: "done"; note: string; completedAt?: string | null; alreadyDone?: boolean }
   | { action: "invoice"; invoicePence: number; invoiceRef?: string; note?: string }

@@ -63,8 +63,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const order = await moveOrder(id, move, by, out);
     /* Work already done before the OS: nobody is told it is done (Rhiannon, 19 Oct 2026). */
     const quietDone = move.action === "done" && move.alreadyDone === true;
-    /* The tenants' email in the agent's own words, from Confirm the Contractor (Lianna Denholm, 16 Nov 2026). */
-    const te = move.action === "contractor_confirmed" && move.tenantEdit && typeof move.tenantEdit === "object" ? move.tenantEdit : null;
+    /* The tenants' email in the agent's own words: Confirm the Contractor, the date, Tell the tenants (Lianna Denholm, 16 Nov 2026). */
+    const te = "tenantEdit" in move && move.tenantEdit && typeof move.tenantEdit === "object" ? move.tenantEdit : null;
     const tenantEdit = te ? { subject: typeof te.subject === "string" ? te.subject.slice(0, 200) : null, body: typeof te.body === "string" ? te.body.slice(0, 6000) : null } : null;
     const emails = quietDone ? [] : await emailsForMove(order, move.action, subject ?? actor, { how: "how" in move ? move.how : undefined, quiet: move.action === "assign" && move.quiet === true, tenantEdit, ...out }).catch(() => []);
     if ((tenantEdit?.body?.trim() || tenantEdit?.subject?.trim()) && emails.some((e) => e.to === "tenant" && e.sent)) await logEvent(order.id, by, "note", "The email to the tenants was reworded before it went.");

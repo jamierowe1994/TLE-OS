@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
-import { dueFor, getContractor, getOrder, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
-import { editableJobEmail, jobTenants, previewJobEmail, tenantEmailOnConfirm, tenantEmailOnRaise, type ContractorEdit } from "@/lib/works-emails";
+import { dueFor, getContractor, getOrder, tenantsOf, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
+import { editableJobEmail, jobTenants, previewJobEmail, tenantEmailOnRaise, tenantEmailOnStep, type ContractorEdit, type TenantStep } from "@/lib/works-emails";
 
 /**
  * The works order a job would send, rendered from the form as it stands and
@@ -25,7 +25,10 @@ type Draft = {
   edit?: ContractorEdit | null; editable?: boolean;
   /** The tenants' email instead of the works order (Lianna Denholm, 16 Nov 2026), and whether Let the tenants know is ticked. */
   audience?: "contractor" | "tenant"; tellTenants?: boolean;
+  /** On a job's page: which button the tenants' email goes with, and the date being set (Lianna Denholm, 16 Nov 2026). */
+  step?: TenantStep;
 };
+const STEPS: TenantStep[] = ["confirm", "schedule", "booked", "access"];
 
 export async function POST(req: NextRequest) {
   const { actor, subject } = await whoIs(req);
@@ -37,13 +40,24 @@ export async function POST(req: NextRequest) {
   if (b.orderId) {
     const found = await getOrder(b.orderId).catch(() => null);
     if (!found) return NextResponse.json({ ok: false, error: "No such job." }, { status: 404 });
-    /* The tenants' email Confirm the Contractor sends, as it stands or in the agent's words (Lianna Denholm, 16 Nov 2026). */
+    /* The tenants' email a button on the job's page sends, as it stands or in
+       the agent's words (Lianna Denholm, 16 Nov 2026): Confirm the Contractor,
+       the date being set, Tell the tenants. */
     if (b.audience === "tenant") {
-      const o = { ...found.order, contractorId: c.id, contractorName: c.name };
-      const id = tenantEmailOnConfirm(o);
+      const step: TenantStep = STEPS.includes(b.step as TenantStep) ? (b.step as TenantStep) : "confirm";
+      const at = step === "schedule" && b.scheduledAt && !Number.isNaN(new Date(b.scheduledAt).getTime()) ? new Date(b.scheduledAt).toISOString() : null;
+      const o = { ...found.order, contractorId: c.id, contractorName: c.name, ...(at ? { scheduledAt: at } : {}) };
+      if (step === "schedule" && !at) return NextResponse.json({ ok: true, none: true });
+      const id = tenantEmailOnStep(o, step);
       if (!id) return NextResponse.json({ ok: true, none: true });
       try {
-        const to = (await jobTenants(o)).filter((t) => t.email.includes("@")).map((t) => ({ name: t.name, email: t.email }));
+        const live = (await jobTenants(o)).filter((t) => t.email.includes("@"));
+        /* Setting the date tells the lead tenant only, as emailsForMove's tenantBooked does, and not one who has moved out. */
+        const lead = o.tenantEmail.trim().toLowerCase();
+        const gone = lead && tenantsOf(o).some((t) => t.email.toLowerCase() === lead && !live.some((l) => l.name === t.name && l.email === t.email));
+        const to = step === "schedule"
+          ? (lead.includes("@") && !gone ? [{ name: o.tenant || live.find((t) => t.email.toLowerCase() === lead)?.name || "", email: o.tenantEmail.trim() }] : [])
+          : live.map((t) => ({ name: t.name, email: t.email }));
         if (!to.length) return NextResponse.json({ ok: true, none: true });
         const change = b.edit && typeof b.edit === "object" ? { subject: typeof b.edit.subject === "string" ? b.edit.subject.slice(0, 200) : null, body: typeof b.edit.body === "string" ? b.edit.body.slice(0, 6000) : null } : null;
         const mail = await previewJobEmail(o, id, subject ?? actor, {}, change);

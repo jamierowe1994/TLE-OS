@@ -9,6 +9,8 @@ import FieldSelect from "@/components/FieldSelect";
 import { ContractorPick, PAID_HOW, pounds, toPence } from "@/components/maintenance/works-ui";
 import { AskForQuotes } from "@/components/maintenance/QuoteAsks";
 import { FloatCard, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
+import { DateEmail } from "@/components/maintenance/TenantJobEmail";
+import type { MailWords } from "@/components/maintenance/WorksOrderEmail";
 
 /**
  * The job's small forms, one per thing you can do to it: the quote, the
@@ -73,6 +75,8 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
   const [f, setF] = useState<Record<string, string>>({});
   const [file, setFile] = useState<File | null>(null);
   const [mine, setMine] = useState<string | null>(null);
+  /* The booking email to the tenant in the agent's words (Lianna Denholm, 16 Nov 2026). */
+  const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
   const set = (k: string, v: string) => setF((cur) => ({ ...cur, [k]: v }));
 
   async function save() {
@@ -82,7 +86,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
       : form === "request_quote" ? (f.contractorId || o.contractorId ? { action: "request_quote", contractorId: f.contractorId || undefined, note: f.note } : null)
       : form === "approve" ? { action: "approve", approvedBy: f.approvedBy ?? (o.landlord || "The landlord"), note: f.note }
       : form === "assign" ? (f.contractorId || o.contractorId ? { action: "assign", contractorId: f.contractorId || o.contractorId!, scheduledAt: iso(f.scheduledAt), note: f.note, quiet: true } : null)
-      : form === "schedule" ? (f.scheduledAt ? { action: "schedule", scheduledAt: iso(f.scheduledAt)!, note: f.note } : null)
+      : form === "schedule" ? (f.scheduledAt ? { action: "schedule", scheduledAt: iso(f.scheduledAt)!, note: f.note, ...(tenantEdit ? { tenantEdit } : {}) } : null)
       : form === "done" || form === "already_done" ? { action: "done", note: f.note ?? "", completedAt: iso(f.completedAt), ...(form === "already_done" ? { alreadyDone: true } : {}) }
       : form === "invoice" ? (f.amount ? { action: "invoice", invoicePence: toPence(f.amount), invoiceRef: f.ref ?? (o.invoicePence != null ? o.invoiceRef : "") } : null)
       : form === "paid" ? (f.how ? { action: "paid", paidHow: f.how as PaidHow, note: f.note } : null)
@@ -179,6 +183,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
             <input value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder="Optional" className={field} />
           </div>
           <p className="text-[11.5px] text-muted sm:col-span-2">{o.scheduledAt ? "Moving it tells the tenant and the contractor the new date." : "Setting it tells the tenant and the contractor, and lets the landlord know it's arranged."}</p>
+          <div className="sm:col-span-2"><DateEmail o={o} at={f.scheduledAt} goes="Goes when you press Save" onEdit={setTenantEdit} /></div>
         </div>
       )}
       {(form === "done" || form === "already_done") && (
