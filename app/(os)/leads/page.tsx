@@ -231,7 +231,13 @@ function pageWindow(page: number, pages: number): (number | "gap")[] {
 }
 
 export default function Leads() {
-  useEffect(() => whenIdle(() => { void loadLeadDrawer(); void loadNewLeadPanel(); }), []);
+  /* A warm-up, so a failure here is nobody's fault and nobody's ticket (Dan
+     Richards' board, 17 Nov 2026, ticket 62c6180f: "e[a] is not a function").
+     A tab left open across a deploy asks for the new drawer's code with the
+     old page's loader, which cannot run it, and with nothing catching that the
+     board filed itself as broken. Caught and dropped: a click on a row loads
+     the drawer again in its own right, and that one does show if it fails. */
+  useEffect(() => whenIdle(() => { loadLeadDrawer().catch(() => {}); loadNewLeadPanel().catch(() => {}); }), []);
   // Closed on arrival: the page is the inbox, full width. The panel is a
   // consequence of picking someone, never the state you land in.
   const [openId, setOpenId] = useState<string | null>(null);
