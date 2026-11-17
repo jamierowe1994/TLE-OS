@@ -8,7 +8,7 @@ import { forgetListing, listingRead } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
 import { isTestId } from "@/lib/test-overlay";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
-import { rexTokenFor } from "@/lib/rex-user";
+import { rexSignInLapsed, rexTokenFor } from "@/lib/rex-user";
 import { forAgent, isOwner } from "@/lib/agent-words";
 import { switchOn } from "@/lib/switches";
 import { waitForSend } from "@/lib/portal-send";
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     const token = await rexTokenFor(actor.id);
     const res = await rexCall("Listings", "update", { data: { id, let_agreed: want } }, token);
     if (!res.ok) {
-      if (token && isExpiredToken(res)) return NextResponse.json({ ok: false, error: "Your REX sign-in has run out. Sign in again and try again.", reconnect: true, signIn: true }, { status: 401 });
+      if (token && isExpiredToken(res) && (await rexSignInLapsed(res, token))) return NextResponse.json({ ok: false, error: "Your REX sign-in has run out. Sign in again and try again.", reconnect: true, signIn: true }, { status: 401 });
       await record({ kind: "listing_let_agreed", actorId: actor.id, actorEmail: actor.email, detail: `${id}: ${words} REFUSED - ${String(res.error ?? `HTTP ${res.status}`).slice(0, 300)}` }).catch(() => {});
       return NextResponse.json({ ok: false, error: owner ? res.error ?? `REX refused it (${res.status}).` : "The listings system did not take that. Try again in a minute." }, { status: 502 });
     }

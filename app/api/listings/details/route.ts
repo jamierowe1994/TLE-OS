@@ -10,7 +10,7 @@ import { invalidateListingBook } from "@/lib/listings-cache";
 import { saveMarketingFacts, type MarketingFacts } from "@/lib/listing-marketing-store";
 import { OPTIONS } from "@/lib/listing-requirements";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
-import { rexTokenFor } from "@/lib/rex-user";
+import { rexSignInLapsed, rexTokenFor } from "@/lib/rex-user";
 import { isOwner } from "@/lib/agent-words";
 import { refusalInWords } from "@/lib/rex-refusal";
 import { recordFact } from "@/lib/property-facts";
@@ -381,7 +381,7 @@ export async function PATCH(req: NextRequest) {
         failed = true;
       } else {
         const r = await rexCall("Listings", "update", { data: plan.listing }, token);
-        if (!r.ok && token && isExpiredToken(r)) {
+        if (!r.ok && token && isExpiredToken(r) && (await rexSignInLapsed(r, token))) {
           return NextResponse.json({ ok: false, error: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.", reconnect: true }, { status: 401 });
         }
         /* Said as what to do, not "try again": a refused field is refused

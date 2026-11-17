@@ -13,7 +13,7 @@ import { ALL_CHANNELS, OFF_CHANNELS, currentInRex, queueUpload, takeAdvertOff, w
 import { sendFrom, waitForSend } from "@/lib/portal-send";
 import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked, type RexResponse } from "@/lib/rex";
-import { rexTokenFor } from "@/lib/rex-user";
+import { rexSignInLapsed, rexTokenFor } from "@/lib/rex-user";
 import { forAgent, isOwner } from "@/lib/agent-words";
 import { ensureRexLink, findUserByEmail, findUserByRexId, type OsUser } from "@/lib/users";
 
@@ -134,7 +134,10 @@ async function refusedAnswer(
   as: { asActor: boolean; name: string },
   actor: OsUser
 ): Promise<NextResponse> {
-  if (token && isExpiredToken(res)) {
+  /* Only when REX says the token itself is dead (ticket 550ef98a, 17 Nov
+     2026): a refusal shaped like one, on a sign-in minutes old, asked James
+     Crumpton for his password round and round. */
+  if (token && isExpiredToken(res) && (await rexSignInLapsed(res, token))) {
     const whose = as.asActor ? "Your REX sign-in has run out. Sign in again" : `${as.name}'s REX sign-in has run out. They sign in again on their Profile (Connect to REX)`;
     return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
   }
@@ -160,7 +163,12 @@ async function refusedAnswer(
   if ((action === "publish" || action === "quiet") && /terms of business is required/i.test(String(res.error ?? ""))) {
     return NextResponse.json({ ok: false, error: TERMS_SENTENCE, missing: ["terms"] }, { status: 422 });
   }
-  return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });
+  /* Shaped like a lapse, but the sign-in is live (ticket 550ef98a): say so,
+     so nobody types their password again for a refusal it cannot fix. */
+  const notTheSignIn = token && isExpiredToken(res)
+    ? "REX turned this down for your REX user, though your sign-in is working, so signing in again won't help. Nothing was changed. Tell James: what REX said is in Activity."
+    : plain;
+  return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : notTheSignIn }, { status: 502 });
 }
 
 function listingId(v: unknown): number | null {
@@ -417,7 +425,7 @@ export async function POST(req: NextRequest) {
     if (action === "quiet") {
       const closed = await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: OFF_CHANNELS }, token);
       if (!closed.ok) {
-        if (token && isExpiredToken(closed)) {
+        if (token && isExpiredToken(closed) && (await rexSignInLapsed(closed, token))) {
           const whose = as.asActor ? "Your REX sign-in has run out. Sign in again" : `${as.name}'s REX sign-in has run out. They sign in again on their Profile (Connect to REX)`;
           return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
         }

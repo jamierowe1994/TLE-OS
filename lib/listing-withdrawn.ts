@@ -6,6 +6,7 @@ import { forgetListing, readListingDetails } from "@/lib/listing-details";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { decisionsForListing, recordDecision, type DecisionRef } from "@/lib/offer-decisions";
 import { isExpiredToken, rexCall, rexWritesLocked, type RexResponse } from "@/lib/rex";
+import { rexSignInLapsed } from "@/lib/rex-user";
 import { outstandingTerms } from "@/lib/rex-esign";
 import { fellThroughOnHome } from "@/lib/propoly-gone";
 import { cancelledTermIds, cancelTermsHere } from "@/lib/terms-cancelled";
@@ -176,7 +177,7 @@ export class WithdrawnRefused extends Error {
 async function write(service: string, method: string, body: unknown, token: string | null, words: string): Promise<RexResponse> {
   const res = await rexCall(service, method, body, token);
   if (!res.ok) {
-    if (token && isExpiredToken(res)) throw new WithdrawnRefused("Your sign-in to the listings system has run out. Sign in again and press it once more.", 401, true);
+    if (token && isExpiredToken(res) && (await rexSignInLapsed(res, token))) throw new WithdrawnRefused("Your sign-in to the listings system has run out. Sign in again and press it once more.", 401, true);
     throw new WithdrawnRefused(`${words} didn't go through. Nothing else was changed after it. Try again in a minute.`, 502);
   }
   return res;
