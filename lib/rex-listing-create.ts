@@ -1,7 +1,7 @@
 import "server-only";
 import { londonToday } from "@/lib/london-clock";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
-import { rexTokenFor } from "@/lib/rex-user";
+import { rexSignInLapsed, rexTokenFor } from "@/lib/rex-user";
 import { fillPropertySource, wantsSource } from "@/lib/rex-property-source";
 import { refusalInWords } from "@/lib/rex-refusal";
 import { noteFailure } from "@/lib/auto-bugs";
@@ -228,7 +228,8 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
        away because REX is down is the band's news, not a ticket.) */
     noteFailure({ source: "REX", what: "Listings/create", status: res.status, message: res.error ?? `answered ${res.status}` });
   }
-  if (isExpiredToken(res)) {
+  /* Asked again only if REX says the sign-in itself is dead (ticket 550ef98a). */
+  if (isExpiredToken(res) && (await rexSignInLapsed(res, token))) {
     return { ok: false, reason: "rex_session_expired", detail: "Your REX sign-in has run out. Sign in again to carry on." };
   }
   if (!res.ok) {

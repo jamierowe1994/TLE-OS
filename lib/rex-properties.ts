@@ -1,7 +1,7 @@
 import "server-only";
 import { isTestFile, TEST_REFUSAL } from "@/lib/test-guard";
 import { rexCall, rexConfigured, rexRows, rexWritesLocked, isExpiredToken } from "@/lib/rex";
-import { rexTokenFor } from "@/lib/rex-user";
+import { rexSignInLapsed, rexTokenFor } from "@/lib/rex-user";
 import { switchOn } from "@/lib/switches";
 
 /**
@@ -235,7 +235,8 @@ export async function createProperty(
     }
   }
 
-  if (isExpiredToken(res)) {
+  /* Asked again only if REX says the sign-in itself is dead (ticket 550ef98a). */
+  if (isExpiredToken(res) && (await rexSignInLapsed(res, token))) {
     return {
       ok: false,
       reason: "rex_session_expired",

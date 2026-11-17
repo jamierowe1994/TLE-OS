@@ -197,6 +197,44 @@ async function extend(userId: string, token: string): Promise<void> {
   }
 }
 
+/**
+ * HAS IT REALLY RUN OUT? (James Crumpton, 17 Nov 2026, ticket 550ef98a.)
+ *
+ * "I have the correct password but it's still not working." He pressed Take
+ * off the market, was asked to sign in to REX again, signed in - REX took the
+ * password and the box went away - and the retry asked him again, round and
+ * round. The token was minutes old. isExpiredToken (lib/rex) calls any 401,
+ * or any REX sentence with "token" or "authenticate" in it, a lapsed sign-in,
+ * and REX answers things that are not a lapse that way too, so a refusal
+ * about the listing itself was sent back as "sign in again".
+ *
+ * So before asking anybody for their password, ask REX whether the token is
+ * alive: extendSessionToken answers a timestamp only for a live one (and
+ * pushes it out a fortnight, which does no harm). Alive means the refusal was
+ * something else, and the caller says so with REX's own words in the audit
+ * trail instead of looping. No answer at all is taken as lapsed, as before.
+ */
+export async function rexSignInLapsed(res: { status: number; error?: string | null }, token: string | null): Promise<boolean> {
+  if (!token) return false;
+  const e = (res.error ?? "").toLowerCase();
+  if (!(res.status === 401 || e.includes("token") || e.includes("authenticate"))) return false;
+  try {
+    const r = await fetch(`${REX_BASE}/v1/rex/UserProfile/extendSessionToken`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ token_lifetime: LIFETIME_SECONDS }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const j = (await r.json().catch(() => null)) as { result?: unknown } | null;
+    const live = typeof j?.result === "number";
+    if (!live) return true;
+    console.warn(`[rex-signin] a live sign-in was refused as if it had run out: ${String(res.error ?? `HTTP ${res.status}`).slice(0, 200)}`);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 /** Their live token, or null if they've never signed in or it has lapsed. */
 export async function rexTokenFor(userId: string | null): Promise<string | null> {
   if (!userId || !hasDb()) return null;
