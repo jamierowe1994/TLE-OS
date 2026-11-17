@@ -115,6 +115,8 @@ export function buildWorld(now = Date.now()): DemoWorld {
   };
   const contactRef = (c: Row) => ({ id: c.id, name: c.name, name_first: c.name_first, name_last: c.name_last, email_address: c.email_address, phone_number: c.phone_number });
 
+  const certificateUrl = `${demoOrigin()}/demo/sample-certificate.pdf`;
+
   /* ── Homes and their listings ── */
   const properties: Row[] = [];
   const listings: Row[] = [];
@@ -213,7 +215,8 @@ export function buildWorld(now = Date.now()): DemoWorld {
       compliance.push({
         ...skeleton("ComplianceEntries/search"), id: 500_000 + compliance.length, etag: `c${compliance.length}`, type_id: type,
         parent_object_id: Number(propertyId), parent_object_type: { id: "property", text: "Property" }, system_record_state: "active",
-        source: { id: "manual", text: "Manual" }, file: null, schema: null,
+        /* Every certificate opens the same one-page sample, which says what it is. */
+        source: { id: "manual", text: "Manual" }, file: { uri: certificateUrl, url: certificateUrl }, schema: null,
         details: { [type]: { notes: "", issue_date: isoDay(issued), expiry_date: isoDay(issued + lastsDays * DAY), not_required: false, status: "satisfactory", ...extra } },
         system_ctime: secs(issued), system_modtime: secs(issued), system_created_user: userRef(agent), system_modified_user: userRef(agent),
       });

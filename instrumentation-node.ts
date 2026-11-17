@@ -32,6 +32,22 @@ export async function warmAtBoot(): Promise<void> {
       .then(({ seedDemo }) => seedDemo())
       .then((r) => console.log(`[demo] ${r.users} demo sign-ins and ${r.homes} managed homes ready${r.signIns ? "" : " (set DEMO_PASSWORD on the service before anybody can sign in)"}`))
       .catch((e) => console.warn("[demo] set-up did not finish:", e instanceof Error ? e.message : e));
+    /* Back to this morning, every morning: the first check after midnight UK
+       time clears what was typed into the demo yesterday (lib/demo/seed
+       resetDemo). In here rather than on a timer service, so the demo is one
+       service and nothing has to be remembered. */
+    const ukDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+    let day = ukDay();
+    const daily = setInterval(() => {
+      const today = ukDay();
+      if (today === day) return;
+      day = today;
+      void import("@/lib/demo/seed")
+        .then(({ resetDemo }) => resetDemo())
+        .then((r) => console.log(`[demo] new day: ${r.cleared} tables cleared and the invented world rebuilt`))
+        .catch((e) => console.warn("[demo] the daily reset did not finish:", e instanceof Error ? e.message : e));
+    }, 10 * 60_000);
+    daily.unref?.();
   }
   /* Signed-out sessions, held in memory for lib/auth (lib/session-revoke). */
   startRevokedSync();
