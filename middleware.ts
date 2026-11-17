@@ -449,6 +449,8 @@ async function areaGate(req: NextRequest): Promise<{ closed: NextResponse | null
  * without checking it refuses when its secret is missing.
  */
 const MACHINE_ROUTES = [
+  /* The demo copy's nightly reset (lib/demo/seed). A 404 anywhere DEMO_MODE is not set. */
+  "/api/demo/reset",
   /* The read log's own hand-over from this file (lib/read-log). The route
      refuses anything not signed with AUTH_SECRET, so the door adds nothing,
      and logging it would log the log. */

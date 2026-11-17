@@ -2,6 +2,8 @@ import "server-only";
 import { noteFailure } from "@/lib/auto-bugs";
 import { mayAskRex, noteRexOutcome, readSnapshot, recordRead, rexIsDown } from "@/lib/rex-outage";
 import { kickReplay, queueRexWrite } from "@/lib/rex-queue";
+import { demoMode } from "@/lib/demo/mode";
+import { demoRex } from "@/lib/demo/rex";
 
 // REX CRM client for TLE OS — ported from the portal's lib/rex.ts.
 //
@@ -51,6 +53,8 @@ function base(): string {
 }
 
 export function rexConfigured(): boolean {
+  /* The demo copy (lib/demo/mode) is always "connected": to its invented world. */
+  if (demoMode()) return true;
   return !!(process.env.REX_API_EMAIL && process.env.REX_API_PASSWORD);
 }
 
@@ -84,6 +88,11 @@ function isTokenError(res: RexResponse): boolean {
 }
 
 async function rexPost(path: string, body: unknown, token?: string): Promise<RexResponse> {
+  /* THE DEMO COPY NEVER CALLS REX (lib/demo/mode). Checked here, at the one
+     place a request to REX is made, so nothing above it has to remember: the
+     question is answered from the invented world and the fetch below is not
+     reached. */
+  if (demoMode()) return demoRex(path, body);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
   let res: Response;
@@ -263,6 +272,8 @@ export function isReadOnlyMethod(method: string): boolean {
 
 /** Is this exact call the one write we've been explicitly unlocked for? */
 function writeIsUnlocked(service: string, method: string): boolean {
+  /* In the demo a "write" changes the invented world and nothing else. */
+  if (demoMode()) return true;
   const allowed = (process.env.REX_ALLOW_WRITES ?? "").trim();
   if (!allowed) return false;
   return allowed
@@ -295,6 +306,7 @@ export function rexAllowedWrites(): string[] {
 }
 
 export function rexWritesLocked(service?: string, method?: string): boolean {
+  if (demoMode()) return false;
   if (service && method) return !writeIsUnlocked(service, method);
   return !(process.env.REX_ALLOW_WRITES ?? "").trim();
 }

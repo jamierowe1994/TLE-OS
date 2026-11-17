@@ -1,5 +1,7 @@
 import "server-only";
 import { mayAskRex, noteRexOutcome, readSnapshot, recordRead, rexIsDown } from "@/lib/rex-outage";
+import { demoMode } from "@/lib/demo/mode";
+import { demoRex } from "@/lib/demo/rex";
 
 // REX CRM client for The Lettings Expert portal — ported from the TEG PAID
 // ADS repo's lib/rex.ts (TLE shares the Property/Lettings REX account).
@@ -33,6 +35,8 @@ function base(): string {
 }
 
 export function rexConfigured(): boolean {
+  /* The demo copy (lib/demo/mode) is always "connected": to its invented world. */
+  if (demoMode()) return true;
   return !!(process.env.REX_API_EMAIL && process.env.REX_API_PASSWORD);
 }
 
@@ -68,6 +72,9 @@ async function rexPost(
   token?: string,
   timeoutMs = CALL_TIMEOUT_MS
 ): Promise<RexResponse> {
+  /* The demo copy never calls REX (lib/demo/mode): answered from the invented
+     world, here, at this client's one request to REX. */
+  if (demoMode()) return demoRex(path, body);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;

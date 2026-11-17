@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Caveat, Inter, JetBrains_Mono, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans, Source_Serif_4 } from "next/font/google";
+import DemoMark from "@/components/DemoMark";
 import "./globals.css";
 import "./new-look.css";
 import "./book-viewing.css";
@@ -179,7 +180,10 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${manrope.variable} ${inter.variable} ${bricolage.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${caveat.variable} ${lora.variable} ${serif4.variable} ${mono.variable}`}
     >
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        <DemoMark />
+      </body>
     </html>
   );
 }

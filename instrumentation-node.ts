@@ -1,17 +1,38 @@
 import { warmSchema } from "@/lib/db";
 import { startRevokedSync } from "@/lib/session-revoke";
 import { startCronWatch } from "@/lib/cron-watch";
+import { demoMode } from "@/lib/demo/mode";
+import { installDemoNetGuard, liveKeysOnDemo } from "@/lib/demo/net-guard";
 
 /**
  * Capped, and never thrown: a database that is slow or down at boot must not
  * stop the server starting. The first query simply tries again.
  */
 export async function warmAtBoot(): Promise<void> {
+  /* THE DEMO COPY (lib/demo/mode, James 17 Nov 2026). Only when DEMO_MODE=1,
+     which the live service never sets. A demo holding a live key is the one
+     way it could touch a real person, so it refuses to start and says which
+     key; then every outside request is refused for as long as it runs. */
+  if (demoMode()) {
+    const live = liveKeysOnDemo();
+    if (live.length) {
+      console.error(`[demo] REFUSING TO START: DEMO_MODE is on but these live settings are set: ${live.join(", ")}. Remove them from the demo service.`);
+      process.exit(1);
+    }
+    installDemoNetGuard();
+  }
   if (!process.env.DATABASE_URL) return;
   const started = Date.now();
   await Promise.race([warmSchema().then(() => true), new Promise<false>((resolve) => setTimeout(() => resolve(false), 20_000))])
     .then((ready) => console.log(ready ? `[boot] schema ready in ${Date.now() - started}ms` : "[boot] schema still building after 20s, starting anyway"))
     .catch((e) => console.warn("[boot] schema warm failed, the first query will retry:", e instanceof Error ? e.message : e));
+  /* The demo's sign-ins and open areas, on its own database (lib/demo/seed). */
+  if (demoMode()) {
+    await import("@/lib/demo/seed")
+      .then(({ seedDemo }) => seedDemo())
+      .then((r) => console.log(`[demo] ${r.users} demo sign-ins and ${r.homes} managed homes ready${r.signIns ? "" : " (set DEMO_PASSWORD on the service before anybody can sign in)"}`))
+      .catch((e) => console.warn("[demo] set-up did not finish:", e instanceof Error ? e.message : e));
+  }
   /* Signed-out sessions, held in memory for lib/auth (lib/session-revoke). */
   startRevokedSync();
   /* Every Railway timer watched from in here, so none has to run for a stopped one to be seen. */

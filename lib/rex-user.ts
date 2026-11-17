@@ -1,6 +1,7 @@
 import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { hasDb, q } from "./db";
+import { demoMode } from "./demo/mode";
 
 /**
  * A person's own REX sign-in.
@@ -89,6 +90,23 @@ function open(sealed: string): string | null {
 
 /* ───────────────────────── signing in ───────────────────────── */
 
+/**
+ * The demo copy's stand-in for a person's own REX sign-in (lib/demo/mode):
+ * a row that says they are connected, for ten years, holding a token that
+ * opens nothing. lib/demo/seed gives every demo sign-in one, so nobody showing
+ * the demo is asked to connect REX. Refuses to run anywhere else.
+ */
+export async function connectDemoRex(userId: string, email: string): Promise<string> {
+  const expiresAt = new Date(Date.now() + 3650 * 86_400_000).toISOString();
+  if (!demoMode() || !hasDb()) return expiresAt;
+  await q(
+    `INSERT INTO os_rex_tokens (user_id, rex_email, token_enc, issued_at, expires_at) VALUES ($1, $2, $3, NOW(), $4)
+     ON CONFLICT (user_id) DO UPDATE SET rex_email = EXCLUDED.rex_email, token_enc = EXCLUDED.token_enc, issued_at = NOW(), expires_at = EXCLUDED.expires_at`,
+    [userId, email, seal("demo-world-token"), expiresAt]
+  );
+  return expiresAt;
+}
+
 export type RexSession = {
   connected: boolean;
   email?: string;
@@ -103,6 +121,8 @@ export async function signInToRex(
   email: string,
   password: string
 ): Promise<{ ok: true; expiresAt: string } | { ok: false; error: string; status: number; rex: string }> {
+  /* The demo copy (lib/demo/mode) has no REX to sign in to: anybody is connected. */
+  if (demoMode()) return { ok: true, expiresAt: await connectDemoRex(userId, email) };
   const res = await fetch(`${REX_BASE}/v1/rex/Authentication/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -176,6 +196,7 @@ export async function signInToRex(
  * valid, and it will be tried again next time.
  */
 async function extend(userId: string, token: string): Promise<void> {
+  if (demoMode()) return;
   try {
     const r = await fetch(`${REX_BASE}/v1/rex/UserProfile/extendSessionToken`, {
       method: "POST",
@@ -215,7 +236,7 @@ async function extend(userId: string, token: string): Promise<void> {
  * trail instead of looping. No answer at all is taken as lapsed, as before.
  */
 export async function rexSignInLapsed(res: { status: number; error?: string | null }, token: string | null): Promise<boolean> {
-  if (!token) return false;
+  if (!token || demoMode()) return false;
   const e = (res.error ?? "").toLowerCase();
   if (!(res.status === 401 || e.includes("token") || e.includes("authenticate"))) return false;
   try {
