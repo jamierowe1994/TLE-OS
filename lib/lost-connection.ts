@@ -22,7 +22,7 @@ const LOST = [
   /networkerror/i,
   /network error/i,
   /network connection was lost/i,
-  /loading (css )?chunk [\w-]+ failed/i,
+  /loading (css )?chunk \S+ failed/i,
   /chunkloaderror/i,
   /connection closed/i,
 ];
