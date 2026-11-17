@@ -169,14 +169,26 @@ export default function BookViewingWindow(props: ViewingBookerProps) {
   const [done, setDone] = useState<{ said: string; viewingId: string | null; failed: boolean } | null>(null);
   const paneRef = useRef<HTMLElement>(null);
   const [pane, setPane] = useState({ w: 0, h: 0 });
+  /* Watched once per opening, and only a real change of size is kept (ticket
+     ecb07a41, 17 Nov 2026: "Minified React error #185" on /viewings). This ran
+     after EVERY render with no list of what it depends on: each run made a new
+     watcher, a new watcher always reports the size straight away, and the size
+     was kept as a new object even when nothing had moved - so the window drew
+     itself again about sixty times a second for as long as it was open, until
+     React gave up with "Maximum update depth exceeded". */
+  const paneUp = Boolean(open && who);
   useEffect(() => {
-    if (!open) return;
+    if (!paneUp) return;
     const el = paneRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setPane({ w: el.clientWidth, h: el.clientHeight }));
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setPane((cur) => (cur.w === w && cur.h === h ? cur : { w, h }));
+    });
     ro.observe(el);
     return () => ro.disconnect();
-  });
+  }, [paneUp]);
   const paneW = pane.w;
   const appEd = useRef<ConfirmEditorHandle>(null);
   const llEd = useRef<ConfirmEditorHandle>(null);
