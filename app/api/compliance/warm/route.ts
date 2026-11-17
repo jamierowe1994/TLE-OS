@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
      Tickets) instead of nowhere. */
   const sweep = refreshComplianceBook();
   sweep.catch((e) => {
-    noteFailure({ source: "REX", what: "compliance book sweep", message: publicError(e, "The compliance book sweep failed.") });
+    noteFailure({ source: "REX", what: "compliance book sweep", message: sweepFailure(e) });
   });
   const answerBy = new Promise<"still going">((r) => setTimeout(() => r("still going"), 80_000));
   try {
@@ -110,4 +110,24 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
+}
+
+/* WHY IT FAILED, NOT JUST THAT IT DID (James, ticket d0402da2, 17 Nov 2026).
+   A database or connection error is hidden by publicError (it may quote the
+   data), so twice on 16 Nov the ticket said only "The compliance book sweep
+   failed." with nothing to go on. Its code carries no data - ECONNRESET, a
+   connect timeout, a Postgres SQLSTATE - so it goes on the ticket: a REX
+   outage then joins the one "REX not answering" ticket (lib/auto-bugs) and
+   anything else says which kind of fault it was. */
+function sweepFailure(e: unknown): string {
+  const fallback = "The compliance book sweep failed.";
+  const said = publicError(e, fallback);
+  if (said !== fallback || !(e instanceof Error)) return said;
+  const own = (e as Error & { code?: unknown }).code;
+  const cause = (e as Error & { cause?: { code?: unknown } }).cause?.code;
+  const code = [own, cause].find((c) => typeof c === "string" || typeof c === "number");
+  if (code == null) return fallback;
+  /* A connection that never opened reads as one, so it is grouped with the outage. */
+  const how = e.message === "fetch failed" ? "fetch failed, " : "";
+  return `The compliance book sweep failed (${how}${String(code).slice(0, 40)}).`;
 }
