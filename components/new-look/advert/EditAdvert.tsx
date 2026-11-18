@@ -700,7 +700,11 @@ export default function EditAdvert({
                           {b.fix === "agent" && publish?.canNameAgent === false && <span className="nl-meta">Only James or Susan can name the agent. Ask them to put your name on it.</span>}
                           {b.fix === null && <span className="nl-meta">Tell James, and he&apos;ll clear it.</span>}
                         </span>
-                        {b.fix && (b.fix !== "agent" || publish?.canNameAgent === true) && (
+                        {b.key === "price" && canEdit && a.details?.rent != null ? (
+                          <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" disabled={a.saving} onClick={() => void a.setPortalPrice()}>
+                            {a.saving ? "Setting it…" : `Set the Price: £${a.details.rent.toLocaleString("en-GB")} pcm`}
+                          </button>
+                        ) : b.fix && (b.fix !== "agent" || publish?.canNameAgent === true) && (
                           <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => fixBlock(b)}>
                             {b.fix === "agent" ? "Name the agent" : `Go to ${STEP_NAMES[b.fix].toLowerCase()}`}
                           </button>

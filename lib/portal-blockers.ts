@@ -31,6 +31,12 @@ const RULES: { test: RegExp; key: string; says: string; until: string; fix: Bloc
   { test: /bathroom/i, key: "baths", says: "The number of bathrooms is missing.", until: "the bathrooms are filled in", fix: "home" },
   { test: /sub.?category|property type|category/i, key: "type", says: "The property type is missing.", until: "the property type is picked", fix: "home" },
   { test: /avail/i, key: "available", says: "The date it's available from is missing.", until: "the available date is filled in", fix: "let" },
+  /* Before the rent rule: REX's "An advertising price must be specified" and
+     "Fixed Price prices require a price value" came on a listing whose rent
+     WAS in, and read "The rent is missing." (James, 18 Nov 2026, a listing
+     made in REX by hand with the figure but no "advertise price as" line).
+     It is the price line the portals print, and saving the rent sets it. */
+  { test: /advertis\w* price|price value|fixed price/i, key: "price", says: "The price the portals print is blank, even though the rent is in.", until: "the portals' price is set from the rent", fix: "let" },
   { test: /\b(price|rent)\b/i, key: "rent", says: "The rent is missing.", until: "the rent is filled in", fix: "let" },
   { test: /bond|deposit/i, key: "deposit", says: "The deposit is missing.", until: "the deposit is filled in", fix: "let" },
   { test: /council tax/i, key: "council", says: "The council tax band is missing.", until: "the council tax band is picked", fix: "bills" },

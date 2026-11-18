@@ -191,8 +191,9 @@ export function useAdvertDraft({
     setNote(null);
   };
 
-  async function save() {
-    if (!details || !changed.length) return;
+  async function save(only?: Partial<Draft>) {
+    if (!details || (!only && !changed.length)) return;
+    const body = only ?? changes;
     setSaving(true);
     setNote(null);
     const settle = reporter.begin("Advert");
@@ -200,7 +201,7 @@ export function useAdvertDraft({
       const r = await fetch("/api/listings/details", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: details.id, ...changes, sources }),
+        body: JSON.stringify({ id: details.id, ...body, sources }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; note?: string; epcHeld?: boolean; details?: ListingDetails | null };
       if (j.details) {
@@ -214,7 +215,7 @@ export function useAdvertDraft({
         );
         onSaved?.(j.details);
       }
-      if (j.ok) {
+      if (j.ok && !only) {
         setFilledBy({});
         setSources({});
       }
@@ -227,6 +228,11 @@ export function useAdvertDraft({
       setSaving(false);
     }
   }
+
+  /** Sends the saved rent again, which sets the price line the portals print
+      (lib/listing-details planListingWrite). For a listing made in REX with
+      the figure but no line (lib/portal-blockers, key "price"). */
+  const setPortalPrice = () => (details?.rent != null ? save({ rent: details.rent }) : Promise.resolve());
 
   sendWaiting.current =
     canEdit && changed.length > 0 && !saving
@@ -312,7 +318,7 @@ export function useAdvertDraft({
     details, draft, error, load, setDraft, types, loadTypes, typeLabel,
     epcReading, epcNote, readEpc,
     filledBy, filling, fillNote, fill,
-    saving, note, setNote, save, discard,
+    saving, note, setNote, save, discard, setPortalPrice,
     changes, changed, images, plans, input, okFor, recDone,
     movePhoto, makeMain, removePhoto, putPhotosBack, removePlan, putPlansBack, sendToListing,
   };
