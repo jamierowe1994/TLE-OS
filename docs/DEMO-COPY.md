@@ -65,23 +65,24 @@ The invented world needs a line when a new feature reads something new from an o
 - **Uploads** (photos, certificates): no file store is connected.
 - **Steve's AI answers**: off unless an AI key is added to the demo and `api.anthropic.com` is put in `DEMO_ALLOW_HOSTS`.
 
-## Setting it up on Railway
+## Where it runs
 
-One service and one database, in the existing TLE OS project.
+Set up on 18 Nov 2026, in its own Railway project so it shares nothing with live, not even a private network.
 
-1. **New database.** Project > Create > Database > PostgreSQL. Rename it `Postgres-demo`.
-2. **New service.** Project > Create > GitHub Repo > `jamierowe1994/TLE-OS`. Rename it `TLE-OS-demo`.
-3. **Variables** on `TLE-OS-demo`, one at a time. Add nothing else.
-   - `DEMO_MODE` = `1`
-   - `DEMO_PASSWORD` = the password you will give the recruiters
-   - `DATABASE_URL` = `${{Postgres-demo.DATABASE_URL}}`
-   - `AUTH_SECRET` = any long random text, different from live
-   - `CRON_SECRET` = any long random text
-   - `SENDING_LOCKED` = `1`
-4. **Address.** Service > Settings > Networking > Generate Domain. Copy it.
-5. **Two more variables**, both set to that address with `https://` in front:
-   - `OS_ORIGIN`
-   - `NEXT_PUBLIC_OS_ORIGIN`
-6. **Deploy.** The log should read `[demo] DEMO_MODE is on` and `[demo] 7 demo sign-ins and ... managed homes ready`.
+- **Project:** `TLE OS Demo`
+- **Service:** `TLE-OS-demo`, built from this repository
+- **Database:** `Postgres`, in the same project
+- **Address:** https://tle-os-demo-production-a79fe0bc.up.railway.app
+
+Its settings, and nothing else:
+
+- `DEMO_MODE` = `1`
+- `SENDING_LOCKED` = `1`
+- `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`
+- `OS_ORIGIN` and `NEXT_PUBLIC_OS_ORIGIN` = the address above
+- `AUTH_SECRET` and `CRON_SECRET` = long random text, different from live
+- `DEMO_PASSWORD` = the password given to whoever is showing it
+
+A healthy start reads `[demo] DEMO_MODE is on` then `[demo] 7 demo sign-ins and ... managed homes ready` in the service's log.
 
 If it reads `[demo] REFUSING TO START`, a live key has been added to the demo service: remove the one it names.
