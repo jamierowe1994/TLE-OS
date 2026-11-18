@@ -12,7 +12,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
-import type { LandlordDeckFigures, DeckKind } from "@/lib/business/landlord-decks"; // type-only
+import type { LandlordDeckFigures, DeckKind, ContractRoute } from "@/lib/business/landlord-decks"; // type-only
 import { monthLabel } from "@/lib/business/format";
 
 const n = (v: number) => v.toLocaleString("en-GB");
@@ -32,6 +32,16 @@ const STAGE: Record<string, string> = {
   lost: "Lost",
   takeon: "Take-on",
 };
+
+/* What each contract came after, in the order the business wants them to happen. */
+const ROUTE_WORDS: Record<ContractRoute, { label: string; says: string }> = {
+  deck: { label: "After the valuation deck", says: "The way it should go: visit, valuation deck, terms." },
+  "visit-no-deck": { label: "After a visit, no valuation deck", says: "A real appraisal, but the valuation never went out as a deck." },
+  direct: { label: "Straight to listing", says: "Listed from New Listing - no appraisal visit, so no valuation to send." },
+  "no-visit": { label: "Appraisal with no visit", says: "An appraisal file with no visit date on it." },
+  none: { label: "No appraisal found", says: "Sent from the home with nothing behind it in the OS." },
+};
+const ROUTE_ORDER: ContractRoute[] = ["deck", "visit-no-deck", "direct", "no-visit", "none"];
 
 const KIND_CARDS: { kind: DeckKind; title: string; when: string }[] = [
   { kind: "pre-appraisal", title: "Pre-appraisal", when: "Sent the day before the visit" },
@@ -100,6 +110,8 @@ export default function LandlordDecksTab({ month }: { month: string; seed?: Seed
   const sent = k["pre-appraisal"].sent + k.appraisal.sent + k["post-appraisal"].sent;
   const opened = k["pre-appraisal"].opened + k.appraisal.opened + k["post-appraisal"].opened;
   const v = data.valuations;
+  const c = data.contracts;
+  const signedOnPortal = c.rows.filter((r) => r.signedAt && r.portal).length;
 
   return (
     <div className="space-y-6">
@@ -126,8 +138,10 @@ export default function LandlordDecksTab({ month }: { month: string; seed?: Seed
             value={pct(v.withDeck, v.total)}
             sub={
               v.total
-                ? `${n(v.withDeck)} of ${n(v.total)} · ${n(v.withoutDeck)} without, ${n(v.withoutDeckNoVisit)} with no visit date`
-                : "No valuations recorded this month"
+                ? `${n(v.withDeck)} of ${n(v.total)} after a visit${v.direct ? ` · ${n(v.direct)} listed straight from New Listing, counted apart` : ""}`
+                : v.direct
+                  ? `No valuations after a visit · ${n(v.direct)} listed straight from New Listing`
+                  : "No valuations recorded this month"
             }
           />
         </div>
@@ -181,6 +195,7 @@ export default function LandlordDecksTab({ month }: { month: string; seed?: Seed
                   <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">Appraisal</th>
                   <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">Valuation</th>
                   <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">Opened</th>
+                  <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">Straight to listing</th>
                   <th className="px-4 py-3 text-right font-semibold">Valuations with deck</th>
                 </tr>
               </thead>
@@ -202,6 +217,7 @@ export default function LandlordDecksTab({ month }: { month: string; seed?: Seed
                       <td className="hidden px-3 py-2.5 text-right tnum sm:table-cell">{n(r.appraisal)}</td>
                       <td className="hidden px-3 py-2.5 text-right tnum sm:table-cell">{n(r.post)}</td>
                       <td className="hidden px-3 py-2.5 text-right tnum sm:table-cell">{n(r.opened)}</td>
+                      <td className="hidden px-3 py-2.5 text-right tnum sm:table-cell">{n(r.direct)}</td>
                       <td className={`px-4 py-2.5 text-right tnum ${r.valuations && r.valuationsWithDeck < r.valuations ? "text-red-700" : "text-ink"}`}>
                         {r.valuations ? `${n(r.valuationsWithDeck)} of ${n(r.valuations)}` : "-"}
                       </td>
@@ -216,7 +232,10 @@ export default function LandlordDecksTab({ month }: { month: string; seed?: Seed
 
       {/* ------------------------ valuations without a deck ------------------------ */}
       <section className="space-y-3">
-        <h2 className="text-[15px] text-ink">Valuations without a Deck - {n(data.withoutDeck.length)}</h2>
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <h2 className="text-[15px] text-ink">Valuations without a Deck - {n(v.withoutDeck)}</h2>
+          {v.direct ? <span className="text-[11px] text-muted">and {n(v.direct)} straight to listing, listed underneath</span> : null}
+        </div>
         {data.withoutDeck.length === 0 ? (
           <div className="card p-5 text-[13px] text-muted">
             {v.total ? "Every valuation this month went out with its deck." : `No valuations recorded in ${monthLabel(month)}.`}
@@ -242,7 +261,11 @@ export default function LandlordDecksTab({ month }: { month: string; seed?: Seed
                       >
                         {r.address || "No address"}
                       </Link>
-                      {r.hadVisit ? null : <span className="block text-[11px] text-red-700">No visit date - marked {STAGE[r.stage]?.toLowerCase() ?? r.stage} without one</span>}
+                      {r.direct ? (
+                        <span className="block text-[11px] text-muted">Straight to listing - no valuation to send</span>
+                      ) : r.hadVisit ? null : (
+                        <span className="block text-[11px] text-red-700">No visit date</span>
+                      )}
                       <span className="mt-1 block text-[11.5px] text-muted sm:hidden">
                         {r.agent} · {STAGE[r.stage] ?? r.stage}
                       </span>
@@ -259,6 +282,105 @@ export default function LandlordDecksTab({ month }: { month: string; seed?: Seed
         <p className="text-[11px] text-muted">
           We count opens, not which slides a landlord read or for how long. Opening a deck while signed in to the OS never counts.
         </p>
+      </section>
+
+      {/* ------------------------------- contracts -------------------------------
+          James, 18 Nov 2026: "compare this to how many contracts we've signed".
+          Each contract sent this month, traced to what came before it. */}
+      <section className="space-y-3">
+        <h2 className="text-[15px] text-ink">Contracts - What Came Before Them</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Tile label="Contracts sent" value={n(c.sent)} sub={`${n(c.signed)} of them signed so far`} />
+          <Tile
+            label="After the valuation deck"
+            value={pct(c.byRoute.deck.sent, c.sent - c.byRoute.direct.sent - c.byRoute.none.sent)}
+            sub={`${n(c.byRoute.deck.sent)} of ${n(c.sent - c.byRoute.direct.sent - c.byRoute.none.sent)} that had an appraisal`}
+          />
+          <Tile label="Straight to listing" value={n(c.byRoute.direct.sent)} sub="No appraisal visit, so no valuation to send" />
+          <Tile label="No appraisal found" value={n(c.byRoute.none.sent)} sub="Sent from the home with nothing behind it" />
+        </div>
+        {c.sent === 0 ? (
+          <div className="card p-5 text-[13px] text-muted">No contracts sent in {monthLabel(month)}.</div>
+        ) : (
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full text-[12.5px] sm:min-w-[560px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                  <th className="px-4 py-3 font-semibold">Came after</th>
+                  <th className="px-3 py-3 text-right font-semibold">Sent</th>
+                  <th className="px-4 py-3 text-right font-semibold">Signed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ROUTE_ORDER.filter((r) => c.byRoute[r].sent > 0).map((r) => (
+                  <tr key={r} className="border-t border-line">
+                    <td className="px-4 py-2.5">
+                      <span className="block text-ink">{ROUTE_WORDS[r].label}</span>
+                      <span className="block text-[11px] text-muted">{ROUTE_WORDS[r].says}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right tnum">{n(c.byRoute[r].sent)}</td>
+                    <td className="px-4 py-2.5 text-right tnum">{n(c.byRoute[r].signed)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {c.rows.length ? (
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full text-[12.5px] sm:min-w-[640px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                  <th className="px-4 py-3 font-semibold">Property</th>
+                  <th className="hidden px-3 py-3 font-semibold sm:table-cell">Agent</th>
+                  <th className="hidden px-3 py-3 font-semibold sm:table-cell">Came after</th>
+                  <th className="hidden px-3 py-3 font-semibold sm:table-cell">Portal</th>
+                  <th className="px-4 py-3 text-right font-semibold">Signed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.rows.map((r) => (
+                  <tr key={r.id} className="border-t border-line">
+                    <td className="px-4 py-2.5">
+                      {r.appraisalId ? (
+                        <Link
+                          href={`/market-appraisals/${encodeURIComponent(r.appraisalId)}`}
+                          className="block text-ink underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                        >
+                          {r.address || "No address"}
+                        </Link>
+                      ) : (
+                        <span className="block text-ink">{r.address || "No address"}</span>
+                      )}
+                      <span className="mt-1 block text-[11.5px] text-muted sm:hidden">
+                        {r.agent} · {ROUTE_WORDS[r.route].label}
+                        {r.portal ? " · on the portal" : ""}
+                      </span>
+                    </td>
+                    <td className="hidden px-3 py-2.5 text-ink sm:table-cell">{r.agent}</td>
+                    <td className="hidden px-3 py-2.5 sm:table-cell">
+                      <span className={r.route === "visit-no-deck" ? "text-red-700" : "text-ink"}>{ROUTE_WORDS[r.route].label}</span>
+                      {r.route === "deck" ? <span className="block text-[11px] text-muted">{r.deckOpened ? "Deck opened" : "Deck not opened"}</span> : null}
+                    </td>
+                    <td className="hidden px-3 py-2.5 sm:table-cell">{r.portal ? "Signed in" : <span className="text-muted">No</span>}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-right tnum">{r.signedAt ? day(r.signedAt) : <span className="text-muted">Not yet</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+
+      {/* ---------------------------- landlord portal ---------------------------- */}
+      <section className="space-y-3">
+        <h2 className="text-[15px] text-ink">Landlord Portal</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Tile label="Invited this month" value={n(data.portal.invited)} sub={`${n(data.portal.signedIn)} signed in for the first time this month`} />
+          <Tile label="Signed contracts on the portal" value={pct(signedOnPortal, c.signed)} sub={`${n(signedOnPortal)} of ${n(c.signed)} signed this month have signed in`} />
+          <Tile label="Landlord accounts" value={n(data.portal.accounts)} sub={`${n(data.portal.everSignedIn)} have ever signed in`} />
+          <Tile label="Visits after that" value="-" sub="Not recorded yet: we only know the first sign-in" />
+        </div>
       </section>
     </div>
   );

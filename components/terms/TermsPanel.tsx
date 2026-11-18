@@ -131,6 +131,28 @@ function OnPagePanel({
   }, [openNew]);
 
   const live = (all ?? []).find((t) => t.status !== "cancelled") ?? null;
+  /* Valuation first (James, 18 Nov 2026, switch "decknudge"): sent from the home rather than the
+     appraisal, while that appraisal's valuation never went to the landlord, the agent is pointed
+     there first - the valuation deck carries the terms. Never on a home listed straight from New
+     Listing (app/api/terms/valuation-first says which). */
+  const nudge = useNewLook("decknudge") === true;
+  const [valuationFirst, setValuationFirst] = useState<{ id: string; address: string } | null>(null);
+  const noTermsYet = all !== null && !live;
+  useEffect(() => {
+    if (!nudge || appraisalId || !noTermsYet || (!propertyId && !propertyAddress)) return;
+    let gone = false;
+    const qs = new URLSearchParams();
+    if (listingId) qs.set("listingId", listingId);
+    if (propertyId) qs.set("propertyId", propertyId);
+    if (propertyAddress) qs.set("address", propertyAddress);
+    fetch(`/api/terms/valuation-first?${qs}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => !gone && setValuationFirst(j?.appraisal ?? null))
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
+  }, [nudge, appraisalId, noTermsYet, listingId, propertyId, propertyAddress]);
   /* Opened for a change of service: waits for the home's terms to be read, then once per `at`. */
   const [wanted, setWanted] = useState<string | null>(null);
   const reissued = useRef(0);
@@ -206,7 +228,9 @@ function OnPagePanel({
         <div className="min-w-0 flex-1">
           <h3 className="nl-block-title">Terms of Business</h3>
           <p className="nl-meta mt-1">
-            {!live
+            {!live && valuationFirst
+              ? `The valuation for ${propertyAddress.split(",")[0] || "this home"} hasn't gone to the landlord yet. Send it from the appraisal and the terms go with it, in one email with the presentation.`
+              : !live
               ? `Nothing has gone yet. Send them and everyone who owns ${propertyAddress.split(",")[0] || "the home"} gets their own link to read and sign.`
               : live.status === "agent"
                 ? replacing
@@ -217,7 +241,17 @@ function OnPagePanel({
                   : `Signed by ${names(live.parties)} on ${day(live.completedAt)}.${live.signedR2Key ? " Copy on file." : ""}`}
           </p>
         </div>
-        {!live ? (
+        {!live && valuationFirst ? (
+          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-2">
+            <a className="nl-btn nl-btn--primary" href={`/market-appraisals/${encodeURIComponent(valuationFirst.id)}`}>
+              <Ico name="arrow" size={15} /> Send the Valuation
+            </a>
+            <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setScreen({ mode: "new" })}>
+              Send the terms on their own
+            </button>
+            {more}
+          </span>
+        ) : !live ? (
           <span className="flex shrink-0 items-center gap-2">
             <button type="button" className="nl-btn nl-btn--primary" onClick={() => setScreen({ mode: "new" })}>
               <Ico name="arrow" size={15} /> Send Terms of Business

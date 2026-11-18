@@ -21,6 +21,8 @@ import { bookFor } from "@/lib/listings-cache";
 import type { OsListing } from "@/lib/rex-listings";
 import { recentTenantSends } from "@/lib/tenant-documents";
 import { termsForAgent } from "@/lib/terms/store";
+import { deckNudgesFor } from "@/lib/deck-nudges";
+import { lookFor } from "@/lib/new-look-store";
 import { sameAgent } from "@/lib/agent-name";
 import { maySendToClaude } from "@/lib/claude-tickets";
 
@@ -577,6 +579,12 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       href: r.ref ? `/market-appraisals/${encodeURIComponent(r.ref)}` : "/market-appraisals",
       tone: "ok",
     });
+  }
+  /* The landlord decks (James, 18 Nov 2026): a valuation still unopened two
+     days on, one just opened, a pre-appraisal unopened before the visit. Only
+     for whoever the "decknudge" switch covers. */
+  if ((await lookFor(me).catch(() => null))?.decknudge) {
+    for (const n of await deckNudgesFor(me).catch(() => [])) out.push(n);
   }
   /* Terms of Business sent from the OS (lib/terms, 23 Oct 2026), to the
      agent who sent them: your part still to sign, an email that didn't go,
