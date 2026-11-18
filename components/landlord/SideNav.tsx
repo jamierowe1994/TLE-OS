@@ -60,6 +60,7 @@ export default function SideNav({ variant, letHere = false }: { variant: "side" 
       <Link
         key={extra + n.label}
         href={n.href}
+        aria-current={n.on ? "page" : undefined}
         className={`${extra} shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12.5px] ${
           n.on ? "border-transparent bg-accent-soft font-semibold text-ink" : "border-line/60 text-muted"
         }`}
@@ -79,11 +80,12 @@ export default function SideNav({ variant, letHere = false }: { variant: "side" 
     );
   }
   return (
-    <nav className="mt-10 space-y-1">
+    <nav data-portal-nav className="mt-10 space-y-1">
       {items.map((n) => (
         <Link
           key={n.label}
           href={n.href}
+          aria-current={n.on ? "page" : undefined}
           className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] transition-colors ${
             n.on ? "bg-accent-soft font-semibold text-ink" : "text-muted hover:bg-accent-soft/50 hover:text-ink"
           }`}

@@ -7,6 +7,8 @@ import TenantSignOut from "@/components/TenantSignOut";
 import TenantPhoneShell from "@/components/tenant/TenantPhoneShell";
 import { PhoneNavButton } from "@/components/landlord/PhoneShell";
 import { locksFor, type TenantStageKey } from "@/lib/tenant-journey";
+import PortalLookPin from "@/components/PortalLookPin";
+import { portalLookOn } from "@/lib/portal-look";
 
 /**
  * The tenant portal's shell, following the landlord's (James, 12 Sep 2026:
@@ -35,16 +37,20 @@ function Logo({ className = "" }: { className?: string }) {
   );
 }
 
-export default function PortalShell({ name, base, stage, sample = false, children }: { name: string; base: string; stage: TenantStageKey; sample?: boolean; children: React.ReactNode }) {
+export default async function PortalShell({ name, base, stage, sample = false, children }: { name: string; base: string; stage: TenantStageKey; sample?: boolean; children: React.ReactNode }) {
   const initial = name.trim()[0]?.toUpperCase() ?? "";
   /* Which sections are open follows where they are (lib/tenant-journey). */
   const locks = locksFor(stage);
+  /* The house style, behind the "portals" switch (lib/portal-look; app/portal-edge.css). */
+  const look = await portalLookOn();
 
   return (
+    <div data-portal-look={look ? "new" : undefined} className="contents">
+    <PortalLookPin on={look} />
     <Suspense fallback={null}>
     <TenantPhoneShell signedIn={!sample} locks={locks}>
     <div id="top" className="min-h-screen bg-white lg:flex">
-      <aside className="sticky top-0 hidden h-screen w-[212px] shrink-0 flex-col border-r border-line/50 px-4 py-7 lg:flex">
+      <aside data-portal-side className="sticky top-0 hidden h-screen w-[212px] shrink-0 flex-col border-r border-line/50 px-4 py-7 lg:flex">
         {/* data-tle-logo is the harness's handle on the sample - see
             components/tenant/StageHarness. On the real portal nothing listens
             and this goes home as it always did. */}
@@ -105,5 +111,6 @@ export default function PortalShell({ name, base, stage, sample = false, childre
     </div>
     </TenantPhoneShell>
     </Suspense>
+    </div>
   );
 }

@@ -74,6 +74,10 @@ export const LOOK_SCREENS = [
   /* The agents' phone app (James, 27 Oct 2026: "bring it in line with what we've got ... minimalistic but gets to
      the point"). The installed app and the iPhone app both open /agent, so one switch covers both. */
   { id: "app", label: "Phone app", what: "The agents' phone app, home screen and iPhone: white, the orange action, type-only headings with no paintings, line icons, text tabs and fewer words. Off, the pastel app as it is." },
+  /* The landlord and tenant portals in the house's square style (James, 18 Nov 2026: "bring them in line with
+     what the rest of the portal and the website look like"). Customer screens: a landlord or tenant is never
+     signed in to the OS, so they only see it at Everyone (lib/portal-look); below that, staff the level covers. */
+  { id: "portals", label: "Landlord and tenant portals", what: "The landlord's and the tenant's own pages in the house style: cream sidebar, square boxes, titles in the condensed capitals, brown buttons, no pink. At Everyone, every landlord and tenant sees it; below that, only the staff it covers (the sample portals). Off, today's look." },
   { id: "booking", label: "Book a viewing (tenants)", what: "The new five-step booking window: home, time, access, messages, book. On, every place a tenant viewing is booked opens it - the lead, the listing, Viewings and Enquiries - and the landlord's email, the tenant's notice and the access record go out from it when the agent presses Book." },
   /* Not a reskin (James, 4 Nov 2026): nearly half the reports were things agents could fix themselves (lib/report-deflect). Needs Steve's new look. */
   /* Not a reskin (James, 18 Nov 2026): 11 of 18 decks sent in November were never opened and nothing told the agent;

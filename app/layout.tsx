@@ -3,6 +3,7 @@ import { Bricolage_Grotesque, Caveat, Inter, JetBrains_Mono, Lora, Manrope, Mont
 import DemoMark from "@/components/DemoMark";
 import "./globals.css";
 import "./new-look.css";
+import "./portal-edge.css";
 import "./book-viewing.css";
 import "./terms-paper.css";
 import "./terms-send.css";

@@ -6,6 +6,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import FileSearch from "@/components/landlord/FileSearch";
 import SideNav from "@/components/landlord/SideNav";
 import PhoneShell, { PhoneNavButton } from "@/components/landlord/PhoneShell";
+import PortalLookPin from "@/components/PortalLookPin";
+import { portalLookOn } from "@/lib/portal-look";
 import { currentLandlord, landlordPlaces, landlordProperties } from "@/lib/landlord-account";
 
 /**
@@ -60,7 +62,11 @@ export default async function LandlordLayout({ children }: { children: React.Rea
    * loadLandlordHome picks when there is no ?p=.
    */
   const places = me ? await landlordPlaces(me).catch(() => []) : [];
+  /* The house style, behind the "portals" switch (lib/portal-look; app/portal-edge.css). */
+  const look = await portalLookOn();
   return (
+    <div data-portal-look={look ? "new" : undefined} className="contents">
+    <PortalLookPin on={look} />
     <PhoneShell
       signedIn={Boolean(me)}
       letHere={letHere}
@@ -69,7 +75,7 @@ export default async function LandlordLayout({ children }: { children: React.Rea
     >
     <div data-surface="landlord" id="top" className="min-h-screen bg-white text-ink lg:flex">
       {/* ── the sidebar, from lg up ── */}
-      <aside className="sticky top-0 hidden h-screen w-[212px] shrink-0 flex-col border-r border-line/50 px-4 py-7 lg:flex">
+      <aside data-portal-side className="sticky top-0 hidden h-screen w-[212px] shrink-0 flex-col border-r border-line/50 px-4 py-7 lg:flex">
         <Link href="/landlord" className="px-2" aria-label="The Letting Experts, home" data-tle-logo>
           <Logo className="h-11" />
         </Link>
@@ -161,5 +167,6 @@ export default async function LandlordLayout({ children }: { children: React.Rea
       <PreviewReturnBar />
     </div>
     </PhoneShell>
+    </div>
   );
 }

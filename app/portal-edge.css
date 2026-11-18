@@ -1,0 +1,172 @@
+/* ===========================================================================
+   THE PORTALS IN THE HOUSE STYLE (James, 18 Nov 2026: "tidy them up and just
+   bring them in line with what the rest of the portal and the website look
+   like"). The landlord's and the tenant's own pages, drawn the way the OS's
+   new look and the website are: the final palette (brown buttons, terracotta
+   for highlights, linen washes, a cream sidebar, no pink), square corners,
+   titles and labels in Bricolage's condensed capitals, Inter for reading,
+   fine lines and no shadows on the boxes.
+
+   One switch, "portals" (lib/new-look, decided by lib/portal-look). On, the
+   portal shells stamp data-portal-look="new" on their wrapper and on <html>
+   (for the sheets drawn onto <body>). Off, nothing here applies and the
+   portals are exactly as they were. Markup is untouched: everything below
+   reads the classes the portal components already carry.
+
+   Unlayered on purpose, so it wins over Tailwind's utilities without
+   !important.
+=========================================================================== */
+
+/* ---- the palette ---- */
+[data-portal-look="new"],
+[data-portal-look="new"] [data-surface] {
+  --accent: #a85a51;            /* terracotta: highlights, the page you are on */
+  --accent-dark: #56423e;       /* brown: buttons */
+  --accent-soft: #f5efe6;       /* linen: the washes (pink is retired) */
+  --panel: #f8f7f4;             /* cream: the sidebar and quiet fills */
+  --box: #f8f7f4;
+  --line: #d9d6cf;
+  --pe-line: rgba(20, 20, 19, 0.12);
+  --pe-line-strong: rgba(20, 20, 19, 0.22);
+  --pe-on: #ebe7df;             /* the page you are on, a shade darker than the bar */
+  --pe-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ---- square, as the website is ---- */
+[data-portal-look="new"] :is(
+  button, a, input, select, textarea, iframe, img, video, picture,
+  [class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-3xl"],
+  [class*="rounded-lg"], [class*="rounded-md"], [class*="rounded-["],
+  [class*="rounded-t-"], [class*="rounded-b-"], [class*="rounded-l-"], [class*="rounded-r-"]
+) {
+  border-radius: 0;
+}
+/* Search fields and chips drawn as a bordered pill go square too; avatars,
+   dots and the progress rings (no border) stay round. */
+[data-portal-look="new"] :is(div, form, label)[class*="rounded-full"][class*="border"]:not([class*="h-"]) { border-radius: 0; }
+
+/* ---- no illustrations, no floating boxes ---- */
+[data-portal-look="new"] .pointer-events-none.absolute.rounded-full[class*="-bottom-"] { display: none; }
+[data-portal-look="new"] main :is([class*="rounded-[22px]"], [class*="rounded-2xl"], [class*="rounded-[18px]"], [class*="rounded-[20px]"], [class*="rounded-xl"])[class*="shadow"] {
+  box-shadow: none;
+}
+[data-portal-look="new"] main :is([class*="rounded-[22px]"], [class*="rounded-2xl"], [class*="rounded-[18px]"], [class*="rounded-[20px]"])[class*="border"] {
+  border-color: var(--pe-line);
+}
+
+/* ---- the sidebar: cream, flat, the page you are on a darker shade with a terracotta edge ---- */
+/* The OS's width and padding (components/Shell: w-[264px]; .nl-nav 16px 12px). */
+[data-portal-look="new"] [data-portal-side] {
+  width: 264px;
+  background: var(--panel);
+  border-right: 1px solid var(--pe-line);
+  padding: 22px 12px 12px;
+}
+[data-portal-look="new"] [data-portal-side] > div:last-child { border-top-color: var(--pe-line); width: 80%; margin-left: 10%; }
+[data-portal-look="new"] [data-portal-nav] { margin-top: 36px; }
+[data-portal-look="new"] [data-portal-nav] > * + * { margin-top: 2px; }
+[data-portal-look="new"] [data-portal-nav] a {
+  border-radius: 0;
+  min-height: 35px;
+  padding: 7px 10px;
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 400;
+  color: #3f3f3c;
+}
+[data-portal-look="new"] [data-portal-nav] a:hover { background: rgba(86, 66, 62, 0.06); color: var(--ink); }
+[data-portal-look="new"] [data-portal-nav] a[aria-current="page"] {
+  background: var(--pe-on);
+  box-shadow: inset 2px 0 0 var(--accent);
+  font-weight: 500;
+  color: var(--ink);
+}
+[data-portal-look="new"] [data-portal-nav] a[aria-current="page"] svg { color: var(--accent); }
+/* The tablet's chips: the one you are on in ink, the rest outlined. */
+[data-portal-look="new"] nav a[aria-current="page"][class*="rounded-full"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* ---- type: titles and labels in the condensed capitals ---- */
+[data-portal-look="new"] :is(h1, h2, h3, .hand) {
+  font-family: var(--pe-cond);
+  font-stretch: 75%;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.02;
+}
+[data-portal-look="new"] :is(h2, h3) { letter-spacing: 0.05em; line-height: 1.1; }
+/* The page's own title, at the website's size. */
+[data-portal-look="new"] main h1 { font-size: clamp(40px, 4.6vw, 64px); line-height: 0.96; }
+/* The small tracked labels above a box ("Your next step", "Rent"). */
+[data-portal-look="new"] :is(p, span, div, h2, h3, dt, label)[class*="uppercase"][class*="tracking-"] {
+  font-family: var(--pe-cond);
+  font-stretch: 75%;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+/* Figures keep their tabular face, a touch lighter. */
+[data-portal-look="new"] .figures { letter-spacing: -0.01em; }
+
+/* ---- buttons: square, brown, the small capitals ---- */
+[data-portal-look="new"] :is(a, button)[class*="bg-accent-dark"],
+[data-portal-look="new"] :is(a, button)[class*="bg-ink"]:not([class*="rounded-full"][class*="h-"]) {
+  font-family: var(--pe-cond);
+  font-stretch: 75%;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 12px;
+  background-color: var(--accent-dark);
+  border-radius: 0;
+}
+[data-portal-look="new"] :is(a, button)[class*="bg-accent-dark"]:hover { background-color: #3f302d; }
+/* The second buttons, outlined or white on a wash ("View property details",
+   "See home", "Open maintenance"). Round icon buttons (fixed h-/w-) are left. */
+[data-portal-look="new"] main :is(a, button)[class*="rounded-full"][class*="px-"]:not([class*="bg-accent-dark"]):not([class*="bg-ink"]):not(nav *) {
+  font-family: var(--pe-cond);
+  font-stretch: 75%;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11.5px;
+  border-color: var(--pe-line-strong);
+}
+[data-portal-look="new"] main :is(a, button)[class*="rounded-full"][class*="border"]:not(nav *) { background: transparent; }
+[data-portal-look="new"] main :is(a, button)[class*="rounded-full"][class*="px-"]:not([class*="bg-accent-dark"]):not([class*="bg-ink"]):not(nav *):hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* ---- the top bar's search: a fine square box ---- */
+[data-portal-look="new"] header input { background: #fff; }
+[data-portal-look="new"] header :is(div, form, label)[class*="border"] { border-color: var(--pe-line-strong); }
+
+/* ---- the phone's menu (PhoneShell, TenantPhoneShell): the pages in the condensed capitals ---- */
+[data-portal-look="new"] ul[class*="text-right"] > li > :is(a, button) {
+  font-family: var(--pe-cond);
+  font-stretch: 75%;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 30px;
+}
+[data-portal-look="new"] ul[class*="text-right"] > li > :is(a, button)[aria-current="page"] { color: var(--accent); }
+
+/* ---- nothing collides: the home card stacks when its box is narrow ----
+   Two cards side by side on a laptop-width window left the address 150px
+   to wrap in, and "NOTTINGHAM" ran out of the box (18 Nov 2026). When the
+   card itself is under 560px wide the photo goes on top instead. */
+[data-portal-look="new"] #property { container-type: inline-size; }
+@container (max-width: 559px) {
+  [data-portal-look="new"] #property > div { flex-direction: column; }
+  [data-portal-look="new"] #property > div > div:first-child { width: 100%; height: 200px; min-height: 0; }
+  [data-portal-look="new"] #property > div > div:last-child > a { align-self: flex-start; margin-top: 24px; }
+}
+[data-portal-look="new"] main :is(h1, h2, h3) { overflow-wrap: anywhere; }
+/* The tenant's home card is the same squeeze (its card is the flex box
+   itself, so this goes by the window): two across from 1024px, stacked until
+   the card has room for the address beside the photo. */
+@media (min-width: 1024px) and (max-width: 1499px) {
+  [data-portal-look="new"] [data-portal-home] { flex-direction: column; }
+  [data-portal-look="new"] [data-portal-home] > img,
+  [data-portal-look="new"] [data-portal-home] > picture,
+  [data-portal-look="new"] [data-portal-home] > :first-child { width: 100%; height: 200px; }
+}

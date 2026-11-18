@@ -43,6 +43,7 @@ export default function SideNav({ variant, locks = {} }: { variant: "side" | "pi
             key={n.label}
             href={n.href}
             title={n.locked ?? undefined}
+            aria-current={on(n) ? "page" : undefined}
             className={`flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12.5px] ${
               on(n) ? "border-transparent bg-accent-soft font-semibold text-ink" : n.locked ? "border-line/40 text-muted/60" : "border-line/60 text-muted"
             }`}
@@ -55,12 +56,13 @@ export default function SideNav({ variant, locks = {} }: { variant: "side" | "pi
     );
   }
   return (
-    <nav className="mt-10 space-y-1">
+    <nav data-portal-nav className="mt-10 space-y-1">
       {items.map((n) => (
         <Link
           key={n.label}
           href={n.href}
           title={n.locked ?? undefined}
+          aria-current={on(n) ? "page" : undefined}
           aria-disabled={n.locked ? true : undefined}
           className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] transition-colors ${
             on(n) ? "bg-accent-soft font-semibold text-ink" : n.locked ? "text-muted/60 hover:bg-panel hover:text-muted" : "text-muted hover:bg-accent-soft/50 hover:text-ink"

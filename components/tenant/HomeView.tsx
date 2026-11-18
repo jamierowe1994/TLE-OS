@@ -205,7 +205,7 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
 
       {/* ── the property, and the one next step, from sm up ── */}
       <div className="hidden gap-5 sm:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <div className={`${card} flex flex-col gap-4 p-4 sm:flex-row sm:gap-5`} data-search style={rise(1)}>
+        <div className={`${card} flex flex-col gap-4 p-4 sm:flex-row sm:gap-5`} data-search data-portal-home style={rise(1)}>
           {/* On a phone the photo goes across the top; the text beside it was
               a column of single words. */}
           <PropertyPhoto src={home?.photo ?? null} alt="" className="h-[180px] w-full shrink-0 rounded-[16px] object-cover sm:h-[200px] sm:w-[220px]" />
