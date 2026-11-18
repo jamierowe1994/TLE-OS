@@ -451,6 +451,8 @@ async function areaGate(req: NextRequest): Promise<{ closed: NextResponse | null
 const MACHINE_ROUTES = [
   /* The demo copy's nightly reset (lib/demo/seed). A 404 anywhere DEMO_MODE is not set. */
   "/api/demo/reset",
+  /* Which screens have the new look for everyone: read by the demo copy to match live. Screen ids only. */
+  "/api/new-look/levels",
   /* The read log's own hand-over from this file (lib/read-log). The route
      refuses anything not signed with AUTH_SECRET, so the door adds nothing,
      and logging it would log the log. */

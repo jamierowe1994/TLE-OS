@@ -5,6 +5,8 @@ import { hasDb, q } from "@/lib/business/db";
 import { agentKeysForName } from "@/lib/business/roster";
 import { overlayCompletes, overlayDealBook, type DealEditMark } from "@/lib/let-edits";
 import type { LetField } from "@/lib/let-edit-fields";
+import { demoMode } from "@/lib/demo/mode";
+import { demoDeals } from "@/lib/demo/deals";
 import type {
   AgentApplication,
   ApplicationStage,
@@ -724,6 +726,9 @@ export interface BusinessDeal {
  * powers Kirstie's /pretenancy dashboard. null = unconfigured/unreachable.
  */
 export async function getAllPropolyDeals(): Promise<BusinessDeal[] | null> {
+  /* The demo copy (lib/demo/mode) has no pre-tenancy system: its lets in
+     progress come from the invented world, and Propoly is never asked. */
+  if (demoMode()) return demoDeals();
   if (!propolyConfigured()) return null;
   const work = fetchAllDeals();
   const deadline = new Promise<null>((resolve) =>

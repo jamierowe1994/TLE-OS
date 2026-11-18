@@ -29,6 +29,9 @@ function allowed(host: string): boolean {
   const own = [process.env.DEMO_ORIGIN, process.env.OS_ORIGIN, process.env.NEXT_PUBLIC_OS_ORIGIN, process.env.RAILWAY_PUBLIC_DOMAIN]
     .map((o) => (o ?? "").replace(/^https?:\/\//, "").replace(/[/:].*$/, "").toLowerCase())
     .filter(Boolean);
+  /* The one thing the demo reads from live: which screens have the new look
+     for everyone (lib/demo/seed liveLook). A public address, screen ids only. */
+  own.push((process.env.DEMO_LOOK_SOURCE || "https://tle-os.co.uk").replace(/^https?:\/\//, "").replace(/[/:].*$/, "").toLowerCase());
   const extra = (process.env.DEMO_ALLOW_HOSTS ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
   return [...ALWAYS, ...own, ...extra].some((a) => h === a || h.endsWith(`.${a}`)) || h.endsWith(".localhost") || h.endsWith(".railway.internal");
 }

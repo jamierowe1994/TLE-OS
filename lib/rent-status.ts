@@ -7,6 +7,8 @@ import { getRentReceived } from "@/lib/business/payprop-income";
 import { homeRents, payPropInvoices, type HomeRents } from "@/lib/business/payprop-rent-invoices";
 import { matchPayPropHome } from "@/lib/payprop-home-match";
 import { isMargoHome, MARGO_PORTFOLIO } from "@/lib/business/margo-portfolio";
+import { demoMode } from "@/lib/demo/mode";
+import { demoRentBook } from "@/lib/demo/rents";
 
 /**
  * IS THIS HOME UP TO DATE ON RENT? (James, 8 Oct 2026)
@@ -274,6 +276,9 @@ async function readTags(account: PayPropAccountId, into: Record<string, string[]
 
 /** The stored read, from 10am or 4pm. Never calls PayProp. */
 export async function rentBook(): Promise<Book | null> {
+  /* The demo copy (lib/demo/mode) has no client-money system: its rents are
+     laid over the invented world, and PayProp is never asked. */
+  if (demoMode()) return demoRentBook() as unknown as Book;
   const stored = await readCache<Book>(KEY).catch(() => null);
   if (stored?.data && (!held || stored.data.at > held.at)) held = stored.data;
   return held;

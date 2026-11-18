@@ -126,7 +126,8 @@ export function buildWorld(now = Date.now()): DemoWorld {
   for (let i = 0; i < HOMES; i++) {
     const town = TOWNS[i % TOWNS.length];
     const agent = agents.filter((a) => a.scotland === town.scotland)[i % agents.filter((a) => a.scotland === town.scotland).length];
-    const [kind, beds, baseRent] = HOME_KINDS[i % HOME_KINDS.length];
+    /* Home 0 is the Showroom's: a two-bed terrace at 8 Recreation Terrace. */
+    const [kind, beds, baseRent] = i === 0 ? (["Terraced House", 2, 1250] as [string, number, number]) : HOME_KINDS[i % HOME_KINDS.length];
     const flat = kind === "Flat";
     const street = i === 0 ? "Recreation Terrace" : STREETS[(i * 3 + 1) % STREETS.length];
     const number = i === 0 ? 8 : between(1, 140);
