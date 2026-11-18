@@ -105,6 +105,11 @@ export default function ContractorsPage() {
       .catch(() => setErr("Could not read the contractors."));
   }, []);
   useEffect(load, [load]);
+  /* ?log=invoice opens Log an Invoice straight away: the button on a home's
+     Invoices tab comes here (Lianna Denholm, ticket cc5d2fc3, 17 Nov 2026). */
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("log") === "invoice") setRaising(true);
+  }, []);
 
   /* On the payment run from To Pay itself (Michael Healy, 2 Nov 2026: "the
      uploaded on payprop button has disappeared?"). It was only ever on

@@ -64,6 +64,8 @@ import RecordPastVisit from "@/components/inspections/RecordPastVisit";
 import TenantChange from "@/components/portfolio/TenantChange";
 import TakeOnTile from "@/components/portfolio/TakeOnTile";
 import HomeNotes from "@/components/portfolio/HomeNotes";
+import HomeInvoices, { invoiceRows } from "@/components/portfolio/HomeInvoices";
+import { AgentChaseList, AgentChaseView, chaseLine, type AgentChase, type ChasesLoaded } from "@/components/portfolio/AgentChases";
 import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Tabs, Menu, Ico, type MenuItem, type Tone } from "@/components/new-look/Parts";
 import PhotoGrid from "@/components/new-look/PhotoGrid";
@@ -88,9 +90,12 @@ import { isScottish } from "@/lib/property-flags";
  */
 
 /* "overview" is the new look's first tab (lib/new-look "property"); the old page has no such tab. */
-type Tab = "overview" | "maintenance" | "compliance" | "inspections" | "tenancy" | "documents" | "notes";
+type Tab = "overview" | "maintenance" | "invoices" | "compliance" | "inspections" | "tenancy" | "documents" | "notes";
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "maintenance", label: "Maintenance", icon: "setting" },
+  /* Lianna Denholm and Michael Healy, 17 Nov 2026: every invoice on the home
+     at a glance (components/portfolio/HomeInvoices). */
+  { id: "invoices", label: "Invoices", icon: "coin" },
   { id: "compliance", label: "Compliance", icon: "shield" },
   { id: "inspections", label: "Inspections", icon: "checklist" },
   { id: "tenancy", label: "Tenancy", icon: "key" },
@@ -321,7 +326,7 @@ export default function PropertyPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || showAll || showLogins || sendOpen || emailPick || teamOpen || recordOpen || threadOpen || mailOpen || lightbox != null || gridFrom) return;
+      if (action || openJob || showAll || showLogins || sendOpen || emailPick || teamOpen || recordOpen || threadOpen || mailOpen || chaseOpen || lightbox != null || gridFrom) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -479,6 +484,21 @@ export default function PropertyPage() {
      line in the latest activity, opening the email and its files. */
   const [propolyMail, setPropolyMail] = useState<PropolyMail[]>([]);
   const [mailOpen, setMailOpen] = useState<PropolyMail | null>(null);
+  /* The certificate reminders sent to the agent about this home (Michael
+     Healy, ticket 7717f8d1, 17 Nov 2026): on the latest activity and the
+     Notes tab, each opening the email as it went. */
+  const [chases, setChases] = useState<ChasesLoaded>({ state: "loading" });
+  const [chaseOpen, setChaseOpen] = useState<AgentChase | null>(null);
+  useEffect(() => {
+    if (!propertyId || p?.test) { setChases({ state: "ready", chases: [], office: false }); return; }
+    let live = true;
+    setChases({ state: "loading" });
+    fetch(`/api/property/agent-chases?property=${encodeURIComponent(propertyId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live) setChases(j?.ok ? { state: "ready", chases: j.chases ?? [], office: Boolean(j.office) } : { state: "failed", error: j?.error ?? "Not read." }); })
+      .catch(() => live && setChases({ state: "failed", error: "Not read." }));
+    return () => { live = false; };
+  }, [propertyId, p?.test]);
   useEffect(() => {
     if (!p || p.test) return;
     let live = true;
@@ -761,6 +781,7 @@ export default function PropertyPage() {
   }
 
   const openJobs = works.state === "ready" ? works.data.orders.filter((o) => OPEN.includes(o.status)) : [];
+  const invoiceCount = works.state === "ready" ? invoiceRows(works.data.orders).length : 0;
   const openVisits = visits.state === "ready" ? visits.data.inspections.filter((i) => OPEN_VISIT.includes(i.status)) : [];
   /* Only a visit still to happen is "booked"; one already made is history. */
   const nextVisit = openVisits.find((i) => i.bookedAt && !i.visitedAt && new Date(i.bookedAt).getTime() > Date.now()) ?? null;
@@ -842,6 +863,12 @@ export default function PropertyPage() {
     const toTenants = x.results.some((r) => (r.role ?? "tenant") === "tenant");
     const to = toLandlord && toTenants ? "the tenants and landlord" : toLandlord ? "the landlord" : "tenants";
     activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `${x.documents.length ? "Sent" : "Emailed"} to ${to} · ${x.documents.length ? x.documents.join(", ") : x.subject || "no attachments"}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => setRecordOpen(x.id) });
+  }
+  if (chases.state === "ready") {
+    for (const c of chases.chases) {
+      const line = chaseLine(c);
+      activity.push({ key: `chase-${c.id}`, at: c.at, icon: "mail", title: line.title, sub: line.sub, hot: !c.sent, go: () => setChaseOpen(c) });
+    }
   }
   for (const m of propolyMail) {
     const kept = m.attachments.filter((f) => f.key).length;
@@ -1013,6 +1040,7 @@ export default function PropertyPage() {
       )}
       {teamOpen && <TeamEmail listing={String(p.listingId)} listings={sendListings} onClose={() => setTeamOpen(false)} />}
       {mailOpen && <PropolyMailView mail={mailOpen} onClose={() => setMailOpen(null)} />}
+      {chaseOpen && <AgentChaseView chase={chaseOpen} onClose={() => setChaseOpen(null)} />}
       {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
       {action?.kind === "tenant-notice" && propertyId && (
         <Modal onClose={closeAction} title="Tenant gave notice">
@@ -1131,6 +1159,7 @@ export default function PropertyPage() {
       { id: "tenancy", label: "Tenancy", dot: Boolean(leaving) },
       { id: "compliance", label: "Compliance", count: outstanding > 0 ? outstanding : null },
       { id: "maintenance", label: "Maintenance", count: works.state === "ready" && openJobs.length > 0 ? openJobs.length : null },
+      { id: "invoices", label: "Invoices", count: invoiceCount > 0 ? invoiceCount : null },
       { id: "inspections", label: "Inspections" },
       { id: "documents", label: "Documents" },
       { id: "notes", label: "Notes", count: noteCount > 0 ? noteCount : null },
@@ -1226,8 +1255,13 @@ export default function PropertyPage() {
           </>
         ),
       },
+      invoices: {
+        sub: works.state === "loading" ? "Reading…" : works.state === "failed" ? "Not available"
+          : invoiceCount > 0 ? `${invoiceCount} ${invoiceCount === 1 ? "invoice" : "invoices"} from contractors on this home` : "Contractors' invoices for work on this home",
+        acts: btn("Log an Invoice", "upload", () => router.push("/contractors?log=invoice"), { primary: true, disabled: p.test, title: "A contractor's invoice for work with no job on the OS" }),
+      },
       documents: {
-        sub: "Inventories, agreements and anything else that isn't a certificate",
+        sub: "Inventories, agreements and anything else that isn't a certificate, and every job's invoices and quotes",
         acts: (
           <>
             {btn("Email Docs", "mail", () => setSendOpen({ start: null, heading: "Email Docs" }), { disabled: p.test, title: "To the tenants, the landlord or both, from you, kept on the record" })}
@@ -1236,7 +1270,7 @@ export default function PropertyPage() {
         ),
       },
       notes: {
-        sub: noteCount > 0 ? `${noteCount} ${noteCount === 1 ? "note" : "notes"} on this home` : "Calls, emails and queries about this home",
+        sub: `${noteCount > 0 ? `${noteCount} ${noteCount === 1 ? "note" : "notes"} on this home` : "Calls, emails and queries about this home"}${chases.state === "ready" && chases.chases.length > 0 ? ` · ${chases.chases.length} ${chases.chases.length === 1 ? "reminder" : "reminders"} to the agent` : ""}`,
         acts: btn("Add a note", "note", () => document.getElementById("home-note")?.focus(), { primary: true, disabled: !propertyId }),
       },
     };
@@ -1743,6 +1777,12 @@ export default function PropertyPage() {
                 )
               )}
 
+              {tab === "invoices" && (
+                works.state === "loading" ? <Loading label="Reading the invoices on this home" /> : works.state === "failed" ? <Failed error={works.error} /> : (
+                  <HomeInvoices orders={works.data.orders} onOpenJob={setOpenJob} look />
+                )
+              )}
+
               {tab === "inspections" && (
                 visits.state === "loading" ? <Loading label="Reading the visits on this home" /> : visits.state === "failed" ? <Failed error={visits.error} /> : (
                   <NlVisits data={visits.data} />
@@ -1767,7 +1807,10 @@ export default function PropertyPage() {
               )}
 
               {tab === "notes" && (
-                <HomeNotes key={`${propertyId}-${p.listingId}`} propertyId={propertyId} listingId={String(p.listingId)} onCount={setNoteCount} />
+                <div className="nl-holder">
+                  <HomeNotes key={`${propertyId}-${p.listingId}`} propertyId={propertyId} listingId={String(p.listingId)} onCount={setNoteCount} />
+                  {!p.test && <div className="mt-9"><AgentChaseList loaded={chases} onOpen={setChaseOpen} look /></div>}
+                </div>
               )}
             </div>
           </div>
@@ -2186,6 +2229,14 @@ export default function PropertyPage() {
               </section>
             )}
 
+            {tab === "invoices" && (
+              <section className="mt-4">
+                {works.state === "loading" ? <Loading label="Reading the invoices on this home" /> : works.state === "failed" ? <Failed error={works.error} /> : (
+                  <HomeInvoices orders={works.data.orders} onOpenJob={setOpenJob} look={false} />
+                )}
+              </section>
+            )}
+
             {tab === "inspections" && (
               <section className="mt-4">
                 {visits.state === "loading" ? <Loading label="Reading the visits on this home" /> : visits.state === "failed" ? <Failed error={visits.error} /> : (
@@ -2268,6 +2319,7 @@ export default function PropertyPage() {
             {tab === "notes" && (
               <section className="mt-4">
                 <HomeNotes key={`${propertyId}-${p.listingId}`} propertyId={propertyId} listingId={String(p.listingId)} onCount={setNoteCount} />
+                {!p.test && <div className="mt-6"><AgentChaseList loaded={chases} onOpen={setChaseOpen} look={false} /></div>}
               </section>
             )}
 

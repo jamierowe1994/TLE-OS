@@ -357,6 +357,23 @@ export async function chasesFor(propertyId: string, cert: string): Promise<Chase
   return rows.map(toRecord);
 }
 
+/**
+ * Every chase on one home, newest first, for the property page (Michael Healy,
+ * ticket 7717f8d1, 17 Nov 2026: the reminders the compliance desk lists were
+ * nowhere on the home itself). `agentUserId` narrows it to the chases sent to
+ * one agent, for anybody who is not the compliance office.
+ */
+export async function chasesForHome(propertyId: string, agentUserId: string | null = null): Promise<ChaseRecord[]> {
+  if (!hasDb()) return [];
+  const rows = await q<Row>(
+    `SELECT ${COLS} FROM os_cert_agent_chases
+      WHERE property_id = $1 AND ($2::text IS NULL OR agent_user_id = $2)
+      ORDER BY at DESC LIMIT 100`,
+    [propertyId, agentUserId]
+  );
+  return rows.map(toRecord);
+}
+
 /** The short history a certificate row shows, keyed propertyId:cert. */
 export type ChaseBrief = Pick<ChaseRecord, "at" | "how" | "agentName" | "byName" | "sent" | "stage">;
 

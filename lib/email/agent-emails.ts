@@ -80,7 +80,7 @@ const textRows = (rows: ShellRow[]) => rows.map((r) => `  ${r.title}${r.detail ?
 export function certificateChaseEmail(input: { firstName: string; lines: string[] }): AgentEmail {
   const rows = input.lines.map(lineToRow);
   const n = rows.length;
-  const subject = `${n} of your propert${n === 1 ? "y needs" : "ies need"} a certificate`;
+  const subject = `${n} of your properties ${n === 1 ? "needs" : "need"} a certificate`;
   const intro =
     "These need a certificate renewing, worst first - anything already expired is at the top, because a let can't legally proceed without it. Chase the landlord, or book the contractor if that's the arrangement on the property. Once the certificate is on file the reminder stops by itself.";
   const link = `${SITE}/compliance`;
