@@ -35,13 +35,18 @@ const LOOK_ON_18_NOV = [
   "admin", "advert", "application", "applications", "appraisal", "appraisals", "booking", "builder", "compliance", "contractors", "dashboard", "diary",
   "entrance", "fade", "finances", "help", "huddles", "job", "listing", "listings", "maintenance", "nav", "orb", "overview", "passport", "plc", "portfolio",
   "property", "search", "settings", "spine", "steve", "terms", "termsqs", "tools",
+  /* On Only me on live that day. */
+  "app", "fixit", "lead", "leads", "warmnav",
 ];
 
 async function liveLook(): Promise<string[]> {
   try {
     const r = await fetch(`${lookSource()}/api/new-look/levels`, { cache: "no-store", signal: AbortSignal.timeout(6000) });
-    const j = (await r.json()) as { ok?: boolean; everyone?: unknown };
-    if (r.ok && j.ok && Array.isArray(j.everyone) && j.everyone.length) return j.everyone.map(String);
+    const j = (await r.json()) as { ok?: boolean; everyone?: unknown; preview?: unknown };
+    /* Everyone's, and the ones still on Only me on live (James, 18 Nov 2026:
+       "leads and the lead pages are all off"): the demo is the system as he
+       sees it, newest look on every screen that has one. */
+    if (r.ok && j.ok && Array.isArray(j.everyone) && j.everyone.length) return [...j.everyone, ...(Array.isArray(j.preview) ? j.preview : LOOK_ON_18_NOV)].map(String);
   } catch {
     /* Live could not be asked: the list below stands until the next morning. */
   }

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { lookRows } from "@/lib/new-look-store";
 
 /**
- * Which screens have the new look switched on for everyone. Nothing else: no
- * names, no who or when.
+ * Which screens have the new look switched on: for everyone, and for only
+ * some people so far. Screen ids, nothing else: no names, no who or when.
  *
  * Public on purpose. The demo copy (lib/demo/mode) runs on its own empty
  * database, where every look switch starts off, so it came up in the old
@@ -19,7 +19,14 @@ export async function GET() {
   const rows = await lookRows().catch(() => null);
   if (!rows) return NextResponse.json({ ok: false }, { status: 503 });
   return NextResponse.json(
-    { ok: true, everyone: rows.filter((r) => r.level === "everyone").map((r) => r.id) },
+    {
+      ok: true,
+      everyone: rows.filter((r) => r.level === "everyone").map((r) => r.id),
+      /* On for some people and not yet the whole team (Only me, owners,
+         testers): the screens James is still bringing in. The demo shows
+         these too, because it should look like the system as he sees it. */
+      preview: rows.filter((r) => r.level !== "everyone" && r.level !== "off").map((r) => r.id),
+    },
     { headers: { "cache-control": "public, max-age=300" } }
   );
 }
