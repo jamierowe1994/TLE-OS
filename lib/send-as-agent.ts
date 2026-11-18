@@ -5,6 +5,7 @@ import { archiveSentCopy, ResendBlocked, sendEmail } from "@/lib/resend";
 import { isInternalAddress } from "@/lib/email-policy";
 import { sendingLocked, switchOn } from "@/lib/switches";
 import { refusedSender } from "@/lib/not-a-sender";
+import { MAILBOX_MAX, totalBytes } from "@/lib/mail-attachments";
 
 /**
  * FROM THE AGENT, NOT FROM THE SYSTEM (James, 16 Sep 2026 - scoped pilot i078).
@@ -101,7 +102,10 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
     };
   }
 
-  if (await switchOn("assistant_email")) {
+  /* Files over 3MB together are more than Outlook takes in one send (lib/mail-attachments),
+     so they go on our sender, with their address to reply to, rather than fail. */
+  const tooBigForOutlook = totalBytes(p.attachments ?? []) > MAILBOX_MAX;
+  if (!tooBigForOutlook && (await switchOn("assistant_email"))) {
     try {
       const conn = await msConnectionFor(p.me.id).catch(() => null);
       if (conn?.connected) {

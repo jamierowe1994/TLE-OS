@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import DoodleIcon from "@/components/DoodleIcon";
 import { registerOpen } from "@/lib/open-record";
+import { useNewLook } from "@/lib/use-new-look";
+import QuickReportSheet from "@/components/QuickReportSheet";
+import { fileRefusal, MAILBOX_MAX, MAX_FILES, MAX_TOTAL, sizeWords, type MailFile } from "@/lib/mail-attachments";
 
 /**
  * Writing one email to one person.
@@ -75,6 +78,41 @@ export default function Compose({
     if (open && startSubject) setSubject((s) => s || startSubject);
   }, [open, startSubject]);
   const [body, setBody] = useState("");
+  /* FILES AND A FREE REPORT (Stuart Roper, 18 Nov 2026), each behind its own
+     switch: "attach" (Attach Files) and "quickreport" (Generate Report, landlords). */
+  const canAttach = useNewLook("attach") === true;
+  const canReport = useNewLook("quickreport") === true && audience === "landlord";
+  const [files, setFiles] = useState<(MailFile & { size: number })[]>([]);
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
+  const [reading, setReading] = useState(false);
+  useEffect(() => {
+    if (!open) { setFiles([]); setFileNote(null); setReporting(false); }
+  }, [open]);
+  const filesTotal = files.reduce((n, f) => n + f.size, 0);
+  async function addFiles(list: FileList | null) {
+    if (!list?.length) return;
+    setFileNote(null);
+    setReading(true);
+    const picked = [...list];
+    const next = [...files];
+    for (const f of picked) {
+      const no = fileRefusal(f.name);
+      if (no) { setFileNote(no); continue; }
+      if (next.length >= MAX_FILES) { setFileNote(`Up to ${MAX_FILES} files can go on one email.`); break; }
+      if (next.reduce((n, x) => n + x.size, 0) + f.size > MAX_TOTAL) { setFileNote(`${f.name} would take it over ${sizeWords(MAX_TOTAL)}, the most one email can carry.`); continue; }
+      const content = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(",")[1] ?? "");
+        r.onerror = () => rej(r.error);
+        r.readAsDataURL(f);
+      }).catch(() => "");
+      if (!content) { setFileNote(`${f.name} couldn't be read.`); continue; }
+      next.push({ filename: f.name, content, contentType: f.type || "application/octet-stream", size: f.size });
+    }
+    setFiles(next);
+    setReading(false);
+  }
   const [preview, setPreview] = useState<{
     html: string;
     missing: string[];
@@ -190,7 +228,7 @@ export default function Compose({
   if (!open) return null;
 
   const missing = preview?.missing ?? [];
-  const canSend = Boolean(preview?.sendEnabled) && !missing.length && to.includes("@");
+  const canSend = Boolean(preview?.sendEnabled) && !missing.length && to.includes("@") && !reading;
 
   return (
     /* In the middle of the screen, the writing on the left and what they'll
@@ -341,6 +379,45 @@ export default function Compose({
             )}
           </div>
 
+          {(canAttach || canReport) && (
+            <div className="nl-files">
+              <div className="nl-files-btns">
+                {canAttach && (
+                  <label className={`nl-btn nl-files-add${reading ? " is-busy" : ""}`}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l8.6-8.6a3.7 3.7 0 015.2 5.2l-8.6 8.6a1.8 1.8 0 01-2.6-2.6l8-8" /></svg>
+                    {reading ? "Reading…" : "Attach Files"}
+                    <input type="file" multiple hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+                  </label>
+                )}
+                {canReport && (
+                  <button type="button" className="nl-btn" onClick={() => setReporting(true)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
+                    Generate Report
+                  </button>
+                )}
+              </div>
+              {files.length > 0 && (
+                <ul className="nl-files-list">
+                  {files.map((f, i) => (
+                    <li key={`${f.filename}-${i}`}>
+                      <span className="nl-files-name">{f.filename}</span>
+                      <span className="nl-files-size">{sizeWords(f.size)}</span>
+                      <button type="button" aria-label={`Take ${f.filename} off`} onClick={() => setFiles(files.filter((_, j) => j !== i))}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {filesTotal > MAILBOX_MAX && (
+                <p className="nl-files-note">
+                  {sizeWords(filesTotal)} of files is more than Outlook takes in one email, so this goes from The Letting Experts with your address to reply to. It won&apos;t be in your Sent Items.
+                </p>
+              )}
+              {fileNote && <p className="nl-files-note is-bad">{fileNote}</p>}
+            </div>
+          )}
+
           {/* UNFILLED MERGE FIELDS, NAMED. They are left in the text rather
               than blanked, so this is a warning about something visible rather
               than about something that silently vanished. */}
@@ -378,7 +455,7 @@ export default function Compose({
               const r = await fetch("/api/messages/send", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ to, subject, body, merge, intent: "send" }),
+                body: JSON.stringify({ to, subject, body, merge, intent: "send", ...(files.length ? { attachments: files.map(({ filename, content, contentType }) => ({ filename, content, contentType })) } : {}) }),
               });
               const j = await r.json().catch(() => null);
               setNote(j?.reason ?? "Something went wrong.");
@@ -394,6 +471,17 @@ export default function Compose({
             {preview && !preview.sendEnabled ? "Sending is off" : "Send"}
           </PressButton>
         </div>
+        {reporting && (
+          <QuickReportSheet
+            address={merge.address ?? null}
+            landlordName={toName?.trim() || merge.name || null}
+            onClose={() => setReporting(false)}
+            onAttach={(r) => {
+              setFiles((fs) => [...fs.filter((f) => f.filename !== r.filename), { filename: r.filename, content: r.content, contentType: r.contentType, size: r.size }]);
+              setFileNote(null);
+            }}
+          />
+        )}
       </aside>
     </div>
   );

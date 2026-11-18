@@ -7,6 +7,8 @@ import { isInternalAddress } from "@/lib/email-policy";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { sendingLocked, switchOn } from "@/lib/switches";
 import { findUserById } from "@/lib/users";
+import { lookFor } from "@/lib/new-look-store";
+import { checkAttachments, type MailFile } from "@/lib/mail-attachments";
 
 /**
  * Compose, preview, and — when it is switched on — send.
@@ -69,6 +71,8 @@ export async function POST(req: NextRequest) {
     merge?: MergeValues;
     /** The composer asks for a preview on every keystroke-ish; send is explicit. */
     intent?: "preview" | "send";
+    /** Files, base64 (switch "attach"; a report from "quickreport"). Only read on Send. */
+    attachments?: MailFile[];
   };
 
   const to = (b.to ?? "").trim();
@@ -132,9 +136,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...preview, sent: false, reason: "Sign in first." }, { status: 401 });
   }
 
+  /* FILES (Stuart Roper, 18 Nov 2026). Only for someone the switch covers, and
+     checked here whatever the window said: count, size, and nothing that runs. */
+  let attachments: MailFile[] | undefined;
+  if (Array.isArray(b.attachments) && b.attachments.length) {
+    const look = await lookFor(me).catch(() => null);
+    if (!look?.attach && !look?.quickreport) {
+      return NextResponse.json({ ...preview, sent: false, reason: "Attaching files is not switched on for you yet, so nothing was sent." }, { status: 403 });
+    }
+    const checked = checkAttachments(b.attachments, { onlyPdf: !look?.attach });
+    if (!checked.ok) {
+      return NextResponse.json({ ...preview, sent: false, reason: `Not sent. ${checked.error}` }, { status: 400 });
+    }
+    attachments = checked.files;
+  }
+
   /* lib/send-as-agent files the copy in os_sent_emails itself, whichever road
      it took, and only once it has gone - so nothing is logged here. */
-  const r = await sendAsAgent({ me, to, subject: subjectMerged.text, html });
+  const r = await sendAsAgent({ me, to, subject: subjectMerged.text, html, attachments });
   if (!r.sent) {
     return NextResponse.json(
       { ...preview, sent: false, reason: r.detail },

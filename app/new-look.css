@@ -1524,6 +1524,66 @@
   .nl-compose-preview { border-left: 0; border-top: 1px solid var(--line); }
 }
 
+/* Attach Files and Generate Report in Write an Email (Stuart Roper, 18 Nov 2026;
+   switches "attach" and "quickreport"). Square, house palette. */
+.nl-compose { position: relative; }
+.nl-files { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.nl-files-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.nl-files-btns .nl-btn { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; background: #fff; border: 1px solid var(--line-strong); color: var(--ink); font-size: 13px; padding: 8px 14px; }
+.nl-files-btns .nl-btn:hover { border-color: var(--primary); }
+.nl-files-add.is-busy { opacity: .6; pointer-events: none; }
+.nl-files-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.nl-files-list li { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 8px 8px 12px; background: #fff; border: 1px solid var(--line-strong); font-size: 13px; }
+.nl-files-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.nl-files-size { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.nl-files-list button { flex: none; display: grid; place-items: center; width: 26px; height: 26px; background: transparent; border: 0; color: var(--muted); cursor: pointer; }
+.nl-files-list button:hover { color: var(--accent-dark, #A85A51); }
+.nl-files-note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.nl-files-note.is-bad { color: var(--accent-dark, #A85A51); }
+
+.nl-qr-wrap { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 24px; background: rgba(20, 20, 19, .32); animation: nl-cmp-in .2s ease; }
+.nl-qr { width: min(760px, 100%); max-height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 30px 70px -30px rgba(20, 20, 19, .5); }
+.nl-qr-head { position: relative; padding: 22px 28px 16px; border-bottom: 1px solid var(--line); }
+.nl-qr-bar { height: 3px; background: var(--line); margin: 0 52px 14px 0; }
+.nl-qr-bar span { display: block; height: 100%; background: var(--primary); transition: width .34s cubic-bezier(0.22, 1, 0.36, 1); }
+.nl-qr-count { margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.nl-qr-title { margin: 6px 0 0; font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 24px; line-height: 1.05; }
+.nl-qr-blurb { margin: 6px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.nl-qr-x { position: absolute; top: 16px; right: 18px; }
+.nl-qr-body { min-height: 0; overflow-y: auto; padding: 20px 28px 22px; animation: slideIn 340ms cubic-bezier(0.22, 1, 0.36, 1); }
+.nl-qr-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nl-qr-kind { display: grid; gap: 6px; text-align: left; padding: 16px; background: #fff; border: 1px solid var(--line-strong); cursor: pointer; color: var(--ink); }
+.nl-qr-kind b { font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; font-size: 16px; }
+.nl-qr-kind span { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.nl-qr-kind.is-on { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); background: var(--nl-linen, #F5EFE6); }
+.nl-qr-field { display: grid; gap: 6px; margin-top: 16px; min-width: 0; }
+.nl-qr-field > span { font-family: var(--font-bricolage); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: var(--muted); }
+.nl-qr-field input, .nl-qr-field textarea { width: 100%; padding: 9px 12px; background: #fff; border: 1px solid var(--line-strong); font-size: 14.5px; color: var(--ink); font-family: var(--font-inter), sans-serif; }
+.nl-qr-field textarea { resize: vertical; line-height: 1.5; }
+.nl-qr-field em { font-style: normal; font-size: 12px; color: var(--accent-dark, #A85A51); }
+.nl-qr-pc input { max-width: 180px; }
+.nl-qr-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.nl-qr-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.nl-qr-pills button { min-width: 44px; padding: 8px 12px; background: #fff; border: 1px solid var(--line-strong); font-size: 13.5px; color: var(--ink); cursor: pointer; }
+.nl-qr-pills button.is-on { background: var(--primary); border-color: var(--primary); color: var(--on-primary, #fff); }
+.nl-qr-hint { margin: 14px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.nl-qr-check iframe { display: block; width: 100%; aspect-ratio: 842 / 595; max-height: 52vh; background: #fff; border: 1px solid var(--line-strong); }
+.nl-qr-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.nl-qr-meta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nl-qr-meta a { flex: none; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.nl-qr-warn { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.nl-qr-error { margin: 14px 0 0; padding: 10px 12px; font-size: 13px; line-height: 1.5; color: var(--bad-ink, #7a2f27); background: var(--bad-soft, #f6e7e3); }
+.nl-qr-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 28px; border-top: 1px solid var(--line); }
+.nl-qr-foot .nl-btn { display: inline-flex; align-items: center; gap: 8px; }
+.nl-qr-spin { width: 12px; height: 12px; border: 2px solid currentColor; border-top-color: transparent; animation: spin .8s linear infinite; border-radius: 999px !important; }
+@media (max-width: 640px) {
+  .nl-qr-wrap { padding: 0; place-items: stretch; }
+  .nl-qr { width: 100%; height: 100%; max-height: none; }
+  .nl-qr-head, .nl-qr-body, .nl-qr-foot { padding-left: 18px; padding-right: 18px; }
+  .nl-qr-kinds, .nl-qr-row { grid-template-columns: 1fr; gap: 0 16px; }
+  .nl-qr-kinds { gap: 8px; }
+}
+
 /* WhatsApp: bigger, square, the message with room to read (8 Nov 2026). */
 .nl-wa-wrap > button:first-child { background: rgba(20, 20, 19, .36); }
 .nl-wa { max-width: 860px; background: var(--page); color: var(--ink); border: 1px solid rgba(20, 20, 19, .14); box-shadow: 0 40px 90px -30px rgba(20, 20, 19, .5); }
