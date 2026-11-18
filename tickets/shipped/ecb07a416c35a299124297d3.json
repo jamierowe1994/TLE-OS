@@ -1,0 +1,1 @@
+{ "id": "ecb07a416c35a299124297d3", "summary": "The Book a Viewing window no longer keeps redrawing itself while it is open, which could make the Diary screen stop with an error." }
