@@ -13,6 +13,7 @@ import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/r
 import { rexSignInLapsed, rexTokenFor } from "@/lib/rex-user";
 import { isOwner } from "@/lib/agent-words";
 import { refusalInWords } from "@/lib/rex-refusal";
+import { noteFailure } from "@/lib/auto-bugs";
 import { recordFact } from "@/lib/property-facts";
 import { MAX_REG_NUMBERS, isRealDay, joinRegExpiries, joinRegNumbers, joinRegOwners, regNumbers, regOwnerName } from "@/lib/reg-numbers";
 import { bandForScore, forgetRecord, normaliseLarn, saveAgentLarn, withScottishFooter } from "@/lib/listing-record";
@@ -359,6 +360,9 @@ export async function PATCH(req: NextRequest) {
     const token = await rexTokenFor(actor.id);
     const outcome: { listing?: string; rooms?: string } = {};
     let failed = false;
+    let roomsByOffice = false;
+    let roomsSaved = false;
+    let portalsTold: boolean | null = null;
 
     /* The property FIRST. REX sends a listing to the portals when the
        listing changes, reading the property as it stands at that moment: on
@@ -369,8 +373,35 @@ export async function PATCH(req: NextRequest) {
         /* Owner-only diagnostics say which permission; nobody else needs to. */
         outcome.rooms = isOwner(actor) ? "Rooms and utilities are kept here; sending them on needs Properties/update on REX_ALLOW_WRITES." : "Kept here; they will reach the portals once switched on.";
       } else {
-        const r = await rexCall("Properties", "update", { data: plan.property }, token);
-        outcome.rooms = r.ok ? "Saved." : isOwner(actor) ? `REX refused the property half: ${r.error ?? r.status}` : "The rooms and services are kept here, and did not reach the portals yet.";
+        let r = await rexCall("Properties", "update", { data: plan.property }, token);
+        /* REX checks the writer against the PROPERTY's owner, not the
+           listing's. A home made under the office login (the 19 Sep sync,
+           an OS-made property) stays the office's while its listing is the
+           agent's, so the agent's own save of the rooms is refused every
+           time - Sean McMahon, ticket 86898102, 17 Nov 2026: eight saves,
+           all "kept here", nothing logged. The agent has already passed
+           listingIsTheirs above, so it is their advert: say REX's reason in
+           the log, then send the same rooms as the office (James, 18 Nov). */
+        /* Never for a lapsed sign-in: that must say "sign in again", not have
+           the office quietly do it (lib/rex.ts). REX answers a permission
+           refusal with 401 as well, so ask whether the token is still live. */
+        if (!r.ok && token && isExpiredToken(r) && (await rexSignInLapsed(r, token))) {
+          return NextResponse.json({ ok: false, error: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.", reconnect: true }, { status: 401 });
+        }
+        if (!r.ok && token) {
+          const why = String(r.error ?? `answered ${r.status}`).slice(0, 300);
+          console.warn(`[listings/details] rooms on property ${plan.propertyId ?? "?"} (listing ${id}) refused for ${actor.email}: ${why}`);
+          const office = await rexCall("Properties", "update", { data: plan.property }, null).catch((e: Error) => ({ ok: false, error: e.message, status: 0, result: null }));
+          if (office.ok) {
+            roomsByOffice = true;
+            r = office as typeof r;
+          } else {
+            console.warn(`[listings/details] ...and as the office: ${String(office.error ?? office.status).slice(0, 300)}`);
+            noteFailure({ source: "REX", what: "Properties/update (advert rooms)", status: r.status || null, message: why, who: actor.email });
+          }
+        }
+        outcome.rooms = r.ok ? "Saved." : isOwner(actor) ? `REX refused the property half: ${r.error ?? r.status}` : "The rooms and services did not reach the portals. The office has been told.";
+        roomsSaved = r.ok;
         failed ||= !r.ok;
       }
     }
@@ -390,13 +421,30 @@ export async function PATCH(req: NextRequest) {
         failed ||= !r.ok;
       }
     }
+
+    /* REX re-sends a listing to the portals when the LISTING changes. A save
+       of the rooms alone changes only the property, so the portals kept the
+       old (empty) rooms until something else on the advert moved. When the
+       rooms went in, the listing was untouched and it is on the portals, ask
+       for a fresh upload - the same call Let Agreed makes. */
+    if (roomsSaved && !plan.listing && !rexWritesLocked("ListingPortalUploads", "queue")) {
+      const pub = await rexCall("ListingPublication", "getPublicationStatus", { listing_id: id }).catch(() => null);
+      const res = (pub?.ok ? pub.result : null) as { status?: unknown; active_targets?: unknown } | null;
+      const onPortals = res?.status === "published" && Array.isArray(res.active_targets) && res.active_targets.includes("portals");
+      if (onPortals) {
+        const q = await rexCall("ListingPortalUploads", "queue", { listing_id: id }, roomsByOffice ? null : token).catch(() => null);
+        /* "Already queued" means a send is waiting, and it will read the new rooms. */
+        portalsTold = Boolean(q?.ok || /already queued/i.test(String(q?.error ?? "")));
+      }
+    }
+
     await invalidateListingBook();
     forgetListing(id);
     await record({
       kind: "listing_edited",
       actorId: actor.id,
       actorEmail: actor.email,
-      detail: `${id}: ${Object.keys(edit).join(", ")} - listing ${outcome.listing ?? "untouched"}; rooms ${outcome.rooms ?? "untouched"}${token ? "" : " (office account)"}`,
+      detail: `${id}: ${Object.keys(edit).join(", ")} - listing ${outcome.listing ?? "untouched"}; rooms ${outcome.rooms ?? "untouched"}${roomsByOffice ? " (rooms as the office: the agent was refused)" : ""}${portalsTold === null ? "" : portalsTold ? "; portals re-sent" : "; portal re-send NOT queued"}${token ? "" : " (office account)"}`,
     });
 
     /* Read back rather than trusting the write: REX trims and normalises. */
