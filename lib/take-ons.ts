@@ -312,6 +312,82 @@ export async function cancelTakeOn(id: string): Promise<boolean> {
 }
 
 /**
+ * PUT A TAKE-ON ON ANOTHER ROOM (18 Nov 2026).
+ *
+ * An agent took over the tenant in Room 4 of a shared house the OS held three
+ * rooms for. There was no Room 4 to pick, so the transfer was started from
+ * Room 2's page and its tenant sat on Room 2, which had to stay free for
+ * somebody else. Nothing on the screen could add a room or move the tenant.
+ *
+ * This moves the whole take-on, everything keyed and every letter ticked, to:
+ *   - another room the house already has (to.homeRef), or
+ *   - a room the OS doesn't hold yet (to.homeRef null): its own OS property
+ *     record is made, "Not on REX", exactly as a brand new take-on's would be,
+ *     and it joins the house by its address like any other room.
+ * The room it was on gets back what the take-on laid over it: the tenants'
+ * names where the take-on put them there, and their contact rows.
+ *
+ * OS tables only. Refused once a push has really gone to Propoly or REX: the
+ * deal and the home there carry the old room, and that is the office's to put
+ * right, not something to paper over here.
+ */
+export async function moveTakeOn(
+  id: string,
+  to: { homeRef: string | null; line1: string; town: string; postcode: string; locality: string }
+): Promise<{ takeOn: TakeOn; from: string } | { error: string }> {
+  const t = await getTakeOn(id);
+  if (!t) return { error: "That take-on isn't here." };
+  const sent = [t.propolyPush, t.rexPush].some((p) => p?.mode === "live" && Object.keys(p.ids ?? {}).length > 0);
+  if (sent) return { error: "This transfer has already been sent on, so the room can't be changed from here. Ask the office to put it right." };
+  const names = t.tenants.map((x) => x.name).join(", ");
+  const own = `mt-${t.id}`;
+  let osPropertyId: string | null;
+  let homeRef: string;
+  if (to.homeRef) {
+    homeRef = to.homeRef;
+    osPropertyId = /^\d+$/.test(to.homeRef) ? null : to.homeRef;
+    if (osPropertyId) {
+      await q(`UPDATE os_properties SET tenant_names = COALESCE(NULLIF(btrim(tenant_names), ''), $2), updated_at = NOW() WHERE id = $1`, [osPropertyId, names || null]).catch(() => {});
+    }
+  } else {
+    homeRef = own;
+    osPropertyId = own;
+    const address = [to.line1, to.town, to.postcode].filter(Boolean).join(", ");
+    await q(
+      `INSERT INTO os_properties (id, source, ref, address, name, locality, postcode, town, bedrooms, management, categories, hmo, no_gas, rex_property_id, match_how, active,
+                                  landlord_name, landlord_email, landlord_phone, agent_name, tenant_names, service_level)
+       VALUES ($1, 'transfer', $2, $3, $4, $5, $6, $7, $8, 'Active', '[]'::jsonb, $9, FALSE, NULL, 'management transfer', TRUE, $10, $11, $12, $13, $14, $15)
+       ON CONFLICT (id) DO UPDATE SET address = EXCLUDED.address, name = EXCLUDED.name, locality = EXCLUDED.locality, postcode = EXCLUDED.postcode,
+         town = EXCLUDED.town, tenant_names = EXCLUDED.tenant_names, active = TRUE, updated_at = NOW()`,
+      [own, `MT-${t.id.slice(0, 6).toUpperCase()}`, address, to.line1, to.locality, to.postcode || null, to.town || null, t.bedrooms,
+       t.letType !== "residential", t.landlord.name, t.landlord.email, t.landlord.phone, t.by, names || null, t.service]
+    );
+  }
+  /* The room it was on: give back what this take-on laid over it. */
+  if (t.osPropertyId && t.osPropertyId !== osPropertyId) {
+    if (t.osPropertyId === own) await q(`UPDATE os_properties SET active = FALSE, updated_at = NOW() WHERE id = $1`, [own]).catch(() => {});
+    else if (names) await q(`UPDATE os_properties SET tenant_names = NULL, updated_at = NOW() WHERE id = $1 AND tenant_names = $2`, [t.osPropertyId, names]).catch(() => {});
+    const { ensureTenantContacts } = await import("@/lib/tenant-contacts");
+    await ensureTenantContacts();
+    if (osPropertyId) {
+      await q(
+        `INSERT INTO os_tenant_contacts (os_property_id, name, name_key, email, phone, source, source_ref)
+         SELECT $2, name, name_key, email, phone, source, source_ref FROM os_tenant_contacts WHERE os_property_id = $1 AND source = 'take-on' AND source_ref = $3
+         ON CONFLICT (os_property_id, name_key) DO UPDATE SET email = COALESCE(EXCLUDED.email, os_tenant_contacts.email), phone = COALESCE(EXCLUDED.phone, os_tenant_contacts.phone)`,
+        [t.osPropertyId, osPropertyId, t.id]
+      );
+    }
+    await q(`DELETE FROM os_tenant_contacts WHERE os_property_id = $1 AND source = 'take-on' AND source_ref = $2`, [t.osPropertyId, t.id]);
+  }
+  const rows = await tq<Row>(
+    `UPDATE os_take_ons SET home_ref = $2, os_property_id = $3, line1 = $4, town = $5, postcode = $6, updated_at = NOW() WHERE id = $1 AND cancelled_at IS NULL RETURNING *`,
+    [t.id, homeRef, osPropertyId, to.line1, to.town, to.postcode]
+  );
+  if (!rows[0]) return { error: "That take-on isn't here." };
+  return { takeOn: shape(rows[0]), from: t.line1 };
+}
+
+/**
  * Laid over the book on every read (lib/managed-book-cache), like notice and
  * record landlords: a take-on saved a moment ago is on Portfolio straight
  * away, without waiting for the next REX read. A new home is added for the

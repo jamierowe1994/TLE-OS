@@ -410,6 +410,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Email sends the tenants, the landlord or both an email from the home, with any of its certificates or documents attached. Send out logins gives tenants their own account.",
       "Move a home to another agent, Use as a case study, and (compliance and owners) Archive this home once we no longer look after it.",
       "Take on a home brings in one we are taking over from another agent, with its sitting tenants.",
+      "A room of a shared house the OS doesn't show yet (the house has four rooms and Portfolio lists three): Take on a home with the address written as 'Room 4, 32 Example Road' and the house's postcode. It joins the house it belongs to as a new room. It does NOT make a second copy of the house.",
+      "A management transfer saved on the wrong room: open the transfer (the Management transfer button on that room) and press Move to Another Room. Pick a room of the house, or A Room That Isn't Listed and its number. Everything on the transfer moves, the room it was on is left free, and nothing is sent to anyone. Once the office has sent a transfer on to Propoly, only the office can change its room.",
       "The three charts of the book (service, town, rent) are on the PM Dashboard (/overview); pressing a slice opens Portfolio filtered to it.",
     ],
     wiring: "live",

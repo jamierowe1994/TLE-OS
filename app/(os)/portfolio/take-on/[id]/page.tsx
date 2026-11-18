@@ -36,6 +36,9 @@ const DEPOSIT: Record<string, string> = {
 const box = "nl-to-box";
 
 type PushFlags = { propolyLive: boolean; rexLive: boolean; canPush: boolean };
+/** The rooms of the take-on's house (GET ?rooms=1), for Move to Another Room. */
+type RoomChoice = { ref: string; label: string; tenant: string | null; here: boolean };
+type HouseRooms = { isRoom: boolean; rooms: RoomChoice[] };
 
 const STEP_CHIP: Record<TakeOnPushStep["state"], { label: string; cls: string }> = {
   done: { label: "Done", cls: "bg-accent-soft text-accent-dark" },
@@ -123,6 +126,12 @@ const pounds = (n: number | null | undefined) => (n == null ? "Not given" : `£$
 export default function TakeOnPage() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<{ status: "loading" } | { status: "failed"; error: string } | { status: "ready"; t: TakeOn; held: boolean; push: PushFlags }>({ status: "loading" });
+  /* Move to Another Room (18 Nov 2026): a transfer saved on the wrong room of a shared house. */
+  const [house, setHouse] = useState<HouseRooms | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [pick, setPick] = useState<string>("");
+  const [newRoom, setNewRoom] = useState("");
+  const [moveMsg, setMoveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [pushError, setPushError] = useState<{ system: "propoly" | "rex"; text: string } | null>(null);
 
@@ -136,6 +145,14 @@ export default function TakeOnPage() {
       .catch(() => setState({ status: "failed", error: "This take-on couldn't be read just now." }));
   }, [id]);
   useEffect(load, [load]);
+  /* The rooms of its house come after: they read the whole book, and the page shouldn't wait on that. */
+  const loadRooms = useCallback(() => {
+    fetch(`/api/take-ons?id=${encodeURIComponent(id)}&rooms=1`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j?.ok) setHouse(j.house ?? null); })
+      .catch(() => { /* the button just isn't offered */ });
+  }, [id]);
+  useEffect(loadRooms, [loadRooms]);
 
   async function tick(key: string, done: boolean) {
     setBusy(key);
@@ -143,6 +160,23 @@ export default function TakeOnPage() {
       .then((r) => r.json()).catch(() => null);
     setBusy(null);
     if (j?.ok && j.takeOn) ready(j);
+  }
+
+  async function move() {
+    const body = pick === "new" ? { id, move: { room: newRoom } } : { id, move: { home: pick } };
+    setBusy("move");
+    setMoveMsg(null);
+    const j = await fetch("/api/take-ons", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+      .then((r) => r.json()).catch(() => null);
+    setBusy(null);
+    if (j?.ok && j.takeOn) {
+      ready(j);
+      setMoving(false);
+      setPick("");
+      setNewRoom("");
+      setMoveMsg({ ok: true, text: `Moved to ${j.moved?.to ?? "the new room"}. ${j.moved?.from ?? "The old room"} is free again.` });
+      loadRooms();
+    } else setMoveMsg({ ok: false, text: j?.error ?? "That didn't move. Try again in a minute." });
   }
 
   /* A push can take a minute: Propoly's homes are read a page at a time. */
@@ -176,6 +210,9 @@ export default function TakeOnPage() {
   const done = t.comms.filter((c) => c.doneAt).length;
   const referenced = t.tenants.filter((x) => x.reference);
   const address = [t.line1, t.town, t.postcode].filter(Boolean).join(", ");
+  /* Once it has really gone to Propoly or the listing system, the room is the office's to change. */
+  const sentOn = [t.propolyPush, t.rexPush].some((p) => p?.mode === "live" && Object.keys(p.ids ?? {}).length > 0);
+  const who = t.tenants.length === 1 ? t.tenants[0].name : t.tenants.length ? `${t.tenants[0].name} and ${t.tenants.length - 1} More` : "The Tenant";
   const deal: Array<[string, string]> = [
     ["Landlord", [t.landlord.name, t.landlord.email].filter(Boolean).join(", ")],
     ["Property", address],
@@ -202,8 +239,70 @@ export default function TakeOnPage() {
             <p className="mt-1 text-[13px] text-muted">{[t.town, t.postcode].filter(Boolean).join(" ")}</p>
             <p className="mt-2 text-[12.5px] text-muted">Taken on by {t.by} on {day(t.at)}. We take over on {day(t.takeoverOn)}{t.previousAgent ? `, from ${t.previousAgent}` : ""}.</p>
           </div>
-          <Link href={`/portfolio/${encodeURIComponent(t.homeRef)}`} className="nl-btn nl-btn--primary w-full shrink-0 justify-center sm:w-auto">Open the Home</Link>
+          <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
+            {house?.isRoom && !sentOn && (
+              <button type="button" data-steve="take-on.move-room" onClick={() => { setMoving((v) => !v); setMoveMsg(null); }} aria-expanded={moving} className="nl-btn nl-btn--secondary w-full justify-center sm:w-auto">
+                Move to Another Room
+              </button>
+            )}
+            <Link href={`/portfolio/${encodeURIComponent(t.homeRef)}`} className="nl-btn nl-btn--primary w-full justify-center sm:w-auto">Open the Home</Link>
+          </div>
         </div>
+        {moveMsg && !moving && (
+          <p role="status" className={`mt-4 px-3 py-2 text-[12.5px] ${moveMsg.ok ? "bg-accent-soft text-accent-dark" : "bg-red-50 text-red-700"}`}>{moveMsg.text}</p>
+        )}
+        {moving && house && (
+          <div className="mt-5 border-t border-line/60 pt-5" data-steve="take-on.move-room.panel">
+            <h2 className="nl-to-h2">Which Room Is {who} In?</h2>
+            <p className="mt-2 max-w-[62ch] text-[12.5px] leading-relaxed text-muted">
+              Everything on this transfer moves with {t.tenants.length === 1 ? "them" : "them all"}, and the room it is on now is left free. Nothing is sent to anyone.
+            </p>
+            <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+              {house.rooms.map((r) => {
+                const off = r.here || Boolean(r.tenant);
+                return (
+                  <li key={r.ref} className="h-full">
+                    <label className={`flex h-full min-h-[52px] items-center gap-3 border px-3 py-2.5 text-[13px] ${off ? "border-line/60 text-muted" : pick === r.ref ? "border-ink" : "cursor-pointer border-line hover:border-ink"}`}>
+                      <input type="radio" name="move-room" className="h-4 w-4 shrink-0 accent-[var(--primary)]" disabled={off} checked={pick === r.ref} onChange={() => setPick(r.ref)} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold">{r.label}</span>
+                        <span className="block truncate text-[11.5px] text-muted">{r.here ? "It is on this room now" : r.tenant ? `${r.tenant} lives here` : "Empty"}</span>
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+              <li>
+                <label className={`flex h-full min-h-[52px] items-center gap-3 border px-3 py-2.5 text-[13px] ${pick === "new" ? "border-ink" : "cursor-pointer border-line hover:border-ink"}`}>
+                  <input type="radio" name="move-room" className="h-4 w-4 shrink-0 accent-[var(--primary)]" checked={pick === "new"} onChange={() => setPick("new")} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">A Room That Isn&apos;t Listed</span>
+                    <span className="mt-1 flex items-center gap-2 text-[12.5px]">
+                      <span className="text-muted">Room</span>
+                      <input
+                        value={newRoom}
+                        onFocus={() => setPick("new")}
+                        onChange={(e) => setNewRoom(e.target.value.replace(/[^a-z0-9]/gi, "").slice(0, 3))}
+                        inputMode="numeric"
+                        aria-label="The room's number"
+                        placeholder="4"
+                        className="h-8 w-16 border border-line bg-white px-2 text-[13px] outline-none focus:border-ink"
+                      />
+                    </span>
+                  </span>
+                </label>
+              </li>
+            </ul>
+            {moveMsg && !moveMsg.ok && <p role="alert" className="mt-3 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">{moveMsg.text}</p>}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button type="button" disabled={busy === "move" || !pick || (pick === "new" && !newRoom)} onClick={() => void move()} className={`nl-btn nl-btn--primary justify-center ${busy === "move" || !pick || (pick === "new" && !newRoom) ? "opacity-50" : ""}`}>
+                {busy === "move" && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+                {busy === "move" ? "Moving…" : "Move the Transfer"}
+              </button>
+              <button type="button" onClick={() => { setMoving(false); setMoveMsg(null); }} className="nl-btn nl-btn--secondary justify-center">Cancel</button>
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
