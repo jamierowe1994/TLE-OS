@@ -187,7 +187,7 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
       <div className="grid grid-cols-2 gap-3 sm:hidden" style={rise(2)}>
         <section className={`${card} flex flex-col p-4`} data-search>
           <p className={`${eyebrow} mb-3`}>{d ? "Your tenancy" : "Your journey"}</p>
-          <SpinePhone stops={v.stops} href={d && !locks.tenancy ? to("/tenancy") : null} blurbs={RING_WORDS} stacked />
+          <SpinePhone stops={v.stops} href={d && !locks.tenancy ? to("/tenancy") : null} blurbs={RING_WORDS} stacked progress />
         </section>
         <div className="relative flex flex-col overflow-hidden rounded-[22px] bg-accent-soft p-4" data-search>
           <p className={eyebrow}>{phase === "living" ? "Right now" : "Your next step"}</p>

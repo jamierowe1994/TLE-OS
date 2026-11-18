@@ -34,7 +34,12 @@ export default function SpinePhone({
   href: given,
   blurbs = BLURB,
   stacked = false,
+  progress = false,
 }: {
+  /** How far along and the stop after, in place of the stop's name and words:
+   *  for a box that sits beside a card already naming the stop they are at
+   *  (the tenant's home on a phone, 18 Nov 2026 - it said Referencing twice). */
+  progress?: boolean;
   /** Ring above the words, centred, for half a phone's width (the tenant's
    *  home, 18 Sep 2026). Off, the ring sits beside them as before. */
   stacked?: boolean;
@@ -98,11 +103,20 @@ export default function SpinePhone({
         </span>
       </div>
 
+      {progress ? (
+        <div className={stacked ? "min-w-0" : "min-w-0 flex-1"}>
+          <p className={`${stacked ? "text-[15px]" : "text-[17px]"} font-bold leading-tight`}>{done} of {stops.length} done</p>
+          <p className={`mt-1.5 leading-relaxed text-muted ${stacked ? "text-[11.5px]" : "text-[12px]"}`}>
+            {stops[at + 1] && done < stops.length ? `After this: ${stops[at + 1].label}` : done === stops.length ? "Every step done" : ""}
+          </p>
+        </div>
+      ) : (
       <div className={stacked ? "min-w-0" : "min-w-0 flex-1"}>
         <p className={`${stacked ? "text-[15px]" : "text-[17px]"} font-bold leading-tight`}>{here.label}</p>
         {here.sub && <p className="mt-0.5 text-[12px] text-muted">{here.sub}</p>}
         <p className={`mt-1.5 leading-relaxed text-muted ${stacked ? "text-[11.5px]" : "text-[12px]"}`}>{blurbs[here.id] ?? ""}</p>
       </div>
+      )}
 
       {href && !stacked && (
         <span aria-hidden className="shrink-0 text-[18px] text-muted">
