@@ -9,6 +9,7 @@ import Income from "./tabs/income";
 import Pnl from "./tabs/pnl";
 import Forecast from "./tabs/forecast";
 import Agents from "./tabs/agents";
+import LandlordDecks from "./tabs/landlord-decks";
 import Portfolio from "./tabs/portfolio";
 import PropertyManagement from "./tabs/property-management";
 import Arrears from "./tabs/arrears";
@@ -26,6 +27,7 @@ export const TAB_COMPONENTS: Record<BusinessTabKey, TabComponent> = {
   pnl: Pnl,
   forecast: Forecast,
   agents: Agents,
+  "landlord-decks": LandlordDecks,
   portfolio: Portfolio,
   "property-management": PropertyManagement,
   arrears: Arrears,

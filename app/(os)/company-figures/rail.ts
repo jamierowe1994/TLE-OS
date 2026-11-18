@@ -18,6 +18,9 @@ export const BUSINESS_TABS = [
   { key: "pnl", label: "P&L", icon: "bank", blurb: "Income from PayProp until a month's accounts are in, costs from the accounts, and the plan for the months ahead." },
   { key: "forecast", label: "Forecast", icon: "trend-up", blurb: "The plan, the partners' own forecasts, and what the book is worth." },
   { key: "agents", label: "Agents", icon: "user", blurb: "Each partner's month: commission, book, appraisals, listings and pipeline." },
+  /* James, 18 Nov 2026: who is sending the landlord decks, whether landlords
+     open them, and whether each valuation goes out with its deck. */
+  { key: "landlord-decks", label: "Landlord Decks", icon: "doc", blurb: "Who is sending the landlord decks, whether landlords open them, and whether each valuation goes out with its deck." },
   { key: "portfolio", label: "Portfolio", icon: "pack/building", blurb: "The book: managed, let only and rent collection, England, Wales and Scotland, with Margo's Glasgow portfolio apart." },
   /* Susan Liles, 3 Nov 2026: "the Property management overview that we had
      before ... every property management function and overview". Every
@@ -37,16 +40,16 @@ export const PRESENT_KEYS: BusinessTabKey[] = ["overview", "paid-leads", "income
 export const BUSINESS_RAIL: RailGroup[] = [
   {
     title: null,
-    items: BUSINESS_TABS.slice(0, 7).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
+    items: BUSINESS_TABS.slice(0, 8).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
   },
   {
     title: "The book",
     rule: true,
-    items: BUSINESS_TABS.slice(7, 11).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
+    items: BUSINESS_TABS.slice(8, 12).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
   },
   {
     title: null,
     rule: true,
-    items: BUSINESS_TABS.slice(11).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
+    items: BUSINESS_TABS.slice(12).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
   },
 ];
