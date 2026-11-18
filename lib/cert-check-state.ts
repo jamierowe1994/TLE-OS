@@ -64,3 +64,18 @@ export function notYetSendable(s: CertCheckState | undefined): string | null {
   if (s?.state === "queried") return "Queried by the compliance team, so it can't be sent until a good one is verified.";
   return null;
 }
+
+/**
+ * A landlord's uploads the compliance team closed without verifying (Michael
+ * Healy, 17 Nov 2026: a duplicate, or title deeds sent as the gas safety
+ * record). Kept on record, but they no longer count as the document they were
+ * sent as, so the landlord's portal asks for the right one again.
+ */
+export async function closedLandlordDocs(ids: string[]): Promise<Set<string>> {
+  if (!hasDb() || !ids.length) return new Set();
+  const rows = await q<{ subject_id: string }>(
+    `SELECT subject_id FROM os_compliance_checks WHERE kind = 'landlord_document' AND state = 'closed' AND subject_id = ANY($1)`,
+    [ids]
+  ).catch(() => []);
+  return new Set(rows.map((r) => r.subject_id));
+}

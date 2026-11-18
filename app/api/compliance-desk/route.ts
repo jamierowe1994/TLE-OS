@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
-import { hasDb } from "@/lib/db";
+import { hasDb, q } from "@/lib/db";
 import { overview } from "@/lib/agent-compliance";
-import { answer, isCheckKind, subjectExists, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
+import { answer, closeUnverified, isCheckKind, isCloseReason, subjectExists, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
+import { refreshComplianceBook } from "@/lib/compliance-cache";
 import { confirmRegister, readAccuracy, readOne, REGISTERS } from "@/lib/cert-register";
 
 /**
@@ -21,6 +22,8 @@ import { confirmRegister, readAccuracy, readOne, REGISTERS } from "@/lib/cert-re
  *        fileAs { type, expiry, issue? }: a landlord's certificate, filed as a
  *        real one on his Verified.
  *        { action: "read", kind, id } reads the engineer off the certificate.
+ *        { state: "closed", reason: "duplicate" | "wrong", note? } takes it off
+ *        the list without verifying it (lib/compliance-desk closeUnverified).
  *
  * Since 4 Oct 2026 his answer has consequences (lib/compliance-desk, answer):
  * Verified lets a certificate go on to the landlord and tenants; a query
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
   if (!me) return NextResponse.json({ ok: false, error: "Not yours." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   const b = (await req.json().catch(() => ({}))) as {
-    kind?: string; id?: string; state?: string; note?: string; action?: string; registerNumber?: string; again?: boolean;
+    kind?: string; id?: string; state?: string; note?: string; action?: string; registerNumber?: string; again?: boolean; reason?: string;
     fileAs?: { type?: string; expiry?: string; issue?: string } | null;
   };
   if (!b.kind || !isCheckKind(b.kind) || !b.id) return NextResponse.json({ ok: false, error: "Which one?" }, { status: 400 });
@@ -74,6 +77,21 @@ export async function POST(req: NextRequest) {
     const read = await readOne(b.kind, b.id, { again: b.again === true });
     const reg = read.scheme !== "none" ? REGISTERS[read.scheme] : null;
     return NextResponse.json({ ok: true, read, registerName: reg?.name ?? null, registerUrl: reg?.url ?? null });
+  }
+  if (b.state === "closed") {
+    if (b.kind === "works_order") return NextResponse.json({ ok: false, error: "A works order can't be closed from here." }, { status: 400 });
+    if (!isCloseReason(b.reason)) return NextResponse.json({ ok: false, error: "Say why it is being closed: a duplicate, or not the right document." }, { status: 400 });
+    if (!(await subjectExists(b.kind, b.id))) return NextResponse.json({ ok: false, error: "That record is not there any more." }, { status: 404 });
+    let said = "";
+    try {
+      said = await closeUnverified({ kind: b.kind, id: b.id, reason: b.reason, note: b.note, by: me.name || me.email });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: publicError(e, "That did not save.") }, { status: 400 });
+    }
+    /* A certificate came off a home: every screen that counts them reads the book. */
+    if (b.kind === "certificate") void refreshComplianceBook().catch(() => null);
+    const [verify, works] = await Promise.all([verifyQueue(), worksToCheck()]);
+    return NextResponse.json({ ok: true, said, verify, works });
   }
   if (b.state !== "verified" && b.state !== "queried") return NextResponse.json({ ok: false, error: "Verified, or queried?" }, { status: 400 });
   if (b.state === "queried" && !b.note?.trim()) return NextResponse.json({ ok: false, error: "Say what is wrong with it, so the agent knows what to put right." }, { status: 400 });
@@ -96,6 +114,23 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That did not save.") }, { status: 400 });
   }
-  const [verify, works] = await Promise.all([verifyQueue(), worksToCheck()]);
-  return NextResponse.json({ ok: true, said, verify, works });
+  const [verify, works, emailTenant] = await Promise.all([verifyQueue(), worksToCheck(), b.state === "verified" ? toEmail(b.kind, b.id) : null]);
+  return NextResponse.json({ ok: true, said, verify, works, emailTenant });
+}
+
+/**
+ * The certificate he just verified, for Email Tenant on his screen there and
+ * then (Michael Healy, ticket b6ddcf01, 16 Nov 2026) - a landlord's upload by
+ * the certificate it was filed as. Null when there is none, or the automatic
+ * send has already given it to the tenants.
+ */
+async function toEmail(kind: string, id: string): Promise<string | null> {
+  if (kind === "works_order") return null;
+  const certId =
+    kind === "certificate"
+      ? id
+      : ((await q<{ certificate_id: string | null }>(`SELECT certificate_id FROM os_landlord_documents WHERE id = $1`, [id]).catch(() => []))[0]?.certificate_id ?? null);
+  if (!certId) return null;
+  const had = await q<{ n: number }>(`SELECT count(*)::int AS n FROM os_certificate_sends WHERE certificate_id = $1 AND role = 'tenant' AND sent`, [certId]).catch(() => [{ n: 0 }]);
+  return (had[0]?.n ?? 0) > 0 ? null : certId;
 }

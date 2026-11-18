@@ -18,6 +18,9 @@ import type { CertRow } from "@/lib/certificate-intake";
  *
  *   wrong     - it is not this certificate at all
  *   replaced  - it was out of date, or a newer one has gone on (Replace)
+ *   duplicate - the same certificate filed twice (Michael Healy, 17 Nov 2026,
+ *               closing one from the desk without verifying it). REX's entry
+ *               is the copy that stays, so it is never left out for this.
  *
  * The file is moved under removed/ rather than deleted, and the row is kept
  * in os_certificates_removed, so what was taken off and by whom can always be
@@ -28,11 +31,12 @@ import type { CertRow } from "@/lib/certificate-intake";
  * certificate is written over the entry, its new date shows again.
  */
 
-export type RemoveReason = "wrong" | "replaced";
+export type RemoveReason = "wrong" | "replaced" | "duplicate";
 
 export const REMOVE_REASONS: Record<RemoveReason, string> = {
   wrong: "Wrong document",
   replaced: "Out of date or replaced",
+  duplicate: "A duplicate",
 };
 
 /** The R2 folder every certificate for this home is filed in. */
@@ -46,11 +50,18 @@ export async function removeCertificate(input: {
   by: string;
   /** The certificate that replaces it, when it went because of a Replace. */
   replacedBy?: string | null;
+  /** This record exactly, where the caller knows it (the desk's Close): the
+   *  same file can be filed twice, and the key alone would pick either. */
+  certificateId?: string | null;
 }): Promise<{ ok: true; name: string; rexStillHolds: boolean } | { ok: false; error: string }> {
   if (!hasDb()) return { ok: false, error: "No database on this environment." };
   if (keyClimbs(input.key)) return { ok: false, error: "That file is not one of this home's certificates." };
   const rows = await q<CertRow>(`SELECT * FROM os_certificates WHERE property_id = $1 AND r2_key = $2`, [input.propertyId, input.key]);
-  const row = rows[0] ?? null;
+  const row = (input.certificateId ? rows.find((r) => r.id === input.certificateId) : rows[0]) ?? null;
+  if (input.certificateId && !row) return { ok: false, error: "That certificate is not there any more." };
+  /* The same file filed twice: taking one record off must leave the file
+     where the other one still points. */
+  const fileShared = Boolean(row) && (await q<{ n: number }>(`SELECT count(*)::int AS n FROM os_certificates WHERE r2_key = $1 AND id <> $2`, [input.key, row!.id]))[0]?.n > 0;
   /* Only a file on this home's own shelf: the key comes from the browser.
      Or one a certificate record of this home names (Lianna Denholm, 17 Nov
      2026, ticket 913fb152): a home linked to its REX property after its
@@ -65,7 +76,7 @@ export async function removeCertificate(input: {
 
   /* The file first: if it cannot be moved, nothing has changed. */
   const movedTo = `removed/${input.key}`;
-  if (r2Configured) {
+  if (r2Configured && !fileShared) {
     try {
       await withR2(async (c) => {
         await c.send(new CopyObjectCommand({ Bucket: R2_BUCKET, CopySource: `${R2_BUCKET}/${encodeURIComponent(input.key)}`, Key: movedTo }));
@@ -82,7 +93,7 @@ export async function removeCertificate(input: {
     `INSERT INTO os_certificates_removed (id, property_id, type_id, name, r2_key, moved_to, expiry, rex_entry_id, replaced_by, row, reason, removed_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12)
      ON CONFLICT (id) DO NOTHING`,
-    [row?.id ?? `file-${Date.now()}`, input.propertyId, typeId, name, input.key, r2Configured ? movedTo : null, expiry, row?.rex_entry_id || null, input.replacedBy ?? null, JSON.stringify(row ?? {}), input.reason, input.by]
+    [row?.id ?? `file-${Date.now()}`, input.propertyId, typeId, name, input.key, r2Configured && !fileShared ? movedTo : null, expiry, input.reason === "duplicate" ? null : row?.rex_entry_id || null, input.replacedBy ?? null, JSON.stringify(row ?? {}), input.reason, input.by]
   );
   if (row) await q(`DELETE FROM os_certificates WHERE id = $1`, [row.id]);
   removedCache = null;
@@ -94,7 +105,7 @@ export async function removeCertificate(input: {
       .then((m) => m.carryQueryToReplacement({ oldId: row.id, newId, by: input.by }))
       .catch((e) => console.error("[certificate-remove] carrying the query failed", row.id, e instanceof Error ? e.message : e));
   }
-  return { ok: true, name, rexStillHolds: Boolean(row?.rex_entry_id) };
+  return { ok: true, name, rexStillHolds: input.reason !== "duplicate" && Boolean(row?.rex_entry_id) };
 }
 
 /* ── Leaving removed certificates out of what REX says ───────────────────── */

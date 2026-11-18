@@ -6,7 +6,7 @@ import WorkspaceLoading from "@/components/WorkspaceLoading";
 import CheckRow, { GREEN } from "@/components/compliance-desk/CheckRow";
 import { useDesk } from "@/components/compliance-desk/useDesk";
 import RegisterCheck from "@/components/compliance-desk/RegisterCheck";
-import VerifiedList, { useVerified } from "@/components/compliance-desk/VerifiedList";
+import VerifiedList, { EmailTenantButton, useVerified } from "@/components/compliance-desk/VerifiedList";
 import { useCallback, useEffect, useState } from "react";
 import { searchMatches } from "@/lib/search-match";
 import type { VerifyItem } from "@/lib/compliance-desk";
@@ -59,7 +59,7 @@ const BLURB: Record<Tab, string> = {
 };
 
 export default function ToVerify() {
-  const { desk, error, busy, said, check, readRegister } = useDesk();
+  const { desk, error, busy, said, emailTenant, check, readRegister } = useDesk();
   const verified = useVerified();
   const [tab, setTab] = useState<Tab>("verify");
   /* What the last Verified press did, with the way to the tab it went to. */
@@ -168,8 +168,16 @@ export default function ToVerify() {
       {checking && said && !error && (
         <div className={`mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl p-4 text-[12.5px] ${GREEN}`}>
           <span className="min-w-0 flex-1">{said}</span>
+          {moved && emailTenant && (
+            <EmailTenantButton
+              key={emailTenant}
+              certificateId={emailTenant}
+              onSent={verified.reload}
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#56634a] px-3.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+            />
+          )}
           {moved && (
-            <button type="button" onClick={() => pick("verified")} className="shrink-0 rounded-full bg-[#56634a] px-3.5 py-1.5 text-[12px] font-semibold text-white">
+            <button type="button" onClick={() => pick("verified")} className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold ${emailTenant ? "border border-[#56634a]/40 text-[#56634a]" : "bg-[#56634a] text-white"}`}>
               Open Verified
             </button>
           )}
@@ -263,6 +271,12 @@ function VerifyRow({
       busy={busy}
       onVerify={verify}
       onQuery={(note) => check(r.kind, r.id, "queried", note)}
+      onClose={(reason, note) => void check(r.kind, r.id, "closed", note || undefined, undefined, null, reason)}
+      closeSays={
+        r.kind === "certificate"
+          ? "It is taken off the home and the file is kept aside, so the home asks for the right one again."
+          : "It stays on the landlord's file but no longer counts as that document, so their portal asks for the right one again."
+      }
     >
       {r.fileAs && (
         <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl bg-page px-3.5 py-3">

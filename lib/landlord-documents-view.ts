@@ -3,6 +3,7 @@ import { bankRow, loadLandlordHome, onFileSub, requiredDocsFor } from "@/lib/lan
 import { DECK_KINDS } from "@/lib/present";
 import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { hasDb, q } from "@/lib/db";
+import { closedLandlordDocs } from "@/lib/cert-check-state";
 
 /* The landlord's own gas safety record or EICR goes to the compliance team
    before it counts (lib/cert-hold, 9 Oct 2026): shown as being processed
@@ -65,7 +66,10 @@ const kindLabel = (kind: DocKind) => DOC_KINDS.find((k) => k.id === kind)?.label
 export async function loadLandlordDocuments(me: LandlordAccount, pick?: string | null): Promise<DocsView> {
   const [{ open, compliance, docs, onFile }, managed] = await Promise.all([loadLandlordHome(me, pick), landlordProperties(me)]);
   const j = open[0] ?? null;
-  const mine = j ? docs.filter((d) => !d.appraisalId || d.appraisalId === j.appraisal.id) : docs;
+  const forThis = j ? docs.filter((d) => !d.appraisalId || d.appraisalId === j.appraisal.id) : docs;
+  /* One the compliance team closed (a duplicate, or not the document it was sent as) doesn't count. */
+  const closed = await closedLandlordDocs(forThis.map((d) => d.id));
+  const mine = forThis.filter((d) => !closed.has(d.id));
   const heldIds = mine.filter((d) => LANDLORD_HELD.has(d.kind)).map((d) => d.id);
   const verifiedIds = new Set(
     heldIds.length && hasDb()
