@@ -29,7 +29,7 @@ import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
  */
 
 interface VaultFile { key: string; certKey: string; label: string; name: string; size: number; uploadedAt: string | null; open: string }
-interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string; renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string }; checking?: CertChecking; verified?: { by: string; at: string }; removed?: { name: string; reason: "wrong" | "replaced"; by: string; at: string } }
+interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string; renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string }; checking?: CertChecking; verified?: { by: string; at: string }; removed?: { name: string; reason: "wrong" | "replaced" | "duplicate"; by: string; at: string } }
 interface Candidate { id: string; name: string; locality: string }
 interface Answer {
   ok: boolean;
@@ -574,7 +574,7 @@ export default function PropertyFile({
                 )}
                 {r.removed && !r.files.length && (
                   <p className="mt-2 text-[12px] text-muted">
-                    {r.removed.name} was taken off {day(r.removed.at.slice(0, 10))} by {r.removed.by}: {r.removed.reason === "wrong" ? "the wrong document" : "out of date or replaced"}.
+                    {r.removed.name} was taken off {day(r.removed.at.slice(0, 10))} by {r.removed.by}: {r.removed.reason === "wrong" ? "the wrong document" : r.removed.reason === "duplicate" ? "a duplicate" : "out of date or replaced"}.
                   </p>
                 )}
                 {r.checking?.queried && <QueryThread kind="certificate" id={r.checking.id} />}

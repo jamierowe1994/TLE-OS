@@ -84,7 +84,7 @@ export interface FileRow {
   /** The certificate shown was verified by the compliance team: the green tick. */
   verified?: { by: string; at: string };
   /** The last certificate taken off this row, and why (lib/certificate-remove). */
-  removed?: { name: string; reason: "wrong" | "replaced"; by: string; at: string };
+  removed?: { name: string; reason: "wrong" | "replaced" | "duplicate"; by: string; at: string };
 }
 
 const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"]);

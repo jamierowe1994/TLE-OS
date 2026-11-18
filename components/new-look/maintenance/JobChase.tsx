@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
 import { CHASE_FINAL_DAYS, CHASE_FIRST_DAYS, CHASE_GRACE_HOURS, chaseBlock, chaseLive, type WorksChase } from "@/lib/works-chase-rules";
 import type { Tile } from "@/components/maintenance/job-page";
-import type { WorksEvent, WorksOrder } from "@/lib/works-orders";
+import type { ContractorWords, WorksEvent, WorksOrder } from "@/lib/works-orders";
+import ContractorJobEmail from "@/components/maintenance/ContractorJobEmail";
 import type { JobView } from "@/components/new-look/maintenance/JobPageNew";
 
 /**
@@ -163,17 +164,9 @@ export function ChaseSheet({ v, onClose, onSaved }: { v: JobView; onClose: () =>
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ kind: "reminder" | "final"; state: "loading" | "failed" | "ready"; subject?: string; html?: string; to?: string; error?: string } | null>(null);
-
-  useEffect(() => {
-    if (!preview || preview.state !== "loading") return;
-    let on = true;
-    fetch(`/api/works-orders/${encodeURIComponent(o.id)}/chase?kind=${preview.kind}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => { if (on) setPreview(j?.ok ? { kind: preview.kind, state: "ready", subject: j.subject, html: j.html, to: j.to } : { kind: preview.kind, state: "failed", error: j?.error ?? "The email could not be shown." }); })
-      .catch(() => { if (on) setPreview({ kind: preview.kind, state: "failed", error: "The email could not be shown just now." }); });
-    return () => { on = false; };
-  }, [preview, o.id]);
+  /* The reminder written out before it goes, in the agent's words if they change it (James, 17 Nov 2026). */
+  const [writing, setWriting] = useState<"reminder" | "final" | null>(null);
+  const [edit, setEdit] = useState<ContractorWords | null>(null);
 
   const run = async (key: string, body: Record<string, unknown>, done: string) => {
     setBusy(key);
@@ -182,37 +175,44 @@ export function ChaseSheet({ v, onClose, onSaved }: { v: JobView; onClose: () =>
     const r = await post(o.id, body);
     setBusy(null);
     if (r.order && r.events) onSaved({ order: r.order, events: r.events });
-    if (!r.ok) { setErr(r.error ?? "That didn't work."); return; }
+    if (!r.ok) { setErr(r.error ?? "That didn't work."); return false; }
     /* Taken off them: straight on to who does it instead. */
-    if (key === "release") { onClose(); v.pickContractor(); return; }
+    if (key === "release") { onClose(); v.pickContractor(); return true; }
     setSaid(done);
+    return true;
   };
   const days = (s: string) => { const n = Math.round(Number(s)); return Number.isFinite(n) && n >= 1 && n <= 60 ? n : null; };
   const firstN = days(first), finalN = days(final);
   const finalGone = !!live?.finalAt;
 
-  if (preview) {
+  if (writing && o.contractorId) {
+    const final = writing === "final";
     return (
       <FloatSheet
-        title={preview.kind === "final" ? "The Final Reminder" : "The Reminder"}
-        lede={preview.state === "ready" ? `What ${name} gets${preview.to ? `, at ${preview.to}` : ""}, in your name.` : undefined}
-        onBack={() => setPreview(null)}
+        title={final ? "The Final Reminder" : "The Reminder"}
+        lede={final ? `Unless they come back within ${CHASE_GRACE_HOURS} hours, it's cancelled with them, placed elsewhere and not paid. Goes in your name.` : `What ${name} gets, in your name. Change the words if you want to.`}
+        onBack={() => { setWriting(null); setEdit(null); }}
         onClose={onClose}
+        dismissible={!busy}
         size="lg"
-        screenKey={`preview-${preview.kind}`}
+        screenKey={`write-${writing}`}
       >
-        <FloatCard className="nl-jb-chase-mail">
-          {preview.state === "loading" && <p className="nl-jb-said" role="status"><span className="nl-bo-spin" aria-hidden /> Writing it out…</p>}
-          {preview.state === "failed" && <p className="nl-fs-err" role="alert">{preview.error}</p>}
-          {preview.state === "ready" && (
-            <>
-              <p className="nl-jb-chase-subj"><span>Subject</span>{preview.subject}</p>
-              <iframe title={preview.subject} srcDoc={preview.html} className="nl-jb-chase-frame" sandbox="" />
-            </>
-          )}
+        <FloatCard>
+          <ContractorJobEmail orderId={o.id} contractorId={o.contractorId} step={writing} goes="Goes when you press Send it" onEdit={setEdit} />
         </FloatCard>
-        <FloatFoot>
-          <button type="button" className="nl-btn nl-btn--secondary" onClick={() => setPreview(null)}>Back</button>
+        <FloatFoot left={err ? <span className="nl-fs-err" role="alert">{err}</span> : undefined}>
+          <button type="button" className="nl-btn nl-fs-ghost" onClick={() => { setWriting(null); setEdit(null); }}>Back</button>
+          <button
+            type="button"
+            className="nl-btn nl-btn--primary"
+            disabled={!!busy}
+            onClick={async () => {
+              const ok = await run(writing, { action: "send", kind: writing, ...(edit ? { edit } : {}) }, final ? `Final reminder sent to ${name}. If nothing comes back in ${CHASE_GRACE_HOURS} hours, you'll be asked what to do.` : `Reminder sent to ${name}.`);
+              if (ok) { setWriting(null); setEdit(null); }
+            }}
+          >
+            {busy === writing ? "Sending…" : "Send it"}
+          </button>
         </FloatFoot>
       </FloatSheet>
     );
@@ -270,22 +270,18 @@ export function ChaseSheet({ v, onClose, onSaved }: { v: JobView; onClose: () =>
             <FloatCardHead title="Send a Reminder Now" />
             <div className="nl-fs-choices">
               <FloatChoice
-                title={busy === "reminder" ? "Sending…" : "Send a reminder now"}
-                text="Polite: when the works order went, and could they let us know a date."
+                title="Send a reminder now"
+                text="Polite: when the works order went, and could they let us know a date. You see it first."
                 disabled={!!busy}
-                onClick={() => void run("reminder", { action: "send", kind: "reminder" }, `Reminder sent to ${name}.`)}
+                onClick={() => { setErr(null); setSaid(null); setEdit(null); setWriting("reminder"); }}
               />
               <FloatChoice
-                title={busy === "final" ? "Sending…" : "Send the final reminder"}
-                text={`Unless they come back within ${CHASE_GRACE_HOURS} hours, it's cancelled with them, placed elsewhere and not paid.`}
+                title="Send the final reminder"
+                text={`Unless they come back within ${CHASE_GRACE_HOURS} hours, it's cancelled with them, placed elsewhere and not paid. You see it first.`}
                 disabled={!!busy}
-                onClick={() => void run("final", { action: "send", kind: "final" }, `Final reminder sent to ${name}. If nothing comes back in ${CHASE_GRACE_HOURS} hours, you'll be asked what to do.`)}
+                onClick={() => { setErr(null); setSaid(null); setEdit(null); setWriting("final"); }}
               />
             </div>
-            <p className="nl-jb-chase-sees">
-              <button type="button" className="nl-link" onClick={() => setPreview({ kind: "reminder", state: "loading" })}>See the reminder</button>
-              <button type="button" className="nl-link" onClick={() => setPreview({ kind: "final", state: "loading" })}>See the final reminder</button>
-            </p>
           </FloatCard>
 
           {!finalGone && (

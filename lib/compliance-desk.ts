@@ -17,6 +17,7 @@ import { ensureTable as ensureSendRecord } from "@/lib/home-send";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { housesIn, MANAGED_READERS } from "@/lib/houses";
 import { sittingLets } from "@/lib/tenant-logins";
+import { removeCertificate } from "@/lib/certificate-remove";
 
 /**
  * MICHAEL'S DESK. The three lists that are his and nobody else's.
@@ -65,7 +66,9 @@ import { sittingLets } from "@/lib/tenant-logins";
 export { CHECKS_BEGAN };
 
 export type CheckKind = "certificate" | "landlord_document" | "works_order";
-export type CheckState = "verified" | "queried";
+/** "closed": taken off the list without being verified - a duplicate, or not the
+ *  document it was filed as (Michael Healy, 17 Nov 2026). See closeUnverified. */
+export type CheckState = "verified" | "queried" | "closed";
 export const isCheckKind = (v: string): v is CheckKind => v === "certificate" || v === "landlord_document" || v === "works_order";
 
 const TYPE_WORDS: Record<string, string> = {
@@ -158,7 +161,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
             WHERE rm.replaced_by = c.id OR rm.id = c.replaces_id
             ORDER BY rm.removed_at DESC LIMIT 1
          ) rq ON TRUE
-        WHERE c.added_at >= $1::date AND (k.state IS NULL OR k.state <> 'verified')
+        WHERE c.added_at >= $1::date AND (k.state IS NULL OR k.state NOT IN ('verified', 'closed'))
         ORDER BY c.added_at`,
       [CHECKS_BEGAN]
     ),
@@ -170,7 +173,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
          LEFT JOIN os_market_appraisals m ON m.id = d.appraisal_id
          LEFT JOIN os_compliance_checks k ON k.kind = 'landlord_document' AND k.subject_id = d.id
          LEFT JOIN os_users tu ON tu.id = k.told
-        WHERE d.uploaded_at >= $1::date AND d.kind <> ALL($2::text[]) AND (k.state IS NULL OR k.state <> 'verified')
+        WHERE d.uploaded_at >= $1::date AND d.kind <> ALL($2::text[]) AND (k.state IS NULL OR k.state NOT IN ('verified', 'closed'))
         ORDER BY d.uploaded_at`,
       [CHECKS_BEGAN, NOT_HIS]
     ),
@@ -880,6 +883,72 @@ export async function sendTargetFor(certificateId: string): Promise<{ listing: s
     title: house && listings.length > 1 ? house.name : first.name,
     start: `vault:${c.r2_key}`,
   };
+}
+
+/* ── Closing one without verifying it ───────────────────────────────────── */
+
+/**
+ * CLOSE WITHOUT VERIFYING (Michael Healy, ticket 06b4c737, 17 Nov 2026): "Ive
+ * seen a few duplicates come through and theyve added title deeds as a gas
+ * cert? can i just cancel the verification". Querying them only emailed the
+ * agent; they stayed on his list for good.
+ *
+ *   duplicate  the same document came in twice: the copy he closes goes, the
+ *              other stays on the list to be verified as normal
+ *   wrong      it is not the document it was filed as (title deeds in the
+ *              gas safety slot)
+ *
+ * A certificate is taken off its home the way Remove on the property file does
+ * it (lib/certificate-remove): the file is kept aside under removed/, the row
+ * in os_certificates_removed, and nothing is written to REX. A held gas safety
+ * record or EICR never went to REX, so the home simply stops saying "being
+ * processed" and asks for the real one again. A duplicate keeps REX's entry
+ * counting, as the other copy is the same certificate.
+ *
+ * A landlord's upload is only marked closed: it stays on their file, but no
+ * longer counts as the document it was sent as, so their portal asks for the
+ * right one again (lib/landlord-home-view, lib/landlord-documents-view).
+ *
+ * Nobody is emailed. The reason is kept on the check, and on the home's notes
+ * for a certificate.
+ */
+export type CloseReason = "duplicate" | "wrong";
+export const CLOSE_REASONS: Record<CloseReason, string> = {
+  duplicate: "A duplicate",
+  wrong: "Not the document it was filed as",
+};
+export const isCloseReason = (v: unknown): v is CloseReason => v === "duplicate" || v === "wrong";
+
+export async function closeUnverified(p: { kind: "certificate" | "landlord_document"; id: string; reason: CloseReason; note?: string; by: string }): Promise<string> {
+  const note = [CLOSE_REASONS[p.reason], (p.note ?? "").trim()].filter(Boolean).join(" - ").slice(0, 600);
+  if (p.kind === "certificate") {
+    const [c] = await q<{ property_id: string; r2_key: string; type_id: string; name: string; source: string }>(
+      `SELECT property_id, r2_key, type_id, name, source FROM os_certificates WHERE id = $1`,
+      [p.id]
+    );
+    if (!c) throw new Error("That certificate is not there any more.");
+    const [k] = await q<{ state: string }>(`SELECT state FROM os_compliance_checks WHERE kind = 'certificate' AND subject_id = $1`, [p.id]);
+    if (k?.state === "verified") throw new Error("This one has already been verified, so it can't be closed from here. Use Remove on the home's file if it is wrong.");
+    const what = whatOf(c.type_id, c.source, c.name);
+    const out = await removeCertificate({ propertyId: c.property_id, key: c.r2_key, reason: p.reason, by: p.by, certificateId: p.id });
+    if (!out.ok) throw new Error(out.error);
+    await recordCheck({ kind: "certificate", id: p.id, state: "closed", note, by: p.by });
+    await noteOnHome(
+      p.id,
+      (_w, fileName) => `Compliance closed the ${what}${fileName ? ` (${fileName})` : ""} without verifying it: ${note.charAt(0).toLowerCase()}${note.slice(1)}. It was taken off the home; the file is kept aside.`,
+      { name: p.by }
+    ).catch(() => null);
+    return p.reason === "duplicate"
+      ? `Closed as a duplicate and taken off the home. The file is kept aside.`
+      : `Closed and taken off the home, as it isn't the ${what} it was filed as. The home will ask for the right one again. The file is kept aside.`;
+  }
+  const [d] = await q<{ certificate_id: string | null }>(`SELECT certificate_id FROM os_landlord_documents WHERE id = $1`, [p.id]);
+  if (!d) throw new Error("That document is not there any more.");
+  if (d.certificate_id) throw new Error("This one has already been filed as a certificate, so it can't be closed from here.");
+  await recordCheck({ kind: "landlord_document", id: p.id, state: "closed", note, by: p.by });
+  return p.reason === "duplicate"
+    ? "Closed as a duplicate. It stays on the landlord's file but is off your list."
+    : "Closed. It stays on the landlord's file, but no longer counts as that document, so their portal asks for the right one again.";
 }
 
 /** His tick, or his query. A second look replaces the first. */

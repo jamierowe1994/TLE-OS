@@ -3,7 +3,8 @@ import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { dueFor, getContractor, getOrder, tenantsOf, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
-import { editableJobEmail, jobTenants, previewJobEmail, tenantEmailOnRaise, tenantEmailOnStep, type ContractorEdit, type TenantStep } from "@/lib/works-emails";
+import { CONTRACTOR_STEPS, contractorEmailOnStep, contractorStepVars, editableJobEmail, jobTenants, previewJobEmail, tenantEmailOnRaise, tenantEmailOnStep, type ContractorEdit, type ContractorStep, type TenantStep } from "@/lib/works-emails";
+import { chaseLive } from "@/lib/works-chase-rules";
 import { cleanCertDates } from "@/lib/works-catalogue";
 
 /**
@@ -30,6 +31,8 @@ type Draft = {
   audience?: "contractor" | "tenant"; tellTenants?: boolean;
   /** On a job's page: which button the tenants' email goes with, and the date being set (Lianna Denholm, 16 Nov 2026). */
   step?: TenantStep;
+  /** On a job's page: which button the contractor's email goes with (James, 17 Nov 2026). */
+  contractorStep?: ContractorStep;
 };
 const STEPS: TenantStep[] = ["confirm", "schedule", "booked", "access"];
 
@@ -68,6 +71,26 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, ...mail, to, template: id, ...(words ? { text: words.text, fields: words.fields } : {}) });
       } catch (e) {
         return NextResponse.json({ ok: false, error: publicError(e, "The email to the tenants could not be written.") }, { status: 400 });
+      }
+    }
+    /* The contractor's email a button on the job's page sends, as it stands
+       or in the agent's words (James, 17 Nov 2026). */
+    if (b.audience === "contractor" && CONTRACTOR_STEPS.includes(b.contractorStep as ContractorStep)) {
+      const step = b.contractorStep as ContractorStep;
+      const at = step === "schedule" && b.scheduledAt && !Number.isNaN(new Date(b.scheduledAt).getTime()) ? new Date(b.scheduledAt).toISOString() : null;
+      if (step === "schedule" && !at) return NextResponse.json({ ok: true, none: true });
+      const o = { ...found.order, contractorId: c.id, contractorName: c.name, ...(at ? { scheduledAt: at } : {}) };
+      const id = contractorEmailOnStep(o, step);
+      if (!id || !c.email.includes("@")) return NextResponse.json({ ok: true, none: true });
+      try {
+        const chase = chaseLive(o.chase) && o.chase.contractorId === o.contractorId ? o.chase : null;
+        const over = contractorStepVars(o, step, chase?.remindedAt ?? null);
+        const change = b.edit && typeof b.edit === "object" ? { subject: typeof b.edit.subject === "string" ? b.edit.subject.slice(0, 200) : null, body: typeof b.edit.body === "string" ? b.edit.body.slice(0, 6000) : null } : null;
+        const mail = await previewJobEmail(o, id, subject ?? actor, over, change);
+        const words = b.editable ? await editableJobEmail(o, id, subject ?? actor, over) : null;
+        return NextResponse.json({ ok: true, ...mail, template: id, ...(words ? { text: words.text, fields: words.fields } : {}) });
+      } catch (e) {
+        return NextResponse.json({ ok: false, error: publicError(e, "The email to the contractor could not be written.") }, { status: 400 });
       }
     }
     try {

@@ -12,7 +12,7 @@ import { previewChaseEmail } from "@/lib/works-emails";
  * Chase the contractor on one job (Sean McMahon, 26 Oct 2026). Any signed-in
  * member of staff, as the job's own moves are.
  *
- *   { action: "send", kind: "reminder" | "final" }   one reminder, now
+ *   { action: "send", kind: "reminder" | "final", edit? }   one reminder, now, in the agent's words if changed
  *   { action: "set", firstDays, finalDays }         the reminders on dates
  *   { action: "stop" }                              stop chasing
  *   { action: "keep_waiting" }                      48 hours on: leave it with them
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type Body =
-  | { action: "send"; kind?: string }
+  | { action: "send"; kind?: string; edit?: { subject?: unknown; body?: unknown } | null }
   | { action: "set"; firstDays?: unknown; finalDays?: unknown }
   | { action: "stop" | "keep_waiting" | "release" };
 
@@ -44,7 +44,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   try {
     let error: string | null = null;
     if (b.action === "send") {
-      const sent = await sendChase(o, b.kind === "final" ? "final" : "reminder", me, by);
+      /* The reminder in the agent's own words (James, 17 Nov 2026). */
+      const e = b.edit && typeof b.edit === "object" ? b.edit : null;
+      const edit = e ? { subject: typeof e.subject === "string" ? e.subject.slice(0, 200) : null, body: typeof e.body === "string" ? e.body.slice(0, 6000) : null } : null;
+      const sent = await sendChase(o, b.kind === "final" ? "final" : "reminder", me, by, edit);
       if (!sent.sent) error = `It didn't go: ${(sent.reason ?? "it could not be sent").replace(/\s*\u2014\s*/g, " - ").replace(/\.+$/, "")}.`;
     } else if (b.action === "set") {
       await setChase(o, b.firstDays, b.finalDays, me, by);

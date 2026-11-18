@@ -400,7 +400,10 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
 
   /* What is on the file. An upload of a kind ticks that row and links to the
      file; the EPC also counts as in if the deck found one on the register. */
-  const mine = docs.filter((d) => !d.appraisalId || d.appraisalId === a.id);
+  const forThis = docs.filter((d) => !d.appraisalId || d.appraisalId === a.id);
+  /* One the compliance team closed (a duplicate, or not the document it was sent as) doesn't count. */
+  const closed = await import("@/lib/cert-check-state").then((m) => m.closedLandlordDocs(forThis.map((d) => d.id))).catch(() => new Set<string>());
+  const mine = forThis.filter((d) => !closed.has(d.id));
   const uploaded = (kind: LandlordDocument["kind"]) => mine.find((d) => d.kind === kind) ?? null;
   /* Their gas safety record or EICR is with the compliance team until
      verified (lib/cert-hold, 9 Oct 2026). */

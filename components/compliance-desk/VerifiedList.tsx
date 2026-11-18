@@ -58,6 +58,57 @@ export function useVerified() {
 
 type Target = { id: string; listing: string; listings: string[]; title: string; start: string };
 
+/**
+ * Email Tenant for one verified certificate: finds the home's let and opens
+ * Email Certificates with the file ticked. On the Verified tab, and straight
+ * after Verified on the Gas & Electric check (Michael Healy, ticket b6ddcf01,
+ * 16 Nov 2026: "i cant see the email to tenant section on the safety certs
+ * when verifying").
+ */
+export function EmailTenantButton({ certificateId, onSent, label = "Email Tenant", className }: { certificateId: string; onSent?: () => void; label?: string; className?: string }) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState("");
+  const [target, setTarget] = useState<Target | null>(null);
+  const open = async () => {
+    setOpening(true);
+    setError("");
+    try {
+      const j = await fetch(`/api/compliance-desk/verified?target=${encodeURIComponent(certificateId)}`, { cache: "no-store" }).then((x) => x.json());
+      if (!j?.ok) setError(j?.error ?? "The home couldn't be found.");
+      else setTarget({ id: certificateId, listing: j.listing, listings: j.listings, title: j.title, start: j.start });
+    } catch {
+      setError("The home couldn't be found. Try again in a minute.");
+    } finally {
+      setOpening(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        disabled={opening}
+        onClick={() => void open()}
+        className={className ?? "flex items-center gap-1.5 rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"}
+      >
+        <DoodleIcon name="mail" size={13} />
+        {opening ? "Opening..." : label}
+      </button>
+      {error && <p className={`w-full rounded-xl px-3.5 py-2.5 text-[12.5px] leading-snug ${RED}`}>{error}</p>}
+      {target && (
+        <SendToTenants
+          listing={target.listing}
+          listings={target.listings}
+          title={target.title}
+          heading="Email Tenant"
+          start={target.start}
+          onClose={() => setTarget(null)}
+          onSent={() => onSent?.()}
+        />
+      )}
+    </>
+  );
+}
+
 export default function VerifiedList({ view, waiting, sent, ready, reload }: { view: "verified" | "sent"; waiting: VerifiedItem[]; sent: VerifiedItem[]; ready: boolean; reload: () => void }) {
   const [opening, setOpening] = useState<string | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});

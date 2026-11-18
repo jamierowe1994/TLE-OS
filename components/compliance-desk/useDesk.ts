@@ -28,6 +28,8 @@ export function useDesk() {
   /* What happened after his last answer, in one sentence: "Emailed Sam Lewis",
      "Gas safety sent to landlord, tenant". Kept until the next one. */
   const [said, setSaid] = useState<string | null>(null);
+  /* The certificate his last Verified filed, for Email Tenant there and then. */
+  const [emailTenant, setEmailTenant] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/compliance-desk", { cache: "no-store" })
@@ -43,18 +45,20 @@ export function useDesk() {
   const check = useCallback(async (
     kind: CheckKind,
     id: string,
-    state: "verified" | "queried",
+    state: "verified" | "queried" | "closed",
     note?: string,
     registerNumber?: string,
-    fileAs?: { type: string; expiry: string; issue?: string } | null
+    fileAs?: { type: string; expiry: string; issue?: string } | null,
+    reason?: "duplicate" | "wrong"
   ): Promise<boolean> => {
     setBusy(id);
     try {
-      const r = await fetch("/api/compliance-desk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, id, state, note, registerNumber, fileAs }) });
-      const j = (await r.json()) as { ok: boolean; error?: string; said?: string; verify?: VerifyItem[]; works?: WorksCheckItem[] };
+      const r = await fetch("/api/compliance-desk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, id, state, note, registerNumber, fileAs, reason }) });
+      const j = (await r.json()) as { ok: boolean; error?: string; said?: string; verify?: VerifyItem[]; works?: WorksCheckItem[]; emailTenant?: string | null };
       if (!j.ok) { setError(j.error ?? "That did not save."); return false; }
       setError(null);
       setSaid(j.said || null);
+      setEmailTenant(j.emailTenant ?? null);
       setDesk((d) => (d ? { ...d, verify: j.verify ?? d.verify, works: j.works ?? d.works } : d));
       return true;
     } catch {
@@ -85,5 +89,5 @@ export function useDesk() {
     );
   }, []);
 
-  return { desk, error, busy, said, check, readRegister, reload: load };
+  return { desk, error, busy, said, emailTenant, check, readRegister, reload: load };
 }

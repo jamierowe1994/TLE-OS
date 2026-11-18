@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Contractor, Move, RankedContractor, WorksOrder, PaidHow } from "@/lib/works-orders";
+import type { Contractor, ContractorWords, Move, RankedContractor, WorksOrder, PaidHow } from "@/lib/works-orders";
 import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_REQUIRED, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type StepId } from "@/lib/works-steps";
 import { categoriesOf, coversOf, CATEGORY_CERT_TYPE, CATEGORY_TRADE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
 import FieldDate, { sayDate } from "@/components/FieldDate";
@@ -16,6 +16,7 @@ import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice
 import { maskedAccount, readBank, sortCodeWords } from "@/lib/bank";
 import TenantJobEmail, { DateEmail, isoOf } from "@/components/maintenance/TenantJobEmail";
 import type { MailWords } from "@/components/maintenance/WorksOrderEmail";
+import ContractorJobEmail, { ContractorDateEmail } from "@/components/maintenance/ContractorJobEmail";
 
 /**
  * The Now card on a job: one thing at a time, in the order James and
@@ -368,11 +369,24 @@ function RankedList({ o, move, busy, canCorporate, onPicked, given, canAdd = tru
   const [placed, setPlaced] = useState(true);
   const [adding, setAdding] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /* "Can you take this?" written out before it goes, for one with an email (James, 17 Nov 2026). */
+  const [asking, setAsking] = useState<RankedContractor | null>(null);
+  const [askEdit, setAskEdit] = useState<ContractorWords | null>(null);
   const load = () => {
     if (given) { setRanked(given); return; }
     fetch(`/api/contractors?for=${encodeURIComponent(o.id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) { setRanked(j.ranked); setPlaced(j.placed); } else setErr(j.error ?? "Could not read the book."); }).catch(() => setErr("Could not read the book."));
   };
   useEffect(load, [o.id, given]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (asking) return (
+    <div>
+      <p className="text-[13px]">{asking.name}{asking.contact ? ` · ${asking.contact}` : ""}</p>
+      <ContractorJobEmail orderId={o.id} contractorId={asking.id} step="contact" goes="Goes when you press Send and mark contacted" onEdit={setAskEdit} />
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => { onPicked?.(); void move({ action: "contact_contractor", contractorId: asking.id, ...(askEdit ? { contractorEdit: askEdit } : {}) }); }} className={primary}>Send and mark contacted</button>
+        <button type="button" onClick={() => { setAsking(null); setAskEdit(null); }} className={btn}>Back</button>
+      </div>
+    </div>
+  );
   return (
     <div>
       {err && <p className="text-[12px] text-accent-dark">{err}</p>}
@@ -389,7 +403,7 @@ function RankedList({ o, move, busy, canCorporate, onPicked, given, canAdd = tru
                 </span>
               </span>
               {c.phone && <a href={`tel:${tel(c.phone)}`} className="figures text-[14px] hover:underline">{c.phone}</a>}
-              <button type="button" disabled={busy} onClick={() => { onPicked?.(); void move({ action: "contact_contractor", contractorId: c.id }); }} className={primary} title={c.email ? "Marks them contacted and emails them the report" : "Marks them contacted. No email on file, so nothing is sent."}>
+              <button type="button" disabled={busy} onClick={() => { if (c.email?.includes("@")) { setAskEdit(null); setAsking(c); return; } onPicked?.(); void move({ action: "contact_contractor", contractorId: c.id }); }} className={primary} title={c.email ? "Shows the email to them first, then marks them contacted" : "Marks them contacted. No email on file, so nothing is sent."}>
                 Contacted
               </button>
             </li>
@@ -417,6 +431,8 @@ function ContractorConfirm({ o, move, busy, canCorporate, given, canAdd }: { o: 
   const [other, setOther] = useState(false);
   /* The tenants' email in the agent's words, once they change it (Lianna Denholm, 16 Nov 2026). */
   const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
+  /* The works order in the agent's words too (James, 17 Nov 2026). */
+  const [contractorEdit, setContractorEdit] = useState<ContractorWords | null>(null);
   if (other) return (
     <div>
       <p className="mb-2 text-[12.5px] text-muted">{o.contractorName} is off the job once you mark somebody else contacted.</p>
@@ -428,9 +444,10 @@ function ContractorConfirm({ o, move, busy, canCorporate, given, canAdd }: { o: 
     <div>
       <p className="text-[13px]">{o.contractorName} was contacted {stamp(o.contractorContactedAt)}. Have they said yes?</p>
       <p className="mt-1 text-[11.5px] text-muted">Confirming sends them the works order with their page to book the date, and tells the tenant somebody's been found.</p>
+      {o.contractorId && <ContractorJobEmail orderId={o.id} contractorId={o.contractorId} step="confirm" goes="Goes when you press They've confirmed" onEdit={setContractorEdit} />}
       {o.contractorId && <TenantJobEmail orderId={o.id} contractorId={o.contractorId} onEdit={setTenantEdit} />}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" disabled={busy} onClick={() => void move({ action: "contractor_confirmed", ...(tenantEdit ? { tenantEdit } : {}) })} className={primary}>They've confirmed</button>
+        <button type="button" disabled={busy} onClick={() => void move({ action: "contractor_confirmed", ...(tenantEdit ? { tenantEdit } : {}), ...(contractorEdit ? { contractorEdit } : {}) })} className={primary}>They've confirmed</button>
         <button type="button" onClick={() => setOther(true)} className={btn}>Try somebody else</button>
       </div>
     </div>
@@ -440,13 +457,17 @@ function ContractorConfirm({ o, move, busy, canCorporate, given, canAdd }: { o: 
 function Booking({ o, f, setF, move, busy }: StepProps) {
   const planned = o.kind === "planned";
   const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
+  /* The contractor's emails in the agent's words (James, 17 Nov 2026): the works order not yet sent, and the booking. */
+  const [orderEdit, setOrderEdit] = useState<ContractorWords | null>(null);
+  const [bookedEdit, setBookedEdit] = useState<ContractorWords | null>(null);
   return (
     <div>
       {o.orderSentTo && o.orderSentTo !== o.contractorId ? (
         /* Changed after the works order went (21 Oct 2026): the new one hasn't had it. */
-        <div className="flex flex-wrap items-center gap-2">
+        <div>
           <p className="text-[13px]">{o.contractorName} hasn&apos;t been sent the works order yet. It went to {o.orderSentToName || "the last contractor"}.</p>
-          <button type="button" disabled={busy} onClick={() => void move({ action: "resend_order" })} className={primary}>Send it to {o.contractorName}</button>
+          {o.contractorId && <ContractorJobEmail orderId={o.id} contractorId={o.contractorId} step="resend" goes={`Goes when you press Send it to ${o.contractorName}`} onEdit={setOrderEdit} />}
+          <button type="button" disabled={busy} onClick={() => void move({ action: "resend_order", ...(orderEdit ? { contractorEdit: orderEdit } : {}) })} className={`mt-3 ${primary}`}>Send it to {o.contractorName}</button>
         </div>
       ) : (
         <p className="text-[13px]">{o.contractorName} has the works order{planned ? " and arranges a time with the tenants" : ""}. They can set the date from their page, or type it in when they tell you.</p>
@@ -457,8 +478,9 @@ function Booking({ o, f, setF, move, busy }: StepProps) {
           <label className="block text-[10px] font-bold uppercase tracking-wider text-muted">Booked for</label>
           <FieldDate className="mt-1" withTime value={f.at ?? ""} onChange={(v) => setF({ ...f, at: v })} placeholder="The date and time agreed" min={localDate(-30)} />
         </div>
-        <button type="button" disabled={busy || !isoOf(f.at)} onClick={() => void move({ action: "schedule", scheduledAt: isoOf(f.at)!, ...(tenantEdit ? { tenantEdit } : {}) })} className={primary}>That's the date</button>
+        <button type="button" disabled={busy || !isoOf(f.at)} onClick={() => void move({ action: "schedule", scheduledAt: isoOf(f.at)!, ...(tenantEdit ? { tenantEdit } : {}), ...(bookedEdit ? { contractorEdit: bookedEdit } : {}) })} className={primary}>That's the date</button>
       </div>
+      <ContractorDateEmail o={o} at={f.at} goes="Goes when you press That's the date" onEdit={setBookedEdit} />
       <DateEmail o={o} at={f.at} goes="Goes when you press That's the date" onEdit={setTenantEdit} />
       <p className="mt-2 text-[11.5px] text-muted">
         {planned
@@ -475,6 +497,7 @@ function Visit({ o, f, setF, move, busy, onCertificate }: StepProps & { onCertif
   const planned = o.kind === "planned";
   const [moving, setMoving] = useState(false);
   const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
+  const [bookedEdit, setBookedEdit] = useState<ContractorWords | null>(null);
   return (
     <div className="space-y-3">
       <p className="text-[13px]">{o.contractorName} booked for {stamp(o.scheduledAt)}.{past ? " That's passed - has it been done?" : ""}</p>
@@ -492,10 +515,11 @@ function Visit({ o, f, setF, move, busy, onCertificate }: StepProps & { onCertif
         {moving && (
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <FieldDate className="w-full sm:w-72" withTime value={f.at ?? ""} onChange={(v) => setF({ ...f, at: v })} placeholder="The new date and time" />
-            <button type="button" disabled={busy || !isoOf(f.at)} onClick={() => void move({ action: "schedule", scheduledAt: isoOf(f.at)!, ...(tenantEdit ? { tenantEdit } : {}) })} className={primary}>Move it</button>
+            <button type="button" disabled={busy || !isoOf(f.at)} onClick={() => void move({ action: "schedule", scheduledAt: isoOf(f.at)!, ...(tenantEdit ? { tenantEdit } : {}), ...(bookedEdit ? { contractorEdit: bookedEdit } : {}) })} className={primary}>Move it</button>
             <button type="button" onClick={() => setMoving(false)} className={btn}>Back</button>
           </div>
         )}
+        {moving && <ContractorDateEmail o={o} at={f.at} goes="Goes when you press Move it" onEdit={setBookedEdit} />}
         {moving && <DateEmail o={o} at={f.at} goes="Goes when you press Move it" onEdit={setTenantEdit} />}
       </div>
       <ContractorLink o={o} />

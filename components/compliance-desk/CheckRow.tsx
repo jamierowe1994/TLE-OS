@@ -11,6 +11,11 @@ import DoodleIcon from "@/components/DoodleIcon";
  * the list, with what is wrong written on it). A query asks for the reason
  * before it saves - "queried" with no note tells the agent nothing, and he goes
  * through the agent for everything.
+ *
+ * A third answer where `onClose` is given (Michael Healy, ticket 06b4c737,
+ * 17 Nov 2026): Close Without Verifying, for a duplicate or a document that
+ * isn't what it was filed as (title deeds sent as a gas safety record). It
+ * asks which, and says what will happen, before anything is saved.
  */
 
 export const GREEN = "bg-[#f1f4ec] text-[#56634a]";
@@ -61,6 +66,8 @@ export default function CheckRow({
   busy,
   onVerify,
   onQuery,
+  onClose,
+  closeSays,
   children,
 }: {
   title: string;
@@ -80,11 +87,18 @@ export default function CheckRow({
   busy: boolean;
   onVerify: () => void;
   onQuery: (note: string) => void;
+  /** Close it without verifying: a duplicate, or not the document it was filed as. */
+  onClose?: (reason: "duplicate" | "wrong", note: string) => void;
+  /** What closing does to this one, said before he confirms. */
+  closeSays?: string;
   /** Drawn under the chips: the engineer's register check, on a certificate. */
   children?: ReactNode;
 }) {
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState("");
+  const [closing, setClosing] = useState(false);
+  const [why, setWhy] = useState<"duplicate" | "wrong" | null>(null);
+  const [closeNote, setCloseNote] = useState("");
   const w = waited(addedAt);
 
   return (
@@ -153,7 +167,46 @@ export default function CheckRow({
         </p>
       ))}
 
-      {asking ? (
+      {closing && onClose ? (
+        <div className="mt-3 rounded-xl border border-line/80 bg-page px-3.5 py-3">
+          <p className="text-[13.5px]">Close This Without Verifying It?</p>
+          <p className="mt-0.5 text-[12px] leading-snug text-muted">
+            It comes off your list and is not verified. Nobody is emailed. {closeSays}
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {([["duplicate", "It's a duplicate"], ["wrong", "It's not the right document"]] as const).map(([v, l]) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={why === v}
+                onClick={() => setWhy(v)}
+                className={`rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition ${why === v ? "border-accent-dark bg-accent-dark text-white" : "border-line/80 bg-card hover:border-ink/40"}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <input
+            value={closeNote}
+            onChange={(e) => setCloseNote(e.target.value)}
+            placeholder={why === "wrong" ? "What is it? (optional) - title deeds, say" : "Anything to add? (optional)"}
+            className="mt-2.5 w-full rounded-xl border border-line/80 bg-card px-3.5 py-2 text-[13px] outline-none focus:border-ink/40"
+          />
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy || !why}
+              onClick={() => { if (why) { onClose(why, closeNote.trim()); setClosing(false); setWhy(null); setCloseNote(""); } }}
+              className="rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
+            >
+              Close It
+            </button>
+            <button type="button" onClick={() => { setClosing(false); setWhy(null); setCloseNote(""); }} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : asking ? (
         <div className="mt-3">
           <textarea
             value={note}
@@ -185,6 +238,11 @@ export default function CheckRow({
           <button type="button" disabled={busy} onClick={() => { setNote(queried?.note ?? ""); setAsking(true); }} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold disabled:opacity-40">
             {queried ? "Change the query" : "Something is wrong"}
           </button>
+          {onClose && (
+            <button type="button" disabled={busy} onClick={() => setClosing(true)} className="rounded-full px-3 py-2 text-[12.5px] font-semibold text-muted underline-offset-2 transition hover:text-ink hover:underline disabled:opacity-40">
+              Close Without Verifying
+            </button>
+          )}
         </div>
       )}
     </li>

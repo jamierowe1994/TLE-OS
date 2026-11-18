@@ -313,7 +313,8 @@ export default function WorksOrderPage() {
   const canResend = open && !quoting && !!o.contractorId && !!(o.contractorConfirmedAt || o.contractorContactedAt || o.scheduledAt);
   /* The contractor was changed after the works order went: the new one hasn't had it. */
   const unsent = canResend && !!o.orderSentTo && o.orderSentTo !== o.contractorId;
-  const resendOrder = () => void move({ action: "resend_order" }, "Works order");
+  /* Shown before it goes, so it can be reworded (James, 17 Nov 2026). */
+  const resendOrder = () => openPop({ kind: "form", form: "resend_order" });
   const live = o.quoteAsks.filter((a) => a.state === "asked" || a.state === "quoted").length;
 
   /* ── the actions, beside the photos ─────────────────────────────────── */

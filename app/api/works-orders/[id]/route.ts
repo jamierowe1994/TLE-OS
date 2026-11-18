@@ -66,8 +66,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     /* The tenants' email in the agent's own words: Confirm the Contractor, the date, Tell the tenants (Lianna Denholm, 16 Nov 2026). */
     const te = "tenantEdit" in move && move.tenantEdit && typeof move.tenantEdit === "object" ? move.tenantEdit : null;
     const tenantEdit = te ? { subject: typeof te.subject === "string" ? te.subject.slice(0, 200) : null, body: typeof te.body === "string" ? te.body.slice(0, 6000) : null } : null;
-    const emails = quietDone ? [] : await emailsForMove(order, move.action, subject ?? actor, { how: "how" in move ? move.how : undefined, quiet: move.action === "assign" && move.quiet === true, tenantEdit, ...out }).catch(() => []);
+    /* The contractor's email in the agent's own words (James, 17 Nov 2026). */
+    const ce = "contractorEdit" in move && move.contractorEdit && typeof move.contractorEdit === "object" ? move.contractorEdit : null;
+    const contractorEdit = ce ? { subject: typeof ce.subject === "string" ? ce.subject.slice(0, 200) : null, body: typeof ce.body === "string" ? ce.body.slice(0, 6000) : null, template: typeof ce.template === "string" ? ce.template.slice(0, 80) : null } : null;
+    const emails = quietDone ? [] : await emailsForMove(order, move.action, subject ?? actor, { how: "how" in move ? move.how : undefined, quiet: move.action === "assign" && move.quiet === true, tenantEdit, contractorEdit, ...out }).catch(() => []);
     if ((tenantEdit?.body?.trim() || tenantEdit?.subject?.trim()) && emails.some((e) => e.to === "tenant" && e.sent)) await logEvent(order.id, by, "note", "The email to the tenants was reworded before it went.");
+    if ((contractorEdit?.body?.trim() || contractorEdit?.subject?.trim()) && emails.some((e) => e.to === "contractor" && e.sent)) await logEvent(order.id, by, "note", "The email to the contractor was reworded before it went.");
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
     if (move.action === "invoice") {
       const told = await tellAccounts(order, (await invoiceSettings()).accountsEmail ?? "");
