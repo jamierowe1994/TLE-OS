@@ -38,6 +38,13 @@
 [data-look="new"] .nl-adv-fill-text b { font-weight: 600; font-size: 14.5px; line-height: 20px; }
 [data-look="new"] .nl-adv-fill-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 [data-look="new"] .nl-adv-fill-note { flex-basis: 100%; margin: 0; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); font-size: 13px; line-height: 19px; color: var(--muted); }
+/* What the portals' own checks still stop (lib/portal-blockers, switch "portalwhy"). */
+[data-look="new"] .nl-adv-ring.is-blocked { background: conic-gradient(var(--accent-dark) calc(var(--p) * 360deg), var(--box) 0); }
+[data-look="new"] .nl-adv-blocks { flex-basis: 100%; list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); display: flex; flex-direction: column; gap: 10px; }
+[data-look="new"] .nl-adv-blocks li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 14px; background: color-mix(in srgb, var(--accent-dark) 7%, var(--page)); border: 1px solid color-mix(in srgb, var(--accent-dark) 28%, transparent); }
+[data-look="new"] .nl-adv-blocks-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-dark); }
+[data-look="new"] .nl-adv-blocks-text { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+[data-look="new"] .nl-adv-blocks-text b { font-weight: 600; font-size: 13.5px; line-height: 19px; color: var(--accent-dark); }
 
 /* The six steps, one open at a time. */
 [data-look="new"] .nl-adv-steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }

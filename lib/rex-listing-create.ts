@@ -265,7 +265,7 @@ function idFrom(result: unknown): string | null {
  * email REX itself gave us when he signed in, which is the one that matches
  * their user record when it differs from the OS one.
  */
-async function rexUserIdFor(userId: string | null): Promise<string | null> {
+export async function rexUserIdFor(userId: string | null): Promise<string | null> {
   if (!userId) return null;
   const { findUserById, ensureRexLink, linkRexUser } = await import("@/lib/users");
   const user = await findUserById(userId).catch(() => null);

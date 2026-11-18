@@ -83,6 +83,7 @@ export const LOOK_SCREENS = [
   /* Not a reskin (James, 18 Nov 2026): 11 of 18 decks sent in November were never opened and nothing told the agent;
      and terms were sent from the home's Compliance tab while the appraisal's valuation had never gone. */
   { id: "decknudge", label: "Valuation deck nudges", what: "The agent's bell says when a valuation deck hasn't been opened two days after it went, when the landlord has just opened it, and when a pre-appraisal is unopened before the visit. Sending terms from a home's Compliance tab, the agent is pointed to the appraisal first if its valuation never went out. Nothing goes to a landlord. Off, none of it." },
+  { id: "portalwhy", label: "Why it won't go to the portals", what: "When the portals' own checks stop a listing, Push to the portals says what is missing in plain words and takes the agent to it, in Edit the Advert and on the listing. A relet that lands on a listing already there with no agent named puts the agent pressing Relet on it. Off, the button only says the portals' checks haven't passed, and a relet leaves the agent blank." },
   { id: "fixit", label: "Report: put it right yourself", what: "A report from a listing, a let or a home that something is wrong, missing or can't be changed gets Steve's offer first: Edit on the record, and he shows where it is. A how-do-I gets his answer first. Send it to James anyway is always there. Off, every report goes straight to James." },
 ] as const;
 

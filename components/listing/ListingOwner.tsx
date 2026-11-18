@@ -40,6 +40,22 @@ export default function ListingOwner({ listingId }: { listingId: string | number
     };
   }, [listingId]);
 
+  /* "Name the agent" from a portal check (lib/portal-blockers, switch
+     "portalwhy"): opens the picker here and brings it into view. */
+  useEffect(() => {
+    if (!canChange) return;
+    const onAsk = (e: Event) => {
+      const want = (e as CustomEvent<{ listingId?: string }>).detail?.listingId;
+      if (want && want !== String(listingId)) return;
+      setChoice(agent?.id ?? "");
+      setPicking(true);
+      setNote(null);
+      window.requestAnimationFrame(() => document.getElementById(`listing-owner-${listingId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+    };
+    window.addEventListener("tle:name-agent", onAsk);
+    return () => window.removeEventListener("tle:name-agent", onAsk);
+  }, [canChange, listingId, agent?.id]);
+
   if (!canChange) return null;
 
   async function save() {
@@ -76,7 +92,7 @@ export default function ListingOwner({ listingId }: { listingId: string | number
 
   if (picking) {
     return (
-      <span className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-line/60 bg-white py-1 pl-3 pr-1 text-[11px]" data-steve-never>
+      <span id={`listing-owner-${listingId}`} className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-line/60 bg-white py-1 pl-3 pr-1 text-[11px]" data-steve-never>
         <span className="text-muted">Move to</span>
         <select
           value={choice}
@@ -111,6 +127,7 @@ export default function ListingOwner({ listingId }: { listingId: string | number
     <>
       <button
         type="button"
+        id={`listing-owner-${listingId}`}
         onClick={() => {
           setChoice(agent?.id ?? "");
           setPicking(true);

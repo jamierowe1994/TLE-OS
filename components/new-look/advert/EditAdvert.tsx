@@ -13,6 +13,7 @@ import SteveFace from "@/components/SteveFace";
 import { Ico } from "@/components/new-look/Parts";
 import { OPTIONS, RECOMMENDED, isRequired, type RequirementInput } from "@/lib/listing-requirements";
 import { useAdvertDraft } from "./useAdvertDraft";
+import type { PortalBlock } from "@/lib/portal-blockers";
 import OsAddressLine from "@/components/OsAddressLine";
 import { bandForScore, bandScoreClash } from "@/lib/epc-band";
 
@@ -36,6 +37,12 @@ export type AdvertPublish = {
   /** "the EPC is filed", for "Not until ..." */
   why: string;
   onPress: () => void;
+  /** What the portals' own checks still stop, in plain words (lib/portal-blockers, switch "portalwhy"). */
+  blocks?: PortalBlock[];
+  /** James or Susan, who can name the listing's agent from the listing page. */
+  canNameAgent?: boolean | null;
+  /** A fix that lives outside the advert (naming the agent). */
+  onFix?: (b: PortalBlock) => void;
 };
 
 type StepId = "home" | "let" | "bills" | "epc" | "advert" | "photos";
@@ -61,6 +68,9 @@ const STEP_NEEDS: Record<StepId, (keyof RequirementInput)[]> = {
 
 const ORDER: StepId[] = ["home", "let", "bills", "epc", "advert", "photos"];
 
+/** "1 thing stops it going live" */
+const stopsWords = (n: number) => `${n === 1 ? "1 thing stops" : `${n} things stop`} it going live`;
+
 export default function EditAdvert({
   listingId,
   address,
@@ -73,6 +83,7 @@ export default function EditAdvert({
   onClose,
   live,
   publish,
+  startStep,
 }: {
   listingId: string;
   /** The eyebrow over the title: the home's address. */
@@ -89,6 +100,8 @@ export default function EditAdvert({
   live: boolean;
   /** Push to the portals, where the listing page offers it. */
   publish: AdvertPublish | null;
+  /** Open on this step, sent from a portal check's fix on the listing page. */
+  startStep?: StepId | null;
 }) {
   const a = useAdvertDraft({ listingId, initial, canEdit, onSaved });
   const { details, draft, setDraft } = a;
@@ -178,7 +191,7 @@ export default function EditAdvert({
   useEffect(() => {
     if (opened.current || !input) return;
     opened.current = true;
-    setOpen(ORDER.find((s) => !stepDone(s)) ?? "home");
+    setOpen(startStep ?? ORDER.find((s) => !stepDone(s)) ?? "home");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input]);
 
@@ -570,8 +583,19 @@ export default function EditAdvert({
   /* ── the drawer ──────────────────────────────────────────────────────── */
 
   const allIn = doneN === ORDER.length;
+  /* Everything ticked, and the portals' own checks still say no (James,
+     18 Nov 2026): the card says what and where, never "Ready". */
+  const blocks = !live && publish && !publish.ready ? publish.blocks ?? [] : [];
+  const blocked = allIn && blocks.length > 0;
+  const fixBlock = (b: PortalBlock) => {
+    if (b.fix === "agent") return publish?.onFix?.(b);
+    if (b.fix) {
+      setPreviewing(false);
+      goStep(b.fix);
+    }
+  };
   const ring = (
-    <span className="nl-adv-ring" style={{ ["--p" as string]: input ? doneN / ORDER.length : 0 }} role="img" aria-label={input ? `${doneN} of ${ORDER.length} steps done` : "Loading"}>
+    <span className={`nl-adv-ring${blocked ? " is-blocked" : ""}`} style={{ ["--p" as string]: input ? doneN / ORDER.length : 0 }} role="img" aria-label={input ? `${doneN} of ${ORDER.length} steps done${blocked ? `, and ${stopsWords(blocks.length)}` : ""}` : "Loading"}>
       <b>{input ? `${doneN}/${ORDER.length}` : "-"}</b>
     </span>
   );
@@ -645,11 +669,13 @@ export default function EditAdvert({
           ) : (
             <>
               <section className="nl-adv-fill">
-                <SteveFace size={40} mood={a.filling === "all" ? "thinking" : allIn ? "happy" : "idle"} />
+                <SteveFace size={40} mood={a.filling === "all" ? "thinking" : allIn && !blocked ? "happy" : "idle"} />
                 <div className="nl-adv-fill-text">
-                  <b>{a.filling === "all" ? "Reading the photos, the last listing and the EPC…" : allIn ? "Ready for the portals" : "Let Steve fill this in"}</b>
+                  <b>{a.filling === "all" ? "Reading the photos, the last listing and the EPC…" : blocked ? stopsWords(blocks.length) : allIn ? "Ready for the portals" : "Let Steve fill this in"}</b>
                   <span className="nl-meta">
-                    {allIn
+                    {blocked
+                      ? "Every step is in, but the portals' own checks still say no. Put this right and it can go."
+                      : allIn
                       ? `Everything the portals need is here${a.recDone < RECOMMENDED.length ? `, and ${a.recDone} of ${RECOMMENDED.length} of the nice-to-haves` : ""}. Preview it, then push it live.`
                       : "From the photos, the last listing, the landlord's answers and the local market. Photos and floor plans are yours."}
                   </span>
@@ -664,6 +690,25 @@ export default function EditAdvert({
                   <GuideButton id="listings" />
                 </div>
                 {a.fillNote && <p className="nl-adv-fill-note">{a.fillNote}</p>}
+                {blocked && (
+                  <ul className="nl-adv-blocks">
+                    {blocks.map((b) => (
+                      <li key={b.key}>
+                        <span className="nl-adv-blocks-dot" aria-hidden />
+                        <span className="nl-adv-blocks-text">
+                          <b>{b.says}</b>
+                          {b.fix === "agent" && publish?.canNameAgent === false && <span className="nl-meta">Only James or Susan can name the agent. Ask them to put your name on it.</span>}
+                          {b.fix === null && <span className="nl-meta">Tell James, and he&apos;ll clear it.</span>}
+                        </span>
+                        {b.fix && (b.fix !== "agent" || publish?.canNameAgent === true) && (
+                          <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => fixBlock(b)}>
+                            {b.fix === "agent" ? "Name the agent" : `Go to ${STEP_NAMES[b.fix].toLowerCase()}`}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </section>
 
               <ol className="nl-adv-steps">

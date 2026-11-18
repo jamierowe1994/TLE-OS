@@ -87,6 +87,8 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
   const [needsSignIn, setNeedsSignIn] = useState(false);
   /* The home already has a current listing: that one is opened, not a second made. */
   const [existing, setExisting] = useState<string | null>(null);
+  /* The relet put this agent on a listing nobody was named on (lib/listing-agent-fill). */
+  const [agentAdded, setAgentAdded] = useState(false);
   /* HOW THE LANDLORD CAME TO US, ASKED HERE (James, 16 Nov 2026: "We need to
      allow the agent to pick the source"). A listing can't be made on a home
      with no Source, and the agent was sent off to find a picker on the home's
@@ -188,6 +190,7 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
     setError(null);
     setNeedsSignIn(false);
     setExisting(null);
+    setAgentAdded(false);
     try {
       if (homeSource.state === "none" && pickedId && sourcePick) {
         const sr = await fetch("/api/homes/source", {
@@ -214,9 +217,10 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
           serviceLevel,
         }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; listingId?: string; propertyId?: string; signIn?: boolean; existingListingId?: string };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; listingId?: string; propertyId?: string; signIn?: boolean; existingListingId?: string; agentAdded?: boolean };
       if (!j.ok && j.existingListingId) {
         setExisting(j.existingListingId);
+        setAgentAdded(Boolean(j.agentAdded));
         return;
       }
       if (!j.ok && j.signIn) {
@@ -381,7 +385,7 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
           {needsSignIn && <SignInAgain doing="create the listing" onDone={() => void create()} />}
           {existing && (
             <div className={look ? "nl-fs-card flex flex-wrap items-center justify-between gap-3" : "flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent-soft/60 px-3.5 py-3"}>
-              <p className="text-[12px] leading-relaxed text-accent-dark">This home is already on Listings, so there is nothing new to make. Carry on with that one.</p>
+              <p className="text-[12px] leading-relaxed text-accent-dark">This home is already on Listings, so there is nothing new to make.{agentAdded ? " Nobody was named as its agent, so it's now yours." : ""} Carry on with that one.</p>
               <a href={`/listings?open=${encodeURIComponent(existing)}&tab=marketing`} className="shrink-0 rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white hover:opacity-90">
                 Open the listing <span aria-hidden>→</span>
               </a>

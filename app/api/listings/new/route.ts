@@ -16,6 +16,8 @@ import type { ServiceLevel } from "@/lib/market-appraisal";
 import { setIntroOnly } from "@/lib/intro-only";
 import { isTestFile } from "@/lib/test-guard";
 import { adoptTestKit, kitFor, makeTestListing } from "@/lib/test-overlay";
+import { nameAgentIfNone } from "@/lib/listing-agent-fill";
+import { lookFor } from "@/lib/new-look-store";
 
 /**
  * NEW LISTING, THE WHOLE WAY (James, 12 Oct 2026).
@@ -226,7 +228,11 @@ export async function POST(req: NextRequest) {
     madeProperty = true;
   } else {
     const existing = await currentListingOn(propertyId);
-    if (existing) return NextResponse.json({ ok: false, step: "home", error: "This home is already on Listings, so a second one was not made.", existingListingId: existing }, { status: 409 });
+    if (existing) {
+      /* Nobody named on the one already there: this agent goes on it (lib/listing-agent-fill, switch "portalwhy"). */
+      const fill = (await lookFor(actor).catch(() => null))?.portalwhy ? await nameAgentIfNone(existing, actor).catch(() => null) : null;
+      return NextResponse.json({ ok: false, step: "home", error: "This home is already on Listings, so a second one was not made.", existingListingId: existing, agentAdded: fill?.state === "added" || undefined }, { status: 409 });
+    }
   }
 
   /* 2. The listing, a draft, and the landlord on it. */

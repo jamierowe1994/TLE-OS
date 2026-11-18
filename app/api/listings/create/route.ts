@@ -11,6 +11,8 @@ import { putOwnerOnListing } from "@/lib/rex-listing-owner";
 import { isTestFile } from "@/lib/test-guard";
 import { adoptTestKit, kitFor, makeTestListing, testListingForAppraisal } from "@/lib/test-overlay";
 import { getAppraisal } from "@/lib/appraisal-store";
+import { nameAgentIfNone } from "@/lib/listing-agent-fill";
+import { lookFor } from "@/lib/new-look-store";
 
 /**
  * "+ Add new listing".
@@ -186,8 +188,11 @@ export async function POST(req: NextRequest) {
   if (!madeProperty && !dryRun) {
     const existing = await currentListingOn(propertyId);
     if (existing) {
+      /* A relet landing on a listing nobody is named on: the agent pressing
+         it goes on as the agent (lib/listing-agent-fill, switch "portalwhy"). */
+      const fill = (await lookFor(actor).catch(() => null))?.portalwhy ? await nameAgentIfNone(existing, actor).catch(() => null) : null;
       return NextResponse.json(
-        { ok: false, step: "listing", error: "This home is already on Listings, so a second one was not made.", existingListingId: existing },
+        { ok: false, step: "listing", error: "This home is already on Listings, so a second one was not made.", existingListingId: existing, agentAdded: fill?.state === "added" || undefined },
         { status: 409 }
       );
     }

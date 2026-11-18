@@ -86,6 +86,7 @@ import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/Recor
 import ChangeViewing, { apptFromViewing, apptStartIso } from "@/components/viewings/ChangeViewing";
 import HomeSwitch from "@/components/HomeSwitch";
 import ActivityList, { exactWhen } from "@/components/new-look/ActivityList";
+import { explainBlockers, type PortalBlock } from "@/lib/portal-blockers";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -327,6 +328,10 @@ function ListingDrawerBody({
   const advertLook = useNewLook("advert");
   /* The progress line in graded sage (James, 25 Oct 2026), behind its own switch. */
   const graded = useNewLook("spine") === true;
+  /* Why it won't go to the portals, in plain words (lib/portal-blockers, James 18 Nov 2026). */
+  const portalWhy = useNewLook("portalwhy") === true;
+  /* Edit the Advert opened on the step a portal check points at. */
+  const [advertStep, setAdvertStep] = useState<Exclude<PortalBlock["fix"], "agent" | null> | null>(null);
   /* The new look's tab on the page itself; Edit the advert stays a pop-out. */
   const [nlTab, setNlTab] = useState<NlTab>(() => {
     const asked = askedTab(initialTab);
@@ -526,6 +531,19 @@ function ListingDrawerBody({
       live = false;
     };
   }, [listing?.id, pubKey]);
+  /* Whether this person can name the listing's agent (James and Susan, app/api/listings/owner),
+     asked only when a portal check says nobody is named. */
+  const needAgent = portalWhy && Boolean(pub?.blockers.some((m) => /listing agent/i.test(m)));
+  const [canNameAgent, setCanNameAgent] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!needAgent || !listing?.id) return;
+    let on = true;
+    fetch(`/api/listings/owner?id=${encodeURIComponent(String(listing.id))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; canChange?: boolean }) => { if (on) setCanNameAgent(Boolean(j.ok && j.canChange)); })
+      .catch(() => {});
+    return () => { on = false; };
+  }, [needAgent, listing?.id]);
   /* Still on its way to the portals, from this browser's watcher (lib/portal-watch). */
   const [watching, setWatching] = useState(false);
   useEffect(() => {
@@ -1262,6 +1280,8 @@ function ListingDrawerBody({
     { id: "eicr", label: home?.eic ? "Electrical certificate (EIC)" : "Electrical certificate (EICR)", done: certOk("eicr"), fix: () => goTab("compliance") },
   ];
   const readyToGoLive = certs != null && requirements.every((r) => r.done) && !(pub?.blockers.length);
+  /* The portals' own checks, each in plain words with where to fix it (switch "portalwhy"). */
+  const portalBlocks = portalWhy && pub?.blockers.length ? explainBlockers(pub.blockers) : [];
   const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
   /* Withdrawn, leased or sold in the listings system (Lorna Fieldson, 28 Oct
      2026, 15 Egton Street): neither live nor a draft, so it is never offered
@@ -1558,10 +1578,28 @@ function ListingDrawerBody({
   const dayOf = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const missingWords = (() => {
     const words: Record<string, string> = { marketing: "the Marketing section is complete", epc: "the EPC is filed" };
-    const m = [...requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label), ...(pub?.blockers.length && requirements.every((r) => r.done) ? ["the portals' own checks pass"] : [])];
+    const m = [...requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label), ...(pub?.blockers.length && requirements.every((r) => r.done) ? (portalBlocks.length ? portalBlocks.map((b) => b.until) : ["the portals' own checks pass"]) : [])];
     return m.length > 1 ? `${m.slice(0, -1).join(", ")} and ${m[m.length - 1]}` : m[0] ?? "the certificates are read";
   })();
+  /* Takes the agent to what a portal check wants: the step of the advert, or
+     the agent picker on the listing (James and Susan), or says who to ask. */
+  const fixBlock = (b: PortalBlock | undefined) => {
+    if (!b) return;
+    if (b.fix === "agent") {
+      if (canNameAgent !== true) return setPortalNote("No agent is named on this listing, so the portals won't take it. Only James or Susan can name the agent - ask them to put your name on it.");
+      if (tab === "marketing") closeTab();
+      if (newLook) pickNl("overview");
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("tle:name-agent", { detail: { listingId: String(listing.id) } })), 350);
+      return;
+    }
+    if (b.fix) {
+      setAdvertStep(b.fix);
+      return goTab("marketing");
+    }
+    setPortalNote(`${b.says} Tell James, and he'll clear it.`);
+  };
   const pushLive = () => {
+    if (!readyToGoLive && portalBlocks.length && certs != null && requirements.every((r) => r.done)) return fixBlock(portalBlocks[0]);
     if (!readyToGoLive) return goTab(requirements.find((r) => !r.done)?.id === "epc" ? "compliance" : "marketing");
     if (!publishCanPress) return setPortalNote(lockedSentence(publishArea, publishLevel));
     setPushError(null);
@@ -1649,11 +1687,12 @@ function ListingDrawerBody({
           setSaved({ heading: d.heading || null, body: d.body || null });
           setPub((cur) => (cur ? { ...cur, status: GONE_STATES.has(cur.status ?? "") ? cur.status : d.status, blockers: [...new Set([...d.blockers.publish, ...d.blockers.portals])] } : cur));
         }}
-        onClose={closeTab}
+        onClose={() => { setAdvertStep(null); closeTab(); }}
+        startStep={advertStep}
         live={isLive}
         publish={
           isDraft && !listing.letAgreed && !publishHidden
-            ? { ready: readyToGoLive, why: missingWords, onPress: () => { closeTab(); pushLive(); } }
+            ? { ready: readyToGoLive, why: missingWords, onPress: () => { closeTab(); pushLive(); }, ...(portalWhy ? { blocks: portalBlocks, canNameAgent, onFix: fixBlock } : {}) }
             : null
         }
       />
