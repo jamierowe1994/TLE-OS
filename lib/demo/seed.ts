@@ -62,6 +62,43 @@ export async function seedDemo(): Promise<{ users: number; homes: number; signIn
       [`demo-met-${u.id}`, id, u.email]
     );
   }
+  /* Real people's own sign-ins (DEMO_EXTRA_LOGINS on the demo service, set by
+     James: "Name <email>, Name <email>"). Kept in a setting, not in this
+     file, because the repository is public. Each sees the whole business,
+     and stands in one invented agent's shoes for the screens that are about
+     "my" diary and "my" homes, so nothing they open is empty. Same shared
+     password. */
+  const agents = world.users.filter((u) => u.role === "agent");
+  const extras = (process.env.DEMO_EXTRA_LOGINS ?? "")
+    .split(",")
+    .map((x) => /^\s*(.*?)\s*<\s*([^<>\s]+@[^<>\s]+)\s*>\s*$/.exec(x))
+    .filter((m): m is RegExpExecArray => Boolean(m));
+  for (const [n, m] of extras.entries()) {
+    const email = m[2].toLowerCase();
+    const as = agents[n % agents.length];
+    const id = `demo-extra-${email.replace(/[^a-z0-9]+/g, "-")}`;
+    await q(
+      `INSERT INTO os_users (id, email, name, role, password_hash, rex_user_id, email_checked_at)
+       VALUES ($1, $2, $3, 'owner', $4, $5, NOW())
+       ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name, password_hash = EXCLUDED.password_hash, rex_user_id = EXCLUDED.rex_user_id, locked_at = NULL`,
+      [id, email, m[1] || email.split("@")[0], password ? hashPassword(password) : "no-sign-in-until-DEMO_PASSWORD-is-set", as.id]
+    );
+    for (const [key, value] of [["os-setup", setup], [READY_PREF, { tourAt: stamp, dismissedAt: stamp }]] as const) {
+      await q(
+        `INSERT INTO os_user_prefs (user_id, key, value, updated_at) VALUES ($1, $2, $3::jsonb, NOW())
+         ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [id, key, JSON.stringify(value)]
+      );
+    }
+    /* Their diary is the invented agent's: the OS finds a person's calendar by their REX address. */
+    await connectDemoRex(id, as.email);
+    await q(
+      `INSERT INTO os_assistant_log (id, user_id, user_email, role, text, kind) VALUES ($1, $2, $3, 'assistant', 'Introduced at demo set-up.', 'onboarding-help')
+       ON CONFLICT (id) DO NOTHING`,
+      [`demo-met-${id}`, id, email]
+    );
+  }
+
   /* The managed-homes list (os_properties): the OS's own record of which
      homes are ours, which Compliance, Inspections and Portfolio all read. On
      live it came across from the old property-management system; here it is
@@ -99,7 +136,7 @@ export async function seedDemo(): Promise<{ users: number; homes: number; signIn
       [a.id]
     );
   }
-  return { users: world.users.length, homes: lets.length, signIns: Boolean(password) };
+  return { users: world.users.length + extras.length, homes: lets.length, signIns: Boolean(password) };
 }
 
 /**
