@@ -247,15 +247,30 @@ const EDITABLE: Record<string, [string, string]> = {
   "works-tenant-notice": ["wtn2", "wtn3"],
   "works-tenant-booked": ["wtb2", "wtb3"],
   "works-tenant-planned-notice": ["wtp2", "wtp4"],
+  /* The contractor's emails from the job's page too (James, 17 Nov 2026):
+     the booking, the cancellation, "can you take this?" and the reminders.
+     The button to their page and the sign-off stay fixed. */
+  "works-contractor-booked": ["wb2", "wb5"],
+  "works-contractor-cancelled": ["wx2", "wx3"],
+  "works-contractor-report": ["wcr2", "wcr4"],
+  "works-contractor-chase": ["wch2", "wch2"],
+  "works-contractor-chase-final": ["wcf2", "wcf3"],
 };
 /** Stands for each tenant's own first name in the words the agent edits, since one edit goes to every tenant. */
 const FIRST_NAME = TENANT_FIRST_NAME;
 const TENANT_EMAILS = new Set(["works-tenant-notice", "works-tenant-booked", "works-tenant-planned-notice"]);
-/** What the agent typed on the last screen: the works order, or the tenants' email. */
-export type ContractorEdit = { subject?: string | null; body?: string | null };
+/**
+ * What the agent typed on the last screen: the works order, or the tenants'
+ * email. `template` is the email it was written for, so a button that sends
+ * two emails to the contractor (Send the works order again on a booked job)
+ * only rewords the one they saw. Left out, as Report a repair sends it, it
+ * goes on whichever editable email the move sends.
+ */
+export type ContractorEdit = { subject?: string | null; body?: string | null; template?: string | null };
 function editFor(id: string, e?: ContractorEdit | null): EmailEdit | null {
   const r = EDITABLE[id];
   if (!r || !e || (!e.body?.trim() && !e.subject?.trim())) return null;
+  if (e.template && e.template !== id) return null;
   /* Each tenant greeted by their own name, as the email always did. */
   const named = (t: string | null | undefined) => (t && TENANT_EMAILS.has(id) ? t.split(FIRST_NAME).join("{{tenantName}}") : t ?? null);
   return { from: r[0], through: r[1], subject: named(e.subject), body: named(e.body) };
@@ -288,6 +303,32 @@ export function tenantEmailOnStep(o: Pick<WorksOrder, "kind" | "scheduledAt" | "
   if (step === "schedule") return o.kind === "planned" || o.quietTenants || !o.scheduledAt ? null : "works-tenant-booked";
   if (step === "booked") return "works-tenant-booked";
   return o.kind === "planned" && o.contractorId && !o.scheduledAt ? "works-tenant-planned-notice" : null;
+}
+
+/** The moves whose contractor email the agent may reword before it goes (James, 17 Nov 2026). */
+const CONTRACTOR_EDIT_ACTIONS = new Set<string>(["raised", "contractor_confirmed", "resend_order", "schedule", "cancel", "contact_contractor", "chase_reminder", "chase_final"]);
+
+/**
+ * The contractor's email a button on the job's page sends, or null when it
+ * sends none (James, 17 Nov 2026). Mirrors emailsForMove: Confirm the
+ * Contractor and Send the works order are the works order; setting or moving
+ * the date is the booking; Cancel the job; Contacted is "can you take this?";
+ * and the two reminders.
+ */
+export type ContractorStep = "confirm" | "resend" | "schedule" | "cancel" | "contact" | "reminder" | "final";
+export const CONTRACTOR_STEPS: ContractorStep[] = ["confirm", "resend", "schedule", "cancel", "contact", "reminder", "final"];
+export function contractorEmailOnStep(o: Pick<WorksOrder, "kind" | "scheduledAt" | "contractorId">, step: ContractorStep): string | null {
+  if (!o.contractorId) return null;
+  if (step === "confirm" || step === "resend") return o.kind === "planned" ? "works-contractor-planned" : "works-contractor-order";
+  if (step === "schedule") return o.scheduledAt ? "works-contractor-booked" : null;
+  if (step === "cancel") return "works-contractor-cancelled";
+  if (step === "contact") return "works-contractor-report";
+  return step === "final" ? "works-contractor-chase-final" : "works-contractor-chase";
+}
+
+/** The words a reminder fills in that the job alone doesn't hold. */
+export function contractorStepVars(o: WorksOrder, step: ContractorStep, remindedAt: string | null): Record<string, string> {
+  return step === "reminder" || step === "final" ? chaseVars(o, remindedAt) : {};
 }
 
 /**
@@ -561,10 +602,14 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
      own - the agent sends the booking when they choose (tell_tenants_booked) -
      and a skipped landlord hears nothing at all. */
   const planned = o.kind === "planned";
+  /* The contractor's email in the agent's own words (James, 17 Nov 2026):
+     raising the job, Confirm the Contractor, Send the works order, the date,
+     Cancel, Contacted and the reminders. */
+  const contractorEdit = (id: string) => (CONTRACTOR_EDIT_ACTIONS.has(action) ? editFor(id, detail.contractorEdit) : null);
   const contractorOrder = async () => {
     if (!contractor) return;
     const id = planned ? "works-contractor-planned" : "works-contractor-order";
-    const sent = await send(o, id, contractor.email, vars, me, "contractor", action === "raised" ? editFor(id, detail.contractorEdit) : null);
+    const sent = await send(o, id, contractor.email, vars, me, "contractor", contractorEdit(id));
     if (sent.sent && o.contractorId) await markOrderSent(o.id, o.contractorId, contractor.name);
     out.push(sent);
   };
@@ -572,7 +617,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
      it before it goes (Lianna Denholm, 16 Nov 2026): raising the job,
      Confirm the Contractor, setting the date, and the Tell the tenants buttons. */
   const tenantEdit = (id: string) => (TENANT_EDIT_ACTIONS.has(action) ? editFor(id, detail.tenantEdit) : null);
-  const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor")); };
+  const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor", contractorEdit("works-contractor-booked"))); };
   /* A discreet repair (Let the tenants know unticked, Lianna 9 Oct 2026):
      nothing automatic goes to any tenant on it. */
   const quiet = !planned && o.quietTenants;
@@ -648,7 +693,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       if (detail.how === "emailed" || detail.how === "both") out.push(await send(o, "works-landlord-report", o.landlordEmail, vars, me, "landlord"));
       break;
     case "contact_contractor":
-      if (contractor) out.push(await send(o, "works-contractor-report", contractor.email, vars, me, "contractor"));
+      if (contractor) out.push(await send(o, "works-contractor-report", contractor.email, vars, me, "contractor", contractorEdit("works-contractor-report")));
       break;
     case "contractor_confirmed":
       /* Together, as James asked: the works order to the contractor and
@@ -727,13 +772,13 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       if (!planned && !quiet) out.push(await send(o, "works-tenant-happy", o.tenantEmail, vars, me, "tenant"));
       break;
     case "cancel":
-      if (contractor) out.push(await send(o, "works-contractor-cancelled", contractor.email, vars, me, "contractor"));
+      if (contractor) out.push(await send(o, "works-contractor-cancelled", contractor.email, vars, me, "contractor", contractorEdit("works-contractor-cancelled")));
       break;
     /* Chasing the contractor (lib/works-chase): by hand, or on the dates set. */
     case "chase_reminder":
     case "chase_final":
       out.push(contractor
-        ? await send(o, action === "chase_final" ? "works-contractor-chase-final" : "works-contractor-chase", contractor.email, { ...vars, ...chaseVars(o, detail.remindedAt) }, me, "contractor")
+        ? await send(o, action === "chase_final" ? "works-contractor-chase-final" : "works-contractor-chase", contractor.email, { ...vars, ...chaseVars(o, detail.remindedAt) }, me, "contractor", contractorEdit(action === "chase_final" ? "works-contractor-chase-final" : "works-contractor-chase"))
         : { to: "contractor", sent: false, reason: "the contractor's record could not be found" });
       break;
     default:

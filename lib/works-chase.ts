@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { getOrder, logEvent, type WorksOrder } from "@/lib/works-orders";
-import { emailsForMove, outcomeLine, type SendOutcome } from "@/lib/works-emails";
+import { emailsForMove, outcomeLine, type ContractorEdit, type SendOutcome } from "@/lib/works-emails";
 import { agentFor } from "@/lib/works-agent";
 import { findUserById, type OsUser } from "@/lib/users";
 import { neverSendsOut } from "@/lib/not-a-sender";
@@ -93,12 +93,13 @@ export async function setChase(o: WorksOrder, firstDays: unknown, finalDays: unk
  * whoever set it up). The outcome is the timeline line either way; nothing
  * moves on unless it went.
  */
-export async function sendChase(o: WorksOrder, kind: "reminder" | "final", me: OsUser, by: string): Promise<SendOutcome> {
+export async function sendChase(o: WorksOrder, kind: "reminder" | "final", me: OsUser, by: string, edit?: ContractorEdit | null): Promise<SendOutcome> {
   const blocked = chaseBlock(o);
   if (blocked) throw new Error(`It can't be chased: ${blocked.charAt(0).toLowerCase()}${blocked.slice(1)}.`);
   const cur = await chaseOf(o.id);
   const live = chaseLive(cur) && cur.contractorId === o.contractorId ? cur : null;
-  const [sent] = await emailsForMove(o, kind === "final" ? "chase_final" : "chase_reminder", me, { remindedAt: live?.remindedAt ?? null });
+  /* In the agent's own words, when they changed it before pressing Send (James, 17 Nov 2026). */
+  const [sent] = await emailsForMove(o, kind === "final" ? "chase_final" : "chase_reminder", me, { remindedAt: live?.remindedAt ?? null, contractorEdit: edit ?? null });
   const name = o.contractorName || "the contractor";
   const label = kind === "final" ? "Final reminder" : "Reminder";
   if (!sent?.sent) {
@@ -106,7 +107,7 @@ export async function sendChase(o: WorksOrder, kind: "reminder" | "final", me: O
     return sent ?? { to: "contractor", sent: false, reason: "it could not be sent" };
   }
   const via = sent.via === "the rehearsal" ? " - written and kept here, not sent" : sent.via === "own mailbox" ? `, from ${by === "TLE OS" ? `${me.name || "the agent"}'s` : "your own"} mailbox` : "";
-  await logEvent(o.id, by, "chase", `${label} sent to ${name} at ${sent.address}${via}${sent.cc ? `, copying ${sent.cc} in` : ""}.`);
+  await logEvent(o.id, by, "chase", `${label} sent to ${name} at ${sent.address}${via}${sent.cc ? `, copying ${sent.cc} in` : ""}${edit?.body?.trim() || edit?.subject?.trim() ? ", reworded before it went" : ""}.`);
   if (kind === "final") {
     /* The 48 hours start now; whatever was planned before is replaced by the wait. */
     await q(

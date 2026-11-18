@@ -728,6 +728,8 @@ export async function worksSummary(): Promise<WorksSummary> {
 
 /** The tenants' email in the agent's own words (Lianna Denholm, 16 Nov 2026). */
 export type TenantWords = { subject?: string | null; body?: string | null };
+/** The contractor's email in the agent's own words (James, 17 Nov 2026); template is the email it was written for. */
+export type ContractorWords = { subject?: string | null; body?: string | null; template?: string | null };
 export type Move =
   /* ── the workflow ── */
   | { action: "tell_landlord"; how: "rang" | "emailed" | "both" | "text"; note?: string }
@@ -738,9 +740,9 @@ export type Move =
   | { action: "tell_tenants_access"; note?: string; tenantEdit?: TenantWords | null }
   | { action: "arranging"; who: "landlord" | "us"; followUpAt?: string | null; note?: string }
   | { action: "landlord_resolved"; note?: string }
-  | { action: "contact_contractor"; contractorId: string; note?: string }
+  | { action: "contact_contractor"; contractorId: string; note?: string; contractorEdit?: ContractorWords | null }
   /* tenantEdit: the tenants' email in the agent's own words (Lianna Denholm, 16 Nov 2026). */
-  | { action: "contractor_confirmed"; note?: string; tenantEdit?: TenantWords | null }
+  | { action: "contractor_confirmed"; note?: string; tenantEdit?: TenantWords | null; contractorEdit?: ContractorWords | null }
   | { action: "tenant_happy"; happy: "yes" | "no"; note?: string }
   | { action: "payee"; payee: "contractor" | "agent"; note?: string }
   /* Skip for now (Howard, 15 Oct 2026): only the current step, only a SKIPPABLE one. Sends nothing. */
@@ -750,12 +752,12 @@ export type Move =
   | { action: "approve"; approvedBy: string; note?: string }
   /** quiet: set them on the job and send nothing (the job page's Change the Contractor says so); Send again sends it. */
   | { action: "assign"; contractorId: string; scheduledAt?: string | null; note?: string; quiet?: boolean }
-  | { action: "schedule"; scheduledAt: string; note?: string; tenantEdit?: TenantWords | null }
+  | { action: "schedule"; scheduledAt: string; note?: string; tenantEdit?: TenantWords | null; contractorEdit?: ContractorWords | null }
   /** alreadyDone: work finished before it was on the OS - nobody is emailed and the tenant is not asked (Rhiannon, 19 Oct 2026). */
   | { action: "done"; note: string; completedAt?: string | null; alreadyDone?: boolean }
   | { action: "invoice"; invoicePence: number; invoiceRef?: string; note?: string }
   | { action: "paid"; paidHow: PaidHow; note?: string }
-  | { action: "cancel"; reason: string }
+  | { action: "cancel"; reason: string; contractorEdit?: ContractorWords | null }
   | { action: "reopen"; note?: string }
   | { action: "note"; note: string }
   | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantPhone" | "tenantEmail" | "landlord" | "landlordEmail" | "landlordMobile" | "access" | "authorityPence" | "reportedBy">> }
@@ -773,7 +775,7 @@ export type Move =
   /** Take this one: they go on the job, the others are told politely. */
   | { action: "accept_quote"; askId: string; note?: string }
   /** The works order again, to whoever is on the job now. */
-  | { action: "resend_order"; note?: string }
+  | { action: "resend_order"; note?: string; contractorEdit?: ContractorWords | null }
   /** Send the invoice to the landlord to authorise (Kirstie Mulholland, 20 Oct 2026). */
   | { action: "ask_landlord_invoice"; email?: string; note?: string }
   /** The landlord's answer: from their link, or recorded by the agent after a call. */

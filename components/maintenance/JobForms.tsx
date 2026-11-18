@@ -2,7 +2,7 @@
 
 import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useState } from "react";
-import type { Contractor, Move, PaidHow, Urgency, WorksOrder } from "@/lib/works-orders";
+import type { Contractor, ContractorWords, Move, PaidHow, Urgency, WorksOrder } from "@/lib/works-orders";
 import { URGENCIES } from "@/lib/works-catalogue";
 import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
@@ -11,6 +11,7 @@ import { AskForQuotes } from "@/components/maintenance/QuoteAsks";
 import { FloatCard, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
 import { DateEmail } from "@/components/maintenance/TenantJobEmail";
 import type { MailWords } from "@/components/maintenance/WorksOrderEmail";
+import ContractorJobEmail, { ContractorDateEmail } from "@/components/maintenance/ContractorJobEmail";
 
 /**
  * The job's small forms, one per thing you can do to it: the quote, the
@@ -29,7 +30,7 @@ import type { MailWords } from "@/components/maintenance/WorksOrderEmail";
  * sends is the same. Left out, the form is drawn as it always has been.
  */
 
-export type FormId = "quote" | "request_quote" | "approve" | "assign" | "schedule" | "done" | "already_done" | "invoice" | "paid" | "cancel" | "reopen" | "note" | "edit";
+export type FormId = "quote" | "request_quote" | "approve" | "assign" | "schedule" | "done" | "already_done" | "invoice" | "paid" | "cancel" | "reopen" | "note" | "edit" | "resend_order";
 
 export const FORM_TITLE: Record<FormId, (o: WorksOrder) => string> = {
   quote: (o) => (o.quotePence != null ? "Change the Quote" : "Log a Quote"),
@@ -45,6 +46,8 @@ export const FORM_TITLE: Record<FormId, (o: WorksOrder) => string> = {
   reopen: () => "Reopen the Job",
   note: () => "Add a Note",
   edit: () => "Edit the Details",
+  /* The works order shown before it goes again (James, 17 Nov 2026). */
+  resend_order: (o) => (o.orderSentTo && o.orderSentTo !== o.contractorId ? "Send the Works Order" : "Send the Works Order Again"),
 };
 
 const FIELD = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
@@ -77,6 +80,9 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
   const [mine, setMine] = useState<string | null>(null);
   /* The booking email to the tenant in the agent's words (Lianna Denholm, 16 Nov 2026). */
   const [tenantEdit, setTenantEdit] = useState<MailWords | null>(null);
+  /* The contractor's email in the agent's words (James, 17 Nov 2026): the booking, the cancellation, the works order again. */
+  const [contractorEdit, setContractorEdit] = useState<ContractorWords | null>(null);
+  const ce = contractorEdit ? { contractorEdit } : {};
   const set = (k: string, v: string) => setF((cur) => ({ ...cur, [k]: v }));
 
   async function save() {
@@ -86,11 +92,12 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
       : form === "request_quote" ? (f.contractorId || o.contractorId ? { action: "request_quote", contractorId: f.contractorId || undefined, note: f.note } : null)
       : form === "approve" ? { action: "approve", approvedBy: f.approvedBy ?? (o.landlord || "The landlord"), note: f.note }
       : form === "assign" ? (f.contractorId || o.contractorId ? { action: "assign", contractorId: f.contractorId || o.contractorId!, scheduledAt: iso(f.scheduledAt), note: f.note, quiet: true } : null)
-      : form === "schedule" ? (f.scheduledAt ? { action: "schedule", scheduledAt: iso(f.scheduledAt)!, note: f.note, ...(tenantEdit ? { tenantEdit } : {}) } : null)
+      : form === "schedule" ? (f.scheduledAt ? { action: "schedule", scheduledAt: iso(f.scheduledAt)!, note: f.note, ...(tenantEdit ? { tenantEdit } : {}), ...ce } : null)
       : form === "done" || form === "already_done" ? { action: "done", note: f.note ?? "", completedAt: iso(f.completedAt), ...(form === "already_done" ? { alreadyDone: true } : {}) }
       : form === "invoice" ? (f.amount ? { action: "invoice", invoicePence: toPence(f.amount), invoiceRef: f.ref ?? (o.invoicePence != null ? o.invoiceRef : "") } : null)
       : form === "paid" ? (f.how ? { action: "paid", paidHow: f.how as PaidHow, note: f.note } : null)
-      : form === "cancel" ? { action: "cancel", reason: f.note ?? "" }
+      : form === "cancel" ? { action: "cancel", reason: f.note ?? "", ...ce }
+      : form === "resend_order" ? { action: "resend_order", ...ce }
       : form === "reopen" ? { action: "reopen", note: f.note }
       : form === "note" ? { action: "note", note: f.note ?? "" }
       : form === "edit" ? { action: "edit", fields: {
@@ -183,6 +190,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
             <input value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder="Optional" className={field} />
           </div>
           <p className="text-[11.5px] text-muted sm:col-span-2">{o.scheduledAt ? "Moving it tells the tenant and the contractor the new date." : "Setting it tells the tenant and the contractor, and lets the landlord know it's arranged."}</p>
+          <div className="sm:col-span-2"><ContractorDateEmail o={o} at={f.scheduledAt} goes="Goes when you press Save" onEdit={setContractorEdit} /></div>
           <div className="sm:col-span-2"><DateEmail o={o} at={f.scheduledAt} goes="Goes when you press Save" onEdit={setTenantEdit} /></div>
         </div>
       )}
@@ -222,6 +230,13 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
       {(form === "cancel" || form === "note" || form === "reopen") && (
         <textarea value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} rows={3} placeholder={form === "cancel" ? "Why it isn't going ahead" : form === "reopen" ? "Why it's open again (optional)" : "A call, an email, anything worth keeping"} className={field} />
       )}
+      {form === "cancel" && o.contractorId && <ContractorJobEmail orderId={o.id} contractorId={o.contractorId} step="cancel" goes="Goes when you press Cancel the job" onEdit={setContractorEdit} />}
+      {form === "resend_order" && (o.contractorId ? (
+        <>
+          <p className="text-[12.5px] text-muted">To {o.contractorName}, with their page to set the date.{o.kind !== "planned" && o.scheduledAt ? " The booking goes with it, as before." : ""}</p>
+          <ContractorJobEmail orderId={o.id} contractorId={o.contractorId} step="resend" goes="Goes when you press Send it" onEdit={setContractorEdit} />
+        </>
+      ) : <p className="text-[12.5px] text-muted">There's no contractor on the job.</p>)}
       {form === "edit" && (
         <div className="grid gap-3 sm:grid-cols-2">
           <input value={f.title ?? o.title} onChange={(e) => set("title", e.target.value)} placeholder="Title" className={`${field} sm:col-span-2`} />
@@ -274,7 +289,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
         ) : (
           <FloatFoot left={problem ? <span className="nl-fs-err" role="alert">{problem}</span> : footLeft}>
             <button type="button" onClick={onBack} className="nl-btn nl-fs-ghost">Back</button>
-            <button type="button" disabled={busy} onClick={() => void save()} className={`nl-btn ${form === "cancel" ? "nl-btn--danger" : "nl-btn--primary"}`}>{busy ? "Saving…" : form === "cancel" ? "Cancel the job" : "Save"}</button>
+            <button type="button" disabled={busy} onClick={() => void save()} className={`nl-btn ${form === "cancel" ? "nl-btn--danger" : "nl-btn--primary"}`}>{busy ? (form === "resend_order" ? "Sending…" : "Saving…") : form === "cancel" ? "Cancel the job" : form === "resend_order" ? "Send it" : "Save"}</button>
           </FloatFoot>
         )}
       </>
@@ -287,7 +302,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
       {(mine || err) && <p className="mt-3 text-[12px] text-accent-dark">{mine ?? err}</p>}
       {form !== "request_quote" && <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onBack} className={btn}>Back</button>
-        <button type="button" disabled={busy} onClick={() => void save()} className={primary}>{busy ? "Saving…" : form === "cancel" ? "Cancel the job" : "Save"}</button>
+        <button type="button" disabled={busy} onClick={() => void save()} className={primary}>{busy ? (form === "resend_order" ? "Sending…" : "Saving…") : form === "cancel" ? "Cancel the job" : form === "resend_order" ? "Send it" : "Save"}</button>
       </div>}
     </div>
   );
