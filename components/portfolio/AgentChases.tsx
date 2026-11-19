@@ -53,7 +53,9 @@ export function chaseLine(c: AgentChase): { title: string; sub: string } {
 
 export function AgentChaseList({ loaded, onOpen, look = true }: { loaded: ChasesLoaded; onOpen: (c: AgentChase) => void; look?: boolean }) {
   if (loaded.state === "loading") return <p className="nl-meta text-[12.5px] text-muted">Reading the reminders sent to the agent…</p>;
-  if (loaded.state === "failed") return <p className="nl-meta text-[12.5px] text-accent-dark">The reminders couldn&apos;t be read: {loaded.error}</p>;
+  if (loaded.state === "failed" || !Array.isArray(loaded.chases)) {
+    return <p className="nl-meta text-[12.5px] text-accent-dark">The reminders couldn&apos;t be read: {loaded.state === "failed" ? loaded.error : "refresh the page to try again."}</p>;
+  }
   const { chases, office } = loaded;
   const none = office ? "No certificate reminders have gone to the agent about this home." : "No certificate reminders have come to you about this home.";
   if (!look) {

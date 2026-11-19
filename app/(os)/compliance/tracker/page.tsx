@@ -9,7 +9,7 @@ import { Pill } from "@/components/Wire";
 import type { ChaseRow, QueuedReminder, TrackerBook } from "@/lib/compliance-tracker";
 import type { ChaseBrief, ChaseRecord } from "@/lib/cert-chase";
 import { searchMatches } from "@/lib/search-match";
-import ChasePanel, { chaseLine } from "@/components/compliance-desk/ChasePanel";
+import ChasePanel, { chaseBook, chaseLine } from "@/components/compliance-desk/ChasePanel";
 
 /**
  * Michael's tracker — the back-office view of compliance.
@@ -757,7 +757,7 @@ export default function ComplianceTracker() {
      just put right (patched in place, so it is quick). */
   async function reload() {
     const p = (await fetch("/api/compliance/tracker").then((x) => x.json()).catch(() => null)) as Payload | null;
-    if (p && p.ok !== false) setD(p);
+    if (p && p.ok !== false) setD({ ...p, chases: chaseBook(p.chases) });
   }
 
   /* Back on the list. */
@@ -788,7 +788,8 @@ export default function ComplianceTracker() {
       .then((p: Payload) => {
         if (!live) return;
         if (p.ok === false) setError(p.error ?? "Couldn't read the compliance book.");
-        else setD(p);
+        /* Only the keyed record is read as the chases (ticket 038f44d4). */
+        else setD({ ...p, chases: chaseBook(p.chases) });
       })
       .catch((e: Error) => live && setError(e.message));
     return () => {

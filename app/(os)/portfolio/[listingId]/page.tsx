@@ -502,7 +502,12 @@ export default function PropertyPage() {
     setChases({ state: "loading" });
     fetch(`/api/property/agent-chases?property=${encodeURIComponent(propertyId)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => { if (live) setChases(j?.ok ? { state: "ready", chases: j.chases ?? [], office: Boolean(j.office) } : { state: "failed", error: j?.error ?? "Not read." }); })
+      .then((j) => {
+        if (!live) return;
+        /* A list, or the reminders say they couldn't be read (ticket 038f44d4). */
+        if (j?.ok && Array.isArray(j.chases)) setChases({ state: "ready", chases: j.chases, office: Boolean(j.office) });
+        else setChases({ state: "failed", error: j?.ok ? "they came back in a shape this page can't read. Refresh to try again." : j?.error ?? "Not read." });
+      })
       .catch(() => live && setChases({ state: "failed", error: "Not read." }));
     return () => { live = false; };
   }, [propertyId, p?.test]);

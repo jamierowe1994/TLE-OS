@@ -62,7 +62,10 @@ export default function CrashScreen({
      nothing left to photograph but the rail, so it is not worth the upload
      or the promise. */
   picture = true,
+  /* The tab is still on the build before the latest deploy (lib/new-build). */
+  updated = false,
 }: {
+  updated?: boolean;
   error?: (Error & { digest?: string }) | null;
   reset?: () => void;
   headline?: string;
@@ -80,9 +83,14 @@ export default function CrashScreen({
      - React's reset alone would only redraw the half-arrived page - and the
      page loads itself again the moment the phone is back online. The report
      button stays, below, for when it keeps happening. */
-  const lost = isLostConnection(error);
-  const title = lost ? "Lost the Connection" : headline;
-  const say = lost
+  /* A tab left open across an update (ticket 038f44d4, 18 Nov 2026): the old
+     page asked the new OS for its figures and could not read the answer. Said
+     as what it is, with Refresh, the same way as a lost connection. */
+  const lost = isLostConnection(error) || updated;
+  const title = updated ? "The OS Has Been Updated" : lost ? "Lost the Connection" : headline;
+  const say = updated
+    ? "This page was opened before the latest update, so it is still running the old version. Nothing is broken and nothing you saved has been lost. Refresh to carry on with the new version."
+    : lost
     ? "Your phone or computer lost touch with the OS for a moment, so this page could not finish loading. Nothing is broken. Try Again loads it afresh, and it will do that on its own as soon as you are back online."
     : what;
   useEffect(() => {
@@ -255,7 +263,7 @@ export default function CrashScreen({
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
           {lost && (
             <button type="button" onClick={() => window.location.reload()} style={{ ...button, background: BROWN, color: "#fff" }}>
-              Try Again
+              {updated ? "Refresh" : "Try Again"}
             </button>
           )}
           {state !== "sent" && (

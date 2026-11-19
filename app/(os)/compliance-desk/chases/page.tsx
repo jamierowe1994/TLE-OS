@@ -143,6 +143,8 @@ export default function AgentChases() {
         .then((j: Payload) => {
           if (!live) return;
           if (j.ok === false) setError(j.error ?? "The chase record couldn't be read.");
+          /* A list, or it is said so - never "chases.map is not a function" (ticket 038f44d4). */
+          else if (!Array.isArray(j.chases)) setError("The chase record came back in a shape this screen can't read. Refresh the page to try again.");
           else {
             setError(null);
             setD(j);
@@ -174,7 +176,7 @@ export default function AgentChases() {
         <div className="flex flex-wrap items-center gap-2.5">
           <select value={agent} onChange={(e) => setAgent(e.target.value)} aria-label="Agent" className={`${field} sm:max-w-[220px]`}>
             <option value="">Every agent</option>
-            {(d?.agents ?? []).map((a) => (
+            {(Array.isArray(d?.agents) ? d.agents : []).map((a) => (
               <option key={a} value={a}>
                 {a}
               </option>

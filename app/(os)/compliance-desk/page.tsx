@@ -8,6 +8,7 @@ import PreTenancyHero from "@/components/pretenancy/Hero";
 import { GREEN, RED, waited } from "@/components/compliance-desk/CheckRow";
 import { useDesk } from "@/components/compliance-desk/useDesk";
 import TodoCard from "@/components/compliance-desk/TodoCard";
+import { chaseBook } from "@/components/compliance-desk/ChasePanel";
 import type { ChaseRow, TrackerBook } from "@/lib/compliance-tracker";
 import type { ChaseBrief } from "@/lib/cert-chase";
 import { asOf } from "@/lib/as-of";
@@ -155,7 +156,7 @@ export default function ComplianceDashboard() {
   const bookOk = book && !bookProblem ? book : null;
   /* Emailed = a chase that went inside the last 30 days, by hand or the
      automatic reminder (lib/cert-chase, 11 Nov 2026). */
-  const chases = book?.chases ?? null;
+  const chases = chaseBook(book?.chases);
   const notEmailed = chases
     ? upcoming.filter((r) => !(chases[`${r.propertyId}:${r.cert}`] ?? []).some((b) => b.sent && Date.now() - new Date(b.at).getTime() < 31 * 86_400_000)).length
     : null;

@@ -23,6 +23,20 @@ function stageWords(stage: number | null): string {
 }
 
 /**
+ * The tracker's `chases` as the screens read them: every certificate's chases,
+ * keyed propertyId:cert. Anything else is null, which the screens show as
+ * "could not read the record" (ticket 038f44d4, 18 Nov 2026: a desk tab still
+ * on the build before 11 Nov expected a list here, got the keyed record and
+ * the whole Compliance desk went down on "chases.map is not a function").
+ */
+export function chaseBook(x: unknown): Record<string, ChaseBrief[]> | null {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return null;
+  const out: Record<string, ChaseBrief[]> = {};
+  for (const [k, v] of Object.entries(x as Record<string, unknown>)) if (Array.isArray(v)) out[k] = v as ChaseBrief[];
+  return out;
+}
+
+/**
  * The history a certificate row shows in one line, oldest first:
  * "Chased Sam, 3 Nov by Josel; reminder sent 10 Nov". Newest three only.
  */
