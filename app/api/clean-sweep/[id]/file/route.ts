@@ -7,6 +7,7 @@ import { isFactKey, sweepDetail } from "@/lib/clean-sweep";
 import { recordFact } from "@/lib/property-facts";
 import { keyClimbs, R2_BUCKET, r2Configured, r2Problem, safeName, SCOPES, withR2 } from "@/lib/r2";
 import { judgeFile } from "@/lib/upload-rules";
+import { VIEW_AS_COOKIE, readViewAs } from "@/lib/view-as";
 
 /**
  * A paper the checker found, filed against a home's column: into R2 under
@@ -22,6 +23,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!can(actor.role, "see:clean-sweep")) return NextResponse.json({ ok: false, error: "The clean sweep is for the office." }, { status: 403 });
+  /* Admin > Deposits uploads certificates here too: never while viewing as somebody, or the file is filed under their name. */
+  if (readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value)) return NextResponse.json({ ok: false, error: "You're viewing as someone else. Switch back to change anything." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   const { id } = await ctx.params;
   let form: FormData;
@@ -64,6 +67,8 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!can(actor.role, "see:clean-sweep")) return NextResponse.json({ ok: false, error: "The clean sweep is for the office." }, { status: 403 });
+  /* Admin > Deposits uploads certificates here too: never while viewing as somebody, or the file is filed under their name. */
+  if (readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value)) return NextResponse.json({ ok: false, error: "You're viewing as someone else. Switch back to change anything." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't configured on this environment." }, { status: 503 });
   const { id } = await ctx.params;

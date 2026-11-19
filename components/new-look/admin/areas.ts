@@ -107,6 +107,10 @@ export const ADMIN_AREAS: AdminArea[] = [
           t("/admin/standing-documents", "Standing documents", "see:pretenancy"),
         ],
       },
+      /* Every let home's deposit for Susan's Propertymark audit (18 Nov 2026):
+         where it is protected, the reference, the certificate, what is still
+         missing. Everyone who can open Admin (James, 19 Nov 2026). */
+      { href: "/admin/deposits", label: "Deposits", says: "Every let's deposit for the Propertymark audit, and what's still missing", needs: "admin:open" },
     ],
   },
   {

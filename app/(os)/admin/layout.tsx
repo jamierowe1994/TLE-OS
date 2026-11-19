@@ -85,6 +85,8 @@ const GROUPS: Array<{
          actually sees them. The pages are unchanged and still reachable
          directly; this is where you find them. */
       { href: "/admin/process", label: "Process", needs: "see:reports" },
+      /* Susan's Propertymark deposit register (19 Nov 2026). */
+      { href: "/admin/deposits", label: "Deposits", needs: "admin:open" },
       /* Who uses which part of the OS, and how much (James, 15 Oct 2026).
          Owners only - see:tracking. */
       { href: "/admin/tracking", label: "Tracking", needs: "see:tracking" },

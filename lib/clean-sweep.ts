@@ -43,6 +43,7 @@ const INFO = new Set([
   "tenancy_end", "tenancy_signed", "occupants", "rent_rex_pm", "rent_review_next", "visit_last",
   "deposit_status", "landlord_photo_id", "landlord_proof_of_ownership", "doc_guarantor",
   "propoly_deal", "check_signed_off", "check_notes", "deposit_registered_by", "landlord_registration_owner",
+  "deposit_pi_served_on", "deposit_notes",
 ]);
 
 export interface SweepHome {
@@ -347,7 +348,7 @@ export interface SweepDetail {
   notes: string | null;
 }
 
-async function filesUnder(prefix: string): Promise<{ key: string; name: string }[]> {
+export async function filesUnder(prefix: string): Promise<{ key: string; name: string }[]> {
   if (!r2Configured) return [];
   const out: { key: string; name: string }[] = [];
   let token: string | undefined;

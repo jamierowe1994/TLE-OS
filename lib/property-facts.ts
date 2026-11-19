@@ -94,6 +94,11 @@ export const FIELDS: FactField[] = [
   { key: "deposit_protected_on", label: "Date protected", group: "Deposit", kind: "date" },
   /* Propoly's deal says who registered it: "agent" (us) or "landlord" (their own scheme). */
   { key: "deposit_registered_by", label: "Deposit registered by", group: "Deposit", kind: "word" },
+  /* Admin > Deposits (Susan's Propertymark audit, 19 Nov 2026): the date the
+     prescribed information went to the tenant, and a line on where the deposit
+     stands. Information only: the sweep never counts them as missing. */
+  { key: "deposit_pi_served_on", label: "Prescribed information served", group: "Deposit", kind: "date" },
+  { key: "deposit_notes", label: "Deposit notes", group: "Deposit", kind: "word" },
   { key: "epc_rating", label: "EPC rating", group: "Compliance", kind: "word" },
   { key: "pat_expiry", label: "PAT expiry", group: "Compliance", kind: "date", when: "hmo" },
   { key: "alarms_expiry", label: "Smoke & CO alarms", group: "Compliance", kind: "date", when: "hmo" },
