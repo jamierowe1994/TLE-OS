@@ -181,9 +181,19 @@ export default function BookViewingWindow(props: ViewingBookerProps) {
     if (!paneUp) return;
     const el = paneRef.current;
     if (!el) return;
+    /* The pane's OUTER size, scrollbars included (ticket e9ca3af9, 18 Nov
+       2026: the same error on the same screen the day after the fix above).
+       The pane scrolls both ways, and on Windows a scrollbar takes 17px out
+       of clientWidth/clientHeight. The time rows are sized from the height
+       and the days from the width, so near some window sizes the rows made
+       a scrollbar, the scrollbar shrank the pane, the smaller pane drew
+       shorter rows, the scrollbar went, the pane grew back - every frame,
+       for as long as the window was open (reproduced: about 110 redraws a
+       second with 17px scrollbars). The outer size does not move when a
+       scrollbar comes or goes, so nothing feeds back. */
     const ro = new ResizeObserver(() => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
       setPane((cur) => (cur.w === w && cur.h === h ? cur : { w, h }));
     });
     ro.observe(el);
