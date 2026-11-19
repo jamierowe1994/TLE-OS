@@ -9,6 +9,7 @@ import { createOrder, listOrders, listContractors, worksSummary, logEvent, moveO
 import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 import { alreadyTakenOn, carriedJobs, markTakenOn, withCarried } from "@/lib/works-carried";
 import { homePeople } from "@/lib/home-people";
+import { homeIdsForJobs } from "@/lib/home-aliases";
 import { landlordKey, landlordPrefsFor, ringsForApproval } from "@/lib/landlord-prefs";
 import { mineFor, summariseOrders, type MineAnswer } from "@/lib/works-mine";
 
@@ -32,11 +33,14 @@ export async function GET(req: NextRequest) {
   const open = req.nextUrl.searchParams.get("open") === "1";
   const propertyId = req.nextUrl.searchParams.get("property");
   const me = subject ?? actor;
+  /* A home's page asks under one id; its jobs may be filed under another of
+     the home's ids (ticket ec6288f8, lib/home-aliases homeIdsForJobs). */
+  const homeIds = propertyId ? await homeIdsForJobs(propertyId).catch(() => [propertyId]) : null;
   /* `lastMonth` is the snapshot nearest to thirty days ago, or null when we
      do not hold one yet - the board draws a delta only when there is a real
      one to draw. See lib/works-trend.ts. */
   const [orders, contractors, own, lastMonth, carried] = await Promise.all([
-    listOrders({ kind, open, propertyId }),
+    listOrders(homeIds ? { kind, open, propertyIds: homeIds } : { kind, open }),
     listContractors(me.id),
     worksSummary(),
     worksSnapshotAround(30).catch(() => null),
@@ -112,6 +116,9 @@ export async function GET(req: NextRequest) {
     canCorporate: can(actor.role, "see:business"),
     /* The office says an invoice is on the payment run (James, 21 Oct 2026). */
     canPayrun: can(actor.role, "see:everything"),
+    /* The ids this home's jobs were read under: the page matches the old
+       system's jobs on any of them too. */
+    ...(homeIds ? { homeIds } : {}),
   });
 }
 

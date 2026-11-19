@@ -88,6 +88,32 @@ export async function homeKeysFor(...known: Array<string | null | undefined>): P
   ];
 }
 
+/**
+ * THE IDS A HOME'S JOBS ARE FILED UNDER (ticket ec6288f8, 19 Nov 2026).
+ *
+ * A job, an invoice and an old-system job each keep the id the home had when
+ * they were made: the REX property id, or the OS record's own id ("pm-...")
+ * for a home not linked to REX at the time. A home linked by hand later has
+ * its page under the REX id, so whatever still sat under the record id never
+ * reached its Jobs or Invoices tab. Read through homeKeysFor, plain ids only
+ * (jobs are never filed under a listing:, appraisal: or let: key).
+ *
+ * The record id is added only when it is the one record linked to that REX
+ * property. Rooms of a shared house can all be linked to the house's REX
+ * property, and each room has its own page under its own record id, so one
+ * room's jobs must never show on another's. A page already under a record id
+ * keeps to that id: it only stands apart from its REX property when another
+ * home's page is under that REX id.
+ */
+export async function homeIdsForJobs(propertyId: string): Promise<string[]> {
+  const id = pick(propertyId);
+  if (!id) return [];
+  if (!/^\d+$/.test(id)) return [id];
+  const keys = (await homeKeysFor(id).catch(() => [id])).filter((k) => !k.includes(":"));
+  const records = keys.filter((k) => k !== id);
+  return records.length === 1 ? [id, records[0]] : [id];
+}
+
 /** Everyone on the home under any of its keys, the same person once (lib/property-people peopleOnKeys). */
 export async function peopleOnHome(...known: Array<string | null | undefined>): Promise<PropertyPerson[]> {
   return peopleOnKeys(await homeKeysFor(...known));

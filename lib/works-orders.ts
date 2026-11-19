@@ -664,7 +664,7 @@ export async function getOrder(id: string): Promise<{ order: WorksOrder; events:
   return { order: { ...(await named(toOrder(r))), quoteAsks, chase }, events };
 }
 
-export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; tenantEmail?: string | null; limit?: number; rehearsal?: boolean } = {}): Promise<WorksOrder[]> {
+export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; propertyIds?: string[]; tenantEmail?: string | null; limit?: number; rehearsal?: boolean } = {}): Promise<WorksOrder[]> {
   if (!hasDb()) return [];
   /* A rehearsal is never on the real list, and a real job is never on the
      rehearsal's. Asked for explicitly, never inferred. */
@@ -673,6 +673,8 @@ export async function listOrders(filter: { kind?: Kind | null; open?: boolean; p
   if (filter.kind) { vals.push(filter.kind); where.push(`kind = $${vals.length}`); }
   if (filter.open) where.push(`status IN ('reported', 'approval', 'approved', 'scheduled')`);
   if (filter.propertyId) { vals.push(filter.propertyId); where.push(`property_id = $${vals.length}`); }
+  /* Every id one home's jobs are filed under (lib/home-aliases homeIdsForJobs). */
+  if (filter.propertyIds?.length) { vals.push(filter.propertyIds); where.push(`property_id = ANY($${vals.length})`); }
   /* The tenant's own jobs, for their portal. Matched on the address they were
      raised against rather than an id, because a tenant's record carries the
      address and not a REX property id - and compared lowercased, because the

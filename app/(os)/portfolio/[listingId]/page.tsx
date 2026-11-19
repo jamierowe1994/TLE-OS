@@ -357,8 +357,15 @@ export default function PropertyPage() {
 
   const loadWorks = useCallback(() => {
     if (!propertyId) return;
-    getJson<Works & { carried?: CarriedJob[] }>(`/api/works-orders?property=${encodeURIComponent(propertyId)}`)
-      .then((j) => setWorks({ state: "ready", data: { orders: j.orders ?? [], contractors: j.contractors ?? [], carried: (j.carried ?? []).filter((c) => c.propertyId === propertyId), canCorporate: Boolean(j.canCorporate) } }))
+    getJson<Works & { carried?: CarriedJob[]; homeIds?: string[] }>(`/api/works-orders?property=${encodeURIComponent(propertyId)}`)
+      .then((j) => {
+        /* An old-system job can sit under the home's record id rather than the
+           id this page is under (ticket ec6288f8): match it on any of the ids
+           the server read this home's jobs under. */
+        const ids = new Set([propertyId, ...(j.homeIds ?? [])]);
+        const onHome = (c: CarriedJob) => (c.propertyId ? ids.has(c.propertyId) : Boolean(c.osPropertyId && ids.has(c.osPropertyId)));
+        setWorks({ state: "ready", data: { orders: j.orders ?? [], contractors: j.contractors ?? [], carried: (j.carried ?? []).filter(onHome), canCorporate: Boolean(j.canCorporate) } });
+      })
       .catch((e) => setWorks({ state: "failed", error: e.message }));
   }, [propertyId]);
   const loadVisits = useCallback(() => {
