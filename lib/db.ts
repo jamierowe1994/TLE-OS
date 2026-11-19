@@ -5201,14 +5201,59 @@ ALTER TABLE os_case_studies ADD COLUMN IF NOT EXISTS hidden JSONB NOT NULL DEFAU
 
 `;
 
+/* The schema runs as one batch in one implicit transaction, so every table it
+   touches stays locked until the whole batch is done.
+   19 Nov 2026 (16:07-16:14 UTC): two deploys 22s apart. The outgoing
+   container's schema batch sat in ClientWrite for six minutes: Postgres was
+   pushing hundreds of "already exists, skipping" notices into a socket nobody
+   read, while holding ACCESS EXCLUSIVE on about 50 tables. The new container's
+   schema queued behind it and every read queued behind that; the live site hung
+   until the stuck query was cancelled by hand (29 Oct was the same trap).
+   So: no notices (nothing left to block on), and a lock wait gives up after
+   15s instead of queueing an exclusive lock in front of every reader. */
+const SCHEMA_LOCK_WAIT = "15s";
+
+async function runSchema(): Promise<void> {
+  const client = await getPool().connect();
+  let broken = false;
+  try {
+    await client.query("SET client_min_messages = warning");
+    await client.query(`SET lock_timeout = '${SCHEMA_LOCK_WAIT}'`);
+    await client.query(SCHEMA);
+  } catch (err) {
+    broken = true;
+    throw err;
+  } finally {
+    // Pooled connections must not keep the schema's settings; if the reset
+    // fails, throw the connection away rather than hand it back.
+    await client.query("RESET client_min_messages; RESET lock_timeout").catch(() => { broken = true; });
+    client.release(broken || undefined);
+  }
+}
+
+let schemaRetries = 0;
+
 /** Created lazily on first query; the promise is reset on failure so a
- *  transient outage retries rather than poisoning the process. */
+ *  transient outage retries rather than poisoning the process.
+ *  A lock wait (55P03) means another instance is mid-way through the same
+ *  schema, so the tables are there: queries go ahead and the schema is tried
+ *  again in the background, rather than every request failing or hanging. */
 function ensureSchema(): Promise<void> {
   if (!globalThis.__osSchemaReady) {
-    globalThis.__osSchemaReady = getPool()
-      .query(SCHEMA)
-      .then(() => undefined)
+    globalThis.__osSchemaReady = runSchema()
+      .then(() => {
+        schemaRetries = 0;
+      })
       .catch((err) => {
+        if ((err as { code?: string })?.code === "55P03" && schemaRetries < 20) {
+          schemaRetries++;
+          console.warn(`[boot] schema waited ${SCHEMA_LOCK_WAIT} for a lock; serving on and retrying in 30s (try ${schemaRetries})`);
+          setTimeout(() => {
+            globalThis.__osSchemaReady = undefined;
+            ensureSchema().catch((e) => console.error("[boot] schema retry failed:", (e as Error)?.message));
+          }, 30_000).unref?.();
+          return;
+        }
         globalThis.__osSchemaReady = undefined;
         throw err;
       });
