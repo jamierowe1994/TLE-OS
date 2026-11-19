@@ -452,6 +452,11 @@ function ListingDrawerBody({
    * it is (88% of rentals).
    */
   const [landlord, setLandlord] = useState<LandlordState>({ status: "idle" });
+  /* WHO THE TERMS WENT TO (ticket 8ddf2e8a, 19 Nov 2026): when nobody else is named, the
+     landlord the home's terms last went to. ONLY the Landlord box and the Send Terms screens
+     read it (`boxLandlord` below); access requests, viewings, the PLC handover and anything
+     else that names the landlord to somebody keep `landlord`, today's answer. */
+  const [termsLandlord, setTermsLandlord] = useState<{ landlord: Landlord; landlords: FoundLandlord[] } | null>(null);
   /* What the market appraisal behind this home learned (10 Nov 2026): its
      section on the home, and its papers on Compliance. */
   const appraisal = useListingAppraisal(listing?.id ?? null);
@@ -891,10 +896,12 @@ function ListingDrawerBody({
     }
     let gone = false;
     setLandlord({ status: "loading" });
-    fetch(`/api/listings/landlord?id=${encodeURIComponent(listing.id)}`, { cache: "no-store" })
+    setTermsLandlord(null);
+    fetch(`/api/listings/landlord?id=${encodeURIComponent(listing.id)}&for=terms`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; landlord?: Landlord | null; landlords?: FoundLandlord[]; problem?: string }) => {
+      .then((j: { ok?: boolean; landlord?: Landlord | null; landlords?: FoundLandlord[]; problem?: string; forTerms?: { landlord: Landlord | null; landlords: FoundLandlord[] } }) => {
         if (gone) return;
+        setTermsLandlord(j.ok && j.forTerms?.landlord ? { landlord: j.forTerms.landlord, landlords: j.forTerms.landlords ?? [] } : null);
         if (!j.ok) setLandlord({ status: "problem", says: j.problem ?? "We could not look the landlord up just now." });
         else if (j.landlord) setLandlord({ status: "known", landlord: j.landlord, landlords: j.landlords ?? [] });
         else setLandlord({ status: "none" });
@@ -906,6 +913,8 @@ function ListingDrawerBody({
       gone = true;
     };
   }, [listing, landlordRev]);
+  /* The Landlord box and the Send Terms screens only (see termsLandlord). */
+  const boxLandlord: LandlordState = termsLandlord && (landlord.status === "known" || landlord.status === "none") ? { status: "known", ...termsLandlord } : landlord;
 
   const [booked, setBooked] = useState<{ when: string; who: string }[]>([]);
   /* WHERE IT'S UP TO, KEPT (17 Sep 2026). The step used to live in this
@@ -2014,11 +2023,11 @@ function ListingDrawerBody({
                   landlord={{
                     contactId: link?.landlord?.contactId ?? null,
                     /* The real landlord only - never a guessed name on a contract. */
-                    name: landlord.status === "known" ? landlord.landlord.name : undefined,
-                    email: landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined,
-                    phone: landlord.status === "known" ? (landlord.landlord.phone ?? undefined) : undefined,
+                    name: boxLandlord.status === "known" ? boxLandlord.landlord.name : undefined,
+                    email: boxLandlord.status === "known" ? (boxLandlord.landlord.email ?? undefined) : undefined,
+                    phone: boxLandlord.status === "known" ? (boxLandlord.landlord.phone ?? undefined) : undefined,
                   }}
-                  otherLandlords={landlord.status === "known" ? landlord.landlords.slice(1) : []}
+                  otherLandlords={boxLandlord.status === "known" ? boxLandlord.landlords.slice(1) : []}
                   appraisalPapers={appraisal.status === "known" ? appraisal.appraisal.papers : []}
                   agentLarn={live?.agentLarn ?? null}
                   service={live?.service ?? null}
@@ -2521,14 +2530,14 @@ function ListingDrawerBody({
 
   /* The landlord's people, for the section and for Edit landlord's stage. */
   const where = { listingId: String(listing.id), propertyId: listing.propertyId ?? null, address: [listing.name, listing.locality].filter(Boolean).join(", ") };
-  const l = landlord.status === "known" ? landlord.landlord : null;
+  const l = boxLandlord.status === "known" ? boxLandlord.landlord : null;
   const lHomeKey = testListing ? null : listing.propertyId ?? `listing:${listing.id}`;
   const lReadOnly = testListing ? "A test listing keeps its own landlord." : null;
   /* EVERY OWNER, NOT THE FIRST (10 Nov 2026): the listing's second owner was
      never shown here. The joint landlords kept on the home are listed by
      HomeLandlords itself, and a landlord changed in the OS has its own card,
      so neither is repeated. */
-  const lOwners = landlord.status === "known" ? landlord.landlords.filter((x) => x.from === "listing" || x.from === "appraisal" || x.from === "property" || x.from === "record" || x.from === "terms") : [];
+  const lOwners = boxLandlord.status === "known" ? boxLandlord.landlords.filter((x) => x.from === "listing" || x.from === "appraisal" || x.from === "property" || x.from === "record" || x.from === "terms") : [];
   const lMain = (
                       landlord.status === "loading" || landlord.status === "idle"
                         ? null
@@ -2889,7 +2898,7 @@ function ListingDrawerBody({
       ...(!introOnly && beforeMoveIn.some((r) => !r.done) && certs !== null ? [{ says: `Before anyone moves in we need ${beforeMoveIn.filter((r) => !r.done).map((r) => r.label.toLowerCase()).join(" and ")}.`, act: "Add it now", go: () => goTab("compliance") }] : []),
     ];
     const idea = ideas[0];
-    const ll = landlord.status === "known" ? landlord.landlord : null;
+    const ll = boxLandlord.status === "known" ? boxLandlord.landlord : null;
     const initialsOf = (n: string) => n.split(/\s+/).filter(Boolean).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
     const features = (live?.highlights ?? []).filter(Boolean);
     const portalNames = ["Rightmove", "Zoopla", "OnTheMarket"];
@@ -3327,7 +3336,7 @@ function ListingDrawerBody({
                   <h3 className="nl-block-title">Landlord</h3>
                   {!testListing && <button type="button" className="nl-link" data-steve="listing.edit-landlord" onClick={() => setLandlordOpen(true)}>Edit</button>}
                 </div>
-                {landlord.status === "loading" || landlord.status === "idle" ? (
+                {boxLandlord.status === "loading" || boxLandlord.status === "idle" ? (
                   <p className="nl-meta">Reading…</p>
                 ) : ll ? (
                   <>
@@ -3343,7 +3352,7 @@ function ListingDrawerBody({
                       {ll.email ? <a href={`mailto:${ll.email}`}><Ico name="mail" size={14} />{ll.email}</a> : <span className="text-muted"><Ico name="mail" size={14} />No email on file</span>}
                     </div>
                     {/* Every other landlord of the home, named with how to reach them (10 Nov 2026). */}
-                    {landlord.status === "known" && landlord.landlords.slice(1).map((x) => (
+                    {boxLandlord.status === "known" && boxLandlord.landlords.slice(1).map((x) => (
                       <div key={x.key} className="mt-2 flex flex-col gap-2" data-landlord-also>
                         <div className="nl-person">
                           <span className="nl-avatar">{initialsOf(x.name || "?")}</span>
@@ -3365,7 +3374,7 @@ function ListingDrawerBody({
                   </>
                 ) : (
                   <>
-                    <p className="nl-meta">{landlord.status === "problem" ? landlord.says : "No landlord is held for this home yet: not on the listing, the property or the home's record. Add them here so the terms, the let and the PLC check have somebody to name."}</p>
+                    <p className="nl-meta">{boxLandlord.status === "problem" ? boxLandlord.says : "No landlord is held for this home yet: not on the listing, the property or the home's record. Add them here so the terms, the let and the PLC check have somebody to name."}</p>
                     {!testListing && <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm self-start" data-steve="listing.edit-landlord" onClick={() => setLandlordOpen(true)}>Add the landlord</button>}
                   </>
                 )}
@@ -3533,11 +3542,11 @@ function ListingDrawerBody({
               terms={terms}
               landlord={{
                 contactId: link?.landlord?.contactId ?? null,
-                name: landlord.status === "known" ? landlord.landlord.name : undefined,
-                email: landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined,
-                phone: landlord.status === "known" ? (landlord.landlord.phone ?? undefined) : undefined,
+                name: boxLandlord.status === "known" ? boxLandlord.landlord.name : undefined,
+                email: boxLandlord.status === "known" ? (boxLandlord.landlord.email ?? undefined) : undefined,
+                phone: boxLandlord.status === "known" ? (boxLandlord.landlord.phone ?? undefined) : undefined,
               }}
-              otherLandlords={landlord.status === "known" ? landlord.landlords.slice(1) : []}
+              otherLandlords={boxLandlord.status === "known" ? boxLandlord.landlords.slice(1) : []}
               appraisalPapers={appraisal.status === "known" ? appraisal.appraisal.papers : []}
               agentLarn={live?.agentLarn ?? null}
               service={live?.service ?? null}

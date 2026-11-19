@@ -22,7 +22,13 @@ import { rexConfigured } from "@/lib/rex";
  * first of them, for the screens that write to one person.
  *
  * The last two used to be the same thing, which is how "we couldn't reach REX"
- * would have read as "this property has no landlord".
+ * would have read as "this property has no landlord". *
+ * `&for=terms` (the listing page, ticket 8ddf2e8a, 19 Nov 2026) adds
+ * `forTerms`: the same answer with whoever the home's terms last went to
+ * standing in when nobody else is named. Only the listing's Landlord box and
+ * its Send Terms screens read it. `landlord` and `landlords` stay exactly what
+ * every other caller gets, so nothing that emails or names a landlord to
+ * somebody else changes without James.
  */
 
 export const dynamic = "force-dynamic";
@@ -59,5 +65,11 @@ export async function GET(req: NextRequest) {
     );
   }
   if (!answer.ok) return NextResponse.json({ ok: false, problem: answer.problem });
-  return NextResponse.json({ ok: true, landlord: answer.landlord, landlords: answer.landlords });
+  let forTerms: { landlord: unknown; landlords: unknown } | null = null;
+  if (req.nextUrl.searchParams.get("for") === "terms") {
+    const t = await landlordForListing(id, { fromTerms: true }).catch(() => null);
+    /* Sent only when it names somebody the plain answer doesn't. */
+    if (t?.ok && t.landlords.some((l) => l.from === "terms")) forTerms = { landlord: t.landlord, landlords: t.landlords };
+  }
+  return NextResponse.json({ ok: true, landlord: answer.landlord, landlords: answer.landlords, ...(forTerms ? { forTerms } : {}) });
 }

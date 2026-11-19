@@ -177,13 +177,14 @@ export function asLandlordOf(l: HomeLandlord): Landlord {
  * property rather than a fault on our side — and the agent would stop
  * expecting the landlord to be told.
  */
-export async function landlordForListing(listingId: string): Promise<LandlordAnswer> {
+export async function landlordForListing(listingId: string, opts: { fromTerms?: boolean } = {}): Promise<LandlordAnswer> {
   const id = Number(listingId);
   if (!Number.isFinite(id) || id <= 0) {
     return { ok: false, problem: "That listing has no reference in the listings system, so its landlord can't be looked up." };
   }
   const { landlordsOfHome } = await import("@/lib/landlords-for-home");
-  const all = await landlordsOfHome({ listingId });
+  /* fromTerms: only the Send Terms screens and the listing's Landlord box (lib/landlords-for-home). */
+  const all = await landlordsOfHome({ listingId }, { fromTerms: Boolean(opts.fromTerms) });
   if (!all.ok) return all;
   return { ok: true, landlord: all.landlords[0] ? asLandlordOf(all.landlords[0]) : null, landlords: all.landlords };
 }

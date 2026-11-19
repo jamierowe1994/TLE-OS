@@ -51,7 +51,12 @@ import { landlordsTermsWentTo } from "@/lib/rex-esign";
  *             e-sign. A listing whose terms went out from REX's e-sign can have
  *             nobody joined to it as owner, so the OS said "no landlord" and
  *             Send Terms had nobody to send the amended set to. Only asked when
- *             every place above names nobody.
+ *             every place above names nobody, and ONLY for a caller that passes
+ *             `fromTerms` (the Send Terms screens and the listing's Landlord
+ *             box). Every other caller - viewing confirmations, offer emails,
+ *             PLC start, a let's people, the Propoly push - gets the answer it
+ *             always got (James's call before it reaches anything that emails
+ *             or names a landlord to somebody else).
  *   joint     the joint landlords added on the home (lib/property-people),
  *             read under every key the home is filed under (lib/home-aliases).
  *             A point of contact is not an owner and is never here.
@@ -166,8 +171,7 @@ type Sources = {
   swap?: boolean;
   /**
    * Whoever the home's terms last went to, asked only when nobody else is
-   * named. Left out by the Propoly push (landlordsForListing), which keeps its
-   * own sources: what reaches Propoly is not changed by this.
+   * named, and only given by a `fromTerms` caller of landlordsOfHome.
    */
   onTerms?: () => Promise<Row[]>;
 };
@@ -291,18 +295,35 @@ export type LandlordsAnswer =
   /** REX did NOT answer. Kept apart from "no landlord" all the way to the screen. */
   | { ok: false; problem: string };
 
-type Held = {
-  propertyId: string | null;
-  onListing: Row[];
-  onProperty: Row[] | null;
-  address?: string | null;
-  /** Who REX's e-sign last sent the listing's terms to; read only when nobody is on the listing or the property. */
-  onTerms?: Row[] | null;
-};
+type Held = { propertyId: string | null; onListing: Row[]; onProperty: Row[] | null; address?: string | null };
 
 /* Named on the listing or its property: REX's e-sign is not asked then. */
 const ownersNamed = (h: Pick<Held, "onListing" | "onProperty">) =>
   h.onListing.some((c) => text(c.name)) || (h.onProperty ?? []).some((c) => text(c.name));
+
+/* WHO THE E-SIGN SENT THE TERMS TO is held under its own key, apart from the
+   listing's owners (landlord:v4), so a caller that did not ask for it can
+   never be handed it from the cache. Same times as the owners: twelve hours
+   once somebody is found, ten minutes for nobody. Not "landlord:v..", which
+   lib/rex-landlord reads as a held owner read. */
+const termsKey = (listingId: string) => `landlord-terms:v1:${listingId}`;
+
+async function termsWentTo(listingId: string, fresh: boolean): Promise<Row[]> {
+  if (hasDb() && !fresh) {
+    const rows = await q<{ payload: { onTerms?: Row[] }; computed_at: Date }>("SELECT payload, computed_at FROM os_cache WHERE key = $1", [termsKey(listingId)]).catch(() => []);
+    const p = rows[0]?.payload;
+    if (p && Array.isArray(p.onTerms) && Date.now() - new Date(rows[0].computed_at).getTime() <= (p.onTerms.length ? HELD_MS : NOBODY_MS)) return p.onTerms;
+  }
+  const onTerms = (await landlordsTermsWentTo(listingId).catch(() => [])).map((c) => slim(c as Row));
+  if (hasDb()) {
+    await q(
+      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
+      [termsKey(listingId), JSON.stringify({ onTerms })]
+    ).catch(() => undefined);
+  }
+  return onTerms;
+}
 
 /**
  * Who the OS's own Send Terms last went to for this home: the newest set
@@ -347,9 +368,7 @@ async function heldFor(listingId: string): Promise<Held | null> {
     const rows = await q<{ payload: Held; computed_at: Date }>("SELECT payload, computed_at FROM os_cache WHERE key = $1", [heldKey(listingId)]);
     const p = rows[0]?.payload;
     if (!p || !Array.isArray(p.onListing)) return null;
-    /* Held before the e-sign was asked (19 Nov 2026): with nobody named, ask again. */
-    if (!ownersNamed(p) && p.onTerms === undefined) return null;
-    const anyone = p.onListing.length > 0 || (p.onProperty?.length ?? 0) > 0 || (p.onTerms?.length ?? 0) > 0;
+    const anyone = p.onListing.length > 0 || (p.onProperty?.length ?? 0) > 0;
     if (Date.now() - new Date(rows[0].computed_at).getTime() > (anyone ? HELD_MS : NOBODY_MS)) return null;
     return p;
   } catch {
@@ -378,7 +397,16 @@ const DEAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
  */
 export async function landlordsOfHome(
   home: { listingId?: string | number | null; propertyId?: string | null; letRef?: string | null; keys?: Array<string | null | undefined> },
-  opts: { fresh?: boolean } = {}
+  opts: {
+    fresh?: boolean;
+    /**
+     * Also whoever the home's terms last went to, when nobody else is named
+     * (from "terms"). ONLY the Send Terms screens and the listing's Landlord
+     * box pass this; anything that emails or names a landlord to somebody else
+     * must not until James says so.
+     */
+    fromTerms?: boolean;
+  } = {}
 ): Promise<LandlordsAnswer> {
   let listingId = idOf(home.listingId);
   let propertyId = idOf(home.propertyId);
@@ -417,9 +445,7 @@ export async function landlordsOfHome(
       /* The property's own owners are only wanted when the listing names
          nobody, so that is the only time REX is asked for them. */
       const onProperty = !onListing.some((c) => text(c.name)) && pid ? ((await propertyOwners(pid))?.map(slim) ?? null) : null;
-      /* Nobody on either: who the terms went to through REX's e-sign (ticket 8ddf2e8a). */
-      const onTerms = ownersNamed({ onListing, onProperty }) ? null : (await landlordsTermsWentTo(listingId).catch(() => [])).map((c) => slim(c as Row));
-      rex = { propertyId: pid, onListing, onProperty, address: listingAddress(listing), onTerms };
+      rex = { propertyId: pid, onListing, onProperty, address: listingAddress(listing) };
       await hold(listingId, rex);
     }
     propertyId = rex.propertyId;
@@ -434,10 +460,15 @@ export async function landlordsOfHome(
     address: rex.address ?? null,
     onListing: named(rex.onListing),
     onProperty: async () => named(rex.onProperty ?? (listingId || !propertyId ? null : await propertyOwners(propertyId))),
-    onTerms: async () => {
-      const ours = await osTermsParties(listingId, propertyId);
-      return ours.length ? ours : named(rex.onTerms ?? null);
-    },
+    /* Only for a caller that asked (ticket 8ddf2e8a): everybody else keeps today's answer. */
+    onTerms: opts.fromTerms
+      ? async () => {
+          const ours = await osTermsParties(listingId, propertyId);
+          if (ours.length) return ours;
+          /* REX's e-sign only when REX names nobody on the listing or its property. */
+          return listingId && !ownersNamed(rex) ? named(await termsWentTo(listingId, Boolean(opts.fresh))) : [];
+        }
+      : undefined,
     keys: [letRef ? `let:${letRef}` : null, ...(home.keys ?? [])],
   });
 
