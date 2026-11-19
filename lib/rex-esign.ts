@@ -96,7 +96,8 @@ type Raw = {
     roles?: {
       provider_role_id?: string;
       role_type?: string;
-      record?: { name?: string; email_address?: string };
+      record_id?: number | string;
+      record?: { id?: number | string; name?: string; email_address?: string; phone_number?: string };
     }[];
   };
 };
@@ -149,6 +150,51 @@ export async function esignFor(listingId: string | number): Promise<EsignRequest
     })
   );
   return full;
+}
+
+/** One landlord the terms were sent to, as a REX contact. */
+export type TermsSigner = { id: string | null; name: string; email_address: string | null; phone_number: string | null };
+
+/**
+ * WHO THE TERMS WENT TO ON A LISTING (ticket 8ddf2e8a, 19 Nov 2026).
+ *
+ * A listing can have nobody joined to it or to its property as the owner and
+ * still have had its terms sent to the landlord from REX's e-sign: the agent
+ * picks the landlord in that dialog, and nothing joins them to the listing.
+ * The OS then said "no landlord" over a home whose landlord had the terms in
+ * their inbox, and Send Terms opened with nobody to send the amended set to.
+ *
+ * The newest request with a Landlord on it says who. Reads only; a REX that
+ * doesn't answer is an empty list here, never a guess.
+ */
+export async function landlordsTermsWentTo(listingId: string | number): Promise<TermsSigner[]> {
+  const res = await rexCall("EsignRequests", "search", {
+    limit: 5,
+    criteria: [{ name: "listing_id", type: "=", value: Number(listingId) }],
+    /* Only id and the two times are sortable (see esignFor). */
+    order_by: { id: "desc" },
+  });
+  if (!res.ok) return [];
+  const rows = ((res.result as { rows?: Raw[] })?.rows ?? []) as Raw[];
+  for (const r of rows) {
+    /* The search leaves out `content`, where the signers are. */
+    const one = await rexCall("EsignRequests", "read", { id: Number(r.id) });
+    if (!one.ok) continue;
+    const roles = ((one.result as Raw | undefined)?.content?.roles ?? []).filter(
+      (x) => /^landlord/i.test(x.provider_role_id ?? "") && (x.role_type ?? "contact") === "contact" && (x.record?.name ?? "").trim()
+    );
+    if (!roles.length) continue;
+    return roles.map((x) => {
+      const id = x.record?.id ?? x.record_id;
+      return {
+        id: id != null && String(id).trim() ? String(id).trim() : null,
+        name: (x.record?.name ?? "").trim(),
+        email_address: (x.record?.email_address ?? "").trim() || null,
+        phone_number: (x.record?.phone_number ?? "").trim() || null,
+      };
+    });
+  }
+  return [];
 }
 
 export async function esignRequest(id: string | number): Promise<EsignRequest | null> {

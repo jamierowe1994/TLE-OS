@@ -9,6 +9,7 @@ import { peopleOnHome } from "@/lib/home-aliases";
 import type { LandlordKind } from "@/lib/landlord-kinds";
 import { heldKey } from "@/lib/rex-landlord";
 import { appraisalForHome } from "@/lib/appraisal-for-home";
+import { landlordsTermsWentTo } from "@/lib/rex-esign";
 
 /**
  * WHO ARE THE LANDLORDS OF THIS HOME - THE ONE READER (10 Nov 2026).
@@ -45,6 +46,12 @@ import { appraisalForHome } from "@/lib/appraisal-for-home";
  *   record    the landlord on the home's OS record (os_properties.landlord_*,
  *             lib/record-landlords): the old system's name, changed with Edit
  *             landlord.
+ *   terms     whoever the home's terms of business last went to (ticket
+ *             8ddf2e8a, 19 Nov 2026): the OS's own Send Terms, else REX's
+ *             e-sign. A listing whose terms went out from REX's e-sign can have
+ *             nobody joined to it as owner, so the OS said "no landlord" and
+ *             Send Terms had nobody to send the amended set to. Only asked when
+ *             every place above names nobody.
  *   joint     the joint landlords added on the home (lib/property-people),
  *             read under every key the home is filed under (lib/home-aliases).
  *             A point of contact is not an owner and is never here.
@@ -71,7 +78,7 @@ import { appraisalForHome } from "@/lib/appraisal-for-home";
 
 type Row = Record<string, unknown>;
 
-export type LandlordFrom = "listing" | "changed" | "appraisal" | "property" | "record" | "joint";
+export type LandlordFrom = "listing" | "changed" | "appraisal" | "property" | "record" | "terms" | "joint";
 
 const FROM_NOTE: Record<LandlordFrom, string> = {
   listing: "On the listing.",
@@ -79,6 +86,7 @@ const FROM_NOTE: Record<LandlordFrom, string> = {
   appraisal: "Not on the listing. Taken from the market appraisal this home came from.",
   property: "Not on the listing. Taken from the property's owner - check they are still the landlord.",
   record: "Not on the listing. Taken from the home's record in the OS - check they are still the landlord.",
+  terms: "Not on the listing. Taken from the terms of business sent on this home - check they are still the landlord.",
   joint: "Not on the listing. Taken from the joint landlords on the home - check they are still the landlord.",
 };
 
@@ -156,6 +164,12 @@ type Sources = {
   keys?: Array<string | null | undefined>;
   /** A change of tenants: the listing's owners only, the home is already in Propoly. */
   swap?: boolean;
+  /**
+   * Whoever the home's terms last went to, asked only when nobody else is
+   * named. Left out by the Propoly push (landlordsForListing), which keeps its
+   * own sources: what reaches Propoly is not changed by this.
+   */
+  onTerms?: () => Promise<Row[]>;
 };
 
 /** Every landlord, from every place, in the order above. */
@@ -208,6 +222,8 @@ async function gather(s: Sources): Promise<LandlordsFound> {
       const record = await recordLandlordFor(s.propertyId).catch(() => null);
       if (record) return found([{ id: record.contactId, name: record.name, email_address: record.email, phone_number: record.phone, ...asCompany(record.name) }], "record");
     }
+    const sentTerms = s.onTerms ? await s.onTerms().catch(() => [] as Row[]) : [];
+    if (sentTerms.length) return found(sentTerms.map((c) => ({ ...c, ...asCompany(text(c.name)) })), "terms");
     return nobody;
   })();
 
@@ -275,7 +291,37 @@ export type LandlordsAnswer =
   /** REX did NOT answer. Kept apart from "no landlord" all the way to the screen. */
   | { ok: false; problem: string };
 
-type Held = { propertyId: string | null; onListing: Row[]; onProperty: Row[] | null; address?: string | null };
+type Held = {
+  propertyId: string | null;
+  onListing: Row[];
+  onProperty: Row[] | null;
+  address?: string | null;
+  /** Who REX's e-sign last sent the listing's terms to; read only when nobody is on the listing or the property. */
+  onTerms?: Row[] | null;
+};
+
+/* Named on the listing or its property: REX's e-sign is not asked then. */
+const ownersNamed = (h: Pick<Held, "onListing" | "onProperty">) =>
+  h.onListing.some((c) => text(c.name)) || (h.onProperty ?? []).some((c) => text(c.name));
+
+/**
+ * Who the OS's own Send Terms last went to for this home: the newest set
+ * still out or signed, else the newest withdrawn one. Read fresh, it is the
+ * OS's own table. Never a REX contact, so nothing writes them to REX.
+ */
+async function osTermsParties(listingId: string | null, propertyId: string | null): Promise<Row[]> {
+  if (!hasDb() || (!listingId && !propertyId)) return [];
+  const rows = await q<{ id: string; parties: Array<{ key?: string; name?: string; email?: string; phone?: string }> | null }>(
+    `SELECT id, parties FROM os_terms
+      WHERE ($1::text IS NOT NULL AND listing_id = $1) OR ($2::text IS NOT NULL AND property_id = $2)
+      ORDER BY (status = 'cancelled'), created_at DESC LIMIT 1`,
+    [listingId, propertyId]
+  ).catch(() => []);
+  const t = rows[0];
+  return (Array.isArray(t?.parties) ? t.parties : [])
+    .filter((p) => text(p.name))
+    .map((p, i) => ({ id: `terms:${t.id}:${p.key ?? i + 1}`, name: text(p.name), email_address: text(p.email), phone_number: text(p.phone) }));
+}
 
 /* A landlord changes hands rarely, and the viewing booker asks every time it
    opens. Twelve hours keeps a busy morning to one call per listing. */
@@ -301,7 +347,9 @@ async function heldFor(listingId: string): Promise<Held | null> {
     const rows = await q<{ payload: Held; computed_at: Date }>("SELECT payload, computed_at FROM os_cache WHERE key = $1", [heldKey(listingId)]);
     const p = rows[0]?.payload;
     if (!p || !Array.isArray(p.onListing)) return null;
-    const anyone = p.onListing.length > 0 || (p.onProperty?.length ?? 0) > 0;
+    /* Held before the e-sign was asked (19 Nov 2026): with nobody named, ask again. */
+    if (!ownersNamed(p) && p.onTerms === undefined) return null;
+    const anyone = p.onListing.length > 0 || (p.onProperty?.length ?? 0) > 0 || (p.onTerms?.length ?? 0) > 0;
     if (Date.now() - new Date(rows[0].computed_at).getTime() > (anyone ? HELD_MS : NOBODY_MS)) return null;
     return p;
   } catch {
@@ -369,7 +417,9 @@ export async function landlordsOfHome(
       /* The property's own owners are only wanted when the listing names
          nobody, so that is the only time REX is asked for them. */
       const onProperty = !onListing.some((c) => text(c.name)) && pid ? ((await propertyOwners(pid))?.map(slim) ?? null) : null;
-      rex = { propertyId: pid, onListing, onProperty, address: listingAddress(listing) };
+      /* Nobody on either: who the terms went to through REX's e-sign (ticket 8ddf2e8a). */
+      const onTerms = ownersNamed({ onListing, onProperty }) ? null : (await landlordsTermsWentTo(listingId).catch(() => [])).map((c) => slim(c as Row));
+      rex = { propertyId: pid, onListing, onProperty, address: listingAddress(listing), onTerms };
       await hold(listingId, rex);
     }
     propertyId = rex.propertyId;
@@ -384,6 +434,10 @@ export async function landlordsOfHome(
     address: rex.address ?? null,
     onListing: named(rex.onListing),
     onProperty: async () => named(rex.onProperty ?? (listingId || !propertyId ? null : await propertyOwners(propertyId))),
+    onTerms: async () => {
+      const ours = await osTermsParties(listingId, propertyId);
+      return ours.length ? ours : named(rex.onTerms ?? null);
+    },
     keys: [letRef ? `let:${letRef}` : null, ...(home.keys ?? [])],
   });
 

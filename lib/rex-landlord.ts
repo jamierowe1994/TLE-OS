@@ -60,8 +60,11 @@ export type Landlord = {
    *  landlord kept on the home in the OS (lib/property-people).
    *  "appraisal" = REX holds no owner, so this is the landlord on the market
    *  appraisal the home came from (lib/appraisal-for-home); contactId is
-   *  their REX contact when the lead's contact is in REX. */
-  from?: "rex" | "record" | "os" | "joint" | "appraisal";
+   *  their REX contact when the lead's contact is in REX.
+   *  "terms" = REX holds no owner, so this is whoever the home's terms of
+   *  business last went to (the OS's Send Terms, else REX's e-sign); contactId
+   *  is their REX contact when the e-sign named one. */
+  from?: "rex" | "record" | "os" | "joint" | "appraisal" | "terms";
   /** For "os": a company, an estate or a private owner, and the change behind it. */
   kind?: "company" | "executor" | "private";
   changeId?: string;
@@ -159,6 +162,7 @@ export function asLandlordOf(l: HomeLandlord): Landlord {
   if (l.from === "record") return { ...base, contactId: null, from: "record" };
   if (l.from === "joint") return { ...base, contactId: null, from: "joint" };
   if (l.from === "appraisal") return { ...base, from: "appraisal" };
+  if (l.from === "terms") return { ...base, from: "terms" };
   return base;
 }
 

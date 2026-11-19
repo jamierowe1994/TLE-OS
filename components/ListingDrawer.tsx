@@ -2528,7 +2528,7 @@ function ListingDrawerBody({
      never shown here. The joint landlords kept on the home are listed by
      HomeLandlords itself, and a landlord changed in the OS has its own card,
      so neither is repeated. */
-  const lOwners = landlord.status === "known" ? landlord.landlords.filter((x) => x.from === "listing" || x.from === "appraisal" || x.from === "property" || x.from === "record") : [];
+  const lOwners = landlord.status === "known" ? landlord.landlords.filter((x) => x.from === "listing" || x.from === "appraisal" || x.from === "property" || x.from === "record" || x.from === "terms") : [];
   const lMain = (
                       landlord.status === "loading" || landlord.status === "idle"
                         ? null
@@ -2546,7 +2546,9 @@ function ListingDrawerBody({
                                 ? "From the home's record in the OS. Not on this listing in REX yet."
                                 : x.from === "property"
                                   ? "The property's owner in the listings system, not on this listing yet. Check they are still the landlord."
-                                  : null,
+                                  : x.from === "terms"
+                                    ? "The terms of business on this home went to them. Not on this listing yet, so check they are still the landlord."
+                                    : null,
                             }))
                           : l && l.from !== "os" && l.from !== "joint" && landlord.status === "known" && !landlord.landlords.length
                             /* A test listing answers with its one landlord and no list. */
