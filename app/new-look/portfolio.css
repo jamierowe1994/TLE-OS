@@ -290,6 +290,13 @@
 [data-look="new"] .nl-home-ask .nl-strong { font-size: 15px; }
 [data-look="new"] .nl-home-ask-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 /* What was changed in the OS, under the details. */
+/* A value the Edit changes opens the Edit (tickets 35f468ac + cdaf3b40, 19 Nov 2026). */
+[data-look="new"] .nl-fact.is-editable { font: inherit; color: inherit; text-align: left; background: none; border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0; margin: 0; cursor: pointer; }
+[data-look="new"] .nl-fact.is-editable > span i { display: inline-flex; vertical-align: -1px; margin-left: 4px; color: var(--faint); opacity: 0; transition: opacity .2s var(--nl-ease); }
+[data-look="new"] .nl-fact.is-editable:hover > span i, [data-look="new"] .nl-fact.is-editable:focus-visible > span i { opacity: 1; color: var(--sage-deep); }
+[data-look="new"] .nl-fact.is-editable:hover > b { color: var(--sage-deep); }
+[data-look="new"] .nl-fact.is-editable:focus-visible { outline: 2px solid var(--sage-deep); outline-offset: 2px; border-radius: 6px; }
+@media (hover: none) { [data-look="new"] .nl-fact.is-editable > span i { opacity: 1; } }
 [data-look="new"] .nl-home-log { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 [data-look="new"] .nl-home-log ul { margin: 6px 0 4px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 [data-look="new"] .nl-home-log li { font-size: 13px; line-height: 19px; color: var(--ink); }

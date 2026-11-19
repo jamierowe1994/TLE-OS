@@ -348,13 +348,26 @@ export default function HomeDetails({
             </div>
           )}
           <div className="nl-facts-grid">
-            {shown.map((r) => (
-              <div key={r.key} className="nl-fact">
-                <span>{r.label}</span>
-                <b className={r.quiet ? "is-quiet" : ""} title={r.title}>{r.text}</b>
-                <Was mark={r.mark} />
-              </div>
-            ))}
+            {shown.map((r) =>
+              /* A value the Edit changes opens the Edit itself (Lianna Denholm,
+                 19 Nov 2026, tickets 35f468ac + cdaf3b40: the type of home and
+                 the let type said "Not an HMO" and "Not set", and she couldn't
+                 see how to change them - the small Edit beside the title was
+                 the only way in). */
+              canEdit && start && (r.field || r.key === "homeType" || r.key === "gas") ? (
+                <button key={r.key} type="button" className="nl-fact is-editable" onClick={begin} title={`Change ${r.label.toLowerCase()}`}>
+                  <span>{r.label} <i aria-hidden><Ico name="pen" size={11} /></i></span>
+                  <b className={r.quiet ? "is-quiet" : ""} title={r.title}>{r.text}</b>
+                  <Was mark={r.mark} />
+                </button>
+              ) : (
+                <div key={r.key} className="nl-fact">
+                  <span>{r.label}</span>
+                  <b className={r.quiet ? "is-quiet" : ""} title={r.title}>{r.text}</b>
+                  <Was mark={r.mark} />
+                </div>
+              )
+            )}
           </div>
           {more}
           {loadErr && <p className="nl-hint mt-2">{loadErr}</p>}
@@ -383,7 +396,9 @@ export default function HomeDetails({
             {field("service", "Service",
               <FieldSelect value={draft.service} onChange={(v) => set("service", v)} options={SERVICE_CHOICES.map((c) => ({ value: c.value, label: c.label, sub: c.sub }))} placeholder="Choose the service" />)}
             {field("letType", "Let type",
-              <FieldSelect value={draft.letType} onChange={(v) => set("letType", v)} options={LET_TYPES.map((t) => ({ value: t, label: t }))} placeholder="Choose the let type" />)}
+              <FieldSelect value={draft.letType} onChange={(v) => set("letType", v)} options={LET_TYPES.map((t) => ({ value: t, label: t }))} placeholder="Choose the let type" />,
+              /* "HMO" is not a let type here: it is the type of home (Lianna Denholm, 19 Nov 2026). */
+              { hint: data?.factsKey ? "How long the let runs. Whether it is an HMO is under Type of home." : "How long the let runs." })}
             {data?.factsKey
               ? field(null, "Type of home",
                   <FieldSelect value={draft.homeType} onChange={(v) => set("homeType", v)} options={CHOICES.homeType.map((c) => ({ value: c.value, label: c.label, sub: c.sub }))} placeholder="Choose" />,
