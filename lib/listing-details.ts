@@ -81,7 +81,7 @@ export interface ListingDetails {
     lodged: string | null;
     /** REX's SAP scores. REX only takes the two together (6 Oct 2026). */
     current: number | null; potential: number | null;
-    /** The band from the current score, or REX's own rating where it has one. */
+    /** The band the current score is in; REX's own letter only where there is no score (ticket ccdfa7cb). */
     band: EpcBand | null;
   };
   /** REX's listing subcategory: its id, and the related row's id for an update. */
@@ -310,14 +310,18 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
     councilTaxBand: str(p.meta_tax_band) ?? str(p.meta_rates_council),
     parking: text(p.attr_parking_type) ?? yesNo(p.attr_has_parking),
     epc: {
-      rating: str(l.epc_rating),
+      /* The band the score is in, before REX's stored letter: REX keeps its
+         old letter when a new score is saved, so Band D with a score of 68
+         went back to E on every reload (Joe Patten, ticket ccdfa7cb, 19 Nov
+         2026). The letter only stands where there is no score. */
+      rating: bandForScore(eerNow) ?? str(l.epc_rating),
       expiry: str(l.epc_expiry_date),
       lodged: str(l.epc_lodgement_date),
       chartUrl: abs((l.epc_combined_chart as Obj | null)?.url ?? (l.epc_eer_chart as Obj | null)?.url),
       fileUrl: abs((l.epc_file as Obj | null)?.url),
       current: eerNow,
       potential: num(l.epc_potential_eer),
-      band: (str(l.epc_rating)?.toUpperCase().match(/^[A-G]$/)?.[0] as EpcBand | undefined) ?? bandForScore(eerNow),
+      band: bandForScore(eerNow) ?? (str(l.epc_rating)?.toUpperCase().match(/^[A-G]$/)?.[0] as EpcBand | undefined) ?? null,
     },
     record,
     agentLarn,
