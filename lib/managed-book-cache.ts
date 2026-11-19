@@ -65,6 +65,13 @@ export interface Held<T> {
 }
 
 const memory = new Map<string, Held<unknown>>();
+/* The copy forgetBooks put aside, served only when the read it forced takes
+   too long (Sean McMahon, ticket 2e0931c4, 19 Nov 2026): Change address on a
+   listing threw every agent's book away, and the listing's home switch and
+   property file then sat on a cold REX walk for over 25 seconds. */
+const forgotten = new Map<string, Held<unknown>>();
+/** How long a read waits on a forced REX walk before taking the copy put aside. */
+const FORGOTTEN_WAIT_MS = 6000;
 const refreshing = new Map<string, Promise<Held<unknown>>>();
 /* The last failure per key, so a route can tell "still working on it" from
    "it broke" — a walk that throws must not leave the screen saying pending
@@ -113,6 +120,7 @@ export function refresh<T>(key: string, work: () => Promise<T>): Promise<Held<T>
     .then(async (data) => {
       const entry = { data, at: Date.now() };
       memory.set(key, entry);
+      forgotten.delete(key);
       failures.delete(key);
       await store(key, entry);
       return entry;
@@ -134,7 +142,11 @@ export function refresh<T>(key: string, work: () => Promise<T>): Promise<Held<T>
  * on its OS record, 15 Oct 2026).
  */
 export async function forgetBooks(): Promise<void> {
-  for (const k of [...memory.keys()]) if (k.startsWith(`${BOOK_BASE}:`)) memory.delete(k);
+  for (const [k, v] of [...memory.entries()]) {
+    if (!k.startsWith(`${BOOK_BASE}:`)) continue;
+    forgotten.set(k, v);
+    memory.delete(k);
+  }
   if (hasDb()) await q(`DELETE FROM os_cache WHERE key LIKE $1`, [`${BOOK_BASE}:%`]).catch(() => {});
 }
 
@@ -206,6 +218,22 @@ async function rawBookFor(rexUserId: string | null): Promise<{
   if (h && age < BOOK_STALE_MS && !walk) {
     void refresh(key, () => readBook(rexUserId)).catch(() => {});
     return { book: h.data, ageMs: age, stale: true };
+  }
+  /* Just forgotten (forgetBooks, after a change): wait a few seconds for the
+     new read, so the change shows, then answer with the copy put aside and
+     let the walk land behind for the next read. Never a screen left waiting. */
+  const before = !h ? (forgotten.get(key) as Held<ManagedBook> | undefined) : undefined;
+  if (before) {
+    const walking = refresh(key, () => readBook(rexUserId));
+    walking.catch(() => {});
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const won = await Promise.race([
+      walking.then((fresh) => ({ fresh }), () => null),
+      new Promise<null>((done) => { timer = setTimeout(() => done(null), FORGOTTEN_WAIT_MS); }),
+    ]);
+    clearTimeout(timer);
+    if (won) return { book: won.fresh.data, ageMs: 0, stale: false };
+    return { book: before.data, ageMs: Date.now() - before.at, stale: true };
   }
   try {
     const fresh = await refresh(key, () => readBook(rexUserId));
