@@ -451,6 +451,8 @@ async function areaGate(req: NextRequest): Promise<{ closed: NextResponse | null
 const MACHINE_ROUTES = [
   /* The demo copy's nightly reset (lib/demo/seed). A 404 anywhere DEMO_MODE is not set. */
   "/api/demo/reset",
+  /* The demo copy's no-sign-in door for reviewers (James, 20 Nov 2026). A 404 anywhere DEMO_MODE is not set. */
+  "/api/demo/enter",
   /* Which screens have the new look for everyone: read by the demo copy to match live. Screen ids only. */
   "/api/new-look/levels",
   /* The read log's own hand-over from this file (lib/read-log). The route
@@ -1028,6 +1030,17 @@ async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
       { ok: false, error: "Your session has ended. Sign in again.", signedOut: true },
       { status: 401, headers: { "x-os-signed-out": "1" } }
     );
+  }
+
+  /* The demo copy has no sign-in screen (James, 20 Nov 2026): a visitor walks
+     in as the demo's Scottish agent, landing where they were heading. Only
+     with DEMO_MODE=1; the live system never takes this branch. */
+  if ((process.env.DEMO_MODE ?? "").trim() === "1") {
+    const enter = req.nextUrl.clone();
+    const heading = req.nextUrl.pathname + req.nextUrl.search;
+    enter.pathname = "/api/demo/enter";
+    enter.search = heading && heading !== "/" ? `?to=${encodeURIComponent(heading)}` : "";
+    return NextResponse.redirect(enter);
   }
 
   /* Send them to sign in, and bring them back to whatever they were reaching
