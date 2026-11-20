@@ -372,13 +372,35 @@ async function searchListings(state: string, rexUserId?: string | null): Promise
      Where a listing names no agent, the person REX has as its owner (whoever
      made it, unless reassigned) is the agent. Still filtered at REX, so
      another agent's stock never enters this process. */
-  const [asAgent, asOwner] = await Promise.all([
+  /* THE BOOK THAT MOVED (Sean McMahon, ticket b7f3b2aa, 20 Nov 2026). Margo
+     Wilson's Glasgow homes are Sean's in the OS (lib/agent-moves, kind
+     'agent'), and his Portfolio has followed since 15 Oct, but this board
+     still read REX's agent only. A relet on one of her homes lands on the
+     listing already there, which still names Margaret Wilson, so it was on
+     nobody's board. Every agent whose homes have moved to this one is read
+     too, still filtered at REX. A home moved on to somebody else by hand
+     (kind 'home') leaves, as it does on Portfolio. */
+  const moves = await import("@/lib/agent-moves").then((m) => m.agentMoves()).catch(() => []);
+  const fromAgents = [...new Set(
+    moves.filter((m) => m.kind === "agent" && m.toRexId === rexUserId && /^\d+$/.test(m.key) && m.key !== rexUserId).map((m) => m.key)
+  )];
+  const [asAgent, asOwner, ...asMoved] = await Promise.all([
     searchListingsBy(state, { name: "listing_agent_1_id", value: rexUserId }),
     searchListingsBy(state, { name: "system_owner_user_id", value: rexUserId }),
+    ...fromAgents.map((id) => searchListingsBy(state, { name: "listing_agent_1_id", value: id })),
   ]);
   const have = new Set(asAgent.map((r) => String(r.id ?? "")));
   const unnamed = asOwner.filter((r) => !r.listing_agent_1 && !have.has(String(r.id ?? "")));
-  return [...asAgent, ...unnamed];
+  for (const r of unnamed) have.add(String(r.id ?? ""));
+  const movedAway = new Set(moves.filter((m) => m.kind === "home" && m.toRexId !== rexUserId).map((m) => m.key));
+  const moved = asMoved.flat().filter((r) => {
+    const id = String(r.id ?? "");
+    if (have.has(id)) return false;
+    have.add(id);
+    const prop = String(r.property?.id ?? "");
+    return !(prop && movedAway.has(prop));
+  });
+  return [...asAgent, ...unnamed, ...moved];
 }
 
 async function searchListingsBy(state: string, scope: { name: string; value: string } | null): Promise<RexListing[]> {
@@ -500,7 +522,13 @@ async function pulledIntoBook(have: string[], rexUserId?: string | null): Promis
      reaches tenants as somewhere to enquire about. */
   /* Nor one since withdrawn, let or sold (29 Oct 2026): REX keeps its
      publication at "published", so it would read as live on the market. */
-  return rexRows(res.result).map((r) => toListing(r as unknown as RexListing)).filter((l) => !l.letAgreed && (!l.listingState || l.listingState === "current"));
+  /* Let agreed is NOT let (Sean McMahon, ticket b7f3b2aa, 20 Nov 2026). A
+     pulled home went off the agent's board the moment its offer was
+     accepted, the very point they need it to progress the let. REX's own
+     book keeps a let-agreed listing as current, and so does the rest of this
+     board; every reader that wants only what is on the market already leaves
+     let agreed out. Only a listing no longer current goes. */
+  return rexRows(res.result).map((r) => toListing(r as unknown as RexListing)).filter((l) => !l.listingState || l.listingState === "current");
 }
 
 export async function fetchListingBook(rexUserId?: string | null): Promise<ListingBook> {
