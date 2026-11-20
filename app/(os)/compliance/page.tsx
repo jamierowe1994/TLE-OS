@@ -10,7 +10,7 @@ import ComplianceDrawer from "@/components/ComplianceDrawer";
 import ExcelButton from "@/components/ExcelButton";
 import StatTile, { toneFor } from "@/components/StatTile";
 import {
-  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, renewalHeld, shownStatus, statusOf,
+  BIG_THREE, CERT_META, HMO_SET, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, renewalHeld, shownStatus, statusOf,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 import { searchMatches } from "@/lib/search-match";
@@ -118,6 +118,9 @@ type Filter = "all" | "expired" | "urgent" | "missing" | "ok";
 export default function Compliance() {
   const look = useNewLook("compliance");
   const [filter, setFilter] = useState<Filter>("all");
+  /* One certificate type at a time (Susan Liles, ticket cebb5c44, 20 Nov 2026):
+     "can we get a breakdown of the compliance type". null = every type. */
+  const [certType, setCertType] = useState<CertKey | null>(null);
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   useNoteVisit(openId ? `cert:${openId}` : null);
@@ -221,12 +224,41 @@ export default function Compliance() {
     ok: graded.filter((g) => g.worst === "ok" || g.worst === "watch").length,
   };
 
+  /* The breakdown by type (Susan Liles, ticket cebb5c44, 20 Nov 2026). The
+     same homes and the same reading of each certificate as the tiles, counted
+     per certificate rather than per home's worst one, so a home with an
+     expired gas and a missing EICR counts once under each. Gas on a home with
+     no gas supply is not counted (headlineCerts leaves it out). */
+  const byType = useMemo(() => {
+    const order: CertKey[] = [...BIG_THREE, ...HMO_SET];
+    return order
+      .map((key) => {
+        const row = { key, homes: 0, expired: 0, urgent: 0, missing: 0, ok: 0 };
+        for (const p of BOOK) {
+          if (!headlineCerts(p).includes(key)) continue;
+          row.homes++;
+          const s = shownStatus(p.certs[key]);
+          if (s === "watch" || s === "ok") row.ok++;
+          else row[s]++;
+        }
+        return row;
+      })
+      .filter((r) => r.homes > 0);
+  }, [BOOK]);
+
   const book = graded.filter(({ p, worst }) => {
     if (query.trim() && !searchMatches(query, p.name, p.locality, p.landlord, p.tenant)) return false;
+    /* With a type picked, the tile filter reads that one certificate, not the home's worst. */
+    let s: CertStatus = worst;
+    if (certType) {
+      if (!headlineCerts(p).includes(certType)) return false;
+      s = shownStatus(p.certs[certType]);
+    }
     if (filter === "all") return true;
-    if (filter === "ok") return worst === "ok" || worst === "watch";
-    return worst === filter;
+    if (filter === "ok") return s === "ok" || s === "watch";
+    return s === filter;
   });
+  const soon = certType ? urgent.filter((u) => u.key === certType) : urgent;
 
   const open = BOOK.find((p) => p.id === openId) ?? null;
 
@@ -264,6 +296,12 @@ export default function Compliance() {
       source.loading || !source.live ? "" : key === "expired" ? (value > 0 ? " is-accent" : " is-sage") : key === "ok" ? " is-sage" : "";
     const who = (name: string | null | undefined) => (name && name.trim() && name.trim() !== "—" ? name : null);
     const filterLabel = TILES.find((t) => t.key === filter)?.label;
+    const typeLabel = certType ? noDash(CERT_META[certType].label) : null;
+    /* Press a count: that type, that state. Press it again: back to everything. */
+    const pick = (key: CertKey, f: Filter) => {
+      if (certType === key && filter === f) { setCertType(null); setFilter("all"); }
+      else { setCertType(key); setFilter(f); }
+    };
     return (
       <div data-look="new">
         <div className="nl-page nl-rise">
@@ -306,15 +344,73 @@ export default function Compliance() {
             </div>
           )}
 
+          {/* BY TYPE (Susan Liles, ticket cebb5c44, 20 Nov 2026): each certificate
+              type's own counts. A count filters the next month and the book. */}
+          {source.live && byType.length > 0 && (
+            <section className="nl-cbook-card">
+              <div className="nl-cbook-bookhead">
+                <h2 className="nl-section-title nl-cbook-h">By Type</h2>
+                {certType && (
+                  <button type="button" onClick={() => { setCertType(null); setFilter("all"); }} className="nl-cbook-chip" aria-label={`Clear the ${typeLabel ?? ""} filter`}>
+                    {typeLabel}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+                  </button>
+                )}
+              </div>
+              <table className="nl-cbook-table nl-cbook-types">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    {TILES.map((t) => <th key={t.key}>{t.label}</th>)}
+                    <th>Homes it applies to</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byType.map((r) => (
+                    <tr key={r.key} className={certType === r.key ? "is-on" : undefined} onClick={() => pick(r.key, "all")}>
+                      <td className="nl-cbook-tprop">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); pick(r.key, "all"); }} className="nl-strong nl-cbook-open" aria-pressed={certType === r.key && filter === "all"}>
+                          {noDash(CERT_META[r.key].label)}
+                        </button>
+                        {HMO_SET.includes(r.key) && <span className="nl-cbook-hmo">HMO</span>}
+                      </td>
+                      {TILES.map((t) => {
+                        const n = r[t.key as "expired" | "urgent" | "missing" | "ok"];
+                        const tone = n === 0 ? " is-none" : t.key === "expired" || t.key === "missing" ? " is-over" : t.key === "urgent" ? " is-soon" : " is-ok";
+                        return (
+                          <td key={t.key} data-label={t.label}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); pick(r.key, t.key); }}
+                              aria-pressed={certType === r.key && filter === t.key}
+                              aria-label={`${noDash(CERT_META[r.key].label)}: ${t.label}, ${n}`}
+                              className={`nl-cbook-tcount nl-cbook-cert${tone}${certType === r.key && filter === t.key ? " is-picked" : ""}`}
+                            >
+                              {n.toLocaleString("en-GB")}
+                            </button>
+                          </td>
+                        );
+                      })}
+                      <td data-label="Homes it applies to" className="nl-cbook-thomes">{r.homes.toLocaleString("en-GB")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="nl-cbook-foot">
+                Counted per certificate, so a home with two out of date shows under both. The tiles above count each home once, by its worst certificate. Press a number to see those homes below.
+              </p>
+            </section>
+          )}
+
           {/* THE NEXT MONTH: the reason this page exists. The whole row opens the home; nothing is done from here. */}
           <section className="nl-cbook-card">
-            <h2 className="nl-section-title nl-cbook-h">Coming Out of Compliance in the Next Month</h2>
-            {urgent.length ? (
+            <h2 className="nl-section-title nl-cbook-h">Coming Out of Compliance in the Next Month{typeLabel ? `: ${CERT_META[certType!].short}` : ""}</h2>
+            {soon.length ? (
               <ul className="nl-cbook-soon">
                 <li className="nl-cbook-soon-head" aria-hidden>
                   <span>Days</span><span>Property</span><span>Requirement</span><span>Expiry date</span>
                 </li>
-                {urgent.map(({ p, key, cert, status }) => {
+                {soon.map(({ p, key, cert, status }) => {
                   const days = cert?.expires ?? null;
                   const over = days == null ? 0 : Math.abs(days);
                   const expiry = days == null ? null : new Date(Date.now() + days * 86400000);
@@ -356,7 +452,7 @@ export default function Compliance() {
                 The certificates didn&rsquo;t load, so nothing here has been checked. Don&rsquo;t read it as all clear - try again in a minute.
               </p>
             ) : (
-              <p className="nl-empty">Nothing expires this month. It happens.</p>
+              <p className="nl-empty">{typeLabel ? `No ${typeLabel} certificates expire this month.` : "Nothing expires this month. It happens."}</p>
             )}
           </section>
 
@@ -364,6 +460,12 @@ export default function Compliance() {
           <section className="nl-cbook-card">
             <div className="nl-cbook-bookhead">
               <h2 className="nl-section-title nl-cbook-h">The Book</h2>
+              {certType && (
+                <button type="button" onClick={() => setCertType(null)} className="nl-cbook-chip" aria-label={`Clear the ${typeLabel ?? ""} filter`}>
+                  {CERT_META[certType].short}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+              )}
               {filter !== "all" && (
                 <button type="button" onClick={() => setFilter("all")} className="nl-cbook-chip" aria-label={`Clear the ${filterLabel ?? ""} filter`}>
                   {filterLabel}
@@ -383,6 +485,7 @@ export default function Compliance() {
                   body={() => ({
                     properties: book.map(({ p }) => p.id),
                     filters: [
+                      typeLabel,
                       filter !== "all" && (TILES.find((t) => t.key === filter)?.label ?? filter),
                       query.trim() && `Search "${query.trim()}"`,
                     ].filter(Boolean).join(", "),

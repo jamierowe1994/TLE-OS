@@ -121,6 +121,16 @@
 [data-look="new"] .nl-cbook-cert.is-info { color: var(--info); }
 [data-look="new"] .nl-cbook-cert.is-none { color: var(--muted); font-weight: 400; }
 
+/* by type (Susan Liles, ticket cebb5c44, 20 Nov 2026): each count is a button */
+[data-look="new"] .nl-cbook-types tbody tr.is-on { background: var(--panel); }
+[data-look="new"] .nl-cbook-tcount {
+  font: inherit; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; text-decoration: none;
+  background: none; border: 0; padding: 4px 10px; margin: -4px -10px; border-radius: 10px; cursor: pointer;
+}
+[data-look="new"] .nl-cbook-tcount:hover { background: var(--box); }
+[data-look="new"] .nl-cbook-tcount.is-picked { box-shadow: inset 0 0 0 1px var(--ink); }
+[data-look="new"] .nl-cbook-thomes { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 [data-look="new"] .nl-cbook-foot { margin: 20px 0 0; max-width: 80ch; font-size: 13px; line-height: 20px; color: var(--muted); }
 [data-look="new"] .nl-cbook-foot b { font-weight: 600; color: var(--ink); }
 
