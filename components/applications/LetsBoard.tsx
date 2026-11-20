@@ -7,6 +7,7 @@ import { searchMatches } from "@/lib/search-match";
 import BoardLoading from "@/components/business/BoardLoading";
 import { PORTAL_STAGES, PORTAL_STAGE_BY_KEY } from "@/lib/business/propoly-stages";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
+import { isStale, type WaitingLet } from "@/lib/lets-in-progress-rule";
 
 /**
  * An agent's own lets, as a board (James, 10 Oct 2026).
@@ -37,7 +38,7 @@ export const isSwapDeal = (d: Deal): boolean => {
 /** An accepted let with no deal in Propoly yet (James, 12 Oct 2026). Not a
  *  deal, so not a column: a tab in the bottom-left corner says how many are
  *  waiting to be handed over, and each opens its file to push. */
-export type WaitingLet = { id: string; property: string; locality: string; image: string | null; tenant: string; agent: string | null; moveIn: string | null; swap: boolean };
+export type { WaitingLet } from "@/lib/lets-in-progress-rule";
 
 export const GREEN_PILL = "bg-[#f1f4ec] text-[#56634a]";
 export const RED_PILL = "bg-[#fdefec] text-[#9d4340]";
@@ -91,11 +92,9 @@ export const agoLabel = (iso: string | null) => {
 };
 export const lastActivity = (d: Deal) =>
   [d.portal.lastNote?.at ?? null, d.portal.override?.at ?? null, d.app.dateReceived].filter((x): x is string => !!x).sort().at(-1) ?? null;
-/* Kirstie's board hides deals that should have finished before 2026 (stale records). */
-export const isStale = (d: Deal) => {
-  const ref = d.app.startDate ?? d.app.dateReceived;
-  return ref != null && ref < "2026-01-01";
-};
+/* Kirstie's board hides deals that should have finished before 2026 (stale
+   records). One rule with the server's count (lib/lets-in-progress-rule). */
+export { isStale } from "@/lib/lets-in-progress-rule";
 
 /** Where one stage stands, in Kirstie's three words and her colours. */
 export function stageStatus(d: Deal, stageKey: string): { text: string; tone: string } {

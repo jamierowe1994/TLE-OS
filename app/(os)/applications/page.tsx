@@ -16,6 +16,7 @@ import { searchMatches } from "@/lib/search-match";
 import LetsBoard from "@/components/applications/LetsBoard";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { isLet } from "@/lib/application-record";
+import { letApplicationFor, waitingLets } from "@/lib/lets-in-progress-rule";
 import { rememberApplicationOrder } from "@/lib/application-order";
 import { SAGE_INK, SAGE_WASH } from "@/components/appraisal/NextUp";
 import type { Application } from "@/lib/applications";
@@ -367,18 +368,9 @@ export default function Applications() {
     );
   }
   if (look) {
-    const waitingLets = (apps ?? [])
-      .filter((a) => isLet(a) && !a.closed && (a.stageLabel === "Handover due" || a.stageLabel === "Accepted"))
-      .map((a) => ({
-        id: a.id,
-        property: a.property,
-        locality: a.locality,
-        image: a.image,
-        tenant: a.applicants.find((p) => p.isPrimary)?.name ?? a.applicants[0]?.name ?? "No tenant recorded",
-        agent: a.agent,
-        moveIn: a.startDate,
-        swap: Boolean(a.swap),
-      }));
+    /* Accepted and not in Propoly yet, by the rule the server counts with
+       (lib/lets-in-progress-rule, ticket 0573c824). */
+    const waiting = waitingLets(apps ?? []);
     const viewToggle = (
       <span className="nl-toggle" role="group" aria-label="Show as">
         <button type="button" className={view === "board" ? "is-on" : ""} aria-pressed={view === "board"} onClick={() => setView("board")}>
@@ -440,14 +432,7 @@ export default function Applications() {
           <LetsByStage
             whenNone={unlinked ? <ConnectRex what="applications" /> : undefined}
             everything={Boolean(scope?.everything)}
-            matchApplication={(d) => {
-              const lid = d.app.listingId ? Number(d.app.listingId) : null;
-              const name = d.app.propertyName.trim().toLowerCase();
-              const hit =
-                (apps ?? []).find((a) => a.propolyDealId === d.app.id) ??
-                (apps ?? []).find((a) => isLet(a) && ((lid != null && a.listingId === lid) || a.property.trim().toLowerCase() === name));
-              return hit?.id ?? null;
-            }}
+            matchApplication={(d) => letApplicationFor(d, apps ?? [])}
             onOpenApplication={(id, order) => openApp(id, order)}
             q={q}
             onQ={setQ}
@@ -455,7 +440,7 @@ export default function Applications() {
             onAgent={setBoardAgent}
             agents={boardAgents}
             onAgents={setBoardAgents}
-            waiting={waitingLets}
+            waiting={waiting}
             waitingReady={apps !== null}
             extra={viewToggle}
           />
@@ -726,31 +711,14 @@ export default function Applications() {
       {view === "board" && (
         <LetsBoard
           everything={Boolean(scope?.everything)}
-          matchApplication={(d) => {
-            const lid = d.app.listingId ? Number(d.app.listingId) : null;
-            const name = d.app.propertyName.trim().toLowerCase();
-            /* The deal the OS pushed for it first, exactly (see lib/applications propolyDealId). */
-            const hit =
-              (apps ?? []).find((a) => a.propolyDealId === d.app.id) ??
-              (apps ?? []).find((a) => isLet(a) && ((lid != null && a.listingId === lid) || a.property.trim().toLowerCase() === name));
-            return hit?.id ?? null;
-          }}
+          /* The deal the OS pushed for it first, exactly, else by its home
+             (lib/lets-in-progress-rule, shared with the server's count). */
+          matchApplication={(d) => letApplicationFor(d, apps ?? [])}
           onOpenApplication={(id, order) => openApp(id, order)}
           q={q}
           agent={boardAgent}
           onAgents={setBoardAgents}
-          waiting={(apps ?? [])
-            .filter((a) => isLet(a) && !a.closed && (a.stageLabel === "Handover due" || a.stageLabel === "Accepted"))
-            .map((a) => ({
-              id: a.id,
-              property: a.property,
-              locality: a.locality,
-              image: a.image,
-              tenant: a.applicants.find((p) => p.isPrimary)?.name ?? a.applicants[0]?.name ?? "No tenant recorded",
-              agent: a.agent,
-              moveIn: a.startDate,
-              swap: Boolean(a.swap),
-            }))}
+          waiting={waitingLets(apps ?? [])}
         />
       )}
 

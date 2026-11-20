@@ -54,6 +54,8 @@ interface Board {
   compliance: Tile<{ expired: number; dueSoon: number; homesAffected: number }>;
   applications: Tile<{ open: number; movingIn: number }>;
   lettings: Tile<{ available: number; letAgreed: number; drafts: number }>;
+  /** The Applications board's All tab, counted on the server (lib/lets-in-progress). */
+  lets: Tile<{ count: number; toPush: number }>;
   arrears: Tile<{ tenants: number; owed: number; largest: number }>;
 }
 
@@ -510,6 +512,7 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
   const cd = data?.compliance?.ok ? data.compliance.data : null;
   const apd = data?.applications?.ok ? data.applications.data : null;
   const ld = data?.lettings?.ok ? data.lettings.data : null;
+  const lt = data?.lets?.ok ? data.lets.data : null;
   const state = (t: Tile<unknown> | undefined) => ({ loading: reading || (!t && !error), error: error ? "Couldn't be read just now" : tileErr(t) });
 
   return (
@@ -584,7 +587,10 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
                 { label: "Drafts", value: ld?.drafts ?? null, note: tileErr(data?.lettings), tone: "clay", onOpen: () => { router.push("/listings"); } },
                 { label: "On the market", value: ld?.available ?? null, note: tileErr(data?.lettings), tone: "terra", onOpen: ld ? list("market", "On the Market", ld.available, ["Rent", "Home", "Live since", "", "Status"], { href: "/listings", label: "Open Listings" }, "Longest on the market first.", "Nothing on the market.") : undefined },
                 { label: "Applications", value: apd?.open ?? null, note: tileErr(data?.applications), tone: "olive", onOpen: apd ? list("applications", "Open Applications", apd.open, ["Applicants", "Home", "Received", "", "Status"], { href: "/applications", label: "Open Applications" }, "Newest first.", "No open applications.") : undefined },
-                { label: "Let agreed", value: ld?.letAgreed ?? null, note: tileErr(data?.lettings), tone: "sage", onOpen: () => { router.push("/applications"); } },
+                /* Susan Liles, 20 Nov 2026 (ticket 0573c824): this step was the
+                   listings marked let agreed (78) and opened Applications, which
+                   counted 17. It is the board's own All tab now. */
+                { label: "Lets in Progress", value: lt?.count ?? null, note: tileErr(data?.lets), tone: "sage", onOpen: () => { router.push("/applications"); } },
                 { label: "Moving in", value: apd?.movingIn ?? null, note: tileErr(data?.applications), tone: "brown", onOpen: () => { router.push("/applications"); } },
               ]}
             />
@@ -639,9 +645,20 @@ function OverviewNew({ data, error, reload, open, panel, agent, picker }: { data
           sub={apd ? `${apd.movingIn} moving in` : null}
           onOpen={apd ? list("applications", "Open Applications", apd.open, ["Applicants", "Home", "Received", "", "Status"], { href: "/applications", label: "Open Applications" }, "Newest first.", "No open applications.") : undefined} />
         <PmTile label="On the market" {...state(data?.lettings)} value={ld?.available ?? null}
-          sub={ld ? `${ld.letAgreed} let agreed · ${ld.drafts} drafts` : null}
+          /* The listings marked let agreed (lib/listing-stages, the Listings
+             board's own rule): a listing figure, said as one (ticket 0573c824). */
+          sub={ld ? `${ld.letAgreed.toLocaleString("en-GB")} listing${ld.letAgreed === 1 ? "" : "s"} marked let agreed · ${ld.drafts} draft${ld.drafts === 1 ? "" : "s"}` : null}
           onOpen={ld ? list("market", "On the Market", ld.available, ["Rent", "Home", "Live since", "", "Status"], { href: "/listings", label: "Open Listings" }, "Longest on the market first.", "Nothing on the market.") : undefined} />
-        <PmTile label="Let agreed" {...state(data?.lettings)} value={ld?.letAgreed ?? null} sub={ld ? "on their way to a move-in" : null} href="/applications" />
+        {/* Susan Liles, 20 Nov 2026 (ticket 0573c824): "shows 78 properties
+            under application which is wrong". This tile counted the listings
+            marked let agreed and opened Applications, which counts the lets
+            still working through to a move-in; a home that has moved in stays
+            let agreed on its listing until it is marked let. It reads the
+            board's own count now, from the server, so the two always agree. */}
+        <PmTile label="Lets in Progress" {...state(data?.lets)} value={lt?.count ?? null}
+          badge={lt && lt.toPush > 0 ? { text: `${lt.toPush} to push`, tone: "flat" } : null}
+          sub={lt ? "accepted, not moved in yet" : null}
+          href="/applications" />
       </PmRow>
 
       <div className="nl-pm-cards">

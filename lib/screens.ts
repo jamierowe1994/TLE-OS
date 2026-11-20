@@ -294,6 +294,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     wiring: "live",
     caveats: [
       "Referencing is done in Propoly: the deal's stage there says when it is at referencing, and references coming back opens the PLC pack automatically.",
+      /* Ticket 0573c824, 20 Nov 2026. */
+      "The All tab counts every let in progress on your board: deals still moving (not cancelled, and not slipped more than 30 days past move-in) plus accepted lets still to push to Propoly. A let drops off once its deal is finished in Propoly. The PM Dashboard's Lets in Progress tile is the same count.",
       "Start the PLC check is the brown button on the let's file once the application is with the landlord or accepted. The how-to guide on handing over the PLC pack has the steps; a pack sent back arrives as a notification with the checker's note.",
       "The right-to-rent gap warning is real — it is counting applications with nothing recorded.",
       "A tenant's right to rent expiry date (or no time limit) is recorded by asking Steve - he puts it on the let after a yes, and it shows on the tenant's Their application card as Right to rent expiry. The office's bell reminds them when the follow-up check is due. A Scottish let has no right to rent, so it shows none and takes none.",
@@ -361,6 +363,9 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     caveats: [
       "Every figure is read from the screen the tile opens, so the two always agree, and an agent sees their own book just as they do there.",
       "Upcoming vacancies is the Move-outs list: tenancies ending, the late ones and the next 30 days, with homes on the market and let agreed beside them.",
+      /* Susan Liles, 20 Nov 2026 (ticket 0573c824): the Let agreed tile counted listings and opened Applications. */
+      "Lets in Progress (in Compliance and Lettings, and the step in On the Way to a Tenant) is the same count as the All tab on Applications: deals still moving towards a move-in, plus accepted lets not pushed to Propoly yet. It opens Applications.",
+      "The On the market tile's note gives how many listings are marked let agreed. That is a listings figure, the Listings board's own: a home that has moved in stays let agreed on its listing until it is marked let, so it is usually bigger than Lets in Progress and is not the number of lets on the way.",
       "Rent arrears is shown to the business owners only.",
     ],
   },

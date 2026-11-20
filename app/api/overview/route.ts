@@ -19,6 +19,7 @@ import { GET as listingsGET } from "@/app/api/listings/route";
 import { grantAgentBook, grantWholeBusiness } from "@/lib/scope";
 import { overviewAgentFor, overviewAgents, wholeOverviewFor, type OverviewAgent } from "@/lib/overview-access";
 import { QUICK_MS, type BoardRead } from "@/lib/applications-board";
+import { countLetsInProgress } from "@/lib/lets-in-progress";
 
 /**
  * The Overview board (1 Oct 2026): one tile per part of property management,
@@ -52,12 +53,17 @@ type Tile<T> = { ok: true; data: T } | { ok: false; error: string };
 
 type Agent = { rexUserId: string; name: string } | null;
 
-/** Call another screen's GET as the same person, and read its JSON. */
-async function read(handler: (r: NextRequest) => Promise<Response>, req: NextRequest, path: string, whole: boolean, agent: Agent): Promise<Json> {
+/** A request for another screen, as the same person, in the board's scope. */
+function asked(req: NextRequest, path: string, whole: boolean, agent: Agent): NextRequest {
   const sub = new NextRequest(new URL(path, req.url), { headers: req.headers });
   if (agent) grantAgentBook(sub, agent);
   else if (whole) grantWholeBusiness(sub);
-  const res = await handler(sub);
+  return sub;
+}
+
+/** Call another screen's GET as the same person, and read its JSON. */
+async function read(handler: (r: NextRequest) => Promise<Response>, req: NextRequest, path: string, whole: boolean, agent: Agent): Promise<Json> {
+  const res = await handler(asked(req, path, whole, agent));
   const j = (await res.json()) as Json;
   if (!res.ok || j.ok === false) throw new Error(typeof j.error === "string" ? j.error : `That screen didn't answer (${res.status}).`);
   return j;
@@ -125,7 +131,7 @@ export async function GET(req: NextRequest) {
     p.then(() => { took[name] = Date.now() - startedAt; }, () => { took[name] = Date.now() - startedAt; });
     return p;
   };
-  const [properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears, agents] = await Promise.all([
+  const [properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, lets, arrears, agents] = await Promise.all([
     timed("properties", settle(portfolio.then((j) => {
       const c = (j.counts ?? {}) as Json;
       return {
@@ -224,6 +230,17 @@ export async function GET(req: NextRequest) {
       return stageCounts(ls, new Set(act?.accepted ?? []));
     }))),
 
+    /* Lets in progress (Susan Liles, 20 Nov 2026, ticket 0573c824): the
+       Applications board's All tab, counted by the one server rule
+       (lib/lets-in-progress) in this board's scope, so the tile and the
+       board it opens can never disagree. The tile beside it counted the
+       listings marked let agreed (78 against the board's 17): that figure is
+       the On the market tile's note now, said as what it is. */
+    timed("lets", settle(countLetsInProgress((path) => asked(req, path, everything, agent), mode).then((l) => {
+      noteBoard({ at: Date.parse(l.at), stale: l.stale === true });
+      return { count: l.count, toPush: l.waiting.length };
+    }))),
+
     /* Money is Susan's and the owners' (see:business). Anyone else sees the
        tile say so rather than a number they are not meant to have. */
     /* PayProp's arrears carry PayProp's property ids, not an agent, so they
@@ -261,6 +278,6 @@ export async function GET(req: NextRequest) {
     scope: { whole, label, agent: agent?.rexUserId ?? null },
     ...(agents ? { agents } : {}),
     ...(heldOver.at != null ? { stale: true, asAt: new Date(heldOver.at).toISOString() } : {}),
-    properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears,
+    properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, lets, arrears,
   });
 }

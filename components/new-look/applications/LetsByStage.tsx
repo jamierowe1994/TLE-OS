@@ -14,7 +14,6 @@ import {
   cardStatus,
   daysSince,
   fmtDate,
-  isStale,
   isSwapDeal,
   lastActivity,
   type WaitingLet,
@@ -101,16 +100,39 @@ export default function LetsByStage({
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<StageId>("all");
   const [open, setOpen] = useState<string | null>(null);
-  /* Lets cancelled from their own page (lib/let-cancel), as on the old board. */
-  const [cancelled, setCancelled] = useState<{ refs: Set<string>; deals: Set<string> }>({ refs: new Set(), deals: new Set() });
   const [wholeBook, setWholeBook] = useState<boolean | null>(null);
   const all = wholeBook ?? everything;
 
+  /* WHICH LETS ARE IN PROGRESS is counted on the server (Susan Liles, 20 Nov
+     2026, ticket 0573c824): /api/lets/in-progress, the same count as the PM
+     Dashboard's Lets in Progress tile, so the two can never disagree. It
+     leaves out the cancelled, archived and stale deals and the lets cancelled
+     from their own page (lib/lets-in-progress-rule); the board draws the
+     deals and the waiting lets it names. Read as the board's applications
+     are: at once from the last board, then again once the fresh one is in. */
+  const [counted, setCounted] = useState<{ count: number; deals: Set<string>; waiting: Set<string> } | null>(null);
+  const [countError, setCountError] = useState<string | null>(null);
   useEffect(() => {
-    fetch("/api/lets/cancelled", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j: { ok?: boolean; refs?: string[]; deals?: string[] }) => j.ok && setCancelled({ refs: new Set(j.refs ?? []), deals: new Set(j.deals ?? []) }))
-      .catch(() => undefined);
+    let gone = false;
+    const ask = (q: string, attempt: number) =>
+      fetch(`/api/lets/in-progress?${q}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: { ok?: boolean; count?: number; deals?: string[]; waiting?: string[]; stale?: boolean; retry?: boolean; error?: string }) => {
+          if (gone) return;
+          if (j.ok && typeof j.count === "number") {
+            setCounted({ count: j.count, deals: new Set(j.deals ?? []), waiting: new Set(j.waiting ?? []) });
+            setCountError(null);
+            if (j.stale && q === "quick=1") ask("fresh=1", 0);
+          } else if (j.retry && attempt < 4) setTimeout(() => ask(q, attempt + 1), 4000);
+          else setCountError(j.error ?? "Your lets didn't load. Try again in a minute.");
+        })
+        .catch(() => {
+          if (!gone) setCountError("Your lets didn't load. Try again in a minute.");
+        });
+    ask("quick=1", 0);
+    return () => {
+      gone = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -141,22 +163,17 @@ export default function LetsByStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [names.join("|"), all]);
 
-  /* Every let still moving, for this agent: what the counts are made of. */
+  /* Every let still moving, for this agent: the ones the server counted. */
   const mine = useMemo(
-    () =>
-      (deals ?? []).filter(
-        (d) =>
-          !d.archived &&
-          d.statusKey !== "cancelled" &&
-          !isStale(d) &&
-          !cancelled.deals.has(d.app.id) &&
-          !cancelled.refs.has(d.app.id) &&
-          !cancelled.refs.has(matchApplication(d) ?? "") &&
-          (!all || !agent || d.agentName === agent)
-      ),
-    [deals, all, agent, cancelled, matchApplication]
+    () => (counted ? (deals ?? []).filter((d) => counted.deals.has(d.app.id) && (!all || !agent || d.agentName === agent)) : []),
+    [deals, all, agent, counted]
   );
-  const waitingMine = useMemo(() => waiting.filter((w) => !all || !agent || w.agent === agent), [waiting, all, agent]);
+  const waitingMine = useMemo(
+    () => (counted ? waiting.filter((w) => counted.waiting.has(w.id) && (!all || !agent || w.agent === agent)) : []),
+    [waiting, all, agent, counted]
+  );
+  /* An agent picked narrows the server's count; otherwise it is the count. */
+  const narrowed = all && !!agent;
   const found = useMemo(
     () => (q.trim() ? mine.filter((d) => searchMatches(q, d.app.propertyName, d.app.locality, d.agentName, ...d.app.tenants.map((t) => t.name))) : mine),
     [mine, q]
@@ -171,10 +188,11 @@ export default function LetsByStage({
   const countOf = (key: string) => mine.filter((d) => d.effectiveStatusKey === key).length;
 
   /* Unknown while Propoly is read; "-" if it failed, never a number we don't have. */
+  const failed = Boolean(error || countError);
   const tabs: { id: StageId; label: string; n: number | null | "-" }[] = [
-    { id: "all", label: "All", n: error ? "-" : deals === null || !waitingReady ? null : mine.length + waitingMine.length },
-    { id: "handover", label: "To push to Propoly", n: waitingReady ? waitingMine.length : null },
-    ...PORTAL_STAGES.map((s) => ({ id: s.key, label: s.label, n: error ? ("-" as const) : deals === null ? null : countOf(s.key) })),
+    { id: "all", label: "All", n: failed ? "-" : deals === null || !waitingReady || !counted ? null : narrowed ? mine.length + waitingMine.length : counted.count },
+    { id: "handover", label: "To push to Propoly", n: countError ? "-" : waitingReady && counted ? waitingMine.length : null },
+    ...PORTAL_STAGES.map((s) => ({ id: s.key, label: s.label, n: failed ? ("-" as const) : deals === null || !counted ? null : countOf(s.key) })),
   ];
 
   /* The underline that slides to the chosen stage, as the design has it. */
@@ -335,7 +353,7 @@ export default function LetsByStage({
             </select>
           </span>
         )}
-        <span className="nl-fcount">{deals === null && !error ? "" : `${shownCount} ${shownCount === 1 ? "let" : "lets"}`}</span>
+        <span className="nl-fcount">{(deals === null || !counted) && !error && !countError ? "" : `${shownCount} ${shownCount === 1 ? "let" : "lets"}`}</span>
         {extra}
       </div>
 
@@ -384,12 +402,12 @@ export default function LetsByStage({
           </section>
         )}
 
-        {error ? (
+        {error || countError ? (
           <div className="nl-apps-problem" role="alert">
             <p className="nl-block-title">Your lets didn&apos;t load</p>
-            <p className="nl-meta mt-1.5 max-w-md">{error}</p>
+            <p className="nl-meta mt-1.5 max-w-md">{error ?? countError}</p>
           </div>
-        ) : deals === null ? (
+        ) : deals === null || !counted ? (
           <p className="nl-meta flex items-center gap-2 py-10">
             <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" />
             Reading your lets from Propoly…
