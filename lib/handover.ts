@@ -1205,7 +1205,10 @@ export function acceptedRecipients(
   const detailsList = [
     ["Offer amount", money(packet.rentPcm)],
     ["Start date", day(packet.startDate)],
-    ["Length of tenancy", packet.agreementMonths ? `${packet.agreementMonths} months` : null],
+    /* No fixed term in Scotland: a private residential tenancy runs until
+       somebody ends it, so the landlord is not told a length that does not
+       exist (Sean McMahon, 20 Nov 2026, ticket 81c513af). */
+    ["Length of tenancy", !o.scotland && packet.agreementMonths ? `${packet.agreementMonths} months` : null],
     ["Date accepted", day(packet.acceptedOn)],
     ["Tenant names", packet.tenants.map((t) => t.name).filter(Boolean).join(", ") || null],
   ]

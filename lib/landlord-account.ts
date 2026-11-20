@@ -341,7 +341,9 @@ export function offerOf(a: Application): ViewOffer {
        adverse-credit note. The landlord is deciding whether somebody can
        afford their property and whether the household suits it, and every one
        of those answers that here. */
-    term: a.agreementMonths != null ? `${a.agreementMonths} months` : null,
+    /* No term on a Scottish home: a private residential tenancy has none
+       (Sean McMahon, 20 Nov 2026, ticket 81c513af). */
+    term: a.agreementMonths != null && !isScottish(a.locality, a.property) ? `${a.agreementMonths} months` : null,
     income:
       a.totalIncome != null && a.totalIncome > 0
         ? `£${Math.round(a.totalIncome).toLocaleString("en-GB")} a year`
