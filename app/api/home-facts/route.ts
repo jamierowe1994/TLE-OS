@@ -9,7 +9,7 @@ import { heldComplianceBook, patchHeldBook } from "@/lib/compliance-cache";
 /**
  * A HOME'S FACTS, AS THE PEOPLE WHO KNOW IT SAY (19 Oct 2026, lib/home-facts).
  *
- *   GET   ?home=<REX property id | pm- id>[&book=1]   -> { facts, book: { hmo, hasGas } | null }
+ *   GET   ?home=<REX property id | pm- id>[&book=1]   -> { facts, book: { hmo, hasGas, gasSays, electricalSays } | null }
  *   PATCH { home, homeType?, gasSupply?, hotWater?, electrical?, eicReason? } -> the same
  *
  * The agent on the home is who usually knows (Rhiannon knew her flat was a
@@ -28,7 +28,14 @@ const KEYS: FactKey[] = ["homeType", "gasSupply", "hotWater", "electrical", "eic
 async function bookView(home: string) {
   const held = await heldComplianceBook().catch(() => null);
   const p = held?.book.properties.find((x) => String(x.id) === home);
-  return p ? { hmo: p.hmo, hasGas: p.hasGas, gasAnswered: p.gasAnswered ?? null } : null;
+  /* What the records already say about the gas and the electrics, so an unanswered
+     question shows it rather than a bare "Not answered" (Susan Liles, 20 Nov 2026,
+     ticket a816d94f: a home the drawer called "no gas at the property" had both
+     drop downs blank). An EIC is only ever an answer given here, so the records
+     can only say EICR. */
+  const gasSays = !p?.gasAnswered ? null : p.hasGas ? "gas" : "none";
+  const electricalSays = p?.certs.eicr && (p.certs.eicr.expires != null || p.certs.eicr.attached) ? "eicr" : null;
+  return p ? { hmo: p.hmo, hasGas: p.hasGas, gasAnswered: p.gasAnswered ?? null, gasSays, electricalSays } : null;
 }
 
 export async function GET(req: NextRequest) {

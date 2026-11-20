@@ -17,7 +17,7 @@ import { CHOICES, NO_FACTS, heatingWithoutGas, type FactKey, type HomeFacts as F
  * save chip), carries their name, and stays in the OS: REX is not changed.
  */
 
-type Book = { hmo: boolean; hasGas: boolean; gasAnswered: boolean | null } | null;
+type Book = { hmo: boolean; hasGas: boolean; gasAnswered: boolean | null; gasSays?: "gas" | "none" | null; electricalSays?: "eicr" | null } | null;
 
 const SHORT = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 
@@ -31,13 +31,15 @@ function effect(k: FactKey, f: Facts, book: Book): string | null {
     case "gasSupply":
       if (f.gasSupply === "none") return "No gas, so no gas safety certificate is asked for.";
       if (f.gasSupply === "gas") return "A gas safety certificate is needed every 12 months.";
-      return book && !book.hasGas && book.gasAnswered ? "The records say there is no gas here." : null;
+      if (book?.gasSays === "none") return "The records say there is no gas here. Choose one to confirm or change it.";
+      if (book?.gasSays === "gas") return "The records say there is gas here. Choose one to confirm or change it.";
+      return null;
     case "hotWater":
       return f.hotWater ? "For the engineer. It changes no certificate." : null;
     case "electrical":
       if (f.electrical === "eic") return "The EIC answers the electrical check for 5 years from the day it was issued. After that an EICR is due.";
       if (f.electrical === "eicr") return "An EICR every 5 years.";
-      return null;
+      return book?.electricalSays === "eicr" ? "The records have an EICR for this home. Choose one to confirm or change it." : null;
     default:
       return null;
   }
@@ -79,8 +81,11 @@ export default function HomeFacts({
     setFacts(null);
     setProblem(null);
     if (!homeKey) return;
-    /* What the book makes of the home is only said beside the type of home. */
-    fetch(`/api/home-facts?home=${encodeURIComponent(homeKey)}${show.includes("homeType") ? "&book=1" : ""}`, { cache: "no-store" })
+    /* What the records make of the home: said beside the type of home, the gas
+       and the electrics (Susan Liles, 20 Nov 2026: the listing's facts asked
+       without it, so both drop downs read Not answered there too). */
+    const wantBook = show.some((k) => k === "homeType" || k === "gasSupply" || k === "electrical");
+    fetch(`/api/home-facts?home=${encodeURIComponent(homeKey)}${wantBook ? "&book=1" : ""}`, { cache: "no-store" })
       .then(async (r) => (await r.json().catch(() => null)) as { ok?: boolean; error?: string; facts?: Facts; book?: Book; canEdit?: boolean } | null)
       .then((j) => {
         if (!live) return;
@@ -154,13 +159,19 @@ export default function HomeFacts({
               const value = (facts[k] as string | null) ?? "";
               const who = facts.setBy[k];
               const said = effect(k, facts, book);
+              /* Unanswered, but the records know: show their answer in the box
+                 (Susan Liles, 20 Nov 2026). Nothing is saved until a person picks
+                 one, so choosing the same answer still confirms it. */
+              const recordsSay = value ? null : k === "gasSupply" ? book?.gasSays : k === "electrical" ? book?.electricalSays : null;
+              const recordsLabel = recordsSay ? CHOICES[k].find((c) => c.value === recordsSay)?.label : null;
+              const placeholder = recordsLabel ? `${recordsLabel} (from the records)` : "Not answered";
               return (
                 <div key={k} className="min-w-0">
                   <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">{LABEL[k]}</p>
                   {canEdit ? (
-                    <FieldSelect value={value} placeholder="Not answered" options={CHOICES[k].map((c) => ({ ...c }))} onChange={(v) => void save({ [k]: v })} />
+                    <FieldSelect value={value} placeholder={placeholder} options={CHOICES[k].map((c) => ({ ...c }))} onChange={(v) => void save({ [k]: v })} />
                   ) : (
-                    <p className="text-[13px] font-semibold">{CHOICES[k].find((c) => c.value === value)?.label ?? "Not answered"}</p>
+                    <p className="text-[13px] font-semibold">{CHOICES[k].find((c) => c.value === value)?.label ?? placeholder}</p>
                   )}
                   {k === "electrical" && facts.electrical === "eic" && (
                     <div className="mt-2">
