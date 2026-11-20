@@ -46,8 +46,11 @@ export interface HistoryFunnel {
  *     `appraisal_type = rent`. July's listings go 34 → 44 and combined MAs
  *     36 → 47. June is unchanged at 41 (it gained 3 listings and lost 3 sales
  *     appraisals, which happened to cancel) so Susan's reconciliation holds.
+ * 3 — 20 Nov 2026. Applications add the offers accepted in the OS (Susan
+ *     Liles, ticket 17836026): since 7 Oct an Accept is kept in the OS only,
+ *     so October was stored short. Months before October are unchanged.
  */
-const DEFINITION_VERSION = 2;
+const DEFINITION_VERSION = 3;
 
 /* ------------------------------- storage -------------------------------- */
 

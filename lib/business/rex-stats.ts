@@ -6,6 +6,7 @@ import { readCache, writeCache } from "./integration-cache";
 import { withoutRemoved } from "@/lib/certificate-remove";
 import { relnKind } from "@/lib/rex-reln";
 import { expiryFromIssue } from "@/lib/cert-life";
+import { osAcceptedExtra } from "./os-accepts";
 
 // Per-agent funnel stats from REX — live pulls confirmed against the live
 // account (3517, "The Property Experts" — Property + Lettings share it) via the
@@ -426,7 +427,9 @@ export async function getAgentFunnel(
 // snapshot", never zero.
 //
 // Date semantics — VALIDATED against Susan's June finals (21 Jul 2026):
-//   applications — application.date_accepted in month (June: 24 vs her 25).
+//   applications — application.date_accepted in month (June: 24 vs her 25),
+//                  plus offers accepted in the OS since 7 Oct 2026, which REX
+//                  never records (lib/business/os-accepts, 20 Nov 2026).
 //                  Her "Applications" column means ACCEPTED applications;
 //                  date_received counts every application (June: 83).
 //   newListings  — created in month (system_ctime, EPOCH SECONDS — date
@@ -643,7 +646,11 @@ export async function getBusinessMonthCounts(
       ? viewingRows.filter((r) => !(r.is_cancelled === true || r.is_cancelled === 1)).length
       : null;
 
-    const applications = applicationRows ? applicationRows.length : null;
+    /* Plus the offers accepted in the OS, which REX never hears about (Susan
+       Liles, 20 Nov 2026, ticket 17836026: November said 1). See
+       lib/business/os-accepts. */
+    const osExtra = applicationRows ? await osAcceptedExtra(month, applicationRows) : null;
+    const applications = applicationRows && osExtra != null ? applicationRows.length + osExtra : null;
 
     if (applications == null && newListings == null && viewings == null && marketAppraisals == null) {
       return null;
@@ -673,7 +680,13 @@ export async function getBusinessMonthCounts(
       tally(listingOnlyRows, "listing_agent_1", "marketAppraisals");
     }
     tally(keptListings, "listing_agent_1", "newListings");
-    tally(applicationRows, "agent", "applications");
+    tally(applications != null ? applicationRows : null, "agent", "applications");
+    /* The OS's accepts carry no REX agent: kept under "none" so the column
+       still adds up to the business figure. */
+    if (applications != null && osExtra) {
+      const row = (byAgent.none ??= { name: null, marketAppraisals: null, newListings: null, applications: null });
+      row.applications = (row.applications ?? 0) + osExtra;
+    }
     /* Somebody with a listing but no appraisal has 0 MAs, not an unknown -
        as long as the search behind that column answered. */
     for (const row of Object.values(byAgent)) {

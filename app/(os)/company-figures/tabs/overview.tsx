@@ -879,7 +879,7 @@ export default function Overview({ month }: { month: string }) {
     live?.monthCounts?.applications != null
       ? asLive(
           live.monthCounts.applications,
-          "Live from REX - applications ACCEPTED this month (Susan's definition - validated vs her June final: 24 vs 25)."
+          "Live - applications ACCEPTED this month: accepted in REX, plus offers accepted in TLE OS that REX doesn't record (Susan's definition - validated vs her June final: 24 vs 25)."
         )
       : kpiPeriod.funnel.applications;
   const funnelListings =
@@ -965,7 +965,7 @@ export default function Overview({ month }: { month: string }) {
   const hApplications = histUpgrade(
     "applications",
     kpiPeriod.funnel.applications,
-    `Live from REX - applications accepted, ${periodLabelBit}.`,
+    `Live - applications accepted in REX or in TLE OS, ${periodLabelBit}.`,
     "live-rex"
   );
   const hMoveIns = histUpgrade(
@@ -1192,7 +1192,7 @@ export default function Overview({ month }: { month: string }) {
   const hlApplications = headlineUpgrade(
     "applications",
     d.headline.applications,
-    `Live from REX - applications accepted ${ytdWindowLabel}, summed from the stored closed months.`,
+    `Live - applications accepted in REX or in TLE OS ${ytdWindowLabel}, summed from the stored closed months.`,
     "live-rex"
   );
   const hlMoveIns = headlineUpgrade(
