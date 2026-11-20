@@ -18,7 +18,7 @@ import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import RaiseJob from "@/components/maintenance/RaiseJob";
 import { LogInvoice } from "@/components/contractors/ContractorProfile";
 import FieldSelect from "@/components/FieldSelect";
-import { OPEN, PAYRUN_LABEL, PayrunTag, day, nextFor, pounds, readHomes, type Property } from "@/components/maintenance/works-ui";
+import { OPEN, PAID_HOW, PAYRUN_LABEL, PayrunTag, day, nextFor, pounds, readHomes, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import { usePref } from "@/lib/prefs-store";
 import { useNoteVisit } from "@/lib/recent-visits";
@@ -749,11 +749,15 @@ function Accounts({ orders, loaded, onOpen, onChanged, canPayrun = false }: { or
   const [copied, setCopied] = useState<string | null>(null);
   /* On the payment run (James, 21 Oct 2026): the list splits into what is
      still to key on PayProp and what is keyed and coming out of the rent. */
-  const [run, setRun] = useState<"to_payprop" | "on_run">("to_payprop");
+  /* Paid (Michael Healy, ticket bb691dda, 20 Nov 2026): a paid invoice used
+     to drop off the screen altogether, so there was nowhere to look one up
+     once it had gone through. It now moves to Paid, newest first. */
+  const [run, setRun] = useState<"to_payprop" | "on_run" | "paid">("to_payprop");
   const unpaid = orders.filter((o) => o.status === "invoiced" || (o.status === "done" && o.invoicePence != null)).sort((a, b) => (a.invoicedAt ?? "").localeCompare(b.invoicedAt ?? ""));
   const toPayprop = unpaid.filter((o) => !o.payrunAt);
   const onRun = unpaid.filter((o) => !!o.payrunAt);
-  const rows = run === "on_run" ? onRun : toPayprop;
+  const paidRows = orders.filter((o) => o.status === "paid" && o.invoicePence != null).sort((a, b) => (b.paidAt ?? "").localeCompare(a.paidAt ?? ""));
+  const rows = run === "paid" ? paidRows : run === "on_run" ? onRun : toPayprop;
   const total = rows.reduce((a, o) => a + (o.invoicePence ?? 0), 0);
   /* WHAT MICHAEL TYPES INTO PAYPROP, in the order he types it.
 
@@ -840,13 +844,19 @@ function Accounts({ orders, loaded, onOpen, onChanged, canPayrun = false }: { or
   return (
     <div className="mt-4 space-y-4">
       <div className="rounded-[22px] border border-line/50 bg-white p-5">
-        <h2 className="text-[15px]">To pay</h2>
+        <h2 className="text-[15px]">{run === "paid" ? "Paid" : "To pay"}</h2>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="mt-0.5 max-w-[68ch] text-[11.5px] text-muted">
-            Every invoice on a job that has not been paid, with what PayProp needs. {loaded ? `${rows.length} to pay · ${pounds(total)}.` : ""} Copy a line
-            rather than re-typing it, or take the whole run as a file. Once it&apos;s keyed on PayProp, put it on the payment run so the agent can see it&apos;s being paid. Mark it paid once it has gone through and it drops off.
+            {run === "paid" ? (
+              <>Every contractor invoice on a job that has been marked paid, newest first, with when and how. {loaded ? `${rows.length} paid · ${pounds(total)}.` : ""} Open a job to see its invoice.</>
+            ) : (
+              <>
+                Every invoice on a job that has not been paid, with what PayProp needs. {loaded ? `${rows.length} to pay · ${pounds(total)}.` : ""} Copy a line
+                rather than re-typing it, or take the whole run as a file. Once it&apos;s keyed on PayProp, put it on the payment run so the agent can see it&apos;s being paid. Mark it paid once it has gone through and it moves to Paid.
+              </>
+            )}
           </p>
-          {rows.length > 0 && (
+          {rows.length > 0 && run !== "paid" && (
             <button
               type="button"
               onClick={downloadRun}
@@ -863,6 +873,7 @@ function Accounts({ orders, loaded, onOpen, onChanged, canPayrun = false }: { or
           options={[
             { id: "to_payprop" as const, label: loaded ? `To put on PayProp ${toPayprop.length}` : "To put on PayProp", icon: <DoodleIcon name="doc" size={14} /> },
             { id: "on_run" as const, label: loaded ? `${PAYRUN_LABEL} ${onRun.length}` : PAYRUN_LABEL, icon: <DoodleIcon name="wallet" size={14} /> },
+            { id: "paid" as const, label: loaded ? `Paid ${paidRows.length}` : "Paid", icon: <DoodleIcon name="check" size={14} /> },
           ]}
         />
       </div>
@@ -872,7 +883,9 @@ function Accounts({ orders, loaded, onOpen, onChanged, canPayrun = false }: { or
           <p className="text-[12.5px] text-muted">Reading…</p>
         ) : rows.length === 0 ? (
           <p className="text-[12.5px] text-muted">
-            {run === "on_run"
+            {run === "paid"
+              ? "Nothing marked paid yet. An invoice moves here once it's marked paid."
+              : run === "on_run"
               ? "Nothing on the payment run. An invoice moves here once it's keyed on PayProp, and drops off when it's marked paid."
               : "Nothing to put on PayProp. An invoice lands here the moment a contractor uploads it or an agent keys it onto a job."}
           </p>
@@ -881,7 +894,7 @@ function Accounts({ orders, loaded, onOpen, onChanged, canPayrun = false }: { or
             <table className="w-full text-left text-[12.5px]">
               <thead>
                 <tr className="border-b border-line/70 text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                  <th className="pb-2 pr-3">Job</th><th className="pb-2 pr-3">Property</th><th className="pb-2 pr-3">Landlord</th><th className="pb-2 pr-3">Pay</th><th className="pb-2 pr-3">Invoice</th><th className="pb-2 pr-3 text-right">Amount</th><th className="pb-2 pr-3">In</th><th className="pb-2"></th>
+                  <th className="pb-2 pr-3">Job</th><th className="pb-2 pr-3">Property</th><th className="pb-2 pr-3">Landlord</th><th className="pb-2 pr-3">Pay</th><th className="pb-2 pr-3">Invoice</th><th className="pb-2 pr-3 text-right">Amount</th><th className="pb-2 pr-3">{run === "paid" ? "Paid" : "In"}</th><th className="pb-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -893,8 +906,14 @@ function Accounts({ orders, loaded, onOpen, onChanged, canPayrun = false }: { or
                     <td className="py-3 pr-3">{o.payee === "agent" ? <>{o.raisedBy} <span className="text-muted">(paid it themselves)</span></> : o.contractorName || <span className="text-muted">—</span>}</td>
                     <td className="py-3 pr-3 text-muted">{o.invoiceRef || "no number"}</td>
                     <td className="figures py-3 pr-3 text-right">{pounds(o.invoicePence)}</td>
-                    <td className="py-3 pr-3 text-muted">{day(o.invoicedAt)}{o.payrunAt && <span className="block text-[10.5px]">On the run {day(o.payrunAt)}</span>}</td>
-                    <td className="py-3 text-right">
+                    {run === "paid" ? (
+                      <td className="py-3 pr-3 text-muted">{day(o.paidAt)}{o.paidHow && <span className="block text-[10.5px]">{PAID_HOW.find((h) => h.id === o.paidHow)?.label ?? ""}</span>}</td>
+                    ) : (
+                      <td className="py-3 pr-3 text-muted">{day(o.invoicedAt)}{o.payrunAt && <span className="block text-[10.5px]">On the run {day(o.payrunAt)}</span>}</td>
+                    )}
+                    <td className="py-3 text-right">{run === "paid" ? (
+                      <button type="button" onClick={() => onOpen(o.id)} className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-[12px] transition hover:border-ink/40">Open</button>
+                    ) : (
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
@@ -912,7 +931,7 @@ function Accounts({ orders, loaded, onOpen, onChanged, canPayrun = false }: { or
                         )}
                         <button type="button" disabled={busy === o.id} onClick={() => void paid(o)} className="whitespace-nowrap rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50">Paid in PayProp</button>
                       </div>
-                    </td>
+                    )}</td>
                   </tr>
                 ))}
               </tbody>
