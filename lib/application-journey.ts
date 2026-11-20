@@ -24,6 +24,7 @@ import { feeOf, otherOpenOffers } from "@/lib/offer-hold";
 import { advertFor, stageReached } from "@/lib/advert-offline";
 import { introOnlyIds, isIntroOnly } from "@/lib/intro-only";
 import { optOutFor } from "@/lib/zero-deposit-optout";
+import { dealIsSomeoneElses } from "@/lib/deal-for-whom";
 
 /**
  * One application's journey, start to keys - the agent's view of Kirstie's
@@ -146,10 +147,14 @@ async function money(): Promise<MoneyContext | null> {
 function findDeal(app: Application, all: BusinessDeal[], pushed?: string | null): BusinessDeal | null {
   /* The deal our own push started is this let's, whatever either side calls
      the address (16 Oct 2026, 285/5 Leith Walk). */
-  const own = pushed ? all.find((d) => d.app.id === pushed) : null;
+  /* Never a deal naming only other people (Sean McMahon, ticket d97601d4, 20
+     Nov 2026): an earlier offer's open deal on the home marked the new
+     applicant's let as pushed, on somebody else's deal. */
+  const mine = (d: BusinessDeal) => !dealIsSomeoneElses(d.app.tenants, app.applicants);
+  const own = pushed ? all.find((d) => d.app.id === pushed && mine(d)) : null;
   if (own) return own;
   if (!app.property?.trim()) return null;
-  const hits = all.filter((d) => sameHome(app.property, d.app.propertyName ?? ""));
+  const hits = all.filter((d) => sameHome(app.property, d.app.propertyName ?? "") && mine(d));
   if (hits.length === 0) return null;
   if (hits.length === 1) return hits[0];
   /* Rooms in one house: the move-in date tells them apart. */

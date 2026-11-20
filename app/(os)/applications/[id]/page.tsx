@@ -14,6 +14,7 @@ import { sameHome } from "@/lib/address-parse";
 import { useNewLook } from "@/lib/use-new-look";
 import type { Application } from "@/lib/applications";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
+import { dealIsSomeoneElses } from "@/lib/deal-for-whom";
 
 /**
  * One let, the whole of it, on one page (James, 12 Oct 2026): clicking a let
@@ -34,16 +35,19 @@ type Loaded<T> = { state: "loading" } | { state: "ready"; data: T } | { state: "
 function dealFor(a: Application, deals: PreTenancyDeal[]): PreTenancyDeal | null {
   if (!isLet(a)) return null;
   const name = a.property.trim().toLowerCase();
+  /* Never a deal naming only other people (Sean McMahon, ticket d97601d4, 20
+     Nov 2026): an earlier offer's open deal on the home stood in for this let's. */
+  const mine = deals.filter((d) => !dealIsSomeoneElses(d.app.tenants, a.applicants));
   return (
     /* The deal the OS pushed for it, exactly (a swap on a REX PM home has no
        listing number and Propoly words its address differently). */
-    (a.propolyDealId ? deals.find((d) => d.app.id === a.propolyDealId) : undefined) ??
-    deals.find((d) => a.listingId != null && d.app.listingId != null && Number(d.app.listingId) === a.listingId) ??
-    deals.find((d) => d.app.propertyName.trim().toLowerCase() === name) ??
+    (a.propolyDealId ? mine.find((d) => d.app.id === a.propolyDealId) : undefined) ??
+    mine.find((d) => a.listingId != null && d.app.listingId != null && Number(d.app.listingId) === a.listingId) ??
+    mine.find((d) => d.app.propertyName.trim().toLowerCase() === name) ??
     /* The same home written Propoly's way (20 Oct 2026): "Apartment 30 21
        Wheatsheaf Court, Leicester" against REX's "Apartment 30, 21 Wheatsheaf
        Court" opened the deal on its own, with no landlord and no PLC. */
-    (a.swap ? undefined : deals.find((d) => sameHome(`${a.property}, ${a.locality}`, `${d.app.propertyName}, ${d.app.locality}`))) ??
+    (a.swap ? undefined : mine.find((d) => sameHome(`${a.property}, ${a.locality}`, `${d.app.propertyName}, ${d.app.locality}`))) ??
     null
   );
 }

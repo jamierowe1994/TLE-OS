@@ -6,6 +6,7 @@ import { sameHome } from "@/lib/address-parse";
 import { getApplications, type Application } from "@/lib/applications";
 import { isLet } from "@/lib/application-record";
 import { letEditsFor, withOwnLetEdits } from "@/lib/let-edits";
+import { dealIsSomeoneElses } from "@/lib/deal-for-whom";
 
 /**
  * A LET'S PROPOLY DEAL, read from the saved copy of the book (20 Oct 2026).
@@ -46,18 +47,22 @@ type Find = { ref: string; app: Application | null; propertyName: string; locali
 export async function dealForLet(f: Find): Promise<LetDeal | null> {
   const deals = await getAllPropolyDeals().catch(() => null);
   if (!deals?.length) return null;
+  /* Never a deal naming only other people (Sean McMahon, ticket d97601d4,
+     20 Nov 2026): an earlier offer's open deal on the same home was taken for
+     the new applicant's, and its tenant shown as on this let's deal. */
+  const mine = (d: BusinessDeal) => !dealIsSomeoneElses(d.app.tenants, f.app?.applicants);
   const live = deals.filter((d) => d.statusKey !== "cancelled");
   const byId = (id: string | null | undefined) => (id ? live.find((d) => d.app.id === id) ?? null : null);
 
   const own = byId(f.ref);
   if (own) return shape(own, "This let is the Propoly deal.");
   const pushed = byId(f.app?.propolyDealId ?? (f.app ? await pushedDeal(String(f.app.id)) : null));
-  if (pushed) return shape(await withLetsFigures(pushed, f), "Started by Push to Propoly.");
+  if (pushed && mine(pushed)) return shape(await withLetsFigures(pushed, f), "Started by Push to Propoly.");
   if (f.app?.swap) return null;
-  const listed = f.listingId ? live.find((d) => d.app.listingId != null && String(d.app.listingId) === f.listingId) : undefined;
+  const listed = f.listingId ? live.find((d) => d.app.listingId != null && String(d.app.listingId) === f.listingId && mine(d)) : undefined;
   if (listed) return shape(await withLetsFigures(listed, f), "On the same listing.");
   const here = `${f.propertyName}, ${f.locality}`;
-  const sameAddress = live.filter((d) => sameHome(here, `${d.app.propertyName}, ${d.app.locality}`));
+  const sameAddress = live.filter((d) => sameHome(here, `${d.app.propertyName}, ${d.app.locality}`) && mine(d));
   /* Two live deals on one home (a re-let keyed early): the one moving in
      nearest the let's own move-in. */
   const start = f.app?.startDate ? Date.parse(f.app.startDate) : NaN;
