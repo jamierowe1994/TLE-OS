@@ -4,6 +4,7 @@ import { rexCall } from "@/lib/rex";
 import { propolyConfigured, propolyErrorText, propolyGet, propolyPatch, propolyPost } from "@/lib/business/propoly";
 import { osAddressForRexProperty } from "@/lib/os-property-address";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
+import { dealIsSomeoneElses } from "@/lib/deal-for-whom";
 import { switchOn } from "@/lib/switches";
 import { handoffFor, isJointOwner, landlordsForListing, type Handoff } from "@/lib/deal-handoff";
 import { findUserById } from "@/lib/users";
@@ -785,8 +786,14 @@ async function pushDeal(
       .filter((r) => r.id !== o.runId && r.mode === "live")
       .flatMap((r) => r.steps)
       .find((s) => s.id === "deal" && s.state === "ok" && str((s.response as Row | null)?.uuid));
-    if (prior) {
-      dealUuid = str((prior.response as Row).uuid);
+    /* A deal an earlier push only FOUND on the home (step 2) is used again
+       only if it is not someone else's (Sean McMahon, ticket d97601d4, 20 Nov
+       2026): one it started itself is this let's whatever it holds. */
+    const priorUuid = prior ? str((prior.response as Row).uuid) : null;
+    const foundBefore = prior && !(prior.response as Row).propoly;
+    const priorDeal = priorUuid && foundBefore ? ((await getAllPropolyDeals().catch(() => null)) ?? []).find((d) => d.app.id === priorUuid) : null;
+    if (prior && priorUuid && !(priorDeal && dealIsSomeoneElses(priorDeal.app.tenants, o.packet.tenants))) {
+      dealUuid = priorUuid;
       found = `Started by an earlier push on ${dayOf(prior.at)}; used again, not doubled.`;
     }
   }
@@ -802,12 +809,19 @@ async function pushDeal(
       await rec.add({ id: "deal", label, state: o.live ? "blocked" : "would", detail: "Propoly's deals couldn't be read, so it isn't known whether this home already has one. No deal was started. Try again in a few minutes." });
       return o.live ? "blocked" : "would";
     }
-    const open = deals
+    const onHome = deals
       .filter((d) => d.app.propoly?.propertyUuid === realProperty && !CLOSED_DEAL.has(d.statusKey))
       .sort((a, b) => (b.app.dateReceived ?? "").localeCompare(a.app.dateReceived ?? ""));
+    /* Not a deal naming only other people (Sean McMahon, ticket d97601d4, 20
+       Nov 2026): an earlier offer's deal, still open on the home, was used for
+       a new applicant, who then sat on a deal under somebody else's name. */
+    const open = onHome.filter((d) => !dealIsSomeoneElses(d.app.tenants, o.packet.tenants));
+    const others = onHome.length - open.length;
     if (open[0]) {
       dealUuid = open[0].app.id;
       found = `Propoly already has a live deal on this home (started ${dayOf(open[0].app.dateReceived)}), so that one is used, not doubled.`;
+    } else if (others) {
+      found = ` Propoly also has ${others === 1 ? "an open deal" : `${others} open deals`} on this home for other tenants (an earlier offer, perhaps): if that offer fell through, cancel it in Propoly.`;
     }
   }
 
@@ -862,7 +876,7 @@ async function pushDeal(
       return "failed";
     }
     dealUuid = uuid;
-    await rec.add({ id: "deal", label, state: "ok", detail: `Started in Propoly: ${termWords(terms)}.`, request: payload, response: { uuid, propoly: made.body } });
+    await rec.add({ id: "deal", label, state: "ok", detail: `Started in Propoly: ${termWords(terms)}.${found}`, request: payload, response: { uuid, propoly: made.body } });
   } else {
     await rec.add({ id: "deal", label, state: "ok", detail: found, response: { uuid: dealUuid } });
   }
