@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const under = refOf(key);
-  const no = under ? await refusal(actor, under.scope, under.ref) : "Not a valid file reference.";
+  const no = under ? await refusal(actor, under.scope, under.ref, key) : "Not a valid file reference.";
   if (no) return NextResponse.json({ ok: false, error: no }, { status: 403 });
   /* A File Store folder can be Office only or Pro agents (lib/shelf-access,
      2 Nov 2026). A read that fails shuts the door rather than opening it. */
@@ -106,7 +106,7 @@ async function demoFile(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const under = refOf(key);
-  const no = under ? await refusal(actor, under.scope, under.ref) : "Not a valid file reference.";
+  const no = under ? await refusal(actor, under.scope, under.ref, key) : "Not a valid file reference.";
   if (no) return NextResponse.json({ ok: false, error: no }, { status: 403 });
   const f = await getDemoFile(key).catch(() => null);
   if (!f) return NextResponse.json({ ok: false, error: "That file isn't on the demo copy." }, { status: 404 });

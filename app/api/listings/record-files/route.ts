@@ -18,8 +18,9 @@ import { R2_BUCKET, withR2 } from "@/lib/r2";
  * property record (the clean sweep) and nowhere on the listing. The office
  * sees every paper; an agent sees only AGENT_RECORD_PAPERS, and only on a
  * listing that is theirs. Files are opened through here, not /api/r2/file,
- * because that route refuses every property- key to an agent - rightly, for
- * the ID and AML papers that sit beside these.
+ * because that route refuses a property- key to an agent unless the home is
+ * in their managed book (lib/record-papers, 20 Nov 2026), and a listing's
+ * home often is not yet - rightly, for the ID and AML papers beside these.
  */
 
 export const dynamic = "force-dynamic";

@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { isScottish } from "@/lib/property-flags";
 import { joinRegNumbers, regExpiries, regNumbers, regOwners } from "@/lib/reg-numbers";
+import { AGENT_LISTING_PAPERS } from "@/lib/record-papers";
 
 /**
  * WHAT THE OS ALREADY KNOWS ABOUT A LISTING'S HOME (6 Oct 2026).
@@ -122,16 +123,10 @@ export async function recordForProperty(
 /**
  * Which of the home's filed papers an agent may open from their listing.
  * The record also holds landlord ID, passports, AML and the last tenant's
- * referencing; those stay with the office (lib/r2-access refuses every
- * property- key to an agent), so they are never even listed to one.
+ * referencing; those stay with the office, so they are never even listed to
+ * one. The list lives in lib/record-papers beside the home page's (20 Nov 2026).
  */
-export const AGENT_RECORD_PAPERS = new Set([
-  "doc_terms_of_business",
-  "doc_landlord_registration",
-  "doc_licence",
-  "doc_rra_sheet",
-  "doc_prt_notes",
-]);
+export const AGENT_RECORD_PAPERS = AGENT_LISTING_PAPERS;
 
 export interface RecordFile {
   field: string;

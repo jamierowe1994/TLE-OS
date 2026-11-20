@@ -12,8 +12,10 @@ import FindingData from "@/components/business/FindingData";
  * The tenancy agreement, deposit certificate, inventory, landlord ID, terms
  * of business and the rest that the clean sweep gathered from REX PM,
  * Propoly, PayProp and Flatfair. Until now only the clean sweep screen showed
- * them. The office only, as lib/r2-access rules for opening them; the route
- * answers an agent with nothing, so this shows nothing to an agent.
+ * them. The office sees every paper. An agent, on a home in their own book,
+ * sees the tenancy papers only (lib/record-papers AGENT_HOME_PAPERS, the list
+ * lib/r2-access opens for them; Lianna Denholm, ticket 35aa0745, 20 Nov 2026:
+ * "I cant see any of the leases"). ID and references stay with the office.
  */
 
 type File = { key: string; field: string; label: string; name: string; sizeBytes: number; at: string | null; where: string | null; url: string };
@@ -32,18 +34,24 @@ export default function RecordFiles({ listing, listings }: { listing: string; li
     return () => { live = false; };
   }, [listing, listings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (state.s === "ready" && !state.office) return null;
+  const office = state.s === "ready" && state.office;
   const groups = state.s === "ready" ? [...new Set(state.files.map((f) => f.label))] : [];
   return (
     <section className="mt-5">
       <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">From the Clean Sweep</p>
-      <p className="mb-3 max-w-[72ch] text-[12px] leading-relaxed text-muted">What the clean sweep gathered for this home from the old systems. Seen by the office only, as it holds ID and references.</p>
+      <p className="mb-3 max-w-[72ch] text-[12px] leading-relaxed text-muted">
+        {state.s !== "ready"
+          ? "What the clean sweep gathered for this home from the old systems."
+          : office
+            ? "What the clean sweep gathered for this home from the old systems. Agents see the tenancy papers; ID and references are seen by the office only."
+            : "The tenancy papers the clean sweep gathered for this home from the old systems. ID, references and the landlord's own papers stay with the office."}
+      </p>
       {state.s === "loading" ? (
         <FindingData label="Reading the clean sweep's papers" />
       ) : state.s === "failed" ? (
         <p className="text-[12.5px] text-accent-dark">{state.error}</p>
       ) : !state.files.length ? (
-        <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">The clean sweep holds no papers for this home.</p>
+        <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">{office ? "The clean sweep holds no papers for this home." : "The clean sweep holds no tenancy papers for this home."}</p>
       ) : (
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {groups.map((g) => (

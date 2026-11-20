@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import type { OsUser } from "@/lib/users";
 import { isScope, SCOPES, type Scope } from "@/lib/r2";
+import { AGENT_HOME_PAPERS, paperKind, recordInAgentBook } from "@/lib/record-papers";
 
 /**
  * WHO MAY OPEN A STORED FILE.
@@ -21,6 +22,11 @@ import { isScope, SCOPES, type Scope } from "@/lib/r2";
  *     open another agent's PLC pack (a tenant's ID, income and references),
  *     a passport, another person's compliance documents, or what somebody
  *     uploaded to Steve.
+ *   - a home's clean-sweep record (documents/property-<id>/<kind>/...): an
+ *     agent opens only the kinds in lib/record-papers AGENT_HOME_PAPERS, one
+ *     file at a time, and only on a home in their own book (Lianna Denholm,
+ *     ticket 35aa0745, 20 Nov 2026). Never a listing of the whole record,
+ *     never another agent's home, never ID, AML or references.
  *
  * Refusals are a sentence for the screen, never a bare status.
  */
@@ -34,8 +40,12 @@ export function refOf(key: string): { scope: Scope; ref: string } | null {
 
 export const STAFF_SEES_ALL = new Set(["owner", "super_admin", "developer", "support", "pretenancy", "compliance", "marketing"]);
 
-/** A sentence when this person may not open files under this record, else null. */
-export async function refusal(actor: Pick<OsUser, "role" | "email" | "id">, scopeRaw: string, ref: string): Promise<string | null> {
+/**
+ * A sentence when this person may not open files under this record, else null.
+ * `key` is the one file being opened (/api/r2/file); a listing of the whole
+ * record (/api/r2/list) passes none.
+ */
+export async function refusal(actor: OsUser, scopeRaw: string, ref: string, key?: string): Promise<string | null> {
   if (STAFF_SEES_ALL.has(actor.role)) return null;
   if (!isScope(scopeRaw)) return "Unknown file type.";
   if (scopeRaw === "photo" || scopeRaw === "library") return null;
@@ -43,8 +53,14 @@ export async function refusal(actor: Pick<OsUser, "role" | "email" | "id">, scop
   if (/^(passport|tenant)-/i.test(ref)) return "A tenant's passport documents are held by pre-tenancy.";
   if (/^agent-compliance-/i.test(ref)) return "Another person's compliance documents are theirs and the office's.";
   /* A home's clean-sweep papers (24 Sep 2026): landlord ID, passports, AML,
-     references. Held by the office, never opened from an agent's screen. */
-  if (/^property-/i.test(ref)) return "Those documents are held by the office.";
+     references. Held by the office, except the tenancy papers on a home in
+     the agent's own book (lib/record-papers, 20 Nov 2026). */
+  if (/^property-/i.test(ref)) {
+    const kind = key && refOf(key)?.ref === ref ? paperKind(key) : null;
+    if (!kind || !AGENT_HOME_PAPERS.has(kind)) return "Those documents are held by the office.";
+    if (!(await recordInAgentBook(actor, ref.slice("property-".length)))) return "That home isn't in your book, so its papers stay with the office.";
+    return null;
+  }
   /* A PLC pack: the agent who assembled it, and pre-tenancy. Nobody else. */
   if (hasDb()) {
     const mine = await q<{ n: string }>(

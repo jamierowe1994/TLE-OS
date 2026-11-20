@@ -17,6 +17,7 @@ import { DOC_TYPES, docTypeLabel, OTHER } from "@/lib/doc-types";
 import { peopleOnHome } from "@/lib/home-aliases";
 import { standingForHome } from "@/lib/standing-documents";
 import { FIELDS } from "@/lib/property-facts";
+import { AGENT_HOME_PAPERS, paperKind, recordIsHome } from "@/lib/record-papers";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { footerFor, withFooter } from "@/lib/email-footer";
@@ -41,9 +42,11 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
  * it lacked:
  *
  *   recordFiles     the clean sweep's papers (documents/property-<os id>/...),
- *                   which only the clean sweep screen showed. Office only, the
- *                   same rule as lib/r2-access: landlord ID, references and
- *                   right to rent live there.
+ *                   which only the clean sweep screen showed. The office sees
+ *                   them all; an agent only the tenancy papers on a home in
+ *                   their own book (lib/record-papers, 20 Nov 2026), the same
+ *                   rule as lib/r2-access: landlord ID, references and right
+ *                   to rent live there too.
  *   pastTenants     who lived there before, with their email and mobile, from
  *                   PayProp's own tenant records (every tenancy it has run,
  *                   Inactive ones included) and the OS's tenancy archive.
@@ -155,8 +158,9 @@ async function osRecords(all: ManagedProperty[]): Promise<OsRecord[]> {
     [ids]
   ).catch(() => [] as OsRecord[]);
   /* Rooms share the house's REX property (Norwich Street's five rooms are one
-     REX id), so a record counts only when its address is one of these doors. */
-  return rows.filter((r) => all.some((p) => p.propertyId === r.id || sameHome(r.address, addrOf(p)) || (!isRoomAddress(r.address) && !isRoomAddress(addrOf(p)) && r.rex_property_id === p.propertyId)));
+     REX id), so a record counts only when its address is one of these doors.
+     The rule is lib/record-papers recordIsHome, which lib/r2-access also asks. */
+  return rows.filter((r) => all.some((p) => recordIsHome(r, p)));
 }
 
 async function r2Files(prefix: string): Promise<{ key: string; size: number; at: string | null }[]> {
@@ -204,15 +208,22 @@ export interface RecordFile {
   url: string;
 }
 
-/** The clean sweep's papers for the home, grouped by what they are. Office only. */
+/**
+ * The clean sweep's papers for the home, grouped by what they are. The office
+ * sees every paper; an agent (whose ctx is cut from their own book, so the
+ * home is theirs) only the kinds in lib/record-papers AGENT_HOME_PAPERS, the
+ * same list lib/r2-access opens for them (Lianna Denholm, ticket 35aa0745,
+ * 20 Nov 2026).
+ */
 export async function recordFiles(ctx: HomeContext): Promise<RecordFile[]> {
-  if (!ctx.office) return [];
   const recs = await osRecords(ctx.all);
   const out: RecordFile[] = [];
   for (const r of recs) {
     const room = isRoomAddress(r.address) ? roomOf(r.address, ctx.all) : null;
     for (const f of await r2Files(`documents/property-${r.id}/`).catch(() => [])) {
       const field = f.key.split("/")[2] ?? "";
+      /* paperKind is the reading lib/r2-access opens by, so an agent is never listed a paper the opener would refuse. */
+      if (!ctx.office && !AGENT_HOME_PAPERS.has(paperKind(f.key) ?? "")) continue;
       out.push({
         key: f.key,
         field,
