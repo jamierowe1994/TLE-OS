@@ -46,7 +46,11 @@ import { useNewLook } from "@/lib/use-new-look";
 
 /** `icon` is a DoodleIcon name. Optional: the admin rail has none, and a
  *  rail with icons on some rows and not others would look broken. */
-export type RailItem = { href: string; label: string; exact?: boolean; icon?: string; /** Other routes that light this entry - a page shown as its tab. */ also?: string[] };
+export type RailItem = {
+  href: string; label: string; exact?: boolean; icon?: string; /** Other routes that light this entry - a page shown as its tab. */ also?: string[];
+  /** Shown only while this switch is on for the person (lib/new-look): the Scottish rent review's desk tab, 20 Nov 2026. */
+  look?: "scotrent";
+};
 
 export type RailGroup = {
   /** Section heading. Null or omitted for the first, unlabelled group —
@@ -82,6 +86,8 @@ export default function WorkspaceRail({
   const [collapsed, setCollapsed] = useState(false);
   /* The new look's sidebar (lib/new-look "nav"): flush to the left, full height, a line down its edge. */
   const look = useNewLook("nav") === true;
+  const scotRent = useNewLook("scotrent") === true;
+  const shown = (t: RailItem) => !t.look || (t.look === "scotrent" && scotRent);
   useEffect(() => {
     try {
       setCollapsed(window.localStorage.getItem(key) === "1");
@@ -163,7 +169,7 @@ export default function WorkspaceRail({
               )}
               {g.title && collapsed && <div className="mx-auto mb-2 w-5 border-t border-[var(--launch-guide)]" />}
               <ul className="space-y-px">
-                {g.items.map((t) => {
+                {g.items.filter(shown).map((t) => {
                   const on = isOn(t);
                   return (
                     <li key={t.href}>
@@ -214,7 +220,7 @@ export default function WorkspaceRail({
         className="mb-4 flex min-w-0 gap-1.5 overflow-x-auto pb-1 md:hidden"
       >
         {groups
-          .flatMap((g) => g.items)
+          .flatMap((g) => g.items.filter(shown))
           .map((t) => (
             <Link
               key={t.href}

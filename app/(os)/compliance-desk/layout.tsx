@@ -22,6 +22,8 @@ import type { RailGroup } from "@/components/WorkspaceRail";
  *
  * Sections (7 Oct 2026) sits under To verify: the agents' Section 13 and
  * Section 8 checklists, waiting for his approval before he serves them.
+ * Rent Reviews (20 Nov 2026) under it: the Scottish rent-increase notices the
+ * agents have sent, behind their switch; he ticks PayProp and the reply.
  *
  * Names that say what each one is (James, 27 Oct 2026: "we should label these
  * better ... it needs to be more obvious what they are"): To verify is "Gas &
@@ -45,6 +47,8 @@ const RAIL: RailGroup[] = [
       { href: "/compliance-desk/chases", label: "Agent Chases", icon: "mail" },
       { href: "/compliance-desk/verify", label: "Gas & Electric Check", icon: "checklist", also: ["/compliance-desk/verified"] },
       { href: "/compliance-desk/sections", label: "Section 8 & 13", icon: "file-contract" },
+      /* Scotland's rent-increase notices, sent from the home (lib/rent-reviews, 20 Nov 2026). */
+      { href: "/compliance-desk/rent-reviews", label: "Rent Reviews", icon: "coin", look: "scotrent" },
       { href: "/compliance-desk/plc", label: "PLC Queue", icon: "list" },
       { href: "/compliance-desk/id-checks", label: "ID Checks", icon: "user" },
       { href: "/compliance-desk/agents", label: "Agent Compliance", icon: "user" },

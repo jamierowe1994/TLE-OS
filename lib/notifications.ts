@@ -14,6 +14,7 @@ import { followUpsDue } from "@/lib/id-checks";
 import { newLeadsFor } from "@/lib/lead-ledger";
 import { newBookingsFor } from "@/lib/rex-viewings";
 import { decisionsFor, waitingOnDesk } from "@/lib/section-notices";
+import { rentReviewOn, reviewsForBell } from "@/lib/rent-reviews";
 import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
 import { gapsForBell } from "@/lib/propoly-mail";
 import { recentBankChanges } from "@/lib/bank-vault";
@@ -141,6 +142,10 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     desk ? waitingOnDesk().catch(() => []) : [],
     decisionsFor(me.email).catch(() => []),
   ]);
+
+  /* A Scottish rent-increase notice sent (lib/rent-reviews, 20 Nov 2026): the
+     desk, until PayProp is ticked as updated. Behind the review's own switch. */
+  const rentReviews = desk && (await rentReviewOn(me).catch(() => false)) ? await reviewsForBell().catch(() => []) : [];
 
   /* An appraisal somebody else booked for you: the pre-presentation goes in
      two hours unless you record a video or send it first (lib/pre-send, 1 Oct
@@ -706,6 +711,17 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       title: x.label,
       body: `${SPECS[x.kind].short} ${x.kind === "s13" ? "rent increase" : "possession notice"} ${x.again ? "sent back" : "submitted"} by ${x.by || "an agent"}. Waiting for your decision.`,
       href: `/compliance-desk/sections?open=${encodeURIComponent(x.id)}`,
+      tone: "warn",
+    });
+  }
+  for (const x of rentReviews) {
+    out.push({
+      id: `rent-review:${x.id}`,
+      kind: "compliance",
+      at: x.at,
+      title: x.home,
+      body: `Scottish rent-increase notice sent by ${x.by || "an agent"}${x.effective ? `, new rent from ${new Date(`${x.effective}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}` : ""}. PayProp to update.`,
+      href: `/compliance-desk/rent-reviews?open=${encodeURIComponent(x.id)}`,
       tone: "warn",
     });
   }

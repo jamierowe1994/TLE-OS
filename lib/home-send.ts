@@ -249,7 +249,8 @@ export interface SendDoc {
   forTenants: boolean;
   forLandlord: boolean;
   /** Server side only: where the bytes are. */
-  source: { r2: string } | { rex: string } | { upload: Buffer | null };
+  /** `held`: bytes the caller already has and has kept under `key` (the Scottish rent review's notice, lib/rent-reviews). */
+  source: { r2: string } | { rex: string } | { upload: Buffer | null } | { held: Buffer; key: string };
   /** Server side only: where a file from the computer was kept for the record. */
   kept?: string;
   certificateId?: string | null;
@@ -490,7 +491,12 @@ function docLine(d: SendDoc): string {
 }
 
 /** What the sender may change before it goes (Email Certificates, 20 Oct 2026). */
-export interface EmailEdit { subject?: string | null; message?: string | null }
+export interface EmailEdit {
+  subject?: string | null;
+  message?: string | null;
+  /** The email's own title in place of "Your Paperwork Has Arrived" (the Scottish rent review, lib/rent-reviews). */
+  heading?: string | null;
+}
 
 const MAX_SUBJECT = 200;
 const MAX_MESSAGE = 4000;
@@ -544,7 +550,7 @@ export async function emailFor(ctx: HomeContext, who: Recipient, docs: SendDoc[]
     firstName: greetingName(who),
     agentName: ctx.me.name || "The Letting Experts",
     address: landlord ? homeLine(ctx) : [let_.name, let_.locality].filter(Boolean).join(", "),
-    heading: docs.length ? (landlord ? "Documents for Your Property" : "Your Paperwork Has Arrived") : landlord ? "A Message About Your Property" : "A Message About Your Home",
+    heading: String(edit.heading ?? "").trim().slice(0, 80) || (docs.length ? (landlord ? "Documents for Your Property" : "Your Paperwork Has Arrived") : landlord ? "A Message About Your Property" : "A Message About Your Home"),
     preheader: docs.length ? "Your copies, attached to this email." : subject,
     messageHtml: messageHtml(message),
     docList: docs.length ? `<p style="margin:0 0 6px;font-weight:600">Attached to this email</p><ul style="margin:0;padding-left:18px">${items}</ul>` : "",
@@ -578,12 +584,14 @@ async function bytesOf(d: SendDoc): Promise<Attachment | null> {
       const buf = d.source.upload;
       return buf && buf.length <= MAX_FILE_BYTES ? pack(buf, contentType) : null;
     }
+    if ("held" in d.source) return d.source.held.length <= MAX_FILE_BYTES ? pack(d.source.held, contentType) : null;
     if ("r2" in d.source) {
       const obj = await withR2((c) => c.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: (d.source as { r2: string }).r2 })));
       if ((obj.ContentLength ?? 0) > MAX_FILE_BYTES) return null;
       const bytes = await obj.Body?.transformToByteArray();
       return bytes ? pack(Buffer.from(bytes), contentType) : null;
     }
+    if (!("rex" in d.source)) return null;
     const res = await fetch(d.source.rex, { cache: "no-store" });
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
@@ -785,7 +793,18 @@ export class NothingToSay extends Error {}
  * each, from the person pressing. Every press is kept, sent or not, and every
  * email is written down the moment it goes.
  */
-export async function sendFromHome(ctx: HomeContext, docs: SendDoc[], tenants: Recipient[], edit: EmailEdit = {}): Promise<{ results: SendResult[]; id: string }> {
+export async function sendFromHome(
+  ctx: HomeContext,
+  docs: SendDoc[],
+  tenants: Recipient[],
+  edit: EmailEdit = {},
+  /**
+   * `dryRun`: the demo copy (lib/demo/mode). Every email is made, kept and
+   * logged exactly as a real send would be, and none of them leaves: each is
+   * written down as not sent, with this sentence as the reason.
+   */
+  opts: { dryRun?: string } = {}
+): Promise<{ results: SendResult[]; id: string }> {
   await ensureTable();
   const picked = docs.filter((d) => !d.blocked);
   const roles = [...new Set(tenants.map((t) => t.role))];
@@ -836,7 +855,7 @@ export async function sendFromHome(ctx: HomeContext, docs: SendDoc[], tenants: R
         JSON.stringify(row.files.map(({ d, f }): RecordedFile => ({
           id: d.id, label: d.label, name: d.name, expiry: d.expiry, bytes: f.bytes, sha256: f.sha256, certificateId: d.certificateId ?? null,
           /* Where the bytes were: the R2 key, or which REX certificate (never REX's file address, which is a signed link). */
-          source: "r2" in d.source ? `r2:${d.source.r2}` : d.kept ? `r2:${d.kept}` : d.id,
+          source: "r2" in d.source ? `r2:${d.source.r2}` : "held" in d.source ? `r2:${d.source.key}` : d.kept ? `r2:${d.kept}` : d.id,
         }))),
         row.via, row.messageId, row.sent, row.detail]
     ).catch((e) => console.error("[home-send] the record of an email could not be written", id, e));
@@ -863,7 +882,12 @@ export async function sendFromHome(ctx: HomeContext, docs: SendDoc[], tenants: R
       if (missing.length) { const detail = `${missing.join(", ")} couldn't be read from storage, so nothing was sent. Try again in a minute.`; results.push({ ...base, sent: false, detail }); await write(t, { ...none, detail }); continue; }
       const total = files.reduce((n, x) => n + x.f.bytes, 0);
       if (total > MAX_EMAIL_BYTES) { const detail = "Together those files are too big for one email. Send them in two goes."; results.push({ ...base, sent: false, detail }); await write(t, { ...none, files, detail }); continue; }
-      const email = await emailFor(ctx, t, mine, { subject, message }, roles);
+      const email = await emailFor(ctx, t, mine, { subject, message, heading: edit.heading }, roles);
+      if (opts.dryRun) {
+        results.push({ ...base, sent: false, detail: opts.dryRun });
+        await write(t, { emailId, subject: email.subject, html: email.html, files, via: null, messageId: null, sent: false, detail: opts.dryRun });
+        continue;
+      }
       try {
         const r = await sendAsAgent({
           me: ctx.me, to: t.email, toName: t.name, subject: email.subject, html: email.html,

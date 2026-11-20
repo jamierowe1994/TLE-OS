@@ -13,6 +13,7 @@ import LandlordJobEmails from "@/components/LandlordJobEmails";
 import RoomPicker from "@/components/RoomPicker";
 import ReletAction from "@/components/portfolio/ReletAction";
 import HomeNotices from "@/components/sections/HomeNotices";
+import RentReviewScreen from "@/components/rent-review/RentReviewScreen";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
@@ -112,6 +113,8 @@ type Action =
   | { kind: "repair" | "planned"; draft?: PropertyDraft }
   | { kind: "inspection"; inspection: Inspection }
   | { kind: "notices"; start: NoticeKind }
+  /* The Scottish rent-increase notice (lib/rent-reviews, 20 Nov 2026), in place of the Section 13 on a Scottish home. */
+  | { kind: "rent-review" }
   | { kind: "tenant-notice"; draft?: PropertyDraft }
   | { kind: "swap" }
   | { kind: "swap-open" }
@@ -211,6 +214,8 @@ export default function PropertyPage() {
   /* The new look (lib/new-look "property", 23 Oct 2026): it opens on Overview,
      and its photos open in the shared photo grid. */
   const look = useNewLook("property");
+  /* The Scottish rent review's switch (lib/new-look "scotrent"); on a Scottish home Rent review opens it. */
+  const scotRent = useNewLook("scotrent");
   const firstTab = look ? "overview" : "maintenance";
   const [gridFrom, setGridFrom] = useState<DOMRect | null>(null);
   const heroRef = useRef<HTMLButtonElement | null>(null);
@@ -467,6 +472,16 @@ export default function PropertyPage() {
       .catch(() => undefined);
   }, [p?.listingId, sendListings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { loadSends(); }, [loadSends]);
+  /* Rent-increase notices printed rather than emailed have no send of their own, so they are read for the activity. */
+  const [rentReviews, setRentReviews] = useState<{ id: string; sentAt: string; method: string; pdfKey: string | null; sentBy: { name: string }; answers: { newRent: number | null; effectiveDate: string } }[]>([]);
+  const loadRentReviews = useCallback(() => {
+    if (!p || p.test || scotRent !== true || !isScottish(p.postcode, p.address, p.town, p.locality)) return;
+    fetch(`/api/rent-reviews?history=1&listing=${encodeURIComponent(p.listingId)}&listings=${encodeURIComponent(sendListings.join(","))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j?.ok) setRentReviews(j.reviews ?? []); })
+      .catch(() => undefined);
+  }, [p?.listingId, scotRent, sendListings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadRentReviews(); }, [loadRentReviews]);
 
   /* Email replies on this home's PLC threads (lib/mail-threads, 21 Oct 2026):
      each message logged is a line in the latest activity, opening its thread. */
@@ -876,6 +891,9 @@ export default function PropertyPage() {
     const to = toLandlord && toTenants ? "the tenants and landlord" : toLandlord ? "the landlord" : "tenants";
     activity.push({ key: `send-${x.id}`, at: x.at, icon: "mail", title: `${x.documents.length ? "Sent" : "Emailed"} to ${to} · ${x.documents.length ? x.documents.join(", ") : x.subject || "no attachments"}`, sub: `${went} of ${x.results.length} sent · ${x.by}`, hot: went < x.results.length, go: () => setRecordOpen(x.id) });
   }
+  for (const r of rentReviews.filter((x) => x.method === "print")) {
+    activity.push({ key: `rent-review-${r.id}`, at: r.sentAt, icon: "coin", title: "Rent increase notice printed", sub: `${r.answers.newRent ? `${money(r.answers.newRent)} from ${day(r.answers.effectiveDate)}` : "Hand it over or post it recorded delivery"} · ${r.sentBy.name}`, go: () => { if (r.pdfKey) window.open(`/api/r2/file?key=${encodeURIComponent(r.pdfKey)}`, "_blank", "noopener"); } });
+  }
   if (chases.state === "ready") {
     for (const c of chases.chases) {
       const line = chaseLine(c);
@@ -953,6 +971,10 @@ export default function PropertyPage() {
     letSince: p.moveIn ?? p.letSince,
   };
   const roomsOnly = houseView && Boolean(house) && !lets;
+  /* Scotland's rent rise is the prescribed rent-increase notice, not a Section 13 (James and Michael Healy, 20 Nov 2026). */
+  const scotReview = scotRent === true && isScottish(p.postcode, p.address, p.town, p.locality);
+  const rentReviewAction: Action = scotReview ? { kind: "rent-review" } : { kind: "notices", start: "s13" };
+  const rentReviewSub = roomsOnly ? "Pick a room first" : scotReview ? "Scottish rent increase notice" : "Section 13 rent increase";
 
   /* The pop-ups, the same in both looks: every action opens over the page. */
   const popups = (
@@ -1080,6 +1102,15 @@ export default function PropertyPage() {
         </Modal>
       )}
       {/* Michael's Section 8 / 13 checklist is its own pop-up already. */}
+      {action?.kind === "rent-review" && !roomsOnly && (
+        <RentReviewScreen
+          key={`rent-review-${p.listingId}`}
+          listingId={String(p.listingId)}
+          listings={sendListings}
+          onClose={closeAction}
+          onSent={() => { setAction(null); loadSends(); loadRentReviews(); }}
+        />
+      )}
       {action?.kind === "notices" && !roomsOnly && (
         <HomeNotices key={`start-${action.start}-${p.listingId}`} home={noticeHome} start={action.start} bare onDone={() => { setAction(null); loadNotices(); }} />
       )}
@@ -1111,7 +1142,7 @@ export default function PropertyPage() {
       { label: "Book a property visit", sub: "Every 6 months: the home and the tenant", disabled: !canAct || visits.state !== "ready", onClick: () => void bookVisit() },
       { label: "Record a past visit", sub: "Already done elsewhere. No emails", disabled: !canAct || visits.state !== "ready", onClick: () => act({ kind: "past-visit" }) },
       { label: "Serve notice", sub: roomsOnly ? "Pick a room first" : "Section 8, checked by compliance", disabled: roomsOnly, onClick: () => act({ kind: "notices", start: "s8" }) },
-      { label: "Rent review", sub: roomsOnly ? "Pick a room first" : "Section 13 rent increase", disabled: roomsOnly, onClick: () => act({ kind: "notices", start: "s13" }) },
+      { label: "Rent review", sub: rentReviewSub, disabled: roomsOnly, onClick: () => act(rentReviewAction) },
       { label: "Tenant gave notice", sub: "Starts the move-out", disabled: !canAct || !tenants.length, onClick: () => act({ kind: "tenant-notice" }) },
       ...(swapLive
         ? [{ label: `${swapLive.swap.label ?? "Tenant swap"} under way`, sub: `${(swapLive.swap.joining.length ? swapLive.swap.joining : swapLive.swap.rereference ?? []).join(", ")} from ${day(swapLive.swap.moveIn)} · ${swapLive.plc?.short ?? "PLC check next"}`, onClick: () => act({ kind: "swap-open" }) }]
@@ -1737,7 +1768,7 @@ export default function PropertyPage() {
                         <p className="nl-meta">Each room is its own tenancy. Pick a room at the top to start its rent review or notice.</p>
                       </>
                     ) : (
-                      <div className="nl-holder"><HomeNotices key={p.listingId} home={noticeHome} /></div>
+                      <div className="nl-holder"><HomeNotices key={p.listingId} home={noticeHome} scottishRentReview={scotReview ? () => act({ kind: "rent-review" }) : undefined} /></div>
                     )}
                   </section>
 
@@ -1948,7 +1979,7 @@ export default function PropertyPage() {
                 {/* Kayleigh Wright, 19 Oct 2026: visits done in Inventory Base, put on the home afterwards. */}
                 <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => act({ kind: "past-visit" })} className={tile}>{tileIcon("clock")}{tileText("Record a past visit", "Already done elsewhere. No emails")}</button>
                 <button type="button" onClick={() => act({ kind: "notices", start: "s8" })} disabled={roomsOnly} className={tile}>{tileIcon("file-contract")}{tileText("Serve notice", "Section 8, checked by compliance")}</button>
-                <button type="button" onClick={() => act({ kind: "notices", start: "s13" })} disabled={roomsOnly} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
+                <button type="button" onClick={() => act(rentReviewAction)} disabled={roomsOnly} className={tile}>{tileIcon("coin")}{tileText("Rent review", scotReview ? "Scottish rent increase notice" : "Section 13 rent increase")}</button>
                 <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}{tileText("Tenant gave notice", "Starts the move-out")}</button>
                 {/* Lianna, 12 Oct 2026: one sharer out, their replacement in, no
                     viewing or offer. Any home with more than one tenant, or let
@@ -2310,7 +2341,7 @@ export default function PropertyPage() {
                       <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">Each room is its own tenancy. Pick a room at the top to start its rent review or notice.</p>
                     </>
                   ) : (
-                    <HomeNotices key={p.listingId} home={noticeHome} />
+                    <HomeNotices key={p.listingId} home={noticeHome} scottishRentReview={scotReview ? () => act({ kind: "rent-review" }) : undefined} />
                   )}
                 </div>
 

@@ -1,7 +1,7 @@
 import "server-only";
 import skeletons from "./rex-skeletons.json";
 import { demoOrigin } from "./mode";
-import { ENQUIRY_LINES, FIRST, HOME_KINDS, INSIDE_PHOTOS, LAST, LEAD_SOURCES, PHOTOS, STAFF, STREETS, TOWNS } from "./world-data";
+import { ENQUIRY_LINES, FIRST, HOME_KINDS, INSIDE_PHOTOS, LANDLORD_HOMES, LAST, LEAD_SOURCES, PHOTOS, STAFF, STREETS, TOWNS } from "./world-data";
 
 /**
  * THE DEMO'S INVENTED WORLD (lib/demo/mode).
@@ -108,6 +108,10 @@ export function buildWorld(now = Date.now()): DemoWorld {
       id: String(13_000_001 + n), name: `${first} ${last}`, name_first: first, name_last: last,
       email_address: email(first, last), phone_number: phone(200 + n), type: { id: "person", text: "Person" },
       is_dnd: false, system_record_state: "active", system_ctime: secs(now - between(60, 700) * DAY), system_modtime: secs(now - between(1, 40) * DAY),
+      /* A landlord's own postal address, which a rent-increase notice and the
+         terms both print (lib/landlord-home reads it as REX's address_postal).
+         Laid out from the person's number, so the world's dice are untouched. */
+      ...(kind === "landlord" ? { address_postal: LANDLORD_HOMES[n % LANDLORD_HOMES.length] } : {}),
       _kind: kind,
     };
     contacts.push(c);

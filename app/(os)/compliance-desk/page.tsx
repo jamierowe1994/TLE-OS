@@ -114,6 +114,16 @@ export default function ComplianceDashboard() {
   /* Section 13s and 8s waiting for his decision (7 Oct 2026). */
   const [sections, setSections] = useState<Notice[] | null>(null);
   const [sectionsError, setSectionsError] = useState(false);
+  /* Scottish rent reviews whose PayProp invoices are still to amend (20 Nov 2026), only while their switch is on. */
+  const [rentReviews, setRentReviews] = useState<{ status: string; home: string; answers: { effectiveDate: string } }[] | null>(null);
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/rent-reviews/desk", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!gone && j?.ok) setRentReviews(j.reviews ?? []); })
+      .catch(() => undefined);
+    return () => { gone = true; };
+  }, []);
 
   useEffect(() => {
     let gone = false;
@@ -267,6 +277,27 @@ export default function ComplianceDashboard() {
               </span>
             </span>
             <span className="flex items-center gap-1 text-[12px] font-semibold text-muted">Open Sections <DoodleIcon name="trend-up" size={11} /></span>
+          </Link>
+        );
+      })()}
+
+      {/* ── Scottish rent reviews, PayProp to update (20 Nov 2026) ── */}
+      {rentReviews && (() => {
+        const toDo = rentReviews.filter((r) => r.status === "sent");
+        return (
+          <Link href="/compliance-desk/rent-reviews" data-search className={`fade-up flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[22px] p-5 transition-colors ${toDo.length ? "bg-accent-soft hover:bg-accent-soft/80" : `${card} hover:border-ink/30`}`}>
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${toDo.length ? "bg-white/80 text-[#9d4340]" : "bg-accent-soft text-accent-dark"}`}>
+              <DoodleIcon name="coin" size={17} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[17px] font-bold leading-tight">
+                {toDo.length ? `${toDo.length} Scottish rent ${toDo.length === 1 ? "review" : "reviews"} to update in PayProp` : "Rent Reviews"}
+              </span>
+              <span className="mt-0.5 block text-[12px] text-muted">
+                {toDo.length ? toDo.slice(0, 3).map((r) => r.home).join("   ") : `Scottish rent-increase notices sent by the agents. ${rentReviews.length ? "PayProp is up to date on every one." : "None sent yet."}`}
+              </span>
+            </span>
+            <span className="flex items-center gap-1 text-[12px] font-semibold text-muted">Open Rent Reviews <DoodleIcon name="trend-up" size={11} /></span>
           </Link>
         );
       })()}

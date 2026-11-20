@@ -55,8 +55,11 @@ function prefillFor(kind: NoticeKind, h: HomeNoticeFacts, me: string): Answers {
   return { fields, checks: {}, signature: "", auto: Object.keys(fields) };
 }
 
-export default function HomeNotices({ home, className = "", stacked = false, start, bare = false, onDone }: {
+export default function HomeNotices({ home, className = "", stacked = false, start, bare = false, onDone, scottishRentReview }: {
   home: HomeNoticeFacts;
+  /** On a Scottish home (lib/rent-reviews, 20 Nov 2026): the rent review button opens the
+   *  rent-increase notice instead of a Section 13, unless a Section 13 is already open here. */
+  scottishRentReview?: () => void;
   className?: string;
   /** One button under the other, for a narrow box. */
   stacked?: boolean;
@@ -128,7 +131,7 @@ export default function HomeNotices({ home, className = "", stacked = false, sta
       <button
         type="button"
         disabled={notices === null}
-        onClick={() => setOpen({ kind, notice: current })}
+        onClick={() => (kind === "s13" && scottishRentReview && !current ? scottishRentReview() : setOpen({ kind, notice: current }))}
         className="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-line/70 bg-white px-4 py-3.5 text-left transition-colors hover:border-ink/40 disabled:opacity-60"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
@@ -137,7 +140,7 @@ export default function HomeNotices({ home, className = "", stacked = false, sta
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-semibold leading-tight">{current ? (current.status === "draft" ? `Carry on: ${spec.button}` : spec.button) : spec.button}</span>
           <span className="mt-0.5 block truncate text-[11.5px] text-muted">
-            {current ? STATUS_LABEL[current.status] : `${spec.short} · ${kind === "s13" ? "rent increase" : "possession notice"}`}
+            {current ? STATUS_LABEL[current.status] : kind === "s13" && scottishRentReview ? "Scottish rent increase notice" : `${spec.short} · ${kind === "s13" ? "rent increase" : "possession notice"}`}
           </span>
         </span>
         <span aria-hidden className="text-muted transition-transform group-hover:translate-x-0.5">→</span>

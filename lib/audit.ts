@@ -167,7 +167,11 @@ export type AuditKind =
      2026, lib/tenant-contacts saveTenantContact): OS only, before and after. */
   | "tenant_contact_saved"
   /* A home's Source picked on its page (23 Oct 2026, /api/homes/source). */
-  | "rex_property_source_set";
+  | "rex_property_source_set"
+  /* A Scottish rent-increase notice sent or printed, and Michael's ticks on
+     it (20 Nov 2026, lib/rent-reviews). */
+  | "rent_review_sent"
+  | "rent_review_updated";
 
 export interface AuditRow {
   id: string;

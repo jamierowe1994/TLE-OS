@@ -5,6 +5,7 @@ import { keyIsOurs, R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { whoIs } from "@/lib/admin";
 import { refOf, refusal } from "@/lib/r2-access";
 import { keyVisible, readFolderAccess, shelfViewer } from "@/lib/shelf-access";
+import { demoFilesOn, getDemoFile } from "@/lib/demo/files";
 
 /**
  * Handing a file back.
@@ -33,6 +34,8 @@ export const runtime = "nodejs";
 const TTL_SECONDS = 300;
 
 export async function GET(req: NextRequest) {
+  /* The demo copy has no R2: the files it kept are in its own database (lib/demo/files). */
+  if (demoFilesOn()) return demoFile(req);
   if (!r2Configured) {
     return NextResponse.json({ ok: false, error: "Storage isn't configured." }, { status: 503 });
   }
@@ -94,4 +97,22 @@ export async function GET(req: NextRequest) {
     console.error("R2 signing failed", err.name, err.message);
     return NextResponse.json({ ok: false, error: "Couldn't open that file." }, { status: 502 });
   }
+}
+
+/** The demo copy's own files, behind the same sign-in and the same rule on who may open what. */
+async function demoFile(req: NextRequest) {
+  const key = req.nextUrl.searchParams.get("key") ?? "";
+  if (!keyIsOurs(key)) return NextResponse.json({ ok: false, error: "Not a valid file reference." }, { status: 400 });
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  const under = refOf(key);
+  const no = under ? await refusal(actor, under.scope, under.ref) : "Not a valid file reference.";
+  if (no) return NextResponse.json({ ok: false, error: no }, { status: 403 });
+  const f = await getDemoFile(key).catch(() => null);
+  if (!f) return NextResponse.json({ ok: false, error: "That file isn't on the demo copy." }, { status: 404 });
+  const name = key.slice(key.lastIndexOf("/") + 1).replace(/^\d+-/, "").replace(/["\\]/g, "");
+  const save = req.nextUrl.searchParams.get("save") === "1";
+  return new NextResponse(new Uint8Array(f.bytes), {
+    headers: { "content-type": f.contentType, "cache-control": "private, no-store", "content-disposition": `${save ? "attachment" : "inline"}; filename="${name}"` },
+  });
 }

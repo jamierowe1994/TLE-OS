@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { areaTesters } from "@/lib/area-access";
 import { ALL_OFF, isLookLevel, LOOK_SCREENS, type LookLevel, type LookOn, type LookScreen } from "@/lib/new-look";
 import type { OsUser } from "@/lib/users";
+import { demoMode } from "@/lib/demo/mode";
 
 /**
  * The stored half of the new-look switches: one os_settings row holding each
@@ -71,5 +72,8 @@ export async function lookFor(user: Pick<OsUser, "email" | "role"> | null): Prom
       /* Only me: the one person who set it, by the address they set it with. */
       (r.level === "me" && (r.changedBy ?? "").trim().toLowerCase() === me);
   }
+  /* The demo copy shows the Scottish rent review to everyone, so it can be
+     walked through on invented homes before it is on for anyone on live. */
+  if (demoMode()) on.scotrent = true;
   return on;
 }

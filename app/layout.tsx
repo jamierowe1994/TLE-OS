@@ -7,6 +7,7 @@ import "./portal-edge.css";
 import "./book-viewing.css";
 import "./terms-paper.css";
 import "./terms-send.css";
+import "./rent-review.css";
 import "./terms-sign.css";
 import "./terms-questions.css";
 import "./tenant-passport.css";

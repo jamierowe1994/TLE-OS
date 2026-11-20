@@ -4805,6 +4805,48 @@ CREATE TABLE IF NOT EXISTS os_section_notice_files (
 CREATE INDEX IF NOT EXISTS os_section_notice_files_notice
   ON os_section_notice_files (notice_id, at);
 
+-- The Scottish rent review (lib/rent-reviews, 20 Nov 2026): one row per
+-- rent-increase notice sent, every answer the agent gave, the evidence, the
+-- notice as sent and who it went to. The id is the screen's own, so a second
+-- press of Send finds the first rather than sending twice.
+CREATE TABLE IF NOT EXISTS os_rent_reviews (
+  id                TEXT PRIMARY KEY,
+  listing_id        TEXT NOT NULL,
+  property_id       TEXT,
+  os_property_id    TEXT,
+  home              TEXT NOT NULL DEFAULT '',
+  country           TEXT NOT NULL DEFAULT 'scotland',
+  answers           JSONB NOT NULL DEFAULT '{}',
+  evidence          JSONB NOT NULL DEFAULT '[]',
+  pdf_key           TEXT,
+  method            TEXT NOT NULL DEFAULT 'email',
+  current_rent      NUMERIC,
+  new_rent          NUMERIC,
+  rent_period       TEXT NOT NULL DEFAULT 'month',
+  effective_date    DATE,
+  sent_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_by_id        TEXT NOT NULL DEFAULT '',
+  sent_by_name      TEXT NOT NULL DEFAULT '',
+  sent_by_email     TEXT NOT NULL DEFAULT '',
+  recipients        JSONB NOT NULL DEFAULT '[]',
+  home_send_id      TEXT,
+  accounts_to       TEXT NOT NULL DEFAULT '',
+  accounts_sent_at  TIMESTAMPTZ,
+  accounts_detail   TEXT NOT NULL DEFAULT '',
+  stage             TEXT NOT NULL DEFAULT 'sending',
+  status            TEXT NOT NULL DEFAULT 'sent',
+  payprop_by        TEXT,
+  payprop_at        TIMESTAMPTZ,
+  response          TEXT,
+  response_date     DATE,
+  response_note     TEXT NOT NULL DEFAULT '',
+  response_by       TEXT,
+  response_at       TIMESTAMPTZ,
+  is_demo           BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS os_rent_reviews_home ON os_rent_reviews (listing_id, sent_at DESC);
+CREATE INDEX IF NOT EXISTS os_rent_reviews_sent ON os_rent_reviews (sent_at DESC);
+
 -- ── Tables the TLE portal made, which the OS reads (Rig run 2, P-004) ──────
 -- Until 10 Oct 2026 the OS used these without ever creating them: they came
 -- with the database it shares with the portal. On a fresh database - a test

@@ -70,3 +70,15 @@ export const ENQUIRY_LINES = [
   "Is there parking, and is the rent negotiable for a longer tenancy?",
   "I am relocating for work and can provide references straight away.",
 ];
+
+/** Where the invented landlords live: invented streets in real towns, never one of the lets. */
+export const LANDLORD_HOMES = [
+  "4 Larch Grove, Stirling, FK8 9ZZ",
+  "17 Heron Way, Perth, PH1 9ZZ",
+  "2 Millbrook Drive, Nottingham, NG5 9ZZ",
+  "31 Sandpiper Close, Leicester, LE4 9ZZ",
+  "9 Ashbury Gardens, Edinburgh, EH10 9ZZ",
+  "22 Kingfisher Row, Derby, DE3 9ZZ",
+  "6 Elmstead Crescent, Glasgow, G43 9ZZ",
+  "14 Copperfield Lane, Dundee, DD2 9ZZ",
+];
