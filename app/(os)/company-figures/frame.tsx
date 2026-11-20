@@ -8,6 +8,7 @@ import Freshness from "@/components/business/Freshness";
 import { PresentProvider, usePresent } from "@/components/business/PresentMode";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { currentMonth, monthLabel, monthProgressLabel, recentMonths } from "@/lib/business/format";
+import { periodsFor } from "@/lib/business/periods";
 import { BUSINESS_TABS, PRESENT_KEYS } from "./rail";
 
 /**
@@ -29,11 +30,15 @@ import { BUSINESS_TABS, PRESENT_KEYS } from "./rail";
 
 interface BusinessCtx {
   month: string;
+  /** A quarter or the year to date picked on the Agents tab ("2026-q3",
+   *  "2026-ytd"), or null for the one month in the month picker. Only the
+   *  Agents tab reads it; every other tab stays on `month`. */
+  period: string | null;
   seed: SeedData | null;
   seedError: string | null;
 }
 
-const Ctx = createContext<BusinessCtx>({ month: currentMonth(), seed: null, seedError: null });
+const Ctx = createContext<BusinessCtx>({ month: currentMonth(), period: null, seed: null, seedError: null });
 export const useBusiness = () => useContext(Ctx);
 
 export default function BusinessFrame({ children }: { children: React.ReactNode }) {
@@ -49,6 +54,7 @@ function Frame({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const { presenting, toggle } = usePresent();
   const [month, setMonth] = useState(currentMonth);
+  const [period, setPeriod] = useState<string | null>(null);
   const [seed, setSeed] = useState<SeedData | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);
   const [autoCycle, setAutoCycle] = useState(false);
@@ -105,11 +111,22 @@ function Frame({ children }: { children: React.ReactNode }) {
     return () => window.clearInterval(id);
   }, [presenting, autoCycle, step]);
 
-  const status = monthProgressLabel(month);
+  /* The Period choice on the Agents tab (Susan Liles, 20 Nov 2026, ticket
+     8ea5a7b8): the month in the picker, as before, or a quarter of this year
+     that has started, or the year to date. Worked out from the clock on every
+     render (lib/business/periods), so a new quarter or year appears by itself. */
+  const periods = tab.key === "agents" ? periodsFor() : [];
+  const picked = periods.find((p) => p.key === period) ?? null;
+  const periodOptions = [
+    { id: "month", label: month === currentMonth() ? "This month" : monthLabel(month) },
+    ...periods.map((p) => ({ id: p.key, label: p.label })),
+  ];
+
+  const status = picked ? (picked.live ? "Live · to date" : "Closed") : monthProgressLabel(month);
   const live = status.startsWith("Live");
 
   return (
-    <Ctx.Provider value={{ month, seed, seedError }}>
+    <Ctx.Provider value={{ month, period: picked?.key ?? null, seed, seedError }}>
       <div className="type-admin biz-os">
         {presenting ? (
           <style>{`[data-admin-rail], [data-os-back] { display: none !important; }`}</style>
@@ -129,14 +146,29 @@ function Frame({ children }: { children: React.ReactNode }) {
               {status}
             </span>
             {!presenting ? <Freshness /> : null}
-            <PickOne
-              value={month}
-              onChange={(v) => setMonth(v ?? month)}
-              clearable={false}
-              label="Month"
-              icon="calendar"
-              options={monthOptions}
-            />
+            {periods.length ? (
+              <PickOne
+                value={picked?.key ?? "month"}
+                onChange={(v) => setPeriod(!v || v === "month" ? null : v)}
+                clearable={false}
+                neutral="month"
+                label="Period"
+                icon="calendar"
+                options={periodOptions}
+              />
+            ) : null}
+            {/* A quarter or the year names its own months, so the month picker
+                stands aside while one is picked. */}
+            {!picked ? (
+              <PickOne
+                value={month}
+                onChange={(v) => setMonth(v ?? month)}
+                clearable={false}
+                label="Month"
+                icon="calendar"
+                options={monthOptions}
+              />
+            ) : null}
             {presenting ? (
               <button
                 type="button"

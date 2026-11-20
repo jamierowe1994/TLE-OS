@@ -8,6 +8,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useListingStages } from "../use-listing-stages";
+import { useBusiness } from "../frame";
+import { periodByKey, periodSpan } from "@/lib/business/periods";
 import { londonToday } from "@/lib/london-clock";
 import type { ReactNode } from "react";
 import DataTable from "@/components/business/DataTable";
@@ -16,7 +18,7 @@ import StatCard from "@/components/business/StatCard";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { ROSTER, agentKeysForName } from "@/lib/business/roster";
 import type { AgentForecast, UserProfile } from "@/lib/business/types";
-import { formatDate, formatGBP, formatNum, formatPct, monthLabel } from "@/lib/business/format";
+import { currentMonth, formatDate, formatGBP, formatNum, formatPct, monthLabel } from "@/lib/business/format";
 import type { StatValue } from "@/lib/business/types";
 
 /* ------------------------------ helpers ------------------------------ */
@@ -384,7 +386,35 @@ interface AgentMoney {
   payments: number;
 }
 
-export default function Agents({ month, seed }: { month: string; seed: SeedData }) {
+/** One month of GET /api/business/agent-period. */
+interface PeriodMonth {
+  month: string;
+  /** The whole business's commission that month, net of VAT - the figure the
+   *  Overview adds up, house accounts and all. */
+  gciNet: number;
+  byAgent: AgentMoney[];
+}
+
+export default function Agents({ month: pickedMonth, seed }: { month: string; seed: SeedData }) {
+  /*
+   * A QUARTER OR THE YEAR TO DATE (Susan Liles, 20 Nov 2026, ticket 8ea5a7b8:
+   * "a filter to see the agents income / GCI per period i.e quarter, 2026 to
+   * date"). Picked beside the month picker in the frame.
+   *
+   * Only the money is added up: GCI and rent are each agent's months from
+   * PayProp summed (/api/business/agent-period, the same monthly split the
+   * month view shows, finished months out of the store). Everything else on
+   * the page - properties, tenancies, MA, listings, applications, move-ins,
+   * the PayProp book and the REX cards - is THIS month while a period is
+   * picked, and says so. Summing REX and Propoly counts across months is a
+   * different measurement, and properties counted in each of three months are
+   * not three times the properties.
+   */
+  const { period: periodKey } = useBusiness();
+  const period = periodKey ? periodByKey(periodKey) : null;
+  /* Every single-month figure below reads `month`: the month picked, or the
+     month we are in while a period is picked. */
+  const month = period ? currentMonth() : pickedMonth;
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [forecastRows, setForecastRows] = useState<AdminForecastRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -462,6 +492,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
     let cancelled = false;
     let tries = 0;
     setAgentMoney([]);
+    setMonthGci(null);
     setBook(null);
     setEarnings(null);
     setMoneyState("loading");
@@ -470,11 +501,15 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         .then((r) => r.json())
         .then((d: {
           portfolio?: { byAgent: Record<string, { names: string[]; properties: number; rentRoll: number; activeTenancies: number }> } | null;
-          income?: { byPartner?: Array<{ name: string; amount: number; payments: number }> } | null;
+          income?: { combinedGci?: number; byPartner?: Array<{ name: string; amount: number; payments: number }> } | null;
           byAgent?: AgentMoney[];
+          unreachable?: string[];
         }) => {
           if (cancelled) return;
           if (d.portfolio) setBook(d.portfolio);
+          /* Net of VAT already (payprop-live nets it), and only when both
+             agencies answered - one agency's GCI is not the business's. */
+          setMonthGci(typeof d.income?.combinedGci === "number" && !d.unreachable?.length ? d.income.combinedGci : null);
           if (d.income?.byPartner) setEarnings(d.income.byPartner);
           // Property-attributed money for the selected month. byPartner above
           // is beneficiary-attributed and is £0 for every Scotland agent,
@@ -492,6 +527,59 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
       cancelled = true;
     };
   }, [month]);
+
+  /* The period's money, month by month. Whole or nothing: until every month
+     in it has answered, GCI and rent stay blank, never a total short by a
+     month. A finished month is instant (stored); the month we are in may take
+     a walk, so this asks again like the month view does.
+
+     Every read is stamped with the period it is for, and only a read for the
+     period picked NOW is shown. Kept unstamped, the first render after a
+     change of period drew the old period's money under the new heading. */
+  type PeriodRead = {
+    key: string;
+    state: "loading" | "ready" | "error";
+    months: PeriodMonth[] | null;
+    gap: { missing: string[]; problem: string | null } | null;
+  };
+  const [periodRead, setPeriodRead] = useState<PeriodRead | null>(null);
+  const thisRead = periodKey && periodRead?.key === periodKey ? periodRead : null;
+  const periodState: "off" | "loading" | "ready" | "error" = !periodKey ? "off" : thisRead?.state ?? "loading";
+  const periodMonths = thisRead?.state === "ready" ? thisRead.months : null;
+  const periodGap = thisRead?.gap ?? null;
+  useEffect(() => {
+    if (!periodKey) return;
+    let cancelled = false;
+    let tries = 0;
+    const set = (r: Omit<PeriodRead, "key">) => setPeriodRead({ key: periodKey, ...r });
+    set({ state: "loading", months: null, gap: null });
+    const ask = () => {
+      fetch(`/api/business/agent-period?period=${encodeURIComponent(periodKey)}`, { cache: "no-store" })
+        .then((r) => r.json().then((j) => (r.ok ? j : Promise.reject(new Error(j?.error ?? String(r.status))))))
+        .then((d: { period?: string; connected?: boolean; complete?: boolean; perMonth?: PeriodMonth[]; missing?: string[]; problem?: string | null }) => {
+          /* An answer for a period since picked away from is dropped. */
+          if (cancelled || d.period !== periodKey) return;
+          if (d.complete && d.perMonth) {
+            set({ state: "ready", months: d.perMonth, gap: null });
+            return;
+          }
+          const gap = { missing: d.missing ?? [], problem: d.problem ?? null };
+          if (d.connected === false || tries++ >= 60) set({ state: "error", months: null, gap });
+          else {
+            set({ state: "loading", months: null, gap });
+            setTimeout(() => !cancelled && ask(), 5000);
+          }
+        })
+        .catch(() => !cancelled && set({ state: "error", months: null, gap: null }));
+    };
+    ask();
+    return () => {
+      cancelled = true;
+    };
+  }, [periodKey]);
+  /* The whole business's commission for the month, to set the TOTAL row
+     against (the month view's own read). */
+  const [monthGci, setMonthGci] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -606,6 +694,24 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         : a
     );
   }
+  /* The period's GCI and rent per agent: each month joined on the same key
+     (a partner PayProp spells two ways is one row) and rounded to the pound
+     exactly as that month's own view rounds it, then the months added. So an
+     agent's period figure is their month rows added up, and the TOTAL row is
+     the month TOTAL rows added up, to the pound. */
+  const periodByName = new Map<string, { gci: number; rent: number }>();
+  for (const pm of periodMonths ?? []) {
+    const month1 = new Map<string, { gci: number; rent: number }>();
+    for (const a of pm.byAgent) {
+      const k = joinKey(a.name);
+      const had = month1.get(k) ?? { gci: 0, rent: 0 };
+      month1.set(k, { gci: had.gci + a.gciNet, rent: had.rent + a.rent });
+    }
+    for (const [k, v] of month1) {
+      const had = periodByName.get(k) ?? { gci: 0, rent: 0 };
+      periodByName.set(k, { gci: had.gci + Math.round(v.gci), rent: had.rent + Math.round(v.rent) });
+    }
+  }
   const rexByName = new Map<string, AgentMonthCounts>();
   for (const [id, a] of Object.entries(biz?.byAgent ?? {})) {
     const name = id === "none" || !a.name ? NO_AGENT : a.name;
@@ -632,6 +738,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
     if (!everyName.has(joinKey(name))) everyName.set(joinKey(name), tidy);
   };
   for (const a of agentMoney) know(a.name);
+  for (const pm of periodMonths ?? []) for (const a of pm.byAgent) know(a.name);
   for (const a of rexByName.values()) know(a.name ?? NO_AGENT);
   for (const c of [...(biz?.moveInsByAgent ?? []), ...(biz?.pipelineByAgent ?? [])]) know(c.agent || NO_AGENT);
   /* Only names a live source knows. The July capture's roster used to be
@@ -649,6 +756,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   const liveRows = [...everyName.entries()].map(([key, displayName]) => {
     const rex = rexByName.get(key);
     const cash = moneyByName.get(key);
+    const over = periodByName.get(key);
     const linked = displayName === NO_AGENT ? null : linkedUserForName(displayName);
     const forecast = displayName === NO_AGENT ? null : forecastForName(displayName);
     return {
@@ -661,9 +769,10 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
             : "Linked"
           : "No portal account",
       isLinked: !!linked,
-      // Every column but pipeline is for the SELECTED month.
-      gci: cash ? Math.round(cash.gciNet) : null,
-      rent: cash ? Math.round(cash.rent) : null,
+      // Every column but pipeline is for the SELECTED month - GCI and rent
+      // for the period instead, when one is picked.
+      gci: period ? (over ? Math.round(over.gci) : null) : cash ? Math.round(cash.gciNet) : null,
+      rent: period ? (over ? Math.round(over.rent) : null) : cash ? Math.round(cash.rent) : null,
       props: cash?.properties ?? null,
       tens: cash?.tenancies ?? null,
       ma: count(answered.ma, rex?.marketAppraisals),
@@ -677,7 +786,11 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   // being hidden, because "who has no figures" is itself worth seeing.
   liveRows.sort((a, b) => (b.gci ?? -1) - (a.gci ?? -1));
 
-  const banded = liveRows.map((r) => ({ ...r, band: bandFor(r.gci) }));
+  /* Bands are drawn on a month's GCI, so over a period they go on the
+     average month (the month we are in counts as one), or a quarter would put
+     nearly everyone in the top band. */
+  const bandMonths = period ? period.months.length : 1;
+  const banded = liveRows.map((r) => ({ ...r, band: bandFor(r.gci == null ? null : r.gci / bandMonths) }));
   /* The no-agent row is not a person, so it sits in no band. */
   const people = banded.filter((r) => r.agent !== NO_AGENT);
   const bandCounts = BANDS.map((b) => ({
@@ -734,15 +847,40 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   /* A spinner until either half of the month is in, then a line naming the
      half still coming, so a dash that is only waiting never reads as a gap. */
   const repLoading = bizState === "loading" && !biz?.byAgent;
-  const tableLoading = moneyState === "loading" && repLoading;
+  const tableLoading = (period ? periodState === "loading" : moneyState === "loading") && repLoading;
+  const thisMonth = monthLabel(month);
   const stillComing = [
-    moneyState === "loading" ? "PayProp (GCI, rent, properties, tenancies)" : null,
+    period && periodState === "loading" ? `PayProp for ${period.label} (GCI, rent)` : null,
+    moneyState === "loading" ? (period ? `PayProp for ${thisMonth} (properties, tenancies)` : "PayProp (GCI, rent, properties, tenancies)") : null,
     bizState === "loading" ? "REX and Propoly (MA, listings, applications, move-ins, pipeline)" : null,
   ].filter(Boolean);
+  /* Which months held the period up, in words, so "blank" is never a mystery. */
+  const gapMonths = (periodGap?.missing ?? []).map(monthLabel).join(", ");
   const failed = [
-    moneyState === "error" ? "PayProp didn't answer for this month, so GCI, rent, properties and tenancies are blank." : null,
-    bizState === "error" ? "REX and Propoly didn't answer for this month, so MA, listings, applications, move-ins and pipeline are blank." : null,
+    period && periodState === "error"
+      ? `PayProp hasn't answered for ${gapMonths || "this period"}, so ${period.label}'s GCI and rent are blank rather than a total short by a month. ${periodGap?.problem ?? "Refresh to try again."}`
+      : null,
+    moneyState === "error"
+      ? period
+        ? `PayProp didn't answer for ${thisMonth}, so properties and tenancies are blank.`
+        : "PayProp didn't answer for this month, so GCI, rent, properties and tenancies are blank."
+      : null,
+    bizState === "error" ? `REX and Propoly didn't answer for ${period ? thisMonth : "this month"}, so MA, listings, applications, move-ins and pipeline are blank.` : null,
   ].filter(Boolean);
+  /* The TOTAL row against the whole business's PayProp commission for the
+     same months - the read the Overview adds up for its year-to-date GCI.
+     The gap is fees on homes PayProp has no agent for (house accounts and
+     unmatched homes), which belong in no row. */
+  const businessGci = period
+    ? periodState === "ready" && periodMonths
+      ? periodMonths.reduce((t, m) => t + m.gciNet, 0)
+      : null
+    : moneyState === "ready"
+      ? monthGci
+      : null;
+  /* Columns that stay on this month while a period is picked are greyed. */
+  const single = (v: unknown) => (period ? <span className="text-muted/70">{formatNum(v as number | null)}</span> : formatNum(v as number | null));
+  const span = period ? period.label : monthLabel(month);
 
   return (
     <div>
@@ -750,8 +888,26 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
           for, so they lead. The PayProp book and the REX totals follow. */}
       {/* ----------------------- per-agent KPI table ----------------------- */}
       <SectionTitle source="PayProp, REX and Propoly, live">
-        Per-Agent KPIs - {monthLabel(month)}
+        Per-Agent KPIs - {span}
       </SectionTitle>
+      {period ? (
+        <>
+          <p className="mb-2 text-xs text-muted">
+            Click an agent&rsquo;s row to open their drill-down. GCI and rent are{" "}
+            {period.label} ({periodSpan(period)}) from PayProp: each agent&rsquo;s months
+            added together, the same monthly figures the month view shows, so the TOTAL
+            row is those months&rsquo; TOTAL rows added up.{" "}
+            {period.live ? `${thisMonth} is counted so far. ` : ""}
+            Attribution uses today&rsquo;s property map, so a property that changed
+            hands counts to whoever holds it now.
+          </p>
+          <p className="mb-3 rounded-xl border border-line bg-panel px-4 py-2.5 text-xs text-ink">
+            Props, tenancies, MA, Li, Ap and MI are {thisMonth} only (greyed) - they
+            aren&rsquo;t added up across months. Pn is today&rsquo;s pipeline. Pick This month
+            to see any one month in full.
+          </p>
+        </>
+      ) : (
       <p className="mb-2 text-xs text-muted">
         Click an agent&rsquo;s row to open their drill-down (forecast, ads,
         portfolio, compliance). GCI, rent, properties and tenancies are{" "}
@@ -767,6 +923,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         Attribution uses today&rsquo;s property map, so a property that changed
         hands counts to whoever holds it now.
       </p>
+      )}
       {error ? (
         <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700">
           {error}
@@ -779,7 +936,9 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         {bandCounts.map((b) => (
           <div key={b.id} className={`rounded-xl border px-3 py-2.5 ${b.tone}`}>
             <p className="text-lg font-semibold leading-none">{b.n}</p>
-            <p className="mt-1 text-[11px] leading-tight">{b.label}</p>
+            <p className="mt-1 text-[11px] leading-tight">
+              {b.id === "none" && period ? `No figures in ${period.label}` : b.label}
+            </p>
             {b.id !== "none" && (
               <p className="text-[11px] opacity-70">
                 {formatGBP(b.gci)}
@@ -790,7 +949,10 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         ))}
       </div>
       <p className="mb-3 text-[11px] text-muted">
-        Bands are on this month&rsquo;s GCI and the thresholds are placeholders - set to
+        {period
+          ? `Over ${period.label} the bands are on each agent\u2019s average month: their GCI for the period divided by ${bandMonths}${period.live ? `, with ${thisMonth} counted as a whole month` : ""}. `
+          : null}
+        Bands are on {period ? "a month\u2019s" : "this month\u2019s"} GCI and the thresholds are placeholders - set to
         sit either side of the ~£1,320 average partner. Tell me the real figures and
         they&rsquo;re a one-line change. Nobody with no figures is counted as
         underperforming.
@@ -804,7 +966,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
       {tableLoading ? (
         <div className="flex items-center gap-2 py-6 text-[13px] text-muted" aria-busy="true">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
-          Loading {monthLabel(month)} for every agent
+          Loading {span} for every agent
         </div>
       ) : (
       <>
@@ -845,19 +1007,19 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
               if (!b) return "";
               return (
                 <span className={`rounded-full border px-2 py-0.5 text-[11px] ${b.tone}`}>
-                  {b.label}
+                  {b.id === "none" && period ? `No figures in ${period.label}` : b.label}
                 </span>
               );
             },
           },
-          { key: "rent", label: "Rent pcm", align: "right", render: (row) => money(row.rent as number | null) },
-          { key: "props", label: "Props", align: "right", render: (row) => num(row.props) },
-          { key: "tens", label: "Tenancies", align: "right", render: (row) => num(row.tens) },
-          { key: "ma", label: "MA", align: "right", render: (row) => num(row.ma) },
-          { key: "li", label: "Li", align: "right", render: (row) => num(row.li) },
+          { key: "rent", label: period ? "Rent" : "Rent pcm", align: "right", render: (row) => money(row.rent as number | null) },
+          { key: "props", label: "Props", align: "right", render: (row) => single(row.props) },
+          { key: "tens", label: "Tenancies", align: "right", render: (row) => single(row.tens) },
+          { key: "ma", label: "MA", align: "right", render: (row) => single(row.ma) },
+          { key: "li", label: "Li", align: "right", render: (row) => single(row.li) },
           { key: "vw", label: "Vw", align: "right", render: (row) => num(row.vw) },
-          { key: "ap", label: "Ap", align: "right", render: (row) => num(row.ap) },
-          { key: "mi", label: "MI", align: "right", render: (row) => num(row.mi) },
+          { key: "ap", label: "Ap", align: "right", render: (row) => single(row.ap) },
+          { key: "mi", label: "MI", align: "right", render: (row) => single(row.mi) },
           { key: "pn", label: "Pn", align: "right", render: (row) => num(row.pn) },
         ]}
         rows={kpiRowsLive as unknown as Record<string, unknown>[]}
@@ -873,11 +1035,20 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         MA = market appraisals · Li = listings instructed · Vw = viewings · Ap =
         applications accepted · MI = move-ins · Pn = pipeline.
       </p>
+      {businessGci != null && totalRow.gci != null ? (
+        <p className="mt-1 text-[11px] text-muted">
+          PayProp&rsquo;s whole-business GCI for {span} is {formatGBP(Math.round(businessGci))} exc VAT,
+          the PayProp read behind the Overview&rsquo;s GCI. The TOTAL row
+          is {formatGBP(totalRow.gci)}; the other {formatGBP(Math.max(0, Math.round(businessGci) - totalRow.gci))} is
+          fees on homes PayProp has no agent for, so it sits in no row.
+        </p>
+      ) : null}
 
       {/* ------------------------- agent drill-down ------------------------- */}
       {selectedAgent ? (
         <AgentDrilldown
           name={selectedAgent}
+          moneyLabel={period?.label ?? null}
           month={month}
           seed={seed}
           live={liveRows.find((r) => norm(r.agent) === norm(selectedAgent)) ?? null}
@@ -1111,6 +1282,7 @@ interface AgentLiveDetail {
 
 function AgentDrilldown({
   name,
+  moneyLabel,
   month,
   seed,
   live,
@@ -1119,6 +1291,9 @@ function AgentDrilldown({
   onClose,
 }: {
   name: string;
+  /** The quarter or year picked, when one is: GCI and rent in `live` are then
+   *  for it, and every other figure is still `month`. Null for one month. */
+  moneyLabel: string | null;
   month: string;
   seed: SeedData;
   /** This partner's row from the live table above - the SAME object, so the
@@ -1252,20 +1427,26 @@ function AgentDrilldown({
           seed block, which meant a drill-down showed July whatever month was
           picked, and showed nothing at all for anyone outside that capture. */}
       <h4 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted">
-        KPIs - {monthLabel(month)}
+        {moneyLabel
+          ? `KPIs - GCI and rent for ${moneyLabel}, the rest for ${monthLabel(month)}`
+          : `KPIs - ${monthLabel(month)}`}
       </h4>
       {live ? (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+          <div className={`grid grid-cols-2 gap-3 sm:grid-cols-4 ${moneyLabel ? "" : "xl:grid-cols-7"}`}>
             <StatCard
               label="GCI exc VAT"
               stat={liveStat(live.gci, live.gci != null ? formatGBP(live.gci) : undefined, "live-payprop",
-                "Fees charged on this partner's properties, net of VAT, in the selected month.")}
+                moneyLabel
+                  ? `Fees charged on this partner's properties, net of VAT, in ${moneyLabel}: each month's figure added together.`
+                  : "Fees charged on this partner's properties, net of VAT, in the selected month.")}
             />
             <StatCard
-              label="Rent pcm"
+              label={moneyLabel ? "Rent" : "Rent pcm"}
               stat={liveStat(live.rent, live.rent != null ? formatGBP(live.rent) : undefined, "live-payprop",
-                "Rent passed through to landlords on this partner's properties in the selected month. Volume, not income.")}
+                moneyLabel
+                  ? `Rent passed through to landlords on this partner's properties in ${moneyLabel}, each month added together. Volume, not income.`
+                  : "Rent passed through to landlords on this partner's properties in the selected month. Volume, not income.")}
             />
             <StatCard
               label="Properties"
@@ -1293,7 +1474,7 @@ function AgentDrilldown({
         </>
       ) : (
         <p className="text-xs text-muted">
-          No figures for {monthLabel(month)} - this partner had no PayProp or Rex activity
+          No figures for {moneyLabel ?? monthLabel(month)} - this partner had no PayProp or Rex activity
           that month.
         </p>
       )}
