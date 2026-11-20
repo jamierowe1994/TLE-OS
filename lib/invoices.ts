@@ -246,6 +246,8 @@ export async function createInvoice(input: { orderId?: string | null; propertyId
     const found = await getOrder(input.orderId);
     if (!found) throw new Error("No such job.");
     const o = found.order;
+    /* The landlord paid the contractor themselves (ticket b7a79378): there is nothing of ours to bill them for this job. */
+    if (o.payee === "landlord") throw new Error("The landlord paid the contractor directly on this job, so there's nothing to invoice them for it.");
     orderId = o.id;
     property = property || [o.propertyName, o.locality].filter(Boolean).join(", ");
     toName = toName || o.landlord;

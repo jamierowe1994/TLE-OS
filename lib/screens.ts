@@ -96,6 +96,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Plan a certificate: a gas safety, an EICR, a boiler service, an inspection, with the date it is due. Compliance can raise one from a certificate that is coming up.",
       "Open a job for its sheet: what needs doing next, the contractor, the quote and the landlord's authority, the invoice, the timeline under each person's name, and the files on it.",
       "A quote over the landlord's authority waits on their yes and says so; under it, the job is approved on the spot.",
+      "Who's Being Paid, once the work is done: the contractor (their invoice goes on the job and to accounts) or the agent who paid it themselves (accounts reimburse them). Where it is switched on for them, a third choice: The Landlord Paid Directly, for a landlord who settled with the contractor themselves (a pre-management home, say). That closes the job as settled, with the invoice and payment shown as Not needed; nothing goes to accounts, nothing goes on the payment run, and there is no invoice to the landlord. Add the Invoice or Receipt on the closed job puts the paper trail on it. Reopen takes it back to Who's Being Paid if it was pressed by mistake.",
       "The trades book has its own place now: Portfolio > Contractors.",
     ],
     wiring: "live",

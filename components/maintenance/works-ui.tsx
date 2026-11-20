@@ -22,10 +22,14 @@ export const STATUS_LABEL: Record<Status, string> = { reported: "Reported", appr
 export const PAYRUN_LABEL = "On the payment run";
 export const PAYRUN_LINE = "Coming out of the rent";
 export const TO_PAYPROP_LABEL = "Invoiced - waiting to go on PayProp";
+/** The landlord paid the contractor themselves (Dan, ticket b7a79378). */
+export const LANDLORD_PAID_LABEL = "Settled - the landlord paid directly";
 /** An invoice in and not yet paid: done or invoiced, with a figure. */
 export const awaitingPay = (o: Pick<WorksOrder, "status" | "invoicePence">) => o.invoicePence != null && (o.status === "invoiced" || o.status === "done");
 /** The job's status in words, with the payment run read in. Use this over STATUS_LABEL[o.status] wherever a job is shown. */
-export function statusLabel(o: Pick<WorksOrder, "status" | "invoicePence" | "payrunAt">): string {
+export function statusLabel(o: Pick<WorksOrder, "status" | "invoicePence" | "payrunAt"> & { payee?: WorksOrder["payee"] }): string {
+  /* Settled with no money through us (ticket b7a79378): never "Paid", which reads as paid by us. */
+  if (o.status === "paid" && o.payee === "landlord") return LANDLORD_PAID_LABEL;
   if (o.status === "invoiced" || (o.status === "done" && o.invoicePence != null)) return o.payrunAt ? PAYRUN_LABEL : TO_PAYPROP_LABEL;
   return STATUS_LABEL[o.status];
 }

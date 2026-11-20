@@ -5,7 +5,7 @@
  */
 export type StepOrder = {
   status: string; kind: string; landlordToldAt: string | null; arranging: "landlord" | "us" | null; landlordResolvedAt: string | null;
-  contractorId: string | null; contractorConfirmedAt: string | null; scheduledAt: string | null; completedAt: string | null; tenantHappy: "yes" | "no" | null; payee: "contractor" | "agent" | null;
+  contractorId: string | null; contractorConfirmedAt: string | null; scheduledAt: string | null; completedAt: string | null; tenantHappy: "yes" | "no" | null; payee: Payee | null;
   landlordSkipped?: boolean;
   /** Steps the agent chose to skip for now (Howard, 15 Oct 2026). Only SKIPPABLE ones, and never a faked fact. */
   skippedSteps?: string[];
@@ -13,6 +13,18 @@ export type StepOrder = {
   quoteRequestedAt?: string | null;
   quotePence?: number | null;
 };
+
+/**
+ * Who's being paid. "landlord": the landlord settled with the contractor
+ * themselves, so nothing goes through our accounts and the job closes as
+ * settled (Dan, ticket b7a79378, 20 Nov 2026: "the landlord paid them
+ * directly as it's pre management"). Picked only behind the "landlordpaid"
+ * switch; every reader of payee handles it whatever the switch says.
+ */
+export type Payee = "contractor" | "agent" | "landlord";
+export const isPayee = (v: unknown): v is Payee => v === "contractor" || v === "agent" || v === "landlord";
+/** The landlord paid the contractor themselves: no invoice for accounts, nothing on the pay run. */
+export const landlordPaid = (o: { payee?: Payee | null }) => o.payee === "landlord";
 
 /**
  * The landlord's answer on a contractor's invoice (Kirstie Mulholland, 20 Oct
@@ -93,6 +105,8 @@ export function stepOf(o: StepOrder): StepId {
   if (o.completedAt && o.arranging !== "landlord") {
     if (o.kind === "repair" && !o.tenantHappy && !wasSkipped(o, "aftercare")) return "aftercare";
     if (!o.payee) return "payment";
+    /* The landlord settled it themselves: no invoice, no payment, settled (ticket b7a79378). */
+    if (o.payee === "landlord") return "closed";
     return "invoice";
   }
   /* Quote first (Sean, 20 Oct 2026): waiting on the contractor's price, or
@@ -110,6 +124,7 @@ export function stepOf(o: StepOrder): StepId {
      tenantHappy stay empty, so doing it later still records the real thing. */
   if (o.kind === "repair" && !o.tenantHappy && !wasSkipped(o, "aftercare")) return "aftercare";
   if (!o.payee) return "payment";
+  if (o.payee === "landlord") return "closed";
   return "invoice";
 }
 

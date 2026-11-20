@@ -66,8 +66,13 @@ const SHORT: Record<StepId, string> = {
   closed: "Closed",
 };
 
-export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true, onCertificate, variant = "card", canPayrun = false }: {
+export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true, onCertificate, variant = "card", canPayrun = false, landlordPaidOn = false, onAddFile, onReopen }: {
   o: WorksOrder;
+  /** The "landlordpaid" switch (ticket b7a79378): Who's Being Paid offers The Landlord Paid Directly. Only the new-look job page passes it. */
+  landlordPaidOn?: boolean;
+  /** The page's Add a File and Reopen, for a job the landlord settled. */
+  onAddFile?: () => void;
+  onReopen?: () => void;
   /** The office may say the invoice is on the payment run (James, 21 Oct 2026); everyone else sees it read-only. */
   canPayrun?: boolean;
   /** "feature": the job sheet's own (9 Oct 2026, James: "very overwhelming:
@@ -113,11 +118,12 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
       {step === "booking" && <Booking o={o} f={f} setF={setF} move={move} busy={busy} />}
       {step === "visit" && <Visit o={o} f={f} setF={setF} move={move} busy={busy} onCertificate={onCertificate} />}
       {step === "aftercare" && <Aftercare o={o} f={f} setF={setF} move={move} busy={busy} />}
-      {step === "payment" && <Payment o={o} move={move} busy={busy} />}
+      {step === "payment" && <Payment o={o} move={move} busy={busy} landlordPaidOn={landlordPaidOn} />}
       {step === "invoice" && <Money o={o} f={f} setF={setF} move={move} busy={busy} onInvoiceLandlord={onInvoiceLandlord} canPayrun={canPayrun} />}
       {isSkippable(step) && <SkipForNow o={o} step={step} move={move} busy={busy} />}
       {step !== "closed" && <StillSkipped o={o} step={step} move={move} busy={busy} />}
-      {step === "closed" && (
+      {step === "closed" && o.payee === "landlord" && o.status === "paid" && <LandlordPaidNote o={o} onAddFile={onAddFile} onReopen={onReopen} />}
+      {step === "closed" && !(o.payee === "landlord" && o.status === "paid") && (
         <p className="text-[13px]">
           {o.status === "cancelled" ? `Cancelled. ${o.cancelledReason}` : o.status === "paid" ? `Paid ${dayOf(o.paidAt)}.` : `The landlord sorted it themselves, resolved ${dayOf(o.landlordResolvedAt)}.`}
         </p>
@@ -741,7 +747,7 @@ function Aftercare({ o, f, setF, move, busy }: StepProps) {
   );
 }
 
-function Payment({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean }) {
+function Payment({ o, move, busy, landlordPaidOn = false }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean; landlordPaidOn?: boolean }) {
   return (
     <div>
       {o.tenantHappy === "no" && <p className="mb-2 rounded-lg border border-accent-dark/40 bg-accent-soft/40 px-3 py-2 text-[12.5px]">The tenant said it isn't right{o.tenantHappyNote ? `: "${o.tenantHappyNote}"` : ""}. Sort that before the money.</p>}
@@ -754,7 +760,41 @@ function Payment({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Promise<
           <span className="block text-[14px] font-semibold">I paid it myself</span>
           <span className="mt-0.5 block text-[11.5px] text-muted">You're the payee; accounts reimburse you.</span>
         </button>
+        {/* Dan, ticket b7a79378 (20 Nov 2026): a pre-management home where the
+            landlord paid the contractor themselves. Closes the job as settled;
+            nothing to accounts. Behind the "landlordpaid" switch. */}
+        {landlordPaidOn && (
+          <button type="button" disabled={busy} onClick={() => void move({ action: "payee", payee: "landlord" })} className={`${tile} border-line/80 bg-card hover:border-ink/40`} data-steve="job.landlord-paid">
+            <span className="block text-[14px] font-semibold">The Landlord Paid Directly</span>
+            <span className="mt-0.5 block text-[11.5px] text-muted">They settled with the contractor; nothing goes through our accounts.</span>
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A job the landlord settled with the contractor themselves (ticket
+ * b7a79378): what is left to see once it is closed, and an optional place
+ * for the paper trail - the job's own Add a File, so it lands on the job and
+ * the home's Documents like any other file.
+ */
+export function LandlordPaidNote({ o, onAddFile, onReopen }: { o: WorksOrder; onAddFile?: () => void; onReopen?: () => void }) {
+  const btnQuiet = "wn-btn rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px]">The landlord paid {o.contractorName || "the contractor"} directly{o.paidAt ? `, recorded ${dayOf(o.paidAt)}` : ""}. No invoice to log and nothing to pay: none of it goes through our accounts or onto the payment run.</p>
+      {onAddFile && (
+        <div className="rounded-xl border border-line/80 bg-card p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">For the record (optional)</p>
+          <p className="mt-1 text-[11.5px] text-muted">Put the contractor&apos;s invoice or the landlord&apos;s receipt on the job, so there&apos;s a paper trail. It goes on the home&apos;s Documents too.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={onAddFile} className={primary}>Add the Invoice or Receipt</button>
+          </div>
+        </div>
+      )}
+      {onReopen && <button type="button" onClick={onReopen} className={btnQuiet} title="Back to Who's Being Paid, if this was pressed by mistake">Reopen</button>}
     </div>
   );
 }

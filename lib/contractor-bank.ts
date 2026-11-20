@@ -26,7 +26,8 @@ export async function setOrderBank(orderId: string, bank: BankDetails | null): P
 
 /** The bank details accounts pay this invoice to, whole, or null when there are none. */
 export async function bankForInvoice(o: WorksOrder): Promise<(BankDetails & { from: "invoice" | "record" }) | null> {
-  if (!hasDb() || o.payee === "agent") return null;
+  /* The agent is reimbursed, and a landlord who paid direct is owed nothing by us (ticket b7a79378). */
+  if (!hasDb() || o.payee === "agent" || o.payee === "landlord") return null;
   const [r] = await q<{ invoice_bank_name: string; invoice_bank_sort: string; invoice_bank_account: string }>(
     `SELECT invoice_bank_name, invoice_bank_sort, invoice_bank_account FROM os_works_orders WHERE id = $1`,
     [o.id]

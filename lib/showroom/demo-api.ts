@@ -114,6 +114,12 @@ function applyMove(w: DemoWorld, o: WorksOrder, move: Move, by: string): WorksOr
       break;
     case "payee":
       n.payee = move.payee;
+      /* The landlord paid directly (ticket b7a79378): settled, as lib/works-orders does it. */
+      if (move.payee === "landlord") {
+        Object.assign(n, { paidAt: at, paidHow: "landlord", status: "paid" });
+        text = `The landlord paid ${o.contractorName || "the contractor"} directly. Nothing goes through our accounts. Closed as settled.`;
+        break;
+      }
       text = move.payee === "agent" ? "To be paid to the agent, who paid the contractor themselves." : `To be paid to ${o.contractorName || "the contractor"}.`;
       break;
     case "quote": {

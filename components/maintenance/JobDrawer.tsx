@@ -465,7 +465,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                     quiet={!o.approvedAt}
                     hot={o.status === "approval"}
                   />
-                  {o.payee && <Figure k="Paying" v={o.payee === "agent" ? `${o.raisedBy} (paid it themselves)` : o.contractorName || "The contractor"} />}
+                  {o.payee && <Figure k="Paying" v={o.payee === "agent" ? `${o.raisedBy} (paid it themselves)` : o.payee === "landlord" ? "Nobody - the landlord paid directly" : o.contractorName || "The contractor"} />}
                   {o.invoicePence != null && <Figure k="Invoice" v={`${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}`} />}
                   {o.accountsToldAt && <Figure k="Accounts told" v={day(o.accountsToldAt)} />}
                   {o.payrunAt && <Figure k="On the payment run" v={`${day(o.payrunAt)} · ${PAYRUN_LINE}`} />}

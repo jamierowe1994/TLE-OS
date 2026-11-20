@@ -38,6 +38,8 @@ export type JobView = {
   o: WorksOrder;
   events: WorksEvent[];
   canPayrun: boolean;
+  /** The "landlordpaid" switch (ticket b7a79378): Who's Being Paid offers The Landlord Paid Directly. */
+  landlordPaidOn: boolean;
   saves: SaveScope;
   home: ManagedProperty | null;
   shots: string[];
@@ -241,6 +243,8 @@ export default function JobPageNew(v: JobView) {
                     onInvoiceLandlord={v.invoiceLandlord}
                     onCertificate={v.certificate}
                     onForm={(form) => v.openPop({ kind: "form", form })}
+                    landlordPaidOn={v.landlordPaidOn}
+                    onAddFile={() => v.fileRef.current?.click()}
                   />
                 </div>
               )}

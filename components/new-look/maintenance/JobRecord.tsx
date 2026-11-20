@@ -127,8 +127,9 @@ function Details({ o }: { o: WorksOrder }) {
       quiet: !o.approvedAt,
       hot: o.status === "approval",
     },
-    ...(o.payee ? [{ k: "Paying", v: o.payee === "agent" ? `${o.raisedBy || "The agent"} (paid it themselves)` : o.contractorName || "The contractor" }] : []),
-    { k: "Invoice", v: o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : "None yet", quiet: o.invoicePence == null },
+    ...(o.payee ? [{ k: "Paying", v: o.payee === "agent" ? `${o.raisedBy || "The agent"} (paid it themselves)` : o.payee === "landlord" ? "Nobody - the landlord paid directly" : o.contractorName || "The contractor" }] : []),
+    /* The landlord settled it (ticket b7a79378): no invoice is coming. */
+    { k: "Invoice", v: o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : o.payee === "landlord" ? "Not needed" : "None yet", quiet: o.invoicePence == null },
     /* Invoice in, on the payment run, paid - for everyone to see (James, 21 Oct 2026), as words. */
     ...(o.invoicePence != null ? [{ k: "Payment Run", v: o.payrunAt ? `On it since ${day(o.payrunAt)}` : o.status === "paid" ? "Paid without it" : "Not on it yet", quiet: !o.payrunAt }] : []),
     ...(o.accountsToldAt ? [{ k: "Accounts Told", v: day(o.accountsToldAt) }] : []),

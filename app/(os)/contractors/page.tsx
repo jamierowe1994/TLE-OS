@@ -55,7 +55,7 @@ type Job = {
   propertyName: string; locality: string; contractorId: string | null; contractorName: string;
   dueAt: string | null; scheduledAt: string | null; completedAt: string | null; contractorContactedAt: string | null;
   quotePence: number | null; invoicePence: number | null; invoiceRef: string; invoicedAt: string | null;
-  paidAt: string | null; paidHow: string | null; payee: "contractor" | "agent" | null; raisedBy: string; urgency: string | null;
+  paidAt: string | null; paidHow: string | null; payee: "contractor" | "agent" | "landlord" | null; raisedBy: string; urgency: string | null;
   /** On the payment run: keyed on PayProp by the office (21 Oct 2026). */
   payrunAt: string | null;
 };
@@ -181,7 +181,8 @@ export default function ContractorsPage() {
   const waitedDays = (j: Job) => (j.invoicedAt ? -ukDaysFromToday(j.invoicedAt) : 0);
   const owedPence = unpaid.reduce((a, j) => a + (j.invoicePence ?? 0), 0);
   const longWait = unpaid.filter((j) => waitedDays(j) > WAITING_DAYS);
-  const recentlyPaid = jobs.filter((j) => j.status === "paid").sort((a, b) => ((a.paidAt ?? "") > (b.paidAt ?? "") ? -1 : 1));
+  /* A job the landlord paid the contractor for themselves was never ours to pay (ticket b7a79378), so it isn't on the money lists. */
+  const recentlyPaid = jobs.filter((j) => j.status === "paid" && j.payee !== "landlord").sort((a, b) => ((a.paidAt ?? "") > (b.paidAt ?? "") ? -1 : 1));
   const payNeedle = payQ.trim();
   const payMatch = (j: Job) => !payNeedle || searchMatches(payNeedle, j.propertyName, j.locality, j.invoiceRef, j.contractorName, j.title, String(j.ref), j.payee === "agent" ? j.raisedBy : "");
   const shownUnpaid = unpaid.filter(payMatch);

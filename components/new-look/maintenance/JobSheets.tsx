@@ -51,6 +51,8 @@ export function JobSheets({ v }: { v: JobView }) {
             onInvoiceLandlord={v.invoiceLandlord}
             onCertificate={v.certificate}
             onForm={(form) => openPop({ kind: "form", form })}
+            landlordPaidOn={v.landlordPaidOn}
+            onAddFile={() => { closePop(); v.fileRef.current?.click(); }}
           />
         </FloatCard>
       </FloatSheet>

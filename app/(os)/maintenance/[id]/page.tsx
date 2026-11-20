@@ -110,6 +110,9 @@ export default function WorksOrderPage() {
   /* The new look behind its own switch (Admin > Switches, "Job page"): the
      same state, reads and handlers below, drawn by JobPageNew. */
   const look = useNewLook("job");
+  /* The Landlord Paid Directly on Who's Being Paid (Dan, ticket b7a79378):
+     its own switch, and only in the job page's new look. */
+  const landlordPaidSwitch = useNewLook("landlordpaid") === true;
 
   const [job, setJob] = useState<Loaded<Job>>({ state: "loading" });
   const [book, setBook] = useState<Loaded<ManagedProperty[]>>({ state: "loading" });
@@ -319,6 +322,8 @@ export default function WorksOrderPage() {
 
   /* ── the actions, beside the photos ─────────────────────────────────── */
   const isClosed = closed ? "The job is closed" : undefined;
+  /* The landlord paid the contractor themselves (ticket b7a79378): nothing to invoice, pay or charge. */
+  const byLandlord = o.payee === "landlord";
   const tiles: Tile[] = [
     { key: "quote", label: "Log a Quote", what: o.quotePence != null ? `Now ${pounds(o.quotePence)}` : "Their price, and the file", icon: "coin", off: isClosed, done: o.quotePence != null, run: () => openPop({ kind: "form", form: "quote" }) },
     { key: "approve", label: o.status === "approval" ? "Landlord Approved" : "Approve the Quote", what: o.status === "approval" ? "Waiting on their yes" : o.approvedAt ? `${o.approvedBy || "Approved"} · ${day(o.approvedAt)}` : "Their go-ahead, by phone or email", icon: "checklist", off: isClosed, done: !!o.approvedAt && o.status !== "approval", run: () => openPop({ kind: "form", form: "approve" }) },
@@ -332,10 +337,10 @@ export default function WorksOrderPage() {
     { key: "done", label: "Mark It Done", what: o.completedAt ? `Done ${day(o.completedAt)}` : "What was done, and when", icon: "checklist", off: isClosed ?? (o.completedAt ? "Already done" : undefined), done: !!o.completedAt, run: () => openPop({ kind: "form", form: "done" }) },
     { key: "cert", label: "Add a Certificate", what: "Read and filed on the home", icon: "shield", off: o.status === "cancelled" ? "The job is cancelled" : undefined, run: () => openPop({ kind: "cert" }) },
     ...(o.kind === "repair" ? [{ key: "happy", label: "Is the Tenant Happy?", what: o.tenantHappy ? `${o.tenantHappy === "yes" ? "Happy" : "Not happy"}${o.tenantHappyAt ? ` · ${day(o.tenantHappyAt)}` : ""}` : "Their yes or no", icon: "message", off: !o.completedAt ? "Once it's done" : isClosed, done: !!o.tenantHappy, run: () => openPop({ kind: "stage", stage: "aftercare" }) }] : []),
-    { key: "payee", label: "Who's Being Paid", what: o.payee === "agent" ? "The agent, who paid it" : o.payee === "contractor" ? o.contractorName || "The contractor" : "The contractor, or you", icon: "wallet", off: isClosed, done: !!o.payee, run: () => openPop({ kind: "stage", stage: "payment" }) },
-    { key: "invoice", label: o.invoicePence != null ? "Change the Invoice" : "Log the Invoice", what: o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : "Amount, number and file", icon: "doc", off: isClosed, done: o.invoicePence != null, run: () => openPop({ kind: "form", form: "invoice" }) },
-    { key: "landlord_says", label: "Landlord Authorises", what: o.landlordInvoiceAnswer ? "Answered" : o.landlordInvoiceAskedAt ? `Sent ${day(o.landlordInvoiceAskedAt)}` : "From the rent, or direct", icon: "home", off: o.invoicePence == null ? "Log the invoice first" : isClosed, done: !!o.landlordInvoiceAnswer, run: () => openPop({ kind: "landlord_says" }) },
-    { key: "raise", label: "Invoice the Landlord", what: "Draft our invoice to them", icon: "file-contract", off: o.status === "cancelled" ? "The job is cancelled" : undefined, run: () => void invoiceLandlord() },
+    { key: "payee", label: "Who's Being Paid", what: o.payee === "agent" ? "The agent, who paid it" : o.payee === "contractor" ? o.contractorName || "The contractor" : byLandlord ? "The landlord paid directly" : look && landlordPaidSwitch ? "The contractor, you, or the landlord direct" : "The contractor, or you", icon: "wallet", off: isClosed, done: !!o.payee, run: () => openPop({ kind: "stage", stage: "payment" }) },
+    { key: "invoice", label: o.invoicePence != null ? "Change the Invoice" : "Log the Invoice", what: byLandlord ? "Not needed" : o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : "Amount, number and file", icon: "doc", off: byLandlord ? "The landlord paid directly" : isClosed, done: o.invoicePence != null, run: () => openPop({ kind: "form", form: "invoice" }) },
+    { key: "landlord_says", label: "Landlord Authorises", what: o.landlordInvoiceAnswer ? "Answered" : o.landlordInvoiceAskedAt ? `Sent ${day(o.landlordInvoiceAskedAt)}` : "From the rent, or direct", icon: "home", off: byLandlord ? "The landlord paid directly" : o.invoicePence == null ? "Log the invoice first" : isClosed, done: !!o.landlordInvoiceAnswer, run: () => openPop({ kind: "landlord_says" }) },
+    { key: "raise", label: "Invoice the Landlord", what: byLandlord ? "Not needed" : "Draft our invoice to them", icon: "file-contract", off: o.status === "cancelled" ? "The job is cancelled" : byLandlord ? "The landlord paid directly" : undefined, run: () => void invoiceLandlord() },
     /* The office says it's keyed on PayProp (James, 21 Oct 2026). Beside Mark paid, for them only. */
     ...(canPayrun ? [{
       key: "payrun",
@@ -346,7 +351,7 @@ export default function WorksOrderPage() {
       done: !!payrunAt,
       run: () => void move({ action: payrunAt ? "payrun_undo" : "payrun" } as Move, PAYRUN_LABEL),
     }] : []),
-    { key: "paid", label: "Mark It Paid", what: o.paidAt ? `Paid ${day(o.paidAt)}` : "How it was settled", icon: "coin", off: o.status === "paid" ? "Already paid" : o.status === "cancelled" ? "The job is cancelled" : o.invoicePence == null ? "Log the invoice first" : undefined, done: o.status === "paid", run: () => openPop({ kind: "form", form: "paid" }) },
+    { key: "paid", label: "Mark It Paid", what: byLandlord ? "Not needed" : o.paidAt ? `Paid ${day(o.paidAt)}` : "How it was settled", icon: "coin", off: byLandlord ? "The landlord paid directly" : o.status === "paid" ? "Already paid" : o.status === "cancelled" ? "The job is cancelled" : o.invoicePence == null ? "Log the invoice first" : undefined, done: o.status === "paid", run: () => openPop({ kind: "form", form: "paid" }) },
     { key: "message", label: "Message the Landlord or Tenants", what: "One email, a copy each, noted on the job", icon: "mail", run: () => setMessaging(true) },
     { key: "note", label: "Add a Note", what: "A call, an email, a query", icon: "note", run: () => openPop({ kind: "form", form: "note" }) },
     { key: "file", label: "Add a File or Photo", what: "On the job and the home", icon: "camera", off: busy ? "Uploading…" : undefined, run: () => fileRef.current?.click() },
@@ -393,6 +398,7 @@ export default function WorksOrderPage() {
         o={o}
         events={events}
         canPayrun={canPayrun}
+        landlordPaidOn={landlordPaidSwitch}
         saves={saves}
         home={home}
         shots={shots}
@@ -677,7 +683,7 @@ export default function WorksOrderPage() {
                       <Figure k="Landlord's authority" v={pounds(o.authorityPence)} />
                       <Figure k="Quote" v={o.quotePence != null ? pounds(o.quotePence) : "None yet"} quiet={o.quotePence == null} />
                       <Figure k="Approved" v={o.approvedAt ? `${o.approvedBy || "Yes"} · ${day(o.approvedAt)}` : o.status === "approval" ? "Waiting on the landlord" : o.quotePence == null || o.quotePence <= o.authorityPence ? "Within authority" : "Not yet"} quiet={!o.approvedAt} hot={o.status === "approval"} />
-                      {o.payee && <Figure k="Paying" v={o.payee === "agent" ? `${o.raisedBy || "The agent"} (paid it themselves)` : o.contractorName || "The contractor"} />}
+                      {o.payee && <Figure k="Paying" v={o.payee === "agent" ? `${o.raisedBy || "The agent"} (paid it themselves)` : o.payee === "landlord" ? "Nobody - the landlord paid directly" : o.contractorName || "The contractor"} />}
                       <Figure k="Invoice" v={o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : "None yet"} quiet={o.invoicePence == null} />
                       {o.accountsToldAt && <Figure k="Accounts told" v={day(o.accountsToldAt)} />}
                       {o.landlordInvoiceAnswer && <Figure k="Landlord says" v={o.landlordInvoiceAnswer === "pay" ? "From the rent" : o.landlordInvoiceAnswer === "direct" ? "Paying direct" : "A query"} hot={o.landlordInvoiceAnswer === "query"} />}

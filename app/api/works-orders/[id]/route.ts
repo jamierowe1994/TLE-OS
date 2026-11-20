@@ -9,6 +9,7 @@ import { invoiceSettings } from "@/lib/invoices";
 import { pounds } from "@/lib/works-orders";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { can } from "@/lib/roles";
+import { lookFor } from "@/lib/new-look-store";
 
 /* On the payment run (James, 21 Oct 2026): only the office - Kirstie,
    Michael, Josel - and the owners key invoices on PayProp, so only they say
@@ -45,6 +46,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!move || typeof move.action !== "string") return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
   if (PAYRUN_ACTIONS.has(move.action) && !canPayrun(actor.role)) {
     return NextResponse.json({ ok: false, error: "Only the office can put an invoice on the payment run." }, { status: 403 });
+  }
+  /* The Landlord Paid Directly (Dan, ticket b7a79378, 20 Nov 2026): behind
+     its own switch (lib/new-look "landlordpaid"), decided on whoever is
+     signed in. It sends nothing: no emails for a payee move, no accounts. */
+  if (move.action === "payee" && move.payee === "landlord" && !(await lookFor(actor).catch(() => null))?.landlordpaid) {
+    return NextResponse.json({ ok: false, error: "The Landlord Paid Directly isn't switched on for you yet." }, { status: 403 });
   }
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;

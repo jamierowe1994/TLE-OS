@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Move, WorksOrder } from "@/lib/works-orders";
 import { STEPS, stepOf, wasSkipped, type StepId } from "@/lib/works-steps";
 import {
-  WorksNow, CertificateUpload,
+  WorksNow, CertificateUpload, LandlordPaidNote,
   QuoteStep, TellLandlordStep, ArrangingStep, LandlordFollowUpStep, PickContractorStep, ContractorConfirmStep,
   BookingStep, VisitStep, AftercareStep, PaymentStep, MoneyStep,
 } from "@/components/WorksNow";
@@ -65,9 +65,17 @@ export function stagesOf(o: WorksOrder): Stage[] {
     add("aftercare", !!o.tenantHappy, o.tenantHappy ? `${o.tenantHappy === "yes" ? "Yes" : "No"}${o.tenantHappyAt ? ` · ${day(o.tenantHappyAt)}` : ""}` : skipped ? "Skipped" : "", skipped);
   }
   if (o.arranging !== "landlord") {
-    add("payment", !!o.payee, o.payee === "agent" ? "The agent" : o.payee === "contractor" ? "Contractor" : "");
-    add("invoice", o.invoicePence != null, o.invoicedAt ? day(o.invoicedAt) : "");
-    add("closed", o.status === "paid", o.paidAt ? day(o.paidAt) : "");
+    add("payment", !!o.payee, o.payee === "agent" ? "The agent" : o.payee === "contractor" ? "Contractor" : o.payee === "landlord" ? "The landlord" : "");
+    /* The landlord paid the contractor themselves (ticket b7a79378): no
+       invoice and no payment through us, shown as "Landlord told" shows a
+       planned job's landlord - done, and not needed. */
+    if (o.payee === "landlord") {
+      add("invoice", true, "Not needed");
+      add("closed", o.status === "paid", "Not needed");
+    } else {
+      add("invoice", o.invoicePence != null, o.invoicedAt ? day(o.invoicedAt) : "");
+      add("closed", o.status === "paid", o.paidAt ? day(o.paidAt) : "");
+    }
   }
   return list;
 }
@@ -156,8 +164,12 @@ export function StageTracker({ o, picked, onPick, look }: {
  * other gets that stage's form, with a line saying it isn't the step the job
  * is on.
  */
-export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun, onInvoiceLandlord, onCertificate, onForm, bare = false }: {
+export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun, onInvoiceLandlord, onCertificate, onForm, bare = false, landlordPaidOn = false, onAddFile }: {
   o: WorksOrder;
+  /** The "landlordpaid" switch is on for this person: Who's Being Paid offers The Landlord Paid Directly (ticket b7a79378). */
+  landlordPaidOn?: boolean;
+  /** Opens the page's own Add a File, for the paper trail on a job the landlord settled. */
+  onAddFile?: () => void;
   /** The caller draws the stage's name and blurb (the job page's Current Stage card). */
   bare?: boolean;
   stage: StepId;
@@ -175,7 +187,7 @@ export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun,
   const mv = async (m: Move) => { await move(m); };
   const meta = STEPS.find((s) => s.id === stage);
   if (stage === here && o.status !== "cancelled") {
-    return <WorksNow o={o} move={mv} busy={busy} err={err} canCorporate={canCorporate} canPayrun={canPayrun} onInvoiceLandlord={onInvoiceLandlord} onCertificate={onCertificate} variant={bare ? "bare" : "card"} />;
+    return <WorksNow o={o} move={mv} busy={busy} err={err} canCorporate={canCorporate} canPayrun={canPayrun} onInvoiceLandlord={onInvoiceLandlord} onCertificate={onCertificate} variant={bare ? "bare" : "card"} landlordPaidOn={landlordPaidOn} onAddFile={onAddFile} onReopen={() => onForm("reopen")} />;
   }
   const btn = "wn-btn rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
   const primary = "wn-primary rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
@@ -237,13 +249,17 @@ export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun,
         : <p className="text-[12.5px] text-muted">The tenant is asked once the job is marked done.</p>;
       break;
     case "payment":
-      body = <PaymentStep o={o} move={mv} busy={busy} />;
+      body = <PaymentStep o={o} move={mv} busy={busy} landlordPaidOn={landlordPaidOn} />;
       break;
     case "invoice":
-      body = <Stateful render={(sf, ssf) => <MoneyStep o={o} f={sf} setF={ssf} move={mv} busy={busy} onInvoiceLandlord={onInvoiceLandlord} canPayrun={canPayrun} />} />;
+      body = o.payee === "landlord"
+        ? <LandlordPaidNote o={o} onAddFile={onAddFile} />
+        : <Stateful render={(sf, ssf) => <MoneyStep o={o} f={sf} setF={ssf} move={mv} busy={busy} onInvoiceLandlord={onInvoiceLandlord} canPayrun={canPayrun} />} />;
       break;
     case "closed":
-      body = o.status === "paid"
+      body = o.payee === "landlord" && o.status === "paid"
+        ? <LandlordPaidNote o={o} onAddFile={onAddFile} onReopen={() => onForm("reopen")} />
+        : o.status === "paid"
         ? (
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-[12.5px]">Paid {day(o.paidAt)}.</p>

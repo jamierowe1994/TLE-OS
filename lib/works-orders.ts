@@ -81,8 +81,8 @@ export const OPEN_STATUSES: Status[] = ["reported", "approval", "approved", "sch
  * through one thing at a time."
  */
 export { STEPS, stepOf, type StepId } from "@/lib/works-steps";
-import { stepOf as stepOfOrder, isSkippable, skippedLine, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type SkippableStep } from "@/lib/works-steps";
-export { LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer };
+import { stepOf as stepOfOrder, isSkippable, isPayee, skippedLine, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type Payee, type SkippableStep } from "@/lib/works-steps";
+export { LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type Payee };
 
 export const PAID_HOW = [
   { id: "payprop", label: "Charged to the landlord through PayProp" },
@@ -207,8 +207,9 @@ export interface WorksOrder {
   tenantHappy: "yes" | "no" | null;
   tenantHappyAt: string | null;
   tenantHappyNote: string;
-  /** Who gets paid: the contractor, or the agent who paid out of their own pocket. */
-  payee: "contractor" | "agent" | null;
+  /** Who gets paid: the contractor, or the agent who paid out of their own pocket.
+   *  "landlord": nobody - the landlord paid the contractor direct (ticket b7a79378). */
+  payee: Payee | null;
   contractorToken: string | null;
   tenantToken: string | null;
   propertyLat: number | null;
@@ -341,7 +342,7 @@ function toOrder(r: Row): WorksOrder {
     tenantHappy: r.tenant_happy === "yes" || r.tenant_happy === "no" ? r.tenant_happy : null,
     tenantHappyAt: iso(r.tenant_happy_at),
     tenantHappyNote: s(r.tenant_happy_note),
-    payee: r.payee === "contractor" || r.payee === "agent" ? r.payee : null,
+    payee: isPayee(r.payee) ? r.payee : null,
     contractorToken: r.contractor_token ? s(r.contractor_token) : null,
     tenantToken: r.tenant_token ? s(r.tenant_token) : null,
     propertyLat: n(r.property_lat),
@@ -746,7 +747,8 @@ export type Move =
   /* tenantEdit: the tenants' email in the agent's own words (Lianna Denholm, 16 Nov 2026). */
   | { action: "contractor_confirmed"; note?: string; tenantEdit?: TenantWords | null; contractorEdit?: ContractorWords | null }
   | { action: "tenant_happy"; happy: "yes" | "no"; note?: string }
-  | { action: "payee"; payee: "contractor" | "agent"; note?: string }
+  /* "landlord" closes the job as settled; the route lets it through only where the "landlordpaid" switch is on. */
+  | { action: "payee"; payee: Payee; note?: string }
   /* Skip for now (Howard, 15 Oct 2026): only the current step, only a SKIPPABLE one. Sends nothing. */
   | { action: "skip_step"; step: SkippableStep; note?: string }
   /* ── the sheet ── */
@@ -932,6 +934,25 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
       break;
     }
     case "payee": {
+      if (!isPayee(move.payee)) throw new Error("Who's being paid?");
+      /* The landlord paid the contractor themselves (Dan, ticket b7a79378,
+         20 Nov 2026: a pre-management home, so it never came through us).
+         Nothing to invoice and nothing to pay, so the job closes here as
+         settled, the way Mark paid "by the landlord direct" closes one -
+         but without an invoice, so it never reaches accounts, the pay run
+         or anyone's To pay list. Who and when are on the timeline. */
+      if (move.payee === "landlord") {
+        if (o.status === "cancelled") throw new Error("The job is cancelled. Reopen it first.");
+        if (o.status === "paid") throw new Error("The job is already settled.");
+        if (!o.completedAt) throw new Error("Mark the work done first.");
+        if (o.invoicePence != null || o.payrunAt) throw new Error("An invoice is already on the job for accounts. Use Mark It Paid and choose Paid by the landlord direct instead.");
+        set("payee", "landlord");
+        set("status", "paid");
+        set("paid_at", new Date());
+        set("paid_how", "landlord");
+        text = `The landlord paid ${o.contractorName || "the contractor"} directly. Nothing goes through our accounts, so there is no invoice to log and nothing to pay. Closed as settled.${move.note?.trim() ? ` ${move.note.trim()}` : ""}`;
+        break;
+      }
       set("payee", move.payee);
       text = move.payee === "agent" ? `To be paid to the agent, who paid the contractor themselves.${move.note ? ` ${move.note}` : ""}` : `To be paid to ${o.contractorName || "the contractor"}.${move.note ? ` ${move.note}` : ""}`;
       break;
@@ -1090,6 +1111,8 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
     }
     case "invoice": {
       if (!Number.isFinite(move.invoicePence) || move.invoicePence < 0) throw new Error("An invoice needs a figure.");
+      /* Logging an invoice tells accounts to pay it (the route's tellAccounts). The landlord paid this one (ticket b7a79378). */
+      if (o.payee === "landlord") throw new Error("The landlord paid the contractor directly, so there's no invoice for accounts. Put their invoice or receipt on with Add a File.");
       set("invoice_pence", Math.round(move.invoicePence));
       set("invoice_ref", (move.invoiceRef ?? "").trim());
       set("invoiced_at", new Date());
@@ -1170,6 +1193,16 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
       break;
     }
     case "reopen": {
+      /* Settled by the landlord and reopened (pressed by mistake, or they
+         didn't pay after all): back to Who's Being Paid, the work still done. */
+      if (o.payee === "landlord" && o.status === "paid") {
+        set("status", "done");
+        set("payee", null);
+        set("paid_at", null);
+        set("paid_how", null);
+        text = `Reopened: no longer marked as paid by the landlord, so who's being paid is open again.${move.note ? ` ${move.note}` : ""}`;
+        break;
+      }
       set("status", o.contractorId && o.scheduledAt ? "scheduled" : "reported");
       set("cancelled_reason", "");
       text = `Reopened.${move.note ? ` ${move.note}` : ""}`;

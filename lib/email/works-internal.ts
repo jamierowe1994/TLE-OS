@@ -37,7 +37,8 @@ const when = (iso: string | null) =>
  * the accounts inbox and nowhere else, and whoever pays needs every digit.
  */
 export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null, caution?: string | null): AgentEmail {
-  const payee = o.payee === "agent" ? `${o.raisedBy} (paid the contractor themselves)` : o.contractorName || "the contractor";
+  /* "landlord" never reaches here (lib/works-orders refuses an invoice on it, ticket b7a79378); named honestly if it ever did. */
+  const payee = o.payee === "agent" ? `${o.raisedBy} (paid the contractor themselves)` : o.payee === "landlord" ? "nobody - the landlord paid directly" : o.contractorName || "the contractor";
   const subject = `Invoice in: #${o.ref} ${o.title}, ${pounds(o.invoicePence)} to ${payee}`;
   const payTo = bank ? `${bank.accountName} · sort code ${sortCodeWords(bank.sortCode)} · account ${bank.accountNumber}` : "";
   return {
