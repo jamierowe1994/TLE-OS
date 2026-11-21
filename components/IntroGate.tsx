@@ -1,6 +1,7 @@
 "use client";
 
 import { fetchMe } from "@/lib/me";
+import { entranceSoundOn, markSteveEntranceSeen, pickSteveEntrance, steveEntranceSrc } from "@/lib/entrance-steve";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNewLook } from "@/lib/use-new-look";
@@ -47,7 +48,14 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
   const [show, setShow] = useState(false);
   const [fading, setFading] = useState(false);
   const done = useRef(false);
-  const look = useNewLook("entrance");
+  const filmLook = useNewLook("entrance");
+  const steveLook = useNewLook("entrancesteve");
+  /* Steve's entrance needs a screen wide enough to hold the whole name; a
+     narrow window, or a clip that will not play, falls back to Entrance. */
+  const [steveOut, setSteveOut] = useState(false);
+  const steve = steveLook === true && !steveOut;
+  const steveCannot = useMemo(() => () => setSteveOut(true), []);
+  const look = steveLook === null ? null : steve ? true : filmLook;
 
   /* Picked once per mount, and NOT during render on the server: the server
      and the browser would choose different pictures and React would keep the
@@ -123,7 +131,7 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
           className={look === true ? `ent-cover${fading ? " is-leaving" : ""}` : `fixed inset-0 z-[250] cursor-pointer bg-page transition-opacity duration-700 ${fading ? "pointer-events-none opacity-0" : "opacity-100"}`}
         >
           <h1 className="sr-only">Welcome to TLE OS</h1>
-          {look === true && <EntranceFilm onDone={dismiss} />}
+          {look === true && (steve ? <EntranceSteve onDone={dismiss} onCannot={steveCannot} leaving={fading} /> : <EntranceFilm onDone={dismiss} />)}
           <button
             type="button"
             onClick={dismiss}
@@ -241,6 +249,106 @@ function EntranceFilm({ onDone }: { onDone: () => void }) {
         </h2>
         <i className="ent-rule" />
         <p className="ent-date"><span>{today}</span></p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * STEVE'S ENTRANCE (James, 21 Nov 2026: "very unique and playful, with a bit
+ * of sound that is fun ... when people sign in, they know it's purpose-built").
+ *
+ * A three second film made in Blender (public/entrance/steve-N.mp4, four
+ * versions): the letters TLE OS drop onto linen, one lands crooked, Steve
+ * rolls in, hops up and knocks it straight, looks at you, then jumps out of
+ * the top - and the cover lifts with him. The film fills the screen whatever
+ * its shape; the greeting is real type over it, so the name is the person's.
+ *
+ * Sound: browsers only allow it once the person has clicked on the site, so
+ * it is tried with sound and played silent if that is refused. Profile >
+ * Appearance turns it off for good on this computer.
+ */
+function EntranceSteve({ onDone, onCannot, leaving }: { onDone: () => void; onCannot: () => void; leaving: boolean }) {
+  const [first, setFirst] = useState<string | null>(null);
+  const [src, setSrc] = useState<string | null>(null);
+  const film = useRef<HTMLVideoElement | null>(null);
+  const left = useRef(false);
+
+  useEffect(() => {
+    /* The name is under half the film's width; a window much taller than it is wide would cut Steve off. */
+    if (window.innerWidth / Math.max(1, window.innerHeight) < 1.25) { onCannot(); return; }
+    setSrc(steveEntranceSrc(pickSteveEntrance()));
+    let live = true;
+    void fetchMe().then((m) => {
+      const n = (m?.actor?.name || m?.user?.name || "").trim().split(/\s+/)[0];
+      if (live && n) setFirst(n);
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [onCannot]);
+
+  useEffect(() => {
+    const v = film.current;
+    if (!v || !src) return;
+    let raf = 0;
+    /* Sound that is allowed but cannot start (no speakers, a tab kept quiet)
+       holds the picture at its first frame: carry on without it. */
+    const stuck = window.setTimeout(() => { if (!v.muted && v.currentTime < 0.03) v.muted = true; }, 350);
+    /* If it has not started in a second and a half, do not make anyone wait for a cartoon. */
+    const late = window.setTimeout(() => { if (v.currentTime < 0.05) onCannot(); }, 1500);
+    const go = () => {
+      if (left.current) return;
+      left.current = true;
+      markSteveEntranceSeen();
+      onDone();
+    };
+    /* He leaves the ground at 2.62s: the cover goes up with him. Watched
+       every frame, and on the film's own clock too, because a tab in the
+       background gets no frames. */
+    const check = () => { if (v.currentTime >= 2.6) go(); };
+    const tick = () => {
+      check();
+      if (!left.current) raf = window.requestAnimationFrame(tick);
+    };
+    const start = async () => {
+      v.muted = !entranceSoundOn();
+      v.volume = 0.6;
+      try {
+        await v.play();
+      } catch {
+        v.muted = true;
+        try { await v.play(); } catch { onCannot(); return; }
+      }
+      raf = window.requestAnimationFrame(tick);
+    };
+    void start();
+    v.addEventListener("ended", go);
+    v.addEventListener("timeupdate", check);
+    v.addEventListener("error", onCannot);
+    return () => {
+      window.clearTimeout(stuck);
+      window.clearTimeout(late);
+      window.cancelAnimationFrame(raf);
+      v.removeEventListener("ended", go);
+      v.removeEventListener("timeupdate", check);
+      v.removeEventListener("error", onCannot);
+    };
+  }, [src, onDone, onCannot]);
+
+  /* Skipped: it should not carry on making a noise behind the page. */
+  useEffect(() => {
+    if (!leaving || left.current) return;
+    left.current = true;
+    const v = film.current;
+    if (v) { v.muted = true; v.pause(); }
+  }, [leaving]);
+
+  const h = new Date().getHours();
+  const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return (
+    <div className="ents" aria-hidden>
+      <div className="ents-stage">
+        {src && <video ref={film} className="ents-film" src={src} playsInline preload="auto" />}
+        <p className="ents-hello"><span>{part}{first ? `, ${first}` : ""}</span></p>
       </div>
     </div>
   );

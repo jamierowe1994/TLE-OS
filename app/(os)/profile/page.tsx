@@ -28,6 +28,7 @@ import {
 } from "@/lib/theme";
 import { fetchMe, invalidateMe } from "@/lib/me";
 import { useNewLook } from "@/lib/use-new-look";
+import { entranceSoundOn, setEntranceSound } from "@/lib/entrance-steve";
 import { Badge, Ico, Mast, Tabs } from "@/components/new-look/Parts";
 import PreAppraisalQuestions from "@/components/new-look/PreAppraisalQuestions";
 
@@ -280,6 +281,10 @@ export default function ProfilePage() {
   const [tab, setTab] = useState<TabKey>("info");
   /* The new look (lib/new-look "settings", 23 Oct 2026). */
   const look = useNewLook("settings");
+  /* Steve's entrance has a sound; this computer can have it off (21 Nov 2026). */
+  const steveEntrance = useNewLook("entrancesteve");
+  const [entSound, setEntSound] = useState(true);
+  useEffect(() => { setEntSound(entranceSoundOn()); }, []);
   /* ?tab=connections lands on that tab - the launch checklist's REX and
      email links (12 Oct 2026). */
   useEffect(() => {
@@ -766,6 +771,30 @@ export default function ProfilePage() {
                   </button>
                 ))}
               </div>
+
+              {steveEntrance === true && (
+                <>
+                  <h2 className="nl-block-title" style={{ marginTop: 40 }}>Entrance Sound</h2>
+                  <p className="nl-meta mb-4 mt-1">The short sound as Steve lets you in. Only you hear it, on this computer. Your browser may keep it quiet until you have clicked on the page.</p>
+                  <div className="nl-choice-row" role="radiogroup" aria-label="Entrance sound">
+                    {([{ on: true, label: "On", sub: "A quiet roll, a knock and a chime" }, { on: false, label: "Off", sub: "Steve still lets you in, silently" }] as const).map((c) => (
+                      <button
+                        key={c.label}
+                        type="button"
+                        role="radio"
+                        aria-checked={entSound === c.on}
+                        onClick={() => { setEntSound(c.on); setEntranceSound(c.on); }}
+                        className={`nl-choice${entSound === c.on ? " is-on" : ""}`}
+                        data-steve={`profile.entrance-sound.${c.on ? "on" : "off"}`}
+                      >
+                        <Ico name={c.on ? "megaphone" : "moon"} size={18} />
+                        <span className="font-medium">{c.label}</span>
+                        <small>{c.sub}</small>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 

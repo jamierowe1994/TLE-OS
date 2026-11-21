@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import DoorFrame from "@/components/DoorFrame";
+import { fetchSteveEntranceAhead } from "@/lib/entrance-steve";
 
 /**
  * Signing in.
@@ -200,6 +201,8 @@ function SignIn() {
 }
 
 export default function SignInPage() {
+  /* Steve's entrance (21 Nov 2026): a browser that has played it before fetches the next clip while the person signs in. */
+  useEffect(() => { fetchSteveEntranceAhead(); }, []);
   return (
     <Suspense fallback={<DoorFrame art="street"><p className="text-[12.5px] text-muted">Loading…</p></DoorFrame>}>
       <SignIn />

@@ -64,6 +64,8 @@ export const LOOK_SCREENS = [
   { id: "fade", label: "Page transitions", what: "Moving between screens: a slow fade out and a slow fade in, in place of the page folding and dropping away." },
   /* The entrance (James, 26 Oct 2026): the painting no longer fits the new look. */
   { id: "entrance", label: "Entrance", what: "The first screen of a visit: a coral line comes in from the left, writes TLE, runs flat, writes OS and leaves to the right, then fades into the page as it pops in. Once a visit, never on a refresh. Off, the painting and the logo." },
+  /* Steve's entrance (James, 21 Nov 2026): made in Blender, with sound. Wins over Entrance when both are on. */
+  { id: "entrancesteve", label: "Entrance: Steve", what: "The first screen of a visit, in 3D: the letters TLE OS drop onto linen, one lands crooked, Steve rolls in, knocks it straight, looks at you and jumps out of the top as the page opens. Three seconds, four versions picked at random, with a quiet sound each person can turn off in Profile. Once a visit, never on a refresh. Off, whatever Entrance says." },
   /* Not a reskin (James, 5 Nov 2026): the November 2026 terms, with the questions about the home asked before the
      contract, a check for the agent before sending, and the landlord's bank details on the contract. */
   { id: "termsqs", label: "Questions before signing", what: "Terms go out on the November 2026 wording: bank details and the landlord declarations on page 2. Sending, the agent sees what the landlord will be asked about the home and answers what they know (never gas or bank details); the landlord answers the rest a few questions at a time before the contract opens. Off, the October terms and no questions first." },
