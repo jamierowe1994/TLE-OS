@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import type { Finding, Inspection } from "@/lib/inspections";
 import { ANSWER_WORD, CHECKS, READINGS, asChecks, checksDone, type CheckAnswer, type Checks } from "@/lib/inspection-checks";
+import { uploadVisitPhotos } from "@/lib/visit-photos";
 
 /**
  * RECORD THE VISIT (James, 3 Oct 2026: "...and then record it afterwards").
@@ -197,22 +198,13 @@ function AddRoom({ taken, onAdd }: { taken: string[]; onAdd: (r: string) => void
   );
 }
 
-/** Photos onto R2 under the inspection, the same route the sheet's findings use. */
-async function upload(inspectionId: string, files: FileList): Promise<{ key: string; name: string }[]> {
-  const added: { key: string; name: string }[] = [];
-  for (const file of Array.from(files)) {
-    const body = new FormData();
-    body.set("scope", "photo");
-    body.set("ref", `inspection-${inspectionId}`);
-    body.set("file", file);
-    const j = await fetch("/api/r2/upload", { method: "POST", body }).then((r) => r.json());
-    if (!j.ok) throw new Error(j.error ?? "That picture would not upload.");
-    added.push({ key: j.key, name: file.name });
-  }
-  return added;
+/** Photos onto R2 under the inspection, made smaller first and kept even when
+    one of them fails (lib/visit-photos, Dan Richards, ticket f30276b7). */
+async function upload(inspectionId: string, files: File[]): Promise<{ added: { key: string; name: string }[]; failed: string[] }> {
+  return uploadVisitPhotos(inspectionId, files);
 }
 
-function Photos({ photos, onAdd, busy }: { photos: { key: string; name: string }[]; onAdd: (files: FileList) => Promise<void>; busy: boolean }) {
+function Photos({ photos, onAdd, busy }: { photos: { key: string; name: string }[]; onAdd: (files: File[]) => Promise<void>; busy: boolean }) {
   const [up, setUp] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   return (
@@ -237,9 +229,10 @@ function Photos({ photos, onAdd, busy }: { photos: { key: string; name: string }
             disabled={busy || up}
             className="hidden"
             onChange={async (e) => {
-              const f = e.target.files;
+              /* Copied out before the picker is cleared, so the list cannot go empty under us. */
+              const f = e.target.files ? Array.from(e.target.files) : [];
               e.currentTarget.value = "";
-              if (!f?.length) return;
+              if (!f.length) return;
               setUp(true);
               setErr(null);
               try {
@@ -326,13 +319,18 @@ function RoomPane({
         photos={photos}
         busy={busy}
         onAdd={async (files) => {
-          const more = await upload(inspection.id, files);
-          const next = [...photos, ...more];
-          setPhotos(next);
-          /* Saved straight away once the room has a condition, so a photo is
-             never in storage with nothing on the record pointing at it. */
-          if (cond) await onMove({ finding: { ...(overall ?? {}), room, item: OVERALL, condition: cond, note, action, photos: next } }, "Photo");
-          else setSaved(false);
+          const { added, failed } = await upload(inspection.id, files);
+          if (added.length) {
+            const next = [...photos, ...added];
+            setPhotos(next);
+            /* Saved straight away once the room has a condition, so a photo is
+               never in storage with nothing on the record pointing at it. The
+               ones that made it are saved even when another did not
+               (ticket f30276b7): they used to be dropped with it. */
+            if (cond) await onMove({ finding: { ...(overall ?? {}), room, item: OVERALL, condition: cond, note, action, photos: next } }, "Photo");
+            else setSaved(false);
+          }
+          if (failed.length) throw new Error(failed.join(" "));
         }}
       />
 
