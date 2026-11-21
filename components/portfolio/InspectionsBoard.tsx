@@ -25,6 +25,7 @@ import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import { searchMatches } from "@/lib/search-match";
 import { useNoteVisit } from "@/lib/recent-visits";
+import { uploadVisitPhotos } from "@/lib/visit-photos";
 import BoardSearch, { overviewQuery, useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
 
 /**
@@ -1414,24 +1415,18 @@ function FindingPhotos({ finding, busy, onMove }: { finding: Finding; busy: bool
   const reporter = useSaveReporter();
   const photos = finding.photos ?? [];
 
-  async function add(files: FileList | null) {
+  async function add(files: File[] | null) {
     if (!files || files.length === 0) return;
     setUploading(true);
     setErr(null);
     try {
-      const added: { key: string; name: string }[] = [];
-      for (const file of Array.from(files)) {
-        const body = new FormData();
-        body.set("scope", "photo");
-        body.set("ref", `inspection-${finding.inspectionId}`);
-        body.set("file", file);
-        const j = await fetch("/api/r2/upload", { method: "POST", body }).then((r) => r.json());
-        if (!j.ok) throw new Error(j.error ?? "That picture would not upload.");
-        added.push({ key: j.key, name: file.name });
-      }
+      /* Made smaller first, and the ones that made it kept even when another
+         did not (lib/visit-photos, Dan Richards, ticket f30276b7). */
+      const { added, failed } = await uploadVisitPhotos(finding.inspectionId, files);
       /* Saved through the finding's own save, so one picture cannot end up in
          storage with nothing on the record pointing at it. */
-      void onMove({ finding: { ...finding, photos: [...photos, ...added] } }, "Photo");
+      if (added.length) void onMove({ finding: { ...finding, photos: [...photos, ...added] } }, "Photo");
+      if (failed.length) throw new Error(failed.join(" "));
     } catch (e) {
       const problem = e instanceof Error ? e.message : "That picture would not upload.";
       setErr(problem);
@@ -1455,7 +1450,7 @@ function FindingPhotos({ finding, busy, onMove }: { finding: Finding; busy: bool
       )}
       <label className={`mt-1.5 inline-block text-[11px] ${busy || uploading ? "text-muted" : "cursor-pointer text-accent-dark underline"}`}>
         {uploading ? "Uploading…" : photos.length ? "Add another photo" : "Add a photo"}
-        <input type="file" accept="image/*" multiple disabled={busy || uploading} onChange={(e) => void add(e.target.files)} className="hidden" />
+        <input type="file" accept="image/*" multiple disabled={busy || uploading} onChange={(e) => { const f = e.target.files ? Array.from(e.target.files) : null; e.target.value = ""; void add(f); }} className="hidden" />
       </label>
       {err && <p className="mt-1 text-[11px] text-accent-dark">{err}</p>}
     </div>
