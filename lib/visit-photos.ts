@@ -2,16 +2,18 @@
  * PHOTOS ONTO A VISIT, from the browser (Dan Richards, ticket f30276b7,
  * 21 Nov 2026: "photos arent uploading to the property visit reports").
  *
- * Both photo buttons on a visit (a room on Record the Visit, and a finding on
- * the Inspections drawer) sent each picture as it came off the camera, one
- * after the other, and stopped at the first that failed. Three things went
- * wrong with that:
+ * THE CAUSE (found 23 Nov 2026, proven in Chrome): the room's "Add photos"
+ * button on Record the Visit read the picker's file list, cleared the picker,
+ * and only then looked at the list. The list is live, so clearing the picker
+ * emptied it: two photos picked, none left, nothing sent, no error. Not one
+ * visit photo had ever reached storage, for anyone. The list is now copied
+ * out before the picker is cleared (RecordVisit, InspectionsBoard).
  *
- *   - A phone photo is 5 to 25MB now. Over 15MB the photo scope refuses it,
- *     and a big one over a weak signal in the property can fail on the way.
- *   - When the third of five failed, the two that had already gone into
- *     storage were dropped with it: nothing on the visit pointed at them, so
- *     the report showed none.
+ * Two weaknesses were put right at the same time, since a phone photo is 5 to
+ * 25MB now and the photo scope refuses anything over 15MB:
+ *
+ *   - Pictures went up full size, one after the other, and the upload stopped
+ *     at the first that failed, dropping the ones that had already landed.
  *   - A reply that was not ours (a page from the host instead of an answer)
  *     came back as a code-word error, or none.
  *

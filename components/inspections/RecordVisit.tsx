@@ -16,8 +16,9 @@ import { uploadVisitPhotos } from "@/lib/visit-photos";
  * the landlord's email and the printout all carry it with no second copy.
  * Anything specific in a room ("extractor fan") is its own finding beneath.
  *
- * Works on a tablet or a phone in the property as well as at a desk: photos
- * open the camera where there is one.
+ * Works on a tablet or a phone in the property as well as at a desk: on a
+ * phone the photo button offers the camera or the photo library (it used to
+ * force the camera, so photos already taken could not be added; 23 Nov 2026).
  */
 
 type Move = (body: unknown, label?: string) => Promise<boolean>;
@@ -224,7 +225,6 @@ function Photos({ photos, onAdd, busy }: { photos: { key: string; name: string }
           <input
             type="file"
             accept="image/*"
-            capture="environment"
             multiple
             disabled={busy || up}
             className="hidden"
