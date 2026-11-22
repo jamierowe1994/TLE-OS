@@ -1836,11 +1836,16 @@ body:has(.fixed.inset-0.flex.items-center.justify-center, .fixed.inset-0.flex.it
 .ent-skip { position: absolute; z-index: 3; right: 32px; bottom: 28px; padding: 8px 14px; font: inherit; font-family: var(--font-bricolage), sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; color: #141413; background: transparent; border: 1px solid currentColor; cursor: pointer; opacity: .6; animation: ent-ink 4.4s ease forwards; }
 .ent-skip:hover { opacity: 1; }
 /* Steve's entrance (IntroGate EntranceSteve, 21 Nov 2026): a 16:9 film on the
-   same linen as the cover, sized to fill the screen whatever its shape, with
-   the greeting set in real type inside the film's own box so it keeps its
-   place under the letters and clear of Steve. */
+   same linen as the cover, with the greeting set in real type inside the
+   film's own box so it keeps its place under the letters and clear of Steve. */
 .ents { position: absolute; inset: 0; overflow: hidden; }
-.ents-stage { position: absolute; left: 50%; top: 50%; width: max(100vw, 177.78vh); height: max(100vh, 56.25vw); transform: translate(-50%, -50%); }
+/* Always the full width of the screen, so Steve is never cut off at the sides:
+   a wider screen crops a little sky and floor, a squarer one shows the cover's
+   own linen above and below, with the film's edges feathered into it. */
+.ents-stage { position: absolute; left: 50%; top: 50%; width: 100vw; height: 56.25vw; transform: translate(-50%, -50%); }
+@media (max-aspect-ratio: 16/9) {
+  .ents-film { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 9%, #000 91%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 9%, #000 91%, transparent 100%); }
+}
 .ents-film { display: block; width: 100%; height: 100%; object-fit: cover; background: #f5efe6; }
 .ents-hello { position: absolute; left: 0; right: 0; top: 73%; margin: 0; overflow: hidden; text-align: center; pointer-events: none; font-family: var(--font-bricolage), sans-serif; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; line-height: 1.1; font-size: clamp(20px, 2.5vw, 40px); color: #141413; }
 .ents-hello > span { display: block; transform: translateY(110%); animation: ent-rise .7s cubic-bezier(.34, 1.4, .64, 1) 1.9s forwards; }
