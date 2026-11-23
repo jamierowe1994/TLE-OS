@@ -1,6 +1,7 @@
 import { rexCall } from "@/lib/rex";
 import type { Handoff } from "@/lib/deal-handoff";
 import { isHmoType, isScottish } from "@/lib/property-flags";
+import { parseAddress } from "@/lib/address-parse";
 import { optOutFor, refOfContact, type OptOut } from "@/lib/zero-deposit-optout";
 import { letEditsFor } from "@/lib/let-edits";
 import { letNumber, sameLetValue, stillNewest, type LetField } from "@/lib/let-edit-fields";
@@ -136,6 +137,32 @@ export interface DealTerms {
   swap?: boolean;
   /** The holding fee was put right on the let in the OS (lib/let-edits): kept, never over a week's rent. */
   holdingFeeSet?: boolean;
+  /**
+   * The room, for a let of one room in a shared house ("3" for "Room 3, ...").
+   * Propoly refuses a deal on a home it rents per room without it: "room_no is
+   * required when property is rented per room" (Joe Patten, ticket ecd0574f,
+   * 23 Nov 2026). Read from the room's address; the agent can change it.
+   */
+  roomNo?: string | null;
+  /** A room let or a shared house: the push panel shows the Room box. */
+  roomLet?: boolean;
+}
+
+/** "Room 3, 12 High Street" → "3"; null when the address names no room. */
+export function roomOf(...addresses: (string | null | undefined)[]): string | null {
+  for (const a of addresses) {
+    if (!a || !a.trim()) continue;
+    const p = parseAddress(a);
+    if (p.unitWord === "room" && p.unit) return p.unit.toUpperCase();
+  }
+  return null;
+}
+
+/** The room as typed: "Room 3", "room 3" and "3" are all "3". Null when blank or odd. */
+export function cleanRoom(v: unknown): string | null {
+  if (typeof v !== "string" && typeof v !== "number") return null;
+  const s = String(v).trim().replace(/^(room|rm|bedroom|bed)\s*/i, "").trim();
+  return /^[A-Za-z0-9]{1,6}$/.test(s) ? s.toUpperCase() : null;
 }
 
 /** REX's lettings_service_type id → Propoly's service level. */
@@ -176,6 +203,10 @@ function dealDefaultsFor(packet: Handoff, listing: Row): DealTerms {
   const type = text(subcats[0]?.subcategory) ?? text((listing.property as Row | null)?.property_subcategory);
   const hmo = isHmoType(type);
   const bond = Number(listing.price_bond);
+  /* The room, from the listing's own address first, then the let's. */
+  const p = (listing.property ?? {}) as Row;
+  const unitLine = [str(p.adr_unit_number), str(p.adr_street_number), str(p.adr_street_name)].filter(Boolean).join(" ");
+  const roomNo = roomOf(unitLine, str(listing.display_address) ?? str(listing.name), packet.property);
   return {
     rentPcm: packet.rentPcm,
     moveIn: packet.startDate ? packet.startDate.slice(0, 10) : null,
@@ -189,6 +220,8 @@ function dealDefaultsFor(packet: Handoff, listing: Row): DealTerms {
     depositPounds: Number.isFinite(bond) && bond > 0 ? bond : null,
     holdingFeePounds: holdingFeeFor(packet.rentPcm, scotland),
     scotland,
+    roomNo,
+    roomLet: Boolean(roomNo) || hmo,
   };
 }
 
@@ -208,6 +241,11 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
   if (out.scotland) out.depositScheme = SCOTTISH_SCHEME;
   else if (typeof change.depositScheme === "string" && change.depositScheme in ENGLISH_SCHEMES) out.depositScheme = change.depositScheme;
   if (typeof change.zeroDeposit === "boolean") out.zeroDeposit = change.zeroDeposit;
+  /* The room box: blank clears it, anything that isn't a room number is ignored. */
+  if ("roomNo" in change) {
+    if (change.roomNo == null || (typeof change.roomNo === "string" && !change.roomNo.trim())) out.roomNo = null;
+    else out.roomNo = cleanRoom(change.roomNo) ?? out.roomNo ?? null;
+  }
   /* Never zero deposit for a landlord who opted out, whatever was sent. */
   if (out.landlordOptOut) out.zeroDeposit = false;
   const dep = money(change.depositPounds);
@@ -256,6 +294,8 @@ export function dealPayload(t: DealTerms, propertyUuid: string, managedBy: strin
       payment_schedule: t.paymentSchedule,
       deposit_pence: pence(t.depositPounds),
       holding_fee_pence: pence(t.holdingFeePounds),
+      /* Only for a room: Propoly wants it on a home rented per room (ticket ecd0574f). */
+      ...(t.roomNo ? { room_no: /^\d+$/.test(t.roomNo) ? Number(t.roomNo) : t.roomNo } : {}),
     },
   };
 }
