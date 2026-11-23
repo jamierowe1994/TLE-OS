@@ -1123,6 +1123,12 @@ export const config = {
        browser fetches it with no say over the redirect, and a 307 to the
        sign-in page means no phone alerts at all. A static file, at the root
        only, holding nothing but the code that shows an alert. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|sign|api/sign|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/offer-part|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/tenant/messages|api/landlord|api/calendar|brand|email|mail-img|case-img|nl|rex|r|api/r|library|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$|sw\\.js$).*)",
+    /* `entrance/steve-N.mp4` is Steve's three-second entrance (23 Nov 2026,
+       public/entrance): the sign-in page fetches the next one ahead so it is
+       ready the moment the door opens, and a signed-out browser got a 307 to
+       the sign-in page instead. Those four files only, named in full: a
+       cartoon of the TLE OS name with no data in it. The rest of the folder
+       stays behind the door. */
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|sign|api/sign|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/offer-part|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/tenant/messages|api/landlord|api/calendar|brand|email|mail-img|case-img|nl|rex|r|api/r|library|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$|sw\\.js$|entrance/steve-[1-4]\\.mp4$).*)",
   ],
 };
