@@ -91,6 +91,16 @@ const TERMS_UNCHECKED_SENTENCE =
  * only fix is before the press: publish with listing_agent_1's own REX
  * sign-in. The office account is James too, so it is no fallback - with no
  * sign-in for the agent the push is refused and says who has to do it.
+ *
+ * ── A refusal answers 500, never 502 (Joe Patten, 23 Nov 2026) ───────────
+ *
+ * Cloudflare swaps an origin 502 for its own error page (the same note is in
+ * app/api/compliance/certificates/read). Take It Offline failed twice on a
+ * let home and Joe saw only "The portals did not take it" and "didn't answer
+ * us in time": the sentence saying why, and REX's own words for James, were
+ * thrown away on the way. So every failure here, and in the other routes the
+ * take-down runs through (withdrawn, moved-in, let-notice), is a 500.
+ * Ticket d7007ec5.
  */
 
 export const dynamic = "force-dynamic";
@@ -168,7 +178,7 @@ async function refusedAnswer(
   const notTheSignIn = token && isExpiredToken(res)
     ? "REX turned this down for your REX user, though your sign-in is working, so signing in again won't help. Nothing was changed. Tell James: what REX said is in Activity."
     : plain;
-  return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : notTheSignIn }, { status: 502 });
+  return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : notTheSignIn }, { status: 500 });
 }
 
 function listingId(v: unknown): number | null {
@@ -205,7 +215,7 @@ export async function GET(req: NextRequest) {
     ]);
     if (!status.ok) {
       const plain = "The listings system did not say where the listing is. Try again in a minute.";
-      return NextResponse.json({ ok: false, error: isOwner(actor) ? status.error ?? "REX did not say." : plain }, { status: 502 });
+      return NextResponse.json({ ok: false, error: isOwner(actor) ? status.error ?? "REX did not say." : plain }, { status: 500 });
     }
     const iss = (issues.result ?? {}) as { errors?: unknown; warnings?: unknown };
     const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
@@ -236,7 +246,7 @@ export async function GET(req: NextRequest) {
       warnings: [...new Set(list(iss.warnings).map((m) => forAgent(actor, m, PORTAL_WARNING)))],
     });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." }, { status: 500 });
   }
 }
 
@@ -307,11 +317,11 @@ export async function POST(req: NextRequest) {
       if (!done.ok) {
         if (done.step === "read") {
           const plain = "The listings system did not say where the listing is. Try again in a minute.";
-          return NextResponse.json({ ok: false, error: isOwner(actor) ? done.error ?? "REX did not say where the listing is." : plain }, { status: 502 });
+          return NextResponse.json({ ok: false, error: isOwner(actor) ? done.error ?? "REX did not say where the listing is." : plain }, { status: 500 });
         }
         if (done.step === "not-published") return NextResponse.json({ ok: false, error: "It is not published yet, so there is nothing to take off." }, { status: 409 });
         if (done.step === "reopen") {
-          return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not open to send the withdrawal: ${done.error ?? "REX did not say."}` : "The portals did not take that change. Try again in a minute." }, { status: 502 });
+          return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not open to send the withdrawal: ${done.error ?? "REX did not say."}` : "The portals did not take that change. Try again in a minute." }, { status: 500 });
         }
         return refusedAnswer(done.res, id, action, token, as, actor);
       }
@@ -325,7 +335,7 @@ export async function POST(req: NextRequest) {
          2026): this answered ok whatever came back, so a change REX accepted
          and did not make read "Taken off" beside a live advert. */
       if (done.now.status === "published" && done.now.channels.includes("portals")) {
-        return NextResponse.json({ ok: false, error: "The portals did not take that change: the advert is still on. Try again in a minute, and report it if it happens twice." }, { status: 502 });
+        return NextResponse.json({ ok: false, error: "The portals did not take that change: the advert is still on. Try again in a minute, and report it if it happens twice." }, { status: 500 });
       }
       /* The OS's own Offline marker, the same one Take It Offline and the
          automatic take-down write (lib/advert-offline). Without it the
@@ -338,7 +348,7 @@ export async function POST(req: NextRequest) {
     const before = await rexCall("ListingPublication", "getPublicationStatus", { listing_id: id });
     if (!before.ok) {
       const plain = "The listings system did not say where the listing is. Try again in a minute.";
-      return NextResponse.json({ ok: false, error: isOwner(actor) ? before.error ?? "REX did not say where the listing is." : plain }, { status: 502 });
+      return NextResponse.json({ ok: false, error: isOwner(actor) ? before.error ?? "REX did not say where the listing is." : plain }, { status: 500 });
     }
     const was = whereFrom(before.result);
     /* Publish as the listing's agent (see the header); off and on as them. */
@@ -429,7 +439,7 @@ export async function POST(req: NextRequest) {
           const whose = as.asActor ? "Your REX sign-in has run out. Sign in again" : `${as.name}'s REX sign-in has run out. They sign in again on their Profile (Connect to REX)`;
           return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
         }
-        return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not close before going live: ${closed.error ?? "REX did not say."}` : "It could not be kept off the portals, so it has not gone live. Try again in a minute." }, { status: 502 });
+        return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not close before going live: ${closed.error ?? "REX did not say."}` : "It could not be kept off the portals, so it has not gone live. Try again in a minute." }, { status: 500 });
       }
     }
     /* Back on the market: a listing the take-off withdrew in REX is made
@@ -438,7 +448,7 @@ export async function POST(req: NextRequest) {
     if (action === "on") {
       const back = await currentInRex(id, token).catch(() => "refused" as const);
       if (back === "refused" || back === "locked") {
-        return NextResponse.json({ ok: false, error: isOwner(actor) ? `The listing is withdrawn in REX and would not go back to current (${back}).` : "It couldn't be put back on the market just now. Try again in a minute." }, { status: 502 });
+        return NextResponse.json({ ok: false, error: isOwner(actor) ? `The listing is withdrawn in REX and would not go back to current (${back}).` : "It couldn't be put back on the market just now. Try again in a minute." }, { status: 500 });
       }
     }
     let res: RexResponse =
@@ -499,6 +509,6 @@ export async function POST(req: NextRequest) {
         { status: 423 }
       );
     }
-    return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." }, { status: 500 });
   }
 }

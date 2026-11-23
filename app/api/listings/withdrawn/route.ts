@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     const w = await withdrawnFor(id, { cached: true });
     return NextResponse.json({ ok: true, withdrawn: w.source ? w : null });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: publicError(e, "The listings system didn't answer. Try again in a minute.") }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "The listings system didn't answer. Try again in a minute.") }, { status: 500 });
   }
 }
 
@@ -72,6 +72,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, did });
   } catch (e) {
     if (e instanceof WithdrawnRefused) return NextResponse.json({ ok: false, error: e.message, signIn: e.signIn || undefined }, { status: e.status });
-    return NextResponse.json({ ok: false, error: publicError(e, "That didn't go through. Try again in a minute.") }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't go through. Try again in a minute.") }, { status: 500 });
   }
 }

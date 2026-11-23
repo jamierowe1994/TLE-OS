@@ -36,6 +36,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, afterDays: AFTER_DAYS, auto, ...report });
   } catch (e) {
     console.error("[listings/moved-in]", e);
-    return NextResponse.json({ ok: false, auto, error: "The listings system did not answer, so the list could not be checked. Try again in a minute." }, { status: 502 });
+    return NextResponse.json({ ok: false, auto, error: "The listings system did not answer, so the list could not be checked. Try again in a minute." }, { status: 500 });
   }
 }

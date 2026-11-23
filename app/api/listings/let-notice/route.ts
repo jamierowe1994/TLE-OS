@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     ]);
     return NextResponse.json({ ok: true, people, cap: LET_NOTICE_CAP, told, emailsOn, email });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't read who enquired.") }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't read who enquired.") }, { status: 500 });
   }
 }
 
@@ -67,6 +67,6 @@ export async function POST(req: NextRequest) {
     await record({ kind: "listing_publication", actorId: g.actor.id, actorEmail: g.actor.email, detail: `${listingId}: told ${out.sent} enquirer(s) and viewer(s) it's been let` }).catch(() => {});
     return NextResponse.json({ ok: true, ...out });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: publicError(e, "That didn't send.") }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't send.") }, { status: 500 });
   }
 }
