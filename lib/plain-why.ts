@@ -49,7 +49,10 @@ export function explainFailure(f: {
     next = "Check you're online, then try again.";
   } else if (f.said) {
     why = /[.!?]$/.test(f.said) ? f.said : `${f.said}.`;
-    next = f.status >= 500 ? tryAgain : "Put that right and try again. If it doesn't make sense, send it to us below.";
+    /* A sentence that already says it is ours to sort ("Report it and we'll
+       take it down", 23 Nov 2026) is not followed by "Put that right": there
+       is nothing for them to put right. */
+    next = f.status >= 500 ? tryAgain : /\breport it\b/i.test(f.said) ? "There's nothing for you to put right. Send it to us below and we'll sort it." : "Put that right and try again. If it doesn't make sense, send it to us below.";
   } else if (f.status === 403) {
     why = "Your account isn't allowed to do this one.";
     next = "Ask James or Howard if you think it should be.";

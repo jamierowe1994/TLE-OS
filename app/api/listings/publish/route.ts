@@ -132,7 +132,9 @@ async function refusedAnswer(
   action: "publish" | "quiet" | "off" | "on",
   token: string | null,
   as: { asActor: boolean; name: string },
-  actor: OsUser
+  actor: OsUser,
+  /** Their own REX user is not allowed to, and the office's sign-in did not get it through either. */
+  notAllowed = false
 ): Promise<NextResponse> {
   /* Only when REX says the token itself is dead (ticket 550ef98a, 17 Nov
      2026): a refusal shaped like one, on a sign-in minutes old, asked James
@@ -155,7 +157,7 @@ async function refusedAnswer(
     kind: "listing_publication",
     actorId: actor.id,
     actorEmail: actor.email,
-    detail: `${id}: ${action} REFUSED${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"} - ${why}`,
+    detail: `${id}: ${action} REFUSED${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"}${notAllowed ? " (their own sign-in is not allowed to, and the office account was tried too)" : ""} - ${why}`,
   }).catch(() => {});
   /* REX's own terms rule (15 Oct 2026, bugs 2fb80600 and 718558c6):
      something the agent can do, so it is said as such - the same
@@ -167,8 +169,27 @@ async function refusedAnswer(
      so nobody types their password again for a refusal it cannot fix. */
   const notTheSignIn = token && isExpiredToken(res)
     ? "REX turned this down for your REX user, though your sign-in is working, so signing in again won't help. Nothing was changed. Tell James: what REX said is in Activity."
-    : plain;
-  return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : notTheSignIn }, { status: 502 });
+    : notAllowed
+      ? NOT_ALLOWED_SENTENCE
+      : plain;
+  return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : notTheSignIn }, { status: refusalStatus(res) });
+}
+
+/** Their own sign-in may not take an advert off, and the office's did not get it through either. */
+const NOT_ALLOWED_SENTENCE =
+  "Your sign-in isn't allowed to take an advert off the portals, and we couldn't get it through for you either, so it is still on. Nothing was changed. Report it and we'll take it down.";
+
+/**
+ * A REFUSAL IS NOT A 502 (23 Nov 2026). The live site sits behind Cloudflare,
+ * which swaps the body of a 502 for its own page, so the sentence written
+ * here never reached the browser: an agent refused on a permission was told
+ * "the property portals didn't answer us in time" and to try again, twice,
+ * for something trying again could not fix. When REX answered and the answer
+ * was no, it goes back as a 409 with the reason; only REX not answering, or
+ * breaking, is a 502.
+ */
+function refusalStatus(res: RexResponse): number {
+  return res.status >= 200 && res.status < 500 ? 409 : 502;
 }
 
 function listingId(v: unknown): number | null {
@@ -299,7 +320,10 @@ export async function POST(req: NextRequest) {
     /* Off is the shared steps (lib/listing-take-off), the same ones the
        automatic take-down runs (Susan Liles, 3 Nov 2026), so the two cannot
        differ. As THEM, so REX says who did it. No token falls to the office
-       account, the same as the write-up. */
+       account, the same as the write-up - and so does a step REX will not let
+       their own user make (lib/listing-take-off notAllowedInRex, 23 Nov 2026:
+       an agent whose REX user may not "manage portal settings" could never
+       take their own advert down). The log below still names who pressed it. */
     if (action === "off") {
       const token = await rexTokenFor(actor.id);
       const as = { asActor: true, name: actor.name };
@@ -311,21 +335,25 @@ export async function POST(req: NextRequest) {
         }
         if (done.step === "not-published") return NextResponse.json({ ok: false, error: "It is not published yet, so there is nothing to take off." }, { status: 409 });
         if (done.step === "reopen") {
-          return NextResponse.json({ ok: false, error: isOwner(actor) ? `The portals channel would not open to send the withdrawal: ${done.error ?? "REX did not say."}` : "The portals did not take that change. Try again in a minute." }, { status: 502 });
+          return NextResponse.json(
+            { ok: false, error: isOwner(actor) ? `The portals channel would not open to send the withdrawal: ${done.error ?? "REX did not say."}` : done.notAllowed ? NOT_ALLOWED_SENTENCE : "The portals did not take that change. Try again in a minute." },
+            { status: done.notAllowed ? 409 : 502 }
+          );
         }
-        return refusedAnswer(done.res, id, action, token, as, actor);
+        return refusedAnswer(done.res, id, action, token, as, actor, done.notAllowed);
       }
       await record({
         kind: "listing_publication",
         actorId: actor.id,
         actorEmail: actor.email,
-        detail: `${id}: off (${done.was.status ?? "?"} [${done.was.channels.join(",")}] -> ${done.now.status ?? "?"} [${done.now.channels.join(",")}]), listing ${done.withdrawal}${token ? "" : " as the office account"}`,
+        detail: `${id}: off (${done.was.status ?? "?"} [${done.was.channels.join(",")}] -> ${done.now.status ?? "?"} [${done.now.channels.join(",")}]), listing ${done.withdrawal}${token ? "" : " as the office account"}${done.office.length ? `, sent from the office account because their own sign-in is not allowed to: ${done.office.join(", ")}` : ""}`,
       });
       /* Read back, and believed only if the channel really went (10 Nov
          2026): this answered ok whatever came back, so a change REX accepted
          and did not make read "Taken off" beside a live advert. */
       if (done.now.status === "published" && done.now.channels.includes("portals")) {
-        return NextResponse.json({ ok: false, error: "The portals did not take that change: the advert is still on. Try again in a minute, and report it if it happens twice." }, { status: 502 });
+        /* 409, so the sentence is the one they read (see refusalStatus). */
+        return NextResponse.json({ ok: false, error: "The portals did not take that change: the advert is still on. Try again in a minute, and report it if it happens twice." }, { status: 409 });
       }
       /* The OS's own Offline marker, the same one Take It Offline and the
          automatic take-down write (lib/advert-offline). Without it the

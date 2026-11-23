@@ -25,7 +25,8 @@ import { hasDb, q } from "@/lib/db";
  *
  * Who it is done as is the caller's: the button passes the presser's own REX
  * sign-in (none falls to the office account), the automatic run the office
- * account. Who is told, and what is written to the audit log, is the caller's
+ * account. A step REX will not let the presser's own user make goes again
+ * from the office's (notAllowedInRex, 23 Nov 2026). Who is told, and what is written to the audit log, is the caller's
  * too, because a person and a job say it differently.
  */
 
@@ -60,16 +61,49 @@ export async function queueUpload(id: number, action: "off" | "on", token: strin
 /** What happened to the listing's own state on the way off: see withdrawInRex. */
 export type Withdrawal = "withdrawn" | "already" | "locked" | "refused" | "unread";
 
+/**
+ * NOT ALLOWED IS NOT THE SAME AS NOT WORKING (Joe Patten, 23 Nov 2026, a room
+ * of his that was let). The take-off is done as whoever pressed it, so REX says
+ * who did it. But REX only lets some of its users tell the portals what to
+ * show ("You do not have the privileges required to manage portal settings"),
+ * and an agent without that could never take their own advert down: two
+ * presses, both refused, the room still on all three portals, and no take-off
+ * of his had ever gone through. So a step REX refuses FOR THAT REASON, and
+ * only that one, is sent again from the office's sign-in, the same one the
+ * automatic take-down uses every day (James's yes, 23 Nov 2026). Each step
+ * is still tried as them first. Who pressed it stays in the OS's own log.
+ */
+export function notAllowedInRex(res: Pick<RexResponse, "error">): boolean {
+  return /PermissionException|do not have the privileges/i.test(String(res.error ?? ""));
+}
+
+/** Which steps the office's sign-in had to send, and whether theirs was refused at all. */
+export type SentBy = { office: string[]; notAllowed: boolean };
+
+/** As them; a step REX will not let THEM do goes again from the office's sign-in. */
+async function asThemOrOffice<T>(token: string | null, step: string, by: SentBy, run: (t: string | null) => Promise<T>, went: (r: T) => boolean, answer: (r: T) => RexResponse): Promise<T> {
+  const first = await run(token);
+  if (!token || went(first) || !notAllowedInRex(answer(first))) return first;
+  by.notAllowed = true;
+  const second = await run(null);
+  if (went(second)) by.office.push(step);
+  return second;
+}
+const rexOk = (r: RexResponse) => r.ok;
+const itself = (r: RexResponse) => r;
+
 export type TakeOffOutcome =
-  | { ok: true; was: Where; now: Where; withdrawal: Withdrawal }
+  /** `office`: the steps sent from the office's sign-in because theirs is not allowed to. */
+  | { ok: true; was: Where; now: Where; withdrawal: Withdrawal; office: string[] }
   /** REX did not say where the listing is. Nothing was changed. */
   | { ok: false; step: "read"; was: null; error: string | null }
   /** Not published, so there is nothing to take off. Nothing was changed. */
   | { ok: false; step: "not-published"; was: Where; error: null }
   /** The portals channel would not open to send the withdrawal. Nothing was changed. */
-  | { ok: false; step: "reopen"; was: Where; error: string | null }
-  /** The withdrawal or the channel change was refused; `res` is REX's answer. */
-  | { ok: false; step: "refused"; was: Where; error: string; res: RexResponse };
+  | { ok: false; step: "reopen"; was: Where; error: string | null; notAllowed: boolean }
+  /** The withdrawal or the channel change was refused; `res` is REX's answer.
+   *  `notAllowed`: theirs was refused as not allowed, and the office's did not get it through either. */
+  | { ok: false; step: "refused"; was: Where; error: string; res: RexResponse; notAllowed: boolean };
 
 /**
  * Off the portals, still published in REX. Throws RexWriteBlocked when
@@ -92,18 +126,20 @@ export type TakeOffOutcome =
  * The answer is kept as that same "off" choice, so the withdrawn-home box
  * does not then ask the agent what to do about a withdrawal they made.
  */
-export async function withdrawInRex(id: number, token: string | null, byName: string): Promise<Withdrawal> {
+export async function withdrawInRex(id: number, token: string | null, byName: string, by: SentBy = { office: [], notAllowed: false }): Promise<Withdrawal> {
   const read = await rexCall("Listings", "read", { id });
   if (!read.ok) return "unread";
   const state = String((read.result as { system_listing_state?: unknown } | null)?.system_listing_state ?? "");
   if (state !== "current") return "already";
   if (rexWritesLocked("Listings", "changeState")) return "locked";
   const today = new Date().toISOString().slice(0, 10);
-  const res = await rexCall(
-    "Listings",
-    "changeState",
-    { id, state: "withdrawn", details: { date: today, reason_id: "other", reason_note: "Taken off the market from TLE OS" } },
-    token
+  const res = await asThemOrOffice(
+    token,
+    "listing withdrawn",
+    by,
+    (t) => rexCall("Listings", "changeState", { id, state: "withdrawn", details: { date: today, reason_id: "other", reason_note: "Taken off the market from TLE OS" } }, t),
+    rexOk,
+    itself
   );
   if (!res.ok) {
     console.warn(`[listing-take-off] withdrawing ${id} was refused: ${res.error ?? res.status}`);
@@ -137,24 +173,31 @@ export async function takeAdvertOff(id: number, token: string | null, byName = "
   const was = whereFrom(before.result);
   if (was.status !== "published") return { ok: false, step: "not-published", was, error: null };
 
+  /* As them, and from the office's sign-in for a step theirs is not allowed
+     to make (see notAllowedInRex). The automatic run passes no sign-in, so it
+     is the office's throughout and nothing here changes for it. */
+  const by: SentBy = { office: [], notAllowed: false };
+  const channels = (step: string, to: string[]) =>
+    asThemOrOffice(token, step, by, (t) => rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: to }, t), rexOk, itself);
+
   const reopen = !was.channels.includes("portals");
   if (reopen) {
-    const opened = await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: [...was.channels, "portals"] }, token);
-    if (!opened.ok) return { ok: false, step: "reopen", was, error: opened.error ?? null };
+    const opened = await channels("portals channel opened", [...was.channels, "portals"]);
+    if (!opened.ok) return { ok: false, step: "reopen", was, error: opened.error ?? null, notAllowed: by.notAllowed };
   }
   /* A refusal, or a lock that throws, puts the channels back as they were. */
-  const putBack = () => (reopen ? rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: was.channels }, token).catch(() => null) : null);
-  const told = await queueUpload(id, "off", token).catch(async (e) => {
+  const putBack = () => (reopen ? channels("portals channel closed again", was.channels).catch(() => null) : null);
+  const told = await asThemOrOffice(token, "portals told", by, (t) => queueUpload(id, "off", t), (r) => r.ok, (r) => ({ ...r.res, ok: r.ok, error: r.ok ? null : r.detail })).catch(async (e) => {
     await putBack();
     throw e;
   });
   if (!told.ok) {
     await putBack();
     const res: RexResponse = { status: told.res.status, ok: false, result: told.res.result, error: `The portals were not told to withdraw it: ${told.detail}` };
-    return { ok: false, step: "refused", was, error: res.error!, res };
+    return { ok: false, step: "refused", was, error: res.error!, res, notAllowed: by.notAllowed };
   }
-  const res = await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: OFF_CHANNELS }, token);
-  if (!res.ok) return { ok: false, step: "refused", was, error: String(res.error ?? `HTTP ${res.status}`), res };
+  const res = await channels("portals channel closed", OFF_CHANNELS);
+  if (!res.ok) return { ok: false, step: "refused", was, error: String(res.error ?? `HTTP ${res.status}`), res, notAllowed: by.notAllowed };
 
   /* Read it back rather than trusting the answer. */
   const [after, feeds] = await Promise.all([
@@ -165,11 +208,11 @@ export async function takeAdvertOff(id: number, token: string | null, byName = "
 
   /* Then off the market in REX itself (16 Nov 2026, see withdrawInRex). A
      refusal here leaves the take-off as done and says so in the outcome. */
-  const withdrawal = await withdrawInRex(id, token, byName).catch((): Withdrawal => "refused");
+  const withdrawal = await withdrawInRex(id, token, byName, by).catch((): Withdrawal => "refused");
 
   await invalidateListingBook();
   forgetListing(id);
   /* Off the owners' moved-in list at once (lib/listings-moved-in, 3 Nov 2026). */
   forgetMovedIn(String(id));
-  return { ok: true, was, now, withdrawal };
+  return { ok: true, was, now, withdrawal, office: by.office };
 }
