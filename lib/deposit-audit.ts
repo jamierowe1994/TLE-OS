@@ -72,6 +72,28 @@ export type Flat = {
 
 export type Value = { value: string | null; source: string | null; at: string | null; by: string | null };
 
+/**
+ * "Mark as Complete" (Michael, 23 Nov 2026): he was writing a note on each
+ * home that could not be put right (a deposit protected late because the
+ * management was taken over, say) and it stayed in To Do, because only the
+ * problem going away cleared it. A person can now say nothing more can be
+ * done, with why. The fact stays on the register (late is still late); the
+ * home leaves To Do and is counted as complete with a note.
+ *
+ * It covers what was flagged when it was signed. A new problem on the home,
+ * or a new let, and it no longer holds: the home is back in To Do with the
+ * old sign-off shown beside it.
+ */
+export type SignOff = {
+  by: string | null;
+  at: string;
+  reason: string;
+  /** False once something it did not cover has come up. */
+  holds: boolean;
+  /** What has come up since, when it no longer holds. */
+  since: Gap[];
+};
+
 export type DepositRow = {
   id: string;
   address: string;
@@ -109,6 +131,9 @@ export type DepositRow = {
   gaps: Gap[];
   action: ActionKey | null;
   done: boolean;
+  /** What the home is flagged for, signed off or not. action is this, or null once a sign-off covers it. */
+  flagged: ActionKey | null;
+  signOff: SignOff | null;
   lastChecked: { at: string; by: string | null } | null;
 };
 
@@ -319,6 +344,11 @@ type FlatRow = {
   fetched_at: Date | null;
 };
 
+/** What a sign-off on this row covers: why it is flagged, and each thing missing. */
+export function signOffCovers(r: Pick<DepositRow, "flagged" | "gaps">): string[] {
+  return [`act:${r.flagged}`, ...r.gaps];
+}
+
 /** Every field this register reads off a home. */
 export const DEPOSIT_FIELDS = [
   "deposit_status", "deposit_ref", "deposit_amount", "deposit_protected_on", "deposit_registered_by",
@@ -389,9 +419,9 @@ const TRUSTED_START = /susan|tds|mydeposits|manual|flatfair/i;
 export async function depositRegister(): Promise<DepositRegister> {
   if (!hasDb()) throw new Error("No database on this environment.");
 
-  /* Three reads, all of them live. Any one failing fails the screen: a register
+  /* Four reads, all of them live. Any one failing fails the screen: a register
      with half its sources missing would read as fewer gaps, not more. */
-  const [props, facts, flats, leavers] = await Promise.all([
+  const [props, facts, flats, leavers, signRows] = await Promise.all([
     q<PropRow>(
       `SELECT id, address, postcode, payprop_no, service_level, management, landlord_name, agent_name, tenant_names
          FROM os_properties WHERE active`
@@ -409,7 +439,13 @@ export async function depositRegister(): Promise<DepositRegister> {
         WHERE f.env = 'live' AND f.status NOT IN ('canceled', 'cancelled', 'closed')`
     ),
     leaverNames(),
+    q<{ property_id: string; reason: string; covers: unknown; signed_by: string | null; signed_at: Date }>(
+      `SELECT property_id, reason, covers, signed_by, signed_at FROM os_deposit_signoffs WHERE reopened_at IS NULL`
+    ),
   ]);
+  const signs = new Map(signRows.map((s) => [s.property_id, s]));
+  /** The start of the new let on a home that has one: a sign-off from before it was about the last tenancy. */
+  const letStart = new Map<string, string>();
 
   const byHome = new Map<string, Map<string, FactRow>>();
   for (const f of facts) {
@@ -592,6 +628,7 @@ export async function depositRegister(): Promise<DepositRegister> {
     const anchor = [oldStart, oldDate].filter(Boolean).sort().pop() ?? null;
     const newLet = Boolean(flatStart && (anchor ? flatStart > addDays(anchor, 30) : !status));
     const cur = (k: string) => (newLet && before(k) ? null : val(k));
+    if (newLet && flatStart) letStart.set(p.id, flatStart);
 
     /* Where it is. */
     const fromFlatfair: DepositRow["fromFlatfair"] = [];
@@ -733,6 +770,8 @@ export async function depositRegister(): Promise<DepositRegister> {
       gaps,
       action: null,
       done: false,
+      flagged: null,
+      signOff: null,
       lastChecked: checked ? { at: iso(checked.verified_at)!, by: checked.verified_by } : null,
     });
   }
@@ -763,6 +802,17 @@ export async function depositRegister(): Promise<DepositRegister> {
                       : r.position === "landlord_scheme" && g.has("cert") ? "landlord_cert"
                         : r.heldByTle && r.gaps.length ? "held_details"
                           : null;
+    r.flagged = r.action;
+    const s = signs.get(r.id) ?? r.alsoRecords.map((a) => signs.get(a.id)).find(Boolean);
+    if (s && r.flagged) {
+      const covers = new Set(Array.isArray(s.covers) ? s.covers.map(String) : []);
+      const since = r.gaps.filter((x) => !covers.has(x));
+      const signedOn = iso(s.signed_at) ?? "";
+      const newLetSince = Boolean(letStart.get(r.id) && signedOn < letStart.get(r.id)!);
+      const holds = !newLetSince && since.length === 0 && covers.has(`act:${r.flagged}`);
+      r.signOff = { by: s.signed_by, at: new Date(s.signed_at).toISOString(), reason: s.reason, holds, since };
+      if (holds) r.action = null;
+    }
     r.done = r.action == null;
   }
 

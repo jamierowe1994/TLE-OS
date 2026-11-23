@@ -3,7 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { seesDeposits } from "@/lib/deposit-access";
 import { hasDb, q } from "@/lib/db";
 import { recordFact } from "@/lib/property-facts";
-import { DEPOSIT_FIELDS, EDITABLE } from "@/lib/deposit-audit";
+import { DEPOSIT_FIELDS, EDITABLE, depositRegister, signOffCovers } from "@/lib/deposit-audit";
 import { filesUnder } from "@/lib/clean-sweep";
 import { VIEW_AS_COOKIE, assertNotViewingAs, ViewingAsRefused } from "@/lib/view-as";
 
@@ -13,6 +13,8 @@ import { VIEW_AS_COOKIE, assertNotViewingAs, ViewingAsRefused } from "@/lib/view
  *
  *   { field, value }   value "" clears it
  *   { checked: true }  the person has checked every deposit value against the scheme
+ *   { complete: true, reason }  nothing more can be done on a flagged home, and why
+ *   { reopen: true }   take that back: the home returns to To Do
  *
  * Written into the OS's own record of the home (os_property_facts) as source
  * 'manual', which wins over every imported value (lib/property-facts). The
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!home.length) return NextResponse.json({ ok: false, error: "That home isn't on the book." }, { status: 404 });
 
   const by = actor.name || actor.email;
-  const body = (await req.json().catch(() => ({}))) as { field?: unknown; value?: unknown; checked?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { field?: unknown; value?: unknown; checked?: unknown; complete?: unknown; reason?: unknown; reopen?: unknown };
 
   if (body.checked === true) {
     await q(
@@ -69,6 +71,34 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         WHERE property_id = $1 AND field = ANY($2) AND (value IS NOT NULL OR file_key IS NOT NULL)`,
       [id, [...DEPOSIT_FIELDS], by]
     );
+    return NextResponse.json({ ok: true });
+  }
+
+  /* Mark as Complete: what it covers is read here from the register as it
+     stands now, never taken from the browser, so a sign-off can only cover
+     what the home is really flagged for. */
+  if (body.complete === true) {
+    const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 1000) : "";
+    if (reason.length < 3) return NextResponse.json({ ok: false, error: "Say why nothing more can be done, then mark it complete." }, { status: 400 });
+    try {
+      const row = (await depositRegister()).rows.find((r) => r.id === id || r.alsoRecords.some((a) => a.id === id));
+      if (!row) return NextResponse.json({ ok: false, error: "That home isn't on the deposit register." }, { status: 404 });
+      if (!row.flagged) return NextResponse.json({ ok: false, error: "Nothing is outstanding on this home." }, { status: 400 });
+      await q(
+        `INSERT INTO os_deposit_signoffs (property_id, reason, covers, signed_by, signed_at, reopened_at, reopened_by)
+         VALUES ($1, $2, $3::jsonb, $4, NOW(), NULL, NULL)
+         ON CONFLICT (property_id) DO UPDATE SET reason = EXCLUDED.reason, covers = EXCLUDED.covers,
+           signed_by = EXCLUDED.signed_by, signed_at = NOW(), reopened_at = NULL, reopened_by = NULL`,
+        [row.id, reason, JSON.stringify(signOffCovers(row)), by]
+      );
+      return NextResponse.json({ ok: true });
+    } catch (e) {
+      console.error("[deposits] complete", e instanceof Error ? e.message : e);
+      return NextResponse.json({ ok: false, error: "That didn't save. The register couldn't be read just now." }, { status: 500 });
+    }
+  }
+  if (body.reopen === true) {
+    await q(`UPDATE os_deposit_signoffs SET reopened_at = NOW(), reopened_by = $2 WHERE property_id = $1 AND reopened_at IS NULL`, [id, by]);
     return NextResponse.json({ ok: true });
   }
 

@@ -1166,6 +1166,18 @@ CREATE TABLE IF NOT EXISTS os_flatbond_docs (
   PRIMARY KEY (env, id)
 );
 CREATE INDEX IF NOT EXISTS os_flatbond_docs_bond_idx ON os_flatbond_docs (env, flatbond_id);
+-- The deposit register's "Mark as Complete" (lib/deposit-audit, 23 Nov 2026):
+-- a person's word that nothing more can be done on a flagged home, with why.
+-- covers holds what was flagged at the time, so a new problem reopens it.
+CREATE TABLE IF NOT EXISTS os_deposit_signoffs (
+  property_id  TEXT PRIMARY KEY,
+  reason       TEXT NOT NULL,
+  covers       JSONB NOT NULL DEFAULT '[]'::jsonb,
+  signed_by    TEXT,
+  signed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reopened_at  TIMESTAMPTZ,
+  reopened_by  TEXT
+);
 -- A deal sent to Flatfair as a draft (lib/flatfair-draft), one per deal per
 -- environment, so the button cannot make two.
 CREATE TABLE IF NOT EXISTS os_flatfair_drafts (

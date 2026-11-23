@@ -52,7 +52,9 @@ export async function POST(req: NextRequest) {
         { header: "Protect by", kind: "date", width: 12 }, { header: "Prescribed info served", kind: "date", width: 13 },
         { header: "Prescribed info evidence", width: 22 }, { header: "Certificate on file", width: 12 }, { header: "New let (from Flatfair)", width: 11 },
         { header: "Flatfair status", width: 16 }, { header: "Flatfair branch", width: 20 },
-        { header: "What's missing", width: 44 }, { header: "To do", width: 34 }, { header: "Notes", width: 40 },
+        { header: "What's missing", width: 44 }, { header: "To do", width: 34 },
+        { header: "Marked complete by", width: 20 }, { header: "Marked complete on", kind: "date", width: 13 },
+        { header: "Why nothing more can be done", width: 50 }, { header: "Notes", width: 40 },
         { header: "Also on the OS as", width: 30 },
         { header: "Last checked", kind: "date", width: 12 }, { header: "Checked by", width: 18 },
       ],
@@ -68,6 +70,8 @@ export async function POST(req: NextRequest) {
         r.flatfair?.branch ?? null,
         r.gaps.map((g) => GAP_LABEL[g]).join("; ") || null,
         r.action ? ACTIONS.find((a) => a.key === r.action)!.title : null,
+        r.signOff?.holds ? r.signOff.by ?? "Not recorded" : null, r.signOff?.holds ? r.signOff.at.slice(0, 10) : null,
+        r.signOff?.holds ? r.signOff.reason : null,
         r.notes, r.alsoRecords.map((a) => a.id).join("; ") || null, r.lastChecked?.at ?? null, r.lastChecked?.by ?? null,
       ]),
     };
@@ -85,6 +89,24 @@ export async function POST(req: NextRequest) {
           r.gaps.map((g) => GAP_LABEL[g]).join("; ") || null, a.says,
         ])
       ),
+    };
+
+    /* Flagged, then marked complete by a person with a reason: on their own
+       sheet so the auditor sees each one, not counted in To do. */
+    const signedRows = rows.filter((r) => r.signOff?.holds);
+    const withNote: Sheet = {
+      name: "Complete with a note",
+      columns: [
+        { header: "Property", width: 38 }, { header: "Postcode", width: 10 }, { header: "Agent", width: 20 },
+        { header: "Where it is", width: 30 }, { header: "Reference", width: 16 }, { header: "Flagged as", width: 40 },
+        { header: "What was flagged", width: 44 }, { header: "Why nothing more can be done", width: 60 },
+        { header: "Marked complete by", width: 20 }, { header: "Marked complete on", kind: "date", width: 13 },
+      ],
+      rows: signedRows.map((r): Value[] => [
+        r.address, r.postcode, r.agent, POSITION_LABEL[r.position], r.ref,
+        r.flagged ? ACTIONS.find((a) => a.key === r.flagged)!.title : null,
+        r.gaps.map((g) => GAP_LABEL[g]).join("; ") || null, r.signOff!.reason, r.signOff!.by ?? "Not recorded", r.signOff!.at.slice(0, 10),
+      ]),
     };
 
     const positions = Object.keys(POSITION_LABEL) as Position[];
@@ -125,14 +147,15 @@ export async function POST(req: NextRequest) {
         { header: "Held by TLE", kind: "number", width: 10 }, { header: "Held by TLE (£)", kind: "money", width: 13 },
         { header: "Landlord's scheme", kind: "number", width: 10 }, { header: "No-deposit plan", kind: "number", width: 10 },
         { header: "Transfer pending", kind: "number", width: 10 }, { header: "Not found", kind: "number", width: 10 },
-        { header: "To do", kind: "number", width: 8 }, { header: "Complete (%)", kind: "number", width: 10 },
+        { header: "To do", kind: "number", width: 8 }, { header: "Complete with a note", kind: "number", width: 10 },
+        { header: "Complete (%)", kind: "number", width: 10 },
       ],
       rows: [...agents.entries()].sort((a, b) => b[1].length - a[1].length).map(([name, set]): Value[] => [
         name, set.some((r) => r.agentLeft) ? "Yes" : null, set.length,
         set.filter((r) => r.heldByTle).length, set.filter((r) => r.heldByTle).reduce((s, r) => s + (r.amount ?? 0), 0),
         set.filter((r) => r.position === "landlord_scheme").length, set.filter((r) => r.position === "flatfair_plan").length,
         set.filter((r) => r.position === "transfer").length, set.filter((r) => r.position === "not_found").length,
-        set.filter((r) => r.action).length, Math.round((set.filter((r) => !r.action).length / set.length) * 100),
+        set.filter((r) => r.action).length, set.filter((r) => r.signOff?.holds).length, Math.round((set.filter((r) => !r.action).length / set.length) * 100),
       ]),
     };
 
@@ -152,13 +175,14 @@ export async function POST(req: NextRequest) {
     const stamp = (s: string | null) => (s ? new Date(s).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "never");
     await noteExport(req, actor, "Deposit register", rows.length, asked.filters);
     return xlsxResponse("TLE Deposit Register", [
-      register, todo, byScheme, byAgent, notOnBook,
+      register, todo, withNote, byScheme, byAgent, notOnBook,
       aboutSheet([
         ["What it is", "Every let home's deposit for the Propertymark audit: where it is protected, the reference, amount, date protected and whether the certificate and prescribed information are on file."],
         ["Filters", asked.filters || "None - every home"],
         ["Flatfair", `Read live: TDS deposits registered through Flatfair and no-deposit plans, England only. Last synced ${stamp(reg.flatfairAt)}. A TDS deposit registered straight with TDS is only here if the team recorded it.`],
         ["Leavers", reg.leaversKnown ? `As REX has them: ${reg.leavers.join(", ") || "nobody"}.` : "Not known when this was downloaded."],
         ["mydeposits Scotland and landlord schemes", `No live feed. These are as the team last recorded them in the OS (last change ${stamp(reg.recordAt)}).`],
+        ["Complete with a note", `${signedRows.length} of the homes here were flagged and then marked complete by a named person because nothing more can be done, each with the reason. They count as complete, not as to do, and are listed on their own sheet. What was flagged stays on the register. A new problem on the home puts it back in To do.`],
         ["Protected late", "More than 30 days (England and Wales) or 30 working days (Scotland) between the tenancy start and the date protected."],
       ]),
     ]);

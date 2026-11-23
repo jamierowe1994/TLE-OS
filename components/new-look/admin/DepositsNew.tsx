@@ -21,6 +21,10 @@ import { ACTIONS, GAP_LABEL as GAP, POSITION_LABEL as POSITION, type ActionKey, 
  *   Flatfair Only - live Flatfair deposits no home on the book claims
  * A row opens the home's deposit: each value with where it came from, the
  * live Flatfair record, the certificate files, and the fields to fill.
+ *
+ * Mark as Complete (Michael, 23 Nov 2026): a flagged home nothing more can
+ * be done on is signed off with a reason. It leaves To Do, is listed under
+ * Complete with a Note, and comes back if something new comes up.
  */
 
 type Val = { value: string | null; source: string | null; at: string | null; by: string | null };
@@ -40,7 +44,12 @@ type Row = {
   flatfair: Flat | null; otherFlats: Flat[]; alsoRecords: { id: string; status: string | null }[];
   newLet: boolean; fromFlatfair: ("ref" | "amount" | "position")[];
   gaps: Gap[]; action: ActionKey | null; done: boolean; lastChecked: { at: string; by: string | null } | null;
+  /** What the home is flagged for, signed off or not; action is null once a sign-off covers it. */
+  flagged: ActionKey | null;
+  signOff: { by: string | null; at: string; reason: string; holds: boolean; since: Gap[] } | null;
 };
+/** Marked complete by a person, and nothing new has come up since. */
+const signed = (r: Row) => Boolean(r.signOff?.holds);
 type Unmatched = { id: number; address: string; postcode: string | null; product: string; status: string; ref: string | null; amount: number | null; start: string | null; branch: string | null; branchLeft: boolean | null };
 type Data = { at: string; flatfairAt: string | null; recordAt: string | null; leaversKnown: boolean; leavers: string[]; rows: Row[]; unmatched: Unmatched[]; choices: string[] };
 
@@ -138,6 +147,7 @@ export default function DepositsNew() {
       done: rows.filter((r) => !r.action).length,
       todo: rows.filter((r) => r.action).length,
       urgent: rows.filter((r) => r.action === "urgent").length,
+      signed: rows.filter(signed).length,
       heldN: held.length,
       heldGbp: held.reduce((s, r) => s + (r.amount ?? 0), 0),
       newLets: rows.filter((r) => r.newLet).length,
@@ -177,7 +187,7 @@ export default function DepositsNew() {
 
         <div className="nl-dep-tiles" aria-busy={loading}>
           <Tile label="Let Homes" value={figs.homes} note="On the book now" loading={loading} failed={failed} />
-          <Tile label="Complete" value={figs.done} note={data ? `${pct(figs.done, figs.homes)}% need nothing more` : "Nothing more needed"} loading={loading} failed={failed} tone="sage" onClick={() => { setView("register"); setOnlyGaps(false); }} />
+          <Tile label="Complete" value={figs.done} note={data ? `${pct(figs.done, figs.homes)}% need nothing more${figs.signed ? `, ${figs.signed} with a note` : ""}` : "Nothing more needed"} loading={loading} failed={failed} tone="sage" onClick={() => { setView("register"); setOnlyGaps(false); }} />
           <Tile label="To Do" value={figs.todo} note={`${figs.urgent} urgent`} loading={loading} failed={failed} tone={figs.urgent ? "accent" : undefined} onClick={() => setView("todo")} />
           <Tile label="Held by TLE" value={gbp0(figs.heldGbp)} note={`${figs.heldN} deposits in TDS and mydeposits`} loading={loading} failed={failed} />
         </div>
@@ -294,9 +304,11 @@ function Gaps({ r }: { r: Row }) {
 
 function TodoView({ rows, onOpen }: { rows: Row[]; onOpen: (id: string) => void }) {
   const groups = ACTIONS.map((a) => ({ ...a, rows: rows.filter((r) => r.action === a.key) })).filter((g) => g.rows.length);
-  if (!groups.length) return <p className="nl-empty nl-dep-empty">Nothing to do on the homes shown. Every deposit is accounted for.</p>;
+  const signedOff = rows.filter(signed);
+  if (!groups.length && !signedOff.length) return <p className="nl-empty nl-dep-empty">Nothing to do on the homes shown. Every deposit is accounted for.</p>;
   return (
     <div className="nl-dep-groups">
+      {!groups.length && <p className="nl-empty nl-dep-empty">Nothing to do on the homes shown.</p>}
       {groups.map((g, i) => (
         <section key={g.key} className="nl-dep-group">
           <h2 className="nl-section-title nl-dep-h">
@@ -321,6 +333,30 @@ function TodoView({ rows, onOpen }: { rows: Row[]; onOpen: (id: string) => void 
           </ul>
         </section>
       ))}
+      {signedOff.length > 0 && (
+        <section className="nl-dep-group">
+          <h2 className="nl-section-title nl-dep-h">
+            <span className="nl-dep-n is-done"><Ico name="check" size={13} /></span> Complete with a Note <span className="nl-count">{signedOff.length}</span>
+          </h2>
+          <p className="nl-meta nl-dep-says">Flagged, then marked complete by a person because nothing more can be done. Not counted in To Do. Each comes back if something new comes up on the home.</p>
+          <ul className="nl-dep-list">
+            {signedOff.map((r) => (
+              <li key={r.id}>
+                <button type="button" className="nl-dep-item" onClick={() => onOpen(r.id)}>
+                  <span className="nl-dep-item-main">
+                    <b>{r.address}</b>
+                    <span className="nl-meta nl-dep-why">{r.signOff!.reason}</span>
+                  </span>
+                  <span className="nl-dep-item-side">
+                    <span className="nl-dep-signed">Complete with a note</span>
+                    <span className="nl-meta">{[r.signOff!.by, day(r.signOff!.at)].filter(Boolean).join(" · ")}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
@@ -352,7 +388,7 @@ function RegisterView({ rows, total, onOpen }: { rows: Row[]; total: number; onO
                 <td data-label="Tenancy start">{day(r.tenancyStart)}</td>
                 <td data-label="Protected">{day(r.protectedOn)}</td>
                 <td data-label="Certificate">{r.certOnFile ? "On file" : r.heldByTle || r.position === "landlord_scheme" ? <span className="nl-dep-bad">Missing</span> : "-"}</td>
-                <td data-label="What's missing"><Gaps r={r} /></td>
+                <td data-label="What's missing">{signed(r) ? <span className="nl-dep-signed">Complete with a note</span> : <Gaps r={r} />}</td>
               </tr>
             ))}
           </tbody>
@@ -568,6 +604,26 @@ function HomeSheet({ row: r, choices, onClose, onSaved }: { row: Row; choices: s
     }
   }
 
+  /* Mark as Complete, and taking it back. */
+  const [why, setWhy] = useState(r.signOff && !r.signOff.holds ? r.signOff.reason : r.notes ?? "");
+  async function signOff(body: { complete: true; reason: string } | { reopen: true }) {
+    setBusy("signoff");
+    setSaid(null);
+    try {
+      const res = await fetch(`/api/admin/deposits/${encodeURIComponent(r.id)}`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+      });
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j?.ok) throw new Error(j?.error ?? "That didn't save.");
+      setSaid({ ok: true, text: "complete" in body ? "Marked as complete" : "Back in To Do" });
+      onSaved();
+    } catch (e) {
+      setSaid({ ok: false, text: e instanceof Error ? e.message : "That didn't save." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function upload(file: File) {
     setBusy("file");
     setSaid(null);
@@ -609,12 +665,52 @@ function HomeSheet({ row: r, choices, onClose, onSaved }: { row: Row; choices: s
         </FloatFoot>
       }
     >
+      {signed(r) && (
+        <FloatCard>
+          <FloatCardHead
+            title="Complete with a Note"
+            aside={
+              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => signOff({ reopen: true })} disabled={Boolean(busy)}>
+                {busy === "signoff" ? "Saving..." : "Reopen"}
+              </button>
+            }
+          />
+          <p className="nl-dep-signed-by"><Ico name="check" size={15} /> Marked complete{r.signOff!.by ? ` by ${r.signOff!.by}` : ""} on {day(r.signOff!.at)}</p>
+          <p className="nl-dep-reason">{r.signOff!.reason}</p>
+          <p className="nl-meta nl-dep-says">Counted as complete, not as to do. What was flagged stays on the register below. If something new comes up on this home, it goes back to To Do.</p>
+        </FloatCard>
+      )}
+
       {(r.gaps.length > 0 || r.action) && (
         <FloatCard>
-          <FloatCardHead title="What's Missing" />
+          <FloatCardHead title={signed(r) ? "What Was Flagged" : "What's Missing"} />
           {r.action && <p className="nl-dep-says">{ACTIONS.find((a) => a.key === r.action)?.says}</p>}
           <Gaps r={r} />
           {r.newLet && <p className="nl-meta nl-dep-says">A new let: Flatfair started a tenancy here on {day(flat?.start)}, after the deposit on record. The details below are the new tenancy&rsquo;s.</p>}
+        </FloatCard>
+      )}
+
+      {r.action && (
+        <FloatCard>
+          <FloatCardHead title="Mark as Complete" />
+          {r.signOff && !r.signOff.holds && (
+            <p className="nl-dep-says nl-dep-lapsed">
+              Marked complete{r.signOff.by ? ` by ${r.signOff.by}` : ""} on {day(r.signOff.at)}, but {r.signOff.since.length ? `something new has come up since (${r.signOff.since.map((g) => GAP[g].toLowerCase()).join(", ")})` : "the home has changed since"}, so it is back in To Do.
+            </p>
+          )}
+          <p className="nl-meta nl-dep-says">If nothing more can be done on this home, say why and mark it complete. It leaves To Do and shows on the register and in the download as complete with a note. If something new comes up here, it comes back.</p>
+          <div className="nl-dep-complete">
+            <label className="nl-dep-field">
+              <span className="nl-dep-field-label">Why nothing more can be done</span>
+              <span className="nl-dep-field-row">
+                <textarea value={why} rows={3} maxLength={1000} onChange={(e) => setWhy(e.target.value)} placeholder="For example: management transfer, the previous agent was slow to move the deposit to us" />
+              </span>
+              {why.trim() !== "" && why.trim() === (r.notes ?? "").trim() && <span className="nl-dep-from">Filled in from the note on this home. Change it if you need to.</span>}
+            </label>
+            <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => signOff({ complete: true, reason: why })} disabled={Boolean(busy) || why.trim().length < 3}>
+              <Ico name="check" size={14} /> {busy === "signoff" ? "Saving..." : "Mark as Complete"}
+            </button>
+          </div>
         </FloatCard>
       )}
 
