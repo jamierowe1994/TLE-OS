@@ -11,6 +11,7 @@ import { getApplications, type Application } from "@/lib/applications";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { peopleLike } from "@/lib/rex-people-store";
 import { leadSide, type Lead } from "@/lib/leads-sample";
+import { searchLedger } from "@/lib/lead-ledger";
 import { searchLikes, searchMatches, searchRank, searchTokens } from "@/lib/search-match";
 import { postcodeOf, sameHome, STREET_SUFFIX } from "@/lib/address-parse";
 import { keysMatching, type KeyHit } from "@/lib/key-index";
@@ -189,16 +190,27 @@ export async function searchAll(
   const db = hasDb();
   const sql = <R extends Record<string, unknown>>(text: string, params: unknown[]) => (db ? q<R>(text, params).catch(() => [] as R[]) : Promise.resolve([] as R[]));
 
-  const [book, managed, leads, compliance, deals, applications, known, keyed] = await Promise.all([
+  const [book, managed, cached, ledger, compliance, deals, applications, known, keyed] = await Promise.all([
     bookFor(rexUserId).catch(() => null),
     managedBookFor(rexUserId).then((m) => m.book).catch(() => null),
     cachedLeads(rexUserId),
+    searchLedger(rexUserId, needle, 40).catch(() => [] as Lead[]),
     getComplianceBook().catch(() => null),
     getAllPropolyDeals().catch(() => null),
     getApplications(200, rexUserId).catch(() => []),
     peopleLike(needle).catch(() => []),
     keysMatching(needle).catch(() => [] as KeyHit[]),
   ]);
+
+  /* Every enquiry on record, not only the newest (ticket 97aa1518, 23 Nov
+     2026): the board's held copy is the last 500 an agent was sent (275 for
+     the office), about ten days' worth, so an applicant who enquired a month
+     ago came up under no name, email or number. The ledger (os_leads, every
+     enquiry since Nov 2023) is searched too, the same way the Leads board's
+     own search box does it, and in the same scope. */
+  const inCache = new Set(cached.map((l) => l.id));
+  const older = ledger.filter((l) => !inCache.has(l.id));
+  const leads = [...cached, ...older];
 
   const listings = book?.listings ?? [];
   const homes = currentLets(managed?.properties ?? []);
@@ -219,10 +231,13 @@ export async function searchAll(
     out.push({ ...it, place: address ?? null, score: (it.score ?? 0) + (address ? searchRank(needle, address) : 0) });
 
   /* ── Tenant and landlord enquiries ───────────────────────────────────── */
-  for (const l of leads) {
+  for (const l of cached) {
     if (!searchMatches(needle, l.name, l.email, l.phone, l.address, l.preferred)) continue;
     add(leadRow(l));
   }
+  /* The ledger has matched these already (a phone by its digits, the name
+     typed on the enquiry): no second test that knows less. */
+  for (const l of older) add(leadRow(l));
 
   const jobs: Promise<void>[] = [];
 
