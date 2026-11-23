@@ -26,6 +26,7 @@ import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/co
 import { searchMatches } from "@/lib/search-match";
 import { useNoteVisit } from "@/lib/recent-visits";
 import { uploadVisitPhotos } from "@/lib/visit-photos";
+import { useNewLook } from "@/lib/use-new-look";
 import BoardSearch, { overviewQuery, useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
 
 /**
@@ -774,6 +775,9 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
   const [busy, setBusy] = useState(false);
   /* The full-screen visit record, and where it opens. */
   const [recording, setRecording] = useState<null | "checks" | "rooms" | "writeup">(null);
+  /* The new look, a stage at a time (James, 23 Nov 2026): Record the Visit and
+     the printed report first, behind the "inspections" switch. */
+  const lookNew = useNewLook("inspections") === true;
   /* The uploaded report beside our boxes (12 Nov 2026), and which file. */
   const [fromReport, setFromReport] = useState<null | { key: string | null }>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -856,6 +860,7 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
               findings={held?.findings ?? []}
               kindText={kindLabel(i.kind)}
               actionLabel={(id) => ACTIONS.find((a) => a.id === id)?.label ?? ""}
+              look={lookNew ? "new" : undefined}
             />
 
             {err && <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12px]">{err}</p>}
@@ -963,6 +968,7 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
         onMove={move}
         onClose={() => setRecording(null)}
         startAt={recording === "rooms" ? undefined : recording}
+        look={lookNew ? "new" : undefined}
       />
     )}
     {i && held && fromReport && (

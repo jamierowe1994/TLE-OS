@@ -1,0 +1,149 @@
+/* New look: Record the Visit (components/inspections/RecordVisit), behind the
+   "inspections" switch (lib/new-look). Prefix nl-vr-. The screen is the old
+   one with a second set of class names: same rooms, same saves, same photos.
+   House style (James, 7 Nov 2026): square edges, condensed capitals for
+   titles and labels, brown buttons, terracotta for where you are, olive for
+   good. The printed report's new look lives in ReportSheet's own print CSS. */
+
+[data-look="new"].nl-vr { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--page); color: var(--ink); }
+[data-look="new"].nl-vr .nl-eyebrow { margin: 0; }
+
+/* ── the top: where, how far through, the way back ───────────────────── */
+[data-look="new"] .nl-vr-top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 28px; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-vr-where { min-width: 0; flex: 1; }
+[data-look="new"] .nl-vr-home {
+  margin: 3px 0 0; font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.04em; font-size: 26px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+[data-look="new"] .nl-vr-prog { margin: 0; font-family: var(--nl-mono); font-size: 12px; line-height: 18px; color: var(--muted); white-space: nowrap; }
+[data-look="new"] .nl-vr-bar { height: 2px; flex: none; background: var(--line); }
+[data-look="new"] .nl-vr-bar i { display: block; height: 100%; background: var(--sage-deep); transition: width 0.4s var(--nl-ease); }
+
+/* ── the walk, down the side ─────────────────────────────────────────── */
+[data-look="new"] .nl-vr-body { display: flex; min-height: 0; flex: 1; }
+[data-look="new"] .nl-vr-rail { display: flex; flex-direction: column; flex: none; width: 264px; overflow-y: auto; padding: 18px 0 28px; background: var(--card); border-right: 1px solid var(--line); }
+[data-look="new"] .nl-vr-step {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex: none;
+  padding: 10px 24px 10px 22px; border: 0; border-left: 2px solid transparent; background: transparent;
+  font: inherit; font-size: 14px; line-height: 20px; text-align: left; color: var(--ink); cursor: pointer;
+}
+[data-look="new"] .nl-vr-step:hover { background: var(--box); }
+[data-look="new"] .nl-vr-step:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+[data-look="new"] .nl-vr-step.is-on { border-left-color: var(--accent); background: var(--page); font-weight: 600; }
+[data-look="new"] .nl-vr-group {
+  display: block; margin: 0; padding: 20px 24px 6px; font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.16em; font-size: 11px; line-height: 16px; color: var(--muted);
+}
+[data-look="new"] .nl-vr-count { font-family: var(--nl-mono); font-size: 11px; color: var(--muted); }
+[data-look="new"] .nl-vr-dot { display: inline-block; flex: none; width: 9px; height: 9px; border: 1px solid var(--line-strong); border-radius: 50% !important; }
+[data-look="new"] .nl-vr-dot.is-good { background: var(--sage-deep); border-color: var(--sage-deep); }
+[data-look="new"] .nl-vr-dot.is-fair { background: var(--warning); border-color: var(--warning); }
+[data-look="new"] .nl-vr-dot.is-poor { background: var(--accent); border-color: var(--accent); }
+[data-look="new"] .nl-vr-add { flex: none; padding: 10px 24px; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 500; text-align: left; color: var(--accent-dark); cursor: pointer; }
+[data-look="new"] .nl-vr-add:hover { background: var(--box); }
+[data-look="new"] .nl-vr-addbox { display: grid; gap: 8px; flex: none; margin: 6px 16px; padding: 10px; border: 1px solid var(--line-strong); background: var(--page); }
+[data-look="new"] .nl-vr-addrow { display: flex; gap: 6px; }
+[data-look="new"] .nl-vr-addinput { min-width: 0; flex: 1; padding: 6px 8px; font-size: 13px; }
+
+/* ── one thing at a time, in the middle ──────────────────────────────── */
+[data-look="new"] .nl-vr-main { min-height: 0; flex: 1; overflow-y: auto; }
+[data-look="new"] .nl-vr-pane { max-width: 720px; margin: 0 auto; padding: 44px 32px 80px; animation: nl-in 0.45s var(--nl-ease) both; }
+[data-look="new"] .nl-vr-title {
+  margin: 6px 0 0; font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.04em; font-size: 54px; line-height: 0.98;
+}
+[data-look="new"] .nl-vr-lede { margin: 12px 0 0; max-width: 60ch; font-size: 15px; line-height: 23px; color: var(--muted); }
+[data-look="new"] .nl-vr-label {
+  margin: 32px 0 10px; font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.16em; font-size: 11px; line-height: 16px; color: var(--muted);
+}
+
+/* how it is kept: three tiles, a dot and a word */
+[data-look="new"] .nl-vr-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+[data-look="new"] .nl-vr-tile {
+  display: flex; align-items: center; justify-content: center; gap: 9px; min-width: 0; padding: 18px 10px;
+  border: 1px solid var(--line-strong); background: var(--page); font: inherit; font-size: 15px; font-weight: 500; line-height: 20px;
+  color: var(--ink); cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+[data-look="new"] .nl-vr-tile::before { content: ""; flex: none; width: 9px; height: 9px; border-radius: 50% !important; background: var(--line-strong); }
+[data-look="new"] .nl-vr-tile.is-good::before { background: var(--sage-deep); }
+[data-look="new"] .nl-vr-tile.is-fair::before { background: var(--warning); }
+[data-look="new"] .nl-vr-tile.is-poor::before { background: var(--accent); }
+[data-look="new"] .nl-vr-tile:hover { border-color: var(--ink); }
+[data-look="new"] .nl-vr-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-vr-tile.is-on.is-good { background: var(--sage-soft); border-color: var(--sage-deep); box-shadow: inset 0 0 0 1px var(--sage-deep); color: var(--sage-ink); }
+[data-look="new"] .nl-vr-tile.is-on.is-fair { background: var(--warning-soft); border-color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning); color: var(--warning); }
+[data-look="new"] .nl-vr-tile.is-on.is-poor { background: var(--bad-soft); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--bad-ink); }
+
+[data-look="new"] .nl-vr-text { display: block; width: 100%; padding: 12px 14px; font-family: var(--nl-serif); font-size: 17px; line-height: 25px; resize: vertical; }
+
+/* photos */
+[data-look="new"] .nl-vr-shots { display: flex; flex-wrap: wrap; gap: 10px; }
+[data-look="new"] .nl-vr-shot { display: block; width: 104px; height: 104px; object-fit: cover; border: 1px solid var(--line); background: var(--box); }
+[data-look="new"] .nl-vr-shot-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 104px; height: 104px;
+  border: 1px dashed var(--line-strong); font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.14em; font-size: 11px; color: var(--accent-dark); cursor: pointer; transition: border-color 0.2s, background-color 0.2s;
+}
+[data-look="new"] .nl-vr-shot-add:hover { border-color: var(--accent); background: var(--accent-soft); }
+[data-look="new"] .nl-vr-shot-add.is-busy { color: var(--muted); cursor: default; background: none; border-color: var(--line-strong); }
+[data-look="new"] .nl-vr-err { margin: 10px 0 0; font-size: 13px; line-height: 19px; color: var(--bad-ink); }
+
+/* what happens next, and the small choices */
+[data-look="new"] .nl-vr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-look="new"] .nl-vr-chip { padding: 8px 14px; border: 1px solid var(--line-strong); background: var(--page); font: inherit; font-size: 13.5px; line-height: 18px; color: var(--ink); cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
+[data-look="new"] .nl-vr-chip:hover { border-color: var(--ink); }
+[data-look="new"] .nl-vr-chip.is-on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+[data-look="new"] .nl-vr-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 36px; }
+[data-look="new"] .nl-vr-note { font-size: 13px; line-height: 19px; color: var(--muted); }
+
+/* something specific in the room */
+[data-look="new"] .nl-vr-spec { margin-top: 48px; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-vr-spec > .nl-vr-label { margin-top: 24px; }
+[data-look="new"] .nl-vr-lines { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-vr-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 20px; }
+[data-look="new"] .nl-vr-more { display: inline-block; margin-top: 12px; font-size: 14px; }
+[data-look="new"] .nl-vr-specform { display: grid; gap: 10px; margin-top: 12px; }
+[data-look="new"] .nl-vr-specform .nl-input { width: 100%; }
+[data-look="new"] .nl-vr-specrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+[data-look="new"] .nl-vr-specform .nl-vr-select { width: auto; padding: 9px 12px; }
+
+/* safety and checks */
+[data-look="new"] .nl-vr-checks { list-style: none; margin: 28px 0 0; padding: 0; border-top: 1px solid var(--line-strong); }
+[data-look="new"] .nl-vr-check { padding: 16px 0; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-vr-checkrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+[data-look="new"] .nl-vr-checkrow > span:first-child { min-width: 0; flex: 1 1 260px; }
+[data-look="new"] .nl-vr-checkname { display: block; font-size: 15px; font-weight: 500; line-height: 21px; }
+[data-look="new"] .nl-vr-hint { display: block; margin: 2px 0 6px; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-vr-seg { display: inline-flex; flex: none; border: 1px solid var(--line-strong); }
+[data-look="new"] .nl-vr-ans { padding: 8px 14px; border: 0; border-left: 1px solid var(--line-strong); background: var(--page); font: inherit; font-size: 13px; line-height: 18px; color: var(--muted); cursor: pointer; white-space: nowrap; transition: background-color 0.2s, color 0.2s; }
+[data-look="new"] .nl-vr-ans:first-child { border-left: 0; }
+[data-look="new"] .nl-vr-ans:hover { color: var(--ink); }
+[data-look="new"] .nl-vr-ans.is-on { color: #fff; }
+[data-look="new"] .nl-vr-ans.is-on.is-ok { background: var(--sage-deep); }
+[data-look="new"] .nl-vr-ans.is-on.is-issue { background: var(--accent); }
+[data-look="new"] .nl-vr-ans.is-on.is-na { background: var(--info); }
+[data-look="new"] .nl-vr-checknote { display: block; width: 100%; margin-top: 10px; }
+[data-look="new"] .nl-vr-readings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+[data-look="new"] .nl-vr-readings .nl-input { width: 100%; }
+
+/* ── a tablet or a phone in the property ─────────────────────────────── */
+@media (max-width: 760px) {
+  [data-look="new"] .nl-vr-top { padding: 12px 18px; gap: 8px 14px; }
+  [data-look="new"] .nl-vr-home { font-size: 21px; }
+  [data-look="new"] .nl-vr-prog { flex-basis: 100%; }
+  [data-look="new"] .nl-vr-body { flex-direction: column; }
+  [data-look="new"] .nl-vr-rail { flex-direction: row; align-items: stretch; width: 100%; overflow-x: auto; overflow-y: hidden; padding: 0 8px; border-right: 0; border-bottom: 1px solid var(--line); }
+  [data-look="new"] .nl-vr-step { width: auto; padding: 12px 12px 10px; border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+  [data-look="new"] .nl-vr-step.is-on { border-bottom-color: var(--accent); background: transparent; }
+  [data-look="new"] .nl-vr-group { display: none; }
+  [data-look="new"] .nl-vr-add { padding: 12px; white-space: nowrap; }
+  [data-look="new"] .nl-vr-addbox { margin: 8px 0; min-width: 240px; }
+  [data-look="new"] .nl-vr-pane { padding: 28px 18px 72px; }
+  [data-look="new"] .nl-vr-title { font-size: 40px; }
+  [data-look="new"] .nl-vr-tile { padding: 16px 6px; font-size: 14px; gap: 7px; }
+  [data-look="new"] .nl-vr-shot, [data-look="new"] .nl-vr-shot-add { width: 96px; height: 96px; }
+  [data-look="new"] .nl-vr-foot .nl-btn { flex: 1 1 auto; }
+  [data-look="new"] .nl-vr-seg { width: 100%; }
+  [data-look="new"] .nl-vr-ans { flex: 1; padding: 10px 6px; }
+}

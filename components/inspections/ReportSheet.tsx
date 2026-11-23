@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 /* TYPES ONLY. lib/inspections is "server-only", so importing a VALUE from it
    into this client component breaks the build - which is exactly what happened
@@ -90,6 +90,53 @@ const CSS = `
 }
 `;
 
+/* THE NEW LOOK (the "inspections" switch, James, 23 Nov 2026). The same report,
+   word for word, in the house style: the name across the top in the condensed
+   capitals, brown rules, the verdict on a wash of its own colour, and the
+   photographs in a row of their own under each line, three across, big
+   enough to argue a deposit over. Colours are typed here, not read from the
+   new look's tokens: the sheet is portalled to <body>, outside that scope. */
+const COND_FONT = `var(--font-bricolage), "Helvetica Neue", Arial, sans-serif`;
+const CSS_NEW = `
+#os-print-report { display: none; }
+@media print {
+  body > * { display: none !important; }
+  body > #os-print-report { display: block !important; }
+  @page { margin: 14mm 14mm 16mm; }
+  #os-print-report { color: #141413; font-family: var(--font-inter), system-ui, sans-serif; font-size: 10.5pt; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #os-print-report .brand { display: flex; justify-content: space-between; align-items: baseline; gap: 12pt; padding-bottom: 7pt; border-bottom: 1.5pt solid #56423e; }
+  #os-print-report .brand b { font-family: ${COND_FONT}; font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.18em; font-size: 11.5pt; color: #56423e; }
+  #os-print-report .brand span { font-family: ${COND_FONT}; font-stretch: 75%; text-transform: uppercase; letter-spacing: 0.16em; font-size: 8pt; color: #63625b; }
+  #os-print-report h1 { font-family: ${COND_FONT}; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 30pt; line-height: 1; margin: 16pt 0 0; }
+  #os-print-report h2 { font-family: ${COND_FONT}; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; font-size: 13pt; margin: 20pt 0 6pt; padding-bottom: 4pt; border-bottom: 0.75pt solid #141413; break-after: avoid; }
+  #os-print-report h2.room { font-size: 10.5pt; letter-spacing: 0.14em; color: #56423e; margin: 14pt 0 3pt; padding-bottom: 0; border-bottom: 0; }
+  #os-print-report .sub { color: #63625b; font-size: 12pt; margin: 5pt 0 0; }
+  #os-print-report .meta { width: 100%; border-collapse: collapse; margin-top: 14pt; }
+  #os-print-report .meta th { text-align: left; width: 30mm; font-family: ${COND_FONT}; font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 8pt; color: #63625b; padding: 3.5pt 8pt 3.5pt 0; vertical-align: top; }
+  #os-print-report .meta td { padding: 3pt 0; vertical-align: top; }
+  #os-print-report .verdict { margin-top: 14pt; padding: 10pt 12pt; background: #f5efe6; border-left: 3pt solid #56423e; break-inside: avoid; }
+  #os-print-report .verdict[data-c="good"] { background: #f1f4ec; border-left-color: #56634a; }
+  #os-print-report .verdict[data-c="fair"] { background: #f2e6d2; border-left-color: #8a531a; }
+  #os-print-report .verdict[data-c="poor"] { background: #f5ebea; border-left-color: #a85a51; }
+  #os-print-report .verdict strong { font-size: 12.5pt; font-weight: 600; }
+  #os-print-report ul.checks { margin: 4pt 0 0; padding-left: 14pt; }
+  #os-print-report table.f { width: 100%; border-collapse: collapse; }
+  #os-print-report table.f th { text-align: left; font-family: ${COND_FONT}; font-stretch: 75%; font-weight: 500; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.14em; color: #63625b; padding: 0 8pt 4pt 0; border-bottom: 0.75pt solid #d6d6d2; }
+  #os-print-report table.f td { vertical-align: top; padding: 6pt 8pt 6pt 0; border-bottom: 0.5pt solid #e0dfdb; break-inside: avoid; }
+  #os-print-report table.f tr.has-shots td { border-bottom: 0; padding-bottom: 2pt; }
+  #os-print-report table.f tr.shotrow td { padding: 3pt 0 8pt; }
+  #os-print-report .item { font-weight: 600; }
+  #os-print-report .m { color: #63625b; font-size: 9.5pt; }
+  #os-print-report .cond { white-space: nowrap; }
+  #os-print-report .cond::before { content: ""; display: inline-block; width: 6pt; height: 6pt; border-radius: 50%; margin-right: 5pt; background: #56634a; vertical-align: 0.5pt; }
+  #os-print-report .cond[data-c="fair"]::before { background: #8a531a; }
+  #os-print-report .cond[data-c="poor"]::before { background: #a85a51; }
+  #os-print-report .shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5pt; }
+  #os-print-report .shots img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border: 0.5pt solid #d6d6d2; break-inside: avoid; }
+  #os-print-report footer { margin-top: 22pt; padding-top: 7pt; border-top: 0.75pt solid #141413; color: #63625b; font-size: 8.5pt; }
+}
+`;
+
 const stamp = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : null;
 
@@ -98,6 +145,7 @@ export default function ReportSheet({
   findings,
   kindText,
   actionLabel,
+  look,
 }: {
   inspection: Inspection | null;
   findings: Finding[];
@@ -105,7 +153,10 @@ export default function ReportSheet({
   kindText: string;
   /** A finding's action in words, from the page's own ACTIONS. */
   actionLabel: (id: string) => string;
+  /** "new" prints the house style; the board passes it when the Inspections switch is on. */
+  look?: "new";
 }) {
+  const nl = look === "new";
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted || !inspection) return null;
@@ -126,8 +177,14 @@ export default function ReportSheet({
 
   return createPortal(
     <div id="os-print-report">
-      <style>{CSS}</style>
+      <style>{nl ? CSS_NEW : CSS}</style>
 
+      {nl && (
+        <div className="brand">
+          <b>The Letting Experts</b>
+          <span>Report {i.ref}</span>
+        </div>
+      )}
       <h1>{kindText} report</h1>
       <p className="sub">{address}</p>
 
@@ -161,7 +218,7 @@ export default function ReportSheet({
       </table>
 
       {/* The same sentence the landlord's email leads on. */}
-      <div className="verdict">
+      <div className="verdict" data-c={i.condition ?? "good"}>
         <strong>Overall, the property is {CONDITION_SENTENCE[i.condition ?? "good"] ?? "in good order"}.</strong>
         {i.summary && <p style={{ margin: "6pt 0 0" }}>{i.summary}</p>}
       </div>
@@ -170,7 +227,7 @@ export default function ReportSheet({
       {checkLines(asChecks(i.checks)).length > 0 && (
         <>
           <h2>Safety and checks</h2>
-          <ul style={{ margin: "4pt 0 0", paddingLeft: "14pt" }}>
+          <ul className="checks" style={{ margin: "4pt 0 0", paddingLeft: "14pt" }}>
             {checkLines(asChecks(i.checks)).map((l) => (
               <li key={l}>{l}</li>
             ))}
@@ -184,7 +241,7 @@ export default function ReportSheet({
       ) : (
         rooms.map((g) => (
           <div key={g.room} style={{ breakInside: "avoid", marginTop: "10pt" }}>
-            <h2 style={{ fontSize: "11pt", margin: "10pt 0 4pt" }}>{g.room}</h2>
+            <h2 className="room" style={nl ? undefined : { fontSize: "11pt", margin: "10pt 0 4pt" }}>{g.room}</h2>
             <table className="f">
               <thead>
                 <tr>
@@ -194,37 +251,50 @@ export default function ReportSheet({
                 </tr>
               </thead>
               <tbody>
-                {g.rows.map((f) => (
-                  <tr key={f.id}>
-                    <td>
-                      <span className="item">{f.item || "Noted"}</span>
-                      {f.note && <div className="m">{f.note}</div>}
-                      {/* The pictures, on the page. A deposit is argued over
-                          what a room looked like, and a report that holds the
-                          photographs but prints only the sentence sends the
-                          landlord the weaker half. Printers default to
-                          dropping background images, so these are real <img>
-                          elements - and print-color-adjust keeps them from
-                          being washed out. */}
-                      {(f.photos ?? []).length > 0 && (
-                        <div className="shots">
-                          {(f.photos ?? []).map((ph) => (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img key={ph.key} src={`/api/r2/file?key=${encodeURIComponent(ph.key)}`} alt={ph.name} />
-                          ))}
-                        </div>
+                {g.rows.map((f) => {
+                  const shots = (f.photos ?? []).length > 0 && (
+                    <div className="shots">
+                      {(f.photos ?? []).map((ph) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={ph.key} src={`/api/r2/file?key=${encodeURIComponent(ph.key)}`} alt={ph.name} />
+                      ))}
+                    </div>
+                  );
+                  return (
+                    <Fragment key={f.id}>
+                      <tr className={nl && shots ? "has-shots" : undefined}>
+                        <td>
+                          <span className="item">{f.item || "Noted"}</span>
+                          {f.note && <div className="m">{f.note}</div>}
+                          {/* The pictures, on the page. A deposit is argued over
+                              what a room looked like, and a report that holds the
+                              photographs but prints only the sentence sends the
+                              landlord the weaker half. Printers default to
+                              dropping background images, so these are real <img>
+                              elements - and print-color-adjust keeps them from
+                              being washed out. In the new look they take a row
+                              of their own beneath, the full width of the page. */}
+                          {!nl && shots}
+                        </td>
+                        <td>
+                          <span className="cond" data-c={f.condition}>{CONDITION_SHORT[f.condition] ?? f.condition}</span>
+                        </td>
+                        <td>
+                          {actionLabel(f.action)}
+                          {/* Whose job it is, where somebody has said. A report that
+                              lists a fault without saying who puts it right is the
+                              reason the same fault is on the next one. */}
+                          {f.responsible && <div className="m">{f.responsible === "tenant" ? "The tenant" : f.responsible === "landlord" ? "The landlord" : "Us"}</div>}
+                        </td>
+                      </tr>
+                      {nl && shots && (
+                        <tr className="shotrow">
+                          <td colSpan={3}>{shots}</td>
+                        </tr>
                       )}
-                    </td>
-                    <td>{CONDITION_SHORT[f.condition] ?? f.condition}</td>
-                    <td>
-                      {actionLabel(f.action)}
-                      {/* Whose job it is, where somebody has said. A report that
-                          lists a fault without saying who puts it right is the
-                          reason the same fault is on the next one. */}
-                      {f.responsible && <div className="m">{f.responsible === "tenant" ? "The tenant" : f.responsible === "landlord" ? "The landlord" : "Us"}</div>}
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

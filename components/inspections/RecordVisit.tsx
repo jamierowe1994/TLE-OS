@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import type { Finding, Inspection } from "@/lib/inspections";
 import { ANSWER_WORD, CHECKS, READINGS, asChecks, checksDone, type CheckAnswer, type Checks } from "@/lib/inspection-checks";
@@ -40,6 +40,16 @@ const ACTIONS = [
   { id: "landlord", label: "Landlord to put right" },
 ];
 
+/* The new look (the "inspections" switch, lib/new-look): the same screen and
+   the same saves, drawn in the house style (app/new-look/visit.css, prefix
+   nl-vr-). Every class is named twice, old then new, so neither look can
+   drift from the other's behaviour. */
+const Nl = createContext(false);
+function useLook() {
+  const nl = useContext(Nl);
+  return { nl, k: (old: string, nw: string) => (nl ? nw : old) };
+}
+
 type Tab = { kind: "checks" } | { kind: "room"; room: string } | { kind: "writeup" };
 
 export default function RecordVisit({
@@ -49,6 +59,7 @@ export default function RecordVisit({
   onMove,
   onClose,
   startAt,
+  look,
 }: {
   inspection: Inspection;
   findings: Finding[];
@@ -56,7 +67,11 @@ export default function RecordVisit({
   onMove: Move;
   onClose: () => void;
   startAt?: "checks" | "writeup";
+  /** "new" draws the house style; the board passes it when the Inspections switch is on. */
+  look?: "new";
 }) {
+  const nl = look === "new";
+  const k = (old: string, nw: string) => (nl ? nw : old);
   const [added, setAdded] = useState<string[]>([]);
   const rooms = useMemo(() => {
     const base = inspection.kind === "hmo" ? [...BASE_ROOMS, "Communal areas"] : BASE_ROOMS;
@@ -80,40 +95,55 @@ export default function RecordVisit({
     };
   }, [onClose]);
 
+  /* On a phone the walk runs along the top: keep where you are in view. */
+  const here = tab.kind === "room" ? tab.room : tab.kind;
+  useEffect(() => {
+    if (!nl) return;
+    document.querySelector(".nl-vr-step.is-on")?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [nl, here]);
+
   const nextRoom = (room: string) => {
     const at = rooms.indexOf(room);
     setTab(at >= 0 && at < rooms.length - 1 ? { kind: "room", room: rooms[at + 1]! } : { kind: "writeup" });
   };
 
   const item = (on: boolean) =>
+    nl ? `nl-vr-step${on ? " is-on" : ""}` :
     `flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-[13px] transition-colors ${on ? "bg-ink text-page" : "hover:bg-accent-soft/40"}`;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-page">
+    <Nl.Provider value={nl}>
+    <div data-look={nl ? "new" : undefined} className={k("fixed inset-0 z-[60] flex flex-col bg-page", "nl-vr nl-edge")}>
       {/* The top: where, how far through, and the way back. */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-line/70 px-5 py-3">
-        <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold">
+      <div className={k("flex flex-wrap items-center gap-3 border-b border-line/70 px-5 py-3", "nl-vr-top")}>
+        <button type="button" onClick={onClose} className={k("rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold", "nl-btn nl-btn--secondary nl-btn--sm")}>
           ← Back to the inspection
         </button>
-        <div className="min-w-0 flex-1">
-          <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Recording the visit · #{inspection.ref}</p>
-          <p className="hand truncate text-[17px]">{inspection.propertyName}</p>
+        <div className={k("min-w-0 flex-1", "nl-vr-where")}>
+          <p className={k("text-[9.5px] font-bold uppercase tracking-wider text-muted", "nl-eyebrow")}>Recording the visit · #{inspection.ref}</p>
+          <p className={k("hand truncate text-[17px]", "nl-vr-home")}>{inspection.propertyName}</p>
         </div>
-        <p className="text-[12px] text-muted">
+        <p className={k("text-[12px] text-muted", "nl-vr-prog")}>
           {done} of {rooms.length} rooms · checks {checksDone(checks)} of {CHECKS.length}
         </p>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      {nl && (
+        <div className="nl-vr-bar" aria-hidden>
+          <i style={{ width: `${Math.round(((done + checksDone(checks)) / (rooms.length + CHECKS.length)) * 100)}%` }} />
+        </div>
+      )}
+
+      <div className={k("flex min-h-0 flex-1 flex-col md:flex-row", "nl-vr-body")}>
         {/* The walk, down the side (along the top on a phone). */}
-        <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-line/70 p-3 md:w-64 md:flex-col md:overflow-y-auto md:border-b-0 md:border-r">
+        <nav className={k("flex shrink-0 gap-1 overflow-x-auto border-b border-line/70 p-3 md:w-64 md:flex-col md:overflow-y-auto md:border-b-0 md:border-r", "nl-vr-rail")}>
           <button type="button" onClick={() => setTab({ kind: "checks" })} className={`${item(tab.kind === "checks")} shrink-0`}>
             <span>Safety &amp; checks</span>
-            <span className="text-[11px] opacity-70">
+            <span className={k("text-[11px] opacity-70", "nl-vr-count")}>
               {checksDone(checks)}/{CHECKS.length}
             </span>
           </button>
-          <p className="hidden px-3 pb-1 pt-3 text-[9.5px] font-bold uppercase tracking-wider text-muted md:block">Rooms</p>
+          <p className={k("hidden px-3 pb-1 pt-3 text-[9.5px] font-bold uppercase tracking-wider text-muted md:block", "nl-vr-group")}>Rooms</p>
           {rooms.map((r) => {
             const o = overallOf(r);
             const c = COND.find((x) => x.id === o?.condition);
@@ -121,7 +151,7 @@ export default function RecordVisit({
             return (
               <button key={r} type="button" onClick={() => setTab({ kind: "room", room: r })} className={`${item(on)} shrink-0`}>
                 <span className="truncate">{r}</span>
-                {c ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.tone }} title={c.label} /> : <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-line" />}
+                {c ? <span className={k("h-2.5 w-2.5 shrink-0 rounded-full", `nl-vr-dot is-${c.id}`)} style={nl ? undefined : { background: c.tone }} title={c.label} /> : <span className={k("h-2.5 w-2.5 shrink-0 rounded-full border border-line", "nl-vr-dot")} />}
               </button>
             );
           })}
@@ -134,12 +164,12 @@ export default function RecordVisit({
           />
           <button type="button" onClick={() => setTab({ kind: "writeup" })} className={`${item(tab.kind === "writeup")} shrink-0 md:mt-3`}>
             <span>Write it up</span>
-            {inspection.reportedAt && <span className="text-[11px] opacity-70">done</span>}
+            {inspection.reportedAt && <span className={k("text-[11px] opacity-70", "nl-vr-count")}>done</span>}
           </button>
         </nav>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl p-5 md:p-8">
+        <div className={k("min-h-0 flex-1 overflow-y-auto", "nl-vr-main")}>
+          <div className={k("mx-auto max-w-2xl p-5 md:p-8", "nl-vr-pane")}>
             {tab.kind === "checks" ? (
               <ChecksPane key="checks" inspection={inspection} checks={checks} busy={busy} onMove={onMove} onNext={() => setTab({ kind: "room", room: rooms[0]! })} />
             ) : tab.kind === "room" ? (
@@ -161,36 +191,38 @@ export default function RecordVisit({
         </div>
       </div>
     </div>
+    </Nl.Provider>
   );
 }
 
 function AddRoom({ taken, onAdd }: { taken: string[]; onAdd: (r: string) => void }) {
+  const { nl, k } = useLook();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const left = MORE_ROOMS.filter((r) => !taken.includes(r));
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="shrink-0 rounded-xl px-3 py-2 text-left text-[12.5px] font-semibold text-accent-dark hover:bg-accent-soft/40">
+      <button type="button" onClick={() => setOpen(true)} className={k("shrink-0 rounded-xl px-3 py-2 text-left text-[12.5px] font-semibold text-accent-dark hover:bg-accent-soft/40", "nl-vr-add")}>
         + Add a room
       </button>
     );
   }
   return (
-    <div className="shrink-0 space-y-1.5 rounded-xl border border-line/80 p-2">
-      <div className="flex flex-wrap gap-1">
+    <div className={k("shrink-0 space-y-1.5 rounded-xl border border-line/80 p-2", "nl-vr-addbox")}>
+      <div className={k("flex flex-wrap gap-1", "nl-vr-chips")}>
         {left.slice(0, 8).map((r) => (
-          <button key={r} type="button" onClick={() => { onAdd(r); setOpen(false); }} className="rounded-full border border-line/80 px-2.5 py-1 text-[11.5px]">
+          <button key={r} type="button" onClick={() => { onAdd(r); setOpen(false); }} className={k("rounded-full border border-line/80 px-2.5 py-1 text-[11.5px]", "nl-vr-chip")}>
             {r}
           </button>
         ))}
       </div>
-      <div className="flex gap-1.5">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Or type one" className="min-w-0 flex-1 rounded-lg border border-line/80 bg-page px-2 py-1 text-[12px]" />
+      <div className={k("flex gap-1.5", "nl-vr-addrow")}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Or type one" className={k("min-w-0 flex-1 rounded-lg border border-line/80 bg-page px-2 py-1 text-[12px]", "nl-input nl-vr-addinput")} />
         <button
           type="button"
           disabled={!name.trim() || taken.includes(name.trim())}
           onClick={() => { onAdd(name.trim()); setName(""); setOpen(false); }}
-          className="rounded-lg bg-ink px-2.5 text-[12px] font-semibold text-page disabled:opacity-40"
+          className={k("rounded-lg bg-ink px-2.5 text-[12px] font-semibold text-page disabled:opacity-40", "nl-btn nl-btn--primary nl-btn--sm")}
         >
           Add
         </button>
@@ -206,18 +238,19 @@ async function upload(inspectionId: string, files: File[]): Promise<{ added: { k
 }
 
 function Photos({ photos, onAdd, busy }: { photos: { key: string; name: string }[]; onAdd: (files: File[]) => Promise<void>; busy: boolean }) {
+  const { nl, k } = useLook();
   const [up, setUp] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
+      <div className={k("flex flex-wrap gap-2", "nl-vr-shots")}>
         {photos.map((p) => (
           <a key={p.key} href={`/api/r2/file?key=${encodeURIComponent(p.key)}`} target="_blank" rel="noreferrer" title={p.name}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/r2/file?key=${encodeURIComponent(p.key)}`} alt={p.name} className="h-20 w-20 rounded-xl border border-line/60 object-cover" />
+            <img src={`/api/r2/file?key=${encodeURIComponent(p.key)}`} alt={p.name} className={k("h-20 w-20 rounded-xl border border-line/60 object-cover", "nl-vr-shot")} />
           </a>
         ))}
-        <label className={`flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line text-[11px] font-semibold ${busy || up ? "text-muted" : "cursor-pointer text-accent-dark"}`}>
+        <label className={nl ? `nl-vr-shot-add${busy || up ? " is-busy" : ""}` : `flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line text-[11px] font-semibold ${busy || up ? "text-muted" : "cursor-pointer text-accent-dark"}`}>
           <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4 8h3l1.5-2h7L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
           </svg>
@@ -246,7 +279,7 @@ function Photos({ photos, onAdd, busy }: { photos: { key: string; name: string }
           />
         </label>
       </div>
-      {err && <p className="mt-1 text-[11.5px] text-accent-dark">{err}</p>}
+      {err && <p className={k("mt-1 text-[11.5px] text-accent-dark", "nl-vr-err")}>{err}</p>}
     </div>
   );
 }
@@ -270,6 +303,7 @@ function RoomPane({
   onNext: () => void;
   isLast: boolean;
 }) {
+  const { nl, k } = useLook();
   const [cond, setCond] = useState<Cond | null>(overall?.condition ?? null);
   const [note, setNote] = useState(overall?.note ?? "");
   const [action, setAction] = useState(overall?.action ?? "none");
@@ -287,34 +321,35 @@ function RoomPane({
 
   return (
     <div>
-      <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Room</p>
-      <h2 className="hand mt-1 text-[28px]">{room}</h2>
+      <p className={k("text-[9.5px] font-bold uppercase tracking-wider text-muted", "nl-eyebrow")}>Room</p>
+      <h2 className={k("hand mt-1 text-[28px]", "nl-vr-title")}>{room}</h2>
 
-      <p className="mb-2 mt-6 text-[10.5px] font-bold uppercase tracking-wider text-muted">How is it kept?</p>
-      <div className="grid grid-cols-3 gap-2">
+      <p className={k("mb-2 mt-6 text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>How is it kept?</p>
+      <div className={k("grid grid-cols-3 gap-2", "nl-vr-tiles")}>
         {COND.map((c) => (
           <button
             key={c.id}
             type="button"
             onClick={() => { setCond(c.id); setSaved(false); }}
-            className="rounded-2xl border-2 px-3 py-3.5 text-[14px] font-semibold transition-colors"
-            style={cond === c.id ? { borderColor: c.tone, background: `${c.tone}14`, color: c.tone } : { borderColor: "var(--line, #e5e0da)" }}
+            className={k("rounded-2xl border-2 px-3 py-3.5 text-[14px] font-semibold transition-colors", `nl-vr-tile is-${c.id}${cond === c.id ? " is-on" : ""}`)}
+            aria-pressed={cond === c.id}
+            style={nl ? undefined : cond === c.id ? { borderColor: c.tone, background: `${c.tone}14`, color: c.tone } : { borderColor: "var(--line, #e5e0da)" }}
           >
             {c.label}
           </button>
         ))}
       </div>
 
-      <p className="mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-wider text-muted">What you saw</p>
+      <p className={k("mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>What you saw</p>
       <textarea
         value={note}
         onChange={(e) => { setNote(e.target.value); setSaved(false); }}
         rows={3}
         placeholder="Clean and tidy. Small mark on the wall by the door…"
-        className="w-full rounded-xl border border-line/80 bg-page px-3 py-2.5 text-[13.5px]"
+        className={k("w-full rounded-xl border border-line/80 bg-page px-3 py-2.5 text-[13.5px]", "nl-input nl-vr-text")}
       />
 
-      <p className="mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-wider text-muted">Photos</p>
+      <p className={k("mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>Photos</p>
       <Photos
         photos={photos}
         busy={busy}
@@ -334,29 +369,29 @@ function RoomPane({
         }}
       />
 
-      <p className="mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-wider text-muted">Anything to do?</p>
-      <div className="flex flex-wrap gap-1.5">
+      <p className={k("mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>Anything to do?</p>
+      <div className={k("flex flex-wrap gap-1.5", "nl-vr-chips")}>
         {ACTIONS.map((a) => (
           <button
             key={a.id}
             type="button"
             onClick={() => { setAction(a.id as Finding["action"]); setSaved(false); }}
-            className={`rounded-full px-3.5 py-1.5 text-[12px] font-semibold ${action === a.id ? "bg-ink text-page" : "border border-line/80 text-muted"}`}
+            className={nl ? `nl-vr-chip${action === a.id ? " is-on" : ""}` : `rounded-full px-3.5 py-1.5 text-[12px] font-semibold ${action === a.id ? "bg-ink text-page" : "border border-line/80 text-muted"}`}
           >
             {a.label}
           </button>
         ))}
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <PressButton disabled={busy || !cond} onClick={() => void save(onNext)} className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40">
+      <div className={k("mt-6 flex flex-wrap items-center gap-2", "nl-vr-foot")}>
+        <PressButton disabled={busy || !cond} onClick={() => void save(onNext)} className={k("rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40", "nl-btn nl-btn--primary")}>
           {isLast ? "Save and write it up" : "Save and next room"}
         </PressButton>
-        <PressButton disabled={busy || !cond} onClick={() => void save()} className="rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold">
+        <PressButton disabled={busy || !cond} onClick={() => void save()} className={k("rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold", "nl-btn nl-btn--secondary")}>
           Save
         </PressButton>
-        {!cond && <span className="text-[12px] text-muted">Pick how it&apos;s kept first.</span>}
-        {cond && saved && <span className="text-[12px] text-muted">Saved.</span>}
+        {!cond && <span className={k("text-[12px] text-muted", "nl-vr-note")}>Pick how it&apos;s kept first.</span>}
+        {cond && saved && <span className={k("text-[12px] text-muted", "nl-vr-note")}>Saved.</span>}
       </div>
 
       {/* Something specific in this room, as its own line on the report. */}
@@ -366,18 +401,19 @@ function RoomPane({
 }
 
 function Specific({ room, extras, busy, onMove }: { room: string; extras: Finding[]; busy: boolean; onMove: Move }) {
+  const { nl, k } = useLook();
   const [open, setOpen] = useState(false);
   const [what, setWhat] = useState("");
   const [note, setNote] = useState("");
   const [cond, setCond] = useState<Cond>("fair");
   const [action, setAction] = useState("works_order");
   return (
-    <section className="mt-8 border-t border-line/70 pt-5">
-      <p className="text-[10.5px] font-bold uppercase tracking-wider text-muted">Something specific in {room.toLowerCase()}</p>
+    <section className={k("mt-8 border-t border-line/70 pt-5", "nl-vr-spec")}>
+      <p className={k("text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>Something specific in {room.toLowerCase()}</p>
       {extras.length > 0 && (
-        <ul className="mt-2 divide-y divide-line/50">
+        <ul className={k("mt-2 divide-y divide-line/50", "nl-vr-lines")}>
           {extras.map((f) => (
-            <li key={f.id} className="flex items-start justify-between gap-3 py-2 text-[12.5px]">
+            <li key={f.id} className={k("flex items-start justify-between gap-3 py-2 text-[12.5px]", "nl-vr-line")}>
               <span className="min-w-0">
                 <span className="block font-semibold">{f.item || "Noted"}</span>
                 {f.note && <span className="block text-muted">{f.note}</span>}
@@ -390,22 +426,22 @@ function Specific({ room, extras, busy, onMove }: { room: string; extras: Findin
         </ul>
       )}
       {!open ? (
-        <button type="button" onClick={() => setOpen(true)} className="mt-2 text-[12.5px] font-semibold text-accent-dark underline">
+        <button type="button" onClick={() => setOpen(true)} className={k("mt-2 text-[12.5px] font-semibold text-accent-dark underline", "nl-link nl-vr-more")}>
           + Add something specific (a broken catch, a leak…)
         </button>
       ) : (
-        <div className="mt-3 space-y-2">
-          <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What - extractor fan, window catch…" className="w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]" />
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What you saw." className="w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]" />
-          <div className="flex flex-wrap gap-2">
-            <select value={cond} onChange={(e) => setCond(e.target.value as Cond)} className="rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]">
+        <div className={k("mt-3 space-y-2", "nl-vr-specform")}>
+          <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What - extractor fan, window catch…" className={k("w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]", "nl-input")} />
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What you saw." className={k("w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]", "nl-input")} />
+          <div className={k("flex flex-wrap gap-2", "nl-vr-specrow")}>
+            <select value={cond} onChange={(e) => setCond(e.target.value as Cond)} className={k("rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]", "nl-input nl-vr-select")}>
               {COND.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label}
                 </option>
               ))}
             </select>
-            <select value={action} onChange={(e) => setAction(e.target.value)} className="rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]">
+            <select value={action} onChange={(e) => setAction(e.target.value)} className={k("rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]", "nl-input nl-vr-select")}>
               {ACTIONS.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.label}
@@ -421,11 +457,11 @@ function Specific({ room, extras, busy, onMove }: { room: string; extras: Findin
                   setOpen(false);
                 }
               }}
-              className="rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page"
+              className={k("rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page", "nl-btn nl-btn--primary nl-btn--sm")}
             >
               Add it
             </PressButton>
-            <button type="button" onClick={() => setOpen(false)} className="text-[12px] text-muted underline">
+            <button type="button" onClick={() => setOpen(false)} className={k("text-[12px] text-muted underline", "nl-link")}>
               Cancel
             </button>
           </div>
@@ -436,6 +472,7 @@ function Specific({ room, extras, busy, onMove }: { room: string; extras: Findin
 }
 
 function ChecksPane({ checks, busy, onMove, onNext }: { inspection: Inspection; checks: Checks; busy: boolean; onMove: Move; onNext: () => void }) {
+  const { nl, k } = useLook();
   const [c, setC] = useState<Checks>(checks);
   const [saved, setSaved] = useState(false);
   const set = (id: string, answer: CheckAnswer) => {
@@ -457,27 +494,28 @@ function ChecksPane({ checks, busy, onMove, onNext }: { inspection: Inspection; 
 
   return (
     <div>
-      <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">On every visit</p>
-      <h2 className="hand mt-1 text-[28px]">Safety &amp; Checks</h2>
-      <p className="mt-1 text-[12.5px] text-muted">Each one is put so that Yes is the good answer. Not checked is fine - a blank would read as a pass.</p>
+      <p className={k("text-[9.5px] font-bold uppercase tracking-wider text-muted", "nl-eyebrow")}>On every visit</p>
+      <h2 className={k("hand mt-1 text-[28px]", "nl-vr-title")}>Safety &amp; Checks</h2>
+      <p className={k("mt-1 text-[12.5px] text-muted", "nl-vr-lede")}>Each one is put so that Yes is the good answer. Not checked is fine - a blank would read as a pass.</p>
 
-      <ul className="mt-5 divide-y divide-line/60 rounded-2xl border border-line/80 bg-panel">
+      <ul className={k("mt-5 divide-y divide-line/60 rounded-2xl border border-line/80 bg-panel", "nl-vr-checks")}>
         {CHECKS.map((d) => {
           const a = c.answers[d.id];
           return (
-            <li key={d.id} className="px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <li key={d.id} className={k("px-4 py-3", "nl-vr-check")}>
+              <div className={k("flex flex-wrap items-center justify-between gap-2", "nl-vr-checkrow")}>
                 <span className="min-w-0">
-                  <span className="block text-[13.5px] font-semibold">{d.label}</span>
-                  {d.hint && <span className="block text-[11.5px] text-muted">{d.hint}</span>}
+                  <span className={k("block text-[13.5px] font-semibold", "nl-vr-checkname")}>{d.label}</span>
+                  {d.hint && <span className={k("block text-[11.5px] text-muted", "nl-vr-hint")}>{d.hint}</span>}
                 </span>
-                <span className="flex gap-1.5">
+                <span className={k("flex gap-1.5", "nl-vr-seg")}>
                   {(["ok", "issue", "na"] as const).map((ans) => (
                     <button
                       key={ans}
                       type="button"
                       onClick={() => set(d.id, ans)}
-                      className={pill(a?.answer === ans, ans === "ok" ? "bg-[#2f7a48]" : ans === "issue" ? "bg-[#b3372b]" : "bg-[#7a6a64]")}
+                      aria-pressed={a?.answer === ans}
+                      className={nl ? `nl-vr-ans is-${ans}${a?.answer === ans ? " is-on" : ""}` : pill(a?.answer === ans, ans === "ok" ? "bg-[#2f7a48]" : ans === "issue" ? "bg-[#b3372b]" : "bg-[#7a6a64]")}
                     >
                       {ANSWER_WORD[ans]}
                     </button>
@@ -489,7 +527,7 @@ function ChecksPane({ checks, busy, onMove, onNext }: { inspection: Inspection; 
                   value={a.note ?? ""}
                   onChange={(e) => note(d.id, e.target.value)}
                   placeholder="What's wrong, and where?"
-                  className="mt-2 w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]"
+                  className={k("mt-2 w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]", "nl-input nl-vr-checknote")}
                 />
               )}
             </li>
@@ -497,44 +535,45 @@ function ChecksPane({ checks, busy, onMove, onNext }: { inspection: Inspection; 
         })}
       </ul>
 
-      <p className="mb-2 mt-6 text-[10.5px] font-bold uppercase tracking-wider text-muted">Meter readings, if you took them</p>
-      <div className="grid grid-cols-3 gap-2">
+      <p className={k("mb-2 mt-6 text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>Meter readings, if you took them</p>
+      <div className={k("grid grid-cols-3 gap-2", "nl-vr-readings")}>
         {READINGS.map((r) => (
           <label key={r.id} className="block">
-            <span className="mb-1 block text-[11.5px] text-muted">{r.label}</span>
+            <span className={k("mb-1 block text-[11.5px] text-muted", "nl-vr-hint")}>{r.label}</span>
             <input
               value={c.readings[r.id] ?? ""}
               onChange={(e) => { setC((x) => ({ ...x, readings: { ...x.readings, [r.id]: e.target.value } })); setSaved(false); }}
               inputMode="numeric"
-              className="w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]"
+              className={k("w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]", "nl-input")}
             />
           </label>
         ))}
       </div>
 
-      <p className="mb-2 mt-6 text-[10.5px] font-bold uppercase tracking-wider text-muted">What the tenant raised</p>
+      <p className={k("mb-2 mt-6 text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>What the tenant raised</p>
       <textarea
         value={c.tenantSays}
         onChange={(e) => { setC((x) => ({ ...x, tenantSays: e.target.value })); setSaved(false); }}
         rows={3}
         placeholder="Anything they mentioned on the day, in their words."
-        className="w-full rounded-xl border border-line/80 bg-page px-3 py-2.5 text-[13.5px]"
+        className={k("w-full rounded-xl border border-line/80 bg-page px-3 py-2.5 text-[13.5px]", "nl-input nl-vr-text")}
       />
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <PressButton disabled={busy} onClick={() => void save(onNext)} className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40">
+      <div className={k("mt-6 flex flex-wrap items-center gap-2", "nl-vr-foot")}>
+        <PressButton disabled={busy} onClick={() => void save(onNext)} className={k("rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40", "nl-btn nl-btn--primary")}>
           Save and start the rooms
         </PressButton>
-        <PressButton disabled={busy} onClick={() => void save()} className="rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold">
+        <PressButton disabled={busy} onClick={() => void save()} className={k("rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold", "nl-btn nl-btn--secondary")}>
           Save
         </PressButton>
-        {saved && <span className="text-[12px] text-muted">Saved.</span>}
+        {saved && <span className={k("text-[12px] text-muted", "nl-vr-note")}>Saved.</span>}
       </div>
     </div>
   );
 }
 
 function WriteUp({ inspection, findings, checks, busy, onMove, onClose }: { inspection: Inspection; findings: Finding[]; checks: Checks; busy: boolean; onMove: Move; onClose: () => void }) {
+  const { nl, k } = useLook();
   const poor = findings.filter((f) => f.condition === "poor").length;
   const fair = findings.filter((f) => f.condition === "fair").length;
   const issues = Object.values(checks.answers).filter((a) => a.answer === "issue").length;
@@ -545,14 +584,14 @@ function WriteUp({ inspection, findings, checks, busy, onMove, onClose }: { insp
 
   return (
     <div>
-      <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Last</p>
-      <h2 className="hand mt-1 text-[28px]">Write It Up</h2>
-      <p className="mt-1 text-[12.5px] text-muted">
-        {findings.length} things recorded · {poor} poor · {fair} fair · {issues} check{issues === 1 ? "" : "s"} failed · {toDo} to put right
+      <p className={k("text-[9.5px] font-bold uppercase tracking-wider text-muted", "nl-eyebrow")}>Last</p>
+      <h2 className={k("hand mt-1 text-[28px]", "nl-vr-title")}>Write It Up</h2>
+      <p className={k("mt-1 text-[12.5px] text-muted", "nl-vr-lede")}>
+        {findings.length} thing{findings.length === 1 ? "" : "s"} recorded · {poor} poor · {fair} fair · {issues} check{issues === 1 ? "" : "s"} failed · {toDo} to put right
       </p>
 
-      <p className="mb-2 mt-6 text-[10.5px] font-bold uppercase tracking-wider text-muted">Overall, the property is</p>
-      <div className="grid grid-cols-3 gap-2">
+      <p className={k("mb-2 mt-6 text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>Overall, the property is</p>
+      <div className={k("grid grid-cols-3 gap-2", "nl-vr-tiles")}>
         {(
           [
             ["good", "In good order"],
@@ -566,8 +605,9 @@ function WriteUp({ inspection, findings, checks, busy, onMove, onClose }: { insp
               key={id}
               type="button"
               onClick={() => setCond(id)}
-              className="rounded-2xl border-2 px-3 py-3.5 text-[13.5px] font-semibold"
-              style={cond === id ? { borderColor: tone, background: `${tone}14`, color: tone } : { borderColor: "var(--line, #e5e0da)" }}
+              className={k("rounded-2xl border-2 px-3 py-3.5 text-[13.5px] font-semibold", `nl-vr-tile is-${id}${cond === id ? " is-on" : ""}`)}
+              aria-pressed={cond === id}
+              style={nl ? undefined : cond === id ? { borderColor: tone, background: `${tone}14`, color: tone } : { borderColor: "var(--line, #e5e0da)" }}
             >
               {label}
             </button>
@@ -575,26 +615,26 @@ function WriteUp({ inspection, findings, checks, busy, onMove, onClose }: { insp
         })}
       </div>
 
-      <p className="mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-wider text-muted">For the landlord, in a few lines</p>
+      <p className={k("mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-wider text-muted", "nl-vr-label")}>For the landlord, in a few lines</p>
       <textarea
         value={summary}
         onChange={(e) => setSummary(e.target.value)}
         rows={5}
         placeholder="How the property is being kept, and anything they need to know."
-        className="w-full rounded-xl border border-line/80 bg-page px-3 py-2.5 text-[13.5px]"
+        className={k("w-full rounded-xl border border-line/80 bg-page px-3 py-2.5 text-[13.5px]", "nl-input nl-vr-text")}
       />
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
+      <div className={k("mt-6 flex flex-wrap items-center gap-2", "nl-vr-foot")}>
         <PressButton
           disabled={busy || !summary.trim()}
           onClick={async () => {
             if (await onMove({ action: "report", condition: cond, summary }, "Write-up")) onClose();
           }}
-          className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40"
+          className={k("rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40", "nl-btn nl-btn--primary")}
         >
           {inspection.reportedAt ? "Save the write-up" : "Finish the record"}
         </PressButton>
-        <span className="text-[12px] text-muted">Then send it to the landlord from the inspection.</span>
+        <span className={k("text-[12px] text-muted", "nl-vr-note")}>Then send it to the landlord from the inspection.</span>
       </div>
     </div>
   );
