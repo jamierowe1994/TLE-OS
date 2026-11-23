@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { refFromPath, useNoteVisit } from "@/lib/recent-visits";
 import { useNewLook } from "@/lib/use-new-look";
+import { Ico } from "@/components/new-look/Parts";
 
 /**
  * Search for anything (10 Oct 2026). Search in the sidebar, or ⌘K, darkens
@@ -79,35 +80,35 @@ function ResultRow({ it, i, on, words, onHover, onGo, float = false }: { it: Ite
       >
         {it.image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={it.image} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" loading="lazy" />
+          <img src={it.image} alt="" className="nl-sf-pic h-11 w-11 shrink-0 rounded-xl object-cover" loading="lazy" />
         ) : (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft/60 text-[12px] font-semibold text-accent-dark">
+          <span className="nl-sf-pic nl-sf-pic--word flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft/60 text-[12px] font-semibold text-accent-dark">
             {it.group === "tenant" || it.group === "landlord" ? initials(it.title) || <DoodleIcon name={GROUPS[it.group].icon} size={15} /> : <DoodleIcon name={GROUPS[it.group].icon} size={15} />}
           </span>
         )}
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className="truncate text-[13.5px] text-ink">
+            <span className="nl-sf-title truncate text-[13.5px] text-ink">
               <Marked text={it.title} words={words} />
             </span>
-            <span className="shrink-0 rounded-full bg-page px-2 py-0.5 text-[10px] font-semibold text-muted">{it.label}</span>
+            <span className="nl-sf-kind shrink-0 rounded-full bg-page px-2 py-0.5 text-[10px] font-semibold text-muted">{it.label}</span>
           </span>
           {it.sub && (
-            <span className="block truncate text-[11.5px] text-muted">
+            <span className="nl-sf-sub block truncate text-[11.5px] text-muted">
               <Marked text={it.sub} words={words} />
             </span>
           )}
           {it.snippet && (
-            <span className="mt-0.5 block line-clamp-2 text-[11.5px] leading-snug text-ink/70">
+            <span className="nl-sf-snip mt-0.5 block line-clamp-2 text-[11.5px] leading-snug text-ink/70">
               <Marked text={it.snippet} words={words} />
             </span>
           )}
         </span>
-        {on && <span className="hidden shrink-0 text-[10.5px] text-muted sm:block">Enter</span>}
+        {on && <span className="nl-sf-enter hidden shrink-0 text-[10.5px] text-muted sm:block">Enter</span>}
       </button>
       {/* The same home's other records (12 Oct 2026): one row, small links. */}
       {it.also && it.also.length > 0 && (
-        <span className="flex flex-wrap gap-1.5 pb-1.5 pl-[68px] pr-3">
+        <span className="nl-sf-also flex flex-wrap gap-1.5 pb-1.5 pl-[68px] pr-3">
           {it.also.map((a) => (
             <button
               key={a.href}
@@ -224,7 +225,10 @@ export default function SearchPalette() {
   }, [q]);
 
   const typing = q.trim().length >= 2;
-  const flat = useMemo(() => (typing ? (answer?.groups ?? []).flatMap((g) => g.items) : recent ?? []), [typing, answer, recent]);
+  /* Six recent files in the floating look (James, 23 Nov 2026: twelve filled
+     the screen). The arrow keys walk the same six. */
+  const shownRecent = useMemo(() => (float && recent ? recent.slice(0, 6) : recent), [float, recent]);
+  const flat = useMemo(() => (typing ? (answer?.groups ?? []).flatMap((g) => g.items) : shownRecent ?? []), [typing, answer, shownRecent]);
   /* Back to the top of whichever list is showing. */
   useEffect(() => setActive(0), [typing]);
   const words = useMemo(() => q.trim().split(/\s+/).filter((w) => w.length > 1), [q]);
@@ -281,7 +285,7 @@ export default function SearchPalette() {
         }`}
       >
         <label className={float ? "nl-sf-bar" : "flex shrink-0 items-center gap-3 border-b border-line/70 px-5 py-4"}>
-          <DoodleIcon name="search" size={18} className="shrink-0 text-muted" />
+          {float ? <span className="nl-sf-glass" aria-hidden><Ico name="search" size={18} /></span> : <DoodleIcon name="search" size={18} className="shrink-0 text-muted" />}
           <input
             ref={input}
             value={q}
@@ -293,20 +297,20 @@ export default function SearchPalette() {
           {busy ? (
             <span className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-ink" aria-label="Searching" />
           ) : (
-            <kbd className="hidden shrink-0 rounded-md border border-line/80 px-1.5 py-0.5 font-sans text-[10.5px] text-muted sm:block">Esc</kbd>
+            <kbd className="nl-sf-key hidden shrink-0 rounded-md border border-line/80 px-1.5 py-0.5 font-sans text-[10.5px] text-muted sm:block">Esc</kbd>
           )}
         </label>
 
         <div ref={list} className={float ? "nl-sf-list" : "min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3"}>
           {!typing ? (
-            recent && recent.length > 0 ? (
+            shownRecent && shownRecent.length > 0 ? (
               <section>
                 <h3 className={float ? "nl-sf-h" : "flex items-center gap-2 px-3 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted"}>
                   <DoodleIcon name="clock" size={12} />
                   Recent
                 </h3>
                 <ul className={float ? "nl-sf-ul" : undefined}>
-                  {recent.map((it, i) => (
+                  {shownRecent.map((it, i) => (
                     <ResultRow key={it.id} it={it} i={i} on={i === active} words={[]} onHover={setActive} onGo={go} float={float} />
                   ))}
                 </ul>
