@@ -169,6 +169,9 @@ export async function GET(req: NextRequest) {
     /* The deal the push would start, for the agent to check first. Only
        when the push would really start one. */
     const draft = mode === "live" && dealOn ? await dealDraftFor(handoff).catch(() => null) : null;
+    /* Propoly refused an earlier push for want of a room (ticket ecd0574f,
+       23 Nov 2026): the Room box shows whatever the address says. */
+    if (draft && runs.some((r) => r.steps.some((s) => s.id === "deal" && s.state === "failed" && /room_no|per room/i.test(s.detail)))) draft.terms.roomLet = true;
     return NextResponse.json({
       ...handoff,
       mode,

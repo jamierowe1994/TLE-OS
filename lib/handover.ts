@@ -723,6 +723,7 @@ const dayOf = (iso: string | null | undefined) =>
 
 function termWords(t: DealTerms): string {
   return [
+    ...(t.roomNo ? [`room ${t.roomNo}`] : []),
     `${pounds(t.rentPcm)} pcm`,
     `moving in ${dayOf(t.moveIn)}`,
     `${t.termMonths ?? "?"} months`,
@@ -868,7 +869,10 @@ async function pushDeal(
     const body = (made.body ?? {}) as Row;
     const uuid = str((body.deal as Row | null)?.uuid) ?? str(body.uuid) ?? str((body.data as Row | null)?.uuid);
     if (made.status < 200 || made.status >= 300) {
-      await rec.add({ id: "deal", label, state: "failed", detail: `Propoly said no: ${refusal(made)} Nothing was started; start it by hand or fix this and push again.`, request: payload, response: made.body });
+      /* A home Propoly rents per room needs the room (Joe Patten, ticket ecd0574f, 23 Nov 2026). */
+      const why = refusal(made);
+      const roomHint = /room_no|per room/i.test(why) ? (terms.roomNo ? ` Propoly didn't take room ${terms.roomNo}: check the Room box on the push matches the room in Propoly, and push again.` : " Propoly rents this home by the room: put the room number in the Room box on the push and push again.") : "";
+      await rec.add({ id: "deal", label, state: "failed", detail: `Propoly said no: ${why}${roomHint} Nothing was started; start it by hand or fix this and push again.`, request: payload, response: made.body });
       return "failed";
     }
     if (!uuid) {

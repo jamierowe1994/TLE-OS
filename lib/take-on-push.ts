@@ -9,7 +9,7 @@ import { TEST_STREET } from "@/lib/test-guard";
 import { propolyConfigured, propolyGet, propolyPatch, propolyPost } from "@/lib/business/propoly";
 import { getAllPropolyDeals, refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 import { candidateOf, firstMatch, landlordPayload, listOf, propolyUserFor, refusal, ukMobile, type PropertyCandidate } from "@/lib/handover";
-import { DEPOSIT_SCHEMES, SCOTTISH_SCHEME, TENANCY_TYPES, dealPayload, dealProblems, officeScheme, type DealTerms } from "@/lib/handover-deal";
+import { DEPOSIT_SCHEMES, SCOTTISH_SCHEME, TENANCY_TYPES, dealPayload, dealProblems, officeScheme, roomOf, type DealTerms } from "@/lib/handover-deal";
 import { isScottish } from "@/lib/property-flags";
 import { isHmoLet, type LetType } from "@/lib/let-type";
 import { parseAddress, sameHome } from "@/lib/address-parse";
@@ -173,6 +173,8 @@ export function takeOnDealTerms(t: TakeOn): DealTerms {
        below says when it has put one on. */
     holdingFeePounds: 0,
     scotland,
+    /* A room in a shared house: Propoly wants its room on the deal (ticket ecd0574f, 23 Nov 2026). */
+    roomNo: roomOf(t.line1),
   };
 }
 
@@ -180,7 +182,7 @@ const pounds = (p: number | null | undefined) => (p == null ? "none" : `£${p.to
 const dayOf = (iso: string | null | undefined) =>
   iso ? new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" }) : "no date";
 const termWords = (d: DealTerms) =>
-  [`${pounds(d.rentPcm)} a month`, `from ${dayOf(d.moveIn)}`, `${d.termMonths} months`, d.template, TENANCY_TYPES[d.tenancyType], d.depositScheme ? DEPOSIT_SCHEMES[d.depositScheme] : "no scheme", `deposit ${pounds(d.depositPounds)}`, "no holding fee"].join(", ");
+  [...(d.roomNo ? [`room ${d.roomNo}`] : []), `${pounds(d.rentPcm)} a month`, `from ${dayOf(d.moveIn)}`, `${d.termMonths} months`, d.template, TENANCY_TYPES[d.tenancyType], d.depositScheme ? DEPOSIT_SCHEMES[d.depositScheme] : "no scheme", `deposit ${pounds(d.depositPounds)}`, "no holding fee"].join(", ");
 
 async function readDeal(uuid: string): Promise<Row | null> {
   const res = await propolyGet(`/api/v1/deals/${encodeURIComponent(uuid)}`);

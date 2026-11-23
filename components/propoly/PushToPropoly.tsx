@@ -44,6 +44,9 @@ type DealTerms = {
   depositPounds: number | null;
   holdingFeePounds: number | null;
   scotland: boolean;
+  /** The room, for a let of one room in a shared house (ticket ecd0574f, 23 Nov 2026). */
+  roomNo?: string | null;
+  roomLet?: boolean;
 };
 type DealDraft = {
   terms: DealTerms;
@@ -354,6 +357,13 @@ export default function PushToPropoly({
                           <span className="text-muted">{terms.zeroDeposit ? "Flatfair cover (£)" : "Deposit (£)"}</span>
                           <input type="number" min={0} step="0.01" inputMode="decimal" value={terms.depositPounds ?? ""} onChange={(e) => set("depositPounds", e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5" />
                         </label>
+                        {(terms.roomLet || terms.roomNo) && (
+                          <label className="col-span-2 flex flex-col gap-1">
+                            <span className="text-muted">Room</span>
+                            <input type="text" inputMode="numeric" maxLength={6} placeholder="e.g. 3" value={terms.roomNo ?? ""} onChange={(e) => set("roomNo", e.target.value.trim() || null)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5" />
+                            <span className="text-[11px] leading-snug text-muted">The room number as Propoly has it. Propoly needs it when it lets this home by the room.</span>
+                          </label>
+                        )}
                         <label className="col-span-2 flex flex-col gap-1">
                           <span className="text-muted">Agreement</span>
                           <select value={terms.template} onChange={(e) => set("template", e.target.value)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
