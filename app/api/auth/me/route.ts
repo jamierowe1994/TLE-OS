@@ -4,6 +4,7 @@ import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { isTeamAdmin } from "@/lib/team-admins";
+import { seesDeposits } from "@/lib/deposit-access";
 import { keepRexAlive } from "@/lib/rex-user";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
@@ -80,6 +81,9 @@ export async function GET(req: NextRequest) {
     /* May add people, reset passwords and set roles from the team page
        (lib/team-admins): owners and a named few, Kirstie first. */
     teamAdmin: await isTeamAdmin(actor).catch(() => false),
+    /* May open the deposit register (lib/deposit-access): Admin, and Michael
+       on his compliance desk. The desk's rail shows the entry on this. */
+    depositDesk: await seesDeposits(actor).catch(() => false),
     role: actor?.role ?? null,
     /* What the SUBJECT is, so the rail can be drawn as theirs while an owner
        views as them (lib/nav railFor). Null when nobody is being viewed, so

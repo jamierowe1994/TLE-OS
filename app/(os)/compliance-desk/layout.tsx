@@ -43,6 +43,9 @@ const RAIL: RailGroup[] = [
       /* Susan's Compliance overview beside his task lists (2 Nov 2026). */
       { href: "/compliance-desk/overview", label: "Compliance Overview", icon: "dashboard" },
       { href: "/compliance-desk/properties", label: "Property Compliance", icon: "shield" },
+      /* Susan's Propertymark deposit register, the screen Admin has (James, 23 Nov 2026: Michael could not find
+         it). For the named people in lib/deposit-access, not the whole role. */
+      { href: "/compliance-desk/deposits", label: "Deposit Register", icon: "bank", only: "deposits" },
       /* Every chase of an agent about a certificate (Josel, ticket 11c8acc9, 11 Nov 2026). */
       { href: "/compliance-desk/chases", label: "Agent Chases", icon: "mail" },
       { href: "/compliance-desk/verify", label: "Gas & Electric Check", icon: "checklist", also: ["/compliance-desk/verified"] },

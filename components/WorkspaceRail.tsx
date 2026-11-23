@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LineIcon from "@/components/LineIcon";
 import { useNewLook } from "@/lib/use-new-look";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The rail every workspace uses. One frame, whoever you are.
@@ -50,6 +51,8 @@ export type RailItem = {
   href: string; label: string; exact?: boolean; icon?: string; /** Other routes that light this entry - a page shown as its tab. */ also?: string[];
   /** Shown only while this switch is on for the person (lib/new-look): the Scottish rent review's desk tab, 20 Nov 2026. */
   look?: "scotrent";
+  /** Shown only to the people a named list gives it to (/api/auth/me): the deposit register on the compliance desk, 23 Nov 2026. */
+  only?: "deposits";
 };
 
 export type RailGroup = {
@@ -87,7 +90,22 @@ export default function WorkspaceRail({
   /* The new look's sidebar (lib/new-look "nav"): flush to the left, full height, a line down its edge. */
   const look = useNewLook("nav") === true;
   const scotRent = useNewLook("scotrent") === true;
-  const shown = (t: RailItem) => !t.look || (t.look === "scotrent" && scotRent);
+  /* Held back until the answer is in, so the entry never shows for a beat to somebody it is not for. */
+  const [deposits, setDeposits] = useState(false);
+  const asksMe = groups.some((g) => g.items.some((t) => t.only));
+  useEffect(() => {
+    if (!asksMe) return;
+    let gone = false;
+    fetchMe()
+      .then((me) => {
+        if (!gone) setDeposits(me?.depositDesk === true);
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [asksMe]);
+  const shown = (t: RailItem) => (!t.look || (t.look === "scotrent" && scotRent)) && (!t.only || (t.only === "deposits" && deposits));
   useEffect(() => {
     try {
       setCollapsed(window.localStorage.getItem(key) === "1");

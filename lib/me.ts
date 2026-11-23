@@ -50,6 +50,8 @@ export interface Me {
   canAdmin?: boolean;
   /** Owners and the named team admins (lib/team-admins): the team page under Admin. */
   teamAdmin?: boolean;
+  /** May open the deposit register (lib/deposit-access): the compliance desk shows its entry on this. */
+  depositDesk?: boolean;
   role?: string | null;
   subjectRole?: string | null;
   anyUsers?: boolean;

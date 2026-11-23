@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { can } from "@/lib/roles";
+import { seesDeposits } from "@/lib/deposit-access";
 import { hasDb, q } from "@/lib/db";
 import { recordFact } from "@/lib/property-facts";
 import { DEPOSIT_FIELDS, EDITABLE } from "@/lib/deposit-audit";
@@ -31,7 +31,7 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 /** GET: the certificate and prescribed information files on file for the home. */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { actor } = await whoIs(req);
-  if (!actor || !can(actor.role, "admin:open")) return NextResponse.json({ ok: false, error: "Only Admin can see the deposit register." }, { status: 403 });
+  if (!actor || !(await seesDeposits(actor))) return NextResponse.json({ ok: false, error: "The deposit register isn't on your account. Ask James if you need it." }, { status: 403 });
   const { id } = await ctx.params;
   if (!/^[\w-]{1,80}$/.test(id)) return NextResponse.json({ ok: false, error: "No such home." }, { status: 404 });
   try {
@@ -47,7 +47,7 @@ const DATES = new Set(["deposit_protected_on", "deposit_pi_served_on"]);
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  if (!can(actor.role, "admin:open")) return NextResponse.json({ ok: false, error: "Only Admin can change the deposit register." }, { status: 403 });
+  if (!(await seesDeposits(actor))) return NextResponse.json({ ok: false, error: "The deposit register isn't on your account. Ask James if you need it." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   try {
     assertNotViewingAs(req.cookies.get(VIEW_AS_COOKIE)?.value);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { can } from "@/lib/roles";
+import { seesDeposits } from "@/lib/deposit-access";
 import { hasDb } from "@/lib/db";
 import { publicError } from "@/lib/public-error";
 import { aboutSheet, idsFrom, noteExport, xlsxResponse } from "@/lib/exports";
@@ -31,7 +31,7 @@ const yes = (b: boolean) => (b ? "Yes" : "No");
 
 export async function POST(req: NextRequest) {
   const { actor } = await whoIs(req);
-  if (!actor || !can(actor.role, "admin:open")) return NextResponse.json({ ok: false, error: "Only Admin can download the deposit register." }, { status: 403 });
+  if (!actor || !(await seesDeposits(actor))) return NextResponse.json({ ok: false, error: "The deposit register isn't on your account. Ask James if you need it." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   const asked = await idsFrom(req, "homes");
   if (!asked) return NextResponse.json({ ok: false, error: "Nothing to download." }, { status: 400 });
