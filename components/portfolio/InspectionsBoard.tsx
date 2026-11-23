@@ -27,6 +27,7 @@ import { searchMatches } from "@/lib/search-match";
 import { useNoteVisit } from "@/lib/recent-visits";
 import { uploadVisitPhotos } from "@/lib/visit-photos";
 import { useNewLook } from "@/lib/use-new-look";
+import { Ico, Mast, Tabs } from "@/components/new-look/Parts";
 import BoardSearch, { overviewQuery, useReportInner, type BoardProps } from "@/components/portfolio/BoardSearch";
 
 /**
@@ -133,7 +134,20 @@ type Board = {
   team?: Person[];
 };
 
+/* THE NEW LOOK, STAGE TWO (James, 23 Nov 2026; the "inspections" switch): the
+   board and the visit drawer in the house style. The board's own top - the
+   title, the four figures, the tabs and the search - is drawn again from the
+   new look's parts. Everything beneath (the lists, the drawer, its forms) is
+   the same markup inside a scope, restyled by app/new-look/inspections.css:
+   square edges, brown buttons in the small capitals, labels in the condensed
+   capitals. Same reads, same saves; with the switch off nothing changes. */
+function LookFrame({ on, page, children }: { on: boolean; page: boolean; children: React.ReactNode }) {
+  return on ? <div data-look="new" className={`nl-edge nl-insp${page ? " nl-page" : ""}`}>{children}</div> : <>{children}</>;
+}
+
 export default function InspectionsBoard({ embedded = false, onInnerOpen }: BoardProps = {}) {
+  const look = useNewLook("inspections");
+  const lookNew = look === true;
   const [data, setData] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"due" | "hand" | "done">("due");
@@ -264,10 +278,29 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
     load();
   }
 
+  /* Until the switch has answered, neither look is drawn: the old one flashing
+     up first and then changing reads as the page breaking. A browser that
+     has asked before answers at once from what it kept. */
+  if (look === null) {
+    return (
+      <p className="flex items-center gap-2 py-16 text-[12.5px] text-muted">
+        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+        Opening Inspections…
+      </p>
+    );
+  }
+
   return (
-    <>
+    <LookFrame on={lookNew} page={!embedded}>
       {embedded ? (
         <BoardSearch value={q} onChange={setQ} placeholder="Search addresses, tenants, landlords…" actions={<WalkthroughLink step="visits" />} />
+      ) : lookNew ? (
+        <Mast
+          eyebrow="Back office"
+          title="Inspections"
+          blurb="Every visit we owe the managed book, and the permission that lets us in. A home is due because the cadence says so, not because somebody remembered, and nobody has agreed to a visit unless they said so on their own link."
+          actions={<WalkthroughLink step="visits" />}
+        />
       ) : (
       <PageHeader
         title="Inspections"
@@ -297,37 +330,83 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
       />
       )}
 
-      <div className={`${embedded ? "mt-5" : "mt-10"} grid grid-cols-2 gap-4 xl:grid-cols-4`}>
-        {(
+      {lookNew ? (
+        <div className="nl-in-tiles">
+          {(
           [
             ["Due now", s ? String(s.due) : "•", s?.overdue ? `${s.overdue} already late` : "inside the lead window", "calendar", null],
             [FOCUS_LABEL.awaiting, s ? String(s.awaitingTenant) : "•", "asked, not answered", "user", "awaiting"],
             [FOCUS_LABEL.booked, s ? String(s.booked) : "•", "dates agreed", "clock", "booked"],
             [FOCUS_LABEL.write_up, s ? String(s.toWriteUp + s.openActions) : "•", "visits done, work outstanding", "checklist", "write_up"],
           ] as const
-        ).map(([k, v, hint, icon, f]) => (
-          /* Portfolio's tile; Due now is the one that matters - pink while any
-             visit is due, green when the book is all visited. Every tile is a
-             button, the way Compliance's are: Due now opens the Due list, the
-             other three open In hand on just their visits. */
-          <StatTile
-            key={k}
-            label={k}
-            value={v}
-            hint={hint}
-            icon={icon}
-            tone={k === "Due now" ? toneFor(s?.due) : undefined}
-            onClick={s ? (f ? () => press(f) : () => chooseTab("due")) : undefined}
-            active={!!f && focus === f && tab === "hand"}
-          />
-        ))}
-      </div>
+          ).map(([k, v, hint, , f]) => (
+            <button
+              key={k}
+              type="button"
+              disabled={!s}
+              onClick={s ? (f ? () => press(f) : () => chooseTab("due")) : undefined}
+              aria-pressed={!!f && focus === f && tab === "hand"}
+              className={`nl-in-tile${k === "Due now" && s?.due ? " is-accent" : ""}${k === "Due now" && s && !s.due ? " is-sage" : ""}${!!f && focus === f && tab === "hand" ? " is-on" : ""}`}
+            >
+              <span className="nl-in-tile-label">{k}</span>
+              {s ? <b className="nl-in-fig">{v}</b> : <span className="nl-in-skel" aria-label="Loading" />}
+              <span className="nl-in-tile-note">{s ? hint : "\u00a0"}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+      <div className={`${embedded ? "mt-5" : "mt-10"} grid grid-cols-2 gap-4 xl:grid-cols-4`}>
+          {(
+            [
+              ["Due now", s ? String(s.due) : "•", s?.overdue ? `${s.overdue} already late` : "inside the lead window", "calendar", null],
+              [FOCUS_LABEL.awaiting, s ? String(s.awaitingTenant) : "•", "asked, not answered", "user", "awaiting"],
+              [FOCUS_LABEL.booked, s ? String(s.booked) : "•", "dates agreed", "clock", "booked"],
+              [FOCUS_LABEL.write_up, s ? String(s.toWriteUp + s.openActions) : "•", "visits done, work outstanding", "checklist", "write_up"],
+            ] as const
+          ).map(([k, v, hint, icon, f]) => (
+            /* Portfolio's tile; Due now is the one that matters - pink while any
+               visit is due, green when the book is all visited. Every tile is a
+               button, the way Compliance's are: Due now opens the Due list, the
+               other three open In hand on just their visits. */
+            <StatTile
+              key={k}
+              label={k}
+              value={v}
+              hint={hint}
+              icon={icon}
+              tone={k === "Due now" ? toneFor(s?.due) : undefined}
+              onClick={s ? (f ? () => press(f) : () => chooseTab("due")) : undefined}
+              active={!!f && focus === f && tab === "hand"}
+            />
+          ))}
+        </div>
+      )}
 
-      <div ref={tabsRow} className="mt-6 flex scroll-mt-4 flex-wrap items-center gap-2">
+      <div ref={tabsRow} className={lookNew ? "nl-in-bar" : "mt-6 flex scroll-mt-4 flex-wrap items-center gap-2"}>
+        {lookNew && (
+          <>
+            <Tabs
+              label="Visits"
+              value={tab}
+              onChange={chooseTab}
+              items={[
+                { id: "due" as const, label: "Due", count: due.length },
+                { id: "hand" as const, label: "In hand", count: inHand.length },
+                { id: "done" as const, label: "Done", count: done.length },
+              ]}
+            />
+            {!embedded && (
+              <label className="nl-fsearch nl-in-search">
+                <Ico name="search" size={15} />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Address, tenant or landlord" aria-label="Search" />
+              </label>
+            )}
+          </>
+        )}
         {/* The same sliding, brown-marked control as Properties, Listings,
             Leads and Viewings. This screen was drawing its own black pills,
             which is the one place in the OS that colour appears. */}
-        <Segmented
+        {!lookNew && <Segmented
           className="w-full sm:w-auto sm:min-w-[340px]"
           value={tab}
           onChange={chooseTab}
@@ -336,7 +415,7 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
             { id: "hand" as const, label: `In hand ${inHand.length}`, icon: <DoodleIcon name="clock" size={14} /> },
             { id: "done" as const, label: `Done ${done.length}`, icon: <DoodleIcon name="checklist" size={14} /> },
           ]}
-        />
+        />}
         {data?.source === "rex-pm" ? (
           /* The due list is the old system's open tasks for now (1 Oct 2026).
              Agent copy never names the system - see lib/rexpm-tasks. */
@@ -454,7 +533,7 @@ export default function InspectionsBoard({ embedded = false, onInnerOpen }: Boar
       )}
 
       {openId && <Sheet id={openId} team={data?.team ?? []} me={data?.me ?? null} onClose={() => setOpenId(null)} onChanged={load} />}
-    </>
+    </LookFrame>
   );
 }
 

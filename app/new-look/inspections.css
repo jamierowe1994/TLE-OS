@@ -1,0 +1,92 @@
+/* New look: the Inspections board and the visit drawer
+   (components/portfolio/InspectionsBoard), behind the "inspections" switch
+   (lib/new-look). Stage two (James, 23 Nov 2026); stage one, Record the Visit
+   and the printed report, is app/new-look/visit.css.
+
+   The board's top (title, figures, tabs, search) is new markup: prefix nl-in-.
+   Everything under it, and the whole drawer with its forms, is the SAME markup
+   as the old look inside a `.nl-insp` scope, so this file restyles the old
+   utility classes where they sit: square edges come from nl-edge, the colours
+   from the new look's tokens, and the rules below do the rest - brown buttons
+   in the small capitals, labels in the condensed capitals, fine lines. Nothing
+   here can reach outside `.nl-insp`. */
+
+/* ── the four figures ─────────────────────────────────────────────────── */
+[data-look="new"] .nl-in-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 4px; }
+/* Inside the Overview's panel the search sits straight above: give it room. */
+[data-look="new"].nl-insp:not(.nl-page) .nl-in-tiles { margin-top: 18px; }
+[data-look="new"] .nl-in-tile {
+  display: grid; gap: 6px; align-content: start; min-width: 0; padding: 18px 20px 16px; text-align: left; cursor: pointer;
+  background: var(--card); border: 1px solid transparent; border-left: 2px solid transparent; color: var(--ink); font: inherit;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+[data-look="new"] .nl-in-tile:disabled { cursor: default; }
+[data-look="new"] .nl-in-tile:hover:not(:disabled) { border-color: var(--line-strong); border-left-color: var(--line-strong); }
+[data-look="new"] .nl-in-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-look="new"] .nl-in-tile.is-on { border-left-color: var(--accent); background: var(--page); border-top-color: var(--line-strong); border-right-color: var(--line-strong); border-bottom-color: var(--line-strong); }
+[data-look="new"] .nl-in-tile.is-accent { background: var(--accent-soft); }
+[data-look="new"] .nl-in-tile.is-sage { background: var(--sage-soft); }
+[data-look="new"] .nl-in-tile-label {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.16em;
+  font-size: 11px; line-height: 16px; color: var(--muted);
+}
+[data-look="new"] .nl-in-fig { font-family: var(--font-figures); font-weight: 400; font-size: 40px; line-height: 44px; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-in-tile.is-accent .nl-in-fig { color: var(--accent-dark); }
+[data-look="new"] .nl-in-tile-note { font-size: 12.5px; line-height: 18px; color: var(--muted); }
+[data-look="new"] .nl-in-skel { display: block; width: 46px; height: 44px; background: var(--box); animation: nl-in-pulse 1.2s ease-in-out infinite; }
+@keyframes nl-in-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* ── tabs, search and the line about the cadence ──────────────────────── */
+[data-look="new"] .nl-in-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 30px; scroll-margin-top: 16px; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-in-bar .nl-tabs { border-bottom: 0; margin-bottom: -1px; }
+[data-look="new"] .nl-in-search { flex: 0 1 300px; margin-left: auto; margin-bottom: 8px; }
+[data-look="new"] .nl-in-bar > span { margin-left: 0; margin-bottom: 8px; flex-basis: 100%; }
+[data-look="new"] .nl-in-bar > span.ml-auto { text-align: left; }
+
+/* ── everything inherited: the lists, the drawer, the forms ───────────── */
+/* Buttons that were pills: the small capitals. */
+[data-look="new"].nl-insp :is(button, a, label)[class*="rounded-full"] {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11.5px; line-height: 18px;
+}
+/* The black button is the brown one here. */
+[data-look="new"].nl-insp .bg-ink { background-color: var(--primary); color: var(--on-primary); }
+[data-look="new"].nl-insp button.bg-ink:hover:not(:disabled) { background-color: color-mix(in srgb, var(--primary) 84%, #000); }
+[data-look="new"].nl-insp .bg-white { background-color: var(--page); }
+/* Small tracked labels: the condensed capitals. */
+[data-look="new"].nl-insp [class*="uppercase"][class*="tracking-"] {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; letter-spacing: 0.16em; font-size: 11px; line-height: 16px;
+}
+/* A list's own heading ("Still to Book (3)"): a label. The drawer's "what now" heading: a title. */
+[data-look="new"].nl-insp h3[class*="text-muted"] { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; font-size: 12px; line-height: 18px; }
+[data-look="new"].nl-insp aside h3.hand { font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 24px; line-height: 1.05; margin-top: 6px; }
+/* Boxes: a fine line, no shadow, a little more air. */
+[data-look="new"].nl-insp section[class*="border"] { border-color: var(--line-strong); }
+[data-look="new"].nl-insp [class*="border-dashed"] { border-color: var(--line-strong); }
+/* Fields. */
+[data-look="new"].nl-insp :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select) { border-color: var(--line-strong); }
+[data-look="new"].nl-insp :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select):focus { outline: 0; border-color: var(--primary); box-shadow: 0 0 0 3px var(--sage-soft); }
+/* The search box in the bar is the new look's own, not one of these. */
+[data-look="new"].nl-insp .nl-fsearch input { border: 0; box-shadow: none; }
+
+/* The list of visits: rows, a terracotta edge under the pointer. */
+[data-look="new"].nl-insp li > button[class*="grid"] { padding-left: 12px; padding-right: 12px; border-left: 2px solid transparent; transition: background-color 0.15s, border-color 0.15s; }
+[data-look="new"].nl-insp li > button[class*="grid"]:hover { background: var(--card); border-left-color: var(--accent); }
+[data-look="new"].nl-insp li > button[class*="grid"] .hand { font-size: 15px; font-weight: 500; }
+
+/* The drawer. */
+[data-look="new"].nl-insp aside { box-shadow: none; border-left: 1px solid var(--line-strong); }
+[data-look="new"].nl-insp aside h2.hand {
+  font-family: var(--edge-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 32px; line-height: 1.02; white-space: normal; overflow: visible; margin-top: 6px; margin-bottom: 6px;
+}
+[data-look="new"].nl-insp aside .hand { letter-spacing: 0; }
+
+@media (max-width: 900px) {
+  [data-look="new"] .nl-in-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  [data-look="new"] .nl-in-tile { padding: 14px 14px 12px; }
+  [data-look="new"] .nl-in-fig { font-size: 32px; line-height: 36px; }
+  [data-look="new"] .nl-in-search { flex: 1 1 100%; margin-left: 0; }
+  [data-look="new"].nl-insp aside h2.hand { font-size: 26px; }
+}
