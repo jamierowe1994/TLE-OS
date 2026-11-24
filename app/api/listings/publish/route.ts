@@ -360,7 +360,9 @@ export async function POST(req: NextRequest) {
          Listings board showed nothing had changed. A marker that will not
          save is not a reason to say the take-off failed. */
       await markOffline(String(id), null, { name: actor.name, email: actor.email }).catch((e) => console.error("[publish] Offline marker not saved", id, e));
-      return NextResponse.json({ ok: true, id, action, ...done.now });
+      /* withdrawal (24 Nov 2026, ticket 5474011a): the screen says so when the
+         listing could not be withdrawn in REX, as Rightmove keeps a current one. */
+      return NextResponse.json({ ok: true, id, action, ...done.now, withdrawal: done.withdrawal });
     }
 
     const before = await rexCall("ListingPublication", "getPublicationStatus", { listing_id: id });

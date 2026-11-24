@@ -156,8 +156,32 @@ export function stillOnPortalFeeds(feeds: unknown): boolean {
   return running && f.most_recent_queue?.listing_status_to_send === "current";
 }
 
-/* The kept answers live in os_cache, so a deploy does not blank the stamps. */
-const PORTAL_KEY = "advert-offline:portals:v1";
+/**
+ * MARKED OFFLINE, STILL CURRENT IN REX (Sean McMahon, ticket 5474011a, 24 Nov
+ * 2026: "properties that have been let are still appearing on the portals as
+ * available", reported for the third time).
+ *
+ * The home on the ticket was marked Offline on 26 Oct and was still on Rightmove a
+ * month later, while its page said Offline with nothing to press but Put Back
+ * Online. The feeds said "withdrawn", so stillOnPortalFeeds said gone. But on
+ * 16 Nov (lib/listing-take-off withdrawInRex) Rightmove was found to keep any
+ * listing REX still holds as "current", whatever the last upload said, and
+ * from then on a take-off withdraws the listing in REX too. Every home taken
+ * offline BEFORE that was left current, and nothing went back for them.
+ *
+ * So a listing the OS has marked Offline counts as still showing while REX
+ * still has it current, and its page and the board offer Take Off the Portals
+ * again, which now withdraws it in REX. `state` is Listings/read's
+ * system_listing_state.
+ */
+export function offlineButStillCurrent(feeds: unknown, state: unknown): boolean {
+  return stillOnPortalFeeds(feeds) || state === "current";
+}
+
+/* The kept answers live in os_cache, so a deploy does not blank the stamps.
+   v2 (24 Nov 2026): the answers now count a listing still current in REX, so
+   the old ones, which did not, are not carried over. */
+const PORTAL_KEY = "advert-offline:portals:v2";
 
 /* One copy per process, on globalThis like the other holds, so dev reloads and
    every route module share it. The windows are the board's own (lib/staleness
@@ -170,8 +194,15 @@ const portalHold = (G.__osPortalHold ??= createPortalStatusHold({
   parallel: 4,
   read: async (id) => {
     /* Fresh: this hold decides how old an answer may be, not the two-minute read behind it. */
-    const res = await listingRead(id, "ListingPortalUploads", "getStatuses", { listing_id: Number(id), include_last_sent: false }, { fresh: true });
-    return res?.ok ? stillOnPortalFeeds(res.result) : null;
+    const [res, own] = await Promise.all([
+      listingRead(id, "ListingPortalUploads", "getStatuses", { listing_id: Number(id), include_last_sent: false }, { fresh: true }),
+      listingRead(id, "Listings", "read", { id: Number(id) }, { fresh: true }),
+    ]);
+    if (!res?.ok) return null;
+    if (stillOnPortalFeeds(res.result)) return true;
+    /* Still current in REX: Rightmove keeps it (see offlineButStillCurrent). Unread is "could not tell", never a guess. */
+    if (!own?.ok) return null;
+    return offlineButStillCurrent(res.result, (own.result as { system_listing_state?: unknown } | null)?.system_listing_state);
   },
   later: (work) => {
     try {
