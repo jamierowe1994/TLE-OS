@@ -73,7 +73,7 @@ const GROUPS: { id: string; title: string; blurb: string; icon: string; keys: st
   { id: "contractor", title: "Quotes and Contractor", blurb: "Prices, who does it, and the works order.", icon: "setting", keys: ["request_quote", "quote", "approve", "pick", "confirm", "resend"] },
   { id: "schedule", title: "Scheduling", blurb: "The landlord, the date and the visit.", icon: "calendar", keys: ["tell", "arranging", "date", "done", "happy"] },
   { id: "talk", title: "Communication", blurb: "Message the landlord and tenants, or ring the contractor.", icon: "message", keys: ["message", "trade", "tenant", "note"] },
-  { id: "money", title: "Files and Billing", blurb: "Certificates, invoices and payment.", icon: "doc", keys: ["file", "cert", "payee", "invoice", "landlord_says", "raise", "payrun", "paid"] },
+  { id: "money", title: "Files and Billing", blurb: "Certificates, invoices and payment.", icon: "doc", keys: ["file", "cert", "payee", "invoice", "landlord_says", "hold", "raise", "payrun", "paid"] },
   { id: "edit", title: "Edit Details", blurb: "Change the job, or close it.", icon: "pencil", keys: ["edit", "cancel", "reopen"] },
 ];
 
@@ -113,6 +113,8 @@ export default function WorksOrderPage() {
   /* The Landlord Paid Directly on Who's Being Paid (Dan, ticket b7a79378):
      its own switch, and only in the job page's new look. */
   const landlordPaidSwitch = useNewLook("landlordpaid") === true;
+  /* Hold the funds (Michael Healy, ticket c22a75e0): behind its own switch. */
+  const holdFundsSwitch = useNewLook("holdfunds") === true;
 
   const [job, setJob] = useState<Loaded<Job>>({ state: "loading" });
   const [book, setBook] = useState<Loaded<ManagedProperty[]>>({ state: "loading" });
@@ -340,6 +342,16 @@ export default function WorksOrderPage() {
     { key: "payee", label: "Who's Being Paid", what: o.payee === "agent" ? "The agent, who paid it" : o.payee === "contractor" ? o.contractorName || "The contractor" : byLandlord ? "The landlord paid directly" : look && landlordPaidSwitch ? "The contractor, you, or the landlord direct" : "The contractor, or you", icon: "wallet", off: isClosed, done: !!o.payee, run: () => openPop({ kind: "stage", stage: "payment" }) },
     { key: "invoice", label: o.invoicePence != null ? "Change the Invoice" : "Log the Invoice", what: byLandlord ? "Not needed" : o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : "Amount, number and file", icon: "doc", off: byLandlord ? "The landlord paid directly" : isClosed, done: o.invoicePence != null, run: () => openPop({ kind: "form", form: "invoice" }) },
     { key: "landlord_says", label: "Landlord Authorises", what: o.landlordInvoiceAnswer ? "Answered" : o.landlordInvoiceAskedAt ? `Sent ${day(o.landlordInvoiceAskedAt)}` : "From the rent, or direct", icon: "home", off: byLandlord ? "The landlord paid directly" : o.invoicePence == null ? "Log the invoice first" : isClosed, done: !!o.landlordInvoiceAnswer, run: () => openPop({ kind: "landlord_says" }) },
+    /* Ask accounts to keep the rent back for the contractor (Michael Healy, ticket c22a75e0). */
+    ...(holdFundsSwitch ? [{
+      key: "hold",
+      label: o.holdAt ? "Release the Hold" : "Hold the Funds",
+      what: o.holdAt ? `${pounds(o.holdPence)} held · ${o.holdBy || "asked"} · ${day(o.holdAt)}` : "Ask accounts to keep the rent back",
+      icon: "bank",
+      off: o.holdAt ? undefined : byLandlord ? "The landlord paid directly" : isClosed,
+      done: !!o.holdAt,
+      run: () => openPop({ kind: "form", form: o.holdAt ? "hold_release" : "hold_funds" }),
+    }] : []),
     { key: "raise", label: "Invoice the Landlord", what: byLandlord ? "Not needed" : "Draft our invoice to them", icon: "file-contract", off: o.status === "cancelled" ? "The job is cancelled" : byLandlord ? "The landlord paid directly" : undefined, run: () => void invoiceLandlord() },
     /* The office says it's keyed on PayProp (James, 21 Oct 2026). Beside Mark paid, for them only. */
     ...(canPayrun ? [{

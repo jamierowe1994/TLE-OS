@@ -164,6 +164,36 @@ export function landlordInvoiceAnswerEmail(o: WorksOrder): AgentEmail {
 }
 
 /**
+ * Hold the funds (Michael Healy, 12 Nov 2026, ticket c22a75e0): the agent asks
+ * accounts to keep back the home's rent for a job, so the contractor can be
+ * paid from it. And the release, when the agent says it can go. Internal only:
+ * the landlord is not told. PayProp is not written; accounts set the hold.
+ */
+export function holdFundsEmail(o: WorksOrder, kind: "hold" | "release"): AgentEmail {
+  const amount = pounds(o.holdPence);
+  const who = kind === "hold" ? o.holdBy || "The agent" : "The agent";
+  const subject = kind === "hold"
+    ? `Please hold ${amount} of the rent: #${o.ref} ${o.title}, ${where(o)}`
+    : `Hold released, ${amount} can go: #${o.ref} ${o.title}, ${where(o)}`;
+  const rows: ShellRow[] = [
+    { title: where(o), detail: `${o.title} · job #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`, tone: "neutral", icon: "mark-home.png" },
+    kind === "hold"
+      ? { title: `Hold ${amount}`, detail: `From this home's rent, to pay ${o.contractorName || "the contractor"} for job #${o.ref}. Keep it back until the agent releases it or the invoice is paid.`, tone: "attention", icon: "mark-money.png" }
+      : { title: `Release ${amount}`, detail: `The hold on this home's rent for job #${o.ref} is no longer needed. It can go to the landlord as usual.`, tone: "neutral", icon: "mark-money.png" },
+  ];
+  if (kind === "hold" && o.holdNote) rows.push({ title: "The agent's note", detail: o.holdNote, tone: "neutral", icon: "mark-doc.png" });
+  const heading = kind === "hold" ? `Please hold ${amount} for job #${o.ref}` : `Hold released on job #${o.ref}`;
+  const intro = kind === "hold"
+    ? `${who} has asked for ${amount} of this home's rent to be held so the contractor can be paid. Please set the hold in PayProp. Nothing has been paid yet.`
+    : `The hold on this home's rent for job #${o.ref} has been released. Please take it off in PayProp.`;
+  return {
+    subject,
+    html: skyListShell({ heading, intro, rows, rowsLead: "The job", rowStyle: "bare", button: "Open the job", link: jobLink(o.id), hero: "hero-invoice.png", tipQuiet: true }),
+    text: `${heading}. ${intro} ${where(o)}, ${o.title}.${kind === "hold" && o.holdNote ? ` Note: ${o.holdNote}` : ""} Open: ${jobLink(o.id)}`,
+  };
+}
+
+/**
  * Michael's ping. Compliance hears twice at most and never while a job is
  * open: once when it is finished, and again if a document lands on a job
  * that is already finished - the certificate that follows the visit, which

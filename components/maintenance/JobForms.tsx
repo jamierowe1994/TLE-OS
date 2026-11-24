@@ -30,7 +30,7 @@ import ContractorJobEmail, { ContractorDateEmail } from "@/components/maintenanc
  * sends is the same. Left out, the form is drawn as it always has been.
  */
 
-export type FormId = "quote" | "request_quote" | "approve" | "assign" | "schedule" | "done" | "already_done" | "invoice" | "paid" | "cancel" | "reopen" | "note" | "edit" | "resend_order";
+export type FormId = "quote" | "request_quote" | "approve" | "assign" | "schedule" | "done" | "already_done" | "invoice" | "paid" | "cancel" | "reopen" | "note" | "edit" | "resend_order" | "hold_funds" | "hold_release";
 
 export const FORM_TITLE: Record<FormId, (o: WorksOrder) => string> = {
   quote: (o) => (o.quotePence != null ? "Change the Quote" : "Log a Quote"),
@@ -48,6 +48,9 @@ export const FORM_TITLE: Record<FormId, (o: WorksOrder) => string> = {
   edit: () => "Edit the Details",
   /* The works order shown before it goes again (James, 17 Nov 2026). */
   resend_order: (o) => (o.orderSentTo && o.orderSentTo !== o.contractorId ? "Send the Works Order" : "Send the Works Order Again"),
+  /* Hold the funds (Michael Healy, ticket c22a75e0). */
+  hold_funds: () => "Hold the Funds",
+  hold_release: () => "Release the Hold",
 };
 
 const FIELD = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
@@ -84,6 +87,9 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
   const [contractorEdit, setContractorEdit] = useState<ContractorWords | null>(null);
   const ce = contractorEdit ? { contractorEdit } : {};
   const set = (k: string, v: string) => setF((cur) => ({ ...cur, [k]: v }));
+  /* What to hold, filled in: the invoice, else the quote, else the landlord's authority. */
+  const holdBase = o.invoicePence ?? o.invoiceWaitPence ?? o.quotePence ?? (o.authorityPence > 0 ? o.authorityPence : null);
+  const holdDefault = holdBase != null ? String(holdBase / 100) : "";
 
   async function save() {
     setMine(null);
@@ -100,6 +106,8 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
       : form === "resend_order" ? { action: "resend_order", ...ce }
       : form === "reopen" ? { action: "reopen", note: f.note }
       : form === "note" ? { action: "note", note: f.note ?? "" }
+      : form === "hold_funds" ? ((f.amount ?? holdDefault) ? { action: "hold_funds", holdPence: toPence(f.amount ?? holdDefault), note: f.note } : null)
+      : form === "hold_release" ? { action: "hold_release", note: f.note }
       : form === "edit" ? { action: "edit", fields: {
           title: f.title, description: f.description, tenant: f.tenant, tenantPhone: f.tenantPhone, tenantEmail: f.tenantEmail,
           landlord: f.landlord, landlordEmail: f.landlordEmail, landlordMobile: f.landlordMobile, access: f.access,
@@ -114,6 +122,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
     }
     if (m.action === "quote" && !Number.isFinite(m.quotePence)) return setMine("That figure doesn't look right.");
     if (m.action === "invoice" && !Number.isFinite(m.invoicePence)) return setMine("That figure doesn't look right.");
+    if (m.action === "hold_funds" && !(Number.isFinite(m.holdPence) && m.holdPence > 0)) return setMine("That figure doesn't look right.");
     /* The quote or invoice file goes on the job first, so a failed upload saves nothing. */
     if (file && (form === "invoice" || form === "quote")) {
       const ok = await uploadFile(file, form === "invoice" ? "invoice" : "quote");
@@ -225,6 +234,28 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
           ))}
           <input value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder="A line for the timeline (optional)" className={`mt-1 ${field}`} />
           <p className="text-[11px] text-muted">PayProp is read-only to the OS: choosing it records the fact here, and the payment is keyed in PayProp by hand. Marking it paid closes the job.</p>
+        </div>
+      )}
+      {form === "hold_funds" && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <span className={label}>Amount to hold</span>
+            <input value={f.amount ?? holdDefault} onChange={(e) => set("amount", e.target.value)} inputMode="decimal" placeholder="£ amount" className={field} />
+          </div>
+          <div>
+            <span className={label}>A note for accounts</span>
+            <input value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder="Optional, e.g. rent due on the 1st" className={field} />
+          </div>
+          <p className="text-[11.5px] text-muted sm:col-span-2">
+            {o.invoicePence != null ? `Filled in from the invoice, ${pounds(o.invoicePence)}.` : o.invoiceWaitPence != null ? `Filled in from the contractor's invoice, ${pounds(o.invoiceWaitPence)}.` : o.quotePence != null ? `Filled in from the quote, ${pounds(o.quotePence)}.` : o.authorityPence > 0 ? `Filled in from the landlord's authority, ${pounds(o.authorityPence)}.` : "There's no quote or invoice on the job yet."}{" "}
+            Accounts are emailed when you press Save, to keep this back from the home&apos;s rent until the contractor is paid. You&apos;re copied in. The landlord isn&apos;t told.
+          </p>
+        </div>
+      )}
+      {form === "hold_release" && (
+        <div className="grid gap-3">
+          <p className="text-[12.5px] text-muted">Accounts were asked to hold {pounds(o.holdPence)}{o.holdBy ? ` by ${o.holdBy}` : ""}. Releasing it emails them that it can go to the landlord as usual.</p>
+          <input value={f.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder="Why, optional (e.g. the landlord paid the contractor)" className={field} />
         </div>
       )}
       {(form === "cancel" || form === "note" || form === "reopen") && (

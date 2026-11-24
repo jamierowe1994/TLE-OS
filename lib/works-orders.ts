@@ -229,6 +229,13 @@ export interface WorksOrder {
    *  invoice on PayProp, and who. The job stays invoiced until marked paid. */
   payrunAt: string | null;
   payrunBy: string;
+  /** Hold the funds (Michael Healy, ticket c22a75e0): the agent asked accounts
+   *  to keep back this much of the home's rent for the job, who and when.
+   *  Null once released. PayProp is not written. */
+  holdAt: string | null;
+  holdBy: string;
+  holdPence: number | null;
+  holdNote: string;
   /** A walkthrough job: real machinery, invented people, no email leaves. */
   rehearsal: boolean;
   title: string;
@@ -375,6 +382,10 @@ function toOrder(r: Row): WorksOrder {
     landlordInvoiceBy: s(r.landlord_invoice_by),
     payrunAt: iso(r.payrun_at),
     payrunBy: s(r.payrun_by),
+    holdAt: iso(r.hold_at),
+    holdBy: s(r.hold_by),
+    holdPence: n(r.hold_pence),
+    holdNote: s(r.hold_note),
     rehearsal: r.rehearsal === true,
     title: s(r.title),
     description: s(r.description),
@@ -424,7 +435,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   due_at, cert_dates, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
   cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, tenants_access_told_at, skipped_steps, quote_requested_at,
-  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, order_sent_to, order_sent_to_name,
+  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, hold_at, hold_by, hold_pence, hold_note, order_sent_to, order_sent_to_name,
   invoice_wait_pence, invoice_wait_ref, invoice_wait_at, invoice_wait_for, invoice_declined_at, invoice_declined_note, invoice_declined_by, invoice_approved_at, invoice_approved_by, agent_share_pence,
   created_at, updated_at`;
 
@@ -823,7 +834,12 @@ export type Move =
   /** On the payment run (James, 21 Oct 2026): the office keyed the invoice on
    *  PayProp. Office only (the route checks). payrun_undo takes it back off. */
   | { action: "payrun"; note?: string }
-  | { action: "payrun_undo"; note?: string };
+  | { action: "payrun_undo"; note?: string }
+  /** Ask accounts to hold this much of the rent for the job (Michael Healy,
+   *  ticket c22a75e0). The route lets it through only behind the "holdfunds"
+   *  switch, and emails accounts. hold_release says they can let it go. */
+  | { action: "hold_funds"; holdPence: number; note?: string }
+  | { action: "hold_release"; note?: string };
 
 export const pounds = (pence: number | null | undefined) =>
   pence == null ? "—" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: pence % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
@@ -1275,6 +1291,36 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
       set("payrun_by", "");
       eventKind = "note";
       text = `Taken off the payment run.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    /* Hold the funds (Michael Healy, 12 Nov 2026: "if rent is in or coming in
+       before works are done we can hold the funds to pay the contractor").
+       A fact on the job and an email to accounts; PayProp is read-only to the
+       OS, so accounts set the hold there themselves. */
+    case "hold_funds": {
+      if (o.status === "paid" || o.status === "cancelled") throw new Error("The job is closed.");
+      if (o.payee === "landlord") throw new Error("The landlord paid the contractor directly, so there's nothing to hold.");
+      if (o.holdAt) throw new Error("Accounts have already been asked to hold funds for this job. Release the hold first to ask for a different amount.");
+      const pence = Math.round(Number(move.holdPence));
+      if (!Number.isFinite(pence) || pence <= 0) throw new Error("Put the amount to hold in first.");
+      if (pence > 10_000_000) throw new Error("That figure doesn't look right.");
+      const note = (move.note ?? "").trim().slice(0, 500);
+      set("hold_at", new Date());
+      set("hold_by", by);
+      set("hold_pence", pence);
+      set("hold_note", note);
+      eventKind = "note";
+      text = `Hold the funds: ${by} asked accounts to hold ${pounds(pence)} of the rent for this job.${note ? ` ${note}` : ""}`;
+      break;
+    }
+    case "hold_release": {
+      if (!o.holdAt) throw new Error("No funds are being held for this job.");
+      const note = (move.note ?? "").trim().slice(0, 500);
+      set("hold_at", null);
+      set("hold_by", "");
+      set("hold_note", "");
+      eventKind = "note";
+      text = `Hold released: ${by} told accounts they can let the ${pounds(o.holdPence)} go.${note ? ` ${note}` : ""}`;
       break;
     }
     case "paid": {

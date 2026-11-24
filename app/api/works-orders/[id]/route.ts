@@ -3,7 +3,7 @@ import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getOrder, moveOrder, logEvent, markAccountsTold, type Move, type MoveOut } from "@/lib/works-orders";
-import { emailsForMove, invoiceChecker, outcomeLine, tellAccounts, tellInvoiceAnswer } from "@/lib/works-emails";
+import { emailsForMove, invoiceChecker, outcomeLine, tellAccounts, tellAccountsHold, tellInvoiceAnswer } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { invoiceSettings } from "@/lib/invoices";
 import { pounds } from "@/lib/works-orders";
@@ -70,6 +70,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (move.action === "payee" && move.payee === "landlord" && !(await lookFor(actor).catch(() => null))?.landlordpaid) {
     return NextResponse.json({ ok: false, error: "The Landlord Paid Directly isn't switched on for you yet." }, { status: 403 });
   }
+  /* Hold the funds (Michael Healy, ticket c22a75e0): behind its own switch
+     (lib/new-look "holdfunds"), decided on whoever is signed in. */
+  if ((move.action === "hold_funds" || move.action === "hold_release") && !(await lookFor(actor).catch(() => null))?.holdfunds) {
+    return NextResponse.json({ ok: false, error: "Hold the Funds isn't switched on for you yet." }, { status: 403 });
+  }
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
     /* The landlord's email for the invoice ask, from the home's record when
@@ -102,6 +107,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       const told = await tellAccounts(order, (await invoiceSettings()).accountsEmail ?? "");
       if (told.sent) await markAccountsTold(order.id);
       await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(order.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${(told.reason ?? "").replace(/\.+$/, "")}.`);
+    }
+    /* Hold the funds, or release them: accounts hear, the agent is copied in. */
+    if (move.action === "hold_funds" || move.action === "hold_release") {
+      const told = await tellAccountsHold(order, move.action === "hold_funds" ? "hold" : "release");
+      await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told at ${told.address}${told.cc ? `, ${told.cc} copied in` : ""}.` : `Accounts not told: ${(told.reason ?? "").replace(/\.+$/, "")}. Ring them.`);
     }
     /* The landlord's answer on the invoice, recorded by the agent after a call. */
     if (move.action === "landlord_invoice") await logEvent(order.id, "TLE OS", "email", outcomeLine(await tellInvoiceAnswer(order)));

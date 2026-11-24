@@ -6,7 +6,7 @@ import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { editableEmailText, renderTleEmailLive, type EmailEdit } from "@/lib/email/tle-emails";
 import { TENANT_FIRST_NAME, categoryName, certDatesOf, coversOf, dueDayOf } from "@/lib/works-catalogue";
-import { accountsInvoiceEmail, complianceJobEmail, invoiceWaitingEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
+import { accountsInvoiceEmail, complianceJobEmail, holdFundsEmail, invoiceWaitingEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import { agentFor } from "@/lib/works-agent";
 import { bankForInvoice } from "@/lib/contractor-bank";
 import { recentBankChanges } from "@/lib/bank-vault";
@@ -480,6 +480,24 @@ export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promis
     const attachments = await invoiceAttachments(o);
     await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text, ...(attachments.length ? { attachments } : {}) });
     return { to: "accounts", sent: true, address, via: "internal sender" };
+  } catch (e) {
+    return { to: "accounts", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
+  }
+}
+
+/** Hold the funds, or release them (ticket c22a75e0): to the same inbox as
+ *  an invoice, with the home's agent copied in. Nothing goes to the landlord. */
+export async function tellAccountsHold(o: WorksOrder, kind: "hold" | "release"): Promise<SendOutcome> {
+  const settings = await invoiceSettings();
+  const address = (settings.accountsEmail ?? "").trim() || settings.complianceEmail.trim();
+  if (!address.includes("@")) return { to: "accounts", sent: false, reason: "no accounts or compliance inbox set under Maintenance, Invoices, Who invoices are from" };
+  const mail = holdFundsEmail(o, kind);
+  if (o.rehearsal) return keep(o.id, "accounts", address, mail.subject, mail.html);
+  const agent = await propertyAgentFor(o).catch(() => null);
+  const cc = agent && agent.email.includes("@") && agent.email.toLowerCase() !== address.toLowerCase() ? agent : null;
+  try {
+    await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text, ...(cc ? { cc: [cc.email] } : {}) });
+    return { to: "accounts", sent: true, address, via: "internal sender", ...(cc ? { cc: cc.name } : {}) };
   } catch (e) {
     return { to: "accounts", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
   }

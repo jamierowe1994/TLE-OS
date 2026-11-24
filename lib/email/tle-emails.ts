@@ -30,7 +30,7 @@ import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
 import { certificateChaseEmail, ownComplianceEmail, ownComplianceRollupEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail, plcFinalApprovalEmail } from "@/lib/email/agent-emails";
-import { accountsInvoiceEmail, certificateSharedEmail, complianceJobEmail, invoiceWaitingEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
+import { accountsInvoiceEmail, certificateSharedEmail, complianceJobEmail, holdFundsEmail, invoiceWaitingEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import type { WorksOrder } from "@/lib/works-orders";
 import {
   bodyFor,
@@ -1647,6 +1647,35 @@ TLE_EMAILS.push(
     render: () => {
       /* With the bank details to pay to (26 Oct 2026); an invented account. */
       const m = accountsInvoiceEmail(JOB_SAMPLE, { accountName: "R. Holt Heating Ltd", sortCode: "401020", accountNumber: "12345678" });
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "works-accounts-hold",
+    group: "Maintenance",
+    name: "Hold the Funds - Accounts",
+    audience: "internal",
+    trigger: "When an agent presses Hold the Funds on a job (behind the holdfunds switch)",
+    fires: "lib/works-emails → tellAccountsHold",
+    to: "The accounts inbox set under Maintenance, Invoices, with the home's agent copied in",
+    summary:
+      "Asks accounts to keep back an amount of the home's rent so the contractor can be paid: the job, the home, the amount and the agent's note. Accounts set the hold in PayProp; the OS does not. The landlord is not told.",
+    render: () => {
+      const m = holdFundsEmail({ ...JOB_SAMPLE, holdAt: "2026-11-24T10:00:00.000Z", holdBy: "Rhona Field", holdPence: 14000, holdNote: "Rent due on the 1st." } as WorksOrder, "hold");
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "works-accounts-hold-release",
+    group: "Maintenance",
+    name: "Hold Released - Accounts",
+    audience: "internal",
+    trigger: "When an agent presses Release the Hold on a job",
+    fires: "lib/works-emails → tellAccountsHold",
+    to: "The accounts inbox set under Maintenance, Invoices, with the home's agent copied in",
+    summary: "Tells accounts the hold on the home's rent for the job is no longer needed and can go to the landlord as usual.",
+    render: () => {
+      const m = holdFundsEmail({ ...JOB_SAMPLE, holdAt: null, holdBy: "", holdPence: 14000, holdNote: "" } as WorksOrder, "release");
       return { subject: m.subject, html: m.html };
     },
   },

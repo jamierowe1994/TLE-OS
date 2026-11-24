@@ -809,6 +809,14 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_by        
 -- on the job, not a status: the job stays invoiced until it is marked paid.
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payrun_at                    TIMESTAMPTZ;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payrun_by                    TEXT NOT NULL DEFAULT '';
+-- Hold the funds (Michael Healy, 12 Nov 2026, ticket c22a75e0): the agent asks
+-- accounts to keep back the home's rent for this job so the contractor can be
+-- paid. A fact on the job, set and cleared by the agent; accounts are emailed
+-- both times. PayProp is never written - accounts set the hold there by hand.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS hold_at                      TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS hold_by                      TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS hold_pence                   BIGINT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS hold_note                    TEXT NOT NULL DEFAULT '';
 -- A contractor's own invoice waits for the home's agent (Sean McMahon, 23 Nov
 -- 2026: contractors were uploading invoices "direct to TLE and by-passing the
 -- agent"). The figure they typed sits here, off invoice_pence, so nothing
