@@ -1651,6 +1651,21 @@ TLE_EMAILS.push(
     },
   },
   {
+    id: "works-accounts-invoice-share",
+    group: "Maintenance",
+    name: "Invoice In, With the Agent's Share - Accounts",
+    audience: "internal",
+    trigger: "When an agent passes a contractor's invoice and puts the landlord's total above it",
+    fires: "lib/works-emails → tellAccounts",
+    to: "The accounts inbox set under Maintenance, Invoices",
+    summary:
+      "The same email as Invoice In, with three figures: what the landlord is charged, what the contractor is paid and what the agent is paid for arranging the work.",
+    render: () => {
+      const m = accountsInvoiceEmail({ ...JOB_SAMPLE, invoicePence: 14000, agentSharePence: 2000, invoiceApprovedBy: "Rhona Field" } as WorksOrder, { accountName: "R. Holt Heating Ltd", sortCode: "401020", accountNumber: "12345678" });
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
     id: "works-invoice-waiting",
     group: "Maintenance",
     name: "Invoice to Check - the Agent",
@@ -1659,7 +1674,7 @@ TLE_EMAILS.push(
     fires: "lib/works-emails → tellInvoiceWaiting",
     to: "The home's agent, or whoever of ours works the job; the office inbox when there is neither",
     summary:
-      "The contractor's invoice is on the job and is waiting to be checked. It has not gone to accounts and nothing is paid until the agent sends it on or sends it back.",
+      "The contractor's invoice is on the job and is waiting to be checked. It has not gone to accounts and nothing is paid until the agent sends it on or declines it.",
     render: () => {
       const m = invoiceWaitingEmail({ ...JOB_SAMPLE, invoiceWaitPence: 14000, invoiceWaitRef: "INV-2291" } as WorksOrder, { office: false });
       return { subject: m.subject, html: m.html };

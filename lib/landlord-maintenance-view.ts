@@ -1,6 +1,7 @@
 import { landlordProperties, type LandlordAccount } from "@/lib/landlord-account";
 import { listInspections, kindLabel as visitLabel } from "@/lib/inspections";
 import { listOrders, pounds, stepOf, URGENCIES, type StepId, type WorksOrder } from "@/lib/works-orders";
+import { landlordChargePence } from "@/lib/works-steps";
 import { categoryName, certDatesOf } from "@/lib/works-catalogue";
 
 /**
@@ -118,7 +119,8 @@ export function jobOf(o: WorksOrder): MaintJob {
     now: state === "done" ? (o.payrunAt && o.status !== "paid" ? "Done - being paid from your rent" : "Done") : state === "cancelled" ? "Not going ahead" : o.scheduledAt && step === "visit" ? `Booked for ${dayShort(o.scheduledAt)}` : NOW[step],
     when,
     contractor: o.contractorName || null,
-    cost: o.invoicePence != null ? pounds(o.invoicePence) : quote,
+    /* What it cost the landlord: the contractor's invoice plus any share the agent added (24 Nov 2026). */
+    cost: o.invoicePence != null ? pounds(landlordChargePence(o)) : quote,
     needsYou,
     urgency: URGENCIES.find((u) => u.id === o.urgency)?.label ?? null,
     reported: `Reported ${day(o.reportedAt) ?? ""}${o.reportedBy ? ` by ${o.reportedBy.toLowerCase() === "tenant" ? "your tenant" : o.reportedBy.toLowerCase() === "landlord" ? "you" : "us"}` : ""}`,
@@ -141,7 +143,7 @@ export async function loadLandlordMaintenance(me: LandlordAccount): Promise<Main
   const jobs = (orders ?? []).map(jobOf);
   const year = new Date().getFullYear();
   const doneThisYear = (orders ?? []).filter((o) => !["reported", "approval", "approved", "scheduled", "cancelled"].includes(o.status) && new Date(o.completedAt ?? o.updatedAt).getFullYear() === year);
-  const spentPence = doneThisYear.reduce((n, o) => n + (o.invoicePence ?? o.quotePence ?? 0), 0);
+  const spentPence = doneThisYear.reduce((n, o) => n + (landlordChargePence(o) ?? o.quotePence ?? 0), 0);
 
   const visits: MaintVisit[] = (inspections ?? [])
     .filter((i) => i.status !== "cancelled")

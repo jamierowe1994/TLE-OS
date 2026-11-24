@@ -51,6 +51,7 @@ export default function Compose({
   language,
   toName,
   subject: startSubject,
+  body: startBody,
 }: {
   open: boolean;
   onClose: () => void;
@@ -66,6 +67,8 @@ export default function Compose({
   toName?: string | null;
   /** The subject it opens with, for the agent to type over: the home it is about, say. */
   subject?: string | null;
+  /** The words it opens with, for the agent to read and change before sending (a declined invoice's reason, 24 Nov 2026). */
+  body?: string | null;
 }) {
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [picked, setPicked] = useState<string>("");
@@ -77,7 +80,7 @@ export default function Compose({
   useEffect(() => {
     if (open && startSubject) setSubject((s) => s || startSubject);
   }, [open, startSubject]);
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(startBody ?? "");
   /* FILES AND A FREE REPORT (Stuart Roper, 18 Nov 2026), each behind its own
      switch: "attach" (Attach Files) and "quickreport" (Generate Report, landlords). */
   const canAttach = useNewLook("attach") === true;

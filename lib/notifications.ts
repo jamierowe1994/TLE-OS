@@ -252,7 +252,30 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     [me.id, me.name ?? "", me.email]
   ).catch(() => []);
 
+  /* A contractor's own invoice waiting for this person to check (Sean
+     McMahon, 23 Nov 2026): it has not gone to accounts, and it stays here
+     until they send it on or send it back (lib/works-orders invoice_wait). */
+  const invoices = await q<{ id: string; ref: number; title: string; property_name: string; contractor_name: string; invoice_wait_pence: string; invoice_wait_at: Date }>(
+    `SELECT id, ref, title, property_name, contractor_name, invoice_wait_pence, invoice_wait_at
+       FROM os_works_orders
+      WHERE invoice_wait_at IS NOT NULL AND NOT rehearsal AND status <> 'cancelled' AND LOWER(invoice_wait_for) = LOWER($1)
+      ORDER BY invoice_wait_at DESC LIMIT 10`,
+    [me.email]
+  ).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const i of invoices) {
+    const pence = Number(i.invoice_wait_pence);
+    out.push({
+      id: `invoice-wait:${i.id}:${new Date(i.invoice_wait_at).toISOString()}`,
+      kind: "money",
+      at: new Date(i.invoice_wait_at).toISOString(),
+      title: `Invoice to check from ${i.contractor_name || "the contractor"}`,
+      body: `Job #${i.ref}, ${i.title}, ${i.property_name}. £${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: pence % 100 ? 2 : 0, maximumFractionDigits: 2 })}. It has not gone to accounts: it waits for you.`,
+      href: `/maintenance/${encodeURIComponent(i.id)}`,
+      tone: "warn",
+    });
+  }
   for (const s of silent) {
     out.push({
       id: `chase-silent:${s.order_id}:${new Date(s.silent_at).toISOString()}`,

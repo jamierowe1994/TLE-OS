@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { Move, WorksOrder } from "@/lib/works-orders";
 import { pounds, stamp } from "@/components/maintenance/works-ui";
 import { openDocument } from "@/lib/doc-sheet";
+import { useNewLook } from "@/lib/use-new-look";
+import InvoiceCheck from "@/components/maintenance/InvoiceCheck";
 
 /**
  * A CONTRACTOR'S OWN INVOICE, WAITING FOR THE AGENT (Sean McMahon, 23 Nov
@@ -17,6 +19,11 @@ import { openDocument } from "@/lib/doc-sheet";
  * accounts, or send it back with why. It shows on whatever step the job is
  * on, because the invoice arrives when the contractor sends it, not when the
  * job reaches The Money.
+ *
+ * With the "invoiceapprove" switch on, the one button is Check the Invoice,
+ * which opens the fuller window (components/maintenance/InvoiceCheck): the
+ * invoice beside the figures, the total the landlord is charged, the agent's
+ * own share, approve or decline.
  */
 const btn = "wn-btn rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40 disabled:opacity-50";
 const primary = "wn-primary rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
@@ -25,16 +32,23 @@ const field = "wn-field w-full rounded-lg border border-line/80 bg-box px-3 py-2
 export default function InvoiceWaiting({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Promise<unknown>; busy: boolean }) {
   const [back, setBack] = useState(false);
   const [why, setWhy] = useState("");
+  const fuller = useNewLook("invoiceapprove") === true;
+  const [checking, setChecking] = useState(false);
+  /* The window sends and reads for itself; once it closes after a change the page reads the job again. */
+  const [changed, setChanged] = useState(false);
+  const closeCheck = () => { setChecking(false); if (changed) window.location.reload(); };
   const file = [...(o.files ?? [])].reverse().find((f) => f.kind === "invoice");
   const who = o.contractorName || "The contractor";
   const open = () => file && openDocument({ key: file.key, name: file.name, label: `Job #${o.ref}`, property: o.propertyName, url: `/api/r2/file?key=${encodeURIComponent(file.key)}` });
 
+  /* Still open after the invoice was answered: the window's own last screen (sent, or declined with the email to write). */
+  if (checking) return <InvoiceCheck jobId={o.id} order={o} onClose={closeCheck} onChanged={() => setChanged(true)} />;
   if (o.invoiceWaitPence == null) {
     /* Sent back and nothing since: said once, quietly, so nobody wonders where it went. */
     if (!o.invoiceDeclinedAt || o.invoicePence != null) return null;
     return (
       <div className="mb-3 rounded-xl border border-line/80 bg-card p-3 text-[12.5px] text-muted">
-        {who}&apos;s invoice was sent back by {o.invoiceDeclinedBy || "the agent"} {stamp(o.invoiceDeclinedAt)}: {o.invoiceDeclinedNote} They can send another from their link. Accounts were never told.
+        {who}&apos;s invoice was declined by {o.invoiceDeclinedBy || "the agent"} {stamp(o.invoiceDeclinedAt)}: {o.invoiceDeclinedNote} They can send another from their link. Accounts were never told.
       </div>
     );
   }
@@ -48,18 +62,23 @@ export default function InvoiceWaiting({ o, move, busy }: { o: WorksOrder; move:
       <p className="mt-0.5 text-[12px] text-muted">
         Uploaded from their link {stamp(o.invoiceWaitAt)}. It hasn&apos;t gone to accounts, and it won&apos;t until you send it.
       </p>
-      {!back ? (
+      {fuller ? (
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <button type="button" disabled={busy} onClick={() => setChecking(true)} className={primary}>Check the Invoice</button>
+          <span className="text-[12px] text-muted">Approve it, add your share, or decline it.</span>
+        </div>
+      ) : !back ? (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <button type="button" disabled={busy} onClick={() => void move({ action: "invoice_approve" })} className={primary}>Send to Accounts</button>
-          <button type="button" disabled={busy} onClick={() => setBack(true)} className={btn}>Send It Back</button>
+          <button type="button" disabled={busy} onClick={() => setBack(true)} className={btn}>Decline</button>
           {file && <button type="button" onClick={open} className="text-[12px] underline underline-offset-2">Open the invoice</button>}
         </div>
       ) : (
         <div className="mt-2.5 space-y-2">
-          <textarea value={why} onChange={(e) => setWhy(e.target.value)} rows={3} placeholder="Why it's going back, e.g. the total doesn't match the quote" className={field} autoFocus />
+          <textarea value={why} onChange={(e) => setWhy(e.target.value)} rows={3} placeholder="Why it is declined, e.g. the total doesn't match the quote" className={field} autoFocus />
           <p className="text-[11.5px] text-muted">Nothing is emailed to {who} from here. Ring or email them with what to change; they can upload a corrected invoice from the same link.</p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy || !why.trim()} onClick={() => void move({ action: "invoice_decline", note: why.trim() })} className={primary}>Send It Back</button>
+            <button type="button" disabled={busy || !why.trim()} onClick={() => void move({ action: "invoice_decline", note: why.trim() })} className={primary}>Decline the Invoice</button>
             <button type="button" disabled={busy} onClick={() => setBack(false)} className={btn}>Cancel</button>
           </div>
         </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { asText, jsonObject } from "@/lib/json-body";
 import { hasDb } from "@/lib/db";
 import { orderByToken, moveOrder, logEvent, pounds, LANDLORD_SELF, LANDLORD_INVOICE_ANSWERS } from "@/lib/works-orders";
+import { landlordChargePence } from "@/lib/works-steps";
 import { outcomeLine, tellInvoiceAnswer } from "@/lib/works-emails";
 import { withR2, R2_BUCKET, r2Configured } from "@/lib/r2";
 
@@ -52,7 +53,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
       title: o.title,
       address: [o.propertyName, o.locality].filter(Boolean).join(", "),
       contractorName: o.contractorName,
-      invoice: pounds(o.invoicePence),
+      /* What the landlord is charged, never the contractor's own figure where the agent added a share (24 Nov 2026). */
+      invoice: pounds(landlordChargePence(o)),
       invoiceRef: o.invoiceRef,
       hasFile: Boolean(file),
       answer: o.landlordInvoiceAnswer,

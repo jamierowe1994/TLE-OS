@@ -39,7 +39,11 @@ const when = (iso: string | null) =>
 export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null, caution?: string | null): AgentEmail {
   /* "landlord" never reaches here (lib/works-orders refuses an invoice on it, ticket b7a79378); named honestly if it ever did. */
   const payee = o.payee === "agent" ? `${o.raisedBy} (paid the contractor themselves)` : o.payee === "landlord" ? "nobody - the landlord paid directly" : o.contractorName || "the contractor";
-  const subject = `Invoice in: #${o.ref} ${o.title}, ${pounds(o.invoicePence)} to ${payee}`;
+  /* The agent's own share, where they put the landlord's total above the contractor's figure (24 Nov 2026). */
+  const share = Math.max(0, o.agentSharePence ?? 0);
+  const charged = (o.invoicePence ?? 0) + share;
+  const agent = o.invoiceApprovedBy || "the agent";
+  const subject = `Invoice in: #${o.ref} ${o.title}, ${pounds(o.invoicePence)} to ${payee}${share ? `, landlord charged ${pounds(charged)}` : ""}`;
   const payTo = bank ? `${bank.accountName} · sort code ${sortCodeWords(bank.sortCode)} · account ${bank.accountNumber}` : "";
   return {
     subject,
@@ -56,6 +60,11 @@ export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null, c
           tone: "attention",
           icon: "mark-money.png",
         },
+        /* Three figures, so nobody has to work one out: what the landlord is charged, what the contractor gets, what the agent gets. */
+        ...(share ? [
+          { title: `Charge the landlord ${pounds(charged)}`, detail: `${pounds(o.invoicePence)} for ${o.contractorName || "the contractor"} plus ${pounds(share)} for ${agent}, who arranged the work`, tone: "attention" as const, icon: "mark-money.png" },
+          { title: `${pounds(share)} to ${agent}`, detail: `The agent's share. It is not part of ${o.contractorName || "the contractor"}'s invoice.`, tone: "attention" as const, icon: "mark-money.png" },
+        ] : []),
         ...(o.payee === "agent" ? [] : [{
           title: bank ? "Pay to" : "No bank details given",
           detail: bank ? payTo : `Ask ${o.contractorName || "the contractor"} where to pay, then add it to their record on the OS.`,
@@ -76,7 +85,7 @@ export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null, c
       tip: "Mark it paid on the job once it has gone through PayProp, and it drops off the accounts list.",
       tipQuiet: true,
     }),
-    text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}.${payTo ? ` Pay to ${payTo}.` : ""}${caution && bank ? ` Check before paying: ${caution}` : ""} Reference #${o.ref}. Open: ${jobLink(o.id)}`,
+    text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}.${share ? ` Charge the landlord ${pounds(charged)}: ${pounds(share)} of it is ${agent}'s.` : ""}${payTo ? ` Pay to ${payTo}.` : ""}${caution && bank ? ` Check before paying: ${caution}` : ""} Reference #${o.ref}. Open: ${jobLink(o.id)}`,
   };
 }
 
@@ -112,7 +121,7 @@ export function invoiceWaitingEmail(o: WorksOrder, to: { office: boolean }): Age
       button: "Open the job",
       link: jobLink(o.id),
       hero: "hero-invoice.png",
-      tip: "Check it against the work, then press Send to Accounts on the job. If it isn't right, press Send It Back and say why: nothing is paid either way until you decide.",
+      tip: "Open the job to check it against the work, then send it to accounts or decline it with why. Nothing is paid either way until you decide.",
       tipQuiet: true,
     }),
     text: `Invoice to check on job #${o.ref}: ${o.title} at ${where(o)}. ${pounds(o.invoiceWaitPence)} from ${o.contractorName || "the contractor"}. It has not gone to accounts. Open: ${jobLink(o.id)}`,

@@ -38,6 +38,16 @@ export const LANDLORD_INVOICE_ANSWERS: { id: LandlordInvoiceAnswer; label: strin
   { id: "query", label: "Raise a query", line: "The landlord has a query: don't pay it yet" },
 ];
 
+/**
+ * What the landlord is charged for a contractor's invoice: the contractor's
+ * figure plus whatever the agent added for arranging the work (James, 24 Nov
+ * 2026). invoicePence stays the contractor's own figure everywhere, so what
+ * accounts pay them and every "owed to contractors" sum is unchanged; anything
+ * the LANDLORD reads uses this.
+ */
+export const landlordChargePence = (o: { invoicePence?: number | null; agentSharePence?: number | null }): number | null =>
+  o.invoicePence == null ? null : o.invoicePence + Math.max(0, o.agentSharePence ?? 0);
+
 export const STEPS = [
   { id: "quote", label: "The quote", blurb: "The contractor has been asked for a price. Nothing is booked and no works order goes until the quote is approved." },
   { id: "tell_landlord", label: "Tell the landlord", blurb: "Ring them first. Email the report if you can't get them, or to put it in writing." },

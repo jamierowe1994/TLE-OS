@@ -99,6 +99,8 @@ export const LOOK_SCREENS = [
   /* Not a reskin (James, 24 Nov 2026): the team's merch shop under Tools, "locked until we're ready to release".
      The switch is the lock: the Tools card and /tools/merch only open for the people it covers, checked on the server. */
   { id: "merch", label: "Merch store", what: "Tools > Merch: the team's kit shop, a full-screen page with the kit on show, sizes and colours, and Place Order. An order is saved in the OS and James is emailed; no card payment, no prices until James sets them. Off, the Merch card is locked for everyone and the page sends them back to Tools." },
+  /* Not a reskin (James, 24 Nov 2026, after Sean McMahon's complaint): a contractor's own invoice already waits for the agent for everyone; this is the fuller check. */
+  { id: "invoiceapprove", label: "Check a contractor's invoice", what: "An invoice a contractor uploads opens in Check the Invoice: the invoice on the left, the figures on the right. The agent can put the total the landlord is charged above the contractor's figure (the difference is the agent's own), sees what each is paid in pounds and pence, then approves; accounts are emailed all three figures. Or declines with a reason, and an email to the contractor is written for the agent to send. Contractors gets a To Approve tab. Off, the job shows the plain card: send it to accounts unchanged, or send it back." },
   { id: "fixit", label: "Report: put it right yourself", what: "A report from a listing, a let or a home that something is wrong, missing or can't be changed gets Steve's offer first: Edit on the record, and he shows where it is. A how-do-I gets his answer first. Send it to James anyway is always there. Off, every report goes straight to James." },
 ] as const;
 

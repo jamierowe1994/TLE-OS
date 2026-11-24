@@ -81,7 +81,7 @@ export const OPEN_STATUSES: Status[] = ["reported", "approval", "approved", "sch
  * through one thing at a time."
  */
 export { STEPS, stepOf, type StepId } from "@/lib/works-steps";
-import { stepOf as stepOfOrder, isSkippable, isPayee, skippedLine, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type Payee, type SkippableStep } from "@/lib/works-steps";
+import { stepOf as stepOfOrder, isSkippable, isPayee, skippedLine, landlordChargePence, LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type Payee, type SkippableStep } from "@/lib/works-steps";
 export { LANDLORD_INVOICE_ANSWERS, type LandlordInvoiceAnswer, type Payee };
 
 export const PAID_HOW = [
@@ -1208,7 +1208,7 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
     case "invoice_decline": {
       if (o.invoiceWaitPence == null) throw new Error("There's no invoice waiting on this job.");
       const why = (move.note ?? "").trim().slice(0, 2000);
-      if (!why) throw new Error("Say why it's going back.");
+      if (!why) throw new Error("Say why it is declined.");
       set("invoice_declined_at", new Date());
       set("invoice_declined_note", why);
       set("invoice_declined_by", by);
@@ -1237,7 +1237,8 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
       set("landlord_invoice_note", "");
       set("landlord_invoice_by", "");
       eventKind = "note";
-      text = `Invoice ${pounds(o.invoicePence)} sent to the landlord to authorise.${move.note ? ` ${move.note}` : ""}`;
+      /* The landlord is shown what they are charged: the contractor's figure plus any share the agent added (24 Nov 2026). */
+      text = `Invoice ${pounds(landlordChargePence(o))} sent to the landlord to authorise${(o.agentSharePence ?? 0) > 0 ? ` (${pounds(o.invoicePence)} of it is ${o.contractorName || "the contractor"}'s)` : ""}.${move.note ? ` ${move.note}` : ""}`;
       break;
     }
     case "landlord_invoice": {

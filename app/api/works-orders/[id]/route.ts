@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
-import { hasDb } from "@/lib/db";
+import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getOrder, moveOrder, logEvent, markAccountsTold, type Move, type MoveOut } from "@/lib/works-orders";
 import { emailsForMove, invoiceChecker, outcomeLine, tellAccounts, tellInvoiceAnswer } from "@/lib/works-emails";
@@ -101,14 +101,22 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (move.action === "invoice" || move.action === "invoice_approve") {
       const told = await tellAccounts(order, (await invoiceSettings()).accountsEmail ?? "");
       if (told.sent) await markAccountsTold(order.id);
-      await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(order.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
+      await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(order.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${(told.reason ?? "").replace(/\.+$/, "")}.`);
     }
     /* The landlord's answer on the invoice, recorded by the agent after a call. */
     if (move.action === "landlord_invoice") await logEvent(order.id, "TLE OS", "email", outcomeLine(await tellInvoiceAnswer(order)));
     await pingCompliance(order, move.action);
     const found = await getOrder(id);
+    /* A declined invoice: who to write to and the link they upload from, for the
+       email the agent sends themselves. Nothing is sent from here. */
+    let declined: { email: string; contact: string; link: string } | undefined;
+    if (move.action === "invoice_decline") {
+      const [c] = order.contractorId ? await q<{ email: string | null; contact: string | null }>(`SELECT email, contact FROM os_contractors WHERE id = $1`, [order.contractorId]).catch(() => []) : [];
+      const origin = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
+      declined = { email: (c?.email ?? "").trim(), contact: (c?.contact ?? "").trim(), link: order.contractorToken ? `${origin}/contractor/${order.contractorToken}` : "" };
+    }
     /* Read again: an email can stamp the job as it goes (who the works order went to). */
-    return NextResponse.json({ ok: true, order: found?.order ?? order, events: found?.events ?? [], emails, canPayrun: canPayrun(actor.role) });
+    return NextResponse.json({ ok: true, order: found?.order ?? order, events: found?.events ?? [], emails, canPayrun: canPayrun(actor.role), ...(declined ? { declined } : {}) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
   }

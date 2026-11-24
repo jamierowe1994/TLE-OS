@@ -1,0 +1,46 @@
+/* Check a contractor's invoice (components/maintenance/InvoiceCheck, 24 Nov 2026):
+   the invoice on the left, the figures on the right. One column on a phone,
+   figures first so the total and the buttons are never under a tall PDF. */
+[data-look="new"] .nl-ic { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr); gap: 16px; align-items: start; }
+[data-look="new"] .nl-ic-doc { position: relative; display: grid; gap: 8px; }
+[data-look="new"] .nl-ic-doc iframe,
+[data-look="new"] .nl-ic-doc img { display: block; width: 100%; height: min(58vh, 640px); border: 1px solid var(--line); background: #fff; }
+[data-look="new"] .nl-ic-doc img { object-fit: contain; }
+[data-look="new"] .nl-ic-nodoc { margin: 0; padding: 48px 20px; border: 1px solid var(--line); background: var(--card, #fff); color: var(--muted); font-size: 14px; line-height: 21px; text-align: center; }
+[data-look="new"] .nl-ic-side { display: grid; gap: 12px; align-content: start; }
+[data-look="new"] .nl-ic-big { margin: 2px 0 6px; font-family: var(--font-heading); font-weight: 500; font-size: 34px; line-height: 40px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+[data-look="new"] .nl-ic-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-ic-what { margin: 0 0 10px; color: var(--ink); font-weight: 500; }
+[data-look="new"] .nl-ic-act { margin: 14px 0 0; }
+[data-look="new"] .nl-ic-err { margin: 0; color: var(--accent-dark); font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-ic-wait { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
+[data-look="new"] .nl-ic-spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--ink); border-radius: 50%; animation: nl-ic-spin 0.8s linear infinite; }
+@keyframes nl-ic-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { [data-look="new"] .nl-ic-spin { animation: none; } }
+[data-look="new"] .nl-ic-amount { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; padding: 0 14px; border: 1px solid var(--line); background: #fff; }
+[data-look="new"] .nl-ic-amount:focus-within { border-color: var(--ink); box-shadow: 0 0 0 2px var(--primary); }
+[data-look="new"] .nl-ic-amount span { font-family: var(--font-heading); font-size: 24px; line-height: 32px; color: var(--muted); }
+[data-look="new"] .nl-ic-amount input { flex: 1 1 auto; min-width: 0; padding: 12px 0; border: 0; outline: 0; background: transparent; font-family: var(--font-heading); font-weight: 500; font-size: 28px; line-height: 34px; letter-spacing: 0; font-variant-numeric: tabular-nums; color: var(--ink); }
+[data-look="new"] .nl-ic-split { margin: 12px 0 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+[data-look="new"] .nl-ic-split > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-ic-split dt { font-size: 14px; line-height: 20px; color: var(--muted); }
+[data-look="new"] .nl-ic-split dd { margin: 0; font-size: 16px; line-height: 22px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+[data-look="new"] .nl-ic-split .is-you dt, [data-look="new"] .nl-ic-split .is-you dd { color: var(--ink); }
+[data-look="new"] .nl-ic-split .is-you dd { font-weight: 600; }
+[data-look="new"] .nl-ic-split > .is-you { background: color-mix(in srgb, var(--primary) 22%, transparent); }
+[data-look="new"] .nl-ic-split.is-final { margin-top: 4px; margin-bottom: 12px; }
+[data-look="new"] .nl-ic-split.is-final dd { font-family: var(--font-heading); font-size: 22px; line-height: 28px; }
+@media (max-width: 860px) {
+  [data-look="new"] .nl-ic { grid-template-columns: minmax(0, 1fr); }
+  [data-look="new"] .nl-ic-side { order: -1; }
+  [data-look="new"] .nl-ic-doc iframe, [data-look="new"] .nl-ic-doc img { height: 52vh; }
+}
+/* The row on Contractors > To Approve. */
+[data-look="new"] .nl-ct-approve { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+[data-look="new"] .nl-ct-approve b { display: block; font-weight: 500; }
+[data-look="new"] .nl-ct-approve small { display: block; color: var(--muted); font-size: 13px; line-height: 19px; }
+[data-look="new"] .nl-ct-approve .nl-ct-approve-amt { font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 560px) {
+  [data-look="new"] .nl-ct-approve { grid-template-columns: minmax(0, 1fr) auto; }
+  [data-look="new"] .nl-ct-approve > .nl-btn { grid-column: 1 / -1; justify-self: stretch; }
+}

@@ -866,6 +866,7 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord, canPayrun = false }:
       ) : (
         <div className="rounded-xl border border-line/80 bg-card p-3 text-[13px]">
           <p><strong>{pounds(o.invoicePence)}</strong> to {payee}{o.invoiceRef ? ` · invoice ${o.invoiceRef}` : ""}.</p>
+          {(o.agentSharePence ?? 0) > 0 && <p className="mt-0.5 text-[12px]">The landlord is charged <strong>{pounds((o.invoicePence ?? 0) + (o.agentSharePence ?? 0))}</strong>: {pounds(o.agentSharePence)} is {o.invoiceApprovedBy || "the agent"}&apos;s, for arranging the work.</p>}
           <p className="mt-0.5 text-[11.5px] text-muted">{o.accountsToldAt ? `Sent for PayProp ${stamp(o.accountsToldAt)}${o.files.some((fl) => fl.kind === "invoice") ? ", with the invoice attached" : ""}.` : "The invoice email has not gone yet - the timeline says why."}</p>
         </div>
       )}

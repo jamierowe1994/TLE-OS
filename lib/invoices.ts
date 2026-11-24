@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { getOrder, logEvent, pounds } from "@/lib/works-orders";
+import { landlordChargePence } from "@/lib/works-steps";
 
 /**
  * Invoices: the ones The Letting Experts raise, numbered, on a schedule.
@@ -253,7 +254,8 @@ export async function createInvoice(input: { orderId?: string | null; propertyId
     toName = toName || o.landlord;
     toEmail = toEmail || o.landlordEmail;
     reference = `Job #${o.ref}: ${o.title}`;
-    const cost = o.invoicePence ?? o.quotePence;
+    /* The landlord's line is what they are charged: the contractor's figure plus any share the agent added (24 Nov 2026). */
+    const cost = landlordChargePence(o) ?? o.quotePence;
     if (cost != null) lines.push({ id: uid(), description: `${o.title}${o.contractorName ? ` - ${o.contractorName}` : ""}`, qty: 1, unitPence: cost, vatRate: 0 });
   }
   /**

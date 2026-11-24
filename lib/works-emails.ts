@@ -26,6 +26,7 @@ import { keyNumbersFor, rexIdOf } from "@/lib/home-keys";
 import { accessLineFor } from "@/lib/viewing-brief";
 import type { JobTenant } from "@/lib/works-orders";
 import { CHASE_GRACE_HOURS } from "@/lib/works-chase-rules";
+import { landlordChargePence } from "@/lib/works-steps";
 import { refusedSender } from "@/lib/not-a-sender";
 
 /**
@@ -218,7 +219,8 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     buttonLabel: o.scheduledAt ? "Open the job" : "Let us know the date and time",
     /* The landlord's invoice page (Kirstie Mulholland, 20 Oct 2026), each
        button opening it with that answer picked. */
-    invoice: pounds(o.invoicePence),
+    /* The landlord's total: the contractor's figure plus any share the agent added (lib/works-steps, 24 Nov 2026). */
+    invoice: pounds(landlordChargePence(o)),
     invoicePayLink: `${ORIGIN}/invoice/ok/${o.landlordInvoiceToken ?? ""}?answer=pay`,
     invoiceDirectLink: `${ORIGIN}/invoice/ok/${o.landlordInvoiceToken ?? ""}?answer=direct`,
     invoiceQueryLink: `${ORIGIN}/invoice/ok/${o.landlordInvoiceToken ?? ""}?answer=query`,

@@ -12,6 +12,7 @@ import ContractorMark from "@/components/contractors/ContractorMark";
 import { RaiseInvoiceDrawer, RaiseInvoiceSheet } from "@/components/contractors/InvoiceForm";
 import RaiseJob from "@/components/maintenance/RaiseJob";
 import FloatSheet, { FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
+import InvoiceCheck from "@/components/maintenance/InvoiceCheck";
 import { credentialsOf, jobHref, liabilityOf } from "@/components/contractors/credentials";
 import { PAYRUN_LABEL, PayrunTag, awaitingPay, day, pounds } from "@/components/maintenance/works-ui";
 import { hhmm, londonDay, londonToday, ukDaysFromToday, worksLate } from "@/lib/london-clock";
@@ -58,6 +59,8 @@ type Job = {
   paidAt: string | null; paidHow: string | null; payee: "contractor" | "agent" | "landlord" | null; raisedBy: string; urgency: string | null;
   /** On the payment run: keyed on PayProp by the office (21 Oct 2026). */
   payrunAt: string | null;
+  /** A contractor's own invoice waiting for the agent, and the agent's share once passed (24 Nov 2026). */
+  invoiceWaitPence?: number | null; invoiceWaitRef?: string; invoiceWaitAt?: string | null; agentSharePence?: number | null;
 };
 type Row = Contractor & { ownerName: string | null };
 type Board = {
@@ -83,7 +86,10 @@ const box = "rounded-2xl border border-line/70 bg-white";
 export default function ContractorsPage() {
   const [data, setData] = useState<Board | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = usePref<"bookings" | "book" | "pay">("contractors-tab-v1", "bookings");
+  const [tab, setTab] = usePref<"bookings" | "book" | "pay" | "approve">("contractors-tab-v1", "bookings");
+  /* To Approve (James, 24 Nov 2026): contractors' own invoices waiting for the agent. Behind the "invoiceapprove" switch. */
+  const approveOn = useNewLook("invoiceapprove") === true;
+  const [checking, setChecking] = useState<string | null>(null);
   const [savedView, saveView] = usePref<"" | "mine" | "everyone">("contractors-view-v1", "");
   const [profile, setProfile] = useState<Row | null>(null);
   const [editing, setEditing] = useState<Partial<Contractor> | null>(null);
@@ -180,6 +186,8 @@ export default function ContractorsPage() {
   const unpaid = jobs.filter((j) => j.status === "invoiced").sort((a, b) => ((a.invoicedAt ?? "") < (b.invoicedAt ?? "") ? -1 : 1));
   const waitedDays = (j: Job) => (j.invoicedAt ? -ukDaysFromToday(j.invoicedAt) : 0);
   const owedPence = unpaid.reduce((a, j) => a + (j.invoicePence ?? 0), 0);
+  /* Oldest first: the one that has waited longest is the one to look at. */
+  const toApprove = jobs.filter((j) => j.invoiceWaitPence != null).sort((a, b) => ((a.invoiceWaitAt ?? "") < (b.invoiceWaitAt ?? "") ? -1 : 1));
   const longWait = unpaid.filter((j) => waitedDays(j) > WAITING_DAYS);
   /* A job the landlord paid the contractor for themselves was never ours to pay (ticket b7a79378), so it isn't on the money lists. */
   const recentlyPaid = jobs.filter((j) => j.status === "paid" && j.payee !== "landlord").sort((a, b) => ((a.paidAt ?? "") > (b.paidAt ?? "") ? -1 : 1));
@@ -243,7 +251,10 @@ export default function ContractorsPage() {
      what needs someone's input, and who is going out when. Every row is the
      same job as before, only gathered. */
   const pastDay = [...missed, ...late.filter((j) => !missed.includes(j))];
+  /* A contractor's invoice waiting to be checked needs somebody as much as a missed visit does (24 Nov 2026). */
+  const invoiceAttn: Attn[] = approveOn ? toApprove.map((j) => ({ j, iso: j.invoiceWaitAt ?? null, why: "Invoice to check", hot: true, note: `${pounds(j.invoiceWaitPence)}, not yet with accounts` })) : [];
   const attention: Attn[] = [
+    ...invoiceAttn,
     ...pastDay.map((j) => {
       const gone = !!j.scheduledAt && londonDay(j.scheduledAt) < today;
       /* The tile is the day that went by: the visit's, or the date it was due. */
@@ -254,7 +265,7 @@ export default function ContractorsPage() {
       return { j, iso: j.dueAt, why: "Waiting for date", hot: d >= 3, note: d <= 0 ? "works order sent today" : `works order sent ${plural(d, "day")} ago` };
     }),
   ];
-  const waitCount = attention.length - pastDay.length;
+  const waitCount = attention.length - pastDay.length - invoiceAttn.length;
   const upcoming = [...outToday, ...thisWeek];
   const look = useNewLook("contractors");
 
@@ -320,7 +331,7 @@ export default function ContractorsPage() {
           <button type="button" onClick={() => setTab("bookings")}>
             <span>Needs you</span>
             <b className={!loading && !failed && attention.length ? "is-hot" : ""}>{fig(String(attention.length))}</b>
-            <em>{loading || failed ? "" : attention.length ? [pastDay.length ? `${pastDay.length} past ${pastDay.length === 1 ? "its" : "their"} date` : "", waitCount ? `${plural(waitCount, "job")} waiting for a date` : ""].filter(Boolean).join(" · ") : "Nothing waiting on you"}</em>
+            <em>{loading || failed ? "" : attention.length ? [invoiceAttn.length ? `${plural(invoiceAttn.length, "invoice")} to check` : "", pastDay.length ? `${pastDay.length} past ${pastDay.length === 1 ? "its" : "their"} date` : "", waitCount ? `${plural(waitCount, "job")} waiting for a date` : ""].filter(Boolean).join(" · ") : "Nothing waiting on you"}</em>
           </button>
           <button type="button" onClick={() => setTab("bookings")}>
             <span>This week</span>
@@ -404,6 +415,7 @@ export default function ContractorsPage() {
             items={[
               { id: "bookings" as const, label: "Jobs", count: data ? attention.length : null },
               { id: "book" as const, label: "Contractors", count: data ? all.length : null },
+              ...(approveOn ? [{ id: "approve" as const, label: "To approve", count: data ? toApprove.length : null }] : []),
               { id: "pay" as const, label: "To pay", count: data ? unpaid.length : null },
             ]}
           />
@@ -470,6 +482,26 @@ export default function ContractorsPage() {
               <CtShelf key={owner} title={`${owner}'s Contractors`} blurb={`Added by ${owner}. Only they and the office see these.`} rows={rows} per={per} onOpen={setProfile} onEdit={setEditing} canEdit={canEdit} searching={Boolean(needle)} sort={sort} onSort={setSort} />
             ))}
           </div>
+        ) : tab === "approve" && approveOn ? (
+          <div className="nl-ct-view" key="approve">
+            <section className="nl-ct-sec">
+              <div className="nl-ct-sh"><h2>To Approve</h2><span>{toApprove.length}</span></div>
+              <p className="nl-meta nl-ct-shnote">Invoices contractors uploaded themselves. None has gone to accounts: each waits here until it is approved or declined. Oldest first.</p>
+              {toApprove.length === 0 ? (
+                <p className="nl-ct-calm">Nothing to approve. Every invoice a contractor has sent in has been answered.</p>
+              ) : toApprove.map((j) => (
+                <div key={j.id} className="nl-ct-approve">
+                  <span className="min-w-0">
+                    <b>{j.contractorName}</b>
+                    <small>{j.propertyName} · #{j.ref} {j.title}</small>
+                    <small>{[j.invoiceWaitRef ? `Invoice ${j.invoiceWaitRef}` : "", j.invoiceWaitAt ? `uploaded ${day(j.invoiceWaitAt)}` : ""].filter(Boolean).join(" · ")}</small>
+                  </span>
+                  <span className="nl-ct-approve-amt">£{((j.invoiceWaitPence ?? 0) / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <button type="button" className="nl-btn nl-btn--primary" onClick={() => setChecking(j.id)}>Check the Invoice</button>
+                </div>
+              ))}
+            </section>
+          </div>
         ) : (
           <div className="nl-ct-view" key="pay">
             <section className="nl-ct-sec">
@@ -503,6 +535,8 @@ export default function ContractorsPage() {
             <p className="nl-meta nl-ct-foot">A contractor emailed you an invoice for work with no job on the OS? Press Log an invoice at the top of the page.</p>
           </div>
         )}
+
+        {checking && <InvoiceCheck jobId={checking} onClose={() => setChecking(null)} onChanged={load} />}
 
         {profile && (
           <ContractorProfile
@@ -1070,7 +1104,7 @@ function CtInvRow({ j, waited, paid = false, onPayrun, busy = false }: { j: Job;
         )}
         {!paid && (
           <span className="nl-ct-m">
-            {[j.invoiceRef ? `Invoice ${j.invoiceRef}` : "", awaitingPay(j) ? (j.payrunAt ? PAYRUN_LABEL : "To go on PayProp") : ""].filter(Boolean).join(" · ")}
+            {[j.invoiceRef ? `Invoice ${j.invoiceRef}` : "", (j.agentSharePence ?? 0) > 0 ? `Landlord charged ${pounds((j.invoicePence ?? 0) + (j.agentSharePence ?? 0))}, agent's share ${pounds(j.agentSharePence)}` : "", awaitingPay(j) ? (j.payrunAt ? PAYRUN_LABEL : "To go on PayProp") : ""].filter(Boolean).join(" · ")}
             {(j.invoiceRef || awaitingPay(j)) ? " · " : ""}
             <span className={long ? "is-bad" : ""}>{waited <= 0 ? "in today" : `waiting ${plural(waited, "day")}`}</span>
           </span>

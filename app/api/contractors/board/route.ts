@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
         paidAt: o.paidAt, paidHow: o.paidHow, payee: o.payee, raisedBy: o.raisedBy, urgency: o.urgency,
         /* On the payment run (James, 21 Oct 2026): keyed on PayProp, coming out of the rent. */
         payrunAt: o.payrunAt,
+        /* A contractor's own invoice waiting for the agent, and the agent's share once passed (24 Nov 2026). */
+        invoiceWaitPence: o.invoiceWaitPence, invoiceWaitRef: o.invoiceWaitRef, invoiceWaitAt: o.invoiceWaitAt, agentSharePence: o.agentSharePence,
       }));
     /* Whose book each agent's contractor is in, by name, for the office's view. */
     const owners = [...new Set(contractors.map((c) => c.ownerId).filter((x): x is string => Boolean(x)))];
