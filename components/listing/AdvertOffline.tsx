@@ -39,7 +39,7 @@ const WHENS: { id: When; label: string }[] = [
 ];
 
 type Advert = { when: When | null; offlineAt: string | null; offlineBy: string | null } | null;
-type Pub = { status: string | null; onPortals: boolean } | null;
+type Pub = { status: string | null; onPortals: boolean; listingState: string | null } | null;
 type Offer = { ref: string; name: string; amount: number | null; people: number };
 type Viewing = {
   id: string;
@@ -105,14 +105,14 @@ export default function AdvertOffline({
       fetch(`/api/listings/offline?listing=${encodeURIComponent(listingId)}${applicationId ? `&application=${encodeURIComponent(applicationId)}` : ""}`, { cache: "no-store" })
         .then((r) => r.json() as Promise<{ ok?: boolean; advert?: Advert; error?: string }>),
       fetch(`/api/listings/publish?id=${encodeURIComponent(listingId)}`, { cache: "no-store" })
-        .then((r) => r.json() as Promise<{ ok?: boolean; status?: string | null; onPortals?: boolean }>)
+        .then((r) => r.json() as Promise<{ ok?: boolean; status?: string | null; onPortals?: boolean; listingState?: string | null }>)
         .catch(() => null),
     ])
       .then(([a, p]) => {
         if (!live) return;
         if (!a.ok) setErr(a.error ?? "Couldn't read the advert.");
         setAdvert(a.advert ?? null);
-        setPub(p?.ok ? { status: p.status ?? null, onPortals: Boolean(p.onPortals) } : null);
+        setPub(p?.ok ? { status: p.status ?? null, onPortals: Boolean(p.onPortals), listingState: p.listingState ?? null } : null);
       })
       .catch(() => live && setErr("Couldn't read the advert - the connection dropped."))
       .finally(() => live && setLoaded(true));
@@ -163,16 +163,24 @@ export default function AdvertOffline({
   /* Marked offline in the OS, still on Rightmove (22 Oct 2026, 6 Ruskin
      Place): the marker is what was pressed, the feeds are where the advert
      is. Taking it off again tells the portals "withdrawn" this time. */
-  const stuck = offline && onPortals === true;
+  /* Or still current in REX (Sean McMahon, ticket 5474011a, 24 Nov 2026):
+     the ticket's home read Offline here for a month while Rightmove kept it,
+     because it was taken off before a take-off withdrew the listing in REX
+     too (lib/advert-offline offlineButStillCurrent). Taking it off again now
+     does. */
+  const stillCurrent = offline && onPortals !== true && pub?.status === "published" && pub.listingState === "current";
+  const stuck = offline && (onPortals === true || stillCurrent);
   const [offBusy, setOffBusy] = useState(false);
   async function takeOffAgain() {
     setOffBusy(true);
     setErr(null);
     try {
       const r = await fetch("/api/listings/publish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: Number(listingId), action: "off" }) });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; onPortals?: boolean };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; onPortals?: boolean; withdrawal?: string };
       if (!j.ok) setErr(j.error ?? "It didn't come off the portals. Try again.");
       else if (j.onPortals) setErr("The portals were told, but they still show it. Give it a few minutes, then look again.");
+      else if (j.withdrawal === "refused" || j.withdrawal === "locked" || j.withdrawal === "unread")
+        setErr("The portals were told, but the listing could not be taken off the market in REX, so Rightmove may keep showing it. Report it and we'll take it down.");
       setTick((n) => n + 1);
     } catch {
       setErr("That didn't go through - the connection dropped. Try again.");
@@ -260,7 +268,9 @@ export default function AdvertOffline({
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
               <span className="rounded-full bg-accent-dark px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-white">Still on the portals</span>
               <span className="text-accent-dark">
-                Marked offline on {day(advert!.offlineAt!)}, but Rightmove, OnTheMarket and Zoopla still show it
+                {stillCurrent
+                  ? `Marked offline on ${day(advert!.offlineAt!)}, but it is still live in REX, so Rightmove can keep showing it`
+                  : `Marked offline on ${day(advert!.offlineAt!)}, but Rightmove, OnTheMarket and Zoopla still show it`}
               </span>
             </p>
           ) : offline ? (
